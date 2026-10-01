@@ -130,6 +130,13 @@ func testProviderDeletionTerminalReadback(t *testing.T, ctx context.Context, rep
 	if err != nil || started.ProviderAccount == nil || started.ProviderAccount.State != "DELETING" || started.ProviderAccount.Deletion == nil {
 		t.Fatalf("start terminal cleanup: %v", err)
 	}
+	var initialRealtimeEvents int
+	if err := repository.pool.QueryRow(ctx, `
+SELECT count(*) FROM control_plane.outbox_events event
+WHERE convert_from(event.payload, 'UTF8')::jsonb->>'eventName' = 'PROVIDER_ACCOUNT_CHANGED'
+  AND convert_from(event.payload, 'UTF8')::jsonb->>'aggregateRef' = $1`, account.Ref).Scan(&initialRealtimeEvents); err != nil {
+		t.Fatal(err)
+	}
 	const worker = "provider-cleanup-terminal"
 	var credentialTask platformrepo.ProviderCredentialCleanupTask
 	for pass := 0; pass < 3; pass++ {
@@ -214,6 +221,13 @@ func testProviderDeletionTerminalReadback(t *testing.T, ctx context.Context, rep
 	if err != nil || terminal.State != "DELETED" || terminal.Enabled || terminal.Ready || terminal.Authorization != nil ||
 		terminal.Deletion == nil || terminal.Deletion.State != "DELETED" || terminal.Deletion.PendingCleanup != 0 || terminal.Deletion.CompletedAt == nil {
 		t.Fatalf("terminal deletion readback is incomplete: state=%s err=%v", terminal.State, err)
+	}
+	var terminalRealtimeEvents int
+	if err := repository.pool.QueryRow(ctx, `
+SELECT count(*) FROM control_plane.outbox_events event
+WHERE convert_from(event.payload, 'UTF8')::jsonb->>'eventName' = 'PROVIDER_ACCOUNT_CHANGED'
+  AND convert_from(event.payload, 'UTF8')::jsonb->>'aggregateRef' = $1`, account.Ref).Scan(&terminalRealtimeEvents); err != nil || terminalRealtimeEvents <= initialRealtimeEvents {
+		t.Fatalf("provider deletion realtime events: initial=%d terminal=%d err=%v", initialRealtimeEvents, terminalRealtimeEvents, err)
 	}
 	items, _, _, err := service.ListProviderAccounts(ctx, actor, query.Filter{Page: query.Page{Size: 100}})
 	if err != nil {

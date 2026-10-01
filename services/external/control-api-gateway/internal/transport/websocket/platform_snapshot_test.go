@@ -37,3 +37,107 @@ func TestTypedPlatformSnapshotAcceptsClosedWorkflowCatalog(t *testing.T) {
 		t.Fatal("typed workflow cursor was not preserved")
 	}
 }
+
+func TestTypedPlatformSnapshotAcceptsRuntimeSecretCatalog(t *testing.T) {
+	t.Parallel()
+	snapshot, err := typedPlatformSnapshot("RUNTIME_SECRET", map[string]any{
+		"catalog": map[string]any{"secrets": []any{}, "page": map[string]any{}},
+	})
+	if err != nil || snapshot.Catalog == nil || snapshot.Catalog.Secrets == nil {
+		t.Fatalf("decode runtime secret snapshot: %v", err)
+	}
+}
+
+func TestTypedPlatformSnapshotAcceptsManagedConfigurationCatalog(t *testing.T) {
+	t.Parallel()
+	snapshot, err := typedPlatformSnapshot("MANAGED_CONFIGURATION", map[string]any{
+		"catalog": map[string]any{
+			"managedConfigurations": []any{
+				map[string]any{
+					"ref": "cfg_test", "version": 1, "kind": "SYSTEM_STT",
+					"name": "Тестовая конфигурация", "managedBy": "UI",
+					"source": "ui", "sourceRevision": "revision-1",
+					"updatedAt": "2026-10-01T00:00:00Z", "archived": false,
+					"nextActions": []any{},
+				},
+			},
+			"managedConfigurationPages": []any{
+				map[string]any{"kind": "SYSTEM_STT", "total": 1, "nextPageToken": "cursor-2"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("decode managed configuration snapshot: %v", err)
+	}
+	if snapshot.Catalog == nil || len(snapshot.Catalog.ManagedConfigurations) != 1 || len(snapshot.Catalog.ManagedConfigurationPages) != 1 {
+		t.Fatal("managed configuration snapshot was not preserved")
+	}
+	if snapshot.Catalog.ManagedConfigurationPages[0].Kind != "SYSTEM_STT" {
+		t.Fatal("managed configuration page kind was not preserved")
+	}
+}
+
+func TestTypedPlatformSnapshotAcceptsProviderBootstrapCatalog(t *testing.T) {
+	t.Parallel()
+	snapshot, err := typedPlatformSnapshot("PROVIDER_ACCOUNT", map[string]any{
+		"catalog": map[string]any{
+			"accounts":                []any{},
+			"providerDefinitions":     []any{},
+			"providerDefinitionsPage": map[string]any{"nextPageToken": "definitions-2"},
+			"runtimes":                []any{},
+			"page":                    map[string]any{},
+			"nextActions":             []any{},
+		},
+	})
+	if err != nil || snapshot.Catalog == nil || snapshot.Catalog.ProviderDefinitions == nil || snapshot.Catalog.Runtimes == nil {
+		t.Fatalf("decode provider bootstrap snapshot: %v", err)
+	}
+}
+
+func TestTypedPlatformSnapshotAcceptsRuntimeEnvironmentBootstrapCatalog(t *testing.T) {
+	t.Parallel()
+	snapshot, err := typedPlatformSnapshot("RUNTIME_ENVIRONMENT", map[string]any{
+		"catalog": map[string]any{
+			"environments":     []any{},
+			"roleEnvironments": []any{},
+			"runtimes":         []any{},
+			"page":             map[string]any{},
+		},
+	})
+	if err != nil || snapshot.Catalog == nil || snapshot.Catalog.RoleEnvironments == nil {
+		t.Fatalf("decode runtime environment bootstrap snapshot: %v", err)
+	}
+}
+
+func TestPlatformKindRequiresProject(t *testing.T) {
+	t.Parallel()
+	if !platformKindRequiresProject("ROLE_IMAGE_RECIPE") {
+		t.Fatal("project-scoped catalogs were not identified")
+	}
+	if platformKindRequiresProject("MEMBERSHIP") || platformKindRequiresProject("RUNTIME_SECRET") || platformKindRequiresProject("PROJECT") {
+		t.Fatal("organization-capable catalogs unexpectedly require a project")
+	}
+}
+
+func TestTypedPlatformSnapshotAcceptsAccessBootstrapCatalog(t *testing.T) {
+	t.Parallel()
+	snapshot, err := typedPlatformSnapshot("MEMBERSHIP", map[string]any{
+		"catalog": map[string]any{
+			"memberships":        []any{},
+			"permissions":        []any{},
+			"accessSubjects":     []any{},
+			"accessSubjectsPage": map[string]any{},
+			"oidcGroups":         []any{},
+			"oidcGroupsPage":     map[string]any{},
+			"accessRoles":        []any{},
+			"accessRolesPage":    map[string]any{},
+			"accessBindings":     []any{},
+			"accessBindingsPage": map[string]any{},
+			"page":               map[string]any{},
+			"nextActions":        []any{},
+		},
+	})
+	if err != nil || snapshot.Catalog == nil || snapshot.Catalog.AccessRoles == nil || snapshot.Catalog.AccessBindings == nil {
+		t.Fatalf("decode access bootstrap snapshot: %v", err)
+	}
+}

@@ -78,7 +78,7 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.TrashProject, Principal: wrongScope,
 		Mutation: value.Mutation{IdempotencyKey: "trash-boundary-wrong-scope", ExpectedVersion: &created.Project.Version},
-		Payload: command.ProjectLifecycleInput{Ref: projectRef},
+		Payload:  command.ProjectLifecycleInput{Ref: projectRef},
 	}); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("foreign project proof accepted for trash: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 	retrashed, err := service.Execute(ctx, command.Command{
 		Kind: command.TrashProject, Principal: scopedOwner,
 		Mutation: value.Mutation{IdempotencyKey: "trash-boundary-retrash", ExpectedVersion: &restored.Project.Version},
-		Payload: command.ProjectLifecycleInput{Ref: projectRef},
+		Payload:  command.ProjectLifecycleInput{Ref: projectRef},
 	})
 	if err != nil || retrashed.Project == nil {
 		t.Fatalf("trash restored project: %v", err)
@@ -193,7 +193,7 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 	pending, err := service.Execute(ctx, command.Command{
 		Kind: command.PurgeProject, Principal: scopedOwner,
 		Mutation: value.Mutation{IdempotencyKey: "trash-boundary-purge", ExpectedVersion: &retrashed.Project.Version},
-		Payload: command.ProjectLifecycleInput{Ref: projectRef},
+		Payload:  command.ProjectLifecycleInput{Ref: projectRef},
 	})
 	if err != nil || pending.Project == nil || pending.Project.Lifecycle != "PURGE_PENDING" {
 		t.Fatalf("request project purge: project=%#v err=%v", pending.Project, err)
@@ -201,7 +201,7 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.RestoreProject, Principal: scopedOwner,
 		Mutation: value.Mutation{IdempotencyKey: "trash-boundary-restore-pending", ExpectedVersion: &pending.Project.Version},
-		Payload: command.ProjectLifecycleInput{Ref: projectRef},
+		Payload:  command.ProjectLifecycleInput{Ref: projectRef},
 	}); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("restore accepted after purge requested: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 	retained, err := service.Execute(ctx, command.Command{
 		Kind: command.CreateProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "trash-retention-project"},
-		Payload: command.ProjectInput{Name: "Retention boundary", Language: "en"},
+		Payload:  command.ProjectInput{Name: "Retention boundary", Language: "en"},
 	})
 	if err != nil || retained.Project == nil {
 		t.Fatalf("create retention fixture: %v", err)
@@ -253,7 +253,7 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 	retainedTrash, err := service.Execute(ctx, command.Command{
 		Kind: command.TrashProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "trash-retention-request", ExpectedVersion: &retained.Project.Version},
-		Payload: command.ProjectLifecycleInput{Ref: retained.Project.Ref},
+		Payload:  command.ProjectLifecycleInput{Ref: retained.Project.Ref},
 	})
 	if err != nil || retainedTrash.Project == nil {
 		t.Fatalf("trash retention fixture: %v", err)
@@ -263,8 +263,23 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 		WHERE ref=$1`, retained.Project.Ref); err != nil {
 		t.Fatalf("age retention fixture: %v", err)
 	}
+	var retentionEventsBefore, retentionEventsAfter int
+	retentionEventCountQuery := `SELECT count(*) FROM control_plane.outbox_events event
+		WHERE convert_from(event.payload,'UTF8')::jsonb->>'aggregateRef'=$1
+		  AND convert_from(event.payload,'UTF8')::jsonb->>'eventName'='PROJECT_CHANGED'`
+	if err := pool.QueryRow(ctx, retentionEventCountQuery, retained.Project.Ref).Scan(&retentionEventsBefore); err != nil {
+		t.Fatalf("read project retention events before purge: %v", err)
+	}
 	if err := repository.PromoteDueProjectPurges(ctx, 8); err != nil {
 		t.Fatalf("promote due project purge: %v", err)
+	}
+	var promotionState string
+	if err := pool.QueryRow(ctx, `SELECT convert_from(event.payload,'UTF8')::jsonb#>>'{data,state}'
+		FROM control_plane.outbox_events event
+		WHERE convert_from(event.payload,'UTF8')::jsonb->>'aggregateRef'=$1
+		  AND convert_from(event.payload,'UTF8')::jsonb->>'eventName'='PROJECT_CHANGED'
+		ORDER BY event.created_at DESC LIMIT 1`, retained.Project.Ref).Scan(&promotionState); err != nil || promotionState != "PURGE_PENDING" {
+		t.Fatalf("project retention promotion event: state=%q err=%v", promotionState, err)
 	}
 	pendingItems, err := repository.ListPendingProjectPurges(ctx, 8)
 	if err != nil || len(pendingItems) != 1 || pendingItems[0].ProjectRef != retained.Project.Ref {
@@ -279,6 +294,17 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 	}
 	if err := repository.FinalizeProjectPurge(ctx, pendingItems[0], inventory); err != nil {
 		t.Fatalf("replay due project purge: %v", err)
+	}
+	var finalState string
+	if err := pool.QueryRow(ctx, retentionEventCountQuery, retained.Project.Ref).Scan(&retentionEventsAfter); err != nil || retentionEventsAfter != retentionEventsBefore+2 {
+		t.Fatalf("project retention events: before=%d after=%d err=%v", retentionEventsBefore, retentionEventsAfter, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT convert_from(event.payload,'UTF8')::jsonb#>>'{data,state}'
+		FROM control_plane.outbox_events event
+		WHERE convert_from(event.payload,'UTF8')::jsonb->>'aggregateRef'=$1
+		  AND convert_from(event.payload,'UTF8')::jsonb->>'eventName'='PROJECT_CHANGED'
+		ORDER BY event.created_at DESC LIMIT 1`, retained.Project.Ref).Scan(&finalState); err != nil || finalState != "PURGED" {
+		t.Fatalf("project retention final event: state=%q err=%v", finalState, err)
 	}
 }
 

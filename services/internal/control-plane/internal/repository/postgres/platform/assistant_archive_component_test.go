@@ -139,4 +139,41 @@ func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *
 	if err != nil || len(archived) != 0 {
 		t.Fatalf("purged history remains readable: %d %v", len(archived), err)
 	}
+	retained, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "history-retention-create"}, Payload: command.AssistantConversationInput{ProjectRef: project.Project.Ref}})
+	if err != nil || retained.Conversation == nil {
+		t.Fatalf("create assistant retention fixture: %v", err)
+	}
+	retained, err = service.Execute(ctx, command.Command{Kind: command.ArchiveAssistantConversation, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "history-retention-archive", ExpectedVersion: &retained.Conversation.Version},
+		Payload:  command.AssistantConversationArchiveInput{ConversationRef: retained.Conversation.Ref}})
+	if err != nil || retained.Conversation == nil {
+		t.Fatalf("archive assistant retention fixture: %v", err)
+	}
+	if _, err := repository.pool.Exec(ctx, `UPDATE control_plane.assistant_conversations
+		SET deleted_at=statement_timestamp()-interval '31 days',purge_after=statement_timestamp()-interval '1 day'
+		WHERE ref=$1`, retained.Conversation.Ref); err != nil {
+		t.Fatalf("age assistant retention fixture: %v", err)
+	}
+	var eventsBefore, eventsAfter int
+	eventCountQuery := `SELECT count(*) FROM control_plane.outbox_events event
+		WHERE convert_from(event.payload,'UTF8')::jsonb->>'aggregateRef'=$1
+		  AND convert_from(event.payload,'UTF8')::jsonb->>'eventName'='SYSTEM_ASSISTANT_CHANGED'`
+	if err := repository.pool.QueryRow(ctx, eventCountQuery, retained.Conversation.Ref).Scan(&eventsBefore); err != nil {
+		t.Fatalf("read assistant retention events before purge: %v", err)
+	}
+	if err := repository.PurgeDueAssistantConversations(ctx, 25); err != nil {
+		t.Fatalf("purge due assistant conversation: %v", err)
+	}
+	if err := repository.pool.QueryRow(ctx, eventCountQuery, retained.Conversation.Ref).Scan(&eventsAfter); err != nil || eventsAfter != eventsBefore+1 {
+		t.Fatalf("assistant retention event: before=%d after=%d err=%v", eventsBefore, eventsAfter, err)
+	}
+	var remaining int
+	var reason string
+	if err := repository.pool.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM control_plane.assistant_conversations WHERE ref=$1),
+		(SELECT reason FROM control_plane.assistant_conversation_purge_receipts WHERE conversation_ref=$1)`,
+		retained.Conversation.Ref).Scan(&remaining, &reason); err != nil || remaining != 0 || reason != "RETENTION" {
+		t.Fatalf("assistant retention purge readback: remaining=%d reason=%q err=%v", remaining, reason, err)
+	}
 }

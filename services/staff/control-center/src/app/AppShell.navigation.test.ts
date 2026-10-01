@@ -34,6 +34,8 @@ describe("AppShell navigation", () => {
     expect(source).toContain("<RealtimeStatus");
     expect(source).toContain("router.isReady().then");
     expect(source).toContain("selectProjectRef(projectRef.value)");
+    expect(source).toContain('route.name === "configuration-catalog"');
+    expect(source).toContain("routeProjectRef(route.query)");
     expect(source).toContain("realtime.openPlatform()");
     expect(source).not.toContain("platform.loadPendingGateCount()");
     expect(source).not.toContain("platform.loadBootstrap()");
@@ -60,5 +62,12 @@ describe("AppShell navigation", () => {
       source.indexOf('class="global-search-wrap"'),
     );
     expect(source).toContain('class="global-search-wrap"');
+  });
+
+  it("выходит из удалённого или недоступного Проекта по авторитетному realtime-снимку", () => {
+    expect(source).toContain(
+      'platform.realtimeSnapshot("PROJECT", projectRef.value)?.scopeKey',
+    );
+    expect(source).toContain('void router.replace("/projects")');
   });
 });

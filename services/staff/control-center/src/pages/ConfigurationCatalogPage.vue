@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ConfigurationCatalog from "@/features/managed-configurations/ConfigurationCatalog.vue";
 import {
@@ -7,13 +7,11 @@ import {
   type ConfigurationKind,
 } from "@/features/managed-configurations/api";
 import ProjectPicker from "@/features/projects/ProjectPicker.vue";
-import { loadProject } from "@/features/projects/api";
-import type { Project } from "@/shared/api/generated/openapi/types.gen";
-import { asProblem, type AppProblem } from "@/shared/api/problem";
-import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { usePlatformStore } from "@/features/platform/store";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 const route = useRoute();
 const router = useRouter();
+const platform = usePlatformStore();
 const kinds: readonly ConfigurationKind[] = [
   "PROMPT_TEMPLATE",
   "ROLE_IMAGE",
@@ -29,8 +27,9 @@ const projectRef = computed(() =>
     ? route.query.projectRef
     : "",
 );
-const project = ref<Project>();
-const problem = ref<AppProblem>();
+const project = computed(() =>
+  projectRef.value ? platform.projects[projectRef.value] : undefined,
+);
 watch(
   () => [kind.value, route.query.assistantImportOpen],
   async ([, open]) => {
@@ -43,23 +42,6 @@ watch(
     await router.replace({ query });
   },
   { immediate: true, flush: "post" },
-);
-watch(
-  projectRef,
-  async (ref, _previous, cleanup) => {
-    project.value = undefined;
-    problem.value = undefined;
-    if (!ref) return;
-    const controller = new AbortController();
-    cleanup(() => controller.abort());
-    try {
-      const result = await loadProject(ref, controller.signal);
-      if (!controller.signal.aborted) project.value = result;
-    } catch (error) {
-      if (!controller.signal.aborted) problem.value = asProblem(error);
-    }
-  },
-  { immediate: true },
 );
 function changeProject(value: string): void {
   void router.replace({ query: value ? { projectRef: value } : {} });
@@ -79,7 +61,6 @@ function openCreated(configurationRef: string): void {
         :project="project"
         @select="changeProject"
     /></template>
-    <ProblemNotice v-if="problem" :problem="problem" compact />
     <ConfigurationCatalog
       v-if="kind"
       :kind="kind"

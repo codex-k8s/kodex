@@ -50,6 +50,7 @@ channels:
       unsubscribeRun: { $ref: "#/components/messages/UnsubscribeRun" }
       sessionReady: { $ref: "#/components/messages/SessionReady" }
       platformSnapshot: { $ref: "#/components/messages/PlatformSnapshot" }
+      platformCursor: { $ref: "#/components/messages/PlatformCursor" }
       platformReady: { $ref: "#/components/messages/PlatformReady" }
       platformResync: { $ref: "#/components/messages/PlatformResync" }
       runSnapshot: { $ref: "#/components/messages/RunSnapshot" }
@@ -77,6 +78,7 @@ operations:
     messages:
       - { $ref: "#/channels/sessionStream/messages/sessionReady" }
       - { $ref: "#/channels/sessionStream/messages/platformSnapshot" }
+      - { $ref: "#/channels/sessionStream/messages/platformCursor" }
       - { $ref: "#/channels/sessionStream/messages/platformReady" }
       - { $ref: "#/channels/sessionStream/messages/platformResync" }
       - { $ref: "#/channels/sessionStream/messages/runSnapshot" }
@@ -166,6 +168,10 @@ components:
       name: platform_snapshot
       contentType: application/json
       payload: { $ref: "#/components/schemas/PlatformSnapshotEnvelope" }
+    PlatformCursor:
+      name: platform_cursor
+      contentType: application/json
+      payload: { $ref: "#/components/schemas/PlatformCursorEnvelope" }
     PlatformReady:
       name: platform_ready
       contentType: application/json
@@ -341,6 +347,20 @@ components:
         kind: { $ref: "#/components/schemas/PlatformResourceKind" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         snapshot: { $ref: "#/components/schemas/PlatformSnapshotPayload" }
+    PlatformCursorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        [type, requestRef, streamKind, streamRef, cursor, eventName, kind]
+      properties:
+        type: { type: string, const: PLATFORM_CURSOR }
+        requestRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamKind: { type: string, const: PLATFORM }
+        streamRef: { type: string, const: PLATFORM }
+        cursor: { type: integer, format: int64, minimum: 1 }
+        eventName: { $ref: "#/components/schemas/PlatformEventName" }
+        kind: { $ref: "#/components/schemas/PlatformResourceKind" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
     PlatformSnapshotPayload:
       type: object
       additionalProperties: false
@@ -373,6 +393,10 @@ components:
             x-go-import-alias: httpgenerated
             x-typescript-type: Project
             x-typescript-import: ../openapi/types.gen
+        trashedProjects:
+          type: array
+          items: *project_projection
+        trashPage: { $ref: "#/components/schemas/PlatformPageCursor" }
         agents:
           type: array
           items:
@@ -400,6 +424,16 @@ components:
             x-go-import-alias: httpgenerated
             x-typescript-type: Run
             x-typescript-import: ../openapi/types.gen
+        gates:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.OwnerGate
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: OwnerGate
+            x-typescript-import: ../openapi/types.gen
+        gatesPage: { $ref: "#/components/schemas/PlatformPageCursor" }
         artifacts:
           type: array
           items:
@@ -445,6 +479,55 @@ components:
             x-go-import-alias: httpgenerated
             x-typescript-type: Membership
             x-typescript-import: ../openapi/types.gen
+        permissions:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.PermissionDefinition
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: PermissionDefinition
+            x-typescript-import: ../openapi/types.gen
+        accessSubjects:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.AccessSubject
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: AccessSubject
+            x-typescript-import: ../openapi/types.gen
+        accessSubjectsPage: { $ref: "#/components/schemas/PlatformPageCursor" }
+        oidcGroups:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.OIDCGroup
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: OidcGroup
+            x-typescript-import: ../openapi/types.gen
+        oidcGroupsPage: { $ref: "#/components/schemas/PlatformPageCursor" }
+        accessRoles:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.AccessRole
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: AccessRole
+            x-typescript-import: ../openapi/types.gen
+        accessRolesPage: { $ref: "#/components/schemas/PlatformPageCursor" }
+        accessBindings:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.AccessBinding
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: AccessBinding
+            x-typescript-import: ../openapi/types.gen
+        accessBindingsPage: { $ref: "#/components/schemas/PlatformPageCursor" }
         conversations:
           type: array
           items:
@@ -462,6 +545,15 @@ components:
             x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
             x-go-import-alias: httpgenerated
             x-typescript-type: RoleImageRecipe
+            x-typescript-import: ../openapi/types.gen
+        roleEnvironments:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.RoleEnvironment
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: RoleEnvironment
             x-typescript-import: ../openapi/types.gen
         environments:
           type: array
@@ -481,6 +573,47 @@ components:
             x-go-import-alias: httpgenerated
             x-typescript-type: ProviderAccount
             x-typescript-import: ../openapi/types.gen
+        providerDefinitions:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.ProviderDefinition
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: ProviderDefinition
+            x-typescript-import: ../openapi/types.gen
+        providerDefinitionsPage:
+          { $ref: "#/components/schemas/PlatformPageCursor" }
+        secrets:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.RuntimeSecret
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: RuntimeSecret
+            x-typescript-import: ../openapi/types.gen
+        managedConfigurations:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.ManagedConfigurationSummary
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: ManagedConfigurationSummary
+            x-typescript-import: ../openapi/types.gen
+        managedConfigurationPages:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformManagedConfigurationPage" }
+        runtimes:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.RuntimeSelection
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: RuntimeSelection
+            x-typescript-import: ../openapi/types.gen
         page: { $ref: "#/components/schemas/PlatformPageCursor" }
         nextActions:
           type: array
@@ -493,6 +626,16 @@ components:
             x-typescript-import: ../openapi/types.gen
         total: { type: integer, format: int64, minimum: 0 }
         coreReady: { type: boolean }
+    PlatformManagedConfigurationPage:
+      type: object
+      additionalProperties: false
+      required: [kind, total]
+      properties:
+        kind:
+          type: string
+          enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT]
+        total: { type: integer, format: int64, minimum: 0 }
+        nextPageToken: { type: string }
     PlatformProjectResponse:
       type: object
       additionalProperties: false
@@ -538,13 +681,18 @@ components:
     PlatformReadyEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, streamKind, streamRef, cursor]
+      required:
+        [type, requestRef, streamKind, streamRef, cursor, availableKinds]
       properties:
         type: { type: string, const: PLATFORM_READY }
         requestRef: { $ref: "#/components/schemas/OpaqueRef" }
         streamKind: { type: string, const: PLATFORM }
         streamRef: { type: string, const: PLATFORM }
         cursor: { type: integer, format: int64, minimum: 0 }
+        availableKinds:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/PlatformResourceKind" }
     PlatformResyncEnvelope:
       type: object
       additionalProperties: false
@@ -647,8 +795,12 @@ components:
           PLATFORM_MEMBERSHIP_CHANGED,
           SYSTEM_ASSISTANT_CHANGED,
           ROLE_IMAGE_RECIPE_CHANGED,
+          ROLE_IMAGE_PROMOTION_REQUESTED,
+          ROLE_IMAGE_PROMOTED,
           RUNTIME_ENVIRONMENT_CHANGED,
           PROVIDER_ACCOUNT_CHANGED,
+          RUNTIME_SECRET_CHANGED,
+          MANAGED_CONFIGURATION_CHANGED,
           RUN_CHANGED,
         ]
     PlatformResourceKind:
@@ -669,6 +821,9 @@ components:
           ROLE_IMAGE_RECIPE,
           RUNTIME_ENVIRONMENT,
           PROVIDER_ACCOUNT,
+          RUNTIME_SECRET,
+          MANAGED_CONFIGURATION,
+          RUNTIME_SELECTION,
           RUN,
         ]
     PlatformSnapshotMode:

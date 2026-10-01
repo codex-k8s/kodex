@@ -46,6 +46,12 @@ interface ProvidersState {
   busyRefs: string[];
   pollingRefs: string[];
   problem?: AppProblem;
+  snapshotAccounts: ProviderAccount[];
+  snapshotAccountsNextPageToken: string;
+  snapshotDefinitions: ProviderDefinition[];
+  snapshotDefinitionsNextPageToken: string;
+  snapshotNextActions: ProviderAccountAction[];
+  snapshotReady: boolean;
 }
 
 export const useProvidersStore = defineStore("providers", {
@@ -62,16 +68,41 @@ export const useProvidersStore = defineStore("providers", {
     busyRefs: [],
     pollingRefs: [],
     problem: undefined,
+    snapshotAccounts: [],
+    snapshotAccountsNextPageToken: "",
+    snapshotDefinitions: [],
+    snapshotDefinitionsNextPageToken: "",
+    snapshotNextActions: [],
+    snapshotReady: false,
   }),
   actions: {
     applySnapshot(
       accounts: ProviderAccount[],
       nextPageToken = "",
       nextActions: ProviderAccountAction[] = [],
+      definitions?: ProviderDefinition[],
+      definitionsNextPageToken = "",
     ): void {
-      this.accounts = accounts;
-      this.accountsNextPageToken = nextPageToken;
-      this.pageNextActions = nextActions;
+      this.snapshotAccounts = accounts;
+      this.snapshotAccountsNextPageToken = nextPageToken;
+      this.snapshotNextActions = nextActions;
+      this.snapshotReady = true;
+      if (definitions) {
+        this.snapshotDefinitions = definitions;
+        this.snapshotDefinitionsNextPageToken = definitionsNextPageToken;
+      }
+      if (!this.query) this.restoreSnapshot();
+      else this.resumeDeviceAuthorizationPolling();
+    },
+    restoreSnapshot(): void {
+      this.query = "";
+      this.accounts = [...this.snapshotAccounts];
+      this.accountsNextPageToken = this.snapshotAccountsNextPageToken;
+      this.pageNextActions = [...this.snapshotNextActions];
+      this.definitions = [...this.snapshotDefinitions];
+      this.definitionsNextPageToken = this.snapshotDefinitionsNextPageToken;
+      this.loading = false;
+      this.problem = undefined;
       this.resumeDeviceAuthorizationPolling();
     },
     async loadDefinitions(query = "", pageSize = 20): Promise<void> {
@@ -83,6 +114,10 @@ export const useProvidersStore = defineStore("providers", {
       );
       this.definitions = page.items;
       this.definitionsNextPageToken = page.nextPageToken;
+      if (!query.trim()) {
+        this.snapshotDefinitions = [...page.items];
+        this.snapshotDefinitionsNextPageToken = page.nextPageToken;
+      }
     },
     async loadMoreDefinitions(pageSize = 20): Promise<void> {
       if (!this.definitionsNextPageToken || this.definitionsLoadingMore) return;
@@ -104,6 +139,10 @@ export const useProvidersStore = defineStore("providers", {
           left.name.localeCompare(right.name, "ru"),
         );
         this.definitionsNextPageToken = page.nextPageToken;
+        if (!this.query) {
+          this.snapshotDefinitions = [...this.definitions];
+          this.snapshotDefinitionsNextPageToken = page.nextPageToken;
+        }
       } catch (error) {
         this.problem = asProblem(error);
       } finally {
@@ -116,6 +155,10 @@ export const useProvidersStore = defineStore("providers", {
       definitionPageSize = 20,
     ): Promise<void> {
       this.query = (query ?? this.query).trim();
+      if (!this.query && this.snapshotReady) {
+        this.restoreSnapshot();
+        return;
+      }
       this.loading = true;
       this.problem = undefined;
       loadController?.abort();
@@ -145,6 +188,13 @@ export const useProvidersStore = defineStore("providers", {
         this.accounts = accounts.items;
         this.accountsNextPageToken = accounts.nextPageToken;
         this.pageNextActions = accounts.nextActions;
+        if (!this.query) {
+          this.snapshotDefinitions = [...definitions.items];
+          this.snapshotDefinitionsNextPageToken = definitions.nextPageToken;
+          this.snapshotAccounts = [...accounts.items];
+          this.snapshotAccountsNextPageToken = accounts.nextPageToken;
+          this.snapshotNextActions = [...accounts.nextActions];
+        }
         this.resumeDeviceAuthorizationPolling();
       } catch (error) {
         if (controller.signal.aborted || generation !== loadGeneration) return;
@@ -175,6 +225,11 @@ export const useProvidersStore = defineStore("providers", {
           this.accounts = upsertProviderAccount(this.accounts, account);
         this.accountsNextPageToken = page.nextPageToken;
         this.pageNextActions = page.nextActions;
+        if (!query) {
+          this.snapshotAccounts = [...this.accounts];
+          this.snapshotAccountsNextPageToken = page.nextPageToken;
+          this.snapshotNextActions = [...page.nextActions];
+        }
       } catch (error) {
         if (generation === loadGeneration && query === this.query)
           this.problem = asProblem(error);

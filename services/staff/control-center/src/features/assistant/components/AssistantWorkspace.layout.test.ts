@@ -225,12 +225,18 @@ describe("AssistantWorkspace layout", () => {
     );
   });
 
-  it("не очищает открытый диалог до загрузки нового scope", () => {
+  it("переключает открытый диалог только на realtime-снимок нового scope", () => {
     expect(source).toMatch(
-      /watch\(contextIdentity,[\s\S]*if \(open\.value\) void loadWorkspace\(\);\s*else store\.setContext\(props\.context, props\.projectRef\);/,
+      /watch\(contextIdentity,[\s\S]*if \(open\.value\) loadWorkspace\(\);\s*else store\.setContext\(props\.context, props\.projectRef\);/,
     );
     expect(source).toContain("function hydrateFromRealtimeSnapshot(): boolean");
-    expect(source).toContain("if (!hydrateFromRealtimeSnapshot())");
+    expect(source).toContain(
+      "store.setContext(props.context, props.projectRef)",
+    );
+    expect(source).not.toContain(
+      "await store.load(props.context, props.projectRef)",
+    );
+    expect(source).not.toContain("platform.reloadPlatformKind(kind)");
   });
 
   it("возвращает фокус к карточке варианта после закрытия редактора", () => {

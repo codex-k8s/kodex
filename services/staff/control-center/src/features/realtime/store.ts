@@ -7,8 +7,15 @@ import { defineStore } from "pinia";
 import { onScopeDispose, reactive, ref } from "vue";
 
 import type {
+  AccessBinding,
+  AccessRole,
+  AccessSubject,
+  Membership,
   NextAction,
+  OidcGroup,
+  PermissionDefinition,
   ProviderAccount,
+  ProviderDefinition,
   RunEvent,
   RunGraph,
   RuntimeEnvironmentSet,
@@ -21,6 +28,7 @@ import { runtimeConfig } from "@/shared/config/runtime";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import { useProvidersStore } from "@/features/providers/store";
+import { useAccessStore } from "@/features/access/store";
 import { selectedProjectRef } from "@/shared/project-context";
 import { currentLocale } from "@/shared/locale";
 import {
@@ -75,6 +83,9 @@ const platformKinds = new Set<PlatformKind>([
   "ROLE_IMAGE_RECIPE",
   "RUNTIME_ENVIRONMENT",
   "PROVIDER_ACCOUNT",
+  "RUNTIME_SECRET",
+  "MANAGED_CONFIGURATION",
+  "RUNTIME_SELECTION",
   "RUN",
 ]);
 
@@ -134,9 +145,24 @@ function entityArrayField<T extends { ref: string }>(
   field: string,
 ): T[] {
   const candidate = value[field];
+  if (candidate === undefined) return [];
   if (
     !Array.isArray(candidate) ||
     candidate.some((item) => !isRecord(item) || typeof item.ref !== "string")
+  )
+    throw new Error(`Invalid realtime snapshot ${field}`);
+  return candidate as T[];
+}
+
+function keyedArrayField<T extends { key: string }>(
+  value: Record<string, unknown>,
+  field: string,
+): T[] {
+  const candidate = value[field];
+  if (candidate === undefined) return [];
+  if (
+    !Array.isArray(candidate) ||
+    candidate.some((item) => !isRecord(item) || typeof item.key !== "string")
   )
     throw new Error(`Invalid realtime snapshot ${field}`);
   return candidate as T[];
@@ -147,6 +173,7 @@ function stringArrayField<T extends string>(
   field: string,
 ): T[] {
   const candidate = value[field];
+  if (candidate === undefined) return [];
   if (
     !Array.isArray(candidate) ||
     candidate.some((item) => typeof item !== "string")
@@ -205,6 +232,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
   const platform = usePlatformStore();
   const runtime = useRuntimeStore();
   const providers = useProvidersStore();
+  const access = useAccessStore();
 
   function hasConsumers(): boolean {
     return platformWanted || activeRuns.size > 0;
@@ -316,10 +344,10 @@ export const useRealtimeStore = defineStore("realtime", () => {
     if (activeSocket(socket)) socket.close(1002, reason);
   }
 
-  async function processPlatformEnvelope(
+  function processPlatformEnvelope(
     socket: WebSocket,
     envelope: Record<string, unknown>,
-  ): Promise<boolean> {
+  ): boolean {
     if (!hasStreamIdentity(envelope, "PLATFORM", platformStreamRef))
       return false;
     if (envelope.requestRef !== session.requestRef) return true;
@@ -330,11 +358,11 @@ export const useRealtimeStore = defineStore("realtime", () => {
         state: "recovering",
         attempt: session.attempt,
       });
-      await platform.reloadPlatformState();
-      if (activeSocket(socket)) {
-        platformSequence.value = cursor;
-        platformSnapshotReady = true;
-      }
+      // Platform cursor не несёт безопасной delta и не позволяет частично
+      // восстановить все каталоги. Следующее соединение обязано запросить
+      // полный типизированный snapshot того же project scope.
+      platformSnapshotReady = false;
+      socket.close(clientReconnectCloseCode, "PLATFORM_RESYNC_REQUIRED");
       return true;
     }
     if (envelope.type === "PLATFORM_SNAPSHOT") {
@@ -353,6 +381,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         const outcome = reducePlatformSequence(platformSequence.value, cursor);
         if (outcome === "duplicate") return true;
         if (outcome !== "applied") {
+          platformSnapshotReady = false;
           socket.close(clientReconnectCloseCode, "PLATFORM_GAP_DETECTED");
           return true;
         }
@@ -368,19 +397,72 @@ export const useRealtimeStore = defineStore("realtime", () => {
         );
         const scope = selectedProjectRef();
         runtime.applyEnvironmentSnapshot(scope, values);
-        platform.markRealtimeSnapshot(kind, scope, catalog);
+        platform.applyPlatformSnapshot(kind, scope, { catalog });
+        platform.applyPlatformSnapshot("RUNTIME_SELECTION", scope, {
+          catalog,
+        });
       } else if (kind === "PROVIDER_ACCOUNT") {
         const catalog = recordField(envelope.snapshot, "catalog");
         providers.applySnapshot(
           entityArrayField<ProviderAccount>(catalog, "accounts"),
           optionalStringField(recordField(catalog, "page"), "nextPageToken"),
           stringArrayField<NextAction>(catalog, "nextActions"),
+          keyedArrayField<ProviderDefinition>(catalog, "providerDefinitions"),
+          optionalStringField(
+            recordField(catalog, "providerDefinitionsPage"),
+            "nextPageToken",
+          ),
+        );
+        platform.applyPlatformSnapshot(
+          "RUNTIME_SELECTION",
+          selectedProjectRef(),
+          {
+            catalog,
+          },
         );
         platform.markRealtimeSnapshot(kind, selectedProjectRef(), catalog);
+      } else if (kind === "MEMBERSHIP") {
+        const catalog = recordField(envelope.snapshot, "catalog");
+        access.applySnapshot({
+          scopeProjectRef: selectedProjectRef(),
+          permissions: keyedArrayField<PermissionDefinition>(
+            catalog,
+            "permissions",
+          ),
+          subjects: entityArrayField<AccessSubject>(catalog, "accessSubjects"),
+          subjectNextPageToken: optionalStringField(
+            recordField(catalog, "accessSubjectsPage"),
+            "nextPageToken",
+          ),
+          groups: entityArrayField<OidcGroup>(catalog, "oidcGroups"),
+          groupNextPageToken: optionalStringField(
+            recordField(catalog, "oidcGroupsPage"),
+            "nextPageToken",
+          ),
+          roles: entityArrayField<AccessRole>(catalog, "accessRoles"),
+          roleNextPageToken: optionalStringField(
+            recordField(catalog, "accessRolesPage"),
+            "nextPageToken",
+          ),
+          bindings: entityArrayField<AccessBinding>(catalog, "accessBindings"),
+          bindingNextPageToken: optionalStringField(
+            recordField(catalog, "accessBindingsPage"),
+            "nextPageToken",
+          ),
+          projectMemberships: entityArrayField<Membership>(
+            catalog,
+            "memberships",
+          ),
+        });
+        platform.applyPlatformSnapshot(
+          kind,
+          envelope.projectRef,
+          envelope.snapshot,
+        );
       } else {
         platform.applyPlatformSnapshot(
           kind,
-          envelope.projectRef as string | undefined,
+          envelope.projectRef,
           envelope.snapshot,
         );
       }
@@ -390,14 +472,53 @@ export const useRealtimeStore = defineStore("realtime", () => {
       }
       return true;
     }
+    if (envelope.type === "PLATFORM_CURSOR") {
+      if (
+        typeof envelope.eventName !== "string" ||
+        typeof envelope.kind !== "string" ||
+        !platformKinds.has(envelope.kind as PlatformKind) ||
+        (envelope.projectRef !== undefined &&
+          typeof envelope.projectRef !== "string")
+      )
+        return false;
+      const outcome = reducePlatformSequence(platformSequence.value, cursor);
+      if (outcome === "duplicate") return true;
+      if (outcome !== "applied") {
+        platformSnapshotReady = false;
+        socket.close(clientReconnectCloseCode, "PLATFORM_GAP_DETECTED");
+        return true;
+      }
+      platformSequence.value = cursor;
+      platformSnapshotReady = true;
+      return true;
+    }
     if (envelope.type === "PLATFORM_READY") {
+      if (
+        !Array.isArray(envelope.availableKinds) ||
+        envelope.availableKinds.some(
+          (kind) =>
+            typeof kind !== "string" ||
+            !platformKinds.has(kind as PlatformKind),
+        ) ||
+        new Set(envelope.availableKinds).size !== envelope.availableKinds.length
+      )
+        return false;
       if (cursor !== platformSequence.value) {
+        platformSnapshotReady = false;
         socket.close(
           clientReconnectCloseCode,
           "PLATFORM_READY_CURSOR_MISMATCH",
         );
         return true;
       }
+      platform.applyRealtimeAvailability(
+        envelope.availableKinds as PlatformKind[],
+        selectedProjectRef(),
+      );
+      if (!envelope.availableKinds.includes("RUNTIME_ENVIRONMENT"))
+        runtime.applyEnvironmentSnapshot(selectedProjectRef(), []);
+      if (!envelope.availableKinds.includes("PROVIDER_ACCOUNT"))
+        providers.applySnapshot([], undefined, []);
       if (platformWanted) {
         Object.assign(platformState, {
           state: "live",
@@ -667,7 +788,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       }
       return;
     }
-    if (await processPlatformEnvelope(socket, envelope)) return;
+    if (processPlatformEnvelope(socket, envelope)) return;
     if (await processRunEnvelope(socket, envelope)) return;
     if (processHeartbeat(envelope)) return;
     if (processStreamProblem(envelope)) return;

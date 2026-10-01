@@ -88,6 +88,20 @@ watch(
   { immediate: true },
 );
 function loadCatalog(more = false): Promise<void> {
+  if (!more && !projectFilter.value && !search.value.trim()) {
+    const snapshot = platform.realtimeSnapshot("RUN");
+    catalog.applySnapshot(
+      {
+        query: "",
+        view: view.value,
+        pageSize: pageSize.value,
+      },
+      platform.gateList,
+      platform.ownerGateNextPageToken,
+    );
+    if (!snapshot) catalog.loading.value = true;
+    return Promise.resolve();
+  }
   return catalog.load(
     {
       projectRef: projectFilter.value || undefined,
@@ -436,12 +450,14 @@ watch(
         .sort(),
     ].join("|"),
   () => {
-    catalog.invalidate({
-      projectRef: projectFilter.value || undefined,
-      query: search.value,
-      view: view.value,
-      pageSize: pageSize.value,
-    });
+    if (!projectFilter.value && !search.value.trim()) void loadCatalog();
+    else
+      catalog.invalidate({
+        projectRef: projectFilter.value || undefined,
+        query: search.value,
+        view: view.value,
+        pageSize: pageSize.value,
+      });
   },
 );
 watch(search, () => {
@@ -680,7 +696,7 @@ function submitActionClass(decision?: DecisionAction): string[] {
 
 onMounted(() => {
   pageMounted = true;
-  void Promise.all([loadCatalog(), platform.loadRuns()]).then(async () => {
+  void loadCatalog().then(async () => {
     if (!pageMounted) return;
     await loadAddressedGate();
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onBeforeUnmount меняет флаг во время await.

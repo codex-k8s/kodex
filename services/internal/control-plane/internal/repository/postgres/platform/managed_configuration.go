@@ -613,7 +613,7 @@ func managedOutcome(set managedSet, revision *entity.ManagedConfigurationRevisio
 	}
 	return commandOutcome{result: command.Result{ManagedConfiguration: &set.ManagedConfigurationSet, ManagedRevision: revision},
 		projectID: set.projectID, projectRef: set.ProjectRef, resourceKind: set.Kind, resourceRef: set.Ref,
-		summary: "i18n:MANAGED_CONFIGURATION_CHANGED"}
+		summary: "i18n:MANAGED_CONFIGURATION_CHANGED", platformEvent: "MANAGED_CONFIGURATION_CHANGED"}
 }
 
 type managedRevisionScan struct {

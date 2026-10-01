@@ -2,7 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.KODEX_E2E_BASE_URL;
 if (baseURL !== "https://control.127.0.0.1.nip.io") {
-  throw new Error("Local project trash test requires the exact local Control Center origin");
+  throw new Error(
+    "Local project trash test requires the exact local Control Center origin",
+  );
 }
 
 export default defineConfig({

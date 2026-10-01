@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
-import {
-  assistantIntegrationConnectionTarget,
-  assistantPollDelay,
-} from "@/features/assistant/model";
+import { assistantIntegrationConnectionTarget } from "@/features/assistant/model";
+import { usePlatformStore } from "@/features/platform/store";
 import { requestSignal } from "@/shared/api/client";
 import { getIntegrationConnection } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -22,10 +20,17 @@ const props = defineProps<{
 const emit = defineEmits<{
   prepareCredential: [connectionRef: string];
 }>();
+const platform = usePlatformStore();
 const target = computed(() =>
   assistantIntegrationConnectionTarget(props.plan, props.operationRef),
 );
-const connection = ref<IntegrationConnection>();
+const readback = ref<IntegrationConnection>();
+const connection = computed(() => {
+  const exact = target.value;
+  return exact
+    ? (platform.connections[exact.connectionRef] ?? readback.value)
+    : undefined;
+});
 const loading = ref(false);
 const problem = ref(false);
 const needsCredential = computed(
@@ -42,16 +47,13 @@ let refresh: (() => Promise<void>) | undefined;
 watch(
   target,
   (value, _previous, onCleanup) => {
-    connection.value = undefined;
+    readback.value = undefined;
     loading.value = false;
     problem.value = false;
     if (!value) return;
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let attempts = 0;
     onCleanup(() => {
       controller.abort();
-      if (timer) clearTimeout(timer);
       refresh = undefined;
     });
     refresh = async () => {
@@ -70,25 +72,20 @@ watch(
         if (controller.signal.aborted) return;
         if (next.ref !== value.connectionRef)
           throw new Error("Integration connection readback mismatch");
-        connection.value = next;
+        readback.value = next;
+        platform.connections[next.ref] = next;
         problem.value = false;
       } catch {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
         if (!controller.signal.aborted) problem.value = true;
       } finally {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) {
-          loading.value = false;
-          attempts += 1;
-          if (problem.value || connection.value?.state === "TESTING")
-            timer = setTimeout(
-              () => void refresh?.(),
-              assistantPollDelay(attempts),
-            );
-        }
+        if (!controller.signal.aborted) loading.value = false;
       }
     };
-    void refresh();
+    const cached = platform.connections[value.connectionRef];
+    if (cached) readback.value = cached;
+    else void refresh();
   },
   { immediate: true },
 );

@@ -2,10 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-import {
-  assistantLaunchedRunTarget,
-  assistantPollDelay,
-} from "@/features/assistant/model";
+import { assistantLaunchedRunTarget } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { requestSignal } from "@/shared/api/client";
 import { getRun } from "@/shared/api/generated/openapi/sdk.gen";
@@ -25,15 +22,14 @@ const platform = usePlatformStore();
 const target = computed(() =>
   assistantLaunchedRunTarget(props.plan, props.operationRef),
 );
-const run = ref<Run>();
+const readback = ref<Run>();
+const run = computed(() => {
+  const exact = target.value;
+  return exact ? (platform.runs[exact.runRef] ?? readback.value) : undefined;
+});
 const loading = ref(false);
 const stopping = ref(false);
 const problem = ref(false);
-const active = computed(() =>
-  run.value
-    ? ["QUEUED", "RUNNING", "CANCELLING"].includes(run.value.state)
-    : false,
-);
 let refresh: (() => Promise<void>) | undefined;
 
 async function readExactRun(
@@ -61,16 +57,13 @@ async function readExactRun(
 watch(
   target,
   (value, _previous, onCleanup) => {
-    run.value = undefined;
+    readback.value = undefined;
     loading.value = false;
     problem.value = false;
     if (!value) return;
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let attempts = 0;
     onCleanup(() => {
       controller.abort();
-      if (timer) clearTimeout(timer);
       refresh = undefined;
     });
     refresh = async () => {
@@ -84,25 +77,24 @@ watch(
         );
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
         if (controller.signal.aborted) return;
-        run.value = current;
+        readback.value = current;
+        platform.runs[current.ref] = current;
         problem.value = false;
       } catch {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
         if (!controller.signal.aborted) problem.value = true;
       } finally {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) {
-          loading.value = false;
-          attempts += 1;
-          if (problem.value || active.value)
-            timer = setTimeout(
-              () => void refresh?.(),
-              assistantPollDelay(attempts),
-            );
-        }
+        if (!controller.signal.aborted) loading.value = false;
       }
     };
-    void refresh();
+    const cached = platform.runs[value.runRef];
+    if (
+      cached?.projectRef === value.projectRef &&
+      cached.source === "SYSTEM_ASSISTANT"
+    )
+      readback.value = cached;
+    else void refresh();
   },
   { immediate: true },
 );
@@ -125,15 +117,15 @@ async function stopRun(): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- план мог смениться во время сетевого запроса.
     if (target.value?.runRef !== exact.runRef) return;
     if (!current.nextActions.includes("CANCEL")) {
-      run.value = current;
+      readback.value = current;
+      platform.runs[current.ref] = current;
       return;
     }
     const changed = await platform.changeRun(current, { action: "CANCEL" });
     if (changed.ref !== exact.runRef || changed.projectRef !== exact.projectRef)
       throw new Error("Assistant run cancellation readback mismatch");
-    run.value = changed;
+    readback.value = changed;
     problem.value = false;
-    await refresh?.();
   } catch {
     problem.value = true;
   } finally {

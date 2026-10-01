@@ -380,6 +380,27 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		}
 		delete(value, "namespace")
 	}
+	if descriptor.FullName() == "controlplane.v1.RuntimeSecret" {
+		// Точная Kubernetes identity текущей ревизии нужна только owner-side
+		// операциям и не входит в browser-facing RuntimeSecret.
+		delete(value, "namespace")
+		delete(value, "currentRevisionDescriptor")
+	}
+	if descriptor.FullName() == "controlplane.v1.RoleImageRecipe" {
+		// Supply-chain pins принадлежат внутреннему lifecycle сборки. Публичный
+		// контракт сообщает только готовность и безопасную ссылку promotion.
+		for _, field := range []string{
+			"specSha256",
+			"policyRevision",
+			"policySha256",
+			"roleRuntimeContractRevision",
+			"roleRuntimeContractSha256",
+		} {
+			delete(value, field)
+		}
+		promotedReference, _ := value["promotedImageReference"].(string)
+		value["promotedImageReady"] = promotedReference != ""
+	}
 	fields := descriptor.Fields()
 	for index := 0; index < fields.Len(); index++ {
 		field := fields.Get(index)
@@ -444,6 +465,9 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	if descriptor.FullName() == "controlplane.v1.Agent" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "system" || field.JSONName() == "enabled"
 	}
+	if descriptor.FullName() == "controlplane.v1.RoleImageRecipe" && field.Kind() == protoreflect.BoolKind {
+		return false, field.JSONName() == "sourceAvailable"
+	}
 	if field.Kind() == protoreflect.BoolKind && field.JSONName() == "ready" {
 		switch descriptor.FullName() {
 		case "controlplane.v1.RuntimeEnvironmentSet", "controlplane.v1.RuntimeEnvironmentReadiness":
@@ -503,6 +527,8 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if field.Kind() == protoreflect.StringKind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.IntegrationConfigurationField":
+			return "", field.JSONName() == "help"
 		case "controlplane.v1.RuntimeEnvironmentSet", "controlplane.v1.RuntimeEnvironmentDraftSpecification":
 			return "", field.JSONName() == "description"
 		case "controlplane.v1.RuntimeEnvironmentTool":
@@ -830,6 +856,9 @@ func normalizeAssistantShape(value map[string]any) {
 		}
 	}
 	if _, hasType := value["type"]; !hasType {
+		if _, isSystemAssistant := value["corePromptRevision"]; isSystemAssistant {
+			delete(value, "systemLabel")
+		}
 		return
 	}
 	if _, hasAction := value["action"]; !hasAction {
@@ -905,9 +934,6 @@ func requiredCollectionKeys(value map[string]any) []string {
 	if _, isStep := value["position"]; isStep {
 		keys = append(keys, "gateDecisions", "requiredCapabilityKeys")
 	}
-	if _, isWorkflowInput := value["valueType"]; isWorkflowInput {
-		keys = append(keys, "options")
-	}
 	_, isAgent := value["roleDescription"]
 	_, hasRef := value["ref"]
 	_, hasProject := value["projectRef"]
@@ -915,7 +941,9 @@ func requiredCollectionKeys(value map[string]any) []string {
 	if isAgent && hasRef && hasProject && hasVersion {
 		keys = append(keys, "capabilities", "integrations", "knowledgeArtifactRefs", "nextActions")
 	}
-	if _, isMembership := value["platformRole"]; isMembership {
+	_, hasPlatformRole := value["platformRole"]
+	_, hasMembershipUser := value["user"]
+	if hasPlatformRole && hasMembershipUser {
 		keys = append(keys, "permissions", "nextActions")
 	}
 	if _, isGraph := value["sequence"]; isGraph {

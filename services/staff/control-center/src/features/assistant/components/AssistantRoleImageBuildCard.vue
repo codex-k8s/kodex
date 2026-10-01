@@ -2,10 +2,8 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-import {
-  assistantPollDelay,
-  assistantRoleImageBuildTarget,
-} from "@/features/assistant/model";
+import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
+import { usePlatformStore } from "@/features/platform/store";
 import {
   commandRoleImage,
   loadRoleImageDetail,
@@ -28,6 +26,7 @@ import { requestConfirmation } from "@/shared/ui/confirmation";
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
 const emit = defineEmits<{ navigate: []; debug: [prompt: string] }>();
 const { t } = useI18n();
+const platform = usePlatformStore();
 const localizeServerMessage = useServerMessage();
 const target = computed(() =>
   assistantRoleImageBuildTarget(props.plan, props.operationRef),
@@ -37,8 +36,6 @@ const loading = ref(false);
 const stopping = ref(false);
 const promoting = ref(false);
 const problem = ref(false);
-const admissionTimedOut = ref(false);
-const promotionTimedOut = ref(false);
 const promotionProblem = ref(false);
 const promotionReceipt = ref<RoleImagePromotionReceipt>();
 const attemptedArtifactRef = ref<string>();
@@ -71,7 +68,6 @@ const promotionPending = computed(
   () =>
     !currentBuildPromoted.value &&
     !promotionFailed.value &&
-    !promotionTimedOut.value &&
     ((candidate.value?.promotionRequested === true &&
       ["PENDING", "CLAIMED", "AUTHORIZED"].includes(
         candidate.value.promotionState,
@@ -93,8 +89,7 @@ const awaitingAdmission = computed(
   () =>
     build.value?.stage === "COMPLETED" &&
     !candidate.value &&
-    !currentBuildPromoted.value &&
-    !admissionTimedOut.value,
+    !currentBuildPromoted.value,
 );
 const cancellable = computed(() => build.value && buildIsActive(build.value));
 const debuggableFailure = computed(
@@ -127,24 +122,22 @@ watch(
   (value, _previous, onCleanup) => {
     detail.value = undefined;
     problem.value = false;
-    admissionTimedOut.value = false;
-    promotionTimedOut.value = false;
     promotionProblem.value = false;
     promotionReceipt.value = undefined;
     attemptedArtifactRef.value = undefined;
     if (!value) return;
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let attempts = 0;
-    let admissionPolls = 0;
-    let promotionPolls = 0;
+    let refreshRequested = false;
     onCleanup(() => {
       controller.abort();
-      if (timer) clearTimeout(timer);
       refresh = undefined;
     });
     refresh = async () => {
       if (controller.signal.aborted) return;
+      if (loading.value) {
+        refreshRequested = true;
+        return;
+      }
       loading.value = true;
       try {
         const next = await loadRoleImageDetail(
@@ -169,35 +162,23 @@ watch(
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
         if (!controller.signal.aborted) {
           loading.value = false;
-          attempts += 1;
-          if (awaitingAdmission.value) {
-            admissionPolls += 1;
-            if (admissionPolls >= 120) admissionTimedOut.value = true;
-          } else {
-            admissionPolls = 0;
+          if (refreshRequested) {
+            refreshRequested = false;
+            void refresh?.();
           }
-          if (promotionPending.value) {
-            promotionPolls += 1;
-            if (promotionPolls >= 120) promotionTimedOut.value = true;
-          } else {
-            promotionPolls = 0;
-          }
-          if (
-            problem.value ||
-            cancellable.value ||
-            awaitingAdmission.value ||
-            promotionPending.value
-          )
-            timer = setTimeout(
-              () => void refresh?.(),
-              assistantPollDelay(attempts),
-            );
         }
       }
     };
     void refresh();
   },
   { immediate: true },
+);
+
+watch(
+  () => platform.roleImageRealtimeRevision,
+  () => {
+    if (target.value) void refresh?.();
+  },
 );
 
 async function stopBuild(): Promise<void> {
@@ -348,13 +329,6 @@ async function promoteCandidate(): Promise<void> {
             "
           />
         </div>
-        <p
-          v-if="admissionTimedOut && !candidate && !currentBuildPromoted"
-          class="assistant-build-card__problem"
-          role="alert"
-        >
-          {{ $t("assistant.roleImageBuild.admissionUnknown") }}
-        </p>
         <div class="assistant-build-card__state">
           <span>{{ $t("roleImages.promotion") }}</span>
           <StatusBadge :state="promotionState" />
@@ -373,7 +347,7 @@ async function promoteCandidate(): Promise<void> {
           {{ $t("assistant.roleImageBuild.promotionFailed") }}
         </p>
         <p
-          v-if="(promotionProblem || promotionTimedOut) && !promotionFailed"
+          v-if="promotionProblem && !promotionFailed"
           class="assistant-build-card__problem"
           role="alert"
         >

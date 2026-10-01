@@ -185,7 +185,7 @@ func (repository *Repository) changeConfigurationWriteBack(ctx context.Context, 
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if err := saveWriteBack(ctx, tx, current, &row); err != nil {
+	if err := repository.saveWriteBack(ctx, tx, current, &row, false); err != nil {
 		return commandOutcome{}, err
 	}
 	repository.writeBackActions(ctx, tx, current, &row)
@@ -246,5 +246,7 @@ func (repository *Repository) prepareConfigurationWriteBack(ctx context.Context,
 
 func writeBackOutcome(set managedSet, proposal entity.ConfigurationWriteBack) commandOutcome {
 	return commandOutcome{result: command.Result{ConfigurationWriteBack: &proposal}, projectID: set.projectID, projectRef: set.ProjectRef,
-		resourceKind: "MANAGED_CONFIGURATION_WRITEBACK", resourceRef: proposal.Ref, summary: "i18n:MANAGED_CONFIGURATION_CHANGED"}
+		resourceKind: "MANAGED_CONFIGURATION_WRITEBACK", resourceRef: proposal.Ref, summary: "i18n:MANAGED_CONFIGURATION_CHANGED",
+		platformEvent:            "MANAGED_CONFIGURATION_CHANGED",
+		platformAggregateVersion: proposal.Version, platformState: proposal.State}
 }

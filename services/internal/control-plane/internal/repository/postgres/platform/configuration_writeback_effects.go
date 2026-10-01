@@ -126,7 +126,7 @@ func (repository *Repository) BeginConfigurationWriteBackEffect(ctx context.Cont
 	receipt := row.proposal
 	receipt.Version++
 	row.receipts[key] = writeBackReceipt{Digest: digest, Proposal: receipt}
-	if err := saveWriteBack(ctx, tx, current, &row); err != nil {
+	if err := repository.saveWriteBack(ctx, tx, current, &row, true); err != nil {
 		return entity.ConfigurationWriteBack{}, false, err
 	}
 	return row.proposal, false, tx.Commit(ctx)
@@ -201,7 +201,7 @@ func (repository *Repository) CompleteConfigurationWriteBackEffect(ctx context.C
 	receipt := row.proposal
 	receipt.Version++
 	row.receipts[key] = writeBackReceipt{Digest: digest, Proposal: receipt}
-	if err := saveWriteBack(ctx, tx, current, &row); err != nil {
+	if err := repository.saveWriteBack(ctx, tx, current, &row, true); err != nil {
 		return entity.ConfigurationWriteBack{}, err
 	}
 	return row.proposal, tx.Commit(ctx)

@@ -122,9 +122,11 @@ it("снимает устаревший план до публикации по�
 });
 it("подтверждает lost ACK через authoritative PUBLISHED/APPLIED без повторной mutation", async () => {
   const state = await panel();
-  api.readSecretDraft
-    .mockResolvedValueOnce(draft)
-    .mockResolvedValueOnce({ ...draft, state: "PUBLISHED", publishedRevision: 1 });
+  api.readSecretDraft.mockResolvedValueOnce(draft).mockResolvedValueOnce({
+    ...draft,
+    state: "PUBLISHED",
+    publishedRevision: 1,
+  });
   api.readRuntimeSecret.mockResolvedValue({ ref: "secret" });
   impact.publishSecretDraft.mockRejectedValueOnce(new Error("lost ACK"));
   impact.readDraftImpact.mockResolvedValue({

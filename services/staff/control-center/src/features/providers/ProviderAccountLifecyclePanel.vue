@@ -14,7 +14,6 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import ProviderLifecycleRecovery from "./ProviderLifecycleRecovery.vue";
-import { loadProviderAccount } from "./api";
 import {
   checkedProviderBlockerPage,
   loadProviderBlockers,
@@ -64,14 +63,8 @@ useCursorInfiniteScroll({
 });
 let generation = 0;
 let controller = new AbortController();
-let pollTimer: ReturnType<typeof setTimeout> | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let pollCount = 0;
 const ownerSignal = ownerRequestSignal();
-function stopPolling(): void {
-  clearTimeout(pollTimer);
-  pollTimer = undefined;
-}
 function applyAccount(value: ProviderAccount): void {
   currentAccount.value = value;
   emit("updated", value);
@@ -87,56 +80,10 @@ function clearProjection(): void {
 function closeOwner(): void {
   generation++;
   controller.abort();
-  stopPolling();
   clearTimeout(searchTimer);
   clearProjection();
 }
 ownerSignal.addEventListener("abort", closeOwner, { once: true });
-function scheduleObservation(): void {
-  stopPolling();
-  if (
-    ownerSignal.aborted ||
-    currentAccount.value?.state !== "DELETING" ||
-    pollCount >= 150
-  )
-    return;
-  pollTimer = setTimeout(() => void observe(), 4000);
-}
-async function observe(): Promise<void> {
-  if (
-    !currentAccount.value ||
-    busy.value ||
-    loading.value ||
-    selected.value.length ||
-    recoveryPending.value
-  ) {
-    scheduleObservation();
-    return;
-  }
-  pollCount++;
-  const current = generation;
-  try {
-    const next = await loadProviderAccount(
-      currentAccount.value.ref,
-      controller.signal,
-    );
-    if (current !== generation || controller.signal.aborted) return;
-    if (next.ref !== props.account.ref)
-      throw new Error("Provider observation scope changed");
-    if (
-      next.version !== currentAccount.value.version ||
-      next.deletion?.version !== currentAccount.value.deletion?.version
-    ) {
-      applyAccount(next);
-      await load(true);
-    } else scheduleObservation();
-  } catch (error) {
-    if (current !== generation) return;
-    clearProjection();
-    problem.value = asProblem(error);
-    emit("unavailable", props.account.ref);
-  }
-}
 async function load(reset: boolean): Promise<void> {
   if (
     busy.value ||
@@ -148,7 +95,6 @@ async function load(reset: boolean): Promise<void> {
   const current = ++generation;
   controller.abort();
   controller = new AbortController();
-  stopPolling();
   loading.value = true;
   problem.value = undefined;
   confirmation.value = undefined;
@@ -158,9 +104,7 @@ async function load(reset: boolean): Promise<void> {
     page.value = undefined;
   }
   try {
-    const fresh = reset
-      ? await loadProviderAccount(props.account.ref, controller.signal)
-      : currentAccount.value;
+    const fresh = currentAccount.value;
     if (current !== generation) return;
     if (!fresh || fresh.ref !== props.account.ref)
       throw new Error("Provider blocker account scope changed");
@@ -197,7 +141,6 @@ async function load(reset: boolean): Promise<void> {
     applyAccount(fresh);
     items.value = combined;
     page.value = next;
-    scheduleObservation();
   } catch (error) {
     if (current !== generation) return;
     clearProjection();
@@ -210,7 +153,6 @@ async function load(reset: boolean): Promise<void> {
 function search(): void {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
-    pollCount = 0;
     void load(true);
   }, 300);
 }
@@ -235,7 +177,6 @@ async function submit(): Promise<void> {
   busy.value = true;
   problem.value = undefined;
   outcomes.value = undefined;
-  stopPolling();
   const currentGeneration = generation;
   try {
     const result = await startProviderLifecycle(
@@ -272,16 +213,20 @@ function recovered(result: ProviderLifecycleResult): void {
   void load(true);
 }
 watch(
-  () => props.account.ref,
+  () => [
+    props.account.ref,
+    props.account.version,
+    props.account.deletion?.version,
+    props.account.deletion?.state,
+  ],
   () => {
-    pollCount = 0;
-    clearProjection();
+    if (currentAccount.value?.ref !== props.account.ref) clearProjection();
+    currentAccount.value = props.account;
     void load(true);
   },
   { immediate: true },
 );
 watch(kind, () => {
-  pollCount = 0;
   void load(true);
 });
 onBeforeUnmount(() => {
@@ -296,10 +241,7 @@ onBeforeUnmount(() => {
       type="button"
       class="button"
       :disabled="loading || busy"
-      @click="
-        pollCount = 0;
-        load(true);
-      "
+      @click="load(true)"
     >
       {{ t("providerLifecycle.refresh") }}
     </button>

@@ -10,7 +10,6 @@ import {
   normalizeRuntimeSecretProblem,
   revokeRuntimeSecret,
   rotateRuntimeSecret,
-  readRuntimeSecret,
 } from "./api";
 import type {
   RuntimeSecret,
@@ -38,6 +37,35 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     () => !loading.value && !problem.value && items.value.length === 0,
   );
   const hasMore = computed(() => nextPageToken.value.length > 0);
+
+  function prepareRealtimeScope(nextProjectRef: string): void {
+    if (projectRef.value !== nextProjectRef) items.value = [];
+    projectRef.value = nextProjectRef;
+    query.value = "";
+    nextPageToken.value = "";
+    problem.value = undefined;
+    mutationProblem.value = undefined;
+    loading.value = true;
+    loadingMore.value = false;
+  }
+
+  function applySnapshot(
+    nextProjectRef: string,
+    values: RuntimeSecret[],
+    sourceNextPageToken?: string,
+  ): void {
+    if (query.value || projectRef.value !== nextProjectRef) return;
+    if (values.some((item) => item.projectRef !== nextProjectRef))
+      throw new Error("Runtime secret realtime scope mismatch");
+    const previous = new Map(items.value.map((item) => [item.ref, item]));
+    items.value = values.map((item) => {
+      const retained = previous.get(item.ref);
+      return retained && retained.version > item.version ? retained : item;
+    });
+    nextPageToken.value = sourceNextPageToken ?? "";
+    loading.value = false;
+    problem.value = undefined;
+  }
 
   async function load(
     nextProjectRef: string,
@@ -138,7 +166,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
         await createRuntimeSecret(project, input),
         project,
       );
-      if (current === generation) await reconcile(receipt);
+      if (current === generation) retainReceipt(receipt);
     } catch (error) {
       const failure = normalizeRuntimeSecretProblem(error);
       if (current === generation) mutationProblem.value = failure;
@@ -166,7 +194,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
         secret.projectRef,
         secret,
       );
-      if (current === generation) await reconcile(receipt);
+      if (current === generation) retainReceipt(receipt);
     } catch (error) {
       const failure = normalizeRuntimeSecretProblem(error);
       if (current === generation) mutationProblem.value = failure;
@@ -191,7 +219,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
         secret.projectRef,
         secret,
       );
-      if (current === generation) await reconcile(receipt);
+      if (current === generation) retainReceipt(receipt);
     } catch (error) {
       const failure = normalizeRuntimeSecretProblem(error);
       if (current === generation) mutationProblem.value = failure;
@@ -232,57 +260,9 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     );
   }
 
-  async function acceptPublication(secret: RuntimeSecret): Promise<void> {
+  function acceptPublication(secret: RuntimeSecret): void {
     if (secret.projectRef !== projectRef.value) return;
-    await reconcile(checkedReceipt(secret, projectRef.value));
-  }
-
-  async function reconcile(receipt: RuntimeSecret): Promise<void> {
-    const current = generation;
-    retainReceipt(receipt);
-    const signal = AbortSignal.any([
-      controller?.signal ?? requestSignal(),
-      AbortSignal.timeout(5000),
-    ]);
-    let latest = receipt;
-    let readProblem: AppProblem | undefined;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      if (attempt)
-        await new Promise<void>((resolve) =>
-          setTimeout(resolve, attempt * 200),
-        );
-      if (generation !== current) return;
-      if (signal.aborted) break;
-      try {
-        const read = await readRuntimeSecret(
-          receipt.ref,
-          receipt.projectRef,
-          signal,
-        );
-        if (
-          read.version < receipt.version ||
-          read.currentRevision < receipt.currentRevision
-        )
-          throw new AppProblem({
-            status: 409,
-            code: "SECRET_REVISION_NOT_VISIBLE",
-            retryable: true,
-            kind: "conflict",
-          });
-        latest = read;
-        readProblem = undefined;
-        break;
-      } catch (error) {
-        readProblem = normalizeRuntimeSecretProblem(error);
-        if (!readProblem.retryable) break;
-      }
-    }
-    if (generation !== current) return;
-    await reload();
-    if (projectRef.value !== receipt.projectRef || generation !== current + 1)
-      return;
-    retainReceipt(latest);
-    if (readProblem) problem.value = readProblem;
+    retainReceipt(checkedReceipt(secret, projectRef.value));
   }
 
   function clearMutationProblem(): void {
@@ -314,6 +294,8 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     busyRef,
     empty,
     hasMore,
+    prepareRealtimeScope,
+    applySnapshot,
     load,
     loadMore,
     reload,

@@ -54,7 +54,11 @@ let searchTimer: number | undefined;
 
 async function openDialog(): Promise<void> {
   if (!canCreate.value) return;
-  if (runtimes.value.length === 0) await platform.loadRuntimes();
+  if (
+    runtimes.value.length === 0 &&
+    !platform.realtimeSnapshot("RUNTIME_SELECTION", projectRef.value)
+  )
+    await platform.loadRuntimes();
   form.runtimeRef ||= runtimes.value[0]?.ref ?? "";
   dialog.value = true;
 }

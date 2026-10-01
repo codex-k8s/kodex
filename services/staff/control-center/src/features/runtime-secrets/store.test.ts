@@ -139,35 +139,32 @@ describe("runtime secrets store", () => {
     expect(api.createRuntimeSecret).toHaveBeenCalledTimes(1);
   });
 
-  it("не откатывает подтверждённую ротацию отставшим GET и списком", async () => {
+  it("не откатывает подтверждённую ротацию отставшим realtime-снимком", async () => {
     const rotated = { ...secret, version: 4, currentRevision: 3 };
     api.loadRuntimeSecretPage.mockResolvedValue({
       items: [secret],
       nextPageToken: "",
     });
     api.rotateRuntimeSecret.mockResolvedValue(rotated);
-    api.readRuntimeSecret
-      .mockResolvedValueOnce(secret)
-      .mockResolvedValue(rotated);
     const store = useRuntimeSecretsStore();
     await store.load(secret.projectRef);
     await store.rotate(secret, {
       valueType: "STRING",
       value: "private-rotation",
     });
+    store.applySnapshot(secret.projectRef, [secret]);
     expect(store.items).toEqual([rotated]);
-    expect(api.readRuntimeSecret).toHaveBeenCalledTimes(2);
+    expect(api.readRuntimeSecret).not.toHaveBeenCalled();
     expect(api.rotateRuntimeSecret).toHaveBeenCalledTimes(1);
   });
 
-  it("сохраняет адаптивный размер страницы при readback после мутации", async () => {
+  it("не перечитывает список после мутации", async () => {
     const rotated = { ...secret, version: 4, currentRevision: 3 };
     api.loadRuntimeSecretPage.mockResolvedValue({
       items: [secret],
       nextPageToken: "",
     });
     api.rotateRuntimeSecret.mockResolvedValue(rotated);
-    api.readRuntimeSecret.mockResolvedValue(rotated);
     const store = useRuntimeSecretsStore();
 
     await store.load(secret.projectRef, "", 22);
@@ -176,13 +173,15 @@ describe("runtime secrets store", () => {
       value: "private-rotation",
     });
 
-    expect(api.loadRuntimeSecretPage).toHaveBeenLastCalledWith(
+    expect(api.loadRuntimeSecretPage).toHaveBeenCalledOnce();
+    expect(api.loadRuntimeSecretPage).toHaveBeenCalledWith(
       secret.projectRef,
       "",
       undefined,
       expect.any(AbortSignal),
       22,
     );
+    expect(api.readRuntimeSecret).not.toHaveBeenCalled();
   });
 
   it("отклоняет каталог другого проекта", async () => {
@@ -248,10 +247,11 @@ describe("runtime secrets store", () => {
     expect(store.busyRef).toBe("");
   });
 
-  it("сохраняет receipt при ошибке повторного чтения списка", async () => {
-    api.loadRuntimeSecretPage
-      .mockResolvedValueOnce({ items: [], nextPageToken: "" })
-      .mockRejectedValueOnce(new Error("Readback unavailable"));
+  it("сохраняет receipt без вторичного чтения списка", async () => {
+    api.loadRuntimeSecretPage.mockResolvedValueOnce({
+      items: [],
+      nextPageToken: "",
+    });
     api.createRuntimeSecret.mockResolvedValue(secret);
     const store = useRuntimeSecretsStore();
     await store.load(secret.projectRef);
@@ -262,8 +262,9 @@ describe("runtime secrets store", () => {
       value: "private-value",
     });
     expect(store.items).toEqual([secret]);
-    expect(store.problem).toBeDefined();
+    expect(store.problem).toBeUndefined();
     expect(store.mutationProblem).toBeUndefined();
+    expect(api.loadRuntimeSecretPage).toHaveBeenCalledOnce();
   });
 
   it("отклоняет повтор курсора и сохраняет уже загруженные данные", async () => {

@@ -12,7 +12,7 @@ describe("FilesWorkspace contract", () => {
     expect(source).toContain("mode: FileCollectionMode");
     expect(source).toContain(':to="trashMode ? filesPath : trashPath"');
     expect(source).toContain('value="KNOWLEDGE"');
-    expect(source).toContain("artifactSourceKinds(collectionTab.value");
+    expect(source).toMatch(/artifactSourceKinds\(\s*collectionTab\.value/);
   });
 
   it("показывает массовое soft-delete как последовательные операции", () => {

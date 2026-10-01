@@ -79,10 +79,16 @@ export const useRunBoardStore = defineStore("run-board", () => {
     hasMore: boolean,
   ): void {
     for (const lane of lanes) {
+      const laneValues = values.filter((run) =>
+        runLaneStates[lane].includes(run.state),
+      );
       columns[lane].applySnapshot(
         { ...scope, states: runLaneStates[lane] },
-        values.filter((run) => runLaneStates[lane].includes(run.state)),
-        hasMore,
+        laneValues,
+        // Общий realtime-cursor доказывает продолжение только уже видимой
+        // колонки. Пустую колонку нельзя автоматически перечитывать как
+        // отдельный первый HTTP-page: это возвращает скрытый initial polling.
+        hasMore && laneValues.length > 0,
       );
     }
   }

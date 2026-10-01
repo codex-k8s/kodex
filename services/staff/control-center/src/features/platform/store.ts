@@ -99,6 +99,7 @@ import type {
   IntegrationGrantInput,
   IntegrationDefinition,
   InstructionVersion,
+  ManagedConfigurationSummary,
   Membership,
   NextAction,
   Overview,
@@ -115,6 +116,7 @@ import type {
   RoleImageBuild,
   RoleImageRecipe,
   RoleImageRecipeCommand,
+  RuntimeSecret,
   RuntimeSelection,
   Run,
   RunCommand,
@@ -239,6 +241,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const searchTotal = ref(0);
   const activeSearchQuery = ref("");
   const projects = reactive<Record<string, Project>>({});
+  const trashedProjects = reactive<Record<string, Project>>({});
   const agents = reactive<Record<string, Agent>>({});
   const instructionVersions = reactive<Record<string, InstructionVersion[]>>(
     {},
@@ -253,8 +256,18 @@ export const usePlatformStore = defineStore("platform", () => {
   const gates = reactive<Record<string, OwnerGate>>({});
   const pendingGateCount = ref<number>();
   const gateCatalogRevision = ref(0);
+  const roleImageRealtimeRevision = ref(0);
+  const ownerGateNextPageToken = ref<string>();
   const artifacts = reactive<Record<string, Artifact>>({});
   const schedules = reactive<Record<string, Schedule>>({});
+  const runtimeSecrets = reactive<Record<string, RuntimeSecret>>({});
+  const managedConfigurations = reactive<
+    Record<string, ManagedConfigurationSummary>
+  >({});
+  const managedConfigurationPages = reactive<
+    Record<string, { total: number; nextPageToken?: string }>
+  >({});
+  const managedConfigurationRealtimeRevision = ref(0);
   const definitions = reactive<Record<string, IntegrationDefinition>>({});
   const connections = reactive<Record<string, IntegrationConnection>>({});
   const memberships = reactive<Record<string, Membership>>({});
@@ -266,14 +279,19 @@ export const usePlatformStore = defineStore("platform", () => {
   const platformMembershipActions = ref<NextAction[]>([]);
   const projectMembershipActions = ref<NextAction[]>([]);
   const projectCollectionActions = ref<NextAction[]>([]);
+  const projectTrashNextPageToken = ref<string>();
   const integrationDefinitionActions = ref<NextAction[]>([]);
   const integrationCoreReady = ref<boolean>();
+  const integrationDefinitionNextPageToken = ref<string>();
+  const integrationConnectionNextPageToken = ref<string>();
+  const integrationRealtimeRevision = ref(0);
   const conversations = reactive<Record<string, AssistantConversation>>({});
   const assistantConversationNextPageToken = ref<string>();
   const assistantRealtimeScopeKey = ref<string>();
   const realtimeCatalogSnapshots = reactive<
     Record<string, RealtimeCatalogSnapshot>
   >({});
+  const realtimeAvailableKinds = ref<PlatformResourceKind[]>([]);
   const assistant = ref<SystemAssistant>();
   const auditEvents = ref<AuditEvent[]>([]);
   const auditNextPageToken = ref<string>();
@@ -1734,8 +1752,22 @@ export const usePlatformStore = defineStore("platform", () => {
     gates[result.data.gate.ref] = result.data.gate;
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
+    if (gate.state === "OPEN" && result.data.gate.state !== "OPEN") {
+      if (pendingGateCount.value !== undefined)
+        pendingGateCount.value = Math.max(0, pendingGateCount.value - 1);
+      if (overview.value)
+        overview.value = {
+          ...overview.value,
+          pendingGateCount: Math.max(0, overview.value.pendingGateCount - 1),
+          pendingGates: overview.value.pendingGates.filter(
+            (current) => current.ref !== result.data.gate.ref,
+          ),
+        };
+      const project = projects[gate.projectRef];
+      if (project)
+        project.pendingGateCount = Math.max(0, project.pendingGateCount - 1);
+    }
     gateCatalogRevision.value += 1;
-    void loadPendingGateCount();
     return result.data.gate;
   }
 
@@ -1944,6 +1976,7 @@ export const usePlatformStore = defineStore("platform", () => {
     field: string,
   ): T[] {
     const items = value[field];
+    if (items === undefined) return [];
     if (
       !Array.isArray(items) ||
       items.some(
@@ -1958,11 +1991,32 @@ export const usePlatformStore = defineStore("platform", () => {
     return items as T[];
   }
 
+  function snapshotKeyArray<T extends { key: string }>(
+    value: Record<string, unknown>,
+    field: string,
+  ): T[] {
+    const items = value[field];
+    if (items === undefined) return [];
+    if (
+      !Array.isArray(items) ||
+      items.some(
+        (item) =>
+          typeof item !== "object" ||
+          item === null ||
+          Array.isArray(item) ||
+          typeof (item as { key?: unknown }).key !== "string",
+      )
+    )
+      throw new Error(`Invalid realtime snapshot ${field}`);
+    return items as T[];
+  }
+
   function snapshotStringArray(
     value: Record<string, unknown>,
     field: string,
   ): NextAction[] {
     const items = value[field];
+    if (items === undefined) return [];
     if (!Array.isArray(items) || items.some((item) => typeof item !== "string"))
       throw new Error(`Invalid realtime snapshot ${field}`);
     return items as NextAction[];
@@ -2008,6 +2062,20 @@ export const usePlatformStore = defineStore("platform", () => {
       case "PROJECT":
         if (!catalog) throw new Error("Project realtime catalog is missing");
         replace(projects, snapshotArray<Project>(catalog, "projects"));
+        if (Array.isArray(catalog.trashedProjects)) {
+          replace(
+            trashedProjects,
+            snapshotArray<Project>(catalog, "trashedProjects"),
+          );
+          const trashPage = snapshotRecord(catalog.trashPage, "trashPage");
+          projectTrashNextPageToken.value =
+            typeof trashPage.nextPageToken === "string"
+              ? trashPage.nextPageToken || undefined
+              : undefined;
+        } else {
+          replace(trashedProjects, []);
+          projectTrashNextPageToken.value = undefined;
+        }
         if ("selectedProject" in snapshot) {
           const response = snapshotRecord(
             snapshot.selectedProject,
@@ -2052,6 +2120,22 @@ export const usePlatformStore = defineStore("platform", () => {
       case "RUN":
         if (!catalog) throw new Error("Run realtime catalog is missing");
         reconcileRuns(snapshotArray<Run>(catalog, "runs"));
+        {
+          const gateValues = snapshotArray<OwnerGate>(catalog, "gates");
+          if (scopeProjectRef)
+            replaceScoped(
+              gates,
+              gateValues,
+              (gate) => gate.projectRef === scopeProjectRef,
+            );
+          else replace(gates, gateValues);
+          const gatePage = snapshotRecord(catalog.gatesPage, "gatesPage");
+          ownerGateNextPageToken.value =
+            typeof gatePage.nextPageToken === "string"
+              ? gatePage.nextPageToken || undefined
+              : undefined;
+          gateCatalogRevision.value += 1;
+        }
         applyOverviewSnapshot(snapshot);
         return;
       case "ARTIFACT":
@@ -2105,6 +2189,23 @@ export const usePlatformStore = defineStore("platform", () => {
           definitionResponse,
           "nextActions",
         );
+        const definitionPage = snapshotRecord(
+          definitionResponse.page,
+          "definitions.page",
+        );
+        const connectionPage = snapshotRecord(
+          connectionResponse.page,
+          "connections.page",
+        );
+        integrationDefinitionNextPageToken.value =
+          typeof definitionPage.nextPageToken === "string"
+            ? definitionPage.nextPageToken || undefined
+            : undefined;
+        integrationConnectionNextPageToken.value =
+          typeof connectionPage.nextPageToken === "string"
+            ? connectionPage.nextPageToken || undefined
+            : undefined;
+        integrationRealtimeRevision.value += 1;
         return;
       }
       case "MEMBERSHIP":
@@ -2167,8 +2268,86 @@ export const usePlatformStore = defineStore("platform", () => {
           snapshotArray<RoleImageRecipe>(catalog, "recipes"),
           (recipe) => recipe.projectRef === scopeProjectRef,
         );
+        replaceByKey(
+          roleEnvironments,
+          snapshotKeyArray<RoleEnvironment>(catalog, "roleEnvironments"),
+          (environment) => environment.key,
+        );
+        roleImageRealtimeRevision.value += 1;
+        return;
+      case "RUNTIME_SECRET":
+        if (!catalog)
+          throw new Error("Runtime secret realtime catalog is missing");
+        if (scopeProjectRef)
+          replaceScoped(
+            runtimeSecrets,
+            snapshotArray<RuntimeSecret>(catalog, "secrets"),
+            (secret) => secret.projectRef === scopeProjectRef,
+          );
+        else
+          replace(
+            runtimeSecrets,
+            snapshotArray<RuntimeSecret>(catalog, "secrets"),
+          );
+        return;
+      case "MANAGED_CONFIGURATION": {
+        if (!catalog)
+          throw new Error("Managed configuration realtime catalog is missing");
+        const configurations = snapshotArray<ManagedConfigurationSummary>(
+          catalog,
+          "managedConfigurations",
+        );
+        const rawPages = catalog.managedConfigurationPages;
+        if (!Array.isArray(rawPages))
+          throw new Error("Managed configuration realtime pages are missing");
+        const pages: Record<string, { total: number; nextPageToken?: string }> =
+          {};
+        const allowedKinds = new Set([
+          "PROMPT_TEMPLATE",
+          "ROLE_IMAGE",
+          "INTEGRATION_DEFINITION",
+          "SYSTEM_STT",
+        ]);
+        for (const rawPage of rawPages) {
+          const page = snapshotRecord(rawPage, "managedConfigurationPages[]");
+          if (
+            typeof page.kind !== "string" ||
+            !allowedKinds.has(page.kind) ||
+            page.kind in pages ||
+            !Number.isSafeInteger(page.total) ||
+            Number(page.total) < 0 ||
+            (page.nextPageToken !== undefined &&
+              typeof page.nextPageToken !== "string")
+          )
+            throw new Error("Managed configuration realtime page is invalid");
+          pages[page.kind] = {
+            total: Number(page.total),
+            ...(page.nextPageToken
+              ? { nextPageToken: page.nextPageToken }
+              : {}),
+          };
+        }
+        replace(managedConfigurations, configurations);
+        for (const kind of Object.keys(managedConfigurationPages))
+          Reflect.deleteProperty(managedConfigurationPages, kind);
+        Object.assign(managedConfigurationPages, pages);
+        managedConfigurationRealtimeRevision.value += 1;
+        return;
+      }
+      case "RUNTIME_SELECTION":
+        if (!catalog)
+          throw new Error("Runtime selection realtime catalog is missing");
+        replace(runtimes, snapshotArray<RuntimeSelection>(catalog, "runtimes"));
         return;
       case "RUNTIME_ENVIRONMENT":
+        if (!catalog)
+          throw new Error("Runtime environment realtime catalog is missing");
+        replaceByKey(
+          roleEnvironments,
+          snapshotKeyArray<RoleEnvironment>(catalog, "roleEnvironments"),
+          (environment) => environment.key,
+        );
+        return;
       case "PROVIDER_ACCOUNT":
         return;
     }
@@ -2235,6 +2414,61 @@ export const usePlatformStore = defineStore("platform", () => {
     scopeProjectRef?: string,
   ): RealtimeCatalogSnapshot | undefined {
     return realtimeCatalogSnapshots[realtimeCatalogKey(kind, scopeProjectRef)];
+  }
+
+  function applyRealtimeAvailability(
+    kinds: PlatformResourceKind[],
+    scopeProjectRef: string | undefined,
+  ): void {
+    if (scopeProjectRef !== selectedProjectRef())
+      throw new Error("Realtime availability project scope changed");
+    const available = new Set(kinds);
+    realtimeAvailableKinds.value = [...available];
+    for (const key of Object.keys(realtimeCatalogSnapshots)) {
+      const [kind, scope = ""] = key.split(":", 2);
+      if (
+        scope === (scopeProjectRef ?? "") &&
+        !available.has(kind as PlatformResourceKind)
+      )
+        Reflect.deleteProperty(realtimeCatalogSnapshots, key);
+    }
+    const clearScoped = <T extends { projectRef?: string }>(
+      target: Record<string, T>,
+    ): void => {
+      for (const [ref, value] of Object.entries(target))
+        if (!scopeProjectRef || value.projectRef === scopeProjectRef)
+          Reflect.deleteProperty(target, ref);
+    };
+    if (!available.has("AGENT") && !available.has("INSTRUCTIONS"))
+      clearScoped(agents);
+    if (!available.has("WORKFLOW")) clearScoped(workflows);
+    if (!available.has("ARTIFACT")) clearScoped(artifacts);
+    if (!available.has("SCHEDULE")) clearScoped(schedules);
+    if (!available.has("RUN")) clearScoped(runs);
+    if (!available.has("ROLE_IMAGE_RECIPE")) clearScoped(roleImageRecipes);
+    if (!available.has("RUNTIME_SECRET")) clearScoped(runtimeSecrets);
+    if (!available.has("MANAGED_CONFIGURATION")) {
+      replace(managedConfigurations, []);
+      for (const kind of Object.keys(managedConfigurationPages))
+        Reflect.deleteProperty(managedConfigurationPages, kind);
+    }
+    if (!available.has("MEMBERSHIP")) clearScoped(memberships);
+    if (!available.has("PLATFORM_MEMBERSHIP")) {
+      replace(platformMemberships, []);
+      platformMembershipActions.value = [];
+    }
+    if (
+      !available.has("INTEGRATION_CONNECTION") &&
+      !available.has("INTEGRATION_GRANT")
+    ) {
+      replaceByKey(definitions, [], () => "");
+      replace(connections, []);
+      integrationDefinitionActions.value = [];
+      integrationCoreReady.value = undefined;
+      integrationDefinitionNextPageToken.value = undefined;
+      integrationConnectionNextPageToken.value = undefined;
+    }
+    if (!available.has("RUNTIME_SELECTION")) replace(runtimes, []);
   }
 
   async function reloadPlatformKind(kind: string): Promise<void> {
@@ -2423,6 +2657,7 @@ export const usePlatformStore = defineStore("platform", () => {
     for (const target of [
       runtimes,
       projects,
+      trashedProjects,
       agents,
       instructionVersions,
       roleEnvironments,
@@ -2435,6 +2670,9 @@ export const usePlatformStore = defineStore("platform", () => {
       gates,
       artifacts,
       schedules,
+      runtimeSecrets,
+      managedConfigurations,
+      runtimes,
       definitions,
       connections,
       memberships,
@@ -2452,6 +2690,8 @@ export const usePlatformStore = defineStore("platform", () => {
       Reflect.deleteProperty(problems, key);
     for (const key of Object.keys(realtimeCatalogSnapshots))
       Reflect.deleteProperty(realtimeCatalogSnapshots, key);
+    for (const kind of Object.keys(managedConfigurationPages))
+      Reflect.deleteProperty(managedConfigurationPages, kind);
     bootstrap.value = undefined;
     overview.value = undefined;
     administration.value = undefined;
@@ -2464,10 +2704,17 @@ export const usePlatformStore = defineStore("platform", () => {
     platformMembershipActions.value = [];
     projectMembershipActions.value = [];
     projectCollectionActions.value = [];
+    projectTrashNextPageToken.value = undefined;
     integrationDefinitionActions.value = [];
     integrationCoreReady.value = undefined;
+    integrationDefinitionNextPageToken.value = undefined;
+    integrationConnectionNextPageToken.value = undefined;
+    integrationRealtimeRevision.value = 0;
+    ownerGateNextPageToken.value = undefined;
     pendingGateCount.value = undefined;
     gateCatalogRevision.value = 0;
+    roleImageRealtimeRevision.value = 0;
+    managedConfigurationRealtimeRevision.value = 0;
     assistant.value = undefined;
     assistantConversationNextPageToken.value = undefined;
     assistantRealtimeScopeKey.value = undefined;
@@ -2479,6 +2726,7 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   const projectList = computed(() => Object.values(projects));
+  const projectTrashList = computed(() => Object.values(trashedProjects));
   const runList = computed(() => Object.values(runs));
   const gateList = computed(() => Object.values(gates));
 
@@ -2492,10 +2740,12 @@ export const usePlatformStore = defineStore("platform", () => {
     searchNextPageToken,
     searchTotal,
     projects,
+    trashedProjects,
     agents,
     instructionVersions,
     roleEnvironments,
     roleImageRecipes,
+    roleImageRealtimeRevision,
     roleImageBuilds,
     workflows,
     runs,
@@ -2504,8 +2754,13 @@ export const usePlatformStore = defineStore("platform", () => {
     gates,
     pendingGateCount,
     gateCatalogRevision,
+    ownerGateNextPageToken,
     artifacts,
     schedules,
+    runtimeSecrets,
+    managedConfigurations,
+    managedConfigurationPages,
+    managedConfigurationRealtimeRevision,
     definitions,
     connections,
     memberships,
@@ -2515,8 +2770,12 @@ export const usePlatformStore = defineStore("platform", () => {
     platformMembershipActions,
     projectMembershipActions,
     projectCollectionActions,
+    projectTrashNextPageToken,
     integrationDefinitionActions,
     integrationCoreReady,
+    integrationDefinitionNextPageToken,
+    integrationConnectionNextPageToken,
+    integrationRealtimeRevision,
     conversations,
     assistantConversationNextPageToken,
     assistantRealtimeScopeKey,
@@ -2527,6 +2786,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loading,
     problems,
     projectList,
+    projectTrashList,
     runList,
     gateList,
     loadBootstrap,
@@ -2601,6 +2861,8 @@ export const usePlatformStore = defineStore("platform", () => {
     applyPlatformSnapshot,
     markRealtimeSnapshot,
     realtimeSnapshot,
+    realtimeAvailableKinds,
+    applyRealtimeAvailability,
     applySpeechAvailability,
     reloadPlatformKind,
     reloadPlatformState,

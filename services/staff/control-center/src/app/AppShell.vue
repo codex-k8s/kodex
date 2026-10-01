@@ -40,6 +40,7 @@ import { resolveShellRealtimeState } from "@/app/realtime-presentation";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
 import { useAssistantStore } from "@/features/assistant/store";
+import { useAccessStore } from "@/features/access/store";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useRoleImagesStore } from "@/features/role-images/store";
@@ -73,6 +74,7 @@ import {
 const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
+const access = useAccessStore();
 const realtime = useRealtimeStore();
 const roleImages = useRoleImagesStore();
 const runtime = useRuntimeStore();
@@ -116,7 +118,13 @@ useCursorInfiniteScroll({
   loadMore: () => platform.loadMoreSearch(searchPageSize.value),
 });
 
-const projectRef = computed(() => routeProjectRef(route.params));
+const projectRef = computed(
+  () =>
+    routeProjectRef(route.params) ??
+    (route.name === "configuration-catalog"
+      ? routeProjectRef(route.query)
+      : undefined),
+);
 const activeSection = computed(() => activeNavigationSection(route.name));
 const fullBleedRunWorkspace = computed(
   () => route.name === "run" || route.name === "project-run",
@@ -471,6 +479,27 @@ watch(
   { immediate: true },
 );
 watch(
+  () => [
+    projectRef.value ?? "",
+    platform.realtimeSnapshot("PROJECT", projectRef.value)?.scopeKey ?? "",
+    platform.projectList
+      .map((item) => `${item.ref}:${String(item.version)}`)
+      .sort()
+      .join("|"),
+  ],
+  ([currentRef, snapshotScope]) => {
+    if (
+      !currentRef ||
+      !snapshotScope ||
+      platform.projects[currentRef] ||
+      routeProjectRef(route.params) !== currentRef
+    )
+      return;
+    void router.replace("/projects");
+  },
+  { flush: "post" },
+);
+watch(
   () => route.fullPath,
   () => {
     mobileOpen.value = false;
@@ -512,6 +541,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("kodex:preload-error", markPreloadFailed);
   realtime.closePlatform();
   runtime.clear();
+  access.clearOwnerState();
   platform.clearOwnerState();
 });
 </script>

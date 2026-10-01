@@ -165,7 +165,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     problem.value = undefined;
     try {
       const [assistantValue, firstPage] = await Promise.all([
-        readAssistant(signal),
+        assistant.value
+          ? Promise.resolve(assistant.value)
+          : readAssistant(signal),
         readHistory(nextProjectRef, undefined, signal),
       ]);
       if (current !== generation) return;
@@ -282,7 +284,6 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     conversation: AssistantConversation,
   ): Promise<void> {
     if (
-      !conversation ||
       conversation.state === "ARCHIVED" ||
       busy.value ||
       loading.value ||
@@ -297,7 +298,6 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       selectedRef.value = undefined;
       receipt.value = undefined;
     });
-    if (context.value) await load(context.value, projectRef.value, false);
   }
 
   async function archiveSelected(): Promise<void> {
@@ -317,7 +317,6 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       );
       if (selectedRef.value === conversation.ref) selectedRef.value = undefined;
     });
-    if (context.value) await load(context.value, projectRef.value, false);
   }
 
   async function purgeFromTrash(

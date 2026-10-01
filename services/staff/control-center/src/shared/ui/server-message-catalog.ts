@@ -347,6 +347,14 @@ export const serverTokenTranslations = {
     "Диалог архивирован",
     "Conversation archived",
   ],
+  ASSISTANT_CONVERSATION_RESTORED: [
+    "Диалог восстановлен",
+    "Conversation restored",
+  ],
+  ASSISTANT_CONVERSATION_PURGED: [
+    "Диалог удалён безвозвратно",
+    "Conversation permanently deleted",
+  ],
   ASSISTANT_CONVERSATION_CREATED: ["Диалог создан", "Conversation created"],
   ASSISTANT_CONVERSATION_PROJECT_CHANGED: [
     "Диалог перенесён в Проект",
@@ -669,6 +677,7 @@ export const serverTokenTranslations = {
     "Запрошено окончательное удаление проекта",
     "Permanent project deletion requested",
   ],
+  PROJECT_PURGED: ["Проект удалён безвозвратно", "Project permanently deleted"],
   PROVIDER_ACCOUNT_AUTHORIZED: [
     "Учётная запись провайдера авторизована",
     "Provider account authorized",

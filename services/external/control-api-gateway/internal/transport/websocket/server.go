@@ -26,6 +26,8 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
 	"github.com/nats-io/nats.go"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -53,18 +55,24 @@ type queryClient interface {
 	GetBootstrapState(context.Context, *controlplanev1.GetBootstrapStateRequest, ...grpc.CallOption) (*controlplanev1.GetBootstrapStateResponse, error)
 	GetOverview(context.Context, *controlplanev1.GetOverviewRequest, ...grpc.CallOption) (*controlplanev1.GetOverviewResponse, error)
 	ListProjects(context.Context, *controlplanev1.ListProjectsRequest, ...grpc.CallOption) (*controlplanev1.ListProjectsResponse, error)
+	ListTrashedProjects(context.Context, *controlplanev1.ListTrashedProjectsRequest, ...grpc.CallOption) (*controlplanev1.ListTrashedProjectsResponse, error)
 	GetProject(context.Context, *controlplanev1.GetProjectRequest, ...grpc.CallOption) (*controlplanev1.GetProjectResponse, error)
 	ListProjectMemberships(context.Context, *controlplanev1.ListProjectMembershipsRequest, ...grpc.CallOption) (*controlplanev1.ListProjectMembershipsResponse, error)
 	ListPlatformMemberships(context.Context, *controlplanev1.ListPlatformMembershipsRequest, ...grpc.CallOption) (*controlplanev1.ListPlatformMembershipsResponse, error)
 	ListAgents(context.Context, *controlplanev1.ListAgentsRequest, ...grpc.CallOption) (*controlplanev1.ListAgentsResponse, error)
 	ListWorkflows(context.Context, *controlplanev1.ListWorkflowsRequest, ...grpc.CallOption) (*controlplanev1.ListWorkflowsResponse, error)
 	ListRuns(context.Context, *controlplanev1.ListRunsRequest, ...grpc.CallOption) (*controlplanev1.ListRunsResponse, error)
+	ListOwnerGates(context.Context, *controlplanev1.ListOwnerGatesRequest, ...grpc.CallOption) (*controlplanev1.ListOwnerGatesResponse, error)
 	ListArtifacts(context.Context, *controlplanev1.ListArtifactsRequest, ...grpc.CallOption) (*controlplanev1.ListArtifactsResponse, error)
 	ListSchedules(context.Context, *controlplanev1.ListSchedulesRequest, ...grpc.CallOption) (*controlplanev1.ListSchedulesResponse, error)
 	ListIntegrationDefinitions(context.Context, *controlplanev1.ListIntegrationDefinitionsRequest, ...grpc.CallOption) (*controlplanev1.ListIntegrationDefinitionsResponse, error)
 	ListIntegrationConnections(context.Context, *controlplanev1.ListIntegrationConnectionsRequest, ...grpc.CallOption) (*controlplanev1.ListIntegrationConnectionsResponse, error)
 	ListRuntimeEnvironmentSets(context.Context, *controlplanev1.ListRuntimeEnvironmentSetsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeEnvironmentSetsResponse, error)
 	ListProviderAccounts(context.Context, *controlplanev1.ListProviderAccountsRequest, ...grpc.CallOption) (*controlplanev1.ListProviderAccountsResponse, error)
+	ListProviderDefinitions(context.Context, *controlplanev1.ListProviderDefinitionsRequest, ...grpc.CallOption) (*controlplanev1.ListProviderDefinitionsResponse, error)
+	ListRuntimeSecrets(context.Context, *controlplanev1.ListRuntimeSecretsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeSecretsResponse, error)
+	ListManagedConfigurations(context.Context, *controlplanev1.ListManagedConfigurationsRequest, ...grpc.CallOption) (*controlplanev1.ListManagedConfigurationsResponse, error)
+	ListRuntimeSelections(context.Context, *controlplanev1.ListRuntimeSelectionsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeSelectionsResponse, error)
 	GetRunGraph(context.Context, *controlplanev1.GetRunGraphRequest, ...grpc.CallOption) (*controlplanev1.GetRunGraphResponse, error)
 	ListRunEvents(context.Context, *controlplanev1.ListRunEventsRequest, ...grpc.CallOption) (*controlplanev1.ListRunEventsResponse, error)
 	GetPlatformEventCursor(context.Context, *controlplanev1.GetPlatformEventCursorRequest, ...grpc.CallOption) (*controlplanev1.GetPlatformEventCursorResponse, error)
@@ -76,13 +84,23 @@ type assistantQueryClient interface {
 }
 
 type roleImageQueryClient interface {
+	ListRoleEnvironments(context.Context, *controlplanev1.ListRoleEnvironmentsRequest, ...grpc.CallOption) (*controlplanev1.ListRoleEnvironmentsResponse, error)
 	ListRoleImageRecipes(context.Context, *controlplanev1.ListRoleImageRecipesRequest, ...grpc.CallOption) (*controlplanev1.ListRoleImageRecipesResponse, error)
+}
+
+type accessQueryClient interface {
+	ListPermissionRegistry(context.Context, *controlplanev1.ListPermissionRegistryRequest, ...grpc.CallOption) (*controlplanev1.ListPermissionRegistryResponse, error)
+	ListAccessSubjects(context.Context, *controlplanev1.ListAccessSubjectsRequest, ...grpc.CallOption) (*controlplanev1.ListAccessSubjectsResponse, error)
+	ListOIDCGroups(context.Context, *controlplanev1.ListOIDCGroupsRequest, ...grpc.CallOption) (*controlplanev1.ListOIDCGroupsResponse, error)
+	ListAccessRoles(context.Context, *controlplanev1.ListAccessRolesRequest, ...grpc.CallOption) (*controlplanev1.ListAccessRolesResponse, error)
+	ListAccessBindings(context.Context, *controlplanev1.ListAccessBindingsRequest, ...grpc.CallOption) (*controlplanev1.ListAccessBindingsResponse, error)
 }
 
 type Server struct {
 	query       queryClient
 	assistant   assistantQueryClient
 	roleImages  roleImageQueryClient
+	access      accessQueryClient
 	speech      sttv1.SpeechToTextServiceClient
 	nats        *nats.Conn
 	origins     []string
@@ -91,10 +109,10 @@ type Server struct {
 }
 
 func New(control *controlplaneclient.Client, connection *nats.Conn, speech sttv1.SpeechToTextServiceClient, origins []string, tickets *boundary.Boundary, legacyUntil time.Time) (*Server, error) {
-	if control == nil || control.Query == nil || control.Assistant == nil || control.RoleImages == nil || connection == nil || !connection.IsConnected() || speech == nil || len(origins) == 0 || tickets == nil {
+	if control == nil || control.Query == nil || control.Assistant == nil || control.RoleImages == nil || control.Access == nil || connection == nil || !connection.IsConnected() || speech == nil || len(origins) == 0 || tickets == nil {
 		return nil, errors.New("realtime server configuration is invalid")
 	}
-	return &Server{query: control.Query, assistant: control.Assistant, roleImages: control.RoleImages, speech: speech, nats: connection, origins: origins, tickets: tickets, legacyUntil: legacyUntil}, nil
+	return &Server{query: control.Query, assistant: control.Assistant, roleImages: control.RoleImages, access: control.Access, speech: speech, nats: connection, origins: origins, tickets: tickets, legacyUntil: legacyUntil}, nil
 }
 
 type busEnvelope struct {
@@ -343,14 +361,14 @@ func (multiplexer *sessionMultiplexer) initializePlatform(after int64, snapshotR
 	}
 	multiplexer.platformCursor = cursor.GetCurrentSequence()
 	multiplexer.platformAvailable = true
-	if snapshotRequired || after != multiplexer.platformCursor {
-		if !multiplexer.sendPlatformBootstrap() {
-			return errOutboundOverflow
-		}
+	availableKinds, sent := multiplexer.sendPlatformBootstrap()
+	if !sent {
+		return errOutboundOverflow
 	}
 	if !multiplexer.send(generated.PlatformReadyEnvelope{
 		Type: "PLATFORM_READY", RequestRef: multiplexer.platformRequestRef,
 		StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: multiplexer.platformCursor,
+		AvailableKinds: availableKinds,
 	}) {
 		return errOutboundOverflow
 	}
@@ -513,8 +531,14 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 	if signal.Sequence != multiplexer.platformCursor+1 {
 		return multiplexer.synchronizePlatform()
 	}
+	if platformSignalOutsideScope(signal, multiplexer.projectRef) {
+		return multiplexer.advancePlatformCursor(signal)
+	}
 	rawSnapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, signal.Kind, multiplexer.projectRef, multiplexer.localize)
 	if err != nil {
+		if status.Code(err) == codes.PermissionDenied {
+			return multiplexer.advancePlatformCursor(signal)
+		}
 		multiplexer.platformAvailable = false
 		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
 	}
@@ -532,6 +556,30 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 	}
 	if multiplexer.projectRef != "" {
 		envelope.ProjectRef = &multiplexer.projectRef
+	}
+	if !multiplexer.send(envelope) {
+		return false
+	}
+	multiplexer.platformCursor = signal.Sequence
+	return true
+}
+
+func platformSignalOutsideScope(signal platformSignal, selectedProjectRef string) bool {
+	if selectedProjectRef == "" || signal.ProjectRef == "" || signal.Kind == "PROJECT" {
+		return false
+	}
+	return signal.ProjectRef != selectedProjectRef
+}
+
+func (multiplexer *sessionMultiplexer) advancePlatformCursor(signal platformSignal) bool {
+	eventName := generated.PlatformEventName(signal.EventName)
+	envelope := generated.PlatformCursorEnvelope{
+		Type: "PLATFORM_CURSOR", RequestRef: multiplexer.platformRequestRef,
+		StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: signal.Sequence,
+		EventName: eventName, Kind: generated.PlatformResourceKind(signal.Kind),
+	}
+	if signal.ProjectRef != "" {
+		envelope.ProjectRef = &signal.ProjectRef
 	}
 	if !multiplexer.send(envelope) {
 		return false

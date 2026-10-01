@@ -151,7 +151,9 @@ test("локальный OIDC, API и основные экраны доступ
       nextActions: string[];
     };
   });
-  expect(assistantReadback.corePromptRevision).toBe("system-assistant-core-v21");
+  expect(assistantReadback.corePromptRevision).toBe(
+    "system-assistant-core-v21",
+  );
   const providerAccountRequired =
     !assistantReadback.warmSessionRef &&
     !assistantReadback.nextActions.includes("CREATE_CONVERSATION");

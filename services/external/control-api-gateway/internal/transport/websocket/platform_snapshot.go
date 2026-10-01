@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	httptransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -47,7 +50,7 @@ func typedPlatformSnapshot(kind string, value map[string]any) (generated.Platfor
 		valid = snapshot.Catalog != nil && snapshot.Overview != nil && (present == 2 || (present == 3 && snapshot.SelectedProject != nil))
 	case "AGENT", "INSTRUCTIONS", "RUN", "ARTIFACT":
 		valid = snapshot.Catalog != nil && snapshot.Overview != nil && present == 2
-	case "WORKFLOW", "SCHEDULE", "MEMBERSHIP", "PLATFORM_MEMBERSHIP", "ROLE_IMAGE_RECIPE", "RUNTIME_ENVIRONMENT", "PROVIDER_ACCOUNT":
+	case "WORKFLOW", "SCHEDULE", "MEMBERSHIP", "PLATFORM_MEMBERSHIP", "ROLE_IMAGE_RECIPE", "RUNTIME_ENVIRONMENT", "PROVIDER_ACCOUNT", "RUNTIME_SECRET", "MANAGED_CONFIGURATION", "RUNTIME_SELECTION":
 		valid = snapshot.Catalog != nil && present == 1
 	case "INTEGRATION_CONNECTION", "INTEGRATION_GRANT":
 		valid = snapshot.Definitions != nil && snapshot.Connections != nil && present == 2
@@ -74,6 +77,18 @@ var platformBootstrapKinds = []string{
 	"ROLE_IMAGE_RECIPE",
 	"RUNTIME_ENVIRONMENT",
 	"PROVIDER_ACCOUNT",
+	"RUNTIME_SECRET",
+	"MANAGED_CONFIGURATION",
+	"RUNTIME_SELECTION",
+}
+
+func platformKindRequiresProject(kind string) bool {
+	switch kind {
+	case "ROLE_IMAGE_RECIPE":
+		return true
+	default:
+		return false
+	}
 }
 
 func platformPage() *controlplanev1.PageRequest {
@@ -162,10 +177,34 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		if projectErr != nil {
 			return nil, projectErr
 		}
+		trash, trashErr := server.query.ListTrashedProjects(ctx, &controlplanev1.ListTrashedProjectsRequest{Page: platformPage()})
+		if trashErr == nil {
+			trashCatalog, projectionErr := projectSnapshotPart(trash, localize)
+			if projectionErr != nil {
+				return nil, projectionErr
+			}
+			catalog := snapshot["catalog"].(map[string]any)
+			catalog["trashedProjects"] = trashCatalog["projects"]
+			catalog["trashPage"] = trashCatalog["page"]
+		} else if code := status.Code(trashErr); code != codes.NotFound && code != codes.PermissionDenied {
+			return nil, trashErr
+		}
 		if projectRef != "" {
 			selected, selectedErr := server.query.GetProject(scoped, &controlplanev1.GetProjectRequest{ProjectRef: projectRef})
 			if selectedErr != nil {
-				return nil, selectedErr
+				if code := status.Code(selectedErr); code != codes.NotFound && code != codes.PermissionDenied {
+					return nil, selectedErr
+				}
+				overview, overviewErr := server.query.GetOverview(ctx, &controlplanev1.GetOverviewRequest{})
+				if overviewErr != nil {
+					return nil, overviewErr
+				}
+				overviewProjection, projectionErr := projectSnapshotPart(overview, localize)
+				if projectionErr != nil {
+					return nil, projectionErr
+				}
+				snapshot["overview"] = overviewProjection
+				return snapshot, nil
 			}
 			selectedProjection, projectionErr := projectSnapshotPart(selected, localize)
 			if projectionErr != nil {
@@ -195,10 +234,21 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		if readErr != nil {
 			return nil, readErr
 		}
-		snapshot, projectErr := snapshotWithCatalog(response, localize)
+		catalog, projectErr := projectSnapshotPart(response, localize)
 		if projectErr != nil {
 			return nil, projectErr
 		}
+		gates, readErr := server.query.ListOwnerGates(scoped, &controlplanev1.ListOwnerGatesRequest{ProjectRef: projectRef, Page: platformPage()})
+		if readErr != nil {
+			return nil, readErr
+		}
+		gateCatalog, projectErr := projectSnapshotPart(gates, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		catalog["gates"] = gateCatalog["gates"]
+		catalog["gatesPage"] = gateCatalog["page"]
+		snapshot := map[string]any{"catalog": catalog}
 		return withOverview(snapshot)
 	case "ARTIFACT":
 		response, readErr := server.query.ListArtifacts(scoped, &controlplanev1.ListArtifactsRequest{ProjectRef: projectRef, Page: platformPage()})
@@ -235,11 +285,70 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		}
 		return map[string]any{"definitions": definitionProjection, "connections": connectionProjection}, nil
 	case "MEMBERSHIP":
-		response, readErr := server.query.ListProjectMemberships(scoped, &controlplanev1.ListProjectMembershipsRequest{ProjectRef: projectRef, Page: platformPage()})
+		catalog := map[string]any{}
+		if projectRef != "" {
+			response, readErr := server.query.ListProjectMemberships(scoped, &controlplanev1.ListProjectMembershipsRequest{ProjectRef: projectRef, Page: platformPage()})
+			if readErr != nil {
+				return nil, readErr
+			}
+			membershipCatalog, projectionErr := projectSnapshotPart(response, localize)
+			if projectionErr != nil {
+				return nil, projectionErr
+			}
+			for key, value := range membershipCatalog {
+				catalog[key] = value
+			}
+		} else {
+			catalog["memberships"] = []any{}
+			catalog["nextActions"] = []any{}
+			catalog["page"] = map[string]any{}
+		}
+		permissions, readErr := server.access.ListPermissionRegistry(ctx, &controlplanev1.ListPermissionRegistryRequest{})
 		if readErr != nil {
 			return nil, readErr
 		}
-		return snapshotWithCatalog(response, localize)
+		subjects, readErr := server.access.ListAccessSubjects(ctx, &controlplanev1.ListAccessSubjectsRequest{Page: platformPage()})
+		if readErr != nil {
+			return nil, readErr
+		}
+		groups, readErr := server.access.ListOIDCGroups(ctx, &controlplanev1.ListOIDCGroupsRequest{Page: platformPage()})
+		if readErr != nil {
+			return nil, readErr
+		}
+		roles, readErr := server.access.ListAccessRoles(ctx, &controlplanev1.ListAccessRolesRequest{Page: platformPage(), IncludeArchived: true})
+		if readErr != nil {
+			return nil, readErr
+		}
+		bindings, readErr := server.access.ListAccessBindings(ctx, &controlplanev1.ListAccessBindingsRequest{Page: platformPage(), ProjectRef: projectRef})
+		if readErr != nil {
+			return nil, readErr
+		}
+		projections := []struct {
+			message proto.Message
+			apply   func(map[string]any)
+		}{
+			{permissions, func(value map[string]any) { catalog["permissions"] = value["permissions"] }},
+			{subjects, func(value map[string]any) {
+				catalog["accessSubjects"], catalog["accessSubjectsPage"] = value["subjects"], value["page"]
+			}},
+			{groups, func(value map[string]any) {
+				catalog["oidcGroups"], catalog["oidcGroupsPage"] = value["groups"], value["page"]
+			}},
+			{roles, func(value map[string]any) {
+				catalog["accessRoles"], catalog["accessRolesPage"] = value["roles"], value["page"]
+			}},
+			{bindings, func(value map[string]any) {
+				catalog["accessBindings"], catalog["accessBindingsPage"] = value["bindings"], value["page"]
+			}},
+		}
+		for _, item := range projections {
+			projection, projectionErr := projectSnapshotPart(item.message, localize)
+			if projectionErr != nil {
+				return nil, projectionErr
+			}
+			item.apply(projection)
+		}
+		return map[string]any{"catalog": catalog}, nil
 	case "PLATFORM_MEMBERSHIP":
 		response, readErr := server.query.ListPlatformMemberships(ctx, &controlplanev1.ListPlatformMembershipsRequest{Page: platformPage()})
 		if readErr != nil {
@@ -285,15 +394,142 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		if readErr != nil {
 			return nil, readErr
 		}
-		return snapshotWithCatalog(response, localize)
+		environments, readErr := server.roleImages.ListRoleEnvironments(scoped, &controlplanev1.ListRoleEnvironmentsRequest{})
+		if readErr != nil {
+			return nil, readErr
+		}
+		catalog, projectErr := projectSnapshotPart(response, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		environmentCatalog, projectErr := projectSnapshotPart(environments, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		catalog["roleEnvironments"] = environmentCatalog["environments"]
+		return map[string]any{"catalog": catalog}, nil
 	case "RUNTIME_ENVIRONMENT":
 		response, readErr := server.query.ListRuntimeEnvironmentSets(scoped, &controlplanev1.ListRuntimeEnvironmentSetsRequest{ProjectRef: projectRef, Page: platformPage()})
 		if readErr != nil {
 			return nil, readErr
 		}
-		return snapshotWithCatalog(response, localize)
+		catalog, projectErr := projectSnapshotPart(response, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		roleEnvironments, readErr := server.roleImages.ListRoleEnvironments(scoped, &controlplanev1.ListRoleEnvironmentsRequest{})
+		if readErr != nil {
+			return nil, readErr
+		}
+		roleEnvironmentCatalog, projectErr := projectSnapshotPart(roleEnvironments, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		catalog["roleEnvironments"] = roleEnvironmentCatalog["environments"]
+		runtimes, readErr := server.query.ListRuntimeSelections(ctx, &controlplanev1.ListRuntimeSelectionsRequest{})
+		if readErr != nil {
+			return nil, readErr
+		}
+		runtimeCatalog, projectErr := projectSnapshotPart(runtimes, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		catalog["runtimes"] = runtimeCatalog["runtimes"]
+		return map[string]any{"catalog": catalog}, nil
 	case "PROVIDER_ACCOUNT":
 		response, readErr := server.query.ListProviderAccounts(ctx, &controlplanev1.ListProviderAccountsRequest{Page: platformPage()})
+		if readErr != nil {
+			return nil, readErr
+		}
+		definitions, readErr := server.query.ListProviderDefinitions(ctx, &controlplanev1.ListProviderDefinitionsRequest{Page: platformPage()})
+		if readErr != nil {
+			return nil, readErr
+		}
+		catalog, projectErr := projectSnapshotPart(response, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		definitionCatalog, projectErr := projectSnapshotPart(definitions, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		catalog["providerDefinitions"] = definitionCatalog["definitions"]
+		catalog["providerDefinitionsPage"] = definitionCatalog["page"]
+		runtimes, readErr := server.query.ListRuntimeSelections(ctx, &controlplanev1.ListRuntimeSelectionsRequest{})
+		if readErr != nil {
+			return nil, readErr
+		}
+		runtimeCatalog, projectErr := projectSnapshotPart(runtimes, localize)
+		if projectErr != nil {
+			return nil, projectErr
+		}
+		catalog["runtimes"] = runtimeCatalog["runtimes"]
+		return map[string]any{"catalog": catalog}, nil
+	case "RUNTIME_SECRET":
+		response, readErr := server.query.ListRuntimeSecrets(scoped, &controlplanev1.ListRuntimeSecretsRequest{ProjectRef: projectRef, Page: platformPage()})
+		if readErr != nil {
+			return nil, readErr
+		}
+		return snapshotWithCatalog(response, localize)
+	case "MANAGED_CONFIGURATION":
+		catalog := map[string]any{
+			"managedConfigurations":     []any{},
+			"managedConfigurationPages": []any{},
+		}
+		configurationKinds := []struct {
+			name string
+			kind controlplanev1.ManagedConfigurationKind
+		}{
+			{"PROMPT_TEMPLATE", controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE},
+			{"ROLE_IMAGE", controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE},
+			{"INTEGRATION_DEFINITION", controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION},
+			{"SYSTEM_STT", controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT},
+		}
+		for _, configurationKind := range configurationKinds {
+			configurationProjectRef := ""
+			if configurationKind.name == "PROMPT_TEMPLATE" || configurationKind.name == "ROLE_IMAGE" {
+				if projectRef == "" {
+					catalog["managedConfigurationPages"] = append(catalog["managedConfigurationPages"].([]any), map[string]any{
+						"kind": configurationKind.name, "total": int64(0),
+					})
+					continue
+				}
+				configurationProjectRef = projectRef
+			}
+			response, readErr := server.query.ListManagedConfigurations(ctx, &controlplanev1.ListManagedConfigurationsRequest{
+				ProjectRef: configurationProjectRef,
+				Kind:       configurationKind.kind,
+				Page:       platformPage(),
+			})
+			if readErr != nil {
+				return nil, readErr
+			}
+			page, projectionErr := httptransport.ManagedConfigurationPageView(response)
+			if projectionErr != nil {
+				return nil, projectionErr
+			}
+			encoded, projectionErr := json.Marshal(page)
+			if projectionErr != nil {
+				return nil, projectionErr
+			}
+			projection := map[string]any{}
+			if projectionErr = json.Unmarshal(encoded, &projection); projectionErr != nil {
+				return nil, projectionErr
+			}
+			items, ok := projection["items"].([]any)
+			if !ok {
+				return nil, errors.New("managed configuration snapshot items are invalid")
+			}
+			catalog["managedConfigurations"] = append(catalog["managedConfigurations"].([]any), items...)
+			pageProjection := map[string]any{"kind": configurationKind.name, "total": projection["total"]}
+			if next, ok := projection["nextPageToken"].(string); ok && next != "" {
+				pageProjection["nextPageToken"] = next
+			}
+			catalog["managedConfigurationPages"] = append(catalog["managedConfigurationPages"].([]any), pageProjection)
+		}
+		return map[string]any{"catalog": catalog}, nil
+	case "RUNTIME_SELECTION":
+		response, readErr := server.query.ListRuntimeSelections(ctx, &controlplanev1.ListRuntimeSelectionsRequest{})
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -303,23 +539,26 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 	}
 }
 
-func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() bool {
+func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.PlatformResourceKind, bool) {
+	available := make([]generated.PlatformResourceKind, 0, len(platformBootstrapKinds))
 	for _, kind := range platformBootstrapKinds {
-		if multiplexer.projectRef == "" {
-			switch kind {
-			case "ROLE_IMAGE_RECIPE":
-				continue
-			}
+		if multiplexer.projectRef == "" && platformKindRequiresProject(kind) {
+			continue
 		}
 		rawSnapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, kind, multiplexer.projectRef, multiplexer.localize)
 		if err != nil {
+			if status.Code(err) == codes.PermissionDenied {
+				continue
+			}
+			slog.Error("platform bootstrap snapshot read failed", "kind", kind, "error_class", "dependency", "error", err)
 			multiplexer.platformAvailable = false
-			return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
+			return nil, multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
 		}
 		snapshot, err := typedPlatformSnapshot(kind, rawSnapshot)
 		if err != nil {
+			slog.Error("platform bootstrap snapshot validation failed", "kind", kind, "error_class", "contract", "error", err)
 			multiplexer.platformAvailable = false
-			return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "INTERNAL")
+			return nil, multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "INTERNAL")
 		}
 		envelope := generated.PlatformSnapshotEnvelope{
 			Type: "PLATFORM_SNAPSHOT", RequestRef: multiplexer.platformRequestRef,
@@ -331,8 +570,9 @@ func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() bool {
 			envelope.ProjectRef = &multiplexer.projectRef
 		}
 		if !multiplexer.send(envelope) {
-			return false
+			return nil, false
 		}
+		available = append(available, generated.PlatformResourceKind(kind))
 	}
-	return true
+	return available, true
 }

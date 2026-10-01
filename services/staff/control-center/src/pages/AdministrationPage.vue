@@ -31,10 +31,7 @@ const environments = computed(() =>
 );
 
 async function load(): Promise<void> {
-  await Promise.all([
-    platform.loadAdministration(),
-    platform.loadRoleEnvironments(),
-  ]);
+  await platform.loadAdministration();
   ownerInstructions.value = platform.assistant?.ownerInstructions ?? "";
 }
 

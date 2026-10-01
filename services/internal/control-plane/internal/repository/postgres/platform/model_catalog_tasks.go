@@ -36,8 +36,8 @@ func (repository *Repository) ClaimProviderModelCatalogTasks(ctx context.Context
 	if _, err := tx.Exec(ctx, queryModelCatalogExpireTasks); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryProviderVerificationExpire, pgx.StrictNamedArgs{"account_id": ""}); err != nil {
-		return nil, errs.ErrUnavailable
+	if err := repository.expireProviderVerifications(ctx, tx, "", true); err != nil {
+		return nil, err
 	}
 	rows, err := tx.Query(ctx, queryModelCatalogClaimAccounts, limit)
 	if err != nil {

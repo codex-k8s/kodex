@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { renderToString } from "@vue/server-renderer";
+import { createPinia } from "pinia";
 import { createSSRApp, defineComponent, h } from "vue";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -45,6 +46,7 @@ async function render(
   });
   await router.push("/");
   await router.isReady();
+  app.use(createPinia());
   app.use(router);
   app.use(
     createI18n({

@@ -22,6 +22,7 @@ import {
   restoreArtifactItem,
   uploadArtifactItem,
   type ArtifactBulkReceipt,
+  type ArtifactListItem,
 } from "@/features/files/api";
 import FileLifecycleDialog from "@/features/files/FileLifecycleDialog.vue";
 import FilePreviewDialog from "@/features/files/FilePreviewDialog.vue";
@@ -34,6 +35,7 @@ import {
   artifactLifecycleAnnounced,
   artifactSourceKinds,
   artifactSourcesForTab,
+  matchesArtifactFilters,
   createUploadQueueItems,
   nextUploadQueueItems,
   supportsInlinePreview,
@@ -103,7 +105,6 @@ const selectedRefs = ref<string[]>([]);
 const uploadQueue = ref<UploadQueueItem[]>([]);
 const activeUploadCount = ref(0);
 const uploadControllers = new Map<string, AbortController>();
-const uploadRefreshPending = ref(false);
 const dragDepth = ref(0);
 const dragActive = computed(() => dragDepth.value > 0);
 const trashMode = computed(() => props.mode === "TRASH");
@@ -141,18 +142,44 @@ const sourceOptions = computed(() =>
 );
 
 const collection = useAsyncEntityCollection(
-  (request) =>
-    loadArtifactPage(props.projectRef, request, {
-      lifecycleState: trashMode.value ? "DELETED" : "ACTIVE",
-      ...(trashMode.value && source.value === "ALL"
-        ? { allSources: true as const }
+  async (request) => {
+    const cacheCompatible = !trashMode.value && !request.query.trim();
+    const page = await loadArtifactPage(
+      props.projectRef,
+      request,
+      cacheCompatible
+        ? { lifecycleState: "ACTIVE", allSources: true }
         : {
-            sourceKinds: artifactSourceKinds(collectionTab.value, source.value),
-          }),
-      ...(kind.value === "ALL" ? {} : { type: kind.value }),
-      ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
-    }),
-  { debounceMs: 500, pageSize },
+            lifecycleState: trashMode.value ? "DELETED" : "ACTIVE",
+            ...(trashMode.value && source.value === "ALL"
+              ? { allSources: true as const }
+              : {
+                  sourceKinds: artifactSourceKinds(
+                    collectionTab.value,
+                    source.value,
+                  ),
+                }),
+            ...(kind.value === "ALL" ? {} : { type: kind.value }),
+            ...(scanState.value === "ALL"
+              ? {}
+              : { scanState: scanState.value }),
+          },
+    );
+    return cacheCompatible
+      ? {
+          items: page.items.filter((item) =>
+            matchesArtifactFilters(item.artifact, {
+              kind: kind.value,
+              scanState: scanState.value,
+              source: source.value,
+              tab: collectionTab.value,
+            }),
+          ),
+          nextCursor: page.nextCursor,
+        }
+      : page;
+  },
+  { debounceMs: 500, immediate: false, pageSize },
 );
 const {
   error: loadError,
@@ -164,7 +191,51 @@ const {
   query,
   total,
   refresh,
+  applySnapshot,
 } = collection;
+
+function artifactListItem(artifact: Artifact): ArtifactListItem {
+  return {
+    artifact,
+    description: artifact.mediaType,
+    id: artifact.ref,
+    label: artifact.fileName,
+  };
+}
+
+function applyRealtimeSnapshot(): boolean {
+  if (trashMode.value || query.value.trim()) return false;
+  const snapshot = platform.realtimeSnapshot("ARTIFACT", props.projectRef);
+  if (!snapshot) return false;
+  applySnapshot({
+    items: Object.values(platform.artifacts)
+      .filter(
+        (artifact) =>
+          artifact.projectRef === props.projectRef &&
+          matchesArtifactFilters(artifact, {
+            kind: kind.value,
+            scanState: scanState.value,
+            source: source.value,
+            tab: collectionTab.value,
+          }),
+      )
+      .map(artifactListItem),
+    nextCursor: snapshot.nextPageToken ?? null,
+  });
+  return true;
+}
+
+const artifactRealtimeRevision = computed(() => {
+  const snapshot = platform.realtimeSnapshot("ARTIFACT", props.projectRef);
+  return [
+    snapshot?.scopeKey ?? "",
+    snapshot?.nextPageToken ?? "",
+    ...Object.values(platform.artifacts)
+      .filter((artifact) => artifact.projectRef === props.projectRef)
+      .sort((left, right) => left.ref.localeCompare(right.ref))
+      .map((artifact) => `${artifact.ref}:${String(artifact.version)}`),
+  ].join("|");
+});
 watch(
   () => items.value.length,
   (count) => {
@@ -478,14 +549,18 @@ watch(activeTab, () => {
 watch([activeTab, kind, scanState, source], () => {
   selectedRef.value = "";
   selectedRefs.value = [];
-  refresh();
+  if (!applyRealtimeSnapshot()) refresh();
 });
+watch(query, (value) => {
+  if (!value.trim()) applyRealtimeSnapshot();
+});
+watch(artifactRealtimeRevision, () => applyRealtimeSnapshot());
 watch(
   () => props.mode,
   () => {
     selectedRef.value = "";
     selectedRefs.value = [];
-    refresh();
+    if (!applyRealtimeSnapshot()) refresh();
   },
 );
 
@@ -542,16 +617,16 @@ function uploadPreviewArtifact(item: UploadQueueItem): Artifact {
 }
 
 function replaceArtifact(artifact: Artifact): void {
-  items.value = items.value.map((item) =>
-    item.id === artifact.ref
-      ? {
-          ...item,
-          artifact,
-          description: artifact.mediaType,
-          label: artifact.fileName,
-        }
-      : item,
-  );
+  const existing = items.value.some((item) => item.id === artifact.ref);
+  const visible = matchesArtifactFilters(artifact, {
+    kind: kind.value,
+    scanState: scanState.value,
+    source: source.value,
+    tab: collectionTab.value,
+  });
+  if (visible && (!query.value.trim() || existing))
+    collection.upsert(artifactListItem(artifact));
+  else if (existing) collection.remove(artifact.ref);
 }
 
 function updateUploadQueueItem(
@@ -611,7 +686,7 @@ async function uploadQueueItem(item: UploadQueueItem): Promise<void> {
     if (!uploadQueue.value.some((candidate) => candidate.id === item.id))
       return;
     selectedRef.value = artifact.ref;
-    uploadRefreshPending.value = true;
+    replaceArtifact(artifact);
     updateUploadQueueItem(item.id, {
       progress: { loadedBytes: item.file.size, totalBytes: item.file.size },
       state: "SUCCEEDED",
@@ -633,15 +708,6 @@ async function uploadQueueItem(item: UploadQueueItem): Promise<void> {
       uploadControllers.delete(item.id);
     activeUploadCount.value = Math.max(0, activeUploadCount.value - 1);
     processUploadQueue();
-    if (
-      !disposed &&
-      activeUploadCount.value === 0 &&
-      !uploadQueue.value.some((candidate) => candidate.state === "QUEUED") &&
-      uploadRefreshPending.value
-    ) {
-      uploadRefreshPending.value = false;
-      refresh();
-    }
   }
 }
 
@@ -693,12 +759,6 @@ function retryUpload(id: string): void {
 }
 
 function removeUpload(id: string): void {
-  if (
-    uploadQueue.value.some(
-      (item) => item.id === id && item.state === "UPLOADING",
-    )
-  )
-    uploadRefreshPending.value = true;
   uploadQueue.value = uploadQueue.value.filter((item) => item.id !== id);
   uploadControllers.get(id)?.abort();
   processUploadQueue();
@@ -890,12 +950,13 @@ async function confirmBulkOperation(): Promise<void> {
         const impact = operation.impacts[artifact.ref];
         if (operation.action === "DELETE") {
           if (!impact) throw new Error("Artifact delete impact is unavailable");
-          await deleteArtifactItem(artifact, impact);
+          replaceArtifact(await deleteArtifactItem(artifact, impact));
         } else if (operation.action === "RESTORE")
-          await restoreArtifactItem(artifact);
+          replaceArtifact(await restoreArtifactItem(artifact));
         else {
           if (!impact) throw new Error("Artifact purge impact is unavailable");
           await purgeArtifactItem(artifact, impact);
+          collection.remove(artifact.ref);
         }
       },
     );
@@ -904,7 +965,6 @@ async function confirmBulkOperation(): Promise<void> {
       .filter((receipt) => receipt.status === "FAILED")
       .map((receipt) => receipt.artifact.ref);
     selectedRef.value = "";
-    refresh();
   } finally {
     contentBusy.value = false;
   }
@@ -933,10 +993,10 @@ async function confirmLifecycleOperation(): Promise<void> {
       if (!operation.state.impact)
         throw new Error("Artifact purge impact is unavailable");
       await purgeArtifactItem(operation.artifact, operation.state.impact);
+      collection.remove(operation.artifact.ref);
     }
     selectedRef.value = "";
     lifecycleDialog.value = undefined;
-    refresh();
   } catch (error) {
     operationProblem.value = asProblem(error);
   } finally {
@@ -1041,7 +1101,7 @@ function closePreview(): void {
 }
 
 onMounted(() => {
-  void platform.loadProject(props.projectRef);
+  if (!applyRealtimeSnapshot() && trashMode.value) refresh();
 });
 onBeforeUnmount(() => {
   disposed = true;
@@ -1645,7 +1705,7 @@ onBeforeUnmount(() => {
                 (target, version) =>
                   changeBinding(selectedArtifact!, target, version)
               "
-              @refresh="refresh()"
+              @refresh="applyRealtimeSnapshot()"
             />
           </section>
           <section class="file-details__impact">

@@ -33,6 +33,7 @@ import {
 const props = defineProps<{
   disabled?: boolean;
   connection: IntegrationConnection;
+  realtimeRevision: number;
   initialConfigurationRef?: string;
   initialRevisionRef?: string;
 }>();
@@ -90,8 +91,6 @@ const actions: MailboxAction[] = [
   "COPY",
 ];
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let deliveryTimer: ReturnType<typeof setTimeout> | undefined;
-let deliveryAttempts = 0;
 let disposed = false;
 useUnsavedChanges(guarded, () => t("mailbox.leave"));
 watch(ownBusy, (value) => emit("busy", value), { immediate: true });
@@ -129,7 +128,6 @@ async function execute(action?: MailboxAction): Promise<void> {
   if (!editor.problem && !editor.uncertain && editor.view) {
     emit("saved");
     emit("selected", editor.view.configuration.ref, editor.view.revision.ref);
-    scheduleDelivery();
   }
 }
 async function open(
@@ -140,7 +138,6 @@ async function open(
   await editor.open(configurationRef, revisionRef);
   if (editor.view)
     emit("selected", editor.view.configuration.ref, editor.view.revision.ref);
-  scheduleDelivery();
 }
 async function newConfiguration(): Promise<void> {
   if (await canClose()) editor.newConfiguration();
@@ -192,33 +189,19 @@ async function loadCredentials(more = false): Promise<void> {
     if (!disposed) credentialBusy.value = false;
   }
 }
-function scheduleDelivery(): void {
-  clearTimeout(deliveryTimer);
-  if (
-    disposed ||
-    deliveryAttempts >= 5 ||
-    editor.view?.publication?.state !== "PENDING"
-  )
-    return;
-  deliveryTimer = setTimeout(() => {
+watch(
+  () => props.realtimeRevision,
+  () => {
+    const current = editor.view;
     if (
       disposed ||
       locked.value ||
       editor.dirty ||
       editor.uncertain ||
-      !editor.view
+      current?.publication?.state !== "PENDING"
     )
       return;
-    deliveryAttempts++;
-    void editor
-      .open(editor.view.configuration.ref, editor.view.revision.ref)
-      .then(scheduleDelivery);
-  }, 2000);
-}
-watch(
-  () => editor.view?.publication?.ref,
-  () => {
-    deliveryAttempts = 0;
+    void editor.open(current.configuration.ref, current.revision.ref);
   },
 );
 onMounted(async () => {
@@ -228,12 +211,10 @@ onMounted(async () => {
     await editor.open(props.initialConfigurationRef, props.initialRevisionRef);
   if (controller.signal.aborted) return;
   await loadCredentials();
-  scheduleDelivery();
 });
 onBeforeUnmount(() => {
   disposed = true;
   clearTimeout(searchTimer);
-  clearTimeout(deliveryTimer);
   controller.abort();
   editor.dispose();
   emit("busy", false);

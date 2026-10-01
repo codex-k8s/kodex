@@ -145,6 +145,10 @@ func (repository *Repository) sourceState(ctx context.Context, tx pgx.Tx, curren
 		current.actorID, "configuration-source."+state, "MANAGED_CONFIGURATION_SOURCE", source.Ref, "i18n:MANAGED_CONFIGURATION_CHANGED", current.correlationRef); err != nil {
 		return entity.ManagedConfigurationGitSource{}, errs.ErrUnavailable
 	}
+	if err := repository.emitPlatformEventSnapshot(ctx, tx, current, "MANAGED_CONFIGURATION_CHANGED", source.projectRef,
+		source.Ref, "i18n:MANAGED_CONFIGURATION_CHANGED", source.Version, state); err != nil {
+		return entity.ManagedConfigurationGitSource{}, err
+	}
 	return source.ManagedConfigurationGitSource, nil
 }
 

@@ -81,7 +81,7 @@ func (repository *Repository) ClaimConfigurationWriteBackWork(ctx context.Contex
 		}
 		if writeBackTerminal(row.proposal.State) {
 			row.lease.Fence, row.lease.Claimant, row.lease.ExpiresAt = "", "", time.Time{}
-			if err := saveWriteBack(ctx, tx, current, &row); err != nil {
+			if err := repository.saveWriteBack(ctx, tx, current, &row, true); err != nil {
 				return nil, err
 			}
 			continue
@@ -99,7 +99,7 @@ func (repository *Repository) ClaimConfigurationWriteBackWork(ctx context.Contex
 		if row.proposal.State != entity.WriteBackUnknown && row.deadline.Before(row.lease.ExpiresAt) {
 			row.lease.ExpiresAt = *row.deadline
 		}
-		if err := saveWriteBack(ctx, tx, current, &row); err != nil {
+		if err := repository.saveWriteBack(ctx, tx, current, &row, true); err != nil {
 			return nil, err
 		}
 		result = append(result, writeBackWork(row))
@@ -135,7 +135,7 @@ func (repository *Repository) RenewConfigurationWriteBackWork(ctx context.Contex
 	if row.proposal.State != entity.WriteBackUnknown && row.deadline.Before(row.lease.ExpiresAt) {
 		row.lease.ExpiresAt = *row.deadline
 	}
-	if err := saveWriteBack(ctx, tx, current, &row); err != nil {
+	if err := repository.saveWriteBack(ctx, tx, current, &row, true); err != nil {
 		return entity.ConfigurationWriteBackLease{}, err
 	}
 	return row.lease, tx.Commit(ctx)
@@ -196,7 +196,7 @@ func (repository *Repository) FailConfigurationWriteBackWork(ctx context.Context
 	receipt := row.proposal
 	receipt.Version++
 	row.receipts[key] = writeBackReceipt{Digest: digest, Proposal: receipt}
-	if err := saveWriteBack(ctx, tx, current, &row); err != nil {
+	if err := repository.saveWriteBack(ctx, tx, current, &row, true); err != nil {
 		return entity.ConfigurationWriteBack{}, err
 	}
 	return row.proposal, tx.Commit(ctx)

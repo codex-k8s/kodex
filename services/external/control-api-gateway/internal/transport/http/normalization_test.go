@@ -168,10 +168,131 @@ func TestWorkflowRevisionRejectsInvalidOwnerPin(t *testing.T) {
 func TestNormalizeWorkflowInputFieldAddsEmptyOptions(t *testing.T) {
 	t.Parallel()
 
-	value := map[string]any{"key": "company", "label": "Компания", "valueType": "TEXT"}
-	normalize(value)
+	value, err := messageMap(&controlplanev1.WorkflowInputField{Key: "company", Label: "Компания", ValueType: "TEXT"})
+	if err != nil {
+		t.Fatalf("normalize workflow input field: %v", err)
+	}
 	if options, ok := value["options"].([]any); !ok || len(options) != 0 {
 		t.Fatalf("обязательная коллекция options отсутствует: %#v", value)
+	}
+	integration, err := messageMap(&controlplanev1.IntegrationConfigurationField{Key: "endpoint", Label: "Endpoint", ValueType: "TEXT"})
+	if err != nil {
+		t.Fatalf("normalize integration configuration field: %v", err)
+	}
+	if _, exists := integration["options"]; exists {
+		t.Fatalf("поле options не должно добавляться IntegrationConfigurationField: %#v", integration)
+	}
+	if help, exists := integration["help"]; !exists || help != "" {
+		t.Fatalf("обязательное поле help отсутствует: %#v", integration)
+	}
+}
+
+func TestNormalizeSystemAssistantDoesNotExposeInternalLabel(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.SystemAssistant{
+		Ref:                "ast_system0001",
+		Version:            1,
+		Name:               "Kodex",
+		SystemLabel:        "internal-system-label",
+		CorePromptRevision: "system-assistant-core-v1",
+	})
+	if err != nil {
+		t.Fatalf("normalize system assistant: %v", err)
+	}
+	if _, exists := value["systemLabel"]; exists {
+		t.Fatalf("внутренняя метка не должна попадать в публичный ответ: %#v", value)
+	}
+}
+
+func TestNormalizeBootstrapDoesNotInventMembershipPermissions(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.BootstrapState{
+		Initialized:  true,
+		PlatformRole: controlplanev1.PlatformRole_PLATFORM_ROLE_OWNER,
+		CurrentUser: &controlplanev1.UserSummary{
+			Ref:         "usr_owner0001",
+			DisplayName: "Owner",
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalize bootstrap: %v", err)
+	}
+	if _, exists := value["permissions"]; exists {
+		t.Fatalf("bootstrap не должен получать поле membership permissions: %#v", value)
+	}
+}
+
+func TestNormalizeRuntimeSecretHidesOwnerMaterializationIdentity(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.RuntimeSecret{
+		Ref:             "sec_runtime0001",
+		Version:         1,
+		ProjectRef:      "prj_runtime0001",
+		Name:            "API token",
+		ValueType:       controlplanev1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING,
+		State:           "ACTIVE",
+		CurrentRevision: 1,
+		Namespace:       "runtime-private",
+		CurrentRevisionDescriptor: &controlplanev1.RuntimeSecretRevisionDescriptor{
+			Revision:   1,
+			Namespace:  "runtime-private",
+			SecretName: "owner-secret-name",
+			SecretKey:  "value",
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalize runtime secret: %v", err)
+	}
+	for _, field := range []string{"namespace", "currentRevisionDescriptor"} {
+		if _, exists := value[field]; exists {
+			t.Fatalf("owner materialization field %s leaked: %#v", field, value)
+		}
+	}
+}
+
+func TestNormalizeRoleImageRecipeUsesPublicProjection(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.RoleImageRecipe{
+		Ref:                         "imgrec_fixture01",
+		Version:                     2,
+		ProjectRef:                  "prj_fixture01",
+		RoleDefinitionRef:           "role_fixture01",
+		Name:                        "Среда проверки",
+		State:                       "ACTIVE",
+		Generation:                  3,
+		SpecSha256:                  "private-spec-pin",
+		PolicyRevision:              4,
+		PolicySha256:                "private-policy-pin",
+		RoleRuntimeContractRevision: 5,
+		RoleRuntimeContractSha256:   "private-contract-pin",
+		PromotedImageReference:      "registry.example/image@sha256:public",
+		Environment: &controlplanev1.RoleEnvironmentSelection{
+			EnvironmentKey: "system-base",
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalize role image recipe: %v", err)
+	}
+	for _, field := range []string{
+		"specSha256",
+		"policyRevision",
+		"policySha256",
+		"roleRuntimeContractRevision",
+		"roleRuntimeContractSha256",
+	} {
+		if _, exists := value[field]; exists {
+			t.Fatalf("внутреннее поле %s попало в публичный ответ: %#v", field, value)
+		}
+	}
+	if value["promotedImageReady"] != true {
+		t.Fatalf("готовность promotion не выведена из публичной ссылки: %#v", value)
+	}
+	if value["sourceAvailable"] != false {
+		t.Fatalf("обязательный публичный допуск исходников отсутствует: %#v", value)
 	}
 }
 

@@ -66,6 +66,11 @@ describe("независимые серверные колонки Kanban", () =
     expect(store.items.map((run) => run.ref)).toEqual(["snapshot_running"]);
     expect(store.ready).toBe(true);
     expect(sdk.listRuns).not.toHaveBeenCalled();
+    expect(store.columns.QUEUED.pageToken).toBeUndefined();
+    expect(store.columns.WAITING_HUMAN.pageToken).toBeUndefined();
+
+    await store.load(scope, true, "QUEUED");
+    expect(sdk.listRuns).not.toHaveBeenCalled();
 
     await store.load(scope, true, "RUNNING");
     expect(sdk.listRuns).toHaveBeenCalledOnce();

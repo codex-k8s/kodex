@@ -16,6 +16,7 @@ import {
   updateRoleImage,
 } from "@/features/role-images/api";
 import type {
+  Agent,
   RoleEnvironment,
   RoleImageArtifact,
   RoleImageBuild,
@@ -73,6 +74,32 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     return (projectRecipeRefs[projectRef] ?? [])
       .map((ref) => recipes[ref])
       .filter((value): value is RoleImageRecipe => Boolean(value));
+  }
+
+  function applyCatalogSnapshot(
+    projectRef: string,
+    values: RoleImageRecipe[],
+    nextPageToken?: string,
+    total?: number,
+  ): void {
+    if (
+      values.some((recipe) => recipe.projectRef !== projectRef) ||
+      new Set(values.map((recipe) => recipe.ref)).size !== values.length
+    )
+      throw new Error("Invalid role image realtime catalog scope");
+    const refs = new Set(values.map((recipe) => recipe.ref));
+    for (const ref of projectRecipeRefs[projectRef] ?? [])
+      if (!refs.has(ref)) Reflect.deleteProperty(recipes, ref);
+    for (const recipe of values) {
+      const previous = recipes[recipe.ref];
+      if (!previous || previous.version <= recipe.version)
+        recipes[recipe.ref] = recipe;
+    }
+    projectRecipeRefs[projectRef] = values.map((recipe) => recipe.ref);
+    projectNextPageToken[projectRef] = nextPageToken;
+    projectTotal[projectRef] = total;
+    problem.value = undefined;
+    loadingCatalog.value = false;
   }
 
   async function loadCatalog(
@@ -252,24 +279,64 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     }
   }
 
-  async function loadSupportingCatalogs(projectRef: string): Promise<void> {
+  function roleDefinitionOptions(values: Agent[]): RoleDefinitionOption[] {
+    const definitions = new Map<
+      string,
+      { label: string; agentRefs: Set<string> }
+    >();
+    for (const agent of values) {
+      if (!agent.roleDefinitionRef) continue;
+      const current = definitions.get(agent.roleDefinitionRef) ?? {
+        label: agent.roleDefinitionName || agent.roleDescription || agent.name,
+        agentRefs: new Set<string>(),
+      };
+      current.agentRefs.add(agent.ref);
+      definitions.set(agent.roleDefinitionRef, current);
+    }
+    return [...definitions.entries()]
+      .map(([ref, value]) => ({
+        ref,
+        label: value.label,
+        agentCount: value.agentRefs.size,
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }
+
+  function applySupportingCatalogSnapshot(
+    agents: Agent[],
+    environmentCatalog: RoleEnvironment[],
+  ): void {
+    roleDefinitions.value = roleDefinitionOptions(agents);
+    environments.value = environmentCatalog;
+  }
+
+  async function loadSupportingCatalogs(
+    projectRef: string,
+    snapshot?: { agents: Agent[]; environments: RoleEnvironment[] },
+  ): Promise<void> {
     const current = ++supportingGeneration;
     supportingController?.abort();
     const controller = new AbortController();
     supportingController = controller;
-    roleDefinitions.value = [];
-    environments.value = [];
     createAllowed[projectRef] = false;
     problem.value = undefined;
+    if (snapshot)
+      applySupportingCatalogSnapshot(snapshot.agents, snapshot.environments);
     try {
       const [definitions, environmentCatalog, canCreate] = await Promise.all([
-        loadRoleDefinitionOptions(projectRef, controller.signal),
-        loadRoleEnvironmentCatalog(controller.signal),
+        snapshot
+          ? Promise.resolve(roleDefinitions.value)
+          : loadRoleDefinitionOptions(projectRef, controller.signal),
+        snapshot
+          ? Promise.resolve(environments.value)
+          : loadRoleEnvironmentCatalog(controller.signal),
         loadRoleImageCreateAccess(projectRef, controller.signal),
       ]);
       if (current !== supportingGeneration) return;
-      roleDefinitions.value = definitions;
-      environments.value = environmentCatalog;
+      if (!snapshot) {
+        roleDefinitions.value = definitions;
+        environments.value = environmentCatalog;
+      }
       createAllowed[projectRef] = canCreate;
     } catch (error) {
       if (current === supportingGeneration && !controller.signal.aborted)
@@ -405,8 +472,10 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     problem,
     catalog,
     loadCatalog,
+    applyCatalogSnapshot,
     loadDetail,
     loadMoreRevisions,
+    applySupportingCatalogSnapshot,
     loadSupportingCatalogs,
     create,
     update,

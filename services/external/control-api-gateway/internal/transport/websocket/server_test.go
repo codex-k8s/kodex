@@ -2,6 +2,7 @@ package websockettransport
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -146,6 +147,32 @@ func TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs(t *test
 	signal, ok := decodePlatformSignal(payload, "org_example0001")
 	if !ok || signal.Sequence != 9 || signal.EventName != "RUN_CHANGED" || signal.Kind != "RUN" {
 		t.Fatalf("valid run invalidation rejected: ok=%t signal=%+v", ok, signal)
+	}
+}
+
+func TestDecodePlatformSignalAcceptsRoleImageLifecycleEvents(t *testing.T) {
+	for index, eventName := range []string{"ROLE_IMAGE_PROMOTION_REQUESTED", "ROLE_IMAGE_PROMOTED"} {
+		payload := []byte(fmt.Sprintf(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"%s","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"rimg_example001","aggregateVersion":2,"sequence":%d,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"ROLE_IMAGE_RECIPE","safeSummary":"i18n:ROLE_IMAGE_RECIPE_CHANGED"}}`, eventName, index+10))
+		signal, ok := decodePlatformSignal(payload, "org_example0001")
+		if !ok || signal.EventName != eventName || signal.Kind != "ROLE_IMAGE_RECIPE" {
+			t.Fatalf("valid role image lifecycle signal rejected: ok=%t signal=%+v", ok, signal)
+		}
+	}
+}
+
+func TestPlatformSignalOutsideScope(t *testing.T) {
+	t.Parallel()
+	if platformSignalOutsideScope(platformSignal{Kind: "SYSTEM_ASSISTANT", ProjectRef: "prj_other0001"}, "") {
+		t.Fatal("global scope skipped an accessible project signal")
+	}
+	if !platformSignalOutsideScope(platformSignal{Kind: "RUNTIME_SECRET", ProjectRef: "prj_other0001"}, "prj_selected01") {
+		t.Fatal("foreign project signal entered the selected project snapshot")
+	}
+	if platformSignalOutsideScope(platformSignal{Kind: "PROJECT", ProjectRef: "prj_other0001"}, "prj_selected01") {
+		t.Fatal("organization project catalog signal was skipped")
+	}
+	if platformSignalOutsideScope(platformSignal{Kind: "RUNTIME_SECRET", ProjectRef: "prj_selected01"}, "prj_selected01") {
+		t.Fatal("selected project signal was skipped")
 	}
 }
 

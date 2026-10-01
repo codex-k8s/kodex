@@ -251,6 +251,46 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     schedule(0);
   }
 
+  function applySnapshot(page: AsyncEntityPage<T>): void {
+    if (disposed || !isObject(page) || !Array.isArray(page.items)) return;
+    cancelPending();
+    generation += 1;
+    cursors.clear();
+    const snapshotItems = mergePage<T>([], page.items);
+    if (
+      page.total !== undefined &&
+      (!Number.isSafeInteger(page.total) || page.total < snapshotItems.length)
+    )
+      throw new Error("Invalid catalog snapshot total");
+    const cursor = page.nextCursor === "" ? null : (page.nextCursor ?? null);
+    if (cursor !== null && typeof cursor !== "string")
+      throw new Error("Invalid catalog snapshot cursor");
+    if (cursor) cursors.add(cursor);
+    items.value = snapshotItems;
+    total.value = page.total;
+    nextCursor.value = cursor;
+    error.value = undefined;
+    initialLoading.value = false;
+    loadingMore.value = false;
+    hasLoaded.value = true;
+  }
+
+  function upsert(value: T): void {
+    if (!isObject(value) || typeof value.id !== "string" || !value.id)
+      throw new Error("Invalid catalog item");
+    const index = items.value.findIndex((item) => item.id === value.id);
+    items.value =
+      index < 0
+        ? [...items.value, value]
+        : items.value.map((item, itemIndex) =>
+            itemIndex === index ? value : item,
+          );
+  }
+
+  function remove(id: string): void {
+    items.value = items.value.filter((item) => item.id !== id);
+  }
+
   function cancel(clearSnapshot = false): void {
     generation += 1;
     cancelPending();
@@ -304,6 +344,9 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     phase,
     query,
     refresh,
+    applySnapshot,
+    upsert,
+    remove,
     cancel,
   };
 }

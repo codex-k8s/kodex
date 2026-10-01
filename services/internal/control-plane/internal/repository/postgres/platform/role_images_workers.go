@@ -93,10 +93,12 @@ func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Pr
 		return entity.ImageBuildClaim{}, mapRoleImageWriteError(err)
 	}
 	var recipe entity.RoleImageRecipe
+	var projectID string
 	var specification []byte
 	var immutable string
 	err = tx.QueryRow(ctx, queryRoleImagesGetBuildInput, current.organizationID, buildID).Scan(
-		&recipe.Ref, &recipe.Version, &recipe.Generation, &recipe.SpecSHA256,
+		&recipe.Ref, &projectID, &recipe.ProjectRef,
+		&recipe.Version, &recipe.Generation, &recipe.SpecSHA256,
 		&specification, &immutable, &recipe.PolicyRevision, &recipe.PolicySHA256,
 		&recipe.RoleRuntimeContractRevision, &recipe.RoleRuntimeContractSHA256)
 	if err != nil || decodeJSON(specification, &recipe.Input) != nil {
@@ -112,6 +114,12 @@ func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Pr
 		Fence: fence, AuthorityGeneration: principal.CredentialRevision, LeaseExpiresAt: expiresAt}
 	if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, key, intent,
 		"IMAGE_BUILD_CLAIM", receipt); err != nil {
+		return entity.ImageBuildClaim{}, err
+	}
+	if err := repository.emitRoleImageBuildChanged(ctx, tx, current, lockedBuild{
+		ProjectID: projectID,
+		Build:     build,
+	}); err != nil {
 		return entity.ImageBuildClaim{}, err
 	}
 	if err := committed(tx, ctx); err != nil {
@@ -205,6 +213,9 @@ func (repository *Repository) ReportBuildProgress(ctx context.Context, input rol
 		intent, "IMAGE_BUILD_PROGRESS", locked.Build); err != nil {
 		return entity.ImageBuild{}, err
 	}
+	if err := repository.emitRoleImageBuildChanged(ctx, tx, current, locked); err != nil {
+		return entity.ImageBuild{}, err
+	}
 	if err := committed(tx, ctx); err != nil {
 		return entity.ImageBuild{}, err
 	}
@@ -274,6 +285,9 @@ func (repository *Repository) CompleteBuild(ctx context.Context, input roleimage
 		intent, "IMAGE_BUILD_COMPLETION", receipt); err != nil {
 		return entity.ImageBuild{}, entity.ImageArtifact{}, err
 	}
+	if err := repository.emitRoleImageBuildChanged(ctx, tx, current, locked); err != nil {
+		return entity.ImageBuild{}, entity.ImageArtifact{}, err
+	}
 	if err := committed(tx, ctx); err != nil {
 		return entity.ImageBuild{}, entity.ImageArtifact{}, err
 	}
@@ -313,6 +327,9 @@ func (repository *Repository) FailBuild(ctx context.Context, input roleimagerepo
 		intent, "IMAGE_BUILD_FAILURE", locked.Build); err != nil {
 		return entity.ImageBuild{}, err
 	}
+	if err := repository.emitRoleImageBuildChanged(ctx, tx, current, locked); err != nil {
+		return entity.ImageBuild{}, err
+	}
 	if err := committed(tx, ctx); err != nil {
 		return entity.ImageBuild{}, err
 	}
@@ -339,6 +356,16 @@ func (repository *Repository) beginBuildMutation(ctx context.Context, input role
 		return scope{}, nil, lockedBuild{}, "", "", errs.ErrUnavailable
 	}
 	return current, tx, locked, operation, roleImageDigest(input), nil
+}
+
+func (repository *Repository) emitRoleImageBuildChanged(ctx context.Context, tx pgx.Tx, current scope, locked lockedBuild) error {
+	projectRef := projectRefByID(ctx, tx, locked.ProjectID)
+	if projectRef == "" || locked.Build.RecipeRef == "" || locked.Build.Version == 0 {
+		return errs.ErrUnavailable
+	}
+	return repository.emitPlatformEventSnapshot(ctx, tx, current, "ROLE_IMAGE_RECIPE_CHANGED",
+		projectRef, locked.Build.RecipeRef, "i18n:ROLE_IMAGE_RECIPE_CHANGED",
+		int64(locked.Build.Version), locked.Build.Stage)
 }
 
 func validateBuildClaim(input roleimagerepo.BuildLeaseInput, locked lockedBuild, now time.Time) error {

@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { searchProjects } from "@/features/projects/api";
+import { usePlatformStore } from "@/features/platform/store";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
@@ -13,6 +14,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [ref: string] }>();
 const { t } = useI18n();
+const platform = usePlatformStore();
 const selected = computed(() =>
   props.project ? option(props.project) : undefined,
 );
@@ -30,6 +32,17 @@ async function loadPage(
   signal: AbortSignal,
   pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
+  const snapshot = platform.realtimeSnapshot("PROJECT", props.project?.ref);
+  if (!query.trim() && !cursor && snapshot) {
+    return {
+      items: [
+        { ref: "__all_projects__", title: t("app.allProjects") },
+        ...platform.projectList.map(option),
+      ],
+      nextPageToken: snapshot.nextPageToken,
+      total: snapshot.total === undefined ? undefined : snapshot.total + 1,
+    };
+  }
   const page = await searchProjects(query, cursor, signal, pageSize);
   return {
     items: [

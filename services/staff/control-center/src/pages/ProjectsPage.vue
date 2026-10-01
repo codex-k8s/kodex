@@ -92,7 +92,7 @@ async function submit(): Promise<void> {
 
 async function load(more = false): Promise<void> {
   if (more && (!pageToken.value || loading.value || listProblem.value)) return;
-  if (!more && !trashMode.value && !query.value.trim()) {
+  if (!more && !query.value.trim()) {
     applyRealtimeSnapshot();
     return;
   }
@@ -161,15 +161,19 @@ async function load(more = false): Promise<void> {
 }
 
 function applyRealtimeSnapshot(): void {
-  if (trashMode.value || query.value.trim()) return;
+  if (query.value.trim()) return;
   controller?.abort();
   generation += 1;
   cursors.clear();
   const snapshot = platform.realtimeSnapshot("PROJECT");
-  items.value = platform.projectList;
-  pageToken.value = snapshot?.nextPageToken;
+  items.value = trashMode.value
+    ? platform.projectTrashList
+    : platform.projectList;
+  pageToken.value = trashMode.value
+    ? platform.projectTrashNextPageToken
+    : snapshot?.nextPageToken;
   if (pageToken.value) cursors.add(pageToken.value);
-  actions.value = platform.projectCollectionActions;
+  actions.value = trashMode.value ? [] : platform.projectCollectionActions;
   listProblem.value = undefined;
   loading.value = !snapshot;
   if (snapshot && route.query.create === "1" && canCreate.value)
@@ -186,7 +190,7 @@ watch(
     pageToken.value = undefined;
     listProblem.value = undefined;
     loading.value = true;
-    if (!trashMode.value && !query.value.trim()) {
+    if (!query.value.trim()) {
       applyRealtimeSnapshot();
       firstProjectLoad = false;
       return;
@@ -203,22 +207,14 @@ watch(
       .map((project) => `${project.ref}:${String(project.version)}`)
       .sort()
       .join("|"),
+    platform.projectTrashNextPageToken ?? "",
+    platform.projectTrashList
+      .map((project) => `${project.ref}:${String(project.version)}`)
+      .sort()
+      .join("|"),
   ],
   () => applyRealtimeSnapshot(),
   { flush: "sync" },
-);
-watch(
-  () =>
-    trashMode.value &&
-    items.value.some((project) => project.lifecycle === "PURGE_PENDING"),
-  (pending, _previous, onCleanup) => {
-    if (!pending) return;
-    const refresh = setInterval(() => {
-      if (!loading.value && !lifecycleBusy.value) void load();
-    }, 3000);
-    onCleanup(() => clearInterval(refresh));
-  },
-  { immediate: true },
 );
 const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
   if (
@@ -280,13 +276,21 @@ async function confirmLifecycle(): Promise<void> {
   lifecycleBusy.value = true;
   lifecycleProblem.value = undefined;
   try {
-    if (lifecycleAction.value === "PURGE") await purgeProjectFromTrash(target);
-    else if (lifecycleAction.value === "RESTORE")
-      await restoreProjectFromTrash(target);
-    else await moveProjectToTrash(target);
+    if (lifecycleAction.value === "PURGE") {
+      const changed = await purgeProjectFromTrash(target);
+      platform.trashedProjects[changed.ref] = changed;
+    } else if (lifecycleAction.value === "RESTORE") {
+      const changed = await restoreProjectFromTrash(target);
+      Reflect.deleteProperty(platform.trashedProjects, changed.ref);
+      platform.projects[changed.ref] = changed;
+    } else {
+      const changed = await moveProjectToTrash(target);
+      Reflect.deleteProperty(platform.projects, changed.ref);
+      platform.trashedProjects[changed.ref] = changed;
+    }
     lifecycleTarget.value = undefined;
     purgeConfirmation.value = "";
-    if (trashMode.value) await load();
+    applyRealtimeSnapshot();
   } catch (error) {
     lifecycleProblem.value = asProblem(error);
   } finally {

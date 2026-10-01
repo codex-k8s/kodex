@@ -28,6 +28,7 @@ import {
   loadCatalog,
   membershipCatalogEntry,
   scheduleCatalogEntry,
+  secretCatalogEntry,
   workflowCatalogEntry,
   type CatalogEntry,
   type CatalogKind,
@@ -89,8 +90,9 @@ const realtimeKind = computed<PlatformResourceKind | undefined>(() => {
     case "members":
       return "MEMBERSHIP";
     case "secrets":
-      return undefined;
+      return "RUNTIME_SECRET";
   }
+  return undefined;
 });
 const realtimeVersion = computed(() => {
   const scope = props.projectRef;
@@ -110,7 +112,7 @@ const realtimeVersion = computed(() => {
       case "members":
         return Object.values(platform.memberships);
       case "secrets":
-        return [];
+        return Object.values(platform.runtimeSecrets);
     }
   })();
   return JSON.stringify([
@@ -212,7 +214,7 @@ function applyRealtime(): boolean {
       case "members":
         return Object.values(platform.memberships).map(membershipCatalogEntry);
       case "secrets":
-        return [];
+        return Object.values(platform.runtimeSecrets).map(secretCatalogEntry);
     }
   })().filter((value) => !scope || value.projectRef === scope);
   if (

@@ -1,6 +1,6 @@
--- name: provider_account_deletion_advance :exec
+-- name: provider_account_deletion_advance :one
 WITH observed AS MATERIALIZED (
-    SELECT intent.id,
+    SELECT intent.id, intent.state AS current_state, intent.safe_reason AS current_reason,
         EXISTS (SELECT 1 FROM control_plane.provider_account_blockers(intent.organization_id, intent.provider_account_id)) AS blocked,
         EXISTS (SELECT 1 FROM control_plane.provider_credential_cleanup_tasks task
                 WHERE task.organization_id = intent.organization_id AND task.provider_account_id = intent.provider_account_id
@@ -30,10 +30,25 @@ WITH observed AS MATERIALIZED (
     WHERE account.id = @account_id::uuid AND account.organization_id = @organization_id::uuid
       AND NOT desired.blocked
       AND (account.current_credential_revision_id IS NOT NULL OR desired.next_state = 'DELETED')
-)
+    RETURNING account.ref, account.version
+), intent_change AS (
 UPDATE control_plane.provider_account_deletion_intents intent
 SET state = desired.next_state, safe_reason = desired.next_reason,
-    version = intent.version + CASE WHEN intent.state <> desired.next_state THEN 1 ELSE 0 END,
+    version = intent.version + 1,
     completed_at = CASE WHEN desired.next_state = 'DELETED' THEN clock_timestamp() ELSE NULL END,
     updated_at = clock_timestamp()
-FROM desired WHERE intent.id = desired.id;
+FROM desired
+WHERE intent.id = desired.id
+  AND (intent.state IS DISTINCT FROM desired.next_state
+       OR intent.safe_reason IS DISTINCT FROM desired.next_reason
+       OR EXISTS (SELECT 1 FROM account_change))
+RETURNING intent.ref, intent.version, intent.state, intent.organization_id, intent.provider_account_id
+)
+SELECT organization.ref,
+       COALESCE((SELECT ref FROM account_change), account.ref),
+       COALESCE((SELECT version FROM account_change), account.version),
+       intent_change.ref, intent_change.version, intent_change.state
+FROM intent_change
+JOIN control_plane.organizations organization ON organization.id = intent_change.organization_id
+JOIN control_plane.provider_accounts account
+  ON account.id = intent_change.provider_account_id AND account.organization_id = intent_change.organization_id;

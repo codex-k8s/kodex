@@ -23,6 +23,8 @@ var (
 	queryRoleImagesInsertRecipe string
 	//go:embed sql/role_images_update_recipe.sql
 	queryRoleImagesUpdateRecipe string
+	//go:embed sql/role_images_refresh_recipe_policy.sql
+	queryRoleImagesRefreshRecipePolicy string
 	//go:embed sql/role_images_change_recipe_state.sql
 	queryRoleImagesChangeRecipeState string
 	//go:embed sql/role_images_cancel_open_builds.sql

@@ -216,6 +216,8 @@ PROJECT_RESTORED:
   other: Проект восстановлен из корзины
 PROJECT_PURGE_REQUESTED:
   other: Запрошено окончательное удаление проекта
+PROJECT_PURGED:
+  other: Проект удалён безвозвратно
 PROJECT_ACCESS_UPDATED:
   other: Доступ к проекту обновлён
 AGENT_CREATED_READY:
@@ -850,6 +852,10 @@ SYSTEM_ROLE_STT_PERMISSION:
   other: Системное разрешение на голосовой ввод
 ASSISTANT_CONVERSATION_ARCHIVED:
   other: Диалог с ассистентом архивирован
+ASSISTANT_CONVERSATION_RESTORED:
+  other: Диалог с ассистентом восстановлен
+ASSISTANT_CONVERSATION_PURGED:
+  other: Диалог с ассистентом удалён безвозвратно
 EMAIL_EFFECT_RECONCILED:
   other: Результат почтовой операции сверён
 EMAIL_EFFECT_REPORTED:

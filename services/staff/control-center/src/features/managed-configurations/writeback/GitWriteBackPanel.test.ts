@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { createI18n } from "vue-i18n";
+import { createPinia } from "pinia";
 import GitWriteBackPanel from "./GitWriteBackPanel.vue";
 import { writeBackFixture, memoryStorage } from "./fixtures";
 import { writeBackMessages } from "./messages";
@@ -22,6 +23,7 @@ it.each(["ru", "en"] as const)(
       configuration: { ...configuration, managedBy: "UI" },
       disabled: true,
     });
+    app.use(createPinia());
     app.use(createI18n({ legacy: false, locale, messages: writeBackMessages }));
     const html = await renderToString(app);
     expect(html).toContain(writeBackMessages[locale].wb.title);
@@ -55,6 +57,7 @@ it("план требует отдельный approval и показывает 
     },
   );
   const app = createSSRApp(GitWriteBackPanel, { configuration });
+  app.use(createPinia());
   app.use(
     createI18n({ legacy: false, locale: "ru", messages: writeBackMessages }),
   );
@@ -66,6 +69,7 @@ it("план требует отдельный approval и показывает 
   );
   view.proposal.state = "UNKNOWN_OUTCOME";
   const unknown = createSSRApp(GitWriteBackPanel, { configuration });
+  unknown.use(createPinia());
   unknown.use(
     createI18n({ legacy: false, locale: "ru", messages: writeBackMessages }),
   );

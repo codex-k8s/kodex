@@ -334,6 +334,38 @@ describe("useAsyncEntityCollection", () => {
     expect(collection.loadMoreError.value).toBe(false);
     scope.stop();
   });
+
+  it("принимает realtime-снимок и продолжает cursor-догрузку", async () => {
+    const loader = vi.fn().mockResolvedValue({
+      items: [{ id: "two", label: "Два", revision: 1 }],
+    });
+    const scope = effectScope();
+    const collection = scope.run(() =>
+      useAsyncEntityCollection<TestItem>(loader, { immediate: false }),
+    );
+    if (!collection) throw new Error("collection was not created");
+
+    collection.applySnapshot({
+      items: [{ id: "one", label: "Один", revision: 1 }],
+      nextCursor: "cursor-2",
+    });
+    expect(collection.phase.value).toBe("ready");
+    expect(collection.hasMore.value).toBe(true);
+
+    collection.upsert({ id: "one", label: "Один v2", revision: 2 });
+    await collection.loadMore();
+    expect(loader).toHaveBeenCalledWith(
+      expect.objectContaining({ cursor: "cursor-2" }),
+    );
+    expect(collection.items.value.map((item) => item.label)).toEqual([
+      "Один v2",
+      "Два",
+    ]);
+
+    collection.remove("one");
+    expect(collection.items.value.map((item) => item.id)).toEqual(["two"]);
+    scope.stop();
+  });
 });
 
 describe("cursor infinite scroll", () => {

@@ -4,8 +4,8 @@ title: Совместная ручная QA-приёмка интерфейса 
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
-updated: 2026-09-29
+version: 1.1.0
+updated: 2026-10-01
 ---
 
 # Совместная ручная QA-приёмка
@@ -38,3 +38,17 @@ Air/Vite hot reload. Staging и production не затрагиваются.
 | Время | Экран и замечание | Исправление | Проверка | Результат владельца |
 | --- | --- | --- | --- | --- |
 | 2026-09-29 | Подготовка совместной QA-сессии | Созданы Issue, ветка и Draft PR | Проверка read-only mount и совпадения исходников host/Pod | Ожидается |
+| 2026-10-01 | Каталоги мерцали и повторно читались по HTTP | Добавлен bounded typed bootstrap/delta для глобального и проектного scope через session WebSocket; Pinia stores гидратируются из единого snapshot | Hard reload `/integrations`: 50 строк, console чистая, network без catalog GET, screenshot `/tmp/kodex-integrations-realtime-verified.png` | Ожидается |
+| 2026-10-01 | Смена Проекта не должна оставлять старый scope | При смене Проекта прежний socket закрывается, новый session stream получает snapshot выбранного Проекта; gap/resync принудительно запрашивает полный WebSocket snapshot | Переход «Все Проекты» → `Marketplace`: только новый `POST /api/v1/session/ticket`, статус вернулся в «Подключено», screenshot `/tmp/kodex-project-scope-realtime.png` | Ожидается |
+| 2026-10-01 | Фоновые изменения не попадали в открытый UI без polling | Добавлены доменные события для очистки корзин, provider lifecycle, email mailbox publication, managed configuration/writeback и role image lifecycle | Gateway и control-plane `go test ./...`; frontend 2036 unit-тестов; browser network без повторных catalog readback | Ожидается |
+| 2026-10-01 | Неизвестное platform event маскировалось под системного помощника | Неизвестный event теперь закрыто отклоняется до sequence/outbox; полный registry закреплён unit-тестом | `go test ./internal/repository/postgres/platform` и полный `go test ./...` — PASS | Ожидается |
+
+## Текущий статус проверок
+
+- `make lint-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen` — PASS.
+- `go test ./...` в `control-api-gateway` и `control-plane` — PASS.
+- `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run build` — PASS; Vite оставляет неблокирующее предупреждение о крупном chunk.
+- Интерактивная проверка локального hot-reload стенда через Chrome DevTools MCP — PASS для `/integrations` и смены project scope; это не формальная staging/disposable E2E-приёмка.
+- `make test-control-plane-postgres` — NOT RUN: отдельный disposable PostgreSQL в этой сессии не поднимался.
+- `npm run test:e2e` — NOT RUN: формальная disposable E2E-установка не запускалась.
+- Ручное решение владельца по приёмке — ожидается.

@@ -50,8 +50,8 @@ func (repository *Repository) hydrateProviderVerifications(ctx context.Context, 
 }
 
 func (repository *Repository) startProviderVerification(ctx context.Context, tx pgx.Tx, current scope, accountID string) error {
-	if _, err := tx.Exec(ctx, queryProviderVerificationExpire, pgx.StrictNamedArgs{"account_id": accountID}); err != nil {
-		return errs.ErrUnavailable
+	if err := repository.expireProviderVerifications(ctx, tx, accountID, false); err != nil {
+		return err
 	}
 	ref, err := newRef("pverify")
 	if err != nil {
@@ -71,6 +71,42 @@ func (repository *Repository) startProviderVerification(ctx context.Context, tx 
 		"organization_id": current.organizationID, "account_id": accountID,
 	}); err != nil {
 		return errs.ErrUnavailable
+	}
+	return nil
+}
+
+func (repository *Repository) expireProviderVerifications(ctx context.Context, tx pgx.Tx, accountID string, emitRealtime bool) error {
+	rows, err := tx.Query(ctx, queryProviderVerificationExpire, pgx.StrictNamedArgs{"account_id": accountID})
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	type expiredVerification struct {
+		organizationID, organizationRef, accountRef, verificationRef, state string
+		accountVersion                                                      int64
+	}
+	items := make([]expiredVerification, 0, 8)
+	for rows.Next() {
+		var item expiredVerification
+		if err := rows.Scan(&item.organizationID, &item.organizationRef, &item.accountRef,
+			&item.verificationRef, &item.accountVersion, &item.state); err != nil {
+			rows.Close()
+			return errs.ErrUnavailable
+		}
+		items = append(items, item)
+	}
+	rows.Close()
+	if rows.Err() != nil {
+		return errs.ErrUnavailable
+	}
+	if !emitRealtime {
+		return nil
+	}
+	for _, item := range items {
+		if err := repository.emitPlatformEventSnapshot(ctx, tx, scope{
+			organizationID: item.organizationID, organizationRef: item.organizationRef, correlationRef: item.verificationRef,
+		}, "PROVIDER_ACCOUNT_CHANGED", "", item.accountRef, "i18n:PROVIDER_ACCOUNT_UPDATED", item.accountVersion, item.state); err != nil {
+			return err
+		}
 	}
 	return nil
 }

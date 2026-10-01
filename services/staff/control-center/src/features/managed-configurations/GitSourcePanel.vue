@@ -57,9 +57,6 @@ const locked = computed(
   () => working.value || awaitingRead.value || !!pending.value,
 );
 const controller = new AbortController();
-let timer: ReturnType<typeof setTimeout> | undefined;
-let polls = 0;
-const paused = ref(false);
 watch(locked, (value) => emit("busy", value), { immediate: true });
 watch(
   () => props.configuration.ref,
@@ -79,37 +76,8 @@ watch(
     awaitingRead.value = false;
   },
 );
-watch(
-  () => `${source.value?.ref ?? ""}/${String(source.value?.generation ?? 0)}`,
-  () => {
-    polls = 0;
-    paused.value = false;
-  },
-);
-function schedule(): void {
-  clearTimeout(timer);
-  if (
-    !source.value ||
-    !["QUEUED", "CLAIMED"].includes(source.value.state) ||
-    controller.signal.aborted
-  )
-    return;
-  if (polls >= 150) {
-    paused.value = true;
-    return;
-  }
-  timer = setTimeout(() => {
-    if (!props.disabled && !locked.value) {
-      polls += 1;
-      emit("changed");
-    }
-    schedule();
-  }, 2000);
-}
-watch(() => source.value?.state, schedule, { immediate: true });
 onBeforeUnmount(() => {
   controller.abort();
-  clearTimeout(timer);
   emit("busy", false);
 });
 async function connections(
@@ -163,8 +131,6 @@ async function run(configure = false): Promise<void> {
     pending.value = undefined;
     awaitingRead.value = true;
     open.value = false;
-    polls = 0;
-    paused.value = false;
     emit("changed");
   } catch (error) {
     if (!controller.signal.aborted) problem.value = asProblem(error);
@@ -226,7 +192,6 @@ async function run(configure = false): Promise<void> {
       {{ t("gitSource.acceptCurrent") }}
     </button>
     <p v-if="awaitingRead" role="status">{{ t("gitSource.readback") }}</p>
-    <p v-if="paused" role="status">{{ t("gitSource.paused") }}</p>
     <div class="git-source-panel__actions">
       <button
         v-if="pending"

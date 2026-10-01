@@ -23,6 +23,34 @@ const response = (items: OwnerGate[], total = 91, nextPageToken = "") => ({
 describe("серверные страницы решений", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.useRealTimers());
+  it("фильтрует realtime-снимок локально и продолжает общий cursor", async () => {
+    const catalog = useGateCatalog();
+    const pending = gate("pending", "OPEN");
+    const settled = gate("settled", "APPROVED");
+    catalog.applySnapshot(
+      { query: "", view: "PENDING" },
+      [pending, settled],
+      "next",
+    );
+
+    expect(catalog.items.value).toEqual([pending]);
+    expect(catalog.total.value).toBeUndefined();
+    sdk.listOwnerGates.mockResolvedValueOnce(
+      response([gate("second", "OPEN"), gate("hidden", "REJECTED")], 4),
+    );
+    await catalog.load({ query: "", view: "PENDING" }, true);
+
+    const request = sdk.listOwnerGates.mock.calls[0]?.[0];
+    expect(request?.query).toMatchObject({
+      states: undefined,
+      pageToken: "next",
+    });
+    expect(catalog.items.value.map((item) => item.ref)).toEqual([
+      "pending",
+      "second",
+    ]);
+    expect(catalog.total.value).toBe(2);
+  });
   it("объединяет realtime invalidation и отменяет refresh прежнего scope", async () => {
     vi.useFakeTimers();
     const catalog = useGateCatalog();

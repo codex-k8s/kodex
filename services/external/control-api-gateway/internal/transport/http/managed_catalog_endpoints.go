@@ -33,17 +33,34 @@ func (server *Server) ListManagedConfigurations(w http.ResponseWriter, r *http.R
 		writeLocalProblem(w, http.StatusBadGateway, "INTERNAL", false)
 		return
 	}
-	output := generated.ManagedConfigurationPage{Items: make([]generated.ManagedConfigurationSummary, 0, len(result.GetConfigurations())), Total: result.GetTotal(), NextPageToken: optionalManagedString(result.GetPage().GetNextPageToken())}
-	for _, value := range result.GetConfigurations() {
-		item, err := managedConfigurationSummaryView(value)
-		if err != nil {
-			writeLocalProblem(w, http.StatusBadGateway, "INTERNAL", false)
-			return
-		}
-		output.Items = append(output.Items, item)
+	output, err := ManagedConfigurationPageView(result)
+	if err != nil {
+		writeLocalProblem(w, http.StatusBadGateway, "INTERNAL", false)
+		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, output)
+}
+
+// ManagedConfigurationPageView строит тот же публичный каталог для HTTP и
+// типизированного realtime snapshot, не создавая два источника проекции.
+func ManagedConfigurationPageView(value *controlplanev1.ListManagedConfigurationsResponse) (generated.ManagedConfigurationPage, error) {
+	if value == nil || value.GetTotal() < int64(len(value.GetConfigurations())) || value.GetTotal() > maximumSafeJSONInteger || len(value.GetConfigurations()) > 100 {
+		return generated.ManagedConfigurationPage{}, errManagedConfigurationShape
+	}
+	result := generated.ManagedConfigurationPage{
+		Items:         make([]generated.ManagedConfigurationSummary, 0, len(value.GetConfigurations())),
+		Total:         value.GetTotal(),
+		NextPageToken: optionalManagedString(value.GetPage().GetNextPageToken()),
+	}
+	for _, configuration := range value.GetConfigurations() {
+		item, err := managedConfigurationSummaryView(configuration)
+		if err != nil {
+			return generated.ManagedConfigurationPage{}, err
+		}
+		result.Items = append(result.Items, item)
+	}
+	return result, nil
 }
 
 func managedConfigurationSummaryView(value *controlplanev1.ManagedConfigurationSet) (generated.ManagedConfigurationSummary, error) {

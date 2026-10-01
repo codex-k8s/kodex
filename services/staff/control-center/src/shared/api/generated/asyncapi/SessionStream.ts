@@ -2,6 +2,7 @@
 
 import type { SessionReadyEnvelope } from "./SessionReadyEnvelope";
 import type { PlatformSnapshotEnvelope } from "./PlatformSnapshotEnvelope";
+import type { PlatformCursorEnvelope } from "./PlatformCursorEnvelope";
 import type { PlatformReadyEnvelope } from "./PlatformReadyEnvelope";
 import type { PlatformResyncEnvelope } from "./PlatformResyncEnvelope";
 import type { RunSnapshotEnvelope } from "./RunSnapshotEnvelope";
@@ -13,4 +14,17 @@ import type { StreamHeartbeatEnvelope } from "./StreamHeartbeatEnvelope";
 import type { StreamProblemEnvelope } from "./StreamProblemEnvelope";
 import type { SessionProblemEnvelope } from "./SessionProblemEnvelope";
 
-export type SessionStream = SessionReadyEnvelope | PlatformSnapshotEnvelope | PlatformReadyEnvelope | PlatformResyncEnvelope | RunSnapshotEnvelope | RunEventEnvelope | RunReadyEnvelope | RunResyncEnvelope | RunUnsubscribedEnvelope | StreamHeartbeatEnvelope | StreamProblemEnvelope | SessionProblemEnvelope;
+export type SessionStream =
+  | SessionReadyEnvelope
+  | PlatformSnapshotEnvelope
+  | PlatformCursorEnvelope
+  | PlatformReadyEnvelope
+  | PlatformResyncEnvelope
+  | RunSnapshotEnvelope
+  | RunEventEnvelope
+  | RunReadyEnvelope
+  | RunResyncEnvelope
+  | RunUnsubscribedEnvelope
+  | StreamHeartbeatEnvelope
+  | StreamProblemEnvelope
+  | SessionProblemEnvelope;

@@ -452,9 +452,9 @@ function hydrateFromRealtimeSnapshot(): boolean {
   return true;
 }
 
-async function loadWorkspace(): Promise<void> {
-  if (!hydrateFromRealtimeSnapshot())
-    await store.load(props.context, props.projectRef);
+function loadWorkspace(): void {
+  store.setContext(props.context, props.projectRef);
+  hydrateFromRealtimeSnapshot();
 }
 
 async function show(): Promise<void> {
@@ -463,7 +463,7 @@ async function show(): Promise<void> {
   historyOpen.value = false;
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
-  await loadWorkspace();
+  loadWorkspace();
   await nextTick();
   panel.value?.focus({ preventScroll: true });
   restoreLatestAfterRender();
@@ -897,16 +897,12 @@ function planVariantNumber(planRef: string): number {
 async function closePlan(): Promise<void> {
   if (store.busy) return;
   const trigger = planTrigger.value;
-  const refresh = ["APPLIED", "REJECTED"].includes(
-    currentPlan.value?.state ?? "",
-  );
   openPlanRef.value = undefined;
   planTrigger.value = undefined;
   store.clearReceipt();
   await nextTick();
   scrollToLatest();
   if (trigger?.isConnected) trigger.focus();
-  if (refresh && open.value) await loadWorkspace();
 }
 
 async function savePlan(
@@ -984,10 +980,6 @@ async function applyPlan(): Promise<void> {
         break;
     }
   }
-  // Квитанция уже применена; ошибка вторичного чтения не меняет её исход.
-  await Promise.allSettled(
-    [...kinds].map((kind) => platform.reloadPlatformKind(kind)),
-  );
   notifyAssistantPlanApplied({
     projectRef: plan.projectRef,
     kinds: [...kinds],
@@ -1037,7 +1029,7 @@ watch(contextIdentity, () => {
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
   attachmentComposer.value?.clear();
-  if (open.value) void loadWorkspace();
+  if (open.value) loadWorkspace();
   else store.setContext(props.context, props.projectRef);
 });
 watch(assistantFormActive, (active) => {

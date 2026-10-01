@@ -57,7 +57,7 @@ func (repository *Repository) cancelConfigurationWriteBacks(ctx context.Context,
 			row.proposal.State, row.proposal.FailureCode, row.proposal.CompletedAt = entity.WriteBackCancelled, "SOURCE_CHANGED", &now
 		}
 		row.lease.Fence, row.lease.Claimant, row.lease.ExpiresAt = "", "", time.Time{}
-		if err := saveWriteBack(ctx, tx, current, &row); err != nil {
+		if err := repository.saveWriteBack(ctx, tx, current, &row, true); err != nil {
 			return err
 		}
 	}

@@ -5,9 +5,10 @@ SELECT task.id::text, task.state, task.request_digest, task.claimant_id, task.cl
        COALESCE(observation.request_digest, ''), COALESCE(observation.receipt_digest, ''), clock_timestamp(),
        account.ref, task.account_version, account.definition_key, credential.ref, credential.revision_number,
        credential.secret_name, credential.secret_uid::text, credential.secret_resource_version, credential.content_sha256,
-       task.authorization_method
+       task.authorization_method, organization.ref
 FROM control_plane.provider_model_catalog_tasks task
 JOIN control_plane.provider_accounts account ON account.id = task.provider_account_id AND account.organization_id = task.organization_id
+JOIN control_plane.organizations organization ON organization.id = task.organization_id
 JOIN control_plane.provider_definitions definition ON definition.stable_key = account.definition_key
 JOIN control_plane.provider_credential_revisions credential ON credential.id = task.provider_credential_revision_id
   AND credential.provider_account_id = account.id AND credential.organization_id = task.organization_id
