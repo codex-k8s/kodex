@@ -1032,18 +1032,14 @@ yq -i '
   )
 ' "$render"
 
-frontend_middlewares=kodex-system-staff-control-center-retry@kubernetescrd
-api_middlewares=""
+frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
+api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
 frontend_bootstrap_digest=$(
   sha256sum "$source_root/services/staff/control-center/vite.config.ts" \
     "$source_root/tools/dev/run-frontend.sh" |
     awk '{print $1}' | sha256sum | awk '{print $1}'
 )
 [[ "$frontend_bootstrap_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'frontend bootstrap digest is invalid'
-if [[ "$tls_mode" == public-acme ]]; then
-  frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
-  api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
-fi
 NODE_IMAGE="$node_image" FRONTEND_CACHE="$frontend_cache" \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
 SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" \
@@ -1327,7 +1323,7 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center"
 "$repository_root/tools/dev/verify-local-integration-render.sh" "$output" "$integration_hot_reload_image"
 "$repository_root/tools/dev/verify-local-email-render.sh" "$output"
 "$repository_root/tools/dev/verify-local-profile-render.sh" "$output" "$deployment_profile"
-yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
+yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[];
     .kind == "ServersTransport" and .metadata.name == "control-api-gateway" and
     .metadata.namespace == "kodex-system" and
@@ -1342,9 +1338,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];
     .kind == "Ingress" and .metadata.name == "staff-control-center-api" and
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      (if $tls_mode == "public-acme" then
-        "kodex-system-oauth2-control-center-auth@kubernetescrd"
-      else "" end) and
+      "kodex-system-oauth2-control-center-auth@kubernetescrd" and
     .spec.rules[0].http.paths == [{
       path:"/api/v1",pathType:"Prefix",
       backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
@@ -1352,9 +1346,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];
     .kind == "Ingress" and .metadata.name == "staff-control-center" and
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      (if $tls_mode == "public-acme" then
-        "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
-      else "kodex-system-staff-control-center-retry@kubernetescrd" end)) and
+      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd") and
   any(.[];
     .kind == "Middleware" and .metadata.name == "staff-control-center-retry" and
     .metadata.namespace == "kodex-system" and

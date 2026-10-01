@@ -293,25 +293,17 @@ readback_local_frontend_transport() {
     .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
       "kodex-system-control-api-gateway@kubernetescrd"
   ' >/dev/null || fail 'local Control API Service transport readback failed'
-  kubectl -n "$namespace" get ingress/staff-control-center-api -o json | jq -e \
-    --arg tls_mode "$tls_mode" '
+  kubectl -n "$namespace" get ingress/staff-control-center-api -o json | jq -e '
     .spec.rules[0].http.paths == [{
       path:"/api/v1",pathType:"Prefix",
       backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
     }] and
-    (if $tls_mode == "public-acme" then
-      .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-        "kodex-system-oauth2-control-center-auth@kubernetescrd"
-    else
-      (.metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] // "") == ""
-    end)
-  ' >/dev/null || fail 'local Control API direct Ingress readback failed'
-  kubectl -n "$namespace" get ingress/staff-control-center -o json | jq -e \
-    --arg tls_mode "$tls_mode" '
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      (if $tls_mode == "public-acme" then
-        "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
-      else "kodex-system-staff-control-center-retry@kubernetescrd" end)
+      "kodex-system-oauth2-control-center-auth@kubernetescrd"
+  ' >/dev/null || fail 'local Control API direct Ingress readback failed'
+  kubectl -n "$namespace" get ingress/staff-control-center -o json | jq -e '
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
   ' >/dev/null || fail 'local frontend middleware Ingress readback failed'
   kubectl -n "$namespace" get middleware.traefik.io/staff-control-center-retry -o json | jq -e '
     .spec.retry == {attempts:4,initialInterval:"100ms"}
