@@ -83,8 +83,7 @@ async function submit() {
     busy.value = false;
   }
 }
-async function load(): Promise<void> {
-  await platform.loadProject(projectRef.value);
+function openRequestedDialog(): void {
   if (route.query.create === "1" && canCreate.value) dialog.value = true;
 }
 
@@ -92,10 +91,11 @@ watch(
   projectRef,
   () => {
     dialog.value = false;
-    void load();
+    openRequestedDialog();
   },
   { immediate: true },
 );
+watch(canCreate, openRequestedDialog);
 </script>
 <template>
   <PageFrame :title="$t('workflows.title')" :subtitle="$t('workflows.subtitle')"

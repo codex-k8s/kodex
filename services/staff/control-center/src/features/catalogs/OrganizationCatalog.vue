@@ -9,7 +9,8 @@ import {
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
-import type { Project } from "@/shared/api/generated/openapi/types.gen";
+import { useRuntimeStore } from "@/features/runtime/store";
+import type { PlatformResourceKind } from "@/shared/api/generated/asyncapi/PlatformResourceKind";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -22,9 +23,12 @@ import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import {
+  agentCatalogEntry,
+  environmentCatalogEntry,
   loadCatalog,
-  catalogInvalidated,
-  loadCatalogProject,
+  membershipCatalogEntry,
+  scheduleCatalogEntry,
+  workflowCatalogEntry,
   type CatalogEntry,
   type CatalogKind,
 } from "./api";
@@ -46,10 +50,11 @@ const entityIconKind = computed(
     )[props.kind],
 );
 const platform = usePlatformStore();
+const runtime = useRuntimeStore();
 const searchId = useId();
 const query = ref("");
 const items = ref<CatalogEntry[]>([]);
-const projects = ref<Record<string, Project>>({});
+const projects = computed(() => platform.projects);
 const pageToken = ref<string>();
 const loading = ref(false);
 const problem = ref<AppProblem>();
@@ -69,9 +74,54 @@ useCursorInfiniteScroll({
 });
 let controller: AbortController | undefined;
 let generation = 0;
-let disposed = false;
 const cursors = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | undefined;
+const realtimeKind = computed<PlatformResourceKind | undefined>(() => {
+  switch (props.kind) {
+    case "agents":
+      return "AGENT";
+    case "workflows":
+      return "WORKFLOW";
+    case "automations":
+      return "SCHEDULE";
+    case "environments":
+      return "RUNTIME_ENVIRONMENT";
+    case "members":
+      return "MEMBERSHIP";
+    case "secrets":
+      return undefined;
+  }
+});
+const realtimeVersion = computed(() => {
+  const scope = props.projectRef;
+  const snapshot = realtimeKind.value
+    ? platform.realtimeSnapshot(realtimeKind.value, scope)
+    : undefined;
+  const values = (() => {
+    switch (props.kind) {
+      case "agents":
+        return Object.values(platform.agents);
+      case "workflows":
+        return Object.values(platform.workflows);
+      case "automations":
+        return Object.values(platform.schedules);
+      case "environments":
+        return Object.values(runtime.environments);
+      case "members":
+        return Object.values(platform.memberships);
+      case "secrets":
+        return [];
+    }
+  })();
+  return JSON.stringify([
+    snapshot?.scopeKey,
+    snapshot?.nextPageToken,
+    snapshot?.total,
+    values
+      .filter((value) => !scope || value.projectRef === scope)
+      .map((value) => [value.ref, value.version]),
+  ]);
+});
 function workflowLaunch(workflow: Workflow) {
   return workflowLaunchReadiness(workflow);
 }
@@ -114,29 +164,8 @@ async function load(more = false): Promise<void> {
       new Set(next.map((item) => item.ref)).size !== next.length
     )
       throw new Error("Invalid organization catalog cursor or duplicate entry");
-    const missing = props.projectRef
-      ? []
-      : [...new Set(page.items.map((item) => item.projectRef))].filter(
-          (ref) => !projects.value[ref],
-        );
-    // Названия проектов читаются по тем же authoritative owner boundaries, не выводятся из refs.
-    const loadedProjects: Record<string, Project> = {};
-    for (let offset = 0; offset < missing.length; offset += 4) {
-      const batch = await Promise.all(
-        missing.slice(offset, offset + 4).map(async (ref) => {
-          const project = await loadCatalogProject(ref, request.signal);
-          if (project.ref !== ref)
-            throw new Error("Invalid project catalog lookup scope");
-          return project;
-        }),
-      );
-      if (current !== generation) return;
-      for (const project of batch) loadedProjects[project.ref] = project;
-    }
-    if (current !== generation) return;
     if (!more) cursors.clear();
     if (token) cursors.add(token);
-    projects.value = { ...projects.value, ...loadedProjects };
     items.value = next;
     pageToken.value = page.nextPageToken || undefined;
   } catch (error) {
@@ -153,17 +182,56 @@ function invalidate(retain = false): void {
   timer = undefined;
   if (!retain) {
     items.value = [];
-    projects.value = {};
   }
   pageToken.value = undefined;
   cursors.clear();
   problem.value = undefined;
   loading.value = false;
 }
+function applyRealtime(): boolean {
+  const kind = realtimeKind.value;
+  if (!kind) return false;
+  const snapshot = platform.realtimeSnapshot(kind, props.projectRef);
+  if (!snapshot) {
+    loading.value = true;
+    return true;
+  }
+  controller?.abort();
+  generation += 1;
+  const scope = props.projectRef;
+  const values = (() => {
+    switch (props.kind) {
+      case "agents":
+        return Object.values(platform.agents).map(agentCatalogEntry);
+      case "workflows":
+        return Object.values(platform.workflows).map(workflowCatalogEntry);
+      case "automations":
+        return Object.values(platform.schedules).map(scheduleCatalogEntry);
+      case "environments":
+        return Object.values(runtime.environments).map(environmentCatalogEntry);
+      case "members":
+        return Object.values(platform.memberships).map(membershipCatalogEntry);
+      case "secrets":
+        return [];
+    }
+  })().filter((value) => !scope || value.projectRef === scope);
+  if (
+    new Set(values.map((value) => value.ref)).size !== values.length ||
+    values.some((value) => scope && value.projectRef !== scope)
+  )
+    throw new Error("Invalid realtime organization catalog scope");
+  cursors.clear();
+  items.value = values;
+  pageToken.value = snapshot.nextPageToken;
+  problem.value = undefined;
+  loading.value = false;
+  return true;
+}
 watch(
   () => [props.kind, props.projectRef, query.value],
   () => {
     invalidate();
+    if (!query.value.trim() && applyRealtime()) return;
     loading.value = true;
     timer = setTimeout(() => {
       void load();
@@ -171,34 +239,10 @@ watch(
   },
   { immediate: true, flush: "sync" },
 );
-const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
-  if (name === "clearOwnerState") {
-    invalidate();
-    return;
-  }
-  if (
-    name !== "reloadPlatformState" &&
-    !(name === "reloadPlatformKind" && catalogInvalidated(props.kind, args[0]))
-  )
-    return;
-  invalidate(
-    name === "reloadPlatformKind" &&
-      ["RUN", "INTEGRATION_CONNECTION", "INTEGRATION_GRANT"].includes(args[0]),
-  );
-  loading.value = true;
-  const expected = generation;
-  after(() => {
-    if (!disposed && expected === generation) void load();
-  });
-  onError((error) => {
-    if (disposed || expected !== generation) return;
-    loading.value = false;
-    problem.value = asProblem(error);
-  });
+watch(realtimeVersion, () => {
+  if (!query.value.trim()) applyRealtime();
 });
 onBeforeUnmount(() => {
-  disposed = true;
-  unsubscribe();
   controller?.abort();
   if (timer) clearTimeout(timer);
   generation += 1;

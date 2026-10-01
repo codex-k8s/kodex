@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import { useRuntimeStore } from "@/features/runtime/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import ArtifactList from "@/features/workboard/components/ArtifactList.vue";
 import AttentionList from "@/features/workboard/components/AttentionList.vue";
 import ProjectAgentList from "@/features/workboard/components/ProjectAgentList.vue";
@@ -16,28 +17,30 @@ import {
   projectRuntimeEnvironments,
   projectSchedules,
 } from "@/features/workboard/model";
-import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
-import { asProblem, type AppProblem } from "@/shared/api/problem";
 import PageFrame from "@/shared/ui/PageFrame.vue";
-import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const platform = usePlatformStore();
 const runtime = useRuntimeStore();
+const realtime = useRealtimeStore();
 const route = useRoute();
 const assistantForm = computed(() => route.query.assistantForm === "1");
 const projectRef = computed(() => String(route.params.projectRef));
 const project = computed(() => platform.projects[projectRef.value]);
-const projectReady = ref(Boolean(project.value));
-const overviewReady = ref(false);
-const runsReady = ref(false);
-const agentsReady = ref(false);
-const schedulesReady = ref(false);
-const environmentsReady = ref(false);
-const environmentsLoading = ref(false);
-const environmentItems = ref<RuntimeEnvironmentSet[]>([]);
-const environmentNextPageToken = ref<string>();
-const environmentProblem = ref<AppProblem>();
-let environmentGeneration = 0;
+const snapshot = (kind: Parameters<typeof platform.realtimeSnapshot>[0]) =>
+  platform.realtimeSnapshot(kind, projectRef.value);
+const projectReady = computed(() =>
+  Boolean(snapshot("PROJECT") && project.value),
+);
+const overviewReady = computed(() => Boolean(snapshot("PROJECT")));
+const runsReady = computed(() => Boolean(snapshot("RUN")));
+const agentsReady = computed(() => Boolean(snapshot("AGENT")));
+const schedulesReady = computed(() => Boolean(snapshot("SCHEDULE")));
+const environmentsReady = computed(() =>
+  Boolean(snapshot("RUNTIME_ENVIRONMENT")),
+);
+const environmentNextPageToken = computed(
+  () => snapshot("RUNTIME_ENVIRONMENT")?.nextPageToken,
+);
 
 const canCreateRun = computed(() =>
   project.value?.nextActions.includes("CREATE_RUN"),
@@ -81,86 +84,26 @@ const schedules = computed(() =>
   projectSchedules(Object.values(platform.schedules), projectRef.value),
 );
 const environments = computed(() =>
-  projectRuntimeEnvironments(environmentItems.value, projectRef.value),
+  projectRuntimeEnvironments(
+    Object.values(runtime.environments),
+    projectRef.value,
+  ),
 );
 const refreshing = computed(
   () =>
-    (platform.loading.project && projectReady.value) ||
-    (platform.loading.overview && overviewReady.value) ||
-    (platform.loading.runs && runsReady.value) ||
-    (platform.loading.agents && agentsReady.value) ||
-    (platform.loading.schedules && schedulesReady.value) ||
-    (environmentsLoading.value && environmentsReady.value),
+    ["connecting", "recovering"].includes(realtime.platformState.state) &&
+    [
+      projectReady.value,
+      overviewReady.value,
+      runsReady.value,
+      agentsReady.value,
+      schedulesReady.value,
+      environmentsReady.value,
+    ].some(Boolean),
 );
-
-async function refreshProject(): Promise<void> {
-  await platform.loadProject(projectRef.value);
-  if (!platform.problems.project) projectReady.value = true;
+function refresh(): void {
+  realtime.refreshSession();
 }
-async function refreshOverview(): Promise<void> {
-  await platform.loadOverview(projectRef.value);
-  if (!platform.problems.overview) overviewReady.value = true;
-}
-async function refreshRuns(): Promise<void> {
-  await platform.loadRuns(projectRef.value);
-  if (!platform.problems.runs) runsReady.value = true;
-}
-async function refreshAgents(): Promise<void> {
-  await platform.loadAgents(projectRef.value);
-  if (!platform.problems.agents) agentsReady.value = true;
-}
-async function refreshSchedules(): Promise<void> {
-  await platform.loadSchedules(projectRef.value);
-  if (!platform.problems.schedules) schedulesReady.value = true;
-}
-async function refreshEnvironments(): Promise<void> {
-  const generation = ++environmentGeneration;
-  const scope = projectRef.value;
-  environmentsLoading.value = true;
-  environmentProblem.value = undefined;
-  try {
-    const page = await runtime.searchEnvironmentPage(scope, "");
-    if (generation !== environmentGeneration || scope !== projectRef.value)
-      return;
-    environmentItems.value = page.items;
-    environmentNextPageToken.value = page.nextPageToken;
-    environmentsReady.value = true;
-  } catch (error) {
-    if (generation === environmentGeneration)
-      environmentProblem.value = asProblem(error);
-  } finally {
-    if (generation === environmentGeneration) environmentsLoading.value = false;
-  }
-}
-
-async function refresh(): Promise<void> {
-  await Promise.all([
-    refreshProject(),
-    refreshOverview(),
-    refreshRuns(),
-    refreshAgents(),
-    refreshSchedules(),
-    refreshEnvironments(),
-  ]);
-}
-
-watch(
-  projectRef,
-  () => {
-    projectReady.value = Boolean(project.value);
-    overviewReady.value = false;
-    runsReady.value = false;
-    agentsReady.value = false;
-    schedulesReady.value = false;
-    environmentsReady.value = false;
-    environmentItems.value = [];
-    environmentNextPageToken.value = undefined;
-    environmentProblem.value = undefined;
-    environmentGeneration += 1;
-    void refresh();
-  },
-  { immediate: true },
-);
 </script>
 
 <template>
@@ -179,21 +122,14 @@ watch(
         </RouterLink>
       </template>
 
-      <ProblemNotice
-        v-if="platform.problems.project && !projectReady"
-        :problem="platform.problems.project"
-        @retry="refreshProject"
-      />
-
       <div class="project-workboard">
         <div class="project-workboard__main">
           <WorkboardSection
             :title="$t('workboard.attention')"
             :count="attention.length"
-            :loading="platform.loading.overview || platform.loading.runs"
+            :loading="!overviewReady && !runsReady"
             :refreshing="refreshing"
             :ready="overviewReady || runsReady"
-            :problem="platform.problems.overview ?? platform.problems.runs"
             :empty="attention.length === 0"
             :empty-text="$t('workboard.noAttention')"
             @retry="refresh"
@@ -210,13 +146,12 @@ watch(
           <WorkboardSection
             :title="$t('workboard.runningNow')"
             :count="activeRuns.length"
-            :loading="platform.loading.runs"
+            :loading="!runsReady"
             :refreshing="refreshing"
             :ready="runsReady"
-            :problem="platform.problems.runs"
             :empty="activeRuns.length === 0"
             :empty-text="$t('workboard.noActiveRuns')"
-            @retry="refreshRuns"
+            @retry="refresh"
           >
             <template #action>
               <RouterLink :to="`/projects/${projectRef}/runs`">{{
@@ -234,13 +169,12 @@ watch(
           <WorkboardSection
             :title="$t('workboard.recentResults')"
             :count="recentArtifacts.length"
-            :loading="platform.loading.overview"
+            :loading="!overviewReady"
             :refreshing="refreshing"
             :ready="overviewReady"
-            :problem="platform.problems.overview"
             :empty="recentArtifacts.length === 0"
             :empty-text="$t('workboard.noRecentResults')"
-            @retry="refreshOverview"
+            @retry="refresh"
           >
             <template #action>
               <RouterLink :to="`/projects/${projectRef}/files`">{{
@@ -253,13 +187,12 @@ watch(
           <WorkboardSection
             :title="$t('agents.title')"
             :count="projectAgents.length"
-            :loading="platform.loading.agents"
+            :loading="!agentsReady"
             :refreshing="refreshing"
             :ready="agentsReady"
-            :problem="platform.problems.agents"
             :empty="projectAgents.length === 0"
             :empty-text="$t('agents.emptyTitle')"
-            @retry="refreshAgents"
+            @retry="refresh"
           >
             <template #action>
               <RouterLink :to="`/projects/${projectRef}/agents`">{{
@@ -281,13 +214,13 @@ watch(
             :environments="environments"
             :schedules-ready="schedulesReady"
             :environments-ready="environmentsReady"
-            :schedules-loading="platform.loading.schedules"
-            :environments-loading="environmentsLoading"
-            :schedules-unavailable="Boolean(platform.problems.schedules)"
-            :environments-unavailable="Boolean(environmentProblem)"
+            :schedules-loading="!schedulesReady"
+            :environments-loading="!environmentsReady"
+            :schedules-unavailable="false"
+            :environments-unavailable="false"
             :environments-truncated="Boolean(environmentNextPageToken)"
-            @retry-schedules="refreshSchedules"
-            @retry-environments="refreshEnvironments"
+            @retry-schedules="refresh"
+            @retry-environments="refresh"
           />
         </aside>
       </div>

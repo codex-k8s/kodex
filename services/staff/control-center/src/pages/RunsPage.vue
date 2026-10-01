@@ -5,6 +5,7 @@ import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import RunsBoard from "@/features/workboard/components/RunsBoard.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
 import {
@@ -14,10 +15,10 @@ import {
 } from "@/features/workboard/model";
 import { useRunBoardStore } from "@/features/workboard/run-board";
 import PageFrame from "@/shared/ui/PageFrame.vue";
-import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const platform = usePlatformStore();
+const realtime = useRealtimeStore();
 const searchId = useId();
 const route = useRoute();
 const projectRef = computed(() =>
@@ -40,7 +41,6 @@ const {
   loading,
   problem,
 } = storeToRefs(catalog);
-const projectReady = ref(!projectRef.value || Boolean(project.value));
 const search = ref("");
 const listRoot = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
@@ -66,6 +66,10 @@ const list = computed(() =>
 );
 
 async function refreshRuns(): Promise<void> {
+  if (!query.value) {
+    realtime.refreshSession();
+    return;
+  }
   await loadRuns();
 }
 async function loadRuns(more = false, lane?: RunLane): Promise<void> {
@@ -80,25 +84,31 @@ async function loadRuns(more = false, lane?: RunLane): Promise<void> {
     lane,
   );
 }
-
-async function refreshProject(): Promise<void> {
-  if (!projectRef.value) return;
-  await platform.loadProject(projectRef.value);
-  if (!platform.problems.project) projectReady.value = true;
+function applyRealtime(): boolean {
+  const snapshot = platform.realtimeSnapshot("RUN", projectRef.value);
+  if (!snapshot) return false;
+  catalog.applySnapshot(
+    {
+      projectRef: projectRef.value,
+      query: "",
+      filter: filter.value,
+      pageSize: pageSize.value,
+    },
+    Object.values(platform.runs).filter(
+      (run) => !projectRef.value || run.projectRef === projectRef.value,
+    ),
+    Boolean(snapshot.nextPageToken),
+  );
+  return true;
 }
 
 const refreshing = computed(() => runsReady.value && loading.value);
 
-async function refresh(): Promise<void> {
-  await Promise.all([refreshRuns(), refreshProject()]);
-}
-
 watch(
   projectRef,
-  (next) => {
+  () => {
     catalog.reset();
-    projectReady.value = !next || Boolean(project.value);
-    void refresh();
+    if (!applyRealtime()) realtime.refreshSession();
   },
   { immediate: true },
 );
@@ -107,13 +117,15 @@ watch(search, () => {
   catalog.reset();
   timer = setTimeout(() => {
     query.value = search.value.trim();
-    void refreshRuns();
+    if (!query.value && applyRealtime()) return;
+    void loadRuns();
   }, 500);
 });
 watch(filter, () => {
   clearTimeout(timer);
   query.value = search.value.trim();
-  void refreshRuns();
+  if (!query.value && applyRealtime()) return;
+  void loadRuns();
 });
 watch(
   () =>
@@ -122,13 +134,15 @@ watch(
       .map((run) => `${run.ref}:${String(run.version)}`)
       .sort()
       .join("|"),
-  () =>
+  () => {
+    if (!query.value && applyRealtime()) return;
     catalog.invalidate({
       projectRef: projectRef.value,
       query: query.value,
       filter: filter.value,
       pageSize: pageSize.value,
-    }),
+    });
+  },
 );
 onBeforeUnmount(() => {
   clearTimeout(timer);
@@ -152,12 +166,6 @@ onBeforeUnmount(() => {
         {{ $t("runs.new") }}
       </RouterLink>
     </template>
-
-    <ProblemNotice
-      v-if="projectRef && platform.problems.project && !projectReady"
-      :problem="platform.problems.project"
-      @retry="refreshProject"
-    />
 
     <div class="runs-controls" role="group" :aria-label="$t('common.status')">
       <label class="runs-search" :for="searchId"

@@ -39,6 +39,7 @@ describe("AppShell navigation", () => {
     expect(source).not.toContain("platform.loadBootstrap()");
     expect(source).not.toContain("platform.loadGates()");
     expect(source).not.toContain("platform.loadProjects()");
+    expect(source).not.toContain("platform.loadProject(value)");
     expect(source).not.toContain("]).finally(() => {");
     expect(source).not.toContain("offline-banner");
     expect(source).not.toContain("location.reload");

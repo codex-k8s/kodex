@@ -467,7 +467,6 @@ watch(
     selectProjectRef(value);
     if (realtimeStarted.value && value !== previous)
       realtime.changeProjectScope();
-    if (value && !platform.projects[value]) void platform.loadProject(value);
   },
   { immediate: true },
 );

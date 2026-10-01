@@ -2008,6 +2008,19 @@ export const usePlatformStore = defineStore("platform", () => {
       case "PROJECT":
         if (!catalog) throw new Error("Project realtime catalog is missing");
         replace(projects, snapshotArray<Project>(catalog, "projects"));
+        if ("selectedProject" in snapshot) {
+          const response = snapshotRecord(
+            snapshot.selectedProject,
+            "selectedProject",
+          );
+          const selected = snapshotRecord(
+            response.project,
+            "selectedProject.project",
+          ) as Project;
+          if (!scopeProjectRef || selected.ref !== scopeProjectRef)
+            throw new Error("Selected project realtime scope changed");
+          projects[selected.ref] = selected;
+        }
         projectCollectionActions.value = snapshotStringArray(
           catalog,
           "nextActions",

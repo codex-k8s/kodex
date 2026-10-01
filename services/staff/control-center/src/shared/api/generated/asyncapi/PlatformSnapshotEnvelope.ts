@@ -3,6 +3,7 @@
 import type { PlatformSnapshotMode } from "./PlatformSnapshotMode";
 import type { PlatformEventName } from "./PlatformEventName";
 import type { PlatformResourceKind } from "./PlatformResourceKind";
+import type { PlatformSnapshotPayload } from "./PlatformSnapshotPayload";
 
 export interface PlatformSnapshotEnvelope {
   type: "PLATFORM_SNAPSHOT";
@@ -14,5 +15,5 @@ export interface PlatformSnapshotEnvelope {
   eventName?: PlatformEventName;
   kind: PlatformResourceKind;
   projectRef?: string;
-  snapshot: Record<string, unknown>;
+  snapshot: PlatformSnapshotPayload;
 }

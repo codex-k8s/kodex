@@ -12,5 +12,5 @@ type PlatformSnapshotEnvelope struct {
 	EventName *PlatformEventName `json:"eventName,omitempty"`
 	Kind PlatformResourceKind `json:"kind"`
 	ProjectRef *string `json:"projectRef,omitempty"`
-	Snapshot map[string]any `json:"snapshot"`
+	Snapshot PlatformSnapshotPayload `json:"snapshot"`
 }

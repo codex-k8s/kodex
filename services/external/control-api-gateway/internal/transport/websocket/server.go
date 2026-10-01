@@ -53,6 +53,7 @@ type queryClient interface {
 	GetBootstrapState(context.Context, *controlplanev1.GetBootstrapStateRequest, ...grpc.CallOption) (*controlplanev1.GetBootstrapStateResponse, error)
 	GetOverview(context.Context, *controlplanev1.GetOverviewRequest, ...grpc.CallOption) (*controlplanev1.GetOverviewResponse, error)
 	ListProjects(context.Context, *controlplanev1.ListProjectsRequest, ...grpc.CallOption) (*controlplanev1.ListProjectsResponse, error)
+	GetProject(context.Context, *controlplanev1.GetProjectRequest, ...grpc.CallOption) (*controlplanev1.GetProjectResponse, error)
 	ListProjectMemberships(context.Context, *controlplanev1.ListProjectMembershipsRequest, ...grpc.CallOption) (*controlplanev1.ListProjectMembershipsResponse, error)
 	ListPlatformMemberships(context.Context, *controlplanev1.ListPlatformMembershipsRequest, ...grpc.CallOption) (*controlplanev1.ListPlatformMembershipsResponse, error)
 	ListAgents(context.Context, *controlplanev1.ListAgentsRequest, ...grpc.CallOption) (*controlplanev1.ListAgentsResponse, error)
@@ -512,10 +513,15 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 	if signal.Sequence != multiplexer.platformCursor+1 {
 		return multiplexer.synchronizePlatform()
 	}
-	snapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, signal.Kind, multiplexer.projectRef, multiplexer.localize)
+	rawSnapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, signal.Kind, multiplexer.projectRef, multiplexer.localize)
 	if err != nil {
 		multiplexer.platformAvailable = false
 		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
+	}
+	snapshot, err := typedPlatformSnapshot(signal.Kind, rawSnapshot)
+	if err != nil {
+		multiplexer.platformAvailable = false
+		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "INTERNAL")
 	}
 	eventName := generated.PlatformEventName(signal.EventName)
 	envelope := generated.PlatformSnapshotEnvelope{

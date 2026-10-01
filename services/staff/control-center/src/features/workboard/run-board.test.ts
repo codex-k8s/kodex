@@ -44,6 +44,35 @@ beforeEach(() => {
     );
 });
 describe("независимые серверные колонки Kanban", () => {
+  it("показывает realtime snapshot без HTTP и начинает cursor-догрузку с авторитетной первой страницы", async () => {
+    const store = useRunBoardStore();
+    const scope = {
+      projectRef: "project_one",
+      query: "",
+      filter: "ALL" as const,
+    };
+    store.applySnapshot(
+      scope,
+      [
+        {
+          ref: "snapshot_running",
+          projectRef: "project_one",
+          state: "RUNNING",
+          version: 2,
+        } as Run,
+      ],
+      true,
+    );
+    expect(store.items.map((run) => run.ref)).toEqual(["snapshot_running"]);
+    expect(store.ready).toBe(true);
+    expect(sdk.listRuns).not.toHaveBeenCalled();
+
+    await store.load(scope, true, "RUNNING");
+    expect(sdk.listRuns).toHaveBeenCalledOnce();
+    expect(sdk.listRuns.mock.calls[0]?.[0].query.pageToken).toBeUndefined();
+    expect(store.items.map((run) => run.ref)).toContain("snapshot_running");
+  });
+
   it("читает четыре фильтра и догружает только cursor выбранной колонки", async () => {
     const store = useRunBoardStore();
     const scope = {

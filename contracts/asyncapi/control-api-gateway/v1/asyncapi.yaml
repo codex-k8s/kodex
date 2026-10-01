@@ -340,9 +340,201 @@ components:
         eventName: { $ref: "#/components/schemas/PlatformEventName" }
         kind: { $ref: "#/components/schemas/PlatformResourceKind" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
-        snapshot:
+        snapshot: { $ref: "#/components/schemas/PlatformSnapshotPayload" }
+    PlatformSnapshotPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        catalog: { $ref: "#/components/schemas/PlatformCatalogSnapshot" }
+        selectedProject:
+          { $ref: "#/components/schemas/PlatformProjectResponse" }
+        overview: { $ref: "#/components/schemas/PlatformOverviewResponse" }
+        definitions: { $ref: "#/components/schemas/PlatformCatalogSnapshot" }
+        connections: { $ref: "#/components/schemas/PlatformCatalogSnapshot" }
+        assistant: { $ref: "#/components/schemas/PlatformAssistantResponse" }
+        conversations:
+          { $ref: "#/components/schemas/PlatformCatalogSnapshot" }
+        bootstrap: { $ref: "#/components/schemas/PlatformBootstrapResponse" }
+    PlatformPageCursor:
+      type: object
+      additionalProperties: false
+      properties:
+        nextPageToken: { type: string }
+    PlatformCatalogSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        projects:
+          type: array
+          items: &project_projection
+            type: object
+            x-go-type: httpgenerated.Project
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: Project
+            x-typescript-import: ../openapi/types.gen
+        agents:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.Agent
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: Agent
+            x-typescript-import: ../openapi/types.gen
+        workflows:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.Workflow
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: Workflow
+            x-typescript-import: ../openapi/types.gen
+        runs:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.Run
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: Run
+            x-typescript-import: ../openapi/types.gen
+        artifacts:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.Artifact
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: Artifact
+            x-typescript-import: ../openapi/types.gen
+        schedules:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.Schedule
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: Schedule
+            x-typescript-import: ../openapi/types.gen
+        definitions:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.IntegrationDefinition
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: IntegrationDefinition
+            x-typescript-import: ../openapi/types.gen
+        connections:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.IntegrationConnection
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: IntegrationConnection
+            x-typescript-import: ../openapi/types.gen
+        memberships:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.Membership
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: Membership
+            x-typescript-import: ../openapi/types.gen
+        conversations:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.AssistantConversation
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: AssistantConversation
+            x-typescript-import: ../openapi/types.gen
+        recipes:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.RoleImageRecipe
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: RoleImageRecipe
+            x-typescript-import: ../openapi/types.gen
+        environments:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.RuntimeEnvironmentSet
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: RuntimeEnvironmentSet
+            x-typescript-import: ../openapi/types.gen
+        accounts:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.ProviderAccount
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: ProviderAccount
+            x-typescript-import: ../openapi/types.gen
+        page: { $ref: "#/components/schemas/PlatformPageCursor" }
+        nextActions:
+          type: array
+          items:
+            type: string
+            x-go-type: httpgenerated.NextAction
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: NextAction
+            x-typescript-import: ../openapi/types.gen
+        total: { type: integer, format: int64, minimum: 0 }
+        coreReady: { type: boolean }
+    PlatformProjectResponse:
+      type: object
+      additionalProperties: false
+      required: [project]
+      properties:
+        project: *project_projection
+    PlatformOverviewResponse:
+      type: object
+      additionalProperties: false
+      required: [overview]
+      properties:
+        overview:
           type: object
-          additionalProperties: true
+          x-go-type: httpgenerated.Overview
+          x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+          x-go-import-alias: httpgenerated
+          x-typescript-type: Overview
+          x-typescript-import: ../openapi/types.gen
+    PlatformAssistantResponse:
+      type: object
+      additionalProperties: false
+      required: [assistant]
+      properties:
+        assistant:
+          type: object
+          x-go-type: httpgenerated.SystemAssistant
+          x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+          x-go-import-alias: httpgenerated
+          x-typescript-type: SystemAssistant
+          x-typescript-import: ../openapi/types.gen
+    PlatformBootstrapResponse:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          type: object
+          x-go-type: httpgenerated.BootstrapState
+          x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+          x-go-import-alias: httpgenerated
+          x-typescript-type: BootstrapState
+          x-typescript-import: ../openapi/types.gen
     PlatformReadyEnvelope:
       type: object
       additionalProperties: false

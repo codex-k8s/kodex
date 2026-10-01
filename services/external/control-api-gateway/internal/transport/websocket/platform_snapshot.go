@@ -1,7 +1,9 @@
 package websockettransport
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -12,6 +14,51 @@ import (
 )
 
 const platformSnapshotPageSize = 50
+
+func typedPlatformSnapshot(kind string, value map[string]any) (generated.PlatformSnapshotPayload, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return generated.PlatformSnapshotPayload{}, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	var snapshot generated.PlatformSnapshotPayload
+	if err := decoder.Decode(&snapshot); err != nil {
+		return generated.PlatformSnapshotPayload{}, err
+	}
+	present := 0
+	for _, field := range []bool{
+		snapshot.Catalog != nil,
+		snapshot.SelectedProject != nil,
+		snapshot.Overview != nil,
+		snapshot.Definitions != nil,
+		snapshot.Connections != nil,
+		snapshot.Assistant != nil,
+		snapshot.Conversations != nil,
+		snapshot.Bootstrap != nil,
+	} {
+		if field {
+			present++
+		}
+	}
+	valid := false
+	switch kind {
+	case "PROJECT":
+		valid = snapshot.Catalog != nil && snapshot.Overview != nil && (present == 2 || (present == 3 && snapshot.SelectedProject != nil))
+	case "AGENT", "INSTRUCTIONS", "RUN", "ARTIFACT":
+		valid = snapshot.Catalog != nil && snapshot.Overview != nil && present == 2
+	case "WORKFLOW", "SCHEDULE", "MEMBERSHIP", "PLATFORM_MEMBERSHIP", "ROLE_IMAGE_RECIPE", "RUNTIME_ENVIRONMENT", "PROVIDER_ACCOUNT":
+		valid = snapshot.Catalog != nil && present == 1
+	case "INTEGRATION_CONNECTION", "INTEGRATION_GRANT":
+		valid = snapshot.Definitions != nil && snapshot.Connections != nil && present == 2
+	case "SYSTEM_ASSISTANT":
+		valid = snapshot.Assistant != nil && snapshot.Conversations != nil && snapshot.Bootstrap != nil && present == 3
+	}
+	if !valid {
+		return generated.PlatformSnapshotPayload{}, errors.New("platform snapshot payload does not match kind")
+	}
+	return snapshot, nil
+}
 
 var platformBootstrapKinds = []string{
 	"PROJECT",
@@ -93,7 +140,7 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		return nil
 	}
 	withOverview := func(snapshot map[string]any) (map[string]any, error) {
-		overview, readErr := server.query.GetOverview(ctx, &controlplanev1.GetOverviewRequest{ProjectRef: projectRef})
+		overview, readErr := server.query.GetOverview(scoped, &controlplanev1.GetOverviewRequest{ProjectRef: projectRef})
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -114,6 +161,17 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		snapshot, projectErr := snapshotWithCatalog(response, localize)
 		if projectErr != nil {
 			return nil, projectErr
+		}
+		if projectRef != "" {
+			selected, selectedErr := server.query.GetProject(scoped, &controlplanev1.GetProjectRequest{ProjectRef: projectRef})
+			if selectedErr != nil {
+				return nil, selectedErr
+			}
+			selectedProjection, projectionErr := projectSnapshotPart(selected, localize)
+			if projectionErr != nil {
+				return nil, projectionErr
+			}
+			snapshot["selectedProject"] = selectedProjection
 		}
 		return withOverview(snapshot)
 	case "AGENT", "INSTRUCTIONS":
@@ -193,7 +251,7 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		if readErr != nil {
 			return nil, readErr
 		}
-		conversations, readErr := server.assistant.ListAssistantConversations(ctx, &controlplanev1.ListAssistantConversationsRequest{ProjectRef: projectRef, Page: platformPage()})
+		conversations, readErr := server.assistant.ListAssistantConversations(scoped, &controlplanev1.ListAssistantConversationsRequest{ProjectRef: projectRef, Page: platformPage()})
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -253,10 +311,15 @@ func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() bool {
 				continue
 			}
 		}
-		snapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, kind, multiplexer.projectRef, multiplexer.localize)
+		rawSnapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, kind, multiplexer.projectRef, multiplexer.localize)
 		if err != nil {
 			multiplexer.platformAvailable = false
 			return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
+		}
+		snapshot, err := typedPlatformSnapshot(kind, rawSnapshot)
+		if err != nil {
+			multiplexer.platformAvailable = false
+			return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "INTERNAL")
 		}
 		envelope := generated.PlatformSnapshotEnvelope{
 			Type: "PLATFORM_SNAPSHOT", RequestRef: multiplexer.platformRequestRef,

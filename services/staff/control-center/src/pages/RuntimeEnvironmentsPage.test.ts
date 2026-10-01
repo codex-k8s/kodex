@@ -8,12 +8,16 @@ const lifecycle = vi.hoisted(() => ({
   cleanup: [] as Array<() => void>,
 }));
 const runtime = vi.hoisted(() => ({
+  environments: {},
   environmentReadiness: {},
   environmentAgents: {},
   problems: {},
   searchEnvironmentPage: vi.fn(),
   loadEnvironmentReadiness: vi.fn(),
   loadEnvironmentAgents: vi.fn(),
+}));
+const platform = vi.hoisted(() => ({
+  realtimeSnapshot: vi.fn(() => ({ scopeKey: "project_1" })),
 }));
 vi.mock("vue", async (original) => ({
   ...(await original<typeof import("vue")>()),
@@ -25,6 +29,9 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("@/features/runtime/store", () => ({ useRuntimeStore: () => runtime }));
+vi.mock("@/features/platform/store", () => ({
+  usePlatformStore: () => platform,
+}));
 import RuntimeEnvironmentsPage from "./RuntimeEnvironmentsPage.vue";
 
 async function catalog() {
@@ -40,6 +47,18 @@ beforeEach(() => {
   lifecycle.mounted.length = 0;
   lifecycle.cleanup.length = 0;
   runtime.searchEnvironmentPage.mockResolvedValue({ items: [] });
+  platform.realtimeSnapshot.mockReturnValue({ scopeKey: "project_1" });
+});
+
+it("первую страницу окружений берёт из realtime snapshot без HTTP", async () => {
+  vi.stubGlobal("document", new EventTarget());
+  try {
+    await catalog();
+    for (const callback of lifecycle.mounted) callback();
+    expect(runtime.searchEnvironmentPage).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 it("каталог не выбирает окружение и не загружает inspector заранее", async () => {

@@ -13,16 +13,4 @@ import type { StreamHeartbeatEnvelope } from "./StreamHeartbeatEnvelope";
 import type { StreamProblemEnvelope } from "./StreamProblemEnvelope";
 import type { SessionProblemEnvelope } from "./SessionProblemEnvelope";
 
-export type SessionStream =
-  | SessionReadyEnvelope
-  | PlatformSnapshotEnvelope
-  | PlatformReadyEnvelope
-  | PlatformResyncEnvelope
-  | RunSnapshotEnvelope
-  | RunEventEnvelope
-  | RunReadyEnvelope
-  | RunResyncEnvelope
-  | RunUnsubscribedEnvelope
-  | StreamHeartbeatEnvelope
-  | StreamProblemEnvelope
-  | SessionProblemEnvelope;
+export type SessionStream = SessionReadyEnvelope | PlatformSnapshotEnvelope | PlatformReadyEnvelope | PlatformResyncEnvelope | RunSnapshotEnvelope | RunEventEnvelope | RunReadyEnvelope | RunResyncEnvelope | RunUnsubscribedEnvelope | StreamHeartbeatEnvelope | StreamProblemEnvelope | SessionProblemEnvelope;

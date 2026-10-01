@@ -73,6 +73,19 @@ export const useRunBoardStore = defineStore("run-board", () => {
         columns[lane].invalidate({ ...scope, states: runLaneStates[lane] });
     }
   }
+  function applySnapshot(
+    scope: RunCatalogScope,
+    values: Run[],
+    hasMore: boolean,
+  ): void {
+    for (const lane of lanes) {
+      columns[lane].applySnapshot(
+        { ...scope, states: runLaneStates[lane] },
+        values.filter((run) => runLaneStates[lane].includes(run.state)),
+        hasMore,
+      );
+    }
+  }
   return {
     columns,
     items,
@@ -83,5 +96,6 @@ export const useRunBoardStore = defineStore("run-board", () => {
     load,
     reset,
     invalidate,
+    applySnapshot,
   };
 });

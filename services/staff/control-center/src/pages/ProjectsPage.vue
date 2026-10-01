@@ -92,6 +92,10 @@ async function submit(): Promise<void> {
 
 async function load(more = false): Promise<void> {
   if (more && (!pageToken.value || loading.value || listProblem.value)) return;
+  if (!more && !trashMode.value && !query.value.trim()) {
+    applyRealtimeSnapshot();
+    return;
+  }
   controller?.abort();
   const request = new AbortController();
   controller = request;
@@ -155,6 +159,22 @@ async function load(more = false): Promise<void> {
     if (current === generation) loading.value = false;
   }
 }
+
+function applyRealtimeSnapshot(): void {
+  if (trashMode.value || query.value.trim()) return;
+  controller?.abort();
+  generation += 1;
+  cursors.clear();
+  const snapshot = platform.realtimeSnapshot("PROJECT");
+  items.value = platform.projectList;
+  pageToken.value = snapshot?.nextPageToken;
+  if (pageToken.value) cursors.add(pageToken.value);
+  actions.value = platform.projectCollectionActions;
+  listProblem.value = undefined;
+  loading.value = !snapshot;
+  if (snapshot && route.query.create === "1" && canCreate.value)
+    dialog.value = true;
+}
 let firstProjectLoad = true;
 watch(
   [query, trashMode],
@@ -166,10 +186,26 @@ watch(
     pageToken.value = undefined;
     listProblem.value = undefined;
     loading.value = true;
+    if (!trashMode.value && !query.value.trim()) {
+      applyRealtimeSnapshot();
+      firstProjectLoad = false;
+      return;
+    }
     timer = setTimeout(() => void load(), firstProjectLoad ? 0 : 150);
     firstProjectLoad = false;
   },
   { immediate: true },
+);
+watch(
+  () => [
+    platform.realtimeSnapshot("PROJECT")?.nextPageToken ?? "",
+    platform.projectList
+      .map((project) => `${project.ref}:${String(project.version)}`)
+      .sort()
+      .join("|"),
+  ],
+  () => applyRealtimeSnapshot(),
+  { flush: "sync" },
 );
 watch(
   () =>
@@ -250,8 +286,7 @@ async function confirmLifecycle(): Promise<void> {
     else await moveProjectToTrash(target);
     lifecycleTarget.value = undefined;
     purgeConfirmation.value = "";
-    await load();
-    await platform.reloadPlatformKind("PROJECT");
+    if (trashMode.value) await load();
   } catch (error) {
     lifecycleProblem.value = asProblem(error);
   } finally {
