@@ -8,7 +8,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v40" {
+	if CorePromptRevision != "system-assistant-core-v41" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{

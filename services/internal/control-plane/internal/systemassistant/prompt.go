@@ -4,7 +4,7 @@ package systemassistant
 
 import _ "embed"
 
-const CorePromptRevision = "system-assistant-core-v40"
+const CorePromptRevision = "system-assistant-core-v41"
 
 //go:embed prompts/system-assistant-core-v40.md
 var corePrompt string
