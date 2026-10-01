@@ -8,5 +8,5 @@ export interface PlatformReadyEnvelope {
   streamKind: "PLATFORM";
   streamRef: "PLATFORM";
   cursor: number;
-  availableKinds: PlatformResourceKind[];
+  availableKinds?: PlatformResourceKind[];
 }

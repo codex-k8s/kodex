@@ -126,7 +126,8 @@ function scalarGoType(schema) {
 function goType(schema, required) {
   if (schema.type === "array") {
     if (!schema.items) fail("Array items are required");
-    return `[]${scalarGoType(schema.items)}`;
+    const value = `[]${scalarGoType(schema.items)}`;
+    return !required && schema["x-go-optional-pointer"] ? `*${value}` : value;
   }
   const value = scalarGoType(schema);
   if (
@@ -264,6 +265,16 @@ function validateNamedSchema(name, schema) {
   }
   for (const [propertyName, property] of Object.entries(schema.properties)) {
     fieldName(propertyName);
+    if (
+      property["x-go-optional-pointer"] !== undefined &&
+      (property["x-go-optional-pointer"] !== true ||
+        property.type !== "array" ||
+        required.has(propertyName))
+    ) {
+      fail(
+        `Schema ${name} property ${propertyName} has an invalid x-go-optional-pointer`,
+      );
+    }
     typescriptType(property);
   }
 }

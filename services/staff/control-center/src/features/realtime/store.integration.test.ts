@@ -389,6 +389,175 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it("при reconnect на том же cursor сохраняет полный кэш без повторного snapshot", async () => {
+    const store = useRealtimeStore();
+    const providers = useProvidersStore();
+    store.openPlatform();
+    await flushProcessing();
+    const first = socketAt(0);
+    first.open();
+    first.message({
+      type: "PLATFORM_SNAPSHOT",
+      requestRef: requestRef(first),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 3,
+      mode: "BOOTSTRAP",
+      kind: "PROVIDER_ACCOUNT",
+      snapshot: {
+        catalog: {
+          accounts: [{ ref: "pacc_primary", version: 1 }],
+          page: {},
+          nextActions: [],
+          providerDefinitions: [],
+          providerDefinitionsPage: {},
+          runtimes: [],
+        },
+      },
+    });
+    first.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(first),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 3,
+      availableKinds: ["PROVIDER_ACCOUNT"],
+    });
+    await flushProcessing();
+
+    first.close(1006, "CONNECTION_LOST");
+    runScheduled();
+    await flushProcessing();
+    const second = socketAt(1);
+    second.open();
+    expect(resumeRequest(second)).toMatchObject({
+      platformAfterSequence: 3,
+      platformSnapshotRequired: false,
+    });
+    second.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(second),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 3,
+    });
+    await flushProcessing();
+
+    expect(second.readyState).toBe(FakeWebSocket.OPEN);
+    expect(store.platformState.state).toBe("live");
+    expect(providers.accounts.map((item) => item.ref)).toEqual([
+      "pacc_primary",
+    ]);
+    store.closeAll();
+  });
+
+  it("закрывает initial session при PLATFORM_READY без полного bootstrap", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(socket),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 0,
+    });
+    await flushProcessing();
+
+    expect(socket.closeCode).toBe(1002);
+    expect(socket.closeReason).toBe("INVALID_SESSION_ENVELOPE");
+    store.closeAll();
+  });
+
+  it("принимает пустой полный bootstrap на ненулевом cursor", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(socket),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 9,
+      availableKinds: [],
+    });
+    await flushProcessing();
+
+    expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+    expect(store.platformSequence).toBe(9);
+    expect(store.platformState.state).toBe("live");
+    store.closeAll();
+  });
+
+  it("после обрыва частичного bootstrap запрашивает полный snapshot", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const first = socketAt(0);
+    first.open();
+    first.message({
+      type: "PLATFORM_SNAPSHOT",
+      requestRef: requestRef(first),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 4,
+      mode: "BOOTSTRAP",
+      kind: "PROJECT",
+      snapshot: { catalog: { projects: [], page: {} } },
+    });
+    await flushProcessing();
+    first.close(1006, "CONNECTION_LOST");
+    runScheduled();
+    await flushProcessing();
+    const second = socketAt(1);
+    second.open();
+
+    expect(resumeRequest(second)).toMatchObject({
+      platformAfterSequence: 4,
+      platformSnapshotRequired: true,
+    });
+    store.closeAll();
+  });
+
+  it("после SESSION_PROBLEM требует новый полный platform snapshot", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const first = socketAt(0);
+    first.open();
+    first.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(first),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 0,
+      availableKinds: [],
+    });
+    first.message({
+      type: "SESSION_PROBLEM",
+      status: 503,
+      code: "SESSION_UNAVAILABLE",
+      title: "Session unavailable",
+      retryable: true,
+    });
+    await flushProcessing();
+    first.close(1006, "CONNECTION_LOST");
+    runScheduled();
+    await flushProcessing();
+    const second = socketAt(1);
+    second.open();
+
+    expect(resumeRequest(second)).toMatchObject({
+      platformAfterSequence: 0,
+      platformSnapshotRequired: true,
+    });
+    store.closeAll();
+  });
+
   it("загружает аккаунты, определения провайдеров и runtime одним снимком", async () => {
     const store = useRealtimeStore();
     const platform = usePlatformStore();
@@ -572,6 +741,15 @@ describe("browser-session realtime multiplexer", () => {
     first.open();
 
     first.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(first),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 0,
+      availableKinds: [],
+    });
+
+    first.message({
       type: "PLATFORM_SNAPSHOT",
       requestRef: requestRef(first),
       streamKind: "PLATFORM",
@@ -635,6 +813,14 @@ describe("browser-session realtime multiplexer", () => {
     await flushProcessing();
     const socket = socketAt(0);
     socket.open();
+    socket.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(socket),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 0,
+      availableKinds: [],
+    });
     socket.message({
       type: "PLATFORM_CURSOR",
       requestRef: requestRef(socket),

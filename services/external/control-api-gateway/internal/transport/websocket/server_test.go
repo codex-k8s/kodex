@@ -2,6 +2,7 @@ package websockettransport
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -103,6 +104,55 @@ func TestValidateSessionResumeRejectsDuplicatesAndBounds(t *testing.T) {
 	invalidCursor.PlatformAfterSequence = -1
 	if err := validateSessionResume(invalidCursor); err == nil {
 		t.Fatal("negative platform cursor was accepted")
+	}
+}
+
+func TestNeedsPlatformBootstrap(t *testing.T) {
+	tests := []struct {
+		name             string
+		requestedAfter   int64
+		current          int64
+		snapshotRequired bool
+		want             bool
+	}{
+		{name: "same cursor and complete cache", requestedAfter: 7, current: 7, want: false},
+		{name: "same cursor and incomplete cache", requestedAfter: 7, current: 7, snapshotRequired: true, want: true},
+		{name: "client cursor behind", requestedAfter: 6, current: 7, want: true},
+		{name: "client cursor ahead", requestedAfter: 8, current: 7, want: true},
+		{name: "initial bootstrap", requestedAfter: 0, current: 0, snapshotRequired: true, want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := needsPlatformBootstrap(test.requestedAfter, test.current, test.snapshotRequired); got != test.want {
+				t.Fatalf("needsPlatformBootstrap() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func TestPlatformReadyAvailabilityPresenceDistinguishesBootstrapAndResume(t *testing.T) {
+	emptyKinds := []generated.PlatformResourceKind{}
+	fullBootstrap, err := json.Marshal(generated.PlatformReadyEnvelope{
+		Type: "PLATFORM_READY", RequestRef: "request_0001", StreamKind: "PLATFORM",
+		StreamRef: platformStreamRef, Cursor: 7, AvailableKinds: &emptyKinds,
+	})
+	if err != nil {
+		t.Fatalf("marshal full bootstrap: %v", err)
+	}
+	if !strings.Contains(string(fullBootstrap), `"availableKinds":[]`) {
+		t.Fatalf("full bootstrap omitted an explicit empty availability set: %s", fullBootstrap)
+	}
+
+	resume, err := json.Marshal(generated.PlatformReadyEnvelope{
+		Type: "PLATFORM_READY", RequestRef: "request_0001", StreamKind: "PLATFORM",
+		StreamRef: platformStreamRef, Cursor: 7,
+	})
+	if err != nil {
+		t.Fatalf("marshal same-cursor resume: %v", err)
+	}
+	if strings.Contains(string(resume), "availableKinds") {
+		t.Fatalf("same-cursor resume unexpectedly replaced availability: %s", resume)
 	}
 }
 

@@ -539,7 +539,7 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 	}
 }
 
-func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.PlatformResourceKind, bool) {
+func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.PlatformResourceKind, error) {
 	available := make([]generated.PlatformResourceKind, 0, len(platformBootstrapKinds))
 	for _, kind := range platformBootstrapKinds {
 		if multiplexer.projectRef == "" && platformKindRequiresProject(kind) {
@@ -552,13 +552,13 @@ func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.Plat
 			}
 			slog.Error("platform bootstrap snapshot read failed", "kind", kind, "error_class", "dependency", "error", err)
 			multiplexer.platformAvailable = false
-			return nil, multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
+			return nil, errors.New("platform bootstrap snapshot is unavailable")
 		}
 		snapshot, err := typedPlatformSnapshot(kind, rawSnapshot)
 		if err != nil {
 			slog.Error("platform bootstrap snapshot validation failed", "kind", kind, "error_class", "contract", "error", err)
 			multiplexer.platformAvailable = false
-			return nil, multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "INTERNAL")
+			return nil, errors.New("platform bootstrap snapshot is invalid")
 		}
 		envelope := generated.PlatformSnapshotEnvelope{
 			Type: "PLATFORM_SNAPSHOT", RequestRef: multiplexer.platformRequestRef,
@@ -570,9 +570,9 @@ func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.Plat
 			envelope.ProjectRef = &multiplexer.projectRef
 		}
 		if !multiplexer.send(envelope) {
-			return nil, false
+			return nil, errOutboundOverflow
 		}
 		available = append(available, generated.PlatformResourceKind(kind))
 	}
-	return available, true
+	return available, nil
 }

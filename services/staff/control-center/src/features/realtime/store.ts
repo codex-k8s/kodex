@@ -229,6 +229,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
   const session: SessionConnection = { attempt: 0, stopped: false };
   let platformWanted = false;
   let platformSnapshotReady = false;
+  let platformBootstrapCursor: number | undefined;
   const platform = usePlatformStore();
   const runtime = useRuntimeStore();
   const providers = useProvidersStore();
@@ -362,6 +363,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       // восстановить все каталоги. Следующее соединение обязано запросить
       // полный типизированный snapshot того же project scope.
       platformSnapshotReady = false;
+      platformBootstrapCursor = undefined;
       socket.close(clientReconnectCloseCode, "PLATFORM_RESYNC_REQUIRED");
       return true;
     }
@@ -377,16 +379,28 @@ export const useRealtimeStore = defineStore("realtime", () => {
       )
         return false;
       if (envelope.mode === "DELTA") {
-        if (typeof envelope.eventName !== "string") return false;
+        if (
+          !platformSnapshotReady ||
+          platformBootstrapCursor !== undefined ||
+          typeof envelope.eventName !== "string"
+        )
+          return false;
         const outcome = reducePlatformSequence(platformSequence.value, cursor);
         if (outcome === "duplicate") return true;
         if (outcome !== "applied") {
           platformSnapshotReady = false;
+          platformBootstrapCursor = undefined;
           socket.close(clientReconnectCloseCode, "PLATFORM_GAP_DETECTED");
           return true;
         }
-      } else if (cursor < platformSequence.value) {
-        return false;
+      } else {
+        if (
+          platformBootstrapCursor !== undefined &&
+          cursor !== platformBootstrapCursor
+        )
+          return false;
+        platformBootstrapCursor = cursor;
+        platformSnapshotReady = false;
       }
       const kind = envelope.kind as PlatformKind;
       if (kind === "RUNTIME_ENVIRONMENT") {
@@ -468,12 +482,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
       }
       if (activeSocket(socket)) {
         platformSequence.value = cursor;
-        platformSnapshotReady = true;
       }
       return true;
     }
     if (envelope.type === "PLATFORM_CURSOR") {
       if (
+        !platformSnapshotReady ||
         typeof envelope.eventName !== "string" ||
         typeof envelope.kind !== "string" ||
         !platformKinds.has(envelope.kind as PlatformKind) ||
@@ -485,6 +499,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       if (outcome === "duplicate") return true;
       if (outcome !== "applied") {
         platformSnapshotReady = false;
+        platformBootstrapCursor = undefined;
         socket.close(clientReconnectCloseCode, "PLATFORM_GAP_DETECTED");
         return true;
       }
@@ -493,32 +508,48 @@ export const useRealtimeStore = defineStore("realtime", () => {
       return true;
     }
     if (envelope.type === "PLATFORM_READY") {
+      const availableKinds = envelope.availableKinds;
+      const fullBootstrap = Array.isArray(availableKinds);
       if (
-        !Array.isArray(envelope.availableKinds) ||
-        envelope.availableKinds.some(
-          (kind) =>
-            typeof kind !== "string" ||
-            !platformKinds.has(kind as PlatformKind),
-        ) ||
-        new Set(envelope.availableKinds).size !== envelope.availableKinds.length
+        (availableKinds !== undefined && !Array.isArray(availableKinds)) ||
+        (Array.isArray(availableKinds) &&
+          availableKinds.some(
+            (kind) =>
+              typeof kind !== "string" ||
+              !platformKinds.has(kind as PlatformKind),
+          )) ||
+        (Array.isArray(availableKinds) &&
+          new Set(availableKinds).size !== availableKinds.length) ||
+        (availableKinds === undefined &&
+          (!platformSnapshotReady || platformBootstrapCursor !== undefined))
       )
         return false;
-      if (cursor !== platformSequence.value) {
+      if (
+        (!fullBootstrap && cursor !== platformSequence.value) ||
+        (platformBootstrapCursor !== undefined &&
+          cursor !== platformBootstrapCursor)
+      ) {
         platformSnapshotReady = false;
+        platformBootstrapCursor = undefined;
         socket.close(
           clientReconnectCloseCode,
           "PLATFORM_READY_CURSOR_MISMATCH",
         );
         return true;
       }
-      platform.applyRealtimeAvailability(
-        envelope.availableKinds as PlatformKind[],
-        selectedProjectRef(),
-      );
-      if (!envelope.availableKinds.includes("RUNTIME_ENVIRONMENT"))
-        runtime.applyEnvironmentSnapshot(selectedProjectRef(), []);
-      if (!envelope.availableKinds.includes("PROVIDER_ACCOUNT"))
-        providers.applySnapshot([], undefined, []);
+      if (Array.isArray(availableKinds)) {
+        platformSequence.value = cursor;
+        platform.applyRealtimeAvailability(
+          availableKinds as PlatformKind[],
+          selectedProjectRef(),
+        );
+        if (!availableKinds.includes("RUNTIME_ENVIRONMENT"))
+          runtime.applyEnvironmentSnapshot(selectedProjectRef(), []);
+        if (!availableKinds.includes("PROVIDER_ACCOUNT"))
+          providers.applySnapshot([], undefined, []);
+      }
+      platformSnapshotReady = true;
+      platformBootstrapCursor = undefined;
       if (platformWanted) {
         Object.assign(platformState, {
           state: "live",
@@ -699,6 +730,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
       envelope.streamRef === platformStreamRef &&
       envelope.requestRef === session.requestRef
     ) {
+      platformSnapshotReady = false;
+      platformBootstrapCursor = undefined;
       Object.assign(platformState, {
         state: envelope.retryable ? "recovering" : "offline",
         problemCode: envelope.code,
@@ -722,6 +755,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
         failProtocol(socket, "INVALID_SESSION_PROBLEM");
         return;
       }
+      platformSnapshotReady = false;
+      platformBootstrapCursor = undefined;
       Object.assign(platformState, {
         state: envelope.retryable ? "recovering" : "offline",
         problemCode: envelope.code,
@@ -857,6 +892,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     socket.addEventListener("open", () => {
       if (!activeSocket(socket)) return;
       clearHandshakeTimer();
+      platformBootstrapCursor = undefined;
       const sessionRequestRef = requestRef();
       session.requestRef = sessionRequestRef;
       const runs = [...activeRuns.keys()].sort().map((runRef) => {
@@ -991,6 +1027,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
     });
     if (!hasConsumers()) {
       platformSequence.value = 0;
+      platformSnapshotReady = false;
+      platformBootstrapCursor = undefined;
       disconnect("NO_SUBSCRIPTIONS");
     }
   }
@@ -1021,6 +1059,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     platformWanted = false;
     platformSequence.value = 0;
     platformSnapshotReady = false;
+    platformBootstrapCursor = undefined;
     Object.assign(platformState, {
       state: "offline",
       attempt: 0,
@@ -1040,6 +1079,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
   function changeProjectScope(): void {
     platformSequence.value = 0;
     platformSnapshotReady = false;
+    platformBootstrapCursor = undefined;
     disconnect("PROJECT_SCOPE_CHANGED");
     session.stopped = false;
     void connect();

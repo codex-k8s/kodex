@@ -361,9 +361,13 @@ func (multiplexer *sessionMultiplexer) initializePlatform(after int64, snapshotR
 	}
 	multiplexer.platformCursor = cursor.GetCurrentSequence()
 	multiplexer.platformAvailable = true
-	availableKinds, sent := multiplexer.sendPlatformBootstrap()
-	if !sent {
-		return errOutboundOverflow
+	var availableKinds *[]generated.PlatformResourceKind
+	if needsPlatformBootstrap(after, multiplexer.platformCursor, snapshotRequired) {
+		kinds, bootstrapErr := multiplexer.sendPlatformBootstrap()
+		if bootstrapErr != nil {
+			return bootstrapErr
+		}
+		availableKinds = &kinds
 	}
 	if !multiplexer.send(generated.PlatformReadyEnvelope{
 		Type: "PLATFORM_READY", RequestRef: multiplexer.platformRequestRef,
@@ -373,6 +377,12 @@ func (multiplexer *sessionMultiplexer) initializePlatform(after int64, snapshotR
 		return errOutboundOverflow
 	}
 	return nil
+}
+
+// needsPlatformBootstrap сохраняет уже подтверждённый browser cache только
+// при точном совпадении авторитетного cursor и явно полном локальном snapshot.
+func needsPlatformBootstrap(requestedAfter, current int64, snapshotRequired bool) bool {
+	return snapshotRequired || requestedAfter != current
 }
 
 func (multiplexer *sessionMultiplexer) applyCommand(command sessionCommand) bool {

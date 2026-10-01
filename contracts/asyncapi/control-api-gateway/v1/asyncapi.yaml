@@ -9,6 +9,9 @@ info:
     авторитетного control-plane read path в проверенном project scope.
     Browser атомарно заменяет соответствующую проекцию Pinia и не выполняет
     повторный HTTP readback при обычном событии.
+    При reconnect с полным локальным snapshot и совпадающим platform cursor
+    gateway подтверждает готовность без повторной передачи каталогов. Gap,
+    смена scope и незавершённый bootstrap всегда требуют нового полного snapshot.
     Ошибка или gap одного Run не закрывает и не повреждает остальные streams.
 defaultContentType: application/json
 servers:
@@ -104,6 +107,8 @@ operations:
       duplicate: CLIENT_IGNORES_CURSOR_NOT_GREATER_THAN_APPLIED
       runGap: SERVER_RESYNCS_ONLY_THE_AFFECTED_RUN
       reconnect: CLIENT_SENDS_PLATFORM_CURSOR_AND_ALL_ACTIVE_RUN_CURSORS
+      sameCursorResume: PLATFORM_READY_WITHOUT_REPEATED_SNAPSHOTS
+      cursorMismatchOrIncompleteCache: FULL_BOUNDED_PLATFORM_BOOTSTRAP
       missedWakeSignal: HEARTBEAT_READS_AUTHORITATIVE_CURSOR_OR_EVENT_STORE
       overflow: SESSION_FAILS_CLOSED_WITH_1013
       maximumRunSubscriptions: 32
@@ -232,7 +237,9 @@ components:
         type: { type: string, const: SESSION_RESUME }
         requestRef: { $ref: "#/components/schemas/OpaqueRef" }
         platformAfterSequence: { type: integer, format: int64, minimum: 0 }
-        platformSnapshotRequired: { type: boolean }
+        platformSnapshotRequired:
+          type: boolean
+          description: true, если у browser нет полного snapshot текущего project scope.
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         runs:
           type: array
@@ -681,8 +688,7 @@ components:
     PlatformReadyEnvelope:
       type: object
       additionalProperties: false
-      required:
-        [type, requestRef, streamKind, streamRef, cursor, availableKinds]
+      required: [type, requestRef, streamKind, streamRef, cursor]
       properties:
         type: { type: string, const: PLATFORM_READY }
         requestRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -690,7 +696,11 @@ components:
         streamRef: { type: string, const: PLATFORM }
         cursor: { type: integer, format: int64, minimum: 0 }
         availableKinds:
+          description: |
+            Передаётся после полного bootstrap. При reconnect на том же cursor
+            отсутствие поля означает сохранить прежний подтверждённый набор.
           type: array
+          x-go-optional-pointer: true
           uniqueItems: true
           items: { $ref: "#/components/schemas/PlatformResourceKind" }
     PlatformResyncEnvelope:
