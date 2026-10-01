@@ -9,7 +9,14 @@ import {
 } from "@/shared/api/generated/openapi/sdk.gen";
 import { requestSignal } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/problem";
-import type { Agent, Workflow } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  Agent,
+  Membership,
+  RuntimeEnvironmentSet,
+  RuntimeSecret,
+  Schedule,
+  Workflow,
+} from "@/shared/api/generated/openapi/types.gen";
 export type CatalogKind =
   | "agents"
   | "workflows"
@@ -60,6 +67,97 @@ export interface CatalogPage {
   items: CatalogEntry[];
   nextPageToken?: string;
 }
+const prefix = (project: string) => `/projects/${encodeURIComponent(project)}`;
+
+export function membershipCatalogEntry(item: Membership): CatalogEntry {
+  if (!item.projectRef)
+    throw new Error("Invalid project membership catalog scope");
+  return {
+    ref: item.ref,
+    projectRef: item.projectRef,
+    title: item.user.displayName,
+    description: "",
+    state: item.active ? "ACTIVE" : "DISABLED",
+    version: item.version,
+    path: `${prefix(item.projectRef)}/members`,
+    meta: [],
+    role: item.platformRole,
+    subjectRef: item.user.ref,
+  };
+}
+
+export function agentCatalogEntry(item: Agent): CatalogEntry {
+  return {
+    agent: item,
+    ref: item.ref,
+    projectRef: item.projectRef,
+    title: item.name,
+    description: item.purpose,
+    state: item.state,
+    version: item.version,
+    path: `${prefix(item.projectRef)}/agents/${encodeURIComponent(item.ref)}`,
+    meta: [
+      item.runtimeProvider ?? "",
+      item.runtimeModel ?? item.runtimeName,
+      item.roleDefinitionName ?? "",
+    ],
+  };
+}
+
+export function workflowCatalogEntry(item: Workflow): CatalogEntry {
+  return {
+    workflow: item,
+    ref: item.ref,
+    projectRef: item.projectRef,
+    title: item.name,
+    description: item.purpose,
+    state: item.state,
+    version: item.version,
+    path: `${prefix(item.projectRef)}/workflows/${encodeURIComponent(item.ref)}`,
+    meta: [],
+  };
+}
+
+export function scheduleCatalogEntry(item: Schedule): CatalogEntry {
+  return {
+    ref: item.ref,
+    projectRef: item.projectRef,
+    title: item.name,
+    description: item.automationText,
+    state: item.state,
+    version: item.version,
+    path: `${prefix(item.projectRef)}/automations?scheduleRef=${encodeURIComponent(item.ref)}`,
+    meta: [item.target.displayName, item.cronExpression, item.timezone],
+  };
+}
+
+export function environmentCatalogEntry(
+  item: RuntimeEnvironmentSet,
+): CatalogEntry {
+  return {
+    ref: item.ref,
+    projectRef: item.projectRef,
+    title: item.name,
+    description: item.description,
+    state: item.ready ? item.state : "UNAVAILABLE",
+    version: item.version,
+    path: `${prefix(item.projectRef)}/environments/${encodeURIComponent(item.ref)}`,
+    meta: [],
+  };
+}
+
+export function secretCatalogEntry(item: RuntimeSecret): CatalogEntry {
+  return {
+    ref: item.ref,
+    projectRef: item.projectRef,
+    title: item.name,
+    description: item.description,
+    state: item.state,
+    version: item.version,
+    path: `${prefix(item.projectRef)}/secrets?secretRef=${encodeURIComponent(item.ref)}`,
+    meta: [item.valueType],
+  };
+}
 export async function loadCatalog(
   kind: CatalogKind,
   query: string,
@@ -72,8 +170,6 @@ export async function loadCatalog(
     query: { query, pageToken, projectRef, pageSize },
     signal: AbortSignal.any([signal, requestSignal()]),
   };
-  const prefix = (project: string) =>
-    `/projects/${encodeURIComponent(project)}`;
   switch (kind) {
     case "members": {
       const page = (await unwrap(listOrganizationProjectMemberships(options)))
@@ -86,18 +182,7 @@ export async function loadCatalog(
             (projectRef && item.projectRef !== projectRef)
           )
             throw new Error("Invalid project membership catalog scope");
-          return {
-            ref: item.ref,
-            projectRef: item.projectRef,
-            title: item.user.displayName,
-            description: "",
-            state: item.active ? "ACTIVE" : "DISABLED",
-            version: item.version,
-            path: `${prefix(item.projectRef)}/members`,
-            meta: [],
-            role: item.platformRole,
-            subjectRef: item.user.ref,
-          };
+          return membershipCatalogEntry(item);
         }),
       };
     }
@@ -105,54 +190,21 @@ export async function loadCatalog(
       const page = (await unwrap(listOrganizationAgents(options))).data;
       return {
         ...page,
-        items: page.items.map((item) => ({
-          agent: item,
-          ref: item.ref,
-          projectRef: item.projectRef,
-          title: item.name,
-          description: item.purpose,
-          state: item.state,
-          version: item.version,
-          path: `${prefix(item.projectRef)}/agents/${encodeURIComponent(item.ref)}`,
-          meta: [
-            item.runtimeProvider ?? "",
-            item.runtimeModel ?? item.runtimeName,
-            item.roleDefinitionName ?? "",
-          ],
-        })),
+        items: page.items.map(agentCatalogEntry),
       };
     }
     case "workflows": {
       const page = (await unwrap(listOrganizationWorkflows(options))).data;
       return {
         ...page,
-        items: page.items.map((item) => ({
-          workflow: item,
-          ref: item.ref,
-          projectRef: item.projectRef,
-          title: item.name,
-          description: item.purpose,
-          state: item.state,
-          version: item.version,
-          path: `${prefix(item.projectRef)}/workflows/${encodeURIComponent(item.ref)}`,
-          meta: [],
-        })),
+        items: page.items.map(workflowCatalogEntry),
       };
     }
     case "automations": {
       const page = (await unwrap(listOrganizationSchedules(options))).data;
       return {
         ...page,
-        items: page.items.map((item) => ({
-          ref: item.ref,
-          projectRef: item.projectRef,
-          title: item.name,
-          description: item.automationText,
-          state: item.state,
-          version: item.version,
-          path: `${prefix(item.projectRef)}/automations?scheduleRef=${encodeURIComponent(item.ref)}`,
-          meta: [item.target.displayName, item.cronExpression, item.timezone],
-        })),
+        items: page.items.map(scheduleCatalogEntry),
       };
     }
     case "environments": {
@@ -161,32 +213,14 @@ export async function loadCatalog(
       ).data;
       return {
         ...page,
-        items: page.items.map((item) => ({
-          ref: item.ref,
-          projectRef: item.projectRef,
-          title: item.name,
-          description: item.description,
-          state: item.ready ? item.state : "UNAVAILABLE",
-          version: item.version,
-          path: `${prefix(item.projectRef)}/environments/${encodeURIComponent(item.ref)}`,
-          meta: [],
-        })),
+        items: page.items.map(environmentCatalogEntry),
       };
     }
     case "secrets": {
       const page = (await unwrap(listOrganizationRuntimeSecrets(options))).data;
       return {
         ...page,
-        items: page.items.map((item) => ({
-          ref: item.ref,
-          projectRef: item.projectRef,
-          title: item.name,
-          description: item.description,
-          state: item.state,
-          version: item.version,
-          path: `${prefix(item.projectRef)}/secrets?secretRef=${encodeURIComponent(item.ref)}`,
-          meta: [item.valueType],
-        })),
+        items: page.items.map(secretCatalogEntry),
       };
     }
   }

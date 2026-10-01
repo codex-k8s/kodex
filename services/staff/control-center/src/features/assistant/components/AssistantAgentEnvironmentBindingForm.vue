@@ -170,7 +170,9 @@ function selectEnvironment(value: string | null | readonly string[]): void {
       <strong>{{ agent.name }}</strong>
     </p>
     <p
-      v-if="!disabled && agent && agent.version !== operation.value.expectedVersion"
+      v-if="
+        !disabled && agent && agent.version !== operation.value.expectedVersion
+      "
       class="field-error"
       role="alert"
     >

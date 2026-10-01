@@ -1,5 +1,6 @@
 import { onBeforeUnmount, onMounted, type ComputedRef } from "vue";
 import { useRouter } from "vue-router";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 
 export function useUnsavedChanges(
   dirty: ComputedRef<boolean>,
@@ -7,7 +8,8 @@ export function useUnsavedChanges(
   options: { ignoreQueryOnly?: boolean } = {},
 ): void {
   const router = useRouter();
-  const confirmLeave = () => !dirty.value || window.confirm(message());
+  const confirmLeave = () =>
+    !dirty.value ? true : requestConfirmation(message());
   const removeNavigationGuard = router.beforeEach((to, from) =>
     options.ignoreQueryOnly && to.path === from.path ? true : confirmLeave(),
   );

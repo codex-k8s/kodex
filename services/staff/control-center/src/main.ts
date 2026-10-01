@@ -9,6 +9,7 @@ import "@/app/styles/base.css";
 import { useSessionStore } from "@/features/session/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { usePlatformStore } from "@/features/platform/store";
+import { useAccessStore } from "@/features/access/store";
 import { configureApiClient } from "@/shared/api/client";
 import { setUnauthorizedHandler } from "@/shared/api/problem";
 import { loadRuntimeConfig } from "@/shared/config/runtime";
@@ -30,6 +31,7 @@ async function bootstrap(): Promise<void> {
   setUnauthorizedHandler(() => {
     session.invalidate();
     useRealtimeStore(pinia).closeAll();
+    useAccessStore(pinia).clearOwnerState();
     usePlatformStore(pinia).clearOwnerState();
   });
   app.use(router);

@@ -310,20 +310,12 @@ describe("access store", () => {
     expect(store.projectMemberships).toEqual([revoked]);
   });
 
-  it("оставляет созданную роль видимой, если первая страница readback её не содержит", async () => {
+  it("применяет квитанцию созданной роли без catalog readback", async () => {
     const created = accessRole(
       "role_created",
       "e2e — точечный запуск сотрудника",
     );
-    const firstPage = Array.from({ length: 50 }, (_, index) =>
-      accessRole(`role_${String(index).padStart(2, "0")}`),
-    );
     addAccessRole.mockResolvedValue(created);
-    fetchAccessRoles.mockResolvedValue({
-      items: firstPage,
-      nextPageToken: "role_49",
-    });
-    fetchAccessRoleVersions.mockResolvedValue({ role: created, items: [] });
     const store = useAccessStore();
 
     const result = await store.saveRole({
@@ -335,22 +327,14 @@ describe("access store", () => {
     });
 
     expect(result).toEqual(created);
-    expect(store.roles).toContainEqual(created);
-    expect(store.roles).toHaveLength(51);
-    expect(store.roleNextPageToken).toBe("role_49");
-    expect(fetchAccessRoleVersions).toHaveBeenCalledWith(created.ref);
+    expect(store.roles).toEqual([created]);
+    expect(fetchAccessRoles).not.toHaveBeenCalled();
+    expect(fetchAccessRoleVersions).not.toHaveBeenCalled();
   });
 
-  it("оставляет созданную привязку видимой, если первая страница readback её не содержит", async () => {
+  it("применяет квитанцию созданной привязки без catalog readback", async () => {
     const created = accessBinding("binding_created");
-    const firstPage = Array.from({ length: 50 }, (_, index) =>
-      accessBinding(`binding_${String(index).padStart(2, "0")}`),
-    );
     addAccessBinding.mockResolvedValue(created);
-    fetchAccessBindings.mockResolvedValue({
-      items: firstPage,
-      nextPageToken: "binding_49",
-    });
     const store = useAccessStore();
 
     const result = await store.saveBinding({
@@ -362,9 +346,8 @@ describe("access store", () => {
     });
 
     expect(result).toEqual(created);
-    expect(store.bindings).toContainEqual(created);
-    expect(store.bindings).toHaveLength(51);
-    expect(store.bindingNextPageToken).toBe("binding_49");
+    expect(store.bindings).toEqual([created]);
+    expect(fetchAccessBindings).not.toHaveBeenCalled();
   });
 
   it("собирает все страницы активных ролей для новой привязки", async () => {

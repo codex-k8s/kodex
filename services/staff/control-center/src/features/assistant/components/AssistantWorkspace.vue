@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import {
   Activity,
-  Archive,
+  ArrowUp,
   Bot,
   Check,
   ChevronDown,
+  EllipsisVertical,
   History,
   KeyRound,
   ListChecks,
   Pencil,
   Plus,
-  Send,
+  RotateCcw,
   Sparkles,
+  Trash2,
   X,
 } from "@lucide/vue";
 import {
@@ -92,6 +94,7 @@ import type {
 } from "@/shared/ui/attachment-composer";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import OverlayPanel from "@/shared/ui/OverlayPanel.vue";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -103,9 +106,8 @@ const props = withDefaults(
     projectRef?: string;
     live?: boolean;
     runEvents?: readonly RunEvent[];
-    refreshRevision?: string;
   }>(),
-  { live: false, runEvents: () => [], refreshRevision: "" },
+  { live: false, runEvents: () => [] },
 );
 
 const planTargetKindTranslationKeys: Readonly<Record<string, string>> = {
@@ -189,6 +191,7 @@ function syncHistoryViewport(): void {
 }
 syncHistoryViewport();
 const message = ref("");
+const messageDrafts = new Map<string, string>();
 const titleDraft = ref("");
 const titleEditing = ref(false);
 const openPlanRef = ref<string>();
@@ -212,6 +215,7 @@ let followLatestAfterLoad = false;
 let chatResizeObserver: ResizeObserver | undefined;
 let latestRestoreTimer: number | undefined;
 const historyMenu = ref<HTMLElement>();
+const openConversationMenu = ref<string>();
 const fab = ref<HTMLButtonElement>();
 const planTrigger = ref<HTMLButtonElement>();
 
@@ -354,6 +358,9 @@ watch(
 const contextIdentity = computed(() =>
   assistantContextIdentity(props.context, props.projectRef),
 );
+const currentDraftKey = computed(
+  () => store.selectedRef ?? `context:${contextIdentity.value}`,
+);
 
 function handleOpenAssistant(event: Event): void {
   void (async () => {
@@ -363,7 +370,9 @@ function handleOpenAssistant(event: Event): void {
     if (isAssistantRoleImageBuildDebugRequest(request)) {
       if (
         message.value.trim() &&
-        !window.confirm(t("assistant.replaceDraftWithBuildDebugConfirm"))
+        !(await requestConfirmation(
+          t("assistant.replaceDraftWithBuildDebugConfirm"),
+        ))
       )
         return;
       message.value = t("assistant.roleImageBuild.debugPrompt", {
@@ -382,7 +391,9 @@ function handleOpenAssistant(event: Event): void {
     if (isAssistantRunDebugRequest(request)) {
       if (
         message.value.trim() &&
-        !window.confirm(t("assistant.replaceDraftWithRunDebugConfirm"))
+        !(await requestConfirmation(
+          t("assistant.replaceDraftWithRunDebugConfirm"),
+        ))
       )
         return;
       message.value = t("assistant.runDebug.prompt", {
@@ -413,7 +424,7 @@ function handleOpenAssistant(event: Event): void {
       return;
     if (
       message.value.trim() &&
-      !window.confirm(t("assistant.replaceDraftConfirm"))
+      !(await requestConfirmation(t("assistant.replaceDraftConfirm")))
     )
       return;
     message.value = t("assistant.publishIntegrationRequest", {
@@ -425,19 +436,40 @@ function handleOpenAssistant(event: Event): void {
   })();
 }
 
+function hydrateFromRealtimeSnapshot(): boolean {
+  if (
+    !platform.assistant ||
+    platform.assistantRealtimeScopeKey !== (props.projectRef ?? "")
+  )
+    return false;
+  store.setContext(props.context, props.projectRef);
+  store.applyRealtimeSnapshot(
+    platform.assistant,
+    Object.values(platform.conversations),
+    props.projectRef,
+    platform.assistantConversationNextPageToken,
+  );
+  return true;
+}
+
+function loadWorkspace(): void {
+  store.setContext(props.context, props.projectRef);
+  hydrateFromRealtimeSnapshot();
+}
+
 async function show(): Promise<void> {
   open.value = true;
   persistAssistantWorkspaceOpen(true);
   historyOpen.value = false;
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
-  await store.load(props.context, props.projectRef);
+  loadWorkspace();
   await nextTick();
   panel.value?.focus({ preventScroll: true });
   restoreLatestAfterRender();
 }
 
-function close(): void {
+async function close(): Promise<void> {
   if (store.busy) return;
   if (pendingProjectMove.value) {
     cancelProjectMove();
@@ -453,7 +485,7 @@ function close(): void {
     (message.value.trim() ||
       attachmentState.value.count > 0 ||
       attachmentState.value.busy) &&
-    !window.confirm(t("assistant.closeWithDraftConfirm"))
+    !(await requestConfirmation(t("assistant.closeWithDraftConfirm")))
   )
     return;
   store.cancelReads();
@@ -544,7 +576,7 @@ function handleKeydown(event: KeyboardEvent): void {
     }
     if (historyOpen.value) historyOpen.value = false;
     else if (openPlanRef.value) void closePlan();
-    else close();
+    else void close();
     return;
   }
   if (event.key !== "Tab" || !panel.value) return;
@@ -590,9 +622,30 @@ async function handleStoreMutation(
   }
 }
 
-function conversationDisplayTitle(title: string): string {
+function temporaryConversationTitle(conversationRef?: string): string {
+  const draft =
+    conversationRef === store.selectedRef
+      ? message.value
+      : conversationRef
+        ? messageDrafts.get(conversationRef)
+        : undefined;
+  const normalized = draft?.replace(/\s+/g, " ").trim() ?? "";
+  if (normalized.length < 12) return "";
+  return normalized.length > 58
+    ? `${normalized.slice(0, 57).trimEnd()}…`
+    : normalized;
+}
+
+function conversationDisplayTitle(
+  title: string,
+  conversationRef?: string,
+): string {
+  const normalized = title.trim();
+  if (normalized && normalized !== t("assistant.newConversation"))
+    return normalized;
   return (
-    title.trim() ||
+    temporaryConversationTitle(conversationRef) ||
+    normalized ||
     t("assistant.contextConversation", { context: contextTitle.value })
   );
 }
@@ -607,20 +660,71 @@ function startTitleEdit(): void {
   titleEditing.value = true;
 }
 async function archiveSelected(): Promise<void> {
+  const conversation = store.selectedConversation;
+  if (!props.live || !conversation || conversation.state === "ARCHIVED") return;
+  await moveConversationToTrash(conversation);
+}
+
+function toggleConversationMenu(ref: string): void {
+  openConversationMenu.value =
+    openConversationMenu.value === ref ? undefined : ref;
+}
+
+async function moveConversationToTrash(
+  conversation: NonNullable<typeof store.selectedConversation>,
+): Promise<void> {
+  openConversationMenu.value = undefined;
   if (
-    !props.live ||
-    store.busy ||
-    store.loading ||
-    !store.selectedConversation ||
-    store.selectedConversation.state === "ARCHIVED"
+    !(await requestConfirmation({
+      message: t("assistant.trashConfirm"),
+      confirmLabel: t("assistant.deleteConversation"),
+      tone: "danger",
+    }))
   )
     return;
-  if (!window.confirm(t("assistant.archiveConfirm"))) return;
-  if (await handleStoreMutation(() => store.archiveSelected())) {
+  if (await handleStoreMutation(() => store.moveToTrash(conversation))) {
+    messageDrafts.delete(conversation.ref);
     titleEditing.value = false;
     openPlanRef.value = undefined;
     attachmentComposer.value?.clear();
   }
+}
+
+async function restoreConversationFromTrash(
+  conversation: NonNullable<typeof store.selectedConversation>,
+): Promise<void> {
+  openConversationMenu.value = undefined;
+  await handleStoreMutation(() => store.restoreFromTrash(conversation));
+}
+
+async function purgeConversationFromTrash(
+  conversation: NonNullable<typeof store.selectedConversation>,
+): Promise<void> {
+  openConversationMenu.value = undefined;
+  if (
+    !(await requestConfirmation({
+      message: t("assistant.purgeConfirm"),
+      confirmLabel: t("assistant.purgeConversation"),
+      tone: "danger",
+    }))
+  )
+    return;
+  if (await handleStoreMutation(() => store.purgeFromTrash(conversation)))
+    messageDrafts.delete(conversation.ref);
+}
+
+async function emptyConversationTrash(): Promise<void> {
+  openConversationMenu.value = undefined;
+  if (
+    !(await requestConfirmation({
+      message: t("assistant.emptyTrashConfirm"),
+      confirmLabel: t("assistant.emptyTrash"),
+      tone: "danger",
+    }))
+  )
+    return;
+  if (await handleStoreMutation(() => store.emptyTrash()))
+    messageDrafts.clear();
 }
 
 async function saveTitle(): Promise<void> {
@@ -635,6 +739,7 @@ async function send(): Promise<void> {
   const attachmentSetRef = await attachmentComposer.value?.finalize();
   if (!(await handleStoreMutation(() => store.send(value, attachmentSetRef))))
     return;
+  messageDrafts.delete(currentDraftKey.value);
   message.value = "";
   attachmentComposer.value?.clear();
   await nextTick();
@@ -792,16 +897,12 @@ function planVariantNumber(planRef: string): number {
 async function closePlan(): Promise<void> {
   if (store.busy) return;
   const trigger = planTrigger.value;
-  const refresh = ["APPLIED", "REJECTED"].includes(
-    currentPlan.value?.state ?? "",
-  );
   openPlanRef.value = undefined;
   planTrigger.value = undefined;
   store.clearReceipt();
   await nextTick();
   scrollToLatest();
   if (trigger?.isConnected) trigger.focus();
-  if (refresh && open.value) await store.load(props.context, props.projectRef);
 }
 
 async function savePlan(
@@ -879,10 +980,6 @@ async function applyPlan(): Promise<void> {
         break;
     }
   }
-  // Квитанция уже применена; ошибка вторичного чтения не меняет её исход.
-  await Promise.allSettled(
-    [...kinds].map((kind) => platform.reloadPlatformKind(kind)),
-  );
   notifyAssistantPlanApplied({
     projectRef: plan.projectRef,
     kinds: [...kinds],
@@ -916,6 +1013,12 @@ function documentPointerDown(event: PointerEvent): void {
     !historyMenu.value.contains(event.target as Node)
   )
     historyOpen.value = false;
+  if (
+    openConversationMenu.value &&
+    (!(event.target instanceof Element) ||
+      !event.target.closest(".assistant-conversation-actions"))
+  )
+    openConversationMenu.value = undefined;
 }
 
 watch(contextIdentity, () => {
@@ -926,7 +1029,7 @@ watch(contextIdentity, () => {
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
   attachmentComposer.value?.clear();
-  if (open.value) void store.load(props.context, props.projectRef);
+  if (open.value) loadWorkspace();
   else store.setContext(props.context, props.projectRef);
 });
 watch(assistantFormActive, (active) => {
@@ -941,13 +1044,6 @@ watch(
     )
       return;
     store.setContext(nextContext, nextProjectRef);
-  },
-);
-watch(
-  () => props.refreshRevision,
-  (value, previous) => {
-    if (open.value && value !== previous)
-      void store.load(props.context, props.projectRef);
   },
 );
 watch(
@@ -986,6 +1082,14 @@ watch(
     chatResizeObserver.observe(element);
   },
   { flush: "post" },
+);
+watch(
+  currentDraftKey,
+  (next, previous) => {
+    if (previous) messageDrafts.set(previous, message.value);
+    message.value = messageDrafts.get(next) ?? "";
+  },
+  { flush: "sync" },
 );
 watch(
   () => store.selectedConversation?.ref,
@@ -1171,7 +1275,7 @@ onBeforeUnmount(() => {
             >
               <span>
                 <strong>{{
-                  conversationDisplayTitle(conversation.title)
+                  conversationDisplayTitle(conversation.title, conversation.ref)
                 }}</strong>
                 <small>{{
                   new Date(conversation.updatedAt).toLocaleString()
@@ -1229,19 +1333,96 @@ onBeforeUnmount(() => {
           @change="store.filterHistory"
         />
         <button
+          v-if="
+            store.historyState === 'ARCHIVED' &&
+            store.sortedConversations.length
+          "
+          class="button assistant-empty-trash"
+          type="button"
+          :disabled="store.busy || store.loading"
+          @click="emptyConversationTrash"
+        >
+          <Trash2 :size="16" aria-hidden="true" />
+          {{ $t("assistant.emptyTrash") }}
+        </button>
+        <p
+          v-if="
+            store.historyState === 'ARCHIVED' &&
+            !store.loading &&
+            !store.sortedConversations.length
+          "
+          class="assistant-conversation-sidebar__empty"
+        >
+          {{ $t("assistant.trashEmpty") }}
+        </p>
+        <div
           v-for="conversation in store.sortedConversations"
           :key="conversation.ref"
           :data-conversation-ref="conversation.ref"
           class="assistant-conversation-entry"
           :class="{ selected: conversation.ref === store.selectedRef }"
-          type="button"
-          @click="chooseConversation(conversation.ref)"
         >
-          <strong>{{ conversationDisplayTitle(conversation.title) }}</strong>
-          <time :datetime="conversation.updatedAt">{{
-            new Date(conversation.updatedAt).toLocaleString()
-          }}</time>
-        </button>
+          <button
+            class="assistant-conversation-entry__select"
+            type="button"
+            @click="chooseConversation(conversation.ref)"
+          >
+            <strong>{{
+              conversationDisplayTitle(conversation.title, conversation.ref)
+            }}</strong>
+            <time :datetime="conversation.updatedAt">{{
+              new Date(conversation.updatedAt).toLocaleString()
+            }}</time>
+          </button>
+          <div class="assistant-conversation-actions">
+            <button
+              class="icon-button assistant-conversation-actions__toggle"
+              type="button"
+              :aria-label="$t('assistant.conversationActions')"
+              :aria-expanded="openConversationMenu === conversation.ref"
+              aria-haspopup="menu"
+              :disabled="store.busy"
+              @click="toggleConversationMenu(conversation.ref)"
+            >
+              <EllipsisVertical :size="18" aria-hidden="true" />
+            </button>
+            <div
+              v-if="openConversationMenu === conversation.ref"
+              class="assistant-conversation-actions__menu"
+              role="menu"
+            >
+              <template v-if="conversation.state === 'ARCHIVED'">
+                <button
+                  type="button"
+                  role="menuitem"
+                  @click="restoreConversationFromTrash(conversation)"
+                >
+                  <RotateCcw :size="16" aria-hidden="true" />
+                  {{ $t("assistant.restoreConversation") }}
+                </button>
+                <button
+                  class="danger"
+                  type="button"
+                  role="menuitem"
+                  @click="purgeConversationFromTrash(conversation)"
+                >
+                  <Trash2 :size="16" aria-hidden="true" />
+                  {{ $t("assistant.purgeConversation") }}
+                </button>
+              </template>
+              <button
+                v-else
+                class="danger"
+                type="button"
+                role="menuitem"
+                @click="moveConversationToTrash(conversation)"
+              >
+                <Trash2 :size="16" aria-hidden="true" />
+                {{ $t("assistant.deleteConversation") }}
+              </button>
+            </div>
+          </div>
+        </div>
         <ProblemNotice
           v-if="store.historyProblem"
           :problem="store.historyProblem"
@@ -1374,7 +1555,10 @@ onBeforeUnmount(() => {
               </form>
               <template v-else>
                 <strong>{{
-                  conversationDisplayTitle(store.selectedConversation.title)
+                  conversationDisplayTitle(
+                    store.selectedConversation.title,
+                    store.selectedConversation.ref,
+                  )
                 }}</strong>
                 <button
                   v-if="store.selectedConversation.state !== 'ARCHIVED'"
@@ -1392,11 +1576,11 @@ onBeforeUnmount(() => {
                   :disabled="
                     !live || store.busy || store.loading || !!store.problem
                   "
-                  :aria-label="$t('assistant.archiveConversation')"
-                  :title="$t('assistant.archiveConversation')"
+                  :aria-label="$t('assistant.deleteConversation')"
+                  :title="$t('assistant.deleteConversation')"
                   @click="archiveSelected"
                 >
-                  <Archive :size="16" />
+                  <Trash2 :size="16" />
                 </button>
                 <StatusBadge v-else :state="store.selectedConversation.state" />
               </template>
@@ -1699,7 +1883,7 @@ onBeforeUnmount(() => {
                     :title="$t('assistant.send')"
                     @click="send"
                   >
-                    <Send :size="19" aria-hidden="true" />
+                    <ArrowUp :size="21" stroke-width="2.5" aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -2026,18 +2210,28 @@ onBeforeUnmount(() => {
     display: none;
   }
   .assistant-conversation-entry {
+    position: relative;
     display: grid;
-    gap: 6px;
-    padding: 12px;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    align-items: start;
     border: 0;
     border-radius: 6px;
-    text-align: left;
     background: transparent;
     color: var(--text);
-    cursor: pointer;
   }
   .assistant-conversation-entry.selected {
     background: var(--accent-soft);
+  }
+  .assistant-conversation-entry__select {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px 4px 12px 12px;
+    border: 0;
+    text-align: left;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
   }
   .assistant-conversation-entry strong {
     display: -webkit-box;
@@ -2050,6 +2244,63 @@ onBeforeUnmount(() => {
   .assistant-conversation-entry time {
     color: var(--muted);
     font-size: 12px;
+  }
+  .assistant-conversation-actions {
+    position: relative;
+    padding-top: 7px;
+  }
+  .assistant-conversation-actions__toggle {
+    width: 32px;
+    height: 32px;
+    opacity: 0.55;
+  }
+  .assistant-conversation-entry:hover .assistant-conversation-actions__toggle,
+  .assistant-conversation-actions__toggle[aria-expanded="true"],
+  .assistant-conversation-actions__toggle:focus-visible {
+    opacity: 1;
+  }
+  .assistant-conversation-actions__menu {
+    position: absolute;
+    z-index: 12;
+    top: 36px;
+    right: 0;
+    width: max-content;
+    min-width: 190px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+  }
+  .assistant-conversation-actions__menu button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    text-align: left;
+    background: transparent;
+    color: var(--text);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .assistant-conversation-actions__menu button:hover,
+  .assistant-conversation-actions__menu button:focus-visible {
+    background: var(--accent-soft);
+  }
+  .assistant-conversation-actions__menu button.danger {
+    color: var(--danger, #b42318);
+  }
+  .assistant-empty-trash {
+    justify-content: center;
+  }
+  .assistant-conversation-sidebar__empty {
+    margin: 10px 0 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
   }
 }
 .assistant-drawer > .assistant-plan-editor,
@@ -2473,12 +2724,17 @@ onBeforeUnmount(() => {
   min-height: 72px;
   max-height: 180px;
   resize: vertical;
-  padding: 11px 104px 11px 12px;
+  padding: 11px 104px 54px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
 }
 .assistant-composer :deep(.voice-textarea__action) {
   right: 58px;
+}
+.assistant-composer :deep(.voice-input[data-state="recording"]) {
+  padding-left: 8px;
+  border-radius: 24px;
+  background: var(--surface);
 }
 .assistant-composer__field > div {
   position: absolute;

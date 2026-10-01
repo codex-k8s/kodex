@@ -23,6 +23,15 @@ export function useGateCatalog() {
   let invalidated = false;
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
   const cursors = new Set<string>();
+  const sourceRefs = new Set<string>();
+  const statesFor = (view: GateCatalogScope["view"]): OwnerGate["state"][] =>
+    view === "PENDING"
+      ? ["OPEN"]
+      : ["APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED"];
+  const locallyFiltered = (scope: GateCatalogScope): boolean =>
+    !scope.projectRef && !scope.query.trim();
+  const matchesView = (gate: OwnerGate, scope: GateCatalogScope): boolean =>
+    statesFor(scope.view).includes(gate.state);
   function keyFor(scope: GateCatalogScope): string {
     return JSON.stringify([scope.projectRef, scope.query, scope.view]);
   }
@@ -49,6 +58,29 @@ export function useGateCatalog() {
     problem.value = undefined;
     scopeKey = "";
     cursors.clear();
+    sourceRefs.clear();
+  }
+
+  function applySnapshot(
+    scope: GateCatalogScope,
+    values: OwnerGate[],
+    nextPageToken?: string,
+  ): void {
+    controller?.abort();
+    generation++;
+    clearTimeout(refreshTimer);
+    refreshTimer = undefined;
+    invalidated = false;
+    cursors.clear();
+    sourceRefs.clear();
+    for (const gate of values) sourceRefs.add(gate.ref);
+    if (nextPageToken) cursors.add(nextPageToken);
+    scopeKey = keyFor(scope);
+    items.value = values.filter((gate) => matchesView(gate, scope));
+    pageToken.value = nextPageToken;
+    total.value = nextPageToken ? undefined : items.value.length;
+    loading.value = false;
+    problem.value = undefined;
   }
 
   async function load(scope: GateCatalogScope, more = false): Promise<void> {
@@ -59,10 +91,8 @@ export function useGateCatalog() {
     controller = active;
     const current = ++generation;
     const cursor = more ? pageToken.value : undefined;
-    const states: OwnerGate["state"][] =
-      scope.view === "PENDING"
-        ? ["OPEN"]
-        : ["APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED"];
+    const states = statesFor(scope.view);
+    const filterLocally = locallyFiltered(scope);
     if (!more) {
       clearTimeout(refreshTimer);
       refreshTimer = undefined;
@@ -71,6 +101,7 @@ export function useGateCatalog() {
       total.value = undefined;
       pageToken.value = undefined;
       cursors.clear();
+      sourceRefs.clear();
       scopeKey = key;
     }
     loading.value = true;
@@ -82,7 +113,7 @@ export function useGateCatalog() {
             query: {
               projectRef: scope.projectRef,
               query: scope.query,
-              states,
+              states: filterLocally ? undefined : states,
               pageSize: scope.pageSize ?? 20,
               pageToken: cursor,
             },
@@ -98,22 +129,32 @@ export function useGateCatalog() {
         page.total < page.items.length ||
         page.items.some(
           (gate) =>
-            !states.includes(gate.state) ||
+            (!filterLocally && !states.includes(gate.state)) ||
             (scope.projectRef && gate.projectRef !== scope.projectRef),
         ) ||
         (page.nextPageToken &&
           (page.nextPageToken === cursor || cursors.has(page.nextPageToken)))
       )
         throw new Error("Invalid owner gate catalog page");
-      const next = more ? [...items.value, ...page.items] : page.items;
+      if (page.items.some((gate) => sourceRefs.has(gate.ref)))
+        throw new Error("Invalid owner gate catalog sequence");
+      const visiblePage = filterLocally
+        ? page.items.filter((gate) => matchesView(gate, scope))
+        : page.items;
+      const next = more ? [...items.value, ...visiblePage] : visiblePage;
       if (
         new Set(next.map((gate) => gate.ref)).size !== next.length ||
         next.length > page.total
       )
         throw new Error("Invalid owner gate catalog sequence");
       items.value = next;
-      total.value = page.total;
+      total.value = filterLocally
+        ? page.nextPageToken
+          ? undefined
+          : next.length
+        : page.total;
       pageToken.value = page.nextPageToken;
+      for (const gate of page.items) sourceRefs.add(gate.ref);
       if (page.nextPageToken) cursors.add(page.nextPageToken);
     } catch (error) {
       if (current === generation && !active.signal.aborted) {
@@ -123,6 +164,7 @@ export function useGateCatalog() {
           total.value = undefined;
           pageToken.value = undefined;
           cursors.clear();
+          sourceRefs.clear();
         }
       }
     } finally {
@@ -132,5 +174,15 @@ export function useGateCatalog() {
       }
     }
   }
-  return { items, total, pageToken, loading, problem, load, reset, invalidate };
+  return {
+    items,
+    total,
+    pageToken,
+    loading,
+    problem,
+    load,
+    reset,
+    invalidate,
+    applySnapshot,
+  };
 }

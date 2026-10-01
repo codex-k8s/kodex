@@ -58,7 +58,7 @@ func (repository *Repository) changeProviderAccount(
 			return commandOutcome{}, err
 		}
 		summary = "i18n:PROVIDER_ACCOUNT_VERIFICATION_REQUESTED"
-		emitEvent = false
+		emitEvent = true
 	case command.StartProviderDeviceAuth:
 		if !providerAccountCanAuthorize(state) || !validPendingProviderAuthorization(payload) {
 			return commandOutcome{}, errs.ErrConflict

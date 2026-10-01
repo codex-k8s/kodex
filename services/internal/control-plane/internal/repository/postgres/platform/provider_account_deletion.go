@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -36,7 +37,7 @@ func (repository *Repository) startProviderAccountDeletion(ctx context.Context, 
 		if _, err = tx.Exec(ctx, queryProviderAccountsUpdateLifecycle, pgx.StrictNamedArgs{"account_id": accountID, "state": "DELETING", "enabled": false, "clear_credential": false}); err != nil {
 			return errs.ErrUnavailable
 		}
-		return repository.scheduleProviderAccountDeletion(ctx, tx, current.organizationID, accountID)
+		return repository.scheduleProviderAccountDeletion(ctx, tx, current, accountID, false)
 	}
 	if state == "DELETED" {
 		return errs.ErrConflict
@@ -61,25 +62,37 @@ func (repository *Repository) startProviderAccountDeletion(ctx context.Context, 
 	}); err != nil {
 		return errs.ErrUnavailable
 	}
-	return repository.scheduleProviderAccountDeletion(ctx, tx, current.organizationID, accountID)
+	return repository.scheduleProviderAccountDeletion(ctx, tx, current, accountID, false)
 }
 
-func (repository *Repository) scheduleProviderAccountDeletion(ctx context.Context, tx pgx.Tx, organizationID, accountID string) error {
+func (repository *Repository) scheduleProviderAccountDeletion(ctx context.Context, tx pgx.Tx, current scope, accountID string, emitRealtime bool) error {
 	if _, err := tx.Exec(ctx, queryProviderCredentialCleanupScheduleAccount, pgx.StrictNamedArgs{
-		"organization_id": organizationID, "account_id": accountID,
+		"organization_id": current.organizationID, "account_id": accountID,
 		"eligible_at": time.Now().UTC(), "maximum_attempts": providerCredentialCleanupMaxAttempts,
 	}); err != nil {
 		return errs.ErrUnavailable
 	}
 	if _, err := tx.Exec(ctx, queryProviderAccountDeletionScheduleAuthorizations, pgx.StrictNamedArgs{
-		"organization_id": organizationID, "account_id": accountID, "maximum_attempts": providerCredentialCleanupMaxAttempts,
+		"organization_id": current.organizationID, "account_id": accountID, "maximum_attempts": providerCredentialCleanupMaxAttempts,
 	}); err != nil {
 		return errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryProviderAccountDeletionAdvance, pgx.StrictNamedArgs{
-		"organization_id": organizationID, "account_id": accountID,
-	}); err != nil {
+	var organizationRef, accountRef, deletionRef, state string
+	var accountVersion, deletionVersion int64
+	err := tx.QueryRow(ctx, queryProviderAccountDeletionAdvance, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "account_id": accountID,
+	}).Scan(&organizationRef, &accountRef, &accountVersion, &deletionRef, &deletionVersion, &state)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
 		return errs.ErrUnavailable
+	}
+	if emitRealtime {
+		current.organizationRef = organizationRef
+		current.correlationRef = deletionRef
+		return repository.emitPlatformEventSnapshot(ctx, tx, current, "PROVIDER_ACCOUNT_CHANGED", "",
+			accountRef, "i18n:PROVIDER_ACCOUNT_UPDATED", accountVersion, state)
 	}
 	return nil
 }
@@ -89,11 +102,11 @@ func (repository *Repository) advanceProviderAccountDeletions(ctx context.Contex
 	if err != nil {
 		return errs.ErrUnavailable
 	}
-	type pending struct{ organizationID, accountID string }
+	type pending struct{ organizationID, organizationRef, accountID string }
 	items := make([]pending, 0, limit)
 	for rows.Next() {
 		var item pending
-		if rows.Scan(&item.organizationID, &item.accountID) != nil {
+		if rows.Scan(&item.organizationID, &item.organizationRef, &item.accountID) != nil {
 			rows.Close()
 			return errs.ErrUnavailable
 		}
@@ -104,7 +117,9 @@ func (repository *Repository) advanceProviderAccountDeletions(ctx context.Contex
 		return errs.ErrUnavailable
 	}
 	for _, item := range items {
-		if err := repository.scheduleProviderAccountDeletion(ctx, tx, item.organizationID, item.accountID); err != nil {
+		if err := repository.scheduleProviderAccountDeletion(ctx, tx, scope{
+			organizationID: item.organizationID, organizationRef: item.organizationRef,
+		}, item.accountID, true); err != nil {
 			return err
 		}
 	}

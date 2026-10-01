@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const list = readFileSync(new URL("./ProjectList.vue", import.meta.url), "utf8");
+const list = readFileSync(
+  new URL("./ProjectList.vue", import.meta.url),
+  "utf8",
+);
 const page = readFileSync(
   new URL("../../pages/ProjectsPage.vue", import.meta.url),
   "utf8",

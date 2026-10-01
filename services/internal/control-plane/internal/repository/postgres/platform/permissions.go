@@ -60,7 +60,7 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	case command.ReportEmailEffect:
 		_, _, _, err := repository.authorizeEmailReport(ctx, tx, current, input)
 		return err
-	case command.ArchiveAssistantConversation:
+	case command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation:
 		_, err := repository.authorizeAssistantArchive(ctx, tx, current, input)
 		return err
 	case command.MoveAssistantConversationToProject:

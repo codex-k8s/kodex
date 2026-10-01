@@ -1,6 +1,8 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  Agent,
+  RoleEnvironment,
   RoleImageRecipe,
   RoleImageRecipePage,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -136,6 +138,54 @@ describe("role image catalog store", () => {
       20,
     );
     expect(store.projectTotal[recipe.projectRef]).toBe(43);
+  });
+  it("обновляет справочник ролей при позднем realtime-снимке агентов", () => {
+    const store = useRoleImagesStore();
+    const environment: RoleEnvironment = {
+      key: "standard",
+      nameMessageKey: "roleImages.environment.standard.name",
+      descriptionMessageKey: "roleImages.environment.standard.description",
+      softwareMessageKeys: [],
+      platforms: [],
+      recommended: true,
+      available: true,
+      customInstallationAllowed: false,
+      dockerfileTemplate: "FROM scratch",
+    };
+    const agent: Agent = {
+      ref: "agent_synthetic",
+      version: 2,
+      projectRef: recipe.projectRef,
+      roleDefinitionRef: recipe.roleDefinitionRef,
+      roleDefinitionName: "Аналитик",
+      name: "Аналитик проекта",
+      purpose: "Проверять сводки",
+      roleDescription: "Аналитик",
+      state: "READY",
+      enabled: true,
+      system: false,
+      runtimeRef: "runtime_synthetic",
+      runtimeName: "Базовая среда",
+      runtimeReady: true,
+      capabilities: [],
+      integrations: [],
+      knowledgeArtifactRefs: [],
+      updatedAt: "2026-09-05T00:00:00Z",
+      nextActions: [],
+    };
+
+    store.applySupportingCatalogSnapshot([], [environment]);
+    expect(
+      store.roleDefinitionByRef.get(recipe.roleDefinitionRef),
+    ).toBeUndefined();
+    store.applySupportingCatalogSnapshot([agent], [environment]);
+
+    expect(store.roleDefinitionByRef.get(recipe.roleDefinitionRef)).toEqual({
+      ref: recipe.roleDefinitionRef,
+      label: "Аналитик",
+      agentCount: 1,
+    });
+    expect(store.environmentByKey.get(environment.key)).toEqual(environment);
   });
   it.each(["dispose", "denied", "different-detail"] as const)(
     "не возвращает исходник из поздней history page после %s",

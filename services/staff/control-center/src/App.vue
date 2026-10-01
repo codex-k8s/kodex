@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import AppShell from "@/app/AppShell.vue";
 import AuthGate from "@/app/AuthGate.vue";
 import { useSessionStore } from "@/features/session/store";
+import ConfirmDialogHost from "@/shared/ui/ConfirmDialogHost.vue";
 
 const route = useRoute();
 const session = useSessionStore();
@@ -13,4 +14,5 @@ const session = useSessionStore();
   <RouterView v-if="route.meta.public" />
   <AppShell v-else-if="session.phase === 'authenticated'" />
   <AuthGate v-else />
+  <ConfirmDialogHost />
 </template>

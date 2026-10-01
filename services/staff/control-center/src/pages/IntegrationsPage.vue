@@ -90,8 +90,25 @@ let connectionController: AbortController | undefined;
 let connectionTimer: ReturnType<typeof setTimeout> | undefined;
 let connectionGeneration = 0;
 let connectionActive = true;
-let connectionLoaded = false;
 const connectionCursors = new Set<string>();
+
+function applyConnectionSnapshot(): boolean {
+  if (connectionSearch.value.trim()) return false;
+  const snapshot = platform.realtimeSnapshot(
+    "INTEGRATION_CONNECTION",
+    undefined,
+  );
+  if (!snapshot) return false;
+  connectionController?.abort();
+  connectionGeneration += 1;
+  connectionCursors.clear();
+  connectionEntries.value = Object.values(platform.connections);
+  connectionCursor.value = platform.integrationConnectionNextPageToken ?? "";
+  connectionLoading.value = false;
+  connectionProblem.value = undefined;
+  integrationsLoaded.value = true;
+  return true;
+}
 async function loadConnections(more = false): Promise<void> {
   if (
     !connectionActive ||
@@ -135,7 +152,6 @@ async function loadConnections(more = false): Promise<void> {
     if (token) connectionCursors.add(token);
     connectionEntries.value = items;
     connectionCursor.value = page.nextPageToken;
-    connectionLoaded = true;
   } catch (error) {
     if (current === connectionGeneration && !controller.signal.aborted)
       connectionProblem.value = asProblem(error);
@@ -147,6 +163,7 @@ watch(connectionSearch, () => {
   connectionController?.abort();
   connectionGeneration += 1;
   if (connectionTimer) clearTimeout(connectionTimer);
+  if (!connectionSearch.value.trim() && applyConnectionSnapshot()) return;
   connectionEntries.value = [];
   connectionCursor.value = "";
   connectionLoading.value = true;
@@ -159,7 +176,7 @@ watch(
       .sort()
       .join("|"),
   () => {
-    if (connectionLoaded) void loadConnections();
+    applyConnectionSnapshot();
   },
 );
 const activeSection = ref<IntegrationsSection>("CONNECTIONS");
@@ -181,6 +198,24 @@ let catalogController: AbortController | undefined;
 let catalogGeneration = 0;
 let catalogTimer: ReturnType<typeof setTimeout> | undefined;
 const catalogCursors = new Set<string>();
+
+function applyCatalogSnapshot(): boolean {
+  if (catalogSearch.value.trim() || catalogCategory.value) return false;
+  const snapshot = platform.realtimeSnapshot(
+    "INTEGRATION_CONNECTION",
+    undefined,
+  );
+  if (!snapshot) return false;
+  catalogController?.abort();
+  catalogGeneration += 1;
+  catalogCursors.clear();
+  catalogDefinitions.value = Object.values(platform.definitions);
+  catalogNextPageToken.value = platform.integrationDefinitionNextPageToken;
+  catalogLoading.value = false;
+  catalogProblem.value = undefined;
+  integrationsLoaded.value = true;
+  return true;
+}
 async function loadCatalogPage(more = false): Promise<void> {
   if (
     more &&
@@ -237,6 +272,7 @@ watch(
     catalogGeneration += 1;
     if (catalogTimer) clearTimeout(catalogTimer);
     if (activeSection.value !== "CATALOG") return;
+    if (applyCatalogSnapshot()) return;
     catalogDefinitions.value = [];
     catalogNextPageToken.value = undefined;
     catalogProblem.value = undefined;
@@ -247,6 +283,14 @@ watch(
     );
   },
 );
+watch(
+  () =>
+    Object.values(platform.definitions)
+      .map((item) => `${item.key}:${item.digest}`)
+      .sort()
+      .join("|"),
+  () => applyCatalogSnapshot(),
+);
 const dialog = ref(false);
 const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");
 const editingConnection = ref<IntegrationConnection>();
@@ -254,17 +298,17 @@ const credentialConnection = ref<IntegrationConnection>();
 const detailsConnection = ref<IntegrationConnection>();
 const mailboxCredentialBusy = ref(false);
 const mailboxConfigurationBusy = ref(false);
-const mailboxConfigurationPanel = ref<{ canClose(): boolean }>();
+const mailboxConfigurationPanel = ref<{ canClose(): Promise<boolean> }>();
 const route = useRoute();
 const router = useRouter();
 const assistantForm = computed(() => route.query.assistantForm === "1");
 const integrationsLoaded = ref(false);
 const assistantCredentialDefinition = ref<IntegrationDefinition>();
-function closeConnectionDetails(): void {
+async function closeConnectionDetails(): Promise<void> {
+  if (mailboxCredentialBusy.value || mailboxConfigurationBusy.value) return;
   if (
-    mailboxCredentialBusy.value ||
-    mailboxConfigurationBusy.value ||
-    mailboxConfigurationPanel.value?.canClose() === false
+    mailboxConfigurationPanel.value &&
+    !(await mailboxConfigurationPanel.value.canClose())
   )
     return;
   detailsConnection.value = undefined;
@@ -1048,13 +1092,18 @@ async function revokeGrant(item: IntegrationGrantPresentation): Promise<void> {
 }
 
 async function reloadIntegrationWorkspace(): Promise<void> {
-  await platform.loadIntegrations();
-  integrationsLoaded.value = true;
-  if (!platform.problems.integrations) await loadConnections();
+  if (applyConnectionSnapshot()) {
+    applyCatalogSnapshot();
+    return;
+  }
+  await platform.reloadPlatformState();
+  applyConnectionSnapshot();
+  applyCatalogSnapshot();
 }
 
 onMounted(() => {
-  void reloadIntegrationWorkspace();
+  applyConnectionSnapshot();
+  if (activeSection.value === "CATALOG") applyCatalogSnapshot();
 });
 
 onBeforeUnmount(() => {
@@ -1371,6 +1420,7 @@ onBeforeUnmount(() => {
           "
           ref="mailboxConfigurationPanel"
           :connection="detailsConnection"
+          :realtime-revision="platform.integrationRealtimeRevision"
           :disabled="mailboxCredentialBusy"
           :initial-configuration-ref="
             mailboxRouteRef('mailboxConfigurationRef')

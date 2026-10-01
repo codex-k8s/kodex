@@ -82,6 +82,7 @@ export const useAccessStore = defineStore("access", () => {
   const groupNextPageToken = ref<string>();
   const roleNextPageToken = ref<string>();
   const bindingNextPageToken = ref<string>();
+  const realtimeScopeKey = ref<string>();
   const loading = reactive<Record<AccessLoadKey, boolean>>({
     permissions: false,
     subjects: false,
@@ -135,6 +136,63 @@ export const useAccessStore = defineStore("access", () => {
       if (sequence[key] === current) problems[key] = asProblem(error);
     } finally {
       if (sequence[key] === current) loading[key] = false;
+    }
+  }
+
+  function applySnapshot(input: {
+    scopeProjectRef?: string;
+    permissions: PermissionDefinition[];
+    subjects: AccessSubject[];
+    subjectNextPageToken?: string;
+    groups: OidcGroup[];
+    groupNextPageToken?: string;
+    roles: AccessRole[];
+    roleNextPageToken?: string;
+    bindings: AccessBinding[];
+    bindingNextPageToken?: string;
+    projectMemberships: Membership[];
+  }): void {
+    permissions.value = input.permissions;
+    subjects.value = input.subjects;
+    subjectNextPageToken.value = input.subjectNextPageToken;
+    groups.value = input.groups;
+    groupNextPageToken.value = input.groupNextPageToken;
+    roles.value = input.roles;
+    roleNextPageToken.value = input.roleNextPageToken;
+    bindings.value = input.bindings;
+    bindingNextPageToken.value = input.bindingNextPageToken;
+    projectMemberships.value = input.projectMemberships;
+    realtimeScopeKey.value = input.scopeProjectRef ?? "";
+    for (const key of [
+      "permissions",
+      "subjects",
+      "groups",
+      "roles",
+      "bindings",
+      "projectMemberships",
+    ] as const) {
+      loading[key] = false;
+      Reflect.deleteProperty(problems, key);
+    }
+  }
+
+  function applySharedSnapshot(input: {
+    projects: Project[];
+    integrations: IntegrationConnection[];
+    platformMemberships: Membership[];
+    platformMembershipActions: NextAction[];
+  }): void {
+    projects.value = input.projects;
+    integrations.value = input.integrations;
+    platformMemberships.value = input.platformMemberships;
+    platformMembershipActions.value = input.platformMembershipActions;
+    for (const key of [
+      "projects",
+      "integrations",
+      "platformMemberships",
+    ] as const) {
+      loading[key] = false;
+      Reflect.deleteProperty(problems, key);
     }
   }
 
@@ -373,7 +431,11 @@ export const useAccessStore = defineStore("access", () => {
     input: PlatformMembershipCreateInput,
   ): Promise<Membership> {
     const updated = await api.createPlatformMembership(input);
-    await loadMembershipPresentation();
+    platformMemberships.value = appendUnique(
+      platformMemberships.value,
+      [updated],
+      (item) => item.ref,
+    );
     return updated;
   }
 
@@ -382,15 +444,23 @@ export const useAccessStore = defineStore("access", () => {
     input: PlatformMembershipChangeInput,
   ): Promise<Membership> {
     const updated = await api.updatePlatformMembership(membership, input);
-    await loadMembershipPresentation();
+    platformMemberships.value = appendUnique(
+      platformMemberships.value,
+      [updated],
+      (item) => item.ref,
+    );
     return updated;
   }
 
   async function revokePlatformMembership(
     membership: Membership,
   ): Promise<void> {
-    await api.revokePlatformMembership(membership);
-    await loadMembershipPresentation();
+    const updated = await api.revokePlatformMembership(membership);
+    platformMemberships.value = appendUnique(
+      platformMemberships.value,
+      [updated],
+      (item) => item.ref,
+    );
   }
 
   async function revokeProjectMembership(
@@ -413,15 +483,13 @@ export const useAccessStore = defineStore("access", () => {
     const role = current
       ? await api.addAccessRoleVersion(current, input)
       : await api.addAccessRole(input);
-    await loadRoles();
     roles.value = appendUnique(roles.value, [role], (item) => item.ref);
-    await loadRoleVersions(role.ref);
     return role;
   }
 
   async function archiveRole(role: AccessRole): Promise<void> {
-    await api.archiveRole(role);
-    await loadRoles(true);
+    const updated = await api.archiveRole(role);
+    roles.value = appendUnique(roles.value, [updated], (item) => item.ref);
   }
 
   async function saveBinding(
@@ -434,7 +502,6 @@ export const useAccessStore = defineStore("access", () => {
           input as AccessBindingChangeInput,
         )
       : await api.addAccessBinding(input as AccessBindingInput);
-    await loadBindings();
     bindings.value = appendUnique(
       bindings.value,
       [binding],
@@ -444,8 +511,12 @@ export const useAccessStore = defineStore("access", () => {
   }
 
   async function revokeBinding(binding: AccessBinding): Promise<void> {
-    await api.removeAccessBinding(binding);
-    await loadBindings();
+    const updated = await api.removeAccessBinding(binding);
+    bindings.value = appendUnique(
+      bindings.value,
+      [updated],
+      (item) => item.ref,
+    );
   }
 
   async function queryEffective(input: EffectiveAccessQuery): Promise<void> {
@@ -487,6 +558,34 @@ export const useAccessStore = defineStore("access", () => {
     delete problems.simulation;
   }
 
+  function clearOwnerState(): void {
+    permissions.value = [];
+    subjects.value = [];
+    groups.value = [];
+    roles.value = [];
+    bindingRoles.value = [];
+    bindings.value = [];
+    projects.value = [];
+    integrations.value = [];
+    platformMemberships.value = [];
+    platformMembershipActions.value = [];
+    projectMemberships.value = [];
+    for (const target of [agents, workflows, roleVersions])
+      for (const key of Object.keys(target))
+        Reflect.deleteProperty(target, key);
+    subjectNextPageToken.value = undefined;
+    groupNextPageToken.value = undefined;
+    roleNextPageToken.value = undefined;
+    bindingNextPageToken.value = undefined;
+    realtimeScopeKey.value = undefined;
+    for (const key of Object.keys(loading) as AccessLoadKey[]) {
+      loading[key] = false;
+      Reflect.deleteProperty(problems, key);
+      sequence[key] += 1;
+    }
+    clearDecision();
+  }
+
   return {
     permissions,
     subjects,
@@ -509,8 +608,11 @@ export const useAccessStore = defineStore("access", () => {
     groupNextPageToken,
     roleNextPageToken,
     bindingNextPageToken,
+    realtimeScopeKey,
     loading,
     problems,
+    applySnapshot,
+    applySharedSnapshot,
     loadPermissions,
     loadSubjects,
     loadGroups,
@@ -536,5 +638,6 @@ export const useAccessStore = defineStore("access", () => {
     explain,
     simulate,
     clearDecision,
+    clearOwnerState,
   };
 });

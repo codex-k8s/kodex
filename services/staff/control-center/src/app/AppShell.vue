@@ -40,6 +40,7 @@ import { resolveShellRealtimeState } from "@/app/realtime-presentation";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
 import { useAssistantStore } from "@/features/assistant/store";
+import { useAccessStore } from "@/features/access/store";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useRoleImagesStore } from "@/features/role-images/store";
@@ -73,6 +74,7 @@ import {
 const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
+const access = useAccessStore();
 const realtime = useRealtimeStore();
 const roleImages = useRoleImagesStore();
 const runtime = useRuntimeStore();
@@ -116,7 +118,13 @@ useCursorInfiniteScroll({
   loadMore: () => platform.loadMoreSearch(searchPageSize.value),
 });
 
-const projectRef = computed(() => routeProjectRef(route.params));
+const projectRef = computed(
+  () =>
+    routeProjectRef(route.params) ??
+    (route.name === "configuration-catalog"
+      ? routeProjectRef(route.query)
+      : undefined),
+);
 const activeSection = computed(() => activeNavigationSection(route.name));
 const fullBleedRunWorkspace = computed(
   () => route.name === "run" || route.name === "project-run",
@@ -269,6 +277,16 @@ const assistantRefreshRevision = computed(() =>
       ),
   ].join("|"),
 );
+
+watch(assistantRefreshRevision, (value, previous) => {
+  if (!assistantStore.context || value === previous) return;
+  assistantStore.applyRealtimeSnapshot(
+    platform.assistant,
+    Object.values(platform.conversations),
+    assistantStore.projectRef,
+    platform.assistantConversationNextPageToken,
+  );
+});
 
 const globalLinks = computed(() => [
   { name: "home", label: t("nav.home"), path: "/", icon: Home },
@@ -453,11 +471,33 @@ watch(search, (value) => {
 });
 watch(
   projectRef,
-  (value) => {
+  (value, previous) => {
     selectProjectRef(value);
-    if (value && !platform.projects[value]) void platform.loadProject(value);
+    if (realtimeStarted.value && value !== previous)
+      realtime.changeProjectScope();
   },
   { immediate: true },
+);
+watch(
+  () => [
+    projectRef.value ?? "",
+    platform.realtimeSnapshot("PROJECT", projectRef.value)?.scopeKey ?? "",
+    platform.projectList
+      .map((item) => `${item.ref}:${String(item.version)}`)
+      .sort()
+      .join("|"),
+  ],
+  ([currentRef, snapshotScope]) => {
+    if (
+      !currentRef ||
+      !snapshotScope ||
+      platform.projects[currentRef] ||
+      routeProjectRef(route.params) !== currentRef
+    )
+      return;
+    void router.replace("/projects");
+  },
+  { flush: "post" },
 );
 watch(
   () => route.fullPath,
@@ -491,10 +531,6 @@ onMounted(() => {
     selectProjectRef(projectRef.value);
     realtimeStarted.value = true;
     realtime.openPlatform();
-    return Promise.all([
-      platform.loadPendingGateCount(),
-      platform.loadBootstrap(),
-    ]);
   });
 });
 onBeforeUnmount(() => {
@@ -505,6 +541,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("kodex:preload-error", markPreloadFailed);
   realtime.closePlatform();
   runtime.clear();
+  access.clearOwnerState();
   platform.clearOwnerState();
 });
 </script>
@@ -800,7 +837,6 @@ onBeforeUnmount(() => {
       :project-ref="assistantContext.projectRef"
       :live="realtime.platformState.state === 'live'"
       :run-events="assistantRunEvents"
-      :refresh-revision="assistantRefreshRevision"
     />
   </div>
 </template>

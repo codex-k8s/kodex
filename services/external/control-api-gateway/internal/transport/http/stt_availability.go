@@ -13,7 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const speechAvailabilityTimeout = 5 * time.Second
+const (
+	speechAvailabilityTimeout      = 5 * time.Second
+	speechAvailabilityLeaseTimeout = 30 * time.Second
+)
 
 func (server *Server) writeBootstrapState(w http.ResponseWriter, r *http.Request, state *controlplanev1.BootstrapState) {
 	if state == nil {
@@ -33,17 +36,26 @@ func (server *Server) writeBootstrapState(w http.ResponseWriter, r *http.Request
 }
 
 func (server *Server) speechAvailability(ctx context.Context, owner *controlplanev1.SpeechTranscriptionAvailability) generated.SpeechTranscriptionAvailability {
+	return SpeechAvailability(ctx, server.speech, owner)
+}
+
+// SpeechAvailability проверяет один защищённый STT path для HTTP bootstrap и
+// WebSocket heartbeat, чтобы оба транспорта выдавали одинаковый короткий lease.
+func SpeechAvailability(ctx context.Context, speech sttv1.SpeechToTextServiceClient, owner *controlplanev1.SpeechTranscriptionAvailability) generated.SpeechTranscriptionAvailability {
 	result := generated.SpeechTranscriptionAvailability{Reason: "STT_SERVICE_UNAVAILABLE"}
 	if owner == nil || !owner.GetEligible() {
 		result.Reason = unavailableSpeechReason(owner.GetReason())
 		return result
 	}
-	if server.speech == nil {
+	if speech == nil {
 		return result
 	}
-	ctx, cancel := context.WithTimeout(ctx, speechAvailabilityTimeout)
+	// Realtime обновляет доступность раз в 15 секунд. Проверка получает
+	// отдельный deadline, чтобы подтверждённый lease не истекал между двумя
+	// heartbeat; фактический STT-вызов всё равно ограничен собственным timeout.
+	ctx, cancel := context.WithTimeout(ctx, speechAvailabilityLeaseTimeout)
 	defer cancel()
-	availability, err := sttapi.CheckAvailability(ctx, server.speech)
+	availability, err := sttapi.CheckAvailability(ctx, speech)
 	if err != nil || ctx.Err() != nil {
 		if status.Code(err) == codes.PermissionDenied || status.Code(err) == codes.Unauthenticated {
 			result.Reason = "STT_PERMISSION_DENIED"

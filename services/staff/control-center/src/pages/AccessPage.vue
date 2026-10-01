@@ -15,6 +15,7 @@ import RoleEditorDialog from "@/features/access/components/RoleEditorDialog.vue"
 import RolesPanel from "@/features/access/components/RolesPanel.vue";
 import { accessSections, type AccessSection } from "@/features/access/model";
 import { useAccessStore } from "@/features/access/store";
+import { usePlatformStore } from "@/features/platform/store";
 import ProjectPicker from "@/features/projects/ProjectPicker.vue";
 import type {
   AccessBinding,
@@ -35,6 +36,7 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const access = useAccessStore();
+const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
@@ -221,6 +223,8 @@ function selectScope(ref: string): void {
 }
 
 async function loadSection(section = routeSection.value): Promise<void> {
+  if (access.realtimeScopeKey === projectRef.value && !memberSearch.value)
+    return;
   if (section === "participants") {
     await Promise.all([
       access.loadSubjects(memberSearch.value),
@@ -251,17 +255,35 @@ async function loadSection(section = routeSection.value): Promise<void> {
   }
 }
 
-async function loadBaseline(): Promise<void> {
-  await Promise.all([
-    access.loadPermissions(),
-    access.loadProjects(),
-    access.loadRoles(true),
-    access.loadGroups(),
-    access.loadIntegrations(),
-    access.loadMembershipPresentation(projectRef.value, memberRef.value),
-  ]);
-  await loadSection();
+function applyRealtimeBaseline(): boolean {
+  const snapshot = platform.realtimeSnapshot(
+    "MEMBERSHIP",
+    projectRef.value || undefined,
+  );
+  if (!snapshot || access.realtimeScopeKey !== projectRef.value) return false;
+  access.applySharedSnapshot({
+    projects: platform.projectList,
+    integrations: Object.values(platform.connections),
+    platformMemberships: Object.values(platform.platformMemberships),
+    platformMembershipActions: platform.platformMembershipActions,
+  });
+  return true;
 }
+
+const realtimeBaselineVersion = computed(() =>
+  JSON.stringify([
+    projectRef.value,
+    platform.realtimeSnapshot("MEMBERSHIP", projectRef.value || undefined)
+      ?.scopeKey,
+    access.realtimeScopeKey,
+    platform.projectList.map((item) => [item.ref, item.version]),
+    Object.values(platform.connections).map((item) => [item.ref, item.version]),
+    Object.values(platform.platformMemberships).map((item) => [
+      item.ref,
+      item.version,
+    ]),
+  ]),
+);
 
 async function loadProjectResources(value: string): Promise<void> {
   editorAgentsProjectRef.value = value;
@@ -476,14 +498,33 @@ async function saveBinding(
   }
 }
 
-watch(routeSection, (section) => void loadSection(section));
+watch(routeSection, (section) => {
+  if (!applyRealtimeBaseline()) void loadSection(section);
+});
 watch([projectRef, memberRef], ([value, selected]) => {
+  if (applyRealtimeBaseline() && !selected) return;
   void Promise.all([
     loadSection(),
     access.loadMembershipPresentation(value, selected),
   ]);
 });
-onMounted(() => void loadBaseline());
+watch(realtimeBaselineVersion, applyRealtimeBaseline);
+onMounted(() => {
+  if (!applyRealtimeBaseline()) {
+    for (const key of [
+      "permissions",
+      "subjects",
+      "groups",
+      "roles",
+      "bindings",
+      "projects",
+      "integrations",
+      "platformMemberships",
+      "projectMemberships",
+    ] as const)
+      access.loading[key] = true;
+  }
+});
 </script>
 
 <template>

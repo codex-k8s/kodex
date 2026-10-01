@@ -5,8 +5,8 @@ package generated
 type OwnerGateDecision string
 
 const (
-	OwnerGateDecisionApprove        OwnerGateDecision = "APPROVE"
-	OwnerGateDecisionReject         OwnerGateDecision = "REJECT"
+	OwnerGateDecisionApprove OwnerGateDecision = "APPROVE"
+	OwnerGateDecisionReject OwnerGateDecision = "REJECT"
 	OwnerGateDecisionRequestChanges OwnerGateDecision = "REQUEST_CHANGES"
-	OwnerGateDecisionCancel         OwnerGateDecision = "CANCEL"
+	OwnerGateDecisionCancel OwnerGateDecision = "CANCEL"
 )

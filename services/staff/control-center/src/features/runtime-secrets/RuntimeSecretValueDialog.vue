@@ -6,6 +6,7 @@ import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { jsonSyntaxIssue } from "@/shared/ui/json-diagnostic";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 
 import type { AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -90,9 +91,12 @@ function submit(): void {
   });
 }
 
-function changeType(event: Event): void {
+async function changeType(event: Event): Promise<void> {
   const target = event.target as HTMLSelectElement;
-  if (value.value && !window.confirm(t("runtimeSecrets.confirmClear"))) {
+  if (
+    value.value &&
+    !(await requestConfirmation(t("runtimeSecrets.confirmClear")))
+  ) {
     target.value = valueType.value;
     return;
   }

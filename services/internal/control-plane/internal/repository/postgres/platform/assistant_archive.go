@@ -17,6 +17,12 @@ var queryAssistantArchiveLock string
 //go:embed sql/assistant_archive_update.sql
 var queryAssistantArchiveUpdate string
 
+//go:embed sql/assistant_restore_update.sql
+var queryAssistantRestoreUpdate string
+
+//go:embed sql/assistant_purge_delete.sql
+var queryAssistantPurgeDelete string
+
 type assistantArchiveOwner struct {
 	conversation  entity.AssistantConversation
 	id, projectID string
@@ -62,13 +68,43 @@ func (repository *Repository) archiveAssistantConversation(ctx context.Context, 
 	if c.Version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
-	if owner.busy || c.State == "ARCHIVED" {
-		return commandOutcome{}, errs.ErrConflict
+	summary := "i18n:ASSISTANT_CONVERSATION_ARCHIVED"
+	result := command.Result{}
+	switch input.Kind {
+	case command.ArchiveAssistantConversation:
+		if owner.busy || c.State == "ARCHIVED" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := tx.QueryRow(ctx, queryAssistantArchiveUpdate, current.organizationID, c.Ref, c.Version).Scan(&c.Version, &c.UpdatedAt); err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+		c.State = "ARCHIVED"
+		result.Conversation = &c
+	case command.RestoreAssistantConversation:
+		if c.State != "ARCHIVED" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := tx.QueryRow(ctx, queryAssistantRestoreUpdate, current.organizationID, c.Ref, c.Version).Scan(&c.Version, &c.UpdatedAt); err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+		c.State = "ACTIVE"
+		result.Conversation = &c
+		summary = "i18n:ASSISTANT_CONVERSATION_RESTORED"
+	case command.PurgeAssistantConversation:
+		if c.State != "ARCHIVED" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		var purged bool
+		if err := tx.QueryRow(ctx, queryAssistantPurgeDelete, current.organizationID, current.actorID, c.Ref, c.Version, current.actorID).Scan(&purged); err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+		if !purged {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		summary = "i18n:ASSISTANT_CONVERSATION_PURGED"
+	default:
+		return commandOutcome{}, errs.ErrInvalid
 	}
-	if err := tx.QueryRow(ctx, queryAssistantArchiveUpdate, current.organizationID, c.Ref, c.Version).Scan(&c.Version, &c.UpdatedAt); err != nil {
-		return commandOutcome{}, mapWriteError(err)
-	}
-	c.State = "ARCHIVED"
-	return commandOutcome{result: command.Result{Conversation: &c}, projectID: owner.projectID, projectRef: c.ProjectRef,
-		resourceKind: "ASSISTANT_CONVERSATION", resourceRef: c.Ref, summary: "i18n:ASSISTANT_CONVERSATION_ARCHIVED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	return commandOutcome{result: result, projectID: owner.projectID, projectRef: c.ProjectRef,
+		resourceKind: "ASSISTANT_CONVERSATION", resourceRef: c.Ref, summary: summary, platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }

@@ -5,6 +5,7 @@ const hooks = vi.hoisted(() => ({
   unmounted: vi.fn(),
   beforeEach: vi.fn(),
   removeGuard: vi.fn(),
+  requestConfirmation: vi.fn(),
 }));
 vi.mock("vue", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue")>()),
@@ -16,13 +17,15 @@ vi.mock("vue-router", () => ({
     beforeEach: hooks.beforeEach.mockReturnValue(hooks.removeGuard),
   }),
 }));
+vi.mock("./confirmation", () => ({
+  requestConfirmation: hooks.requestConfirmation,
+}));
 import { useUnsavedChanges } from "./unsaved-changes";
 describe("unsaved changes guard", () => {
   beforeEach(() => vi.resetAllMocks());
   afterEach(() => vi.unstubAllGlobals());
-  it("сохраняет черновики при смене query вкладки и защищает смену объекта", () => {
-    const confirm = vi.fn(() => false);
-    vi.stubGlobal("window", { confirm });
+  it("сохраняет черновики при смене query вкладки и защищает смену объекта", async () => {
+    hooks.requestConfirmation.mockResolvedValue(false);
     useUnsavedChanges(
       computed(() => true),
       () => "Discard changes?",
@@ -31,29 +34,33 @@ describe("unsaved changes guard", () => {
     const guard = hooks.beforeEach.mock.calls[0]?.[0] as (
       to: { path: string },
       from: { path: string },
-    ) => boolean;
+    ) => boolean | Promise<boolean>;
     expect(guard({ path: "/agents/one" }, { path: "/agents/one" })).toBe(true);
-    expect(confirm).not.toHaveBeenCalled();
-    expect(guard({ path: "/agents/two" }, { path: "/agents/one" })).toBe(false);
+    expect(hooks.requestConfirmation).not.toHaveBeenCalled();
+    await expect(
+      guard({ path: "/agents/two" }, { path: "/agents/one" }),
+    ).resolves.toBe(false);
   });
-  it("сохраняет dirty-форму при отмене, разрешает чистую навигацию и удаляет listener", () => {
-    const confirm = vi.fn(() => false);
+  it("сохраняет dirty-форму при отмене, разрешает чистую навигацию и удаляет listener", async () => {
+    hooks.requestConfirmation.mockResolvedValue(false);
     const addEventListener = vi.fn();
     const removeEventListener = vi.fn();
-    vi.stubGlobal("window", { confirm, addEventListener, removeEventListener });
+    vi.stubGlobal("window", { addEventListener, removeEventListener });
     const dirty = ref(false);
     useUnsavedChanges(
       computed(() => dirty.value),
       () => "Discard changes?",
     );
-    const guard = hooks.beforeEach.mock.calls[0]?.[0] as () => boolean;
+    const guard = hooks.beforeEach.mock.calls[0]?.[0] as () =>
+      | boolean
+      | Promise<boolean>;
     expect(guard()).toBe(true);
-    expect(confirm).not.toHaveBeenCalled();
+    expect(hooks.requestConfirmation).not.toHaveBeenCalled();
     dirty.value = true;
-    expect(guard()).toBe(false);
+    await expect(guard()).resolves.toBe(false);
     expect(dirty.value).toBe(true);
-    confirm.mockReturnValue(true);
-    expect(guard()).toBe(true);
+    hooks.requestConfirmation.mockResolvedValue(true);
+    await expect(guard()).resolves.toBe(true);
     const mount = hooks.mounted.mock.calls[0]?.[0] as () => void;
     const unmount = hooks.unmounted.mock.calls[0]?.[0] as () => void;
     mount();

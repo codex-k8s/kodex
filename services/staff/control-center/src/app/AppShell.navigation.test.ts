@@ -23,16 +23,25 @@ describe("AppShell navigation", () => {
     expect(source).not.toContain("openAssistantWorkspace");
   });
 
-  it("запускает realtime до readback и не загружает полный каталог Проектов в оболочке", () => {
+  it("сливает realtime-снимок помощника без повторной загрузки открытого чата", () => {
+    expect(source).toContain("assistantStore.applyRealtimeSnapshot(");
+    expect(source).not.toContain(
+      ':refresh-revision="assistantRefreshRevision"',
+    );
+  });
+
+  it("запускает realtime без catalog readback и не загружает полный каталог Проектов в оболочке", () => {
     expect(source).toContain("<RealtimeStatus");
     expect(source).toContain("router.isReady().then");
     expect(source).toContain("selectProjectRef(projectRef.value)");
+    expect(source).toContain('route.name === "configuration-catalog"');
+    expect(source).toContain("routeProjectRef(route.query)");
     expect(source).toContain("realtime.openPlatform()");
-    expect(source.indexOf("realtime.openPlatform()")).toBeLessThan(
-      source.indexOf("platform.loadPendingGateCount()"),
-    );
+    expect(source).not.toContain("platform.loadPendingGateCount()");
+    expect(source).not.toContain("platform.loadBootstrap()");
     expect(source).not.toContain("platform.loadGates()");
     expect(source).not.toContain("platform.loadProjects()");
+    expect(source).not.toContain("platform.loadProject(value)");
     expect(source).not.toContain("]).finally(() => {");
     expect(source).not.toContain("offline-banner");
     expect(source).not.toContain("location.reload");
@@ -53,5 +62,12 @@ describe("AppShell navigation", () => {
       source.indexOf('class="global-search-wrap"'),
     );
     expect(source).toContain('class="global-search-wrap"');
+  });
+
+  it("выходит из удалённого или недоступного Проекта по авторитетному realtime-снимку", () => {
+    expect(source).toContain(
+      'platform.realtimeSnapshot("PROJECT", projectRef.value)?.scopeKey',
+    );
+    expect(source).toContain('void router.replace("/projects")');
   });
 });

@@ -45,13 +45,13 @@ type writeBackReceipt struct {
 }
 
 type writeBackRow struct {
-	id, rootRef, approverRef, organizationRef string
-	snapshot                                  writeBackSnapshot
-	proposal                                  entity.ConfigurationWriteBack
-	lease                                     entity.ConfigurationWriteBackLease
-	effect, tree, blob                        string
-	started, deadline                         *time.Time
-	receipts                                  map[string]writeBackReceipt
+	id, rootRef, approverRef, organizationRef, projectRef string
+	snapshot                                              writeBackSnapshot
+	proposal                                              entity.ConfigurationWriteBack
+	lease                                                 entity.ConfigurationWriteBackLease
+	effect, tree, blob                                    string
+	started, deadline                                     *time.Time
+	receipts                                              map[string]writeBackReceipt
 }
 
 func writeBackDigest(raw []byte) string {
@@ -70,7 +70,7 @@ func lockWriteBack(ctx context.Context, tx pgx.Tx, current scope, ref string) (w
 		&row.lease.Attempt, &row.lease.ClaimGeneration, &row.lease.Claimant, &row.lease.Fence, &lease,
 		&p.CandidateCommitSHA, &row.tree, &row.blob, &row.started, &p.BranchConfirmedAt, &p.PullRequestConfirmedAt, &p.PullRequestRef, &p.PullRequestURL,
 		&p.FailureCode, &receipts, &p.ApprovedAt, &row.deadline, &p.ExpiresAt, &p.CompletedAt, &p.CreatedAt,
-		&row.rootRef, &row.approverRef, &row.organizationRef, &configurationRef, &sourceRef, &connectionRef, &credentialRef)
+		&row.rootRef, &row.approverRef, &row.organizationRef, &configurationRef, &row.projectRef, &sourceRef, &connectionRef, &credentialRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row, errs.ErrNotFound
 	}
@@ -99,7 +99,7 @@ func lockWriteBack(ctx context.Context, tx pgx.Tx, current scope, ref string) (w
 	return row, nil
 }
 
-func saveWriteBack(ctx context.Context, tx pgx.Tx, current scope, row *writeBackRow) error {
+func (repository *Repository) saveWriteBack(ctx context.Context, tx pgx.Tx, current scope, row *writeBackRow, emitRealtime bool) error {
 	var lease *time.Time
 	if !row.lease.ExpiresAt.IsZero() {
 		lease = &row.lease.ExpiresAt
@@ -127,6 +127,12 @@ func saveWriteBack(ctx context.Context, tx pgx.Tx, current scope, row *writeBack
 		"configuration-writeback."+p.State, "MANAGED_CONFIGURATION_WRITEBACK", p.Ref, "i18n:MANAGED_CONFIGURATION_CHANGED", current.correlationRef)
 	if err != nil {
 		return errs.ErrUnavailable
+	}
+	if emitRealtime {
+		if err = repository.emitPlatformEventSnapshot(ctx, tx, current, "MANAGED_CONFIGURATION_CHANGED", row.projectRef,
+			p.Ref, "i18n:MANAGED_CONFIGURATION_CHANGED", p.Version, p.State); err != nil {
+			return err
+		}
 	}
 	return nil
 }

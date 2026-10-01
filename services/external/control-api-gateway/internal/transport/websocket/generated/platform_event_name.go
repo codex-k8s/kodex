@@ -17,5 +17,11 @@ const (
 	PlatformEventNamePlatformMembershipChanged    PlatformEventName = "PLATFORM_MEMBERSHIP_CHANGED"
 	PlatformEventNameSystemAssistantChanged       PlatformEventName = "SYSTEM_ASSISTANT_CHANGED"
 	PlatformEventNameRoleImageRecipeChanged       PlatformEventName = "ROLE_IMAGE_RECIPE_CHANGED"
+	PlatformEventNameRoleImagePromotionRequested  PlatformEventName = "ROLE_IMAGE_PROMOTION_REQUESTED"
+	PlatformEventNameRoleImagePromoted            PlatformEventName = "ROLE_IMAGE_PROMOTED"
+	PlatformEventNameRuntimeEnvironmentChanged    PlatformEventName = "RUNTIME_ENVIRONMENT_CHANGED"
+	PlatformEventNameProviderAccountChanged       PlatformEventName = "PROVIDER_ACCOUNT_CHANGED"
+	PlatformEventNameRuntimeSecretChanged         PlatformEventName = "RUNTIME_SECRET_CHANGED"
+	PlatformEventNameManagedConfigurationChanged  PlatformEventName = "MANAGED_CONFIGURATION_CHANGED"
 	PlatformEventNameRunChanged                   PlatformEventName = "RUN_CHANGED"
 )

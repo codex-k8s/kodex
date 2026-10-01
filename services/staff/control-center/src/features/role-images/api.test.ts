@@ -293,7 +293,12 @@ describe("role image API adapter", () => {
     api.commandRoleImageRecipe.mockReturnValueOnce(
       response({ recipe, reused: false }),
     );
-    await commandRoleImage("project_1", recipe, "CANCEL_BUILD", "imgbld_12345678");
+    await commandRoleImage(
+      "project_1",
+      recipe,
+      "CANCEL_BUILD",
+      "imgbld_12345678",
+    );
     expect(api.commandRoleImageRecipe).toHaveBeenCalledWith(
       expect.objectContaining({
         body: { action: "CANCEL_BUILD", buildRef: "imgbld_12345678" },

@@ -22,18 +22,24 @@ export class SpeechAvailabilityLease {
     return this.active && this.expiresAt > Date.now();
   }
 
-  start(initial?: SpeechTranscriptionAvailability): void {
+  start(
+    initial?: SpeechTranscriptionAvailability,
+    refreshFromHTTP = true,
+  ): void {
     this.stop();
     this.active = true;
     if (initial) this.accept(initial);
-    void this.refresh();
+    if (refreshFromHTTP) void this.refresh();
   }
 
   synchronize(value: SpeechTranscriptionAvailability | undefined): void {
     if (!this.active) return;
-    // Общий bootstrap может завершиться позже отдельной проверки допуска.
-    if (!value?.available) this.accept(value);
-    void this.refresh();
+    this.generation += 1;
+    this.controller?.abort();
+    this.controller = undefined;
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = undefined;
+    this.accept(value);
   }
 
   accept(value: SpeechTranscriptionAvailability | undefined): void {

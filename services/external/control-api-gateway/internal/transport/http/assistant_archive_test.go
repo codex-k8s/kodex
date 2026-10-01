@@ -127,3 +127,36 @@ func TestAssistantArchiveExactMutationAndErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestAssistantTrashRestoreAndPurgeExactMutations(t *testing.T) {
+	mutationRequest := func(method, path, key string) *http.Request {
+		r := httptest.NewRequest(method, path, nil)
+		r.Header.Set("Idempotency-Key", key)
+		r.Header.Set("If-Match", `"4"`)
+		r.Header.Set("X-CSRF-Token", "fixture-csrf")
+		return r
+	}
+
+	restored := &cp.AssistantConversation{Ref: "conv_fixture01", Version: 5, State: cp.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE}
+	client := &catalogRPCRecorder{response: &cp.RestoreAssistantConversationResponse{Conversation: restored}}
+	w := httptest.NewRecorder()
+	assistantCatalogHandler(client).ServeHTTP(w, mutationRequest(http.MethodPost, "/api/v1/assistant-conversations/conv_fixture01/restore", "restore-fixture"))
+	if w.Code != http.StatusOK || client.method != cp.SystemAssistantService_RestoreAssistantConversation_FullMethodName || w.Header().Get("ETag") != `"5"` {
+		t.Fatalf("restore status=%d method=%s", w.Code, client.method)
+	}
+	restore := client.request.(*cp.RestoreAssistantConversationRequest)
+	if restore.ConversationRef != "conv_fixture01" || restore.Mutation.IdempotencyKey != "restore-fixture" || restore.Mutation.GetExpectedVersion() != 4 {
+		t.Fatal("restore OCC/idempotency lost")
+	}
+
+	client = &catalogRPCRecorder{response: &cp.PurgeAssistantConversationResponse{ConversationRef: "conv_fixture01"}}
+	w = httptest.NewRecorder()
+	assistantCatalogHandler(client).ServeHTTP(w, mutationRequest(http.MethodDelete, "/api/v1/assistant-conversations/conv_fixture01", "purge-fixture"))
+	if w.Code != http.StatusNoContent || client.method != cp.SystemAssistantService_PurgeAssistantConversation_FullMethodName || w.Body.Len() != 0 {
+		t.Fatalf("purge status=%d method=%s body=%q", w.Code, client.method, w.Body.String())
+	}
+	purge := client.request.(*cp.PurgeAssistantConversationRequest)
+	if purge.ConversationRef != "conv_fixture01" || purge.Mutation.IdempotencyKey != "purge-fixture" || purge.Mutation.GetExpectedVersion() != 4 {
+		t.Fatal("purge OCC/idempotency lost")
+	}
+}

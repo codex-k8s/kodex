@@ -16,6 +16,7 @@ vi.mock("@/features/workboard/gate-catalog", () => ({
     load: vi.fn(),
     invalidate: vi.fn(),
     reset: vi.fn(),
+    applySnapshot: vi.fn(),
   }),
 }));
 vi.mock("@/features/workboard/gate-projects", () => ({

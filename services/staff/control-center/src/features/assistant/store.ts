@@ -7,10 +7,12 @@ import {
   applyPlanDraft,
   createConversation,
   moveConversationToProject,
+  purgeConversation,
   readAssistant,
   readConversations,
   rejectPlanDraft,
   renameConversation,
+  restoreConversation,
   savePlanDraft,
   validatePlanDraft,
 } from "@/features/assistant/api";
@@ -163,7 +165,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     problem.value = undefined;
     try {
       const [assistantValue, firstPage] = await Promise.all([
-        readAssistant(signal),
+        assistant.value
+          ? Promise.resolve(assistant.value)
+          : readAssistant(signal),
         readHistory(nextProjectRef, undefined, signal),
       ]);
       if (current !== generation) return;
@@ -276,10 +280,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     );
   }
 
-  async function archiveSelected(): Promise<void> {
-    const conversation = selectedConversation.value;
+  async function moveToTrash(
+    conversation: AssistantConversation,
+  ): Promise<void> {
     if (
-      !conversation ||
       conversation.state === "ARCHIVED" ||
       busy.value ||
       loading.value ||
@@ -294,7 +298,68 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       selectedRef.value = undefined;
       receipt.value = undefined;
     });
-    if (context.value) await load(context.value, projectRef.value, false);
+  }
+
+  async function archiveSelected(): Promise<void> {
+    const conversation = selectedConversation.value;
+    if (conversation) await moveToTrash(conversation);
+  }
+
+  async function restoreFromTrash(
+    conversation: AssistantConversation,
+  ): Promise<void> {
+    if (conversation.state !== "ARCHIVED" || busy.value || loading.value)
+      return;
+    await runMutation(async () => {
+      await restoreConversation(conversation);
+      conversations.value = conversations.value.filter(
+        (item) => item.ref !== conversation.ref,
+      );
+      if (selectedRef.value === conversation.ref) selectedRef.value = undefined;
+    });
+  }
+
+  async function purgeFromTrash(
+    conversation: AssistantConversation,
+  ): Promise<void> {
+    if (conversation.state !== "ARCHIVED" || busy.value || loading.value)
+      return;
+    await runMutation(async () => {
+      await purgeConversation(conversation);
+      conversations.value = conversations.value.filter(
+        (item) => item.ref !== conversation.ref,
+      );
+      if (selectedRef.value === conversation.ref) selectedRef.value = undefined;
+    });
+  }
+
+  async function emptyTrash(): Promise<void> {
+    if (historyState.value !== "ARCHIVED" || busy.value || loading.value)
+      return;
+    await runMutation(async () => {
+      const all = new Map<string, AssistantConversation>();
+      let cursor: string | undefined;
+      const seen = new Set<string>();
+      const signal = new AbortController().signal;
+      do {
+        if (cursor && seen.has(cursor))
+          throw new Error("Assistant trash cursor repeated");
+        if (cursor) seen.add(cursor);
+        const page = await readConversations(
+          projectRef.value,
+          cursor,
+          signal,
+          { state: "ARCHIVED" },
+          historyPageSize.value ?? 40,
+        );
+        for (const item of page.items) all.set(item.ref, item);
+        cursor = page.nextPageToken;
+      } while (cursor);
+      for (const item of all.values()) await purgeConversation(item);
+      conversations.value = [];
+      selectedRef.value = undefined;
+      nextPageToken.value = undefined;
+    });
   }
 
   async function moveSelectedToProject(
@@ -377,6 +442,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     assistantValue: SystemAssistant | undefined,
     values: AssistantConversation[],
     sourceProjectRef?: string,
+    sourceNextPageToken?: string,
   ): void {
     if (projectRef.value !== sourceProjectRef) return;
     if (assistantValue) assistant.value = assistantValue;
@@ -397,6 +463,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       return previous;
     });
     conversations.value.splice(0, conversations.value.length, ...reconciled);
+    nextPageToken.value = sourceNextPageToken;
     selectMatchingConversation();
   }
 
@@ -541,6 +608,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     historyState,
     filterHistory,
     archiveSelected,
+    moveToTrash,
+    restoreFromTrash,
+    purgeFromTrash,
+    emptyTrash,
     moveSelectedToProject,
     loadMoreHistory,
     setHistoryPageSize,

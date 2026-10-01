@@ -5,10 +5,10 @@ package generated
 type OwnerGateState string
 
 const (
-	OwnerGateStateOpen             OwnerGateState = "OPEN"
-	OwnerGateStateApproved         OwnerGateState = "APPROVED"
-	OwnerGateStateRejected         OwnerGateState = "REJECTED"
+	OwnerGateStateOpen OwnerGateState = "OPEN"
+	OwnerGateStateApproved OwnerGateState = "APPROVED"
+	OwnerGateStateRejected OwnerGateState = "REJECTED"
 	OwnerGateStateChangesRequested OwnerGateState = "CHANGES_REQUESTED"
-	OwnerGateStateCancelled        OwnerGateState = "CANCELLED"
-	OwnerGateStateExpired          OwnerGateState = "EXPIRED"
+	OwnerGateStateCancelled OwnerGateState = "CANCELLED"
+	OwnerGateStateExpired OwnerGateState = "EXPIRED"
 )

@@ -2,7 +2,7 @@
 
 package generated
 
-type PlatformInvalidatedEnvelope struct {
+type PlatformCursorEnvelope struct {
 	Type       string               `json:"type"`
 	RequestRef string               `json:"requestRef"`
 	StreamKind string               `json:"streamKind"`
@@ -10,4 +10,5 @@ type PlatformInvalidatedEnvelope struct {
 	Cursor     int64                `json:"cursor"`
 	EventName  PlatformEventName    `json:"eventName"`
 	Kind       PlatformResourceKind `json:"kind"`
+	ProjectRef *string              `json:"projectRef,omitempty"`
 }

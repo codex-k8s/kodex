@@ -9,6 +9,7 @@ import {
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
+import { usePlatformStore } from "@/features/platform/store";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import {
   ownerInvalidationSignal,
@@ -25,7 +26,6 @@ import {
   contentBytes,
   maximumContentBytes,
   matchesPreparation,
-  pollsNeeded,
   preparationReason,
   safePullRequestUrl,
   type Action,
@@ -42,6 +42,7 @@ const { t, locale } = useI18n({
   useScope: "local",
   messages: writeBackMessages,
 });
+const platform = usePlatformStore();
 const state = shallowRef<WriteBackController>();
 const editing = ref(false);
 const approved = ref(false);
@@ -58,7 +59,7 @@ const historyPageSize = useAdaptiveCursorPageSize({
   minimum: 6,
   maximum: 100,
 });
-let timer: ReturnType<typeof setTimeout> | undefined;
+let handledRealtimeRevision = 0;
 let stopOwner: (() => void) | undefined;
 const view = computed(() => state.value?.view);
 const proposal = computed(() => view.value?.proposal);
@@ -86,23 +87,8 @@ function time(value: string): string {
   }).format(new Date(value));
 }
 function stop(): void {
-  clearTimeout(timer);
   stopOwner?.();
   state.value?.close();
-}
-function schedule(): void {
-  clearTimeout(timer);
-  const current = state.value;
-  if (!current || current.signal.aborted) return;
-  timer = setTimeout(() => {
-    void tick(current);
-  }, 3000);
-}
-async function tick(current: WriteBackController): Promise<void> {
-  now.value = Date.now();
-  if (!props.disabled && !current.paused && current === state.value)
-    await current.poll();
-  if (current === state.value) schedule();
 }
 watch(
   () => props.configuration.ref,
@@ -116,13 +102,13 @@ watch(
     editing.value = current.pending?.action === "PREPARE";
     approved.value = false;
     adopted.value = false;
+    handledRealtimeRevision = platform.managedConfigurationRealtimeRevision;
     const invalidation = ownerInvalidationSignal();
     const revoked = () => {
       current.revoke();
       editing.value = false;
       approved.value = false;
       emit("busy", false);
-      clearTimeout(timer);
     };
     invalidation.addEventListener("abort", revoked, { once: true });
     stopOwner = () => invalidation.removeEventListener("abort", revoked);
@@ -135,9 +121,30 @@ watch(
       if (current.pending?.proposalRef) void current.recover();
       else void current.history(false, historyPageSize.value);
     }
-    schedule();
   },
   { immediate: true },
+);
+watch(
+  () =>
+    [
+      platform.managedConfigurationRealtimeRevision,
+      state.value?.working ?? false,
+    ] as const,
+  ([revision, working]) => {
+    const current = state.value;
+    if (
+      revision <= handledRealtimeRevision ||
+      working ||
+      props.disabled ||
+      !current ||
+      current.signal.aborted
+    )
+      return;
+    handledRealtimeRevision = revision;
+    now.value = Date.now();
+    if (current.view || current.pending?.proposalRef) void current.recover();
+    else void current.history(false, historyPageSize.value);
+  },
 );
 watch(
   () => props.configuration,
@@ -207,8 +214,7 @@ async function decide(action: Action): Promise<void> {
 async function refresh(): Promise<void> {
   const current = state.value;
   if (!current || blocked.value) return;
-  current.polls = 0;
-  current.paused = false;
+  now.value = Date.now();
   if (current.view || current.pending?.proposalRef) await current.recover();
   else await current.history();
 }
@@ -462,12 +468,6 @@ async function adopt(): Promise<void> {
           }}</small>
         </div>
       </div>
-      <p v-if="state?.paused && pollsNeeded(proposal)" role="status">
-        {{ t("wb.paused") }}
-        <button type="button" :disabled="blocked" @click="refresh">
-          {{ t("wb.resume") }}
-        </button>
-      </p>
     </section>
   </section>
 </template>

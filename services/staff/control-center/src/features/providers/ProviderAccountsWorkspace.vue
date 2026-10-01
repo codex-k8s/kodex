@@ -29,7 +29,7 @@ import {
 } from "vue";
 
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import { readSpeechAvailability } from "@/shared/api/speech";
+import { usePlatformStore } from "@/features/platform/store";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -38,7 +38,7 @@ import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
-import { loadProviderAccount, loadProviderDefinitions } from "./api";
+import { loadProviderDefinitions } from "./api";
 import ProviderUsageDetails from "./ProviderUsageDetails.vue";
 import ProviderAccountLifecyclePanel from "./ProviderAccountLifecyclePanel.vue";
 import ProviderLifecycleRecovery from "./ProviderLifecycleRecovery.vue";
@@ -59,6 +59,7 @@ import {
 import { useProvidersStore } from "./store";
 
 const store = useProvidersStore();
+const platform = usePlatformStore();
 const { t } = useI18n();
 const {
   accounts,
@@ -131,38 +132,18 @@ useCursorInfiniteScroll({
 const canCreate = computed(() =>
   pageAllowsAccountCreation(pageNextActions.value),
 );
-const authorizedApiKeyRefs = computed(() =>
-  accounts.value
-    .filter(
-      (account) =>
-        account.state === "AUTHORIZED" &&
-        account.enabled &&
-        account.authorization?.method === "API_KEY",
-    )
-    .map((account) => account.ref)
-    .sort()
-    .join(","),
+const hasAuthorizedApiKeyAccount = computed(() =>
+  accounts.value.some(
+    (account) =>
+      account.state === "AUTHORIZED" &&
+      account.enabled &&
+      account.authorization?.method === "API_KEY",
+  ),
 );
-const speechConfigurationMissing = ref(false);
-watch(
-  authorizedApiKeyRefs,
-  (refs, _previous, cleanup) => {
-    speechConfigurationMissing.value = false;
-    if (!refs) return;
-    const controller = new AbortController();
-    cleanup(() => controller.abort());
-    void readSpeechAvailability(controller.signal)
-      .then((availability) => {
-        if (!controller.signal.aborted)
-          speechConfigurationMissing.value =
-            availability.reason === "STT_NOT_CONFIGURED";
-      })
-      .catch(() => {
-        if (!controller.signal.aborted)
-          speechConfigurationMissing.value = false;
-      });
-  },
-  { immediate: true },
+const speechConfigurationMissing = computed(
+  () =>
+    hasAuthorizedApiKeyAccount.value &&
+    platform.bootstrap?.speechTranscription.reason === "STT_NOT_CONFIGURED",
 );
 const availableDefinitions = computed(() =>
   definitions.value.filter((item) => item.available),
@@ -408,69 +389,6 @@ function recovered(result: ProviderLifecycleResult): void {
     store.schedulePoll(result.account.ref);
 }
 
-let verificationController = new AbortController();
-let verificationTimer: ReturnType<typeof setTimeout> | undefined;
-let verificationGeneration = 0;
-let verificationReads = 0;
-function stopVerificationObservation(): void {
-  verificationGeneration++;
-  verificationController.abort();
-  verificationController = new AbortController();
-  clearTimeout(verificationTimer);
-}
-function scheduleVerificationObservation(): void {
-  if (
-    authorizationAccount.value?.verification?.state !== "PENDING" ||
-    verificationReads >= 150
-  )
-    return;
-  verificationTimer = setTimeout(() => void observeVerification(), 4000);
-}
-async function observeVerification(): Promise<void> {
-  const current = authorizationAccount.value;
-  if (!current || current.verification?.state !== "PENDING") return;
-  if (
-    busyRefs.value.includes(current.ref) ||
-    authorizationRecoveryPending.value
-  ) {
-    scheduleVerificationObservation();
-    return;
-  }
-  const generation = verificationGeneration;
-  verificationReads++;
-  try {
-    const next = await loadProviderAccount(
-      current.ref,
-      verificationController.signal,
-    );
-    if (generation !== verificationGeneration) return;
-    if (next.ref !== current.ref)
-      throw new Error("Provider verification observation scope changed");
-    if (
-      next.version >= (authorizationAccount.value?.version ?? current.version)
-    )
-      receiveLifecycleAccount(next);
-    scheduleVerificationObservation();
-  } catch (error) {
-    if (generation !== verificationGeneration) return;
-    store.accounts = store.accounts.filter((item) => item.ref !== current.ref);
-    closeAuthorization();
-    localProblem.value = asProblem(error);
-  }
-}
-watch(
-  () => [
-    authorizationAccount.value?.ref,
-    authorizationAccount.value?.verification?.ref,
-    authorizationAccount.value?.verification?.state,
-  ],
-  () => {
-    stopVerificationObservation();
-    verificationReads = 0;
-    scheduleVerificationObservation();
-  },
-);
-
 async function copyUserCode(): Promise<void> {
   const code = authorizationAccount.value?.authorization?.userCode;
   if (!code) return;
@@ -481,14 +399,7 @@ async function copyUserCode(): Promise<void> {
   }
 }
 
-onMounted(
-  () =>
-    void store.load(
-      undefined,
-      accountsPageSize.value,
-      definitionsPageSize.value,
-    ),
-);
+onMounted(() => store.restoreSnapshot());
 watch(accounts, (items) => {
   const currentRef = authorizationAccount.value?.ref;
   if (!currentRef) return;
@@ -501,7 +412,6 @@ watch(authorizationMethod, () => {
   replacingApiKey.value = false;
 });
 onBeforeUnmount(() => {
-  stopVerificationObservation();
   if (searchTimer) clearTimeout(searchTimer);
   store.stopAllPolling();
   apiKey.value = "";

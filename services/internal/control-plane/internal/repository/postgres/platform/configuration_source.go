@@ -43,7 +43,7 @@ var queryConfigurationSourceRetireDraft string
 
 type configurationSource struct {
 	entity.ManagedConfigurationGitSource
-	id, actorID, format string
+	id, actorID, format, projectRef string
 }
 
 func hydrateConfigurationSource(ctx context.Context, querier connectionQuerier, organizationID string, set *managedSet) error {
@@ -65,7 +65,7 @@ func readConfigurationSource(ctx context.Context, querier connectionQuerier, org
 	var source configurationSource
 	err := querier.QueryRow(ctx, queryConfigurationSourceRead, organizationID, ref).Scan(&source.id, &source.Ref, &source.Version, &source.Generation, &source.State,
 		&source.ConnectionRef, &source.ProviderKey, &source.RepositoryRef, &source.RefName, &source.Path, &source.AcceptedCommitSHA, &source.AcceptedContentSHA256,
-		&source.AcceptedRevisionRef, &source.SyncedAt, &source.FailureCode, &source.actorID, &source.format)
+		&source.AcceptedRevisionRef, &source.SyncedAt, &source.FailureCode, &source.actorID, &source.format, &source.projectRef)
 	return source, err
 }
 

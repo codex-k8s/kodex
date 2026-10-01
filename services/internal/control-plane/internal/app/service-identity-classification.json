@@ -79,7 +79,7 @@
     },
     {
       "operation_id": "platform.assistant.conversations.archive",
-      "source_binding_sha256": "1411793688212354c2cb7f541c3d07319b34aa285467995001084b46a68917ea",
+      "source_binding_sha256": "51ade091b48288ae6eb4070b16761a2c2781e399accadc31232743da2a58278f",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
@@ -95,6 +95,16 @@
     {
       "operation_id": "platform.assistant.conversations.project.move",
       "source_binding_sha256": "f325280d2d19d097cc337fc8e626259faddb9e60699a80aa0ff71a3ea457dd8f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.conversations.purge",
+      "source_binding_sha256": "6a00382684ca178a1030742ee4739b34145f191958c03699279ab1059a468912",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.conversations.restore",
+      "source_binding_sha256": "e88a367c3844c2b53654b7271eb1df7644d9d0559967ef9832daf1800f051c49",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {

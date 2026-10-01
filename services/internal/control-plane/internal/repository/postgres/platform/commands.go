@@ -344,7 +344,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.ConfigureEmailCredential:
 		return repository.configureEmailCredential(ctx, tx, scope, input)
-	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn,
+	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)
@@ -1867,12 +1867,16 @@ func (repository *Repository) emitCommandOutcomePlatformEvent(ctx context.Contex
 }
 
 func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string, aggregateVersion int64, state string) error {
+	kind := platformEventKind(eventName)
+	if kind == "" {
+		return fmt.Errorf("emit platform event: unsupported event name %q", eventName)
+	}
 	var sequence int64
 	if err := tx.QueryRow(ctx, queryCommandsEmitplatformeventUpdateInstallationPlatformSequence).Scan(&sequence); err != nil {
 		return serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	eventID := uuid.New()
-	data := map[string]any{"kind": platformEventKind(eventName), "safeSummary": summary}
+	data := map[string]any{"kind": kind, "safeSummary": summary}
 	if state != "" {
 		data["state"] = state
 	}
@@ -2089,6 +2093,10 @@ func platformEventKind(eventName string) string {
 		return "SCHEDULE"
 	case "PROVIDER_ACCOUNT_CHANGED":
 		return "PROVIDER_ACCOUNT"
+	case "RUNTIME_SECRET_CHANGED":
+		return "RUNTIME_SECRET"
+	case "MANAGED_CONFIGURATION_CHANGED":
+		return "MANAGED_CONFIGURATION"
 	case "INTEGRATION_CONNECTION_CHANGED":
 		return "INTEGRATION_CONNECTION"
 	case "INTEGRATION_GRANT_CHANGED":
@@ -2099,12 +2107,12 @@ func platformEventKind(eventName string) string {
 		return "PLATFORM_MEMBERSHIP"
 	case "SYSTEM_ASSISTANT_CHANGED":
 		return "SYSTEM_ASSISTANT"
-	case "ROLE_IMAGE_RECIPE_CHANGED":
+	case "ROLE_IMAGE_RECIPE_CHANGED", "ROLE_IMAGE_PROMOTION_REQUESTED", "ROLE_IMAGE_PROMOTED":
 		return "ROLE_IMAGE_RECIPE"
 	case "RUN_CHANGED":
 		return "RUN"
 	default:
-		return "SYSTEM_ASSISTANT"
+		return ""
 	}
 }
 

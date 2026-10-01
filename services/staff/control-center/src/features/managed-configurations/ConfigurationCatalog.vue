@@ -10,6 +10,8 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { loadCatalogProject } from "@/features/catalogs/api";
+import { usePlatformStore } from "@/features/platform/store";
+import { selectedProjectRef } from "@/shared/project-context";
 import OpenAPIImportDialog from "./OpenAPIImportDialog.vue";
 import {
   configurationProjectScopeValid,
@@ -23,6 +25,7 @@ const props = defineProps<{
   autoOpenImport?: boolean;
 }>();
 const emit = defineEmits<{ created: [configurationRef: string] }>();
+const platform = usePlatformStore();
 const query = ref("");
 const searchId = useId();
 const items = ref<ManagedConfigurationSummary[]>([]);
@@ -57,6 +60,37 @@ const showProjectColumn = computed(
 let generation = 0;
 let controller: AbortController | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
+
+function applyRealtimeCatalog(): boolean {
+  if (query.value.trim()) return false;
+  const scopeProjectRef = selectedProjectRef();
+  if (props.projectRef && props.projectRef !== scopeProjectRef) return false;
+  const snapshot = platform.realtimeSnapshot(
+    "MANAGED_CONFIGURATION",
+    scopeProjectRef,
+  );
+  if (!snapshot) {
+    items.value = [];
+    total.value = 0;
+    nextPageToken.value = undefined;
+    loading.value = !platform.realtimeAvailableKinds.length;
+    return true;
+  }
+  items.value = Object.values(platform.managedConfigurations).filter(
+    (item) =>
+      item.kind === props.kind &&
+      (!props.projectRef || item.projectRef === props.projectRef),
+  );
+  const page = platform.managedConfigurationPages[props.kind];
+  total.value = page?.total ?? items.value.length;
+  nextPageToken.value = page?.nextPageToken;
+  projectNames.value = {};
+  problem.value = undefined;
+  loading.value = false;
+  cursors.clear();
+  return true;
+}
+
 async function load(more = false): Promise<void> {
   if (more && (!nextPageToken.value || loading.value)) return;
   controller?.abort();
@@ -129,7 +163,13 @@ async function load(more = false): Promise<void> {
   }
 }
 watch(
-  () => [props.kind, props.projectRef, query.value],
+  () => [
+    props.kind,
+    props.projectRef,
+    query.value,
+    platform.managedConfigurationRealtimeRevision,
+    platform.realtimeAvailableKinds.join(","),
+  ],
   () => {
     controller?.abort();
     generation += 1;
@@ -138,6 +178,7 @@ watch(
     total.value = 0;
     nextPageToken.value = undefined;
     problem.value = undefined;
+    if (applyRealtimeCatalog()) return;
     loading.value = true;
     timer = setTimeout(() => {
       void load();
@@ -371,6 +412,7 @@ function created(configurationRef: string): void {
 .configuration-catalog__list {
   max-height: min(720px, calc(100dvh - 220px));
   overflow: auto;
+  contain: layout paint;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);

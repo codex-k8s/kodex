@@ -2,6 +2,8 @@ package websockettransport
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -105,6 +107,55 @@ func TestValidateSessionResumeRejectsDuplicatesAndBounds(t *testing.T) {
 	}
 }
 
+func TestNeedsPlatformBootstrap(t *testing.T) {
+	tests := []struct {
+		name             string
+		requestedAfter   int64
+		current          int64
+		snapshotRequired bool
+		want             bool
+	}{
+		{name: "same cursor and complete cache", requestedAfter: 7, current: 7, want: false},
+		{name: "same cursor and incomplete cache", requestedAfter: 7, current: 7, snapshotRequired: true, want: true},
+		{name: "client cursor behind", requestedAfter: 6, current: 7, want: true},
+		{name: "client cursor ahead", requestedAfter: 8, current: 7, want: true},
+		{name: "initial bootstrap", requestedAfter: 0, current: 0, snapshotRequired: true, want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := needsPlatformBootstrap(test.requestedAfter, test.current, test.snapshotRequired); got != test.want {
+				t.Fatalf("needsPlatformBootstrap() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func TestPlatformReadyAvailabilityPresenceDistinguishesBootstrapAndResume(t *testing.T) {
+	emptyKinds := []generated.PlatformResourceKind{}
+	fullBootstrap, err := json.Marshal(generated.PlatformReadyEnvelope{
+		Type: "PLATFORM_READY", RequestRef: "request_0001", StreamKind: "PLATFORM",
+		StreamRef: platformStreamRef, Cursor: 7, AvailableKinds: &emptyKinds,
+	})
+	if err != nil {
+		t.Fatalf("marshal full bootstrap: %v", err)
+	}
+	if !strings.Contains(string(fullBootstrap), `"availableKinds":[]`) {
+		t.Fatalf("full bootstrap omitted an explicit empty availability set: %s", fullBootstrap)
+	}
+
+	resume, err := json.Marshal(generated.PlatformReadyEnvelope{
+		Type: "PLATFORM_READY", RequestRef: "request_0001", StreamKind: "PLATFORM",
+		StreamRef: platformStreamRef, Cursor: 7,
+	})
+	if err != nil {
+		t.Fatalf("marshal same-cursor resume: %v", err)
+	}
+	if strings.Contains(string(resume), "availableKinds") {
+		t.Fatalf("same-cursor resume unexpectedly replaced availability: %s", resume)
+	}
+}
+
 func TestDecodeSessionCommandIsClosedAndTyped(t *testing.T) {
 	command, err := decodeSessionCommand([]byte(`{"type":"SUBSCRIBE_RUN","requestRef":"request_0001","runRef":"run_root0001","afterSequence":4}`))
 	if err != nil {
@@ -146,6 +197,32 @@ func TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs(t *test
 	signal, ok := decodePlatformSignal(payload, "org_example0001")
 	if !ok || signal.Sequence != 9 || signal.EventName != "RUN_CHANGED" || signal.Kind != "RUN" {
 		t.Fatalf("valid run invalidation rejected: ok=%t signal=%+v", ok, signal)
+	}
+}
+
+func TestDecodePlatformSignalAcceptsRoleImageLifecycleEvents(t *testing.T) {
+	for index, eventName := range []string{"ROLE_IMAGE_PROMOTION_REQUESTED", "ROLE_IMAGE_PROMOTED"} {
+		payload := []byte(fmt.Sprintf(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"%s","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"rimg_example001","aggregateVersion":2,"sequence":%d,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"ROLE_IMAGE_RECIPE","safeSummary":"i18n:ROLE_IMAGE_RECIPE_CHANGED"}}`, eventName, index+10))
+		signal, ok := decodePlatformSignal(payload, "org_example0001")
+		if !ok || signal.EventName != eventName || signal.Kind != "ROLE_IMAGE_RECIPE" {
+			t.Fatalf("valid role image lifecycle signal rejected: ok=%t signal=%+v", ok, signal)
+		}
+	}
+}
+
+func TestPlatformSignalOutsideScope(t *testing.T) {
+	t.Parallel()
+	if platformSignalOutsideScope(platformSignal{Kind: "SYSTEM_ASSISTANT", ProjectRef: "prj_other0001"}, "") {
+		t.Fatal("global scope skipped an accessible project signal")
+	}
+	if !platformSignalOutsideScope(platformSignal{Kind: "RUNTIME_SECRET", ProjectRef: "prj_other0001"}, "prj_selected01") {
+		t.Fatal("foreign project signal entered the selected project snapshot")
+	}
+	if platformSignalOutsideScope(platformSignal{Kind: "PROJECT", ProjectRef: "prj_other0001"}, "prj_selected01") {
+		t.Fatal("organization project catalog signal was skipped")
+	}
+	if platformSignalOutsideScope(platformSignal{Kind: "RUNTIME_SECRET", ProjectRef: "prj_selected01"}, "prj_selected01") {
+		t.Fatal("selected project signal was skipped")
 	}
 }
 

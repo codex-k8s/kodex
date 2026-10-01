@@ -22,6 +22,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import EmailMailboxFields from "./EmailMailboxFields.vue";
 import { mailboxEditor } from "../email-mailbox-editor";
 import {
@@ -32,6 +33,7 @@ import {
 const props = defineProps<{
   disabled?: boolean;
   connection: IntegrationConnection;
+  realtimeRevision: number;
   initialConfigurationRef?: string;
   initialRevisionRef?: string;
 }>();
@@ -89,14 +91,12 @@ const actions: MailboxAction[] = [
   "COPY",
 ];
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let deliveryTimer: ReturnType<typeof setTimeout> | undefined;
-let deliveryAttempts = 0;
 let disposed = false;
 useUnsavedChanges(guarded, () => t("mailbox.leave"));
 watch(ownBusy, (value) => emit("busy", value), { immediate: true });
-function canClose(): boolean {
+async function canClose(): Promise<boolean> {
   if (locked.value) return false;
-  return !guarded.value || window.confirm(t("mailbox.leave"));
+  return !guarded.value || (await requestConfirmation(t("mailbox.leave")));
 }
 defineExpose({ canClose });
 function reason(action: MailboxAction): string {
@@ -119,27 +119,28 @@ function canExecute(action: MailboxAction): boolean {
 async function execute(action?: MailboxAction): Promise<void> {
   if (locked.value) return;
   if (action && !canExecute(action)) return;
-  if (action === "DISCARD" && !window.confirm(t("mailbox.discardConfirm")))
+  if (
+    action === "DISCARD" &&
+    !(await requestConfirmation(t("mailbox.discardConfirm")))
+  )
     return;
   await editor.execute(action);
   if (!editor.problem && !editor.uncertain && editor.view) {
     emit("saved");
     emit("selected", editor.view.configuration.ref, editor.view.revision.ref);
-    scheduleDelivery();
   }
 }
 async function open(
   configurationRef?: string,
   revisionRef?: string,
 ): Promise<void> {
-  if (!canClose()) return;
+  if (!(await canClose())) return;
   await editor.open(configurationRef, revisionRef);
   if (editor.view)
     emit("selected", editor.view.configuration.ref, editor.view.revision.ref);
-  scheduleDelivery();
 }
-function newConfiguration(): void {
-  if (canClose()) editor.newConfiguration();
+async function newConfiguration(): Promise<void> {
+  if (await canClose()) editor.newConfiguration();
 }
 function search(): void {
   clearTimeout(searchTimer);
@@ -188,33 +189,19 @@ async function loadCredentials(more = false): Promise<void> {
     if (!disposed) credentialBusy.value = false;
   }
 }
-function scheduleDelivery(): void {
-  clearTimeout(deliveryTimer);
-  if (
-    disposed ||
-    deliveryAttempts >= 5 ||
-    editor.view?.publication?.state !== "PENDING"
-  )
-    return;
-  deliveryTimer = setTimeout(() => {
+watch(
+  () => props.realtimeRevision,
+  () => {
+    const current = editor.view;
     if (
       disposed ||
       locked.value ||
       editor.dirty ||
       editor.uncertain ||
-      !editor.view
+      current?.publication?.state !== "PENDING"
     )
       return;
-    deliveryAttempts++;
-    void editor
-      .open(editor.view.configuration.ref, editor.view.revision.ref)
-      .then(scheduleDelivery);
-  }, 2000);
-}
-watch(
-  () => editor.view?.publication?.ref,
-  () => {
-    deliveryAttempts = 0;
+    void editor.open(current.configuration.ref, current.revision.ref);
   },
 );
 onMounted(async () => {
@@ -224,12 +211,10 @@ onMounted(async () => {
     await editor.open(props.initialConfigurationRef, props.initialRevisionRef);
   if (controller.signal.aborted) return;
   await loadCredentials();
-  scheduleDelivery();
 });
 onBeforeUnmount(() => {
   disposed = true;
   clearTimeout(searchTimer);
-  clearTimeout(deliveryTimer);
   controller.abort();
   editor.dispose();
   emit("busy", false);

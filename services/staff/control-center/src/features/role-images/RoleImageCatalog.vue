@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useRoleImagesStore } from "@/features/role-images/store";
+import { usePlatformStore } from "@/features/platform/store";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
@@ -17,6 +18,7 @@ const { t } = useI18n();
 const localizeServerMessage = useServerMessage();
 const fieldId = useId();
 const store = useRoleImagesStore();
+const platform = usePlatformStore();
 const query = ref("");
 const state = ref<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
 const items = computed(() => store.catalog(props.projectRef));
@@ -38,7 +40,25 @@ useCursorInfiniteScroll({
   loadMore: () =>
     store.loadCatalog(props.projectRef, false, undefined, pageSize.value),
 });
+function applyRealtimeCatalog(): boolean {
+  if (query.value.trim() || state.value !== "ALL") return false;
+  const snapshot = platform.realtimeSnapshot(
+    "ROLE_IMAGE_RECIPE",
+    props.projectRef,
+  );
+  if (!snapshot) return true;
+  store.applyCatalogSnapshot(
+    props.projectRef,
+    Object.values(platform.roleImageRecipes).filter(
+      (recipe) => recipe.projectRef === props.projectRef,
+    ),
+    snapshot.nextPageToken,
+    snapshot.total,
+  );
+  return true;
+}
 function loadFiltered() {
+  if (applyRealtimeCatalog()) return Promise.resolve();
   return store.loadCatalog(
     props.projectRef,
     true,
@@ -50,10 +70,57 @@ function loadFiltered() {
   );
 }
 
+const realtimeVersion = computed(() => {
+  const snapshot = platform.realtimeSnapshot(
+    "ROLE_IMAGE_RECIPE",
+    props.projectRef,
+  );
+  return JSON.stringify([
+    snapshot?.nextPageToken,
+    snapshot?.total,
+    Object.values(platform.roleImageRecipes)
+      .filter((recipe) => recipe.projectRef === props.projectRef)
+      .map((recipe) => [recipe.ref, recipe.version]),
+  ]);
+});
+
+const supportingCatalogVersion = computed(() =>
+  JSON.stringify([
+    props.projectRef,
+    Object.values(platform.agents)
+      .filter((agent) => agent.projectRef === props.projectRef)
+      .map((agent) => [
+        agent.ref,
+        agent.version,
+        agent.roleDefinitionRef,
+        agent.roleDefinitionName,
+      ]),
+    Object.values(platform.roleEnvironments).map((environment) => [
+      environment.key,
+      environment.nameMessageKey,
+      environment.available,
+    ]),
+  ]),
+);
+
+function applyRealtimeSupportingCatalogs(): void {
+  store.applySupportingCatalogSnapshot(
+    Object.values(platform.agents).filter(
+      (agent) => agent.projectRef === props.projectRef,
+    ),
+    Object.values(platform.roleEnvironments),
+  );
+}
+
 async function load(): Promise<void> {
   await Promise.all([
     loadFiltered(),
-    store.loadSupportingCatalogs(props.projectRef),
+    store.loadSupportingCatalogs(props.projectRef, {
+      agents: Object.values(platform.agents).filter(
+        (agent) => agent.projectRef === props.projectRef,
+      ),
+      environments: Object.values(platform.roleEnvironments),
+    }),
   ]);
 }
 
@@ -62,6 +129,10 @@ watch(
   () => void load(),
 );
 watch([query, state], () => void loadFiltered());
+watch(realtimeVersion, applyRealtimeCatalog);
+watch(supportingCatalogVersion, applyRealtimeSupportingCatalogs, {
+  immediate: true,
+});
 onMounted(() => void load());
 onBeforeUnmount(() => store.dispose());
 </script>

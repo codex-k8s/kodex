@@ -7,6 +7,7 @@ import type { AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import type {
   RuntimeSecret,
   RuntimeSecretCreateInput,
@@ -109,9 +110,12 @@ useUnsavedChanges(
   () => t("runtimeSecrets.draft.abandon"),
 );
 
-function close(): void {
+async function close(): Promise<void> {
   if (locked.value) return;
-  if (uncertain.value && !window.confirm(t("runtimeSecrets.draft.abandon")))
+  if (
+    uncertain.value &&
+    !(await requestConfirmation(t("runtimeSecrets.draft.abandon")))
+  )
     return;
   emit("close");
 }

@@ -22,6 +22,7 @@ export interface RunCatalogScope {
 }
 
 export function createRunCatalog() {
+  const realtimeFirstPage = "__REALTIME_FIRST_PAGE__";
   const items = ref<Run[]>([]);
   const ready = ref(false);
   const pageToken = ref<string>();
@@ -71,6 +72,35 @@ export function createRunCatalog() {
     scopeKey = "";
   }
 
+  function applySnapshot(
+    scope: RunCatalogScope,
+    values: Run[],
+    hasMore: boolean,
+  ): void {
+    const states = scope.states ?? runFilterStates(scope.filter);
+    if (
+      values.some(
+        (run) =>
+          (scope.projectRef && run.projectRef !== scope.projectRef) ||
+          (states && !states.includes(run.state)),
+      ) ||
+      new Set(values.map((run) => run.ref)).size !== values.length
+    )
+      throw new Error("Invalid realtime run catalog scope");
+    controller?.abort();
+    generation += 1;
+    clearTimeout(refreshTimer);
+    refreshTimer = undefined;
+    invalidated = false;
+    items.value = values;
+    ready.value = true;
+    pageToken.value = hasMore ? realtimeFirstPage : undefined;
+    loading.value = false;
+    problem.value = undefined;
+    cursors.clear();
+    scopeKey = keyFor(scope);
+  }
+
   async function load(scope: RunCatalogScope, more = false): Promise<void> {
     const key = keyFor(scope);
     if (more && (loading.value || !pageToken.value || key !== scopeKey)) return;
@@ -78,7 +108,8 @@ export function createRunCatalog() {
     const active = new AbortController();
     controller = active;
     const current = ++generation;
-    const cursor = more ? pageToken.value : undefined;
+    const fromRealtime = more && pageToken.value === realtimeFirstPage;
+    const cursor = more && !fromRealtime ? pageToken.value : undefined;
     const states = scope.states ?? runFilterStates(scope.filter);
     loading.value = true;
     problem.value = undefined;
@@ -121,8 +152,19 @@ export function createRunCatalog() {
           (page.nextPageToken === cursor || cursors.has(page.nextPageToken)))
       )
         throw new Error("Invalid run catalog page");
-      const next = more ? [...items.value, ...page.items] : page.items;
-      if (new Set(next.map((run) => run.ref)).size !== next.length)
+      const next = fromRealtime
+        ? [
+            ...new Map(
+              [...items.value, ...page.items].map((run) => [run.ref, run]),
+            ).values(),
+          ]
+        : more
+          ? [...items.value, ...page.items]
+          : page.items;
+      if (
+        !fromRealtime &&
+        new Set(next.map((run) => run.ref)).size !== next.length
+      )
         throw new Error("Repeated run catalog item");
       items.value = next;
       pageToken.value = page.nextPageToken;
@@ -138,7 +180,17 @@ export function createRunCatalog() {
       }
     }
   }
-  return { items, ready, pageToken, loading, problem, load, reset, invalidate };
+  return {
+    items,
+    ready,
+    pageToken,
+    loading,
+    problem,
+    load,
+    reset,
+    invalidate,
+    applySnapshot,
+  };
 }
 
 export const useRunCatalogStore = defineStore("run-catalog", createRunCatalog);

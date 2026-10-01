@@ -12,10 +12,12 @@ const workspace = readFileSync(
 );
 
 describe("карточка запущенного помощником сотрудника или процесса", () => {
-  it("связывает запуск с точной квитанцией и авторитетным readback", () => {
+  it("связывает запуск с точной квитанцией, realtime-кэшем и авторитетным readback", () => {
     expect(source).toContain("assistantLaunchedRunTarget");
+    expect(source).toContain("platform.runs[exact.runRef]");
     expect(source).toContain("current.projectRef !== projectRef");
     expect(source).toContain('current.source !== "SYSTEM_ASSISTANT"');
+    expect(source).not.toContain("setTimeout");
     expect(workspace).toContain("<AssistantLaunchedRunCard");
     expect(workspace).toContain("item.type === 'LAUNCH_RUN'");
   });

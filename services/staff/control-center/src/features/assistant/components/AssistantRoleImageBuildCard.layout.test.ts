@@ -18,10 +18,10 @@ describe("AssistantRoleImageBuildCard", () => {
     expect(source).toContain("@click=\"emit('navigate')\"");
   });
 
-  it("наблюдает повторную попытку и отменяет точную сборку без архивирования рецепта", () => {
+  it("наблюдает повторную попытку по realtime и отменяет точную сборку без архивирования рецепта", () => {
     expect(source).toContain("buildIsActive(build.value)");
-    expect(source).toContain("assistantPollDelay(attempts)");
-    expect(source).toContain("cancellable.value ||");
+    expect(source).toContain("platform.roleImageRealtimeRevision");
+    expect(source).not.toContain("setTimeout");
     expect(source).toContain("roleImages.retryPending");
     expect(source).toContain('current.nextActions.includes("CANCEL_BUILD")');
     expect(source).toMatch(
@@ -38,9 +38,7 @@ describe("AssistantRoleImageBuildCard", () => {
     );
     expect(source).toContain("candidate?.admissionVerdict");
     expect(source).toContain("canPromoteRoleImage(recipe, artifact)");
-    expect(source).toContain("awaitingAdmission.value");
-    expect(source).toContain("admissionPolls >= 120");
-    expect(source).toContain("promotionPolls >= 120");
+    expect(source).toContain("const awaitingAdmission = computed");
     expect(source).toContain("candidate.value?.promotionRequested === true");
     expect(source).toContain('candidate.value.promotionState === "REJECTED"');
     expect(source).toContain("attemptedArtifactRef.value = artifact.ref");

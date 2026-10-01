@@ -27,11 +27,11 @@ import {
   canPromoteRoleImage,
   canRequestBuild,
   latestBuild,
-  roleImageLifecycleNeedsRefresh,
   roleImageState,
   validateDockerfile,
 } from "@/features/role-images/model";
 import { useRoleImagesStore } from "@/features/role-images/store";
+import { usePlatformStore } from "@/features/platform/store";
 import { requestAssistantRoleImageBuildDebug } from "@/features/assistant/events";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -41,6 +41,7 @@ import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 
 const props = defineProps<{
   projectRef: string;
@@ -51,6 +52,7 @@ const localizeServerMessage = useServerMessage();
 const router = useRouter();
 const route = useRoute();
 const store = useRoleImagesStore();
+const platform = usePlatformStore();
 const fieldNamePrefix = `role-image-${useId()}`;
 const name = ref("");
 const roleDefinitionRef = ref("");
@@ -188,44 +190,8 @@ const environmentLabel = computed(() => {
   const environment = store.environmentByKey.get(key);
   return environment ? t(environment.nameMessageKey) : key;
 });
-let buildPollTimer: ReturnType<typeof setTimeout> | undefined;
-let lifecyclePollAttempts = 0;
-const pollingPaused = ref(false);
 let disposed = false;
 let loadGeneration = 0;
-
-function stopBuildPolling(): void {
-  if (buildPollTimer) clearTimeout(buildPollTimer);
-  buildPollTimer = undefined;
-}
-
-function scheduleBuildPolling(): void {
-  stopBuildPolling();
-  const needsRefresh = roleImageLifecycleNeedsRefresh(
-    recipe.value,
-    currentBuild.value,
-    artifact.value,
-    promotionReceipt.value,
-  );
-  pollingPaused.value = needsRefresh && lifecyclePollAttempts >= 150;
-  if (disposed || !props.recipeRef || !needsRefresh || pollingPaused.value)
-    return;
-  buildPollTimer = setTimeout(() => void refreshBuild(), 2000);
-}
-
-async function refreshBuild(): Promise<void> {
-  if (disposed || !props.recipeRef) return;
-  const current = loadGeneration;
-  lifecyclePollAttempts += 1;
-  await store.loadDetail(props.projectRef, props.recipeRef, false);
-  if (current === loadGeneration) scheduleBuildPolling();
-}
-
-async function resumeBuildPolling(): Promise<void> {
-  lifecyclePollAttempts = 0;
-  pollingPaused.value = false;
-  await refreshBuild();
-}
 
 function sync(): void {
   if (!recipe.value) return;
@@ -239,10 +205,13 @@ function sync(): void {
 
 async function load(): Promise<void> {
   const current = ++loadGeneration;
-  lifecyclePollAttempts = 0;
-  pollingPaused.value = false;
   const tasks: Promise<void>[] = [
-    store.loadSupportingCatalogs(props.projectRef),
+    store.loadSupportingCatalogs(props.projectRef, {
+      agents: Object.values(platform.agents).filter(
+        (agent) => agent.projectRef === props.projectRef,
+      ),
+      environments: Object.values(platform.roleEnvironments),
+    }),
   ];
   if (props.recipeRef)
     tasks.push(
@@ -262,7 +231,6 @@ async function load(): Promise<void> {
     if (recommended) selectEnvironment(recommended.key);
   }
   sync();
-  scheduleBuildPolling();
 }
 
 function selectEnvironment(key: string): void {
@@ -319,10 +287,8 @@ async function runCommand(
   if (!recipe.value || store.mutating || hasLocalChanges.value) return;
   try {
     await store.command(props.projectRef, recipe.value, action);
-    lifecyclePollAttempts = 0;
     confirmationAction.value = undefined;
     sync();
-    scheduleBuildPolling();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
@@ -337,7 +303,11 @@ async function cancelCurrentBuild(): Promise<void> {
     hasLocalChanges.value ||
     !recipe.value.nextActions.includes("CANCEL_BUILD") ||
     !buildIsActive(current) ||
-    !window.confirm(t("roleImages.cancelBuildConfirm"))
+    !(await requestConfirmation({
+      message: t("roleImages.cancelBuildConfirm"),
+      confirmLabel: t("roleImages.cancelBuild"),
+      tone: "danger",
+    }))
   )
     return;
   try {
@@ -347,9 +317,7 @@ async function cancelCurrentBuild(): Promise<void> {
       "CANCEL_BUILD",
       current.ref,
     );
-    lifecyclePollAttempts = 0;
     sync();
-    scheduleBuildPolling();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
@@ -371,8 +339,6 @@ async function promote(): Promise<void> {
   if (!canPromoteRoleImage(recipe.value, artifact.value)) return;
   try {
     await store.promote(props.projectRef, recipe.value, artifact.value);
-    lifecyclePollAttempts = 0;
-    scheduleBuildPolling();
     sync();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
@@ -392,15 +358,25 @@ watch(
 watch(
   () => [props.projectRef, props.recipeRef],
   () => {
-    stopBuildPolling();
     void load();
+  },
+);
+watch(
+  () => platform.roleImageRealtimeRevision,
+  async () => {
+    const current = ++loadGeneration;
+    const projectRef = props.projectRef;
+    const recipeRef = props.recipeRef;
+    if (disposed || !recipeRef) return;
+    await store.loadDetail(projectRef, recipeRef, false);
+    if (current !== loadGeneration) return;
+    sync();
   },
 );
 onMounted(() => void load());
 onBeforeUnmount(() => {
   disposed = true;
   loadGeneration += 1;
-  stopBuildPolling();
   store.dispose();
 });
 </script>
@@ -597,17 +573,6 @@ onBeforeUnmount(() => {
           <StatusBadge :state="promotionVisualState" />
         </article>
       </section>
-
-      <div
-        v-if="pollingPaused"
-        class="panel lifecycle-poll-paused"
-        role="status"
-      >
-        <span>{{ t("roleImages.statusRefreshPaused") }}</span>
-        <button class="button" type="button" @click="resumeBuildPolling">
-          {{ t("common.refresh") }}
-        </button>
-      </div>
 
       <div class="editor-layout">
         <main class="editor-main">
@@ -1163,12 +1128,6 @@ onBeforeUnmount(() => {
 .image-lifecycle {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-.lifecycle-poll-paused {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 12px;
 }
 .lifecycle-step {

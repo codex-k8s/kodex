@@ -16,6 +16,7 @@ import { environmentReadinessMessage } from "@/features/runtime/environment-read
 import { useRoute, useRouter } from "vue-router";
 
 import { useRuntimeStore } from "@/features/runtime/store";
+import { usePlatformStore } from "@/features/platform/store";
 import {
   compactIdentifier,
   hasEnvironmentAction,
@@ -38,6 +39,7 @@ const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
+const platform = usePlatformStore();
 const searchId = useId();
 const projectRef = computed(() => String(route.params.projectRef));
 const query = ref("");
@@ -167,6 +169,51 @@ async function load(reset = true): Promise<void> {
   }
 }
 
+function applyRealtime(): boolean {
+  const snapshot = platform.realtimeSnapshot(
+    "RUNTIME_ENVIRONMENT",
+    projectRef.value,
+  );
+  if (!snapshot) {
+    loading.value = true;
+    return true;
+  }
+  listController?.abort();
+  generation += 1;
+  const values = Object.values(runtime.environments).filter(
+    (item) => item.projectRef === projectRef.value,
+  );
+  if (new Set(values.map((item) => item.ref)).size !== values.length)
+    throw invalidSearchResult();
+  visitedCursors.clear();
+  items.value = values;
+  cursor.value = snapshot.nextPageToken;
+  loading.value = false;
+  loadingMore.value = false;
+  problem.value = undefined;
+  if (
+    selectedRef.value &&
+    !items.value.some((item) => item.ref === selectedRef.value)
+  )
+    selectedRef.value = "";
+  return true;
+}
+
+const realtimeVersion = computed(() => {
+  const snapshot = platform.realtimeSnapshot(
+    "RUNTIME_ENVIRONMENT",
+    projectRef.value,
+  );
+  return JSON.stringify([
+    projectRef.value,
+    snapshot?.scopeKey,
+    snapshot?.nextPageToken,
+    Object.values(runtime.environments)
+      .filter((item) => item.projectRef === projectRef.value)
+      .map((item) => [item.ref, item.version]),
+  ]);
+});
+
 function replaceItem(value: RuntimeEnvironmentSet): void {
   const index = items.value.findIndex((item) => item.ref === value.ref);
   if (index >= 0) items.value[index] = value;
@@ -227,11 +274,19 @@ watch(query, () => {
   listController?.abort();
   selectedRef.value = "";
   if (debounceTimer) clearTimeout(debounceTimer);
+  if (!query.value.trim()) {
+    applyRealtime();
+    return;
+  }
   debounceTimer = setTimeout(() => void load(), 500);
 });
 watch(projectRef, () => {
   if (debounceTimer) clearTimeout(debounceTimer);
-  void load();
+  if (!query.value.trim()) applyRealtime();
+  else void load();
+});
+watch(realtimeVersion, () => {
+  if (!query.value.trim()) applyRealtime();
 });
 watch(
   () =>
@@ -292,7 +347,8 @@ function openEditor(environmentRef: string): void {
   );
 }
 onMounted(() => {
-  void load();
+  if (!query.value.trim()) applyRealtime();
+  else void load();
   document.addEventListener("pointerdown", dismissInspector);
   document.addEventListener("keydown", dismissInspectorWithKeyboard);
 });

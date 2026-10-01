@@ -1,20 +1,13 @@
 <script setup lang="ts">
 import { Plus, Sparkles } from "@lucide/vue";
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-  watch,
-} from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import AgentCatalog from "@/features/agents/catalog/AgentCatalog.vue";
 import { openAssistantWorkspace } from "@/features/assistant/events";
 import { useAgentCatalogStore } from "@/features/agents/catalog/store";
-import { catalogInvalidated } from "@/features/catalogs/api";
 import { usePlatformStore } from "@/features/platform/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import AgentFormFields from "@/features/platform/AgentFormFields.vue";
 import {
   isAgentDraftComplete,
@@ -27,6 +20,7 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const platform = usePlatformStore();
+const realtime = useRealtimeStore();
 const catalog = useAgentCatalogStore();
 const route = useRoute();
 const router = useRouter();
@@ -57,10 +51,14 @@ const formReady = computed(
     runtimes.value.some((runtime) => runtime.ref === form.runtimeRef),
 );
 let searchTimer: number | undefined;
-let catalogGeneration = 0;
 
-function openDialog(): void {
+async function openDialog(): Promise<void> {
   if (!canCreate.value) return;
+  if (
+    runtimes.value.length === 0 &&
+    !platform.realtimeSnapshot("RUNTIME_SELECTION", projectRef.value)
+  )
+    await platform.loadRuntimes();
   form.runtimeRef ||= runtimes.value[0]?.ref ?? "";
   dialog.value = true;
 }
@@ -79,16 +77,23 @@ async function submit(): Promise<void> {
     busy.value = false;
   }
 }
-async function load(): Promise<void> {
-  await Promise.all([
-    platform.loadProject(projectRef.value),
-    catalog.load(projectRef.value, catalogQuery.value, false, pageSize.value),
-    platform.loadRuntimes(),
-  ]);
-  if (route.query.create === "1") openDialog();
+function applyRealtimeCatalog(): void {
+  if (catalogQuery.value.trim()) return;
+  const snapshot = platform.realtimeSnapshot("AGENT", projectRef.value);
+  if (!snapshot) {
+    catalog.prepareRefresh();
+    return;
+  }
+  catalog.applySnapshot(
+    projectRef.value,
+    Object.values(platform.agents).filter(
+      (agent) => agent.projectRef === projectRef.value,
+    ),
+    snapshot.nextPageToken,
+    pageSize.value,
+  );
+  if (route.query.create === "1") void openDialog();
 }
-
-onMounted(() => void load());
 
 watch(
   runtimes,
@@ -103,46 +108,43 @@ watch(
 
 watch(catalogQuery, (value) => {
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
+  if (!value.trim()) {
+    applyRealtimeCatalog();
+    return;
+  }
   searchTimer = window.setTimeout(() => {
     void catalog.load(projectRef.value, value, false, pageSize.value);
   }, 500);
 });
 
+watch(
+  () => [
+    projectRef.value,
+    platform.realtimeSnapshot("AGENT", projectRef.value)?.nextPageToken ?? "",
+    Object.values(platform.agents)
+      .filter((agent) => agent.projectRef === projectRef.value)
+      .map((agent) => `${agent.ref}:${String(agent.version)}`)
+      .sort()
+      .join("|"),
+  ],
+  () => applyRealtimeCatalog(),
+  { immediate: true, flush: "sync" },
+);
+
+function retryCatalog(): void {
+  if (catalogQuery.value.trim())
+    void catalog.load(
+      projectRef.value,
+      catalogQuery.value,
+      false,
+      pageSize.value,
+    );
+  else realtime.refreshSession();
+}
+
 onBeforeUnmount(() => {
-  catalogGeneration += 1;
-  unsubscribe();
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
   catalog.clear();
-});
-const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
-  if (
-    name !== "clearOwnerState" &&
-    name !== "reloadPlatformState" &&
-    !(name === "reloadPlatformKind" && catalogInvalidated("agents", args[0]))
-  )
-    return;
-  if (searchTimer !== undefined) window.clearTimeout(searchTimer);
-  const expected = ++catalogGeneration;
-  if (name === "clearOwnerState") {
-    catalog.clear();
-    dialog.value = false;
-    return;
-  }
-  const retain =
-    name === "reloadPlatformKind" &&
-    ["RUN", "INTEGRATION_CONNECTION", "INTEGRATION_GRANT"].includes(args[0]);
-  catalog.prepareRefresh(retain);
-  const scope = projectRef.value;
-  after(() => {
-    if (catalogGeneration === expected && projectRef.value === scope)
-      void catalog.load(scope, catalogQuery.value, retain, pageSize.value);
-  });
-  onError((error) => {
-    if (catalogGeneration === expected) {
-      catalog.clear();
-      catalog.problem = asProblem(error);
-    }
-  });
 });
 </script>
 
@@ -173,7 +175,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
       :problem="catalog.problem"
       :empty="list.length === 0 && !catalogQuery.trim()"
       :empty-title="$t('agents.emptyTitle')"
-      @retry="catalog.load(projectRef, catalogQuery, false, pageSize)"
+      @retry="retryCatalog"
     >
       <template #empty-action
         ><button

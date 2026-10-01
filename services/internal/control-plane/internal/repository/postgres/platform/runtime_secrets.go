@@ -566,6 +566,9 @@ func (repository *Repository) CompleteRuntimeSecretOperation(ctx context.Context
 	if err != nil {
 		return entity.RuntimeSecret{}, err
 	}
+	if err := repository.emitPlatformEventSnapshot(ctx, tx, current, "RUNTIME_SECRET_CHANGED", locked.projectRef, secret.Ref, runtimeSecretAuditSummary(locked.kind), secret.Version, secret.State); err != nil {
+		return entity.RuntimeSecret{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.RuntimeSecret{}, errs.ErrConflict
 	}
@@ -687,6 +690,9 @@ func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Co
 	}
 	secret, err := repository.completeLockedRuntimeSecretOperation(ctx, tx, current.organizationID, locked, &input.Materialization)
 	if err != nil {
+		return platformrepo.RuntimeSecretRecoveryResult{}, err
+	}
+	if err := repository.emitPlatformEventSnapshot(ctx, tx, current, "RUNTIME_SECRET_CHANGED", locked.projectRef, secret.Ref, runtimeSecretAuditSummary(locked.kind), secret.Version, secret.State); err != nil {
 		return platformrepo.RuntimeSecretRecoveryResult{}, err
 	}
 	result.Action, result.OperationState, result.Secret = "KEEP", "COMPLETED", &secret

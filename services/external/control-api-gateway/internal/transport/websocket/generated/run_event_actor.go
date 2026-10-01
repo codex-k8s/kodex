@@ -4,6 +4,6 @@ package generated
 
 type RunEventActor struct {
 	Kind RunEventActorKind `json:"kind"`
-	Ref  string            `json:"ref"`
-	Name string            `json:"name"`
+	Ref string `json:"ref"`
+	Name string `json:"name"`
 }

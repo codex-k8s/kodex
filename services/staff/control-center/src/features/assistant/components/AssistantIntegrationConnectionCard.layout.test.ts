@@ -8,12 +8,14 @@ const source = readFileSync(
 );
 
 describe("AssistantIntegrationConnectionCard", () => {
-  it("разрешает только точное подключение квитанции через авторитетный readback", () => {
+  it("разрешает только точное подключение квитанции через realtime-кэш и авторитетный readback", () => {
     expect(source).toContain("assistantIntegrationConnectionTarget");
+    expect(source).toContain("platform.connections[exact.connectionRef]");
     expect(source).toContain("getIntegrationConnection");
     expect(source).toContain("next.ref !== value.connectionRef");
+    expect(source).not.toContain("setTimeout");
     expect(source).toContain("!connection.value?.credentialsConfigured");
-    expect(source).toContain('connection.value?.state === "TESTING"');
+    expect(source).toContain("connection.state === 'TESTING'");
   });
 
   it("передаёт только ref в защищённую форму учётных данных", () => {

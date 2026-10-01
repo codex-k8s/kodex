@@ -37,7 +37,11 @@ function changeState(event: Event): void {
         :key="value"
         :value="value"
       >
-        {{ $t(`states.${value}`) }}
+        {{
+          value === "ARCHIVED"
+            ? $t("assistant.trashState")
+            : $t(`states.${value}`)
+        }}
       </option>
     </select>
   </div>

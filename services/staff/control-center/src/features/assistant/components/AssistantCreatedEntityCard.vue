@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 
 import { assistantCreatedEntityTarget } from "@/features/assistant/model";
+import { usePlatformStore } from "@/features/platform/store";
 import { requestSignal } from "@/shared/api/client";
 import { getAgent, getProject } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -13,9 +14,17 @@ import { unwrap } from "@/shared/api/problem";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
+const platform = usePlatformStore();
 const target = computed(() =>
   assistantCreatedEntityTarget(props.plan, props.operationRef),
 );
+const cachedEntity = computed<Project | Agent | undefined>(() => {
+  const current = target.value;
+  if (!current) return undefined;
+  return current.kind === "PROJECT"
+    ? platform.projects[current.resourceRef]
+    : platform.agents[current.resourceRef];
+});
 const updated = computed(() =>
   props.plan.operations.some(
     (operation) =>
@@ -53,12 +62,16 @@ const destination = computed(() => {
 let refresh: (() => Promise<void>) | undefined;
 
 watch(
-  target,
-  (value, _previous, onCleanup) => {
+  [target, cachedEntity],
+  ([value, cached], _previous, onCleanup) => {
     entity.value = undefined;
     loading.value = false;
     problem.value = false;
     if (!value) return;
+    if (cached) {
+      entity.value = cached;
+      refresh = undefined;
+    }
     const controller = new AbortController();
     onCleanup(() => {
       controller.abort();
@@ -95,6 +108,9 @@ watch(
         )
           throw new Error("Assistant entity readback mismatch");
         entity.value = next;
+        if (value.kind === "PROJECT")
+          platform.projects[next.ref] = next as Project;
+        else platform.agents[next.ref] = next as Agent;
         problem.value = false;
       } catch {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
@@ -104,7 +120,7 @@ watch(
         if (!controller.signal.aborted) loading.value = false;
       }
     };
-    void refresh();
+    if (!cached) void refresh();
   },
   { immediate: true },
 );

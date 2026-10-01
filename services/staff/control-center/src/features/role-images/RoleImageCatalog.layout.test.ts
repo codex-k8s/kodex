@@ -73,9 +73,10 @@ describe("каталог образов ИИ-сотрудников", () => {
     expect(summary).toContain('t("roleImages.debugBuildWithAssistant")');
   });
 
-  it("повторяет FAILED/EXPIRED и опрашивает допуск после завершения сборки", () => {
-    expect(editor).toContain("roleImageLifecycleNeedsRefresh(");
-    expect(editor).toContain("pollingPaused.value");
+  it("повторяет FAILED/EXPIRED и обновляет детали по realtime-событию", () => {
+    expect(editor).toContain("platform.roleImageRealtimeRevision");
+    expect(editor).toContain("store.loadDetail(projectRef, recipeRef, false)");
+    expect(editor).not.toContain("scheduleBuildPolling");
     expect(editor).toContain("!buildIsActive(current) ||");
     expect(editor).toContain("buildIsActive(currentBuild)");
     expect(editor).toContain('t("roleImages.retryPending")');

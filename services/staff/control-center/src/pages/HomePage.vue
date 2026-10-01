@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Play } from "@lucide/vue";
-import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 
@@ -10,59 +10,46 @@ import HomeProjectsList from "@/features/home/components/HomeProjectsList.vue";
 import {
   homeFailedRuns,
   homeOpenGates,
-  homePriorityProjectRefs,
   prioritizeHomeProjects,
 } from "@/features/home/model";
 import { usePlatformStore } from "@/features/platform/store";
+import { useProvidersStore } from "@/features/providers/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import HomeResultCatalog from "@/features/home/components/HomeResultCatalog.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
-import { loadProject, searchProjects } from "@/features/projects/api";
+import { searchProjects } from "@/features/projects/api";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
-import type { Project } from "@/shared/api/generated/openapi/types.gen";
-import type { ProviderAccount } from "@/shared/api/generated/openapi/types.gen";
-import { listProviderAccounts } from "@/shared/api/generated/openapi/sdk.gen";
-import { asProblem, unwrap, type AppProblem } from "@/shared/api/problem";
-import { requestSignal } from "@/shared/api/client";
-import { invalidSearchResult } from "@/shared/api/search-result";
 
 const platform = usePlatformStore();
+const providers = useProvidersStore();
+const realtime = useRealtimeStore();
 const router = useRouter();
 const { t } = useI18n();
 const projectAction = ref(false);
-const overviewReady = ref(Boolean(platform.overview));
-const projectsReady = ref(false);
-const visibleProjects = ref<Project[]>([]);
-const projectLoading = ref(false);
-const projectProblem = ref<AppProblem>();
-let projectController: AbortController | undefined;
-const providerAccountsNeedingAuthorization = ref<ProviderAccount[]>([]);
-const providerNextPageToken = ref<string>();
-const providerProblem = ref<AppProblem>();
-const providerMoreProblem = ref<AppProblem>();
-const providerReady = ref(false);
-const providerLoading = ref(false);
-const providerLoadingMore = ref(false);
-const consumedProviderCursors = new Set<string>();
-let providerController: AbortController | undefined;
-const runsReady = ref(platform.runList.length > 0);
-
 const sessionCatalogTotal = ref<number>();
-const runsSettled = ref(false);
 const artifactCatalogTotal = ref<number>();
+const projectsReady = computed(() =>
+  Boolean(platform.realtimeSnapshot("PROJECT")),
+);
+const overviewReady = projectsReady;
+const runsReady = computed(() => Boolean(platform.realtimeSnapshot("RUN")));
+const providerReady = computed(() =>
+  Boolean(platform.realtimeSnapshot("PROVIDER_ACCOUNT")),
+);
+const runsSettled = runsReady;
+const visibleProjects = computed(() => platform.projectList);
+const providerAccountsNeedingAuthorization = computed(() =>
+  providers.accounts.filter(
+    (account) => account.state === "REAUTHORIZATION_REQUIRED",
+  ),
+);
 const pendingGates = computed(() => platform.overview?.pendingGates ?? []);
 const openGates = computed(() => homeOpenGates(pendingGates.value));
 const failedRuns = computed(() =>
   homeFailedRuns(platform.runList, platform.runList.length),
-);
-const priorityProjectRefs = computed(() =>
-  homePriorityProjectRefs(
-    openGates.value,
-    platform.overview?.activeRuns ?? [],
-    failedRuns.value,
-  ),
 );
 const dashboardProjects = computed(() =>
   prioritizeHomeProjects(visibleProjects.value, 4),
@@ -77,11 +64,8 @@ const pageTitle = computed(() =>
 );
 const refreshing = computed(
   () =>
-    (platform.loading.overview && overviewReady.value) ||
-    (projectLoading.value && projectsReady.value) ||
-    (platform.loading.runs && runsReady.value) ||
-    (providerLoading.value && providerReady.value) ||
-    providerLoadingMore.value,
+    realtime.platformState.state === "connecting" ||
+    realtime.platformState.state === "recovering",
 );
 const showSessions = computed(() => sessionCatalogTotal.value !== 0);
 const showResults = computed(() => artifactCatalogTotal.value !== 0);
@@ -108,176 +92,8 @@ async function loadActionProjects(
   };
 }
 
-async function refreshOverview(): Promise<void> {
-  await platform.loadOverview();
-  if (!platform.problems.overview) overviewReady.value = true;
-}
-
-async function refreshProjects(): Promise<void> {
-  projectController?.abort();
-  const controller = new AbortController();
-  projectController = controller;
-  projectLoading.value = true;
-  projectProblem.value = undefined;
-  try {
-    const page = await searchProjects("", undefined, controller.signal);
-    if (controller.signal.aborted) return;
-    if (new Set(page.items.map((item) => item.ref)).size !== page.items.length)
-      throw invalidSearchResult();
-    const pageRefs = new Set(page.items.map((item) => item.ref));
-    const missingRefs = priorityProjectRefs.value.filter(
-      (ref) => !pageRefs.has(ref),
-    );
-    const priorityProjects = await Promise.all(
-      missingRefs.map((ref) => loadProject(ref, controller.signal)),
-    );
-    controller.signal.throwIfAborted();
-    if (
-      priorityProjects.some(
-        (project, index) => project.ref !== missingRefs[index],
-      )
-    )
-      throw invalidSearchResult();
-    visibleProjects.value = [...page.items, ...priorityProjects];
-    projectsReady.value = true;
-  } catch (error) {
-    if (!controller.signal.aborted) projectProblem.value = asProblem(error);
-  } finally {
-    if (projectController === controller) projectLoading.value = false;
-  }
-}
-
-async function refreshRuns(): Promise<void> {
-  try {
-    await platform.loadRuns();
-    if (!platform.problems.runs) runsReady.value = true;
-  } finally {
-    runsSettled.value = true;
-  }
-}
-
-function validateProviderAttentionPage(
-  items: ProviderAccount[],
-  existingRefs: ReadonlySet<string>,
-  requestedCursor?: string,
-  nextCursor?: string,
-): void {
-  const refs = items.map((item) => item.ref);
-  if (
-    items.some((item) => item.state !== "REAUTHORIZATION_REQUIRED") ||
-    new Set(refs).size !== refs.length ||
-    refs.some((ref) => existingRefs.has(ref)) ||
-    (nextCursor !== undefined &&
-      (nextCursor === requestedCursor ||
-        consumedProviderCursors.has(nextCursor)))
-  )
-    throw invalidSearchResult();
-}
-
-async function refreshProviderAttention(pageSize = 6): Promise<void> {
-  const role = platform.bootstrap?.platformRole;
-  if (role !== "OWNER" && role !== "ADMINISTRATOR") {
-    providerController?.abort();
-    providerAccountsNeedingAuthorization.value = [];
-    providerNextPageToken.value = undefined;
-    providerProblem.value = undefined;
-    providerMoreProblem.value = undefined;
-    providerLoading.value = false;
-    providerLoadingMore.value = false;
-    providerReady.value = true;
-    consumedProviderCursors.clear();
-    return;
-  }
-  providerController?.abort();
-  const controller = new AbortController();
-  providerController = controller;
-  providerLoading.value = true;
-  providerLoadingMore.value = false;
-  providerProblem.value = undefined;
-  providerMoreProblem.value = undefined;
-  consumedProviderCursors.clear();
-  try {
-    const page = (
-      await unwrap(
-        listProviderAccounts({
-          query: { state: "REAUTHORIZATION_REQUIRED", pageSize },
-          signal: requestSignal(controller.signal),
-        }),
-      )
-    ).data;
-    if (controller.signal.aborted) return;
-    const nextCursor = page.nextPageToken || undefined;
-    validateProviderAttentionPage(page.items, new Set(), undefined, nextCursor);
-    providerAccountsNeedingAuthorization.value = page.items;
-    providerNextPageToken.value = nextCursor;
-    providerReady.value = true;
-  } catch (error) {
-    if (!controller.signal.aborted) providerProblem.value = asProblem(error);
-  } finally {
-    if (providerController === controller) providerLoading.value = false;
-  }
-}
-
-async function loadMoreProviderAttention(pageSize: number): Promise<void> {
-  const pageToken = providerNextPageToken.value;
-  if (!pageToken || providerLoadingMore.value || providerMoreProblem.value)
-    return;
-  const controller = new AbortController();
-  providerController = controller;
-  providerLoadingMore.value = true;
-  providerMoreProblem.value = undefined;
-  try {
-    const page = (
-      await unwrap(
-        listProviderAccounts({
-          query: {
-            state: "REAUTHORIZATION_REQUIRED",
-            pageSize,
-            pageToken,
-          },
-          signal: requestSignal(controller.signal),
-        }),
-      )
-    ).data;
-    if (controller.signal.aborted || providerNextPageToken.value !== pageToken)
-      return;
-    const nextCursor = page.nextPageToken || undefined;
-    validateProviderAttentionPage(
-      page.items,
-      new Set(
-        providerAccountsNeedingAuthorization.value.map(
-          (account) => account.ref,
-        ),
-      ),
-      pageToken,
-      nextCursor,
-    );
-    consumedProviderCursors.add(pageToken);
-    providerAccountsNeedingAuthorization.value = [
-      ...providerAccountsNeedingAuthorization.value,
-      ...page.items,
-    ];
-    providerNextPageToken.value = nextCursor;
-  } catch (error) {
-    if (!controller.signal.aborted)
-      providerMoreProblem.value = asProblem(error);
-  } finally {
-    if (providerController === controller) providerLoadingMore.value = false;
-  }
-}
-
-function retryMoreProviderAttention(pageSize: number): void {
-  providerMoreProblem.value = undefined;
-  void loadMoreProviderAttention(pageSize);
-}
-
-async function refresh(): Promise<void> {
-  await Promise.all([
-    refreshOverview(),
-    refreshProjects(),
-    refreshRuns(),
-    refreshProviderAttention(),
-  ]);
+function retryRealtime(): void {
+  realtime.refreshSession();
 }
 
 function projectActionPath(projectRef: string): string {
@@ -292,24 +108,6 @@ async function chooseProject(projectRef: string): Promise<void> {
 function chooseActionProject(value: unknown): void {
   if (typeof value === "string") void chooseProject(value);
 }
-onMounted(() => void refresh());
-watch(
-  () => platform.bootstrap?.platformRole,
-  (role, previous) => {
-    if (role && role !== previous) void refreshProviderAttention();
-  },
-);
-watch(
-  () =>
-    `${priorityProjectRefs.value.join("|")}#${String(platform.overview?.pendingGateCount ?? 0)}#${String(platform.overview?.activeRunCount ?? 0)}`,
-  () => {
-    if (projectsReady.value) void refreshProjects();
-  },
-);
-onBeforeUnmount(() => {
-  projectController?.abort();
-  providerController?.abort();
-});
 </script>
 
 <template>
@@ -335,25 +133,17 @@ onBeforeUnmount(() => {
       :gates-count="platform.overview?.pendingGateCount"
       :failed-runs="failedRuns"
       :provider-accounts="providerAccountsNeedingAuthorization"
-      :provider-next-page-token="providerNextPageToken"
       :projects="visibleProjects"
       :gates-ready="overviewReady"
       :runs-ready="runsReady"
       :provider-ready="providerReady"
-      :gates-loading="platform.loading.overview"
-      :runs-loading="platform.loading.runs"
-      :provider-loading="providerLoading"
-      :provider-loading-more="providerLoadingMore"
-      :gates-problem="platform.problems.overview"
-      :runs-problem="platform.problems.runs"
-      :provider-problem="providerProblem"
-      :provider-more-problem="providerMoreProblem"
+      :gates-loading="!overviewReady"
+      :runs-loading="!runsReady"
+      :provider-loading="!providerReady"
       :refreshing="refreshing"
-      @retry-gates="refreshOverview"
-      @retry-runs="refreshRuns"
-      @retry-providers="refreshProviderAttention"
-      @more-providers="loadMoreProviderAttention"
-      @retry-more-providers="retryMoreProviderAttention"
+      @retry-gates="retryRealtime"
+      @retry-runs="retryRealtime"
+      @retry-providers="retryRealtime"
     />
 
     <div class="home-dashboard">
@@ -380,13 +170,12 @@ onBeforeUnmount(() => {
           class="home-project-section"
           :title="$t('home.projects')"
           :count="platform.overview?.projectCount"
-          :loading="projectLoading"
+          :loading="!projectsReady"
           :refreshing="refreshing"
           :ready="projectsReady"
-          :problem="projectProblem"
           :empty="visibleProjects.length === 0"
           :empty-text="$t('projects.emptyText')"
-          @retry="refreshProjects()"
+          @retry="retryRealtime"
         >
           <template #action>
             <RouterLink to="/projects">{{ $t("home.allProjects") }}</RouterLink>

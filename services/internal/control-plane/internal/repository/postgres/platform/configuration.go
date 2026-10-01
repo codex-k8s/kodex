@@ -927,7 +927,7 @@ func (repository *Repository) changeAssistant(ctx context.Context, tx pgx.Tx, sc
 		return repository.createAssistantConversation(ctx, tx, scope, input)
 	case command.UpdateAssistantConversation:
 		return repository.updateAssistantConversationTitle(ctx, tx, scope, input)
-	case command.ArchiveAssistantConversation:
+	case command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation:
 		return repository.archiveAssistantConversation(ctx, tx, scope, input)
 	case command.MoveAssistantConversationToProject:
 		return repository.moveAssistantConversationToProject(ctx, tx, scope, input)

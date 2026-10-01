@@ -65,6 +65,19 @@ describe("agent catalog store", () => {
     expect(store.items.map((item) => item.ref)).toEqual(["agent_new"]);
   });
 
+  it("принимает первую realtime-страницу без HTTP и сохраняет cursor", () => {
+    const store = useAgentCatalogStore();
+
+    store.applySnapshot("project_sales", [agent("agent_first")], "page_2", 37);
+
+    expect(api.loadAgentCatalogPage).not.toHaveBeenCalled();
+    expect(store.items.map((item) => item.ref)).toEqual(["agent_first"]);
+    expect(store.projectRef).toBe("project_sales");
+    expect(store.query).toBe("");
+    expect(store.pageSize).toBe(37);
+    expect(store.hasMore).toBe(true);
+  });
+
   it("добавляет cursor-страницу, обновляет дубли и сохраняет query", async () => {
     api.loadAgentCatalogPage
       .mockResolvedValueOnce({

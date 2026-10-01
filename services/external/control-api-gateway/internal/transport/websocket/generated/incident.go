@@ -3,14 +3,14 @@
 package generated
 
 type Incident struct {
-	Ref          string           `json:"ref"`
-	ProjectRef   *string          `json:"projectRef,omitempty"`
-	RunRef       *string          `json:"runRef,omitempty"`
-	Category     string           `json:"category"`
-	Severity     IncidentSeverity `json:"severity"`
-	State        IncidentState    `json:"state"`
-	SafeSummary  string           `json:"safeSummary"`
-	SafeNextStep string           `json:"safeNextStep"`
-	CoreAffected bool             `json:"coreAffected"`
-	CreatedAt    string           `json:"createdAt"`
+	Ref string `json:"ref"`
+	ProjectRef *string `json:"projectRef,omitempty"`
+	RunRef *string `json:"runRef,omitempty"`
+	Category string `json:"category"`
+	Severity IncidentSeverity `json:"severity"`
+	State IncidentState `json:"state"`
+	SafeSummary string `json:"safeSummary"`
+	SafeNextStep string `json:"safeNextStep"`
+	CoreAffected bool `json:"coreAffected"`
+	CreatedAt string `json:"createdAt"`
 }

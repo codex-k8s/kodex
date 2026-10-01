@@ -17,5 +17,10 @@ const (
 	PlatformResourceKindPlatformMembership    PlatformResourceKind = "PLATFORM_MEMBERSHIP"
 	PlatformResourceKindSystemAssistant       PlatformResourceKind = "SYSTEM_ASSISTANT"
 	PlatformResourceKindRoleImageRecipe       PlatformResourceKind = "ROLE_IMAGE_RECIPE"
+	PlatformResourceKindRuntimeEnvironment    PlatformResourceKind = "RUNTIME_ENVIRONMENT"
+	PlatformResourceKindProviderAccount       PlatformResourceKind = "PROVIDER_ACCOUNT"
+	PlatformResourceKindRuntimeSecret         PlatformResourceKind = "RUNTIME_SECRET"
+	PlatformResourceKindManagedConfiguration  PlatformResourceKind = "MANAGED_CONFIGURATION"
+	PlatformResourceKindRuntimeSelection      PlatformResourceKind = "RUNTIME_SELECTION"
 	PlatformResourceKindRun                   PlatformResourceKind = "RUN"
 )

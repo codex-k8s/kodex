@@ -85,7 +85,7 @@ func (repository *Repository) CompleteProviderModelCatalogTask(ctx context.Conte
 		return errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var id, state, requestDigest, claimant, fence, savedRequest, savedReceipt string
+	var id, state, requestDigest, claimant, fence, savedRequest, savedReceipt, organizationRef string
 	var generation int64
 	var expires *time.Time
 	var now time.Time
@@ -93,7 +93,7 @@ func (repository *Repository) CompleteProviderModelCatalogTask(ctx context.Conte
 	var stored platformrepo.ProviderModelCatalogTask
 	err = tx.QueryRow(ctx, queryModelCatalogLockCompletion, task.OrganizationID, task.Ref).Scan(&id, &state, &requestDigest, &claimant, &generation, &fence, &expires, &eligible, &savedRequest, &savedReceipt, &now,
 		&stored.AccountRef, &stored.AccountVersion, &stored.ProviderDefinitionKey, &stored.CredentialRef, &stored.CredentialRevision,
-		&stored.Credential.SecretName, &stored.Credential.SecretUID, &stored.Credential.SecretResourceVersion, &stored.Credential.ContentSHA256, &stored.AuthorizationMethod)
+		&stored.Credential.SecretName, &stored.Credential.SecretUID, &stored.Credential.SecretResourceVersion, &stored.Credential.ContentSHA256, &stored.AuthorizationMethod, &organizationRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrNotFound
 	}
@@ -121,6 +121,11 @@ func (repository *Repository) CompleteProviderModelCatalogTask(ctx context.Conte
 	}
 	if _, err := tx.Exec(ctx, queryProviderVerificationComplete, pgx.StrictNamedArgs{"task_id": id}); err != nil {
 		return errs.ErrUnavailable
+	}
+	if err := repository.emitPlatformEventSnapshot(ctx, tx, scope{
+		organizationID: task.OrganizationID, organizationRef: organizationRef, correlationRef: task.Ref,
+	}, "PROVIDER_ACCOUNT_CHANGED", "", task.AccountRef, "i18n:PROVIDER_ACCOUNT_UPDATED", task.AccountVersion, ""); err != nil {
+		return err
 	}
 	if tx.Commit(ctx) != nil {
 		return errs.ErrUnavailable

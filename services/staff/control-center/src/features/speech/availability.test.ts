@@ -91,7 +91,7 @@ describe("SpeechAvailabilityLease", () => {
     expect(lease.available).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
   });
-  it("не возвращает допуск из запоздавшего общего bootstrap после отзыва", async () => {
+  it("не возвращает допуск из запоздавшего HTTP-readback после WebSocket-отзыва", async () => {
     const pending: {
       signal: AbortSignal;
       resolve(value: SpeechTranscriptionAvailability): void;
@@ -105,15 +105,11 @@ describe("SpeechAvailabilityLease", () => {
     lease.synchronize({ available: false, reason: "STT_PERMISSION_DENIED" });
     expect(pending[0]?.signal.aborted).toBe(true);
     expect(lease.available).toBe(false);
-    lease.synchronize(ready());
-    expect(pending[1]?.signal.aborted).toBe(true);
-    expect(lease.available).toBe(false);
     pending[0]?.resolve(ready());
-    pending[1]?.resolve(ready());
     await vi.advanceTimersByTimeAsync(0);
     expect(lease.available).toBe(false);
-    pending[2]?.resolve(ready());
-    await vi.advanceTimersByTimeAsync(0);
+
+    lease.synchronize(ready());
     expect(lease.available).toBe(true);
     lease.stop();
     expect(vi.getTimerCount()).toBe(0);

@@ -160,6 +160,27 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     return view;
   }
 
+  function applyEnvironmentSnapshot(
+    projectRef: string | undefined,
+    values: RuntimeEnvironmentSet[],
+  ): void {
+    const incoming = new Set(values.map((value) => value.ref));
+    for (const [ref, value] of Object.entries(environments)) {
+      if (
+        (!projectRef || value.projectRef === projectRef) &&
+        !incoming.has(ref)
+      )
+        Reflect.deleteProperty(environments, ref);
+    }
+    for (const value of values) {
+      if (projectRef && value.projectRef !== projectRef)
+        throw new Error("Runtime environment snapshot scope changed");
+      const current = environments[value.ref];
+      if (!current || current.version <= value.version)
+        environments[value.ref] = value;
+    }
+  }
+
   async function loadAgentRuntime(agentRef: string): Promise<void> {
     await query(
       `agent:${agentRef}`,
@@ -676,6 +697,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     loading,
     problems,
     loadAgentRuntime,
+    applyEnvironmentSnapshot,
     loadAgentVersions,
     saveAgentRuntime,
     saveOverlayDraft,

@@ -3,12 +3,13 @@
 import type { PlatformEventName } from "./PlatformEventName";
 import type { PlatformResourceKind } from "./PlatformResourceKind";
 
-export interface PlatformInvalidatedEnvelope {
-  type: "PLATFORM_INVALIDATED";
+export interface PlatformCursorEnvelope {
+  type: "PLATFORM_CURSOR";
   requestRef: string;
   streamKind: "PLATFORM";
   streamRef: "PLATFORM";
   cursor: number;
   eventName: PlatformEventName;
   kind: PlatformResourceKind;
+  projectRef?: string;
 }

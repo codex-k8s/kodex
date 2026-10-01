@@ -68,6 +68,15 @@ describe("AssistantWorkspace layout", () => {
     expect(attachmentComposer).toContain('name="attachments"');
   });
 
+  it("даёт каждому диалогу меню действий и показывает пустую корзину", () => {
+    expect(template).toContain("assistant-conversation-actions__toggle");
+    expect(template).toContain('$t("assistant.deleteConversation")');
+    expect(template).toContain('$t("assistant.restoreConversation")');
+    expect(template).toContain('$t("assistant.purgeConversation")');
+    expect(template).toContain('$t("assistant.emptyTrash")');
+    expect(template).toContain('$t("assistant.trashEmpty")');
+  });
+
   it("открывает большую desktop модалку с отдельной колонкой истории", () => {
     expect(styles).toMatch(
       /\.assistant-drawer\s*\{[\s\S]*?inset:\s*4dvh 4vw[\s\S]*?width:\s*92vw[\s\S]*?height:\s*92dvh/,
@@ -216,10 +225,18 @@ describe("AssistantWorkspace layout", () => {
     );
   });
 
-  it("не очищает открытый диалог до загрузки нового scope", () => {
+  it("переключает открытый диалог только на realtime-снимок нового scope", () => {
     expect(source).toMatch(
-      /watch\(contextIdentity,[\s\S]*if \(open\.value\) void store\.load\(props\.context, props\.projectRef\);\s*else store\.setContext\(props\.context, props\.projectRef\);/,
+      /watch\(contextIdentity,[\s\S]*if \(open\.value\) loadWorkspace\(\);\s*else store\.setContext\(props\.context, props\.projectRef\);/,
     );
+    expect(source).toContain("function hydrateFromRealtimeSnapshot(): boolean");
+    expect(source).toContain(
+      "store.setContext(props.context, props.projectRef)",
+    );
+    expect(source).not.toContain(
+      "await store.load(props.context, props.projectRef)",
+    );
+    expect(source).not.toContain("platform.reloadPlatformKind(kind)");
   });
 
   it("возвращает фокус к карточке варианта после закрытия редактора", () => {
@@ -317,6 +334,15 @@ describe("AssistantWorkspace layout", () => {
     expect(header).toContain('class="assistant-new-conversation"');
     expect(header).toContain('{{ $t("assistant.newConversation") }}');
     expect(header).toContain('class="icon-button assistant-history__toggle"');
+  });
+
+  it("изолирует черновики по диалогам и временно именует новый диалог", () => {
+    expect(source).toContain("const messageDrafts = new Map<string, string>()");
+    expect(source).toContain("const currentDraftKey = computed(");
+    expect(source).toContain("messageDrafts.set(previous, message.value)");
+    expect(source).toContain('message.value = messageDrafts.get(next) ?? ""');
+    expect(source).toContain("temporaryConversationTitle(conversationRef)");
+    expect(source).toContain("normalized.length < 12");
   });
 
   it("разрешает новый диалог после ошибки истории только готовому assistant", () => {

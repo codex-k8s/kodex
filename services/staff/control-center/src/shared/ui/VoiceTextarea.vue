@@ -54,8 +54,13 @@ function insert(text: string): void {
       target.selectionEnd,
       "end",
     );
-    target.dispatchEvent(new Event("input", { bubbles: true }));
   }
+  // execCommand не обязан породить input во всех браузерах. Parent v-model
+  // обновляется явно, чтобы доступность submit не зависела от следующего ввода.
+  emit(
+    "update:modelValue",
+    props.modelModifiers?.trim ? target.value.trim() : target.value,
+  );
   target.scrollTop = scrollTop;
   target.scrollLeft = scrollLeft;
 }

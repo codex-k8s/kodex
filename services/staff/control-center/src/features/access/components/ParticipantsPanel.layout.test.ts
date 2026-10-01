@@ -12,7 +12,7 @@ describe("ParticipantsPanel access presentation", () => {
     expect(panel).toContain("function participantActive");
     expect(panel).toContain('subject.kind !== "USER"');
     expect(panel).toContain("platformMembership(subject)?.active === true");
-    expect(panel).toContain(":state=\"participantActive(subject)");
+    expect(panel).toContain(':state="participantActive(subject)');
     expect(panel).toContain("!participantActive(selectedSubject)");
   });
 

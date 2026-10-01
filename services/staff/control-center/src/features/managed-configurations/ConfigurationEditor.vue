@@ -13,6 +13,7 @@ import {
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { usePlatformStore } from "@/features/platform/store";
 import type {
   ManagedConfiguration,
   ManagedConfigurationImpact,
@@ -30,6 +31,7 @@ import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
@@ -94,6 +96,7 @@ const props = defineProps<{
 const emit = defineEmits<{ created: [configuration: ManagedConfiguration] }>();
 const i18n = useI18n();
 const { t } = i18n;
+const platform = usePlatformStore();
 const fieldPrefix = `configuration-editor-${useId()}`;
 const configuration = ref<ManagedConfiguration>();
 const revision = ref<ManagedConfigurationRevision>();
@@ -375,8 +378,12 @@ function changeFormat(event: Event): void {
   format.value = next;
 }
 
-function choose(item: ManagedConfigurationRevision): void {
-  if (dirty.value && revision.value && !window.confirm(t("managed.discard")))
+async function choose(item: ManagedConfigurationRevision): Promise<void> {
+  if (
+    dirty.value &&
+    revision.value &&
+    !(await requestConfirmation(t("managed.discard")))
+  )
     return;
   revision.value = item;
   content.value = item.content;
@@ -433,7 +440,7 @@ async function load(more = false): Promise<void> {
     !more &&
     dirty.value &&
     revision.value &&
-    !window.confirm(t("managed.discard"))
+    !(await requestConfirmation(t("managed.discard")))
   )
     return;
   imageImpactConflict.value = false;
@@ -1193,6 +1200,26 @@ watch(
     void load();
   },
   { immediate: true },
+);
+watch(
+  () => platform.managedConfigurationRealtimeRevision,
+  () => {
+    const current = configuration.value;
+    if (!current) return;
+    const summary = platform.managedConfigurations[current.ref];
+    if (!summary || summary.kind !== current.kind) return;
+    const revisionChanged =
+      summary.currentRevision?.ref !== current.currentRevision?.ref ||
+      summary.currentRevision?.digest !== current.currentRevision?.digest;
+    configuration.value = {
+      ...current,
+      ...summary,
+      currentRevision: current.currentRevision,
+    };
+    name.value = summary.name;
+    if (revisionChanged && !dirty.value && !busy.value && !sourceBusy.value)
+      void load();
+  },
 );
 watch(
   sourceVisible,

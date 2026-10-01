@@ -216,6 +216,8 @@ PROJECT_RESTORED:
   other: Project restored from trash
 PROJECT_PURGE_REQUESTED:
   other: Permanent project deletion requested
+PROJECT_PURGED:
+  other: Project permanently deleted
 PROJECT_ACCESS_UPDATED:
   other: Project access updated
 AGENT_CREATED_READY:
@@ -850,6 +852,10 @@ SYSTEM_ROLE_STT_PERMISSION:
   other: System permission for voice input
 ASSISTANT_CONVERSATION_ARCHIVED:
   other: Assistant conversation archived
+ASSISTANT_CONVERSATION_RESTORED:
+  other: Assistant conversation restored
+ASSISTANT_CONVERSATION_PURGED:
+  other: Assistant conversation permanently deleted
 EMAIL_EFFECT_RECONCILED:
   other: Email operation reconciled
 EMAIL_EFFECT_REPORTED:

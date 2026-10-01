@@ -6,5 +6,7 @@ export interface SessionResumeEnvelope {
   type: "SESSION_RESUME";
   requestRef: string;
   platformAfterSequence: number;
+  platformSnapshotRequired: boolean;
+  projectRef?: string;
   runs: RunResumeCursor[];
 }

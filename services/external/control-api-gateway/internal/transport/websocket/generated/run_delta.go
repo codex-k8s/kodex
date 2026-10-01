@@ -3,18 +3,18 @@
 package generated
 
 type RunDelta struct {
-	Ref               string       `json:"ref"`
-	Version           int64        `json:"version"`
-	State             RunState     `json:"state"`
-	GraphRevision     int64        `json:"graphRevision"`
-	LastEventSequence int64        `json:"lastEventSequence"`
-	ResultSummary     *string      `json:"resultSummary,omitempty"`
-	SafeErrorCode     *string      `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage  *string      `json:"safeErrorMessage,omitempty"`
-	Usage             TokenUsage   `json:"usage"`
-	ArtifactRefs      []string     `json:"artifactRefs"`
-	GateRefs          []string     `json:"gateRefs"`
-	StartedAt         *string      `json:"startedAt,omitempty"`
-	FinishedAt        *string      `json:"finishedAt,omitempty"`
-	NextActions       []NextAction `json:"nextActions"`
+	Ref string `json:"ref"`
+	Version int64 `json:"version"`
+	State RunState `json:"state"`
+	GraphRevision int64 `json:"graphRevision"`
+	LastEventSequence int64 `json:"lastEventSequence"`
+	ResultSummary *string `json:"resultSummary,omitempty"`
+	SafeErrorCode *string `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage *string `json:"safeErrorMessage,omitempty"`
+	Usage TokenUsage `json:"usage"`
+	ArtifactRefs []string `json:"artifactRefs"`
+	GateRefs []string `json:"gateRefs"`
+	StartedAt *string `json:"startedAt,omitempty"`
+	FinishedAt *string `json:"finishedAt,omitempty"`
+	NextActions []NextAction `json:"nextActions"`
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Mic, Square, X, LoaderCircle, RotateCcw } from "@lucide/vue";
+import { Check, LoaderCircle, Mic, RotateCcw, Square, X } from "@lucide/vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { routeLocationKey } from "vue-router";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -117,33 +117,68 @@ onBeforeUnmount(() => {
             : $t(problemMessage)
         }}
       </span>
+      <span
+        v-if="state === 'recording'"
+        class="voice-input__recording-indicator"
+        role="status"
+        :aria-label="$t('voice.recordingActive')"
+      >
+        <i></i><i></i><i></i>
+      </span>
       <button
-        class="icon-button"
+        v-if="state === 'idle' || state === 'error'"
+        class="voice-input__button"
         type="button"
         :title="$t(`voice.${state}`)"
         :aria-label="$t(`voice.${state}`)"
-        :disabled="state === 'requesting' || state === 'transcribing'"
         @mousedown.prevent
-        @click="state === 'recording' ? capture.stop() : capture.start()"
+        @click="capture.start()"
       >
-        <Square v-if="state === 'recording'" :size="17" /><LoaderCircle
-          v-else-if="state === 'requesting' || state === 'transcribing'"
-          :size="17"
-        /><RotateCcw v-else-if="state === 'error'" :size="17" /><Mic
-          v-else
-          :size="17"
-        />
+        <RotateCcw v-if="state === 'error'" :size="19" />
+        <Mic v-else :size="19" />
       </button>
       <button
-        v-if="state !== 'idle'"
-        class="icon-button"
+        v-if="state === 'requesting' || state === 'transcribing'"
+        class="voice-input__button voice-input__button--progress"
         type="button"
-        :title="$t('common.cancel')"
-        :aria-label="$t('common.cancel')"
+        :title="$t(`voice.${state}`)"
+        :aria-label="$t(`voice.${state}`)"
+        disabled
+      >
+        <LoaderCircle :size="19" />
+      </button>
+      <button
+        v-if="state === 'requesting' || state === 'transcribing'"
+        class="voice-input__button voice-input__button--cancel"
+        type="button"
+        :title="$t('voice.cancelRecording')"
+        :aria-label="$t('voice.cancelRecording')"
         @mousedown.prevent
         @click="capture.cancel()"
       >
-        <X :size="17" />
+        <X :size="19" />
+      </button>
+      <button
+        v-if="state === 'recording'"
+        class="voice-input__button voice-input__button--cancel"
+        type="button"
+        :title="$t('voice.cancelRecording')"
+        :aria-label="$t('voice.cancelRecording')"
+        @mousedown.prevent
+        @click="capture.cancel()"
+      >
+        <Square :size="17" fill="currentColor" />
+      </button>
+      <button
+        v-if="state === 'recording'"
+        class="voice-input__button voice-input__button--accept"
+        type="button"
+        :title="$t('voice.acceptRecording')"
+        :aria-label="$t('voice.acceptRecording')"
+        @mousedown.prevent
+        @click="capture.stop()"
+      >
+        <Check :size="21" stroke-width="2.5" />
       </button>
     </template>
   </span>
@@ -152,7 +187,7 @@ onBeforeUnmount(() => {
 .voice-input {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 .voice-input:empty {
   display: none;
@@ -162,7 +197,88 @@ onBeforeUnmount(() => {
   color: var(--danger);
   font-size: 12px;
 }
-.voice-input[data-state="recording"] {
+.voice-input__button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  cursor: pointer;
+}
+.voice-input__button:disabled {
+  cursor: default;
+}
+.voice-input__button--progress svg {
+  animation: voice-input-spin 0.8s linear infinite;
+}
+.voice-input__button--cancel {
   color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 24%, transparent);
+  background: var(--danger-soft);
+}
+.voice-input__button--accept {
+  color: #fff;
+  background: var(--accent);
+}
+.voice-input__recording-indicator {
+  display: inline-flex;
+  height: 40px;
+  align-items: center;
+  gap: 3px;
+  padding: 0 4px;
+  color: var(--danger);
+}
+.voice-input__recording-indicator::before {
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 14%, transparent);
+  content: "";
+  animation: voice-input-pulse 1.2s ease-in-out infinite;
+}
+.voice-input__recording-indicator i {
+  display: block;
+  width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: voice-input-level 0.8s ease-in-out infinite alternate;
+}
+.voice-input__recording-indicator i:nth-child(2) {
+  height: 18px;
+  animation-delay: -0.35s;
+}
+.voice-input__recording-indicator i:nth-child(3) {
+  height: 13px;
+  animation-delay: -0.6s;
+}
+@keyframes voice-input-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes voice-input-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes voice-input-level {
+  to {
+    transform: scaleY(0.45);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-input__button--progress svg,
+  .voice-input__recording-indicator::before,
+  .voice-input__recording-indicator i {
+    animation: none;
+  }
 }
 </style>

@@ -308,6 +308,35 @@ function replaceSchedule(schedule: Schedule): void {
     scheduleRefs.value = [...scheduleRefs.value, schedule.ref];
 }
 
+const realtimeVersion = computed(() => {
+  const snapshot = platform.realtimeSnapshot("SCHEDULE", props.projectRef);
+  return JSON.stringify([
+    snapshot?.scopeKey,
+    snapshot?.nextPageToken,
+    Object.values(platform.schedules)
+      .filter((schedule) => schedule.projectRef === props.projectRef)
+      .map((schedule) => [schedule.ref, schedule.version]),
+  ]);
+});
+
+function applyRealtimeList(): boolean {
+  if (search.value.trim()) return false;
+  const snapshot = platform.realtimeSnapshot("SCHEDULE", props.projectRef);
+  if (!snapshot) {
+    listLoading.value = true;
+    return true;
+  }
+  listController?.abort();
+  scheduleRefs.value = Object.values(platform.schedules)
+    .filter((schedule) => schedule.projectRef === props.projectRef)
+    .map((schedule) => schedule.ref);
+  nextPageToken.value = snapshot.nextPageToken;
+  listProblem.value = undefined;
+  listLoading.value = false;
+  moreLoading.value = false;
+  return true;
+}
+
 async function loadList(reset = false): Promise<void> {
   if (!reset && moreLoading.value) return;
   if (!reset && !nextPageToken.value) return;
@@ -317,6 +346,7 @@ async function loadList(reset = false): Promise<void> {
     listLoading.value = true;
     listProblem.value = undefined;
   } else moreLoading.value = true;
+  if (reset && applyRealtimeList()) return;
   const controller = listController ?? new AbortController();
   const requestedProject = props.projectRef;
   try {
@@ -348,6 +378,8 @@ watch(search, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => void loadList(true), 500);
 });
+
+watch(realtimeVersion, applyRealtimeList);
 
 watch(
   [schedules, filteredSchedules],
@@ -604,7 +636,7 @@ function handleAssistantPlanApplied(event: Event): void {
     !detail.kinds.includes("SCHEDULE")
   )
     return;
-  void loadList(true);
+  applyRealtimeList();
 }
 
 onMounted(() => {
@@ -612,7 +644,7 @@ onMounted(() => {
     assistantPlanAppliedEvent,
     handleAssistantPlanApplied,
   );
-  void Promise.all([loadList(true), platform.loadProject(props.projectRef)]);
+  void loadList(true);
 });
 
 onBeforeUnmount(() => {

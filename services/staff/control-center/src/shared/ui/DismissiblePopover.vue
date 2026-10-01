@@ -35,6 +35,7 @@ const props = withDefaults(
     block?: boolean;
     contained?: boolean;
     teleportTo?: string;
+    maxHeight?: number;
   }>(),
   {
     role: "dialog",
@@ -68,7 +69,13 @@ const triggerAttrs = computed(() => ({
 }));
 const panelStyle = computed<CSSProperties>(() => ({
   left: `${position.value.left.toString()}px`,
-  maxHeight: `${position.value.maxHeight.toString()}px`,
+  maxHeight: `${(position.value.maxHeight > 0
+    ? Math.min(
+        position.value.maxHeight,
+        props.maxHeight ?? Number.POSITIVE_INFINITY,
+      )
+    : (props.maxHeight ?? 0)
+  ).toString()}px`,
   top: `${position.value.top.toString()}px`,
   visibility: positioned.value ? "visible" : "hidden",
   ...(props.width === "anchor" && anchor.value

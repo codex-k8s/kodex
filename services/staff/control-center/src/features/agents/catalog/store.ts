@@ -25,6 +25,24 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
 
   const hasMore = computed(() => Boolean(nextPageToken.value));
 
+  function applySnapshot(
+    nextProjectRef: string,
+    values: Agent[],
+    nextPageTokenValue?: string,
+    nextPageSize = pageSize.value,
+  ): void {
+    generation += 1;
+    projectRef.value = nextProjectRef;
+    query.value = "";
+    pageSize.value = nextPageSize;
+    items.value = appendUnique([], values);
+    nextPageToken.value = nextPageTokenValue;
+    consumedPageTokens.clear();
+    loading.value = false;
+    loadingMore.value = false;
+    problem.value = undefined;
+  }
+
   async function load(
     nextProjectRef: string,
     nextQuery = "",
@@ -135,6 +153,7 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
     loadingMore,
     problem,
     hasMore,
+    applySnapshot,
     load,
     loadMore,
     prepareRefresh,

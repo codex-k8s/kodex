@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Eye, Link2, Plus, RotateCw, Search, ShieldX } from "@lucide/vue";
-import { onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { useSessionStore } from "@/features/session/store";
+import { usePlatformStore } from "@/features/platform/store";
 import SecretImpactDialog from "@/features/runtime/SecretImpactDialog.vue";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import EntityIcon from "@/shared/ui/EntityIcon.vue";
@@ -41,9 +42,9 @@ function planPrepared(draftRef: string, planRef: string): void {
 const resumeOpen = ref(false);
 function draftSaved(draft: RuntimeSecretDraft): void {
   emit("draftSaved", draft.ref);
-  if (draft.state !== "PUBLISHED") void store.reload();
 }
 const store = useRuntimeSecretsStore();
+const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
 const searchId = useId();
@@ -67,6 +68,46 @@ const pageSize = useAdaptiveCursorPageSize({
   itemCount: () => store.items.length,
   estimatedItemHeight: 64,
 });
+const realtimeRevision = computed(() => {
+  const snapshot = platform.realtimeSnapshot(
+    "RUNTIME_SECRET",
+    props.projectRef,
+  );
+  return [
+    snapshot?.scopeKey ?? "",
+    snapshot?.nextPageToken ?? "",
+    ...Object.values(platform.runtimeSecrets)
+      .filter((item) => item.projectRef === props.projectRef)
+      .sort((left, right) => left.ref.localeCompare(right.ref))
+      .map((item) => `${item.ref}:${String(item.version)}`),
+  ].join("|");
+});
+
+function applyRealtimeSnapshot(): boolean {
+  if (search.value.trim()) return false;
+  const snapshot = platform.realtimeSnapshot(
+    "RUNTIME_SECRET",
+    props.projectRef,
+  );
+  if (!snapshot) {
+    store.prepareRealtimeScope(props.projectRef);
+    return false;
+  }
+  if (store.projectRef !== props.projectRef || store.query)
+    store.prepareRealtimeScope(props.projectRef);
+  store.applySnapshot(
+    props.projectRef,
+    Object.values(platform.runtimeSecrets).filter(
+      (item) => item.projectRef === props.projectRef,
+    ),
+    snapshot.nextPageToken,
+  );
+  return true;
+}
+
+async function retryCatalog(): Promise<void> {
+  if (!applyRealtimeSnapshot()) await platform.reloadPlatformState();
+}
 
 useCursorInfiniteScroll({
   root: scrollRoot,
@@ -147,6 +188,10 @@ watch(
 );
 watch(search, (value) => {
   if (searchTimer) clearTimeout(searchTimer);
+  if (!value.trim()) {
+    applyRealtimeSnapshot();
+    return;
+  }
   searchTimer = setTimeout(
     () => void store.load(props.projectRef, value, pageSize.value),
     500,
@@ -182,16 +227,18 @@ watch(
     revokeTarget.value = undefined;
     if (searchTimer) clearTimeout(searchTimer);
     search.value = "";
-    void store.load(value, "", pageSize.value);
+    store.prepareRealtimeScope(value);
+    applyRealtimeSnapshot();
   },
 );
+watch(realtimeRevision, () => applyRealtimeSnapshot());
 watch(
   () => store.items.map((item) => item.ref).join("\u0000"),
   restoreReauthenticatedReveal,
   { immediate: true },
 );
 onMounted(() => {
-  void store.load(props.projectRef, "", pageSize.value);
+  applyRealtimeSnapshot();
   resumeCreateAfterReauthentication();
 });
 onBeforeUnmount(() => {
@@ -255,7 +302,7 @@ onBeforeUnmount(() => {
           ? $t('runtimeSecrets.emptySearchText')
           : $t('runtimeSecrets.emptyText')
       "
-      @retry="store.reload"
+      @retry="retryCatalog"
     >
       <template #empty-icon>
         <Search v-if="search" :size="18" aria-hidden="true" />
@@ -264,7 +311,7 @@ onBeforeUnmount(() => {
       <ProblemNotice
         v-if="store.problem && store.items.length"
         :problem="store.problem"
-        @retry="store.reload"
+        @retry="retryCatalog"
       />
       <div ref="scrollRoot" class="runtime-secrets__scroll">
         <table class="runtime-secrets__table">

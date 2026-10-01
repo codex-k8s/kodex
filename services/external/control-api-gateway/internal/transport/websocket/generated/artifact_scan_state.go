@@ -5,9 +5,9 @@ package generated
 type ArtifactScanState string
 
 const (
-	ArtifactScanStatePending     ArtifactScanState = "PENDING"
-	ArtifactScanStateScanning    ArtifactScanState = "SCANNING"
-	ArtifactScanStateClean       ArtifactScanState = "CLEAN"
+	ArtifactScanStatePending ArtifactScanState = "PENDING"
+	ArtifactScanStateScanning ArtifactScanState = "SCANNING"
+	ArtifactScanStateClean ArtifactScanState = "CLEAN"
 	ArtifactScanStateQuarantined ArtifactScanState = "QUARANTINED"
-	ArtifactScanStateFailed      ArtifactScanState = "FAILED"
+	ArtifactScanStateFailed ArtifactScanState = "FAILED"
 )

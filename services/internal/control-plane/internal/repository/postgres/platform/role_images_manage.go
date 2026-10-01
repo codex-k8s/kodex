@@ -364,6 +364,26 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 				repository.roleImages.RoleRuntimeContractSHA256); err != nil {
 				return roleimagerepo.ManageResult{}, "", "", mapRoleImageWriteError(err)
 			}
+		} else if input.Action == "REQUEST_BUILD" {
+			// Повторный запрос всегда заменяет незавершённую сборку. Если платформа
+			// обновила policy или runtime contract, одновременно выпускаем новую
+			// серверную ревизию рецепта: worker не должен бесконечно забирать
+			// заведомо устаревшую задачу и блокировать всю очередь.
+			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {
+				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
+			}
+			if !repository.roleImageRecipePolicyCurrent(locked.Recipe) {
+				if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenPromotions, current.organizationID, locked.ID); err != nil {
+					return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
+				}
+				if _, err := tx.Exec(ctx, queryRoleImagesRefreshRecipePolicy,
+					current.organizationID, locked.ID,
+					repository.roleImages.PolicyRevision, repository.roleImages.PolicySHA256,
+					repository.roleImages.RoleRuntimeContractRevision,
+					repository.roleImages.RoleRuntimeContractSHA256); err != nil {
+					return roleimagerepo.ManageResult{}, "", "", mapRoleImageWriteError(err)
+				}
+			}
 		} else if input.Action == "ARCHIVE" || input.Action == "RESTORE" {
 			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {
 				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
@@ -397,6 +417,13 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 	default:
 		return roleimagerepo.ManageResult{}, "", "", errs.ErrInvalid
 	}
+}
+
+func (repository *Repository) roleImageRecipePolicyCurrent(recipe entity.RoleImageRecipe) bool {
+	return recipe.PolicyRevision == repository.roleImages.PolicyRevision &&
+		recipe.PolicySHA256 == repository.roleImages.PolicySHA256 &&
+		recipe.RoleRuntimeContractRevision == repository.roleImages.RoleRuntimeContractRevision &&
+		recipe.RoleRuntimeContractSHA256 == repository.roleImages.RoleRuntimeContractSHA256
 }
 
 func (repository *Repository) authorizeRoleImageManage(ctx context.Context, tx pgx.Tx, current scope, input roleimagerepo.ManageInput) error {

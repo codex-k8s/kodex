@@ -3,7 +3,7 @@
 package generated
 
 type SessionReadyEnvelope struct {
-	Type       string         `json:"type"`
-	RequestRef string         `json:"requestRef"`
-	Streams    []StreamCursor `json:"streams"`
+	Type string `json:"type"`
+	RequestRef string `json:"requestRef"`
+	Streams []StreamCursor `json:"streams"`
 }

@@ -11,7 +11,6 @@ import {
   assistantEnvironmentDraftTarget,
   assistantIntegrationConnectionTarget,
   assistantLaunchedRunTarget,
-  assistantPollDelay,
   assistantRequiresProviderAccount,
   assistantRoleImageBuildTarget,
   editableOperations,
@@ -31,15 +30,6 @@ import type {
   AssistantPlanOperation,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
-
-describe("assistant long-running observation", () => {
-  it("продолжает редкое обновление после первых десяти минут", () => {
-    expect(assistantPollDelay(1)).toBe(5000);
-    expect(assistantPollDelay(119)).toBe(5000);
-    expect(assistantPollDelay(120)).toBe(30000);
-    expect(assistantPollDelay(1000)).toBe(30000);
-  });
-});
 
 describe("assistant reply indicator", () => {
   const conversation = (

@@ -78,6 +78,14 @@ func testProviderVerificationFreshObservation(t *testing.T, ctx context.Context,
 	if err := repository.CompleteProviderModelCatalogTask(ctx, task, observation); err != nil {
 		t.Fatalf("complete fresh verification: %v", err)
 	}
+	var realtimeEvents int
+	if err := repository.pool.QueryRow(ctx, `
+SELECT count(*) FROM control_plane.outbox_events event
+WHERE convert_from(event.payload, 'UTF8')::jsonb->>'eventName' = 'PROVIDER_ACCOUNT_CHANGED'
+  AND convert_from(event.payload, 'UTF8')::jsonb->>'aggregateRef' = $1
+  AND convert_from(event.payload, 'UTF8')::jsonb->>'correlationRef' = $2`, account.Ref, task.Ref).Scan(&realtimeEvents); err != nil || realtimeEvents != 1 {
+		t.Fatalf("provider verification realtime event: count=%d err=%v", realtimeEvents, err)
+	}
 	replayed, err = service.Execute(ctx, verify)
 	if err != nil || replayed.ProviderAccount == nil || replayed.ProviderAccount.Verification.State != "VERIFIED" || replayed.ProviderAccount.Verification.CompletedAt == nil || replayed.ProviderAccount.Verification.Ref != verificationRef {
 		t.Fatalf("fresh verification receipt: account=%#v err=%v", replayed.ProviderAccount, err)

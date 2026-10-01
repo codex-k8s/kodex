@@ -109,6 +109,7 @@ describe("DismissiblePopover", () => {
             ariaLabel: "Доступные действия",
             block: true,
             contained: true,
+            maxHeight: 440,
             open: true,
             role: "menu",
           },
@@ -130,5 +131,6 @@ describe("DismissiblePopover", () => {
     expect(teleported).toContain('role="menu"');
     expect(teleported).toContain('aria-label="Доступные действия"');
     expect(teleported).toContain("dismissible-popover--contained");
+    expect(teleported).toContain("max-height:440px");
   });
 });

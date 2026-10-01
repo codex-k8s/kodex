@@ -14,6 +14,10 @@ const runtime = readFileSync(
   new URL("../agents/detail/AgentRuntimePanel.vue", import.meta.url),
   "utf8",
 );
+const lifecycle = readFileSync(
+  new URL("./ProviderAccountLifecyclePanel.vue", import.meta.url),
+  "utf8",
+);
 
 describe("provider account layout", () => {
   it("не показывает API key повторно и не предлагает ввод внутренних ref", () => {
@@ -67,5 +71,15 @@ describe("provider account layout", () => {
     expect(workspace).not.toContain("provider-account-card");
     expect(workspace).toContain("@media (max-width: 560px)");
     expect(selector).toContain("min-width: min(430px, calc(100vw - 32px))");
+  });
+
+  it("получает фоновые verification и deletion переходы из realtime-снимка без HTTP polling", () => {
+    expect(workspace).not.toContain("verificationTimer");
+    expect(workspace).not.toContain("observeVerification");
+    expect(workspace).not.toContain("loadProviderAccount");
+    expect(lifecycle).not.toContain("pollTimer");
+    expect(lifecycle).not.toContain("scheduleObservation");
+    expect(lifecycle).not.toContain("loadProviderAccount");
+    expect(lifecycle).toContain("props.account.deletion?.version");
   });
 });

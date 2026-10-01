@@ -52,8 +52,51 @@ func (repository *Repository) PromoteDueProjectPurges(ctx context.Context, limit
 	if limit < 1 || limit > 16 {
 		return errs.ErrInvalid
 	}
-	_, err := repository.pool.Exec(ctx, queryProjectPurgeDue, pgx.StrictNamedArgs{"limit": limit})
+	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
+		return errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	type promotedProject struct {
+		organizationID, organizationRef, projectID, projectRef string
+		version                                                int64
+	}
+	rows, err := tx.Query(ctx, queryProjectPurgeDue, pgx.StrictNamedArgs{"limit": limit})
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	promoted := make([]promotedProject, 0, limit)
+	for rows.Next() {
+		var item promotedProject
+		var receiptCount, cancelledTaskCount int64
+		if err := rows.Scan(&item.organizationID, &item.organizationRef, &item.projectID,
+			&item.projectRef, &item.version, &receiptCount, &cancelledTaskCount); err != nil {
+			rows.Close()
+			return errs.ErrUnavailable
+		}
+		if item.organizationID == "" || item.organizationRef == "" || item.projectID == "" ||
+			item.projectRef == "" || item.version < 1 || receiptCount < 1 || cancelledTaskCount < 0 {
+			rows.Close()
+			return errs.ErrConflict
+		}
+		promoted = append(promoted, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return errs.ErrUnavailable
+	}
+	rows.Close()
+	for _, item := range promoted {
+		current := scope{
+			organizationID: item.organizationID, organizationRef: item.organizationRef,
+			correlationRef: item.projectRef,
+		}
+		if err := repository.emitPlatformEventSnapshot(ctx, tx, current, "PROJECT_CHANGED", item.projectRef,
+			item.projectRef, "i18n:PROJECT_PURGE_REQUESTED", item.version, "PURGE_PENDING"); err != nil {
+			return errs.ErrUnavailable
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return errs.ErrUnavailable
 	}
 	return nil
@@ -137,8 +180,9 @@ func (repository *Repository) FinalizeProjectPurge(ctx context.Context, candidat
 		return errs.ErrConflict
 	}
 	var projectRef string
+	var projectVersion int64
 	err = tx.QueryRow(ctx, queryProjectPurgeLockProject,
-		candidate.OrganizationID, candidate.ProjectID).Scan(&projectRef)
+		candidate.OrganizationID, candidate.ProjectID).Scan(&projectRef, &projectVersion)
 	if err != nil || projectRef != candidate.ProjectRef {
 		return errs.ErrConflict
 	}
@@ -188,6 +232,14 @@ func (repository *Repository) FinalizeProjectPurge(ctx context.Context, candidat
 	if err := tx.QueryRow(ctx, queryProjectPurgeDeleteDatabase,
 		candidate.OrganizationID, candidate.ProjectID, digest).Scan(&deletedRows); err != nil || deletedRows < 0 {
 		return errs.ErrConflict
+	}
+	current := scope{
+		organizationID: candidate.OrganizationID, organizationRef: candidate.OrganizationRef,
+		correlationRef: candidate.ProjectRef,
+	}
+	if err := repository.emitPlatformEventSnapshot(ctx, tx, current, "PROJECT_CHANGED", candidate.ProjectRef,
+		candidate.ProjectRef, "i18n:PROJECT_PURGED", projectVersion, "PURGED"); err != nil {
+		return errs.ErrUnavailable
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return errs.ErrConflict

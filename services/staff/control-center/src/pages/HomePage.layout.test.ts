@@ -29,23 +29,22 @@ describe("HomePage layout", () => {
     expect(template).toContain('kind="SESSION"');
     expect(template).not.toContain("CapabilityCoverageList");
     expect(template).not.toContain("PROVIDER_AUTH_EXPIRY");
-    expect(source).toContain('state: "REAUTHORIZATION_REQUIRED"');
-    expect(source).toContain("pageToken,");
-    expect(template).toContain(
-      ':provider-next-page-token="providerNextPageToken"',
-    );
-    expect(template).toContain('@more-providers="loadMoreProviderAttention"');
-    expect(template).toContain(
-      '@retry-more-providers="retryMoreProviderAttention"',
-    );
+    expect(source).toContain('account.state === "REAUTHORIZATION_REQUIRED"');
+    expect(source).toContain('platform.realtimeSnapshot("PROVIDER_ACCOUNT")');
+    expect(template).not.toContain("provider-next-page-token");
+    expect(template).not.toContain("more-providers");
     expect(template).toContain('class="home-dashboard"');
     expect(template).toContain("dashboard");
     expect(template).not.toContain("HomeGateCatalog");
   });
 
-  it("обновляет данные через store без route reload", () => {
-    expect(source).toContain("platform.loadOverview()");
-    expect(source).toContain("platform.loadRuns()");
+  it("читает стартовые каталоги из realtime store без HTTP readback", () => {
+    expect(source).toContain('platform.realtimeSnapshot("PROJECT")');
+    expect(source).toContain('platform.realtimeSnapshot("RUN")');
+    expect(source).not.toContain("platform.loadOverview()");
+    expect(source).not.toContain("platform.loadRuns()");
+    expect(source).not.toContain("listProviderAccounts");
+    expect(source).not.toContain('searchProjects(""');
     expect(source).not.toContain("location.reload");
     expect(source).not.toContain("router.go");
   });

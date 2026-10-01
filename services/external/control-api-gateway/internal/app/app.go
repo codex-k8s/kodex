@@ -122,7 +122,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	realtime, err := websockettransport.New(control, bus, config.origins(), security, legacyUntil)
+	realtime, err := websockettransport.New(control, bus, speech.Speech, config.origins(), security, legacyUntil)
 	if err != nil {
 		return err
 	}
