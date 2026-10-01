@@ -308,6 +308,8 @@ ASSISTANT_TURN_QUEUED:
   other: Команда помощнику поставлена в очередь
 ASSISTANT_TURN_ACCEPTED:
   other: Команда помощнику принята
+ASSISTANT_TURN_CANCELLED:
+  other: Ход помощника остановлен
 ASSISTANT_PLAN_APPLIED:
   other: План помощника применён
 ASSISTANT_PLAN_PROPOSED:
