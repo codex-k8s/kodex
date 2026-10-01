@@ -1458,7 +1458,7 @@ const ru = {
     networkDestinationHelp: {
       DNS: "Разрешение имён через DNS кластера, TCP/UDP 53.",
       PROVIDER_PROXY:
-        "Вызовы провайдера только через платформенный proxy, TCP 8080.",
+        "Вызовы провайдера и разрешённый веб-доступ только через платформенный proxy, TCP 8084.",
       RUNTIME_CALLBACK:
         "Возврат событий выполнения в runtime-controller, TCP 8444.",
       KUBERNETES_API:
@@ -1466,6 +1466,22 @@ const ru = {
     },
     mandatoryDestination: "Обязательно",
     scopedAccessEnabled: "Scoped доступ",
+    webAccessMode: "Доступ к публичной сети",
+    webAccessModeLabel: {
+      NONE: "Без веб-доступа",
+      ALLOWLIST_READ_ONLY: "Allowlist: только чтение",
+      ALLOWLIST_FULL: "Allowlist: чтение и изменение",
+      FULL_PUBLIC: "Полный публичный доступ",
+    },
+    webAccessModeHelp: {
+      NONE: "Рабочие инструменты не могут обращаться к публичным сайтам; соединение с моделью сохраняется.",
+      ALLOWLIST_READ_ONLY: "Разрешены только GET, HEAD и OPTIONS к указанным доменам.",
+      ALLOWLIST_FULL: "Разрешены GET, HEAD, OPTIONS, POST, PUT, PATCH и DELETE к указанным доменам.",
+      FULL_PUBLIC: "Разрешён HTTPS-доступ к публичным адресам через управляемый proxy с SSRF-защитой.",
+    },
+    webAccessDomain: "Домен или scoped wildcard",
+    webAccessMethods: "HTTP-методы",
+    addWebAccessRule: "Добавить домен",
     networkPolicyUnavailable:
       "API не предоставляет typed destinations и итоговый NetworkPolicy preview.",
     kubernetesRbac: "Ограниченные права Kubernetes (RBAC)",
@@ -1579,6 +1595,13 @@ const ru = {
       kubernetesAccess: "Неизвестный профиль Kubernetes доступа.",
       networkDestinations:
         "Сеть должна содержать DNS, provider proxy и runtime callback, а Kubernetes API — только при READ_OWN_EXECUTION.",
+      webAccessMode: "Неизвестный режим публичного доступа.",
+      webAccessRulesForMode: "Для выбранного режима список доменов должен быть пустым.",
+      webAccessRulesRequired: "Добавьте от 1 до 64 доменных правил.",
+      webAccessDomain: "Укажите точный домен, *.example.com или **.example.com. Глобальный wildcard запрещён.",
+      webAccessDuplicateDomain: "Доменные правила не должны повторяться.",
+      webAccessTransport: "В прототипе поддерживается только HTTPS на порту 443.",
+      webAccessMethods: "Выберите уникальные HTTP-методы, допустимые для режима.",
       secretDescriptorRequired:
         "Заполните все обязательные поля Secret descriptor.",
       sha256: "SHA-256 должен содержать 64 строчные шестнадцатеричные цифры.",
@@ -3486,7 +3509,7 @@ const ru = {
     subtitle:
       "Настраивает платформу через те же типизированные команды и ваши полномочия",
     ready: "Всегда готов",
-    working: "Kodex отвечает",
+    working: "Kodex работает",
     providerAccountRequired: "Подключите аккаунт модели",
     providerAccountRequiredHelp:
       "Создайте provider account и завершите авторизацию. До этого Kodex не запускает модели и не создаёт диалоги.",
@@ -3495,6 +3518,21 @@ const ru = {
     newConversation: "Новый диалог",
     message: "Опишите, что нужно настроить или запустить",
     send: "Отправить помощнику",
+    queue: "Добавить сообщение в очередь",
+    sendNow: "Остановить текущий ход и отправить сейчас",
+    stop: "Остановить текущий ход",
+    settings: {
+      title: "Настройки Kodex",
+      description: "Та же конфигурация модели, окружения и инструкций, что у ИИ-сотрудников.",
+      runtime: "Модель и выполнение",
+      environment: "Окружение",
+      instructions: "Инструкции",
+      instructionsHelp: "Дополнение владельца применяется к следующим ходам. Изменения, предложенные самим Kodex, сначала показываются как подтверждаемый черновик.",
+      environmentTitle: "Рабочее окружение Kodex",
+      environmentHelp: "Переменные, ресурсы и сетевой доступ применятся к следующим ходам. Доступ к интернету требует свежего подтверждения владельца.",
+      platformImage: "Платформенный образ",
+      platformImageHelp: "Образ и встроенные инструменты системного помощника обновляются платформой и здесь не заменяются.",
+    },
     workContext: "Контекст работы",
     contextReady: "Готов помочь на этом экране",
     outcomeHelp:
@@ -3858,6 +3896,8 @@ const ru = {
         "Подсказка о секрете некорректна. Попросите помощника подготовить новый план.",
       environmentRevisionBoundary:
         "Проверьте название, описание, образ, инструменты, параметры, привязки секретов и политику. Применение создаст только черновик новой ревизии.",
+      systemEnvironmentBoundary:
+        "Это окружение самого Kodex. Платформенный образ и секреты здесь не меняются; проверьте публичные переменные, ресурсы и сетевой доступ.",
       environmentPolicyInvalid:
         "Политика окружения повреждена или содержит недопустимые поля. Попросите подготовить новый план.",
       environmentPolicyFreshAuthentication:
@@ -3870,6 +3910,8 @@ const ru = {
         "Укажите название и корректную ссылку на образ или оставьте поле образа пустым.",
       environmentRevisionNextSteps:
         "После подтверждения будет создан черновик новой ревизии. Откройте его, проверьте влияние на сотрудников и опубликуйте отдельно.",
+      systemEnvironmentNextSteps:
+        "После подтверждения новая ревизия будет опубликована для следующих ходов Kodex; текущий ход продолжит работать на закреплённой ревизии.",
       bindingBoundary:
         "Назначается только готовая опубликованная среда этого проекта. Секреты и параметры окружения здесь не меняются.",
       bindingLoadFailed:
@@ -5635,7 +5677,7 @@ const en = {
     networkDestinationHelp: {
       DNS: "Name resolution through cluster DNS on TCP/UDP 53.",
       PROVIDER_PROXY:
-        "Provider calls only through the platform proxy on TCP 8080.",
+        "Provider calls and allowed web access only through the platform proxy on TCP 8084.",
       RUNTIME_CALLBACK:
         "Execution events returned to runtime-controller on TCP 8444.",
       KUBERNETES_API:
@@ -5643,6 +5685,22 @@ const en = {
     },
     mandatoryDestination: "Required",
     scopedAccessEnabled: "Scoped access",
+    webAccessMode: "Public network access",
+    webAccessModeLabel: {
+      NONE: "No web access",
+      ALLOWLIST_READ_ONLY: "Allowlist: read only",
+      ALLOWLIST_FULL: "Allowlist: read and write",
+      FULL_PUBLIC: "Full public access",
+    },
+    webAccessModeHelp: {
+      NONE: "Workspace tools cannot access public sites; model connectivity remains available.",
+      ALLOWLIST_READ_ONLY: "Only GET, HEAD and OPTIONS are allowed for listed domains.",
+      ALLOWLIST_FULL: "GET, HEAD, OPTIONS, POST, PUT, PATCH and DELETE are allowed for listed domains.",
+      FULL_PUBLIC: "HTTPS access to public addresses is allowed through the managed SSRF-protected proxy.",
+    },
+    webAccessDomain: "Domain or scoped wildcard",
+    webAccessMethods: "HTTP methods",
+    addWebAccessRule: "Add domain",
     networkPolicyUnavailable:
       "The API does not expose typed destinations or final NetworkPolicy preview.",
     kubernetesRbac: "Scoped Kubernetes RBAC",
@@ -5753,6 +5811,13 @@ const en = {
       kubernetesAccess: "Unknown Kubernetes access profile.",
       networkDestinations:
         "Network policy must include DNS, provider proxy and runtime callback; Kubernetes API is allowed only with READ_OWN_EXECUTION.",
+      webAccessMode: "Unknown public network access mode.",
+      webAccessRulesForMode: "The domain list must be empty for the selected mode.",
+      webAccessRulesRequired: "Add between 1 and 64 domain rules.",
+      webAccessDomain: "Enter an exact domain, *.example.com, or **.example.com. A global wildcard is forbidden.",
+      webAccessDuplicateDomain: "Domain rules must be unique.",
+      webAccessTransport: "The prototype supports HTTPS on port 443 only.",
+      webAccessMethods: "Select unique HTTP methods supported by the mode.",
       secretDescriptorRequired:
         "Complete all required Secret descriptor fields.",
       sha256: "SHA-256 must contain 64 lowercase hexadecimal digits.",
@@ -7567,7 +7632,7 @@ const en = {
     subtitle:
       "Configures the platform through the same typed commands and your permissions",
     ready: "Always ready",
-    working: "Kodex is responding",
+    working: "Kodex is working",
     providerAccountRequired: "Connect a model account",
     providerAccountRequiredHelp:
       "Create a provider account and complete authorization. Until then, Kodex does not run models or create conversations.",
@@ -7576,6 +7641,21 @@ const en = {
     newConversation: "New conversation",
     message: "Describe what to configure or launch",
     send: "Send to assistant",
+    queue: "Queue message",
+    sendNow: "Stop the current turn and send now",
+    stop: "Stop the current turn",
+    settings: {
+      title: "Kodex settings",
+      description: "The same model, environment and instruction controls used for AI employees.",
+      runtime: "Model and runtime",
+      environment: "Environment",
+      instructions: "Instructions",
+      instructionsHelp: "Owner instructions apply to future turns. Changes proposed by Kodex itself are shown as a draft for confirmation first.",
+      environmentTitle: "Kodex runtime environment",
+      environmentHelp: "Variables, resources and network access apply to future turns. Internet access requires fresh owner confirmation.",
+      platformImage: "Platform image",
+      platformImageHelp: "The system assistant image and built-in tools are managed by the platform and cannot be replaced here.",
+    },
     workContext: "Work context",
     contextReady: "Ready to help on this screen",
     outcomeHelp:
@@ -7934,6 +8014,8 @@ const en = {
         "The secret suggestion is invalid. Ask the assistant to prepare a new plan.",
       environmentRevisionBoundary:
         "Review the name, description, image, tools, values, secret bindings, and policy. Applying this creates only a new revision draft.",
+      systemEnvironmentBoundary:
+        "This is Kodex's own environment. The platform image and secrets stay fixed; review public values, resources, and network access.",
       environmentPolicyInvalid:
         "The environment policy is damaged or contains unsupported fields. Request a new plan.",
       environmentPolicyFreshAuthentication:
@@ -7946,6 +8028,8 @@ const en = {
         "Provide a name and a valid image reference, or leave the image field empty.",
       environmentRevisionNextSteps:
         "Confirmation creates a revision draft. Open it, review its impact on employees, and publish separately.",
+      systemEnvironmentNextSteps:
+        "Confirmation publishes a new revision for subsequent Kodex turns; the current turn keeps its pinned revision.",
       bindingBoundary:
         "Only a ready, published environment in this project can be assigned. Secrets and environment settings do not change here.",
       bindingLoadFailed:

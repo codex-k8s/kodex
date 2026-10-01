@@ -176,6 +176,7 @@ describe("assistant api mutation reconciliation", () => {
         content: "Измени назначение",
         context: initial.context,
         attachmentSetRef: "attachment-set-own",
+        deliveryMode: "QUEUE",
       },
       headers: {
         "Idempotency-Key": "stable-assistant-idempotency-key",

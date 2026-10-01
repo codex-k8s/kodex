@@ -210,7 +210,7 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 	case command.ConfigOverlayInput:
 		return repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", payload.AgentRef)
 	case command.RuntimeEnvironmentBindingInput:
-		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+		return repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", payload.AgentRef)
 	case command.RuntimeEnvironmentRebindInput:
 		lookup := current
 		lookup.role = "OWNER"
@@ -249,6 +249,9 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, lookupScope, payload.Ref)
 		if err != nil {
 			return "", resolvedAccessTarget{}, err
+		}
+		if environment.ProjectRef == "" {
+			return "organization.manage", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
 	case command.RuntimeEnvironmentDraftInput:
@@ -402,7 +405,7 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "organization.view", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", payload.ProjectRef, payload.ProjectRef)
-	case command.AssistantTurnInput, command.AssistantConversationTitleInput,
+	case command.AssistantTurnInput, command.AssistantTurnCancellationInput, command.AssistantConversationTitleInput,
 		command.AssistantPlanInput, command.AssistantPlanDraftInput, command.AssistantInstructionsInput:
 		return "organization.manage", organization, nil
 	case command.ManagedConfigurationInput:

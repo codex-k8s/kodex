@@ -295,7 +295,8 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 	result := &generated.RuntimeEnvironmentPolicyInput{Resources: generated.RuntimeResourcePolicy{
 		CpuRequestMilli: resources.GetCpuRequestMilli(), CpuLimitMilli: resources.GetCpuLimitMilli(), MemoryRequestMib: resources.GetMemoryRequestMib(), MemoryLimitMib: resources.GetMemoryLimitMib(),
 		EphemeralStorageRequestMib: resources.GetEphemeralStorageRequestMib(), EphemeralStorageLimitMib: resources.GetEphemeralStorageLimitMib(),
-	}, Volumes: []generated.RuntimeVolumeInput{}, NetworkDestinations: []generated.RuntimeNetworkDestination{}}
+	}, Volumes: []generated.RuntimeVolumeInput{}, NetworkDestinations: []generated.RuntimeNetworkDestination{},
+		WebAccess: generated.RuntimeWebAccess{Mode: generated.NONE, Rules: []generated.RuntimeWebAccessRule{}}}
 	switch input.GetKubernetesAccess() {
 	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE, controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION:
 		result.KubernetesAccess = generated.RuntimeKubernetesAccessKind(strings.TrimPrefix(input.GetKubernetesAccess().String(), "RUNTIME_KUBERNETES_ACCESS_KIND_"))
@@ -315,6 +316,25 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 			result.NetworkDestinations = append(result.NetworkDestinations, generated.RuntimeNetworkDestination(strings.TrimPrefix(destination.String(), "RUNTIME_NETWORK_DESTINATION_")))
 		default:
 			return nil, false
+		}
+	}
+	if webAccess := input.GetWebAccess(); webAccess != nil {
+		mode := strings.TrimPrefix(webAccess.GetMode().String(), "RUNTIME_WEB_ACCESS_MODE_")
+		if mode == "UNSPECIFIED" {
+			mode = "NONE"
+		}
+		result.WebAccess.Mode = generated.RuntimeWebAccessMode(mode)
+		if !result.WebAccess.Mode.Valid() {
+			return nil, false
+		}
+		for _, rule := range webAccess.GetRules() {
+			methods := make([]generated.RuntimeWebAccessRuleHttpMethods, 0, len(rule.GetHttpMethods()))
+			for _, method := range rule.GetHttpMethods() {
+				methods = append(methods, generated.RuntimeWebAccessRuleHttpMethods(method))
+			}
+			result.WebAccess.Rules = append(result.WebAccess.Rules, generated.RuntimeWebAccessRule{
+				DomainPattern: rule.GetDomainPattern(), Protocol: generated.RuntimeWebAccessRuleProtocol(rule.GetProtocol()), Port: generated.RuntimeWebAccessRulePort(rule.GetPort()), HttpMethods: methods,
+			})
 		}
 	}
 	return result, true

@@ -270,7 +270,21 @@ func environmentPolicySchema() map[string]any {
 		"ephemeralStorageRequestMib": map[string]any{"type": "integer", "minimum": 256, "maximum": 20480},
 		"ephemeralStorageLimitMib":   map[string]any{"type": "integer", "minimum": 256, "maximum": 102400},
 	})
-	return objectSchema([]string{"resources", "volumes", "networkDestinations", "kubernetesAccess"}, map[string]any{
+	webAccessRule := objectSchema([]string{"domainPattern", "protocol", "port", "httpMethods"}, map[string]any{
+		"domainPattern": map[string]any{
+			"type": "string", "minLength": 3, "maxLength": 253,
+			"pattern": `^(?:\*\*\.|\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`,
+		},
+		"protocol": enumSchema("HTTPS"),
+		"port":     map[string]any{"type": "integer", "const": 443},
+		"httpMethods": map[string]any{"type": "array", "minItems": 3, "maxItems": 7, "uniqueItems": true,
+			"items": enumSchema("GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE")},
+	})
+	webAccess := objectSchema([]string{"mode", "rules"}, map[string]any{
+		"mode":  enumSchema("NONE", "ALLOWLIST_READ_ONLY", "ALLOWLIST_FULL", "FULL_PUBLIC"),
+		"rules": map[string]any{"type": "array", "maxItems": 64, "items": webAccessRule},
+	})
+	return objectSchema([]string{"resources", "volumes", "networkDestinations", "webAccess", "kubernetesAccess"}, map[string]any{
 		"resources": resources,
 		"volumes": map[string]any{"type": "array", "maxItems": 16, "items": objectSchema([]string{"name", "kind", "sizeMib"}, map[string]any{
 			"name": stringSchema(1, 32), "kind": enumSchema("EPHEMERAL_DISK", "EPHEMERAL_MEMORY"),
@@ -278,6 +292,7 @@ func environmentPolicySchema() map[string]any {
 		})},
 		"networkDestinations": map[string]any{"type": "array", "minItems": 3, "maxItems": 4, "uniqueItems": true,
 			"items": enumSchema("DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "KUBERNETES_API")},
+		"webAccess":        webAccess,
 		"kubernetesAccess": enumSchema("NONE", "READ_OWN_EXECUTION"),
 	})
 }
@@ -290,6 +305,29 @@ func environmentSecretSuggestionsSchema() map[string]any {
 			"valueType": enumSchema("STRING", "JSON", "BINARY"), "sourceHelp": stringSchema(1, 1000),
 		}),
 	}
+}
+
+func environmentRevisionInputSchema(environmentRef map[string]any, systemAssistantRef map[string]any) map[string]any {
+	required := []string{"environmentRef"}
+	properties := map[string]any{
+		"environmentRef": environmentRef, "name": stringSchema(1, 120),
+		"description": stringSchema(0, 1000), "imageArtifactRef": stringSchema(0, 96),
+		"publicValues": environmentPublicValuesSchema(), "publicValueUpdates": environmentPublicValueUpdatesSchema(),
+		"publicValueRemovals": environmentPublicValueRemovalsSchema(), "secretBindings": environmentSecretBindingsSchema(),
+		"tools": environmentToolsSchema(), "policy": environmentPolicySchema(),
+	}
+	if systemAssistantRef != nil {
+		required = append(required, "systemAssistantRef")
+		properties["systemAssistantRef"] = systemAssistantRef
+	}
+	schema := objectSchema(required, properties)
+	schema["anyOf"] = []map[string]any{
+		{"required": []string{"name"}}, {"required": []string{"description"}},
+		{"required": []string{"imageArtifactRef"}}, {"required": []string{"publicValues"}},
+		{"required": []string{"publicValueUpdates"}}, {"required": []string{"publicValueRemovals"}},
+		{"required": []string{"secretBindings"}}, {"required": []string{"tools"}}, {"required": []string{"policy"}},
+	}
+	return schema
 }
 
 func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[string]any {
@@ -359,6 +397,12 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
+	selfEnvironmentOperation := input.SystemAssistant && input.AgentRef != "" && input.RuntimeEnvironmentRef != "" &&
+		(input.AssistantContext == nil || input.AssistantContext.EntityKind != "ENVIRONMENT")
+	if selfEnvironmentOperation {
+		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+			environmentRevisionInputSchema(enumSchema(input.RuntimeEnvironmentRef), enumSchema(input.AgentRef))))
+	}
 	if input.AssistantContext == nil {
 		return result
 	}
@@ -377,21 +421,8 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		result = append(result, assistantOperationSchema("UPDATE_WORKFLOW", workflowUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
 	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" {
-		schema := objectSchema([]string{"environmentRef"}, map[string]any{
-			"environmentRef": enumSchema(input.AssistantContext.EntityRef), "name": stringSchema(1, 120),
-			"description": stringSchema(0, 1000), "imageArtifactRef": stringSchema(0, 96),
-			"publicValues": environmentPublicValuesSchema(), "publicValueUpdates": environmentPublicValueUpdatesSchema(),
-			"publicValueRemovals": environmentPublicValueRemovalsSchema(), "secretBindings": environmentSecretBindingsSchema(),
-			"tools":  environmentToolsSchema(),
-			"policy": environmentPolicySchema(),
-		})
-		schema["anyOf"] = []map[string]any{
-			{"required": []string{"name"}}, {"required": []string{"description"}},
-			{"required": []string{"imageArtifactRef"}}, {"required": []string{"publicValues"}},
-			{"required": []string{"publicValueUpdates"}}, {"required": []string{"publicValueRemovals"}},
-			{"required": []string{"secretBindings"}}, {"required": []string{"tools"}}, {"required": []string{"policy"}},
-		}
-		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION", schema))
+		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+			environmentRevisionInputSchema(enumSchema(input.AssistantContext.EntityRef), nil)))
 	}
 	if input.AssistantContext.EntityKind == "INTEGRATION_CONNECTION" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_INTEGRATION_CONNECTION", connectionUpdateInputSchema(input.AssistantContext.EntityRef)))
@@ -409,7 +440,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	filtered := make([]map[string]any, 0, len(result))
 	for _, operation := range result {
 		kind := operation["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
-		if _, ok := allowed[kind]; ok {
+		if _, ok := allowed[kind]; ok || selfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 			filtered = append(filtered, operation)
 		}
 	}

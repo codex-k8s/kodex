@@ -201,6 +201,57 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 	}
 }
 
+func TestSystemAssistantEnvironmentRevisionPublishesPinnedGlobalEnvironment(t *testing.T) {
+	t.Parallel()
+	specification := entity.RuntimeEnvironmentDraftSpecification{
+		Name: "Kodex", Description: "System assistant environment",
+		Values: []entity.RuntimeEnvironmentValue{{Name: "MODE", Value: "safe"}},
+		Policy: runtimecontract.DefaultRuntimeEnvironmentPolicy(),
+	}
+	raw, err := json.Marshal(specification)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var safe map[string]any
+	if err := json.Unmarshal(raw, &safe); err != nil {
+		t.Fatal(err)
+	}
+	before := map[string]any{
+		"environmentRef": "renv_system", "projectRef": "", "systemAssistantRef": "agt_system",
+		"name": "Kodex", "description": "System assistant environment", "imageArtifactRef": "",
+		"versionRef": "renvv_system", "versionDigest": "digest-system", "specification": safe,
+		"policyInput": assistantEnvironmentPolicyInput(specification.Policy),
+	}
+	proposal := entity.AssistantPlanOperation{
+		Type: "PREPARE_RUNTIME_ENVIRONMENT_REVISION", Key: "system-environment", Title: "Настроить сеть Kodex",
+		Summary: "Разрешить доступ к документации", Parameters: map[string]any{
+			"environmentRef": "renv_system", "systemAssistantRef": "agt_system",
+			"publicValues": []any{map[string]any{"name": "MODE", "value": "updated"}},
+		},
+	}
+	if !assistantOperationMatchesContext("PROJECT", "prj_current", proposal) {
+		t.Fatal("system assistant environment proposal was restricted to the current page entity")
+	}
+	hydrated, err := hydrateAssistantEnvironmentFields(before, 9, proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.PublishRuntimeEnvironment || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 9 {
+		t.Fatalf("system assistant environment command is not an exact publication: %#v %v", mapped, err)
+	}
+	payload := mapped.Payload.(command.RuntimeEnvironmentInput)
+	if payload.Ref != "renv_system" || payload.ProjectRef != "" || payload.Name != "Kodex" ||
+		len(payload.Values) != 1 || payload.Values[0].Value != "updated" || payload.ImageArtifactRef != "" ||
+		len(payload.SecretBindings) != 0 || len(payload.Tools) != 0 {
+		t.Fatalf("system assistant environment publication escaped its protected boundary: %#v", payload)
+	}
+}
+
 func assistantTestEnvironmentPolicy() map[string]any {
 	return map[string]any{
 		"resources": map[string]any{

@@ -12,7 +12,11 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Send,
+  Settings,
   Sparkles,
+  Square,
+  Zap,
   Trash2,
   X,
 } from "@lucide/vue";
@@ -29,6 +33,8 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
+import AssistantEnvironmentSettingsPanel from "@/features/assistant/components/AssistantEnvironmentSettingsPanel.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
 import AssistantCreatedEntityCard from "@/features/assistant/components/AssistantCreatedEntityCard.vue";
 import AssistantCreatedProjectFileCard from "@/features/assistant/components/AssistantCreatedProjectFileCard.vue";
@@ -194,6 +200,11 @@ const message = ref("");
 const messageDrafts = new Map<string, string>();
 const titleDraft = ref("");
 const titleEditing = ref(false);
+const settingsOpen = ref(false);
+const settingsTab = ref<"RUNTIME" | "ENVIRONMENT" | "INSTRUCTIONS">("RUNTIME");
+const assistantInstructions = ref("");
+const settingsBusy = ref(false);
+const settingsProblem = ref<AppProblem>();
 const openPlanRef = ref<string>();
 const activeView = ref<"CHAT" | "ACTIVITY">("CHAT");
 const attachmentComposer = ref<AttachmentComposerHandle>();
@@ -733,11 +744,17 @@ async function saveTitle(): Promise<void> {
   titleEditing.value = false;
 }
 
-async function send(): Promise<void> {
+async function send(
+  deliveryMode: "QUEUE" | "INTERRUPT_ACTIVE" = "QUEUE",
+): Promise<void> {
   const value = message.value.trim();
   if (!value || !canSend.value) return;
   const attachmentSetRef = await attachmentComposer.value?.finalize();
-  if (!(await handleStoreMutation(() => store.send(value, attachmentSetRef))))
+  if (
+    !(await handleStoreMutation(() =>
+      store.send(value, attachmentSetRef, deliveryMode),
+    ))
+  )
     return;
   messageDrafts.delete(currentDraftKey.value);
   message.value = "";
@@ -745,6 +762,31 @@ async function send(): Promise<void> {
   await nextTick();
   scrollToLatest();
   composer.value?.focus();
+}
+
+async function stopActiveTurn(): Promise<void> {
+  await handleStoreMutation(() => store.stopActiveTurn());
+}
+
+function openAssistantSettings(): void {
+  assistantInstructions.value = store.assistant?.ownerInstructions ?? "";
+  settingsProblem.value = undefined;
+  settingsOpen.value = true;
+}
+
+async function saveAssistantInstructions(): Promise<void> {
+  if (!store.assistant?.nextActions.includes("EDIT")) return;
+  settingsBusy.value = true;
+  settingsProblem.value = undefined;
+  try {
+    await platform.updateAssistantInstructions(assistantInstructions.value);
+    await store.load(props.context, props.projectRef, false);
+  } catch (error) {
+    settingsProblem.value = error instanceof AppProblem ? error : undefined;
+    if (!(error instanceof AppProblem)) throw error;
+  } finally {
+    settingsBusy.value = false;
+  }
 }
 
 function scrollToLatest(): void {
@@ -872,7 +914,7 @@ function openCreatedDefinition(): void {
 function handleComposerKeydown(event: KeyboardEvent): void {
   if (event.key !== "Enter" || event.shiftKey) return;
   event.preventDefault();
-  void send();
+  void send("QUEUE");
 }
 
 async function openPlan(plan: AssistantPlan, event: MouseEvent): Promise<void> {
@@ -1302,6 +1344,17 @@ onBeforeUnmount(() => {
             }}</span>
           </section>
         </div>
+        <button
+          v-if="store.assistant"
+          class="icon-button"
+          type="button"
+          :aria-label="$t('assistant.settings.title')"
+          :title="$t('assistant.settings.title')"
+          :disabled="store.busy"
+          @click="openAssistantSettings"
+        >
+          <Settings :size="19" aria-hidden="true" />
+        </button>
         <button
           class="icon-button"
           type="button"
@@ -1857,7 +1910,12 @@ onBeforeUnmount(() => {
                 "
                 @change="attachmentState = $event"
               />
-              <div class="assistant-composer__field">
+              <div
+                class="assistant-composer__field"
+                :class="{
+                  'assistant-composer__field--active': awaitingReply,
+                }"
+              >
                 <VoiceTextarea
                   ref="composer"
                   v-model="message"
@@ -1876,14 +1934,45 @@ onBeforeUnmount(() => {
                 />
                 <div>
                   <button
+                    v-if="awaitingReply"
+                    class="assistant-composer__send assistant-composer__send--stop"
+                    type="button"
+                    :aria-label="$t('assistant.stop')"
+                    :disabled="store.busy"
+                    :title="$t('assistant.stop')"
+                    @click="stopActiveTurn"
+                  >
+                    <Square :size="17" fill="currentColor" aria-hidden="true" />
+                  </button>
+                  <button
                     class="assistant-composer__send"
                     type="button"
-                    :aria-label="$t('assistant.send')"
+                    :aria-label="
+                      awaitingReply
+                        ? $t('assistant.queue')
+                        : $t('assistant.send')
+                    "
                     :disabled="!canSend || !message.trim()"
-                    :title="$t('assistant.send')"
-                    @click="send"
+                    :title="
+                      awaitingReply
+                        ? $t('assistant.queue')
+                        : $t('assistant.send')
+                    "
+                    @click="send('QUEUE')"
                   >
-                    <ArrowUp :size="21" stroke-width="2.5" aria-hidden="true" />
+                    <Send v-if="!awaitingReply" :size="19" aria-hidden="true" />
+                    <ArrowUp v-else :size="20" stroke-width="2.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    v-if="awaitingReply"
+                    class="assistant-composer__send assistant-composer__send--immediate"
+                    type="button"
+                    :aria-label="$t('assistant.sendNow')"
+                    :disabled="!canSend || !message.trim()"
+                    :title="$t('assistant.sendNow')"
+                    @click="send('INTERRUPT_ACTIVE')"
+                  >
+                    <Zap :size="19" fill="currentColor" aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -1994,6 +2083,86 @@ onBeforeUnmount(() => {
       @click="closeAssistantForm"
     />
   </div>
+  <Teleport to="body">
+    <div v-if="open && settingsOpen" class="assistant-settings-layer">
+      <button
+        class="assistant-settings-layer__backdrop"
+        type="button"
+        :aria-label="$t('common.close')"
+        @click="settingsOpen = false"
+      />
+      <section
+        class="assistant-settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="$t('assistant.settings.title')"
+      >
+        <header>
+          <div>
+            <h2>{{ $t("assistant.settings.title") }}</h2>
+            <p>{{ $t("assistant.settings.description") }}</p>
+          </div>
+          <button
+            class="icon-button"
+            type="button"
+            :aria-label="$t('common.close')"
+            @click="settingsOpen = false"
+          >
+            <X :size="20" aria-hidden="true" />
+          </button>
+        </header>
+        <nav class="assistant-settings-dialog__tabs" aria-label="">
+          <button
+            type="button"
+            :class="{ selected: settingsTab === 'RUNTIME' }"
+            @click="settingsTab = 'RUNTIME'"
+          >{{ $t("assistant.settings.runtime") }}</button>
+          <button
+            type="button"
+            :class="{ selected: settingsTab === 'ENVIRONMENT' }"
+            @click="settingsTab = 'ENVIRONMENT'"
+          >{{ $t("assistant.settings.environment") }}</button>
+          <button
+            type="button"
+            :class="{ selected: settingsTab === 'INSTRUCTIONS' }"
+            @click="settingsTab = 'INSTRUCTIONS'"
+          >{{ $t("assistant.settings.instructions") }}</button>
+        </nav>
+        <div class="assistant-settings-dialog__body">
+          <AgentRuntimePanel
+            v-if="settingsTab === 'RUNTIME' && store.assistant"
+            :agent-ref="store.assistant.ref"
+            :can-edit="store.assistant.nextActions.includes('EDIT')"
+          />
+          <AssistantEnvironmentSettingsPanel
+            v-else-if="settingsTab === 'ENVIRONMENT' && store.assistant"
+            :agent-ref="store.assistant.ref"
+            :can-edit="store.assistant.nextActions.includes('EDIT')"
+          />
+          <section v-else class="assistant-settings-dialog__instructions">
+            <p>{{ $t("assistant.settings.instructionsHelp") }}</p>
+            <VoiceTextarea
+              v-model="assistantInstructions"
+              rows="8"
+              maxlength="32768"
+              :disabled="settingsBusy"
+            />
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="settingsBusy || !store.assistant?.nextActions.includes('EDIT')"
+              @click="saveAssistantInstructions"
+            >{{ $t("common.save") }}</button>
+            <ProblemNotice
+              v-if="settingsProblem"
+              :problem="settingsProblem"
+              compact
+            />
+          </section>
+        </div>
+      </section>
+    </div>
+  </Teleport>
   <section
     v-show="open && assistantFormActive"
     id="assistant-form-slot"
@@ -2063,6 +2232,79 @@ onBeforeUnmount(() => {
   z-index: 90;
   inset: 0;
   pointer-events: none;
+}
+.assistant-settings-layer {
+  position: fixed;
+  z-index: 95;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+.assistant-settings-layer__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(17 24 39 / 38%);
+}
+.assistant-settings-dialog {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(1180px, 94vw);
+  height: min(840px, 92dvh);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 24px 72px rgb(15 23 42 / 30%);
+  overflow: hidden;
+}
+.assistant-settings-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.assistant-settings-dialog h2,
+.assistant-settings-dialog p {
+  margin: 0;
+}
+.assistant-settings-dialog header p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.assistant-settings-dialog__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 24px 0;
+  border-bottom: 1px solid var(--border);
+}
+.assistant-settings-dialog__tabs button {
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.assistant-settings-dialog__tabs button.selected {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+.assistant-settings-dialog__body {
+  min-height: 0;
+  padding: 20px 24px 28px;
+  overflow: auto;
+}
+.assistant-settings-dialog__instructions {
+  display: grid;
+  gap: 14px;
+}
+.assistant-settings-dialog__instructions .button {
+  justify-self: start;
 }
 .assistant-credential-layer {
   position: fixed;
@@ -2731,6 +2973,12 @@ onBeforeUnmount(() => {
 .assistant-composer :deep(.voice-textarea__action) {
   right: 58px;
 }
+.assistant-composer__field--active :deep(.voice-textarea__action) {
+  right: 150px;
+}
+.assistant-composer__field--active :deep(textarea) {
+  padding-right: 198px;
+}
 .assistant-composer :deep(.voice-input[data-state="recording"]) {
   padding-left: 8px;
   border-radius: 24px;
@@ -2764,6 +3012,15 @@ onBeforeUnmount(() => {
   background: var(--panel);
   color: var(--subtle);
   cursor: not-allowed;
+}
+.assistant-composer__send--stop {
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.assistant-composer__send--immediate {
+  background: var(--warning);
+  color: var(--text);
 }
 .assistant-composer__meta {
   display: flex;

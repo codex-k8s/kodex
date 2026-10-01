@@ -407,6 +407,7 @@ export const serverTokenTranslations = {
     "Assistant message accepted",
   ],
   ASSISTANT_TURN_QUEUED: ["Сообщение поставлено в очередь", "Message queued"],
+  ASSISTANT_TURN_CANCELLED: ["Ход помощника остановлен", "Assistant turn stopped"],
   ATTACHMENT_SET_DRAFT_CREATED: [
     "Черновик вложений создан",
     "Attachment draft created",

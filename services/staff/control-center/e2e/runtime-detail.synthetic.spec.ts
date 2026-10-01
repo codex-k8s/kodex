@@ -99,7 +99,7 @@ for (const width of [1440, 390, 2900]) {
               ephemeralStorageLimitMib: 2048,
             },
             volumes: [],
-            network: { denyByDefault: true, egress: [] },
+            network: { denyByDefault: true, egress: [], webAccess: { mode: "NONE", rules: [] } },
             kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
             resourcesDigest: digest,
             volumesDigest: digest,

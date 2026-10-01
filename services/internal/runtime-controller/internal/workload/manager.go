@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -99,6 +100,7 @@ type Config struct {
 	CallbackTLSServerName, CallbackClientCASecret, CallbackClientTLSSecret             string
 	StorageClass, SessionPVCSize, RunnerServiceAccount                                 string
 	ProviderHTTPSProxy                                                                 string
+	RuntimeEgressSigningKey                                                            []byte
 	ProviderAppArmorProfile                                                            string
 	KubernetesAPIServiceIP                                                             string
 	PromotedRoleImageRepository, DefaultRoleImageReference                             string
@@ -158,6 +160,7 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 		config.ControllerPodUID == "" || net.ParseIP(config.ControllerPodIP) == nil ||
 		(config.RPCProfile == "" && (config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" || config.CallbackClientTLSSecret == "")) ||
 		config.ProviderHTTPSProxy == "" ||
+		len(config.RuntimeEgressSigningKey) < 32 ||
 		(config.ProviderAppArmorProfile != "" && config.ProviderAppArmorProfile != "kodex-provider-runtime") ||
 		net.ParseIP(config.KubernetesAPIServiceIP) == nil ||
 		(config.StorageClass != "" && !validDNSSubdomain(config.StorageClass)) ||
@@ -693,7 +696,8 @@ func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentP
 			EphemeralStorageRequestMiB: resources.GetEphemeralStorageRequestMib(),
 			EphemeralStorageLimitMiB:   resources.GetEphemeralStorageLimitMib(),
 		},
-		Network: runtimecontract.RuntimeNetworkPolicy{DenyByDefault: value.GetNetwork().GetDenyByDefault()},
+		Network: runtimecontract.RuntimeNetworkPolicy{DenyByDefault: value.GetNetwork().GetDenyByDefault(),
+			WebAccess: runtimecontract.RuntimeWebAccess{Mode: runtimeWebAccessMode(value.GetNetwork().GetWebAccess().GetMode()), Rules: []runtimecontract.RuntimeWebAccessRule{}}},
 		KubernetesAccess: runtimecontract.RuntimeKubernetesAccessProfile{
 			Kind:      runtimeKubernetesAccessKind(value.GetKubernetesAccess().GetKind()),
 			Namespace: value.GetKubernetesAccess().GetNamespace(),
@@ -711,12 +715,21 @@ func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentP
 			Destination: runtimeNetworkDestination(egress.GetDestination()), Protocol: runtimeNetworkProtocol(egress.GetProtocol()), Port: egress.GetPort(),
 		})
 	}
+	for _, rule := range value.GetNetwork().GetWebAccess().GetRules() {
+		policy.Network.WebAccess.Rules = append(policy.Network.WebAccess.Rules, runtimecontract.RuntimeWebAccessRule{
+			DomainPattern: rule.GetDomainPattern(), Protocol: rule.GetProtocol(), Port: rule.GetPort(), HTTPMethods: append([]string(nil), rule.GetHttpMethods()...),
+		})
+	}
 	normalized, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
 	if err != nil || normalized.ResourcesDigest != policy.ResourcesDigest || normalized.VolumesDigest != policy.VolumesDigest ||
 		normalized.NetworkDigest != policy.NetworkDigest || normalized.RBACDigest != policy.RBACDigest {
 		return runtimecontract.RuntimeEnvironmentPolicy{}, errors.New("runtime environment policy digest mismatch")
 	}
 	return normalized, nil
+}
+
+func runtimeWebAccessMode(value controlplanev1.RuntimeWebAccessMode) string {
+	return strings.TrimPrefix(value.String(), "RUNTIME_WEB_ACCESS_MODE_")
 }
 
 func runtimeKubernetesAccessFromProto(value *controlplanev1.RuntimeKubernetesAccess) (runtimecontract.RuntimeKubernetesAccess, error) {
@@ -912,6 +925,9 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 		return fmt.Errorf("ensure runtime execution ticket: %w", err)
 	}
 	pod := manager.runtimePod(input, providerBinding, &credentials, secretName, podName, "turn")
+	if pod == nil {
+		return errors.New("materialize runtime egress grant")
+	}
 	_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
@@ -1169,6 +1185,9 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 			return false, projectionErr
 		}
 		pod := manager.runtimePod(input, providerBinding, nil, secretName, podName, "warm")
+		if pod == nil {
+			return false, errors.New("materialize warm runtime egress grant")
+		}
 		existing, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
 		if apierrors.IsAlreadyExists(err) {
 			existing, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
@@ -1919,6 +1938,10 @@ func sessionPVCMatches(existing, desired *corev1.PersistentVolumeClaim, storageC
 }
 
 func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, credentials *CredentialProjection, ticketSecret, podName, mode string) *corev1.Pod {
+	providerProxy, err := manager.runtimeProxyURL(input)
+	if err != nil {
+		return nil
+	}
 	roleArgs := []string{"runtime-session"}
 	if mode == "warm" {
 		roleArgs = []string{"runtime-warm"}
@@ -2010,7 +2033,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		StartupProbe: httpProbe("/readyz", "runtime-health", 2, 60), ReadinessProbe: httpProbe("/readyz", "runtime-health", 5, 3), LivenessProbe: httpProbe("/healthz", "runtime-health", 10, 3)}
 	provider := corev1.Container{Name: "provider-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
-			{Name: "HTTPS_PROXY", Value: manager.config.ProviderHTTPSProxy}, {Name: "HTTP_PROXY", Value: manager.config.ProviderHTTPSProxy},
+			{Name: "HTTPS_PROXY", Value: providerProxy}, {Name: "HTTP_PROXY", Value: providerProxy},
 			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: providerSandboxSecurityContext(10002, manager.config.ProviderAppArmorProfile),
 		VolumeMounts: append(append([]corev1.VolumeMount(nil), sandboxWorkspaceMounts...), []corev1.VolumeMount{
 			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true},
@@ -2085,6 +2108,23 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		}
 	}
 	return pod
+}
+
+func (manager *Manager) runtimeProxyURL(input runtimecontract.RunnerInput) (string, error) {
+	workloadRef := input.LeaseRef
+	if workloadRef == "" && input.Mode == runtimecontract.RunnerModeWarm && input.EnvironmentPolicy.Network.WebAccess.Mode == runtimecontract.RuntimeWebAccessNone {
+		workloadRef = "warm:" + input.OrganizationRef + ":" + input.SessionRef + ":" + input.RuntimeRevisionRef + ":" + input.RuntimeRevisionDigest
+	}
+	grant, err := runtimecontract.SignRuntimeWebAccessGrant(manager.config.RuntimeEgressSigningKey, workloadRef, input.EnvironmentPolicy.NetworkDigest, input.EnvironmentPolicy.Network.WebAccess)
+	if err != nil {
+		return "", errors.New("sign runtime egress grant")
+	}
+	proxy, err := url.Parse(manager.config.ProviderHTTPSProxy)
+	if err != nil {
+		return "", errors.New("parse runtime egress proxy")
+	}
+	proxy.User = url.UserPassword("kodex", grant)
+	return proxy.String(), nil
 }
 
 func runtimePolicyResourceRequirements(policy runtimecontract.RuntimeResourcePolicy) corev1.ResourceRequirements {

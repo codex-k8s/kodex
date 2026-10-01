@@ -162,7 +162,8 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 	case "UPDATE_WORKFLOW":
 		return contextKind == "WORKFLOW" && contextRef != "" && assistantString(operation.Parameters, "workflowRef") == contextRef
 	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
-		return contextKind == "ENVIRONMENT" && contextRef != "" && assistantString(operation.Parameters, "environmentRef") == contextRef
+		return assistantString(operation.Parameters, "systemAssistantRef") != "" ||
+			contextKind == "ENVIRONMENT" && contextRef != "" && assistantString(operation.Parameters, "environmentRef") == contextRef
 	case "UPDATE_INTEGRATION_CONNECTION":
 		return contextKind == "INTEGRATION_CONNECTION" && contextRef != "" && assistantString(operation.Parameters, "connectionRef") == contextRef
 	case "CHANGE_INTEGRATION_GRANT":

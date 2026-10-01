@@ -601,6 +601,7 @@ const friendlyInputsReady = computed(() =>
           environmentFieldsValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
+          isSystemAssistantEnvironment(operation) ||
           environmentToolsValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
@@ -768,6 +769,12 @@ const initialCapabilities = [
 function fieldValue(operation: EditablePlanOperation, key: string): string {
   const value = operationParameter(operation, key);
   return typeof value === "string" ? value : "";
+}
+
+function isSystemAssistantEnvironment(
+  operation: EditablePlanOperation,
+): boolean {
+  return fieldValue(operation, "systemAssistantRef").length > 0;
 }
 
 function agentProfile(operation: EditablePlanOperation): AgentProfileDraft {
@@ -1348,7 +1355,10 @@ function validationProblemLabel(problem: string): string {
                     updateOperationParameter(operation, key, value)
                 "
               />
-              <label class="field">
+              <label
+                v-if="!isSystemAssistantEnvironment(operation)"
+                class="field"
+              >
                 <span>{{ $t("runtime.exactImage") }}</span>
                 <AsyncEntityPicker
                   :model-value="fieldValue(operation, 'imageArtifactRef')"
@@ -1366,6 +1376,7 @@ function validationProblemLabel(problem: string): string {
                 :operation="operation"
                 :project-ref="plan.projectRef || ''"
                 :disabled="!editable"
+                :allow-secrets="!isSystemAssistantEnvironment(operation)"
                 @valid="environmentFieldsValidity[operation.value.ref] = $event"
                 @dirty="environmentFieldsTouched = true"
                 @parameter="
@@ -1374,6 +1385,7 @@ function validationProblemLabel(problem: string): string {
                 "
               />
               <AssistantEnvironmentToolsForm
+                v-if="!isSystemAssistantEnvironment(operation)"
                 :operation="operation"
                 :project-ref="plan.projectRef || ''"
                 :selected-image="selectedImage(operation)"

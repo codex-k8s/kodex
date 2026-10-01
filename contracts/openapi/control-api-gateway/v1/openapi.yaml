@@ -4982,6 +4982,10 @@ paths:
               required: [content]
               properties:
                 content: { type: string, minLength: 1, maxLength: 32768 }
+                deliveryMode:
+                  type: string
+                  enum: [QUEUE, INTERRUPT_ACTIVE]
+                  default: QUEUE
                 attachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
                 context:
                   { $ref: "#/components/schemas/AssistantContextDescriptor" }
@@ -4991,6 +4995,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AssistantConversation" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/assistant-conversations/{conversationRef}/active-turn/cancellation:
+    post:
+      tags: [Assistant]
+      operationId: cancelAssistantTurn
+      description: Атомарно находит и отменяет активный корневой Run выбранного диалога; переданный клиентом runRef не используется.
+      parameters:
+        [
+          { $ref: "#/components/parameters/ConversationRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      responses:
+        "200":
+          description: Активный ход отменён либо уже отсутствовал
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [conversationRef, runRef, cancelled]
+                properties:
+                  conversationRef: { $ref: "#/components/schemas/OpaqueRef" }
+                  runRef: { type: string }
+                  cancelled: { type: boolean }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/assistant-plans/{planRef}/application:
     post:
@@ -11941,6 +11971,37 @@ components:
     RuntimeNetworkProtocol:
       type: string
       enum: [TCP, UDP]
+    RuntimeWebAccessMode:
+      type: string
+      enum: [NONE, ALLOWLIST_READ_ONLY, ALLOWLIST_FULL, FULL_PUBLIC]
+    RuntimeWebAccessRule:
+      type: object
+      additionalProperties: false
+      required: [domainPattern, protocol, port, httpMethods]
+      properties:
+        domainPattern:
+          type: string
+          minLength: 3
+          maxLength: 253
+          pattern: '^(?:\*\*\.|\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$'
+        protocol: { type: string, enum: [HTTPS] }
+        port: { type: integer, format: int32, enum: [443] }
+        httpMethods:
+          type: array
+          minItems: 3
+          maxItems: 7
+          uniqueItems: true
+          items: { type: string, enum: [GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE] }
+    RuntimeWebAccess:
+      type: object
+      additionalProperties: false
+      required: [mode, rules]
+      properties:
+        mode: { $ref: "#/components/schemas/RuntimeWebAccessMode" }
+        rules:
+          type: array
+          maxItems: 64
+          items: { $ref: "#/components/schemas/RuntimeWebAccessRule" }
     RuntimeKubernetesAccessKind:
       type: string
       enum: [NONE, READ_OWN_EXECUTION]
@@ -11993,7 +12054,7 @@ components:
     RuntimeEnvironmentPolicyInput:
       type: object
       additionalProperties: false
-      required: [resources, volumes, networkDestinations, kubernetesAccess]
+      required: [resources, volumes, networkDestinations, kubernetesAccess, webAccess]
       properties:
         resources: { $ref: "#/components/schemas/RuntimeResourcePolicy" }
         volumes:
@@ -12010,6 +12071,7 @@ components:
           items: { $ref: "#/components/schemas/RuntimeNetworkDestination" }
         kubernetesAccess:
           { $ref: "#/components/schemas/RuntimeKubernetesAccessKind" }
+        webAccess: { $ref: "#/components/schemas/RuntimeWebAccess" }
     RuntimeNetworkEgress:
       type: object
       additionalProperties: false
@@ -12021,7 +12083,7 @@ components:
     RuntimeNetworkPolicy:
       type: object
       additionalProperties: false
-      required: [denyByDefault, egress]
+      required: [denyByDefault, egress, webAccess]
       properties:
         denyByDefault: { type: boolean, enum: [true] }
         egress:
@@ -12031,6 +12093,7 @@ components:
             maxItems: 5,
             items: { $ref: "#/components/schemas/RuntimeNetworkEgress" },
           }
+        webAccess: { $ref: "#/components/schemas/RuntimeWebAccess" }
     RuntimeKubernetesAccessProfile:
       type: object
       additionalProperties: false
@@ -12660,7 +12723,11 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
-        imageArtifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        imageArtifactRef:
+          description: Для системного помощника пустая строка означает платформенный образ; Проектные окружения по-прежнему требуют точный artifact ref.
+          type: string
+          maxLength: 128
+          pattern: "^$|^[A-Za-z0-9_-]{8,128}$"
         tools:
           {
             type: array,
@@ -17133,7 +17200,13 @@ components:
         sequence: { type: integer, format: int64, minimum: 1 }
         role: { type: string, enum: [USER, ASSISTANT, SYSTEM_RECEIPT] }
         content: { type: string, maxLength: 32768 }
-        state: { type: string, enum: [QUEUED, RUNNING, COMPLETED, FAILED] }
+        state:
+          {
+            type: string,
+            enum: [QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED],
+          }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runVersion: { type: integer, format: int64, minimum: 1 }
         plan: { $ref: "#/components/schemas/AssistantPlan" }
         attachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
         createdAt: { $ref: "#/components/schemas/Timestamp" }

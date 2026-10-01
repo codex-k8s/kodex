@@ -23,9 +23,9 @@ import (
 )
 
 type lockedRuntimeAgent struct {
-	id, projectID, projectRef, overlayID, runtimeProfileRef string
-	agentVersion, configVersion                             int64
-	overlayVersion, bindingVersion                          int64
+	id, projectID, projectRef, systemKey, overlayID, runtimeProfileRef string
+	agentVersion, configVersion                                        int64
+	overlayVersion, bindingVersion                                     int64
 }
 
 func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.Tx, organizationID, agentID, projectID string, runtime entity.RuntimeSelection, createdBy string) error {
@@ -332,7 +332,7 @@ func (repository *Repository) changeRuntimeEnvironmentLifecycle(
 func (repository *Repository) lockRuntimeAgent(ctx context.Context, tx pgx.Tx, scope scope, ref string) (lockedRuntimeAgent, error) {
 	var agent lockedRuntimeAgent
 	err := tx.QueryRow(ctx, queryRuntimeConfigurationLockAgent, scope.organizationID, ref).Scan(
-		&agent.id, &agent.projectID, &agent.projectRef, &agent.agentVersion, &agent.configVersion,
+		&agent.id, &agent.projectID, &agent.projectRef, &agent.systemKey, &agent.agentVersion, &agent.configVersion,
 		&agent.overlayID, &agent.overlayVersion, &agent.bindingVersion, &agent.runtimeProfileRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return lockedRuntimeAgent{}, errs.ErrNotFound
@@ -341,6 +341,11 @@ func (repository *Repository) lockRuntimeAgent(ctx context.Context, tx pgx.Tx, s
 		return lockedRuntimeAgent{}, errs.ErrUnavailable
 	}
 	return agent, nil
+}
+
+func validRuntimeConfigurationAgent(agent lockedRuntimeAgent) bool {
+	return agent.projectID != "" && agent.systemKey == "" ||
+		agent.projectID == "" && agent.systemKey == "system-assistant"
 }
 
 func (repository *Repository) publishAgentRuntimeConfiguration(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -353,7 +358,7 @@ func (repository *Repository) publishAgentRuntimeConfiguration(ctx context.Conte
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	if agent.projectID == "" {
+	if !validRuntimeConfigurationAgent(agent) {
 		return commandOutcome{}, errs.ErrProtected
 	}
 	if *input.Mutation.ExpectedVersion != agent.agentVersion {
@@ -417,7 +422,7 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	if agent.projectID == "" {
+	if !validRuntimeConfigurationAgent(agent) {
 		return commandOutcome{}, errs.ErrProtected
 	}
 	if *input.Mutation.ExpectedVersion != agent.agentVersion {
@@ -655,7 +660,7 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 			"version_ref": versionRef, "organization_id": scope.organizationID, "environment_id": environmentID,
 			"version_number": currentRevision + 1, "parent_version_id": currentVersionID,
 			"non_secret_values": values, "secret_descriptors": secrets, "digest": digest, "created_by": scope.actorID,
-			"image_artifact_id": imageArtifactID, "selected_tools": selectedTools,
+			"image_artifact_id": nullUUID(imageArtifactID), "selected_tools": selectedTools,
 			"core_digest": coreDigest, "resource_policy": asJSON(policy.Resources), "volume_policy": asJSON(policy.Volumes),
 			"network_policy": asJSON(policy.Network), "kubernetes_access_profile": asJSON(policy.KubernetesAccess),
 			"resources_digest": policy.ResourcesDigest, "volumes_digest": policy.VolumesDigest,
@@ -691,6 +696,16 @@ func (repository *Repository) resolveRuntimeEnvironmentImage(
 	organizationID, projectID, artifactRef string,
 	tools []entity.RuntimeEnvironmentTool,
 ) (string, entity.RuntimeEnvironmentImage, []entity.RuntimeEnvironmentTool, []byte, error) {
+	if projectID == "" {
+		if artifactRef != "" || len(tools) != 0 {
+			return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
+		}
+		emptyTools, _ := json.Marshal([]entity.RuntimeEnvironmentTool{})
+		return "", entity.RuntimeEnvironmentImage{
+			Reference: repository.roleImages.DefaultImageReference,
+			Digest:    repository.roleImages.DefaultImageDigest,
+		}, []entity.RuntimeEnvironmentTool{}, emptyTools, nil
+	}
 	if !strings.HasPrefix(artifactRef, "imgart_") || len(artifactRef) > 96 || len(tools) > 128 {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
 	}
@@ -749,7 +764,7 @@ func (repository *Repository) bindRuntimeEnvironment(ctx context.Context, tx pgx
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	if agent.projectID == "" {
+	if !validRuntimeConfigurationAgent(agent) {
 		return commandOutcome{}, errs.ErrProtected
 	}
 	if *input.Mutation.ExpectedVersion != agent.agentVersion {
@@ -858,6 +873,9 @@ func (repository *Repository) resolveEnvironmentPayload(
 	if len(bindings) > 128 {
 		return nil, nil, nil, nil, errs.ErrInvalid
 	}
+	if projectID == "" && len(bindings) != 0 {
+		return nil, nil, nil, nil, errs.ErrInvalid
+	}
 	seen := make(map[string]struct{}, len(bindings))
 	descriptors := make([]entity.RuntimeSecretDescriptor, 0, len(bindings))
 	for _, binding := range bindings {
@@ -924,16 +942,21 @@ func (repository *Repository) admitRuntimeEnvironmentPolicy(
 	if err != nil {
 		return runtimecontract.RuntimeEnvironmentPolicy{}, errs.ErrInvalid
 	}
-	if normalized.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
+	if normalized.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone ||
+		normalized.Network.WebAccess.Mode != runtimecontract.RuntimeWebAccessNone {
 		resourceKind, resourceRef := "RUNTIME_ENVIRONMENT", environmentRef
 		if environmentRef == "" {
 			resourceKind, resourceRef = "PROJECT", projectRef
 		}
-		target, resolveErr := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
-			ProjectRef: projectRef, ResourceKind: resourceKind, ResourceRef: resourceRef,
-		})
-		if resolveErr != nil {
-			return runtimecontract.RuntimeEnvironmentPolicy{}, resolveErr
+		target := resolvedAccessTarget{scope: organizationTarget(current.organizationRef)}
+		if projectRef != "" {
+			var resolveErr error
+			target, resolveErr = repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+				ProjectRef: projectRef, ResourceKind: resourceKind, ResourceRef: resourceRef,
+			})
+			if resolveErr != nil {
+				return runtimecontract.RuntimeEnvironmentPolicy{}, resolveErr
+			}
 		}
 		if accessErr := repository.requireAccess(ctx, tx, current, "environment.privileged.manage", target); accessErr != nil {
 			return runtimecontract.RuntimeEnvironmentPolicy{}, accessErr

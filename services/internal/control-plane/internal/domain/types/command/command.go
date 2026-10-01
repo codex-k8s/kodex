@@ -146,6 +146,7 @@ const (
 	PurgeAssistantConversation         Kind = "PURGE_ASSISTANT_CONVERSATION"
 	MoveAssistantConversationToProject Kind = "MOVE_ASSISTANT_CONVERSATION_TO_PROJECT"
 	AddAssistantTurn                   Kind = "ADD_ASSISTANT_TURN"
+	CancelAssistantTurn                Kind = "CANCEL_ASSISTANT_TURN"
 	UpdateAssistantPlan                Kind = "UPDATE_ASSISTANT_PLAN_DRAFT"
 	ValidateAssistantPlan              Kind = "VALIDATE_ASSISTANT_PLAN"
 	ApplyAssistantPlan                 Kind = "APPLY_ASSISTANT_PLAN"
@@ -388,9 +389,10 @@ type EmailCredentialInput struct {
 	ReplayOnly    bool
 }
 type AssistantTurnInput struct {
-	ConversationRef, Content, AttachmentSetRef string
-	Context                                    *entity.AssistantContextDescriptor
+	ConversationRef, Content, AttachmentSetRef, DeliveryMode string
+	Context                                                  *entity.AssistantContextDescriptor
 }
+type AssistantTurnCancellationInput struct{ ConversationRef string }
 type AssistantPlanInput struct {
 	PlanRef       string
 	Revision      int64

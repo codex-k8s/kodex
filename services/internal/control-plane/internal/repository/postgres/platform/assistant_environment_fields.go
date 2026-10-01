@@ -69,7 +69,7 @@ func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEn
 		return runtimecontract.RuntimeEnvironmentPolicy{}, true
 	}
 	item, ok := raw.(map[string]any)
-	if !ok || !onlyAssistantFields(item, "resources", "volumes", "networkDestinations", "kubernetesAccess") ||
+	if !ok || !onlyAssistantFields(item, "resources", "volumes", "networkDestinations", "webAccess", "kubernetesAccess") ||
 		!hasAssistantFields(item, "resources", "volumes", "networkDestinations", "kubernetesAccess") {
 		return runtimecontract.RuntimeEnvironmentPolicy{}, false
 	}
@@ -121,12 +121,44 @@ func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEn
 	if !ok {
 		return runtimecontract.RuntimeEnvironmentPolicy{}, false
 	}
+	webMode := runtimecontract.RuntimeWebAccessNone
+	webRulesRaw := []any{}
+	if rawWebAccess, supplied := item["webAccess"]; supplied {
+		webAccess, valid := rawWebAccess.(map[string]any)
+		if !valid || !onlyAssistantFields(webAccess, "mode", "rules") || !hasAssistantFields(webAccess, "mode", "rules") {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		var modeOK, rulesOK bool
+		webMode, modeOK = webAccess["mode"].(string)
+		webRulesRaw, rulesOK = webAccess["rules"].([]any)
+		if !modeOK || !rulesOK || len(webRulesRaw) > 64 {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+	}
+	webRules := make([]runtimecontract.RuntimeWebAccessRule, 0, len(webRulesRaw))
+	for _, rawRule := range webRulesRaw {
+		rule, valid := rawRule.(map[string]any)
+		if !valid || !onlyAssistantFields(rule, "domainPattern", "protocol", "port") ||
+			!hasAssistantFields(rule, "domainPattern", "protocol", "port") {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		domain, domainOK := rule["domainPattern"].(string)
+		protocol, protocolOK := rule["protocol"].(string)
+		port, portOK := assistantInt64(rule, "port")
+		if !domainOK || !protocolOK || !portOK || port < 1 || port > 65535 {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		webRules = append(webRules, runtimecontract.RuntimeWebAccessRule{
+			DomainPattern: domain, Protocol: protocol, Port: int32(port),
+		})
+	}
 	policy, err := runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{
 		Resources: runtimecontract.RuntimeResourcePolicy{
 			CPURequestMilli: numbers[0], CPULimitMilli: numbers[1], MemoryRequestMiB: numbers[2], MemoryLimitMiB: numbers[3],
 			EphemeralStorageRequestMiB: numbers[4], EphemeralStorageLimitMiB: numbers[5],
 		},
-		Volumes: volumes, NetworkDestinations: destinations, KubernetesAccess: access,
+		Volumes: volumes, NetworkDestinations: destinations,
+		WebAccess: runtimecontract.RuntimeWebAccess{Mode: webMode, Rules: webRules}, KubernetesAccess: access,
 	})
 	return policy, err == nil
 }

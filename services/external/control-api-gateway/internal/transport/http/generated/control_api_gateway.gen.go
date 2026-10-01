@@ -930,6 +930,7 @@ func (e AssistantTurnRole) Valid() bool {
 
 // Defines values for AssistantTurnState.
 const (
+	AssistantTurnStateCANCELLED AssistantTurnState = "CANCELLED"
 	AssistantTurnStateCOMPLETED AssistantTurnState = "COMPLETED"
 	AssistantTurnStateFAILED    AssistantTurnState = "FAILED"
 	AssistantTurnStateQUEUED    AssistantTurnState = "QUEUED"
@@ -939,6 +940,8 @@ const (
 // Valid indicates whether the value is a known member of the AssistantTurnState enum.
 func (e AssistantTurnState) Valid() bool {
 	switch e {
+	case AssistantTurnStateCANCELLED:
+		return true
 	case AssistantTurnStateCOMPLETED:
 		return true
 	case AssistantTurnStateFAILED:
@@ -5659,6 +5662,93 @@ func (e RuntimeVolumeKind) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeWebAccessMode.
+const (
+	ALLOWLISTFULL     RuntimeWebAccessMode = "ALLOWLIST_FULL"
+	ALLOWLISTREADONLY RuntimeWebAccessMode = "ALLOWLIST_READ_ONLY"
+	FULLPUBLIC        RuntimeWebAccessMode = "FULL_PUBLIC"
+	NONE              RuntimeWebAccessMode = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeWebAccessMode enum.
+func (e RuntimeWebAccessMode) Valid() bool {
+	switch e {
+	case ALLOWLISTFULL:
+		return true
+	case ALLOWLISTREADONLY:
+		return true
+	case FULLPUBLIC:
+		return true
+	case NONE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeWebAccessRuleHttpMethods.
+const (
+	RuntimeWebAccessRuleHttpMethodsDELETE  RuntimeWebAccessRuleHttpMethods = "DELETE"
+	RuntimeWebAccessRuleHttpMethodsGET     RuntimeWebAccessRuleHttpMethods = "GET"
+	RuntimeWebAccessRuleHttpMethodsHEAD    RuntimeWebAccessRuleHttpMethods = "HEAD"
+	RuntimeWebAccessRuleHttpMethodsOPTIONS RuntimeWebAccessRuleHttpMethods = "OPTIONS"
+	RuntimeWebAccessRuleHttpMethodsPATCH   RuntimeWebAccessRuleHttpMethods = "PATCH"
+	RuntimeWebAccessRuleHttpMethodsPOST    RuntimeWebAccessRuleHttpMethods = "POST"
+	RuntimeWebAccessRuleHttpMethodsPUT     RuntimeWebAccessRuleHttpMethods = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeWebAccessRuleHttpMethods enum.
+func (e RuntimeWebAccessRuleHttpMethods) Valid() bool {
+	switch e {
+	case RuntimeWebAccessRuleHttpMethodsDELETE:
+		return true
+	case RuntimeWebAccessRuleHttpMethodsGET:
+		return true
+	case RuntimeWebAccessRuleHttpMethodsHEAD:
+		return true
+	case RuntimeWebAccessRuleHttpMethodsOPTIONS:
+		return true
+	case RuntimeWebAccessRuleHttpMethodsPATCH:
+		return true
+	case RuntimeWebAccessRuleHttpMethodsPOST:
+		return true
+	case RuntimeWebAccessRuleHttpMethodsPUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeWebAccessRulePort.
+const (
+	N443 RuntimeWebAccessRulePort = 443
+)
+
+// Valid indicates whether the value is a known member of the RuntimeWebAccessRulePort enum.
+func (e RuntimeWebAccessRulePort) Valid() bool {
+	switch e {
+	case N443:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeWebAccessRuleProtocol.
+const (
+	HTTPS RuntimeWebAccessRuleProtocol = "HTTPS"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeWebAccessRuleProtocol enum.
+func (e RuntimeWebAccessRuleProtocol) Valid() bool {
+	switch e {
+	case HTTPS:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleDayOfWeek.
 const (
 	ScheduleDayOfWeekEmpty     ScheduleDayOfWeek = ""
@@ -7788,16 +7878,16 @@ func (e ListOrganizationArtifactsParamsSourceKinds) Valid() bool {
 
 // Defines values for DownloadArtifactParamsPurpose.
 const (
-	DownloadArtifactParamsPurposeDOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
-	DownloadArtifactParamsPurposePREVIEW  DownloadArtifactParamsPurpose = "PREVIEW"
+	DOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
+	PREVIEW  DownloadArtifactParamsPurpose = "PREVIEW"
 )
 
 // Valid indicates whether the value is a known member of the DownloadArtifactParamsPurpose enum.
 func (e DownloadArtifactParamsPurpose) Valid() bool {
 	switch e {
-	case DownloadArtifactParamsPurposeDOWNLOAD:
+	case DOWNLOAD:
 		return true
-	case DownloadArtifactParamsPurposePREVIEW:
+	case PREVIEW:
 		return true
 	default:
 		return false
@@ -7816,6 +7906,24 @@ func (e GetArtifactImpactParamsAction) Valid() bool {
 	case DELETE:
 		return true
 	case PURGE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AddAssistantTurnJSONBodyDeliveryMode.
+const (
+	INTERRUPTACTIVE AddAssistantTurnJSONBodyDeliveryMode = "INTERRUPT_ACTIVE"
+	QUEUE           AddAssistantTurnJSONBodyDeliveryMode = "QUEUE"
+)
+
+// Valid indicates whether the value is a known member of the AddAssistantTurnJSONBodyDeliveryMode enum.
+func (e AddAssistantTurnJSONBodyDeliveryMode) Valid() bool {
+	switch e {
+	case INTERRUPTACTIVE:
+		return true
+	case QUEUE:
 		return true
 	default:
 		return false
@@ -9137,6 +9245,8 @@ type AssistantTurn struct {
 	Plan             *AssistantPlan     `json:"plan,omitempty"`
 	Ref              OpaqueRef          `json:"ref"`
 	Role             AssistantTurnRole  `json:"role"`
+	RunRef           *OpaqueRef         `json:"runRef,omitempty"`
+	RunVersion       *int64             `json:"runVersion,omitempty"`
 	Sequence         int64              `json:"sequence"`
 	State            AssistantTurnState `json:"state"`
 }
@@ -12102,8 +12212,10 @@ type RuntimeEnvironmentImpact struct {
 
 // RuntimeEnvironmentInput defines model for RuntimeEnvironmentInput.
 type RuntimeEnvironmentInput struct {
-	Description      string                        `json:"description"`
-	ImageArtifactRef OpaqueRef                     `json:"imageArtifactRef"`
+	Description string `json:"description"`
+
+	// ImageArtifactRef Для системного помощника пустая строка означает платформенный образ; Проектные окружения по-прежнему требуют точный artifact ref.
+	ImageArtifactRef string                        `json:"imageArtifactRef"`
 	Name             string                        `json:"name"`
 	Policy           RuntimeEnvironmentPolicyInput `json:"policy"`
 	SecretBindings   []RuntimeSecretBinding        `json:"secretBindings"`
@@ -12135,6 +12247,7 @@ type RuntimeEnvironmentPolicyInput struct {
 	NetworkDestinations []RuntimeNetworkDestination `json:"networkDestinations"`
 	Resources           RuntimeResourcePolicy       `json:"resources"`
 	Volumes             []RuntimeVolumeInput        `json:"volumes"`
+	WebAccess           RuntimeWebAccess            `json:"webAccess"`
 }
 
 // RuntimeEnvironmentPublicationResult defines model for RuntimeEnvironmentPublicationResult.
@@ -12248,6 +12361,7 @@ type RuntimeNetworkEgress struct {
 type RuntimeNetworkPolicy struct {
 	DenyByDefault RuntimeNetworkPolicyDenyByDefault `json:"denyByDefault"`
 	Egress        []RuntimeNetworkEgress            `json:"egress"`
+	WebAccess     RuntimeWebAccess                  `json:"webAccess"`
 }
 
 // RuntimeNetworkPolicyDenyByDefault defines model for RuntimeNetworkPolicy.DenyByDefault.
@@ -12523,6 +12637,32 @@ type RuntimeVolumeInput struct {
 
 // RuntimeVolumeKind defines model for RuntimeVolumeKind.
 type RuntimeVolumeKind string
+
+// RuntimeWebAccess defines model for RuntimeWebAccess.
+type RuntimeWebAccess struct {
+	Mode  RuntimeWebAccessMode   `json:"mode"`
+	Rules []RuntimeWebAccessRule `json:"rules"`
+}
+
+// RuntimeWebAccessMode defines model for RuntimeWebAccessMode.
+type RuntimeWebAccessMode string
+
+// RuntimeWebAccessRule defines model for RuntimeWebAccessRule.
+type RuntimeWebAccessRule struct {
+	DomainPattern string                            `json:"domainPattern"`
+	HttpMethods   []RuntimeWebAccessRuleHttpMethods `json:"httpMethods"`
+	Port          RuntimeWebAccessRulePort          `json:"port"`
+	Protocol      RuntimeWebAccessRuleProtocol      `json:"protocol"`
+}
+
+// RuntimeWebAccessRuleHttpMethods defines model for RuntimeWebAccessRule.HttpMethods.
+type RuntimeWebAccessRuleHttpMethods string
+
+// RuntimeWebAccessRulePort defines model for RuntimeWebAccessRule.Port.
+type RuntimeWebAccessRulePort int32
+
+// RuntimeWebAccessRuleProtocol defines model for RuntimeWebAccessRule.Protocol.
+type RuntimeWebAccessRuleProtocol string
 
 // STTModelCatalog defines model for STTModelCatalog.
 type STTModelCatalog struct {
@@ -14050,6 +14190,13 @@ type PurgeAssistantConversationParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// CancelAssistantTurnParams defines parameters for CancelAssistantTurn.
+type CancelAssistantTurnParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ArchiveAssistantConversationParams defines parameters for ArchiveAssistantConversation.
 type ArchiveAssistantConversationParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -14090,9 +14237,10 @@ type UpdateAssistantConversationTitleParams struct {
 
 // AddAssistantTurnJSONBody defines parameters for AddAssistantTurn.
 type AddAssistantTurnJSONBody struct {
-	AttachmentSetRef *OpaqueRef                  `json:"attachmentSetRef,omitempty"`
-	Content          string                      `json:"content"`
-	Context          *AssistantContextDescriptor `json:"context,omitempty"`
+	AttachmentSetRef *OpaqueRef                            `json:"attachmentSetRef,omitempty"`
+	Content          string                                `json:"content"`
+	Context          *AssistantContextDescriptor           `json:"context,omitempty"`
+	DeliveryMode     *AddAssistantTurnJSONBodyDeliveryMode `json:"deliveryMode,omitempty"`
 }
 
 // AddAssistantTurnParams defines parameters for AddAssistantTurn.
@@ -14100,6 +14248,9 @@ type AddAssistantTurnParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
+
+// AddAssistantTurnJSONBodyDeliveryMode defines parameters for AddAssistantTurn.
+type AddAssistantTurnJSONBodyDeliveryMode string
 
 // ApplyAssistantPlanJSONBody defines parameters for ApplyAssistantPlan.
 type ApplyAssistantPlanJSONBody struct {
@@ -16696,6 +16847,9 @@ type ServerInterface interface {
 
 	// (DELETE /api/v1/assistant-conversations/{conversationRef})
 	PurgeAssistantConversation(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params PurgeAssistantConversationParams)
+
+	// (POST /api/v1/assistant-conversations/{conversationRef}/active-turn/cancellation)
+	CancelAssistantTurn(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params CancelAssistantTurnParams)
 
 	// (POST /api/v1/assistant-conversations/{conversationRef}/archive)
 	ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params ArchiveAssistantConversationParams)
@@ -22470,6 +22624,112 @@ func (siw *ServerInterfaceWrapper) PurgeAssistantConversation(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PurgeAssistantConversation(w, r, conversationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelAssistantTurn operation middleware
+func (siw *ServerInterfaceWrapper) CancelAssistantTurn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationRef" -------------
+	var conversationRef ConversationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationRef", r.PathValue("conversationRef"), &conversationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelAssistantTurnParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelAssistantTurn(w, r, conversationRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -45015,6 +45275,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.ListAssistantConversations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.CreateAssistantConversation)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}", wrapper.PurgeAssistantConversation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/active-turn/cancellation", wrapper.CancelAssistantTurn)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/archive", wrapper.ArchiveAssistantConversation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/project", wrapper.MoveAssistantConversationToProject)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/restore", wrapper.RestoreAssistantConversation)

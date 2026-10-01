@@ -22,7 +22,7 @@ function effectivePolicy() {
         {
           destination: "PROVIDER_PROXY" as const,
           protocol: "TCP" as const,
-          port: 8080,
+          port: 8084,
         },
         {
           destination: "RUNTIME_CALLBACK" as const,
@@ -30,6 +30,7 @@ function effectivePolicy() {
           port: 8444,
         },
       ],
+      webAccess: { mode: "NONE" as const, rules: [] },
     },
     kubernetesAccess: {
       kind: "NONE" as const,

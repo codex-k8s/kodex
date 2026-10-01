@@ -428,6 +428,8 @@ describe("assistant workspace store", () => {
       created,
       "Создай сотрудника",
       context,
+      undefined,
+      "QUEUE",
     );
     expect(store.selectedConversation?.turns).toHaveLength(1);
   });
@@ -559,6 +561,7 @@ describe("assistant workspace store", () => {
       "Изучи вложения",
       context,
       "aset_contracts",
+      "QUEUE",
     );
   });
 

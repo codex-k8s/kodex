@@ -81,6 +81,14 @@ type runtimeCodeModeConfig struct {
 type permissionProfile struct {
 	Extends    string            `toml:"extends"`
 	Filesystem map[string]string `toml:"filesystem"`
+	Network    *networkPolicy    `toml:"network,omitempty"`
+}
+
+type networkPolicy struct {
+	Enabled            bool     `toml:"enabled"`
+	Mode               string   `toml:"mode,omitempty"`
+	AllowedDomains     []string `toml:"allowed_domains,omitempty"`
+	AllowUpstreamProxy bool     `toml:"allow_upstream_proxy"`
 }
 
 type historyConfig struct {
@@ -168,7 +176,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 				filepath.Join(input.CodexHome, "auth.json"): "deny",
 				"/run/secrets": "deny",
 				"/proc":        "deny",
-			}}},
+			}, Network: codexNetworkPolicy(input.EnvironmentPolicy.Network.WebAccess)}},
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "all", IgnoreDefaultExcludes: true,
 			IncludeOnly: includeOnly, Set: environmentSet},
 		MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
@@ -193,6 +201,22 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		return errors.New("validate Codex configuration")
 	}
 	return replacePrivateFile(filepath.Join(input.CodexHome, "config.toml"), raw.Bytes())
+}
+
+func codexNetworkPolicy(access runtimecontract.RuntimeWebAccess) *networkPolicy {
+	result := &networkPolicy{Enabled: access.Mode != runtimecontract.RuntimeWebAccessNone, AllowUpstreamProxy: true}
+	switch access.Mode {
+	case runtimecontract.RuntimeWebAccessAllowlistReadOnly:
+		result.Mode = "limited"
+	case runtimecontract.RuntimeWebAccessAllowlistFull, runtimecontract.RuntimeWebAccessFullPublic:
+		result.Mode = "full"
+	}
+	if access.Mode == runtimecontract.RuntimeWebAccessAllowlistReadOnly || access.Mode == runtimecontract.RuntimeWebAccessAllowlistFull {
+		for _, rule := range access.Rules {
+			result.AllowedDomains = append(result.AllowedDomains, rule.DomainPattern)
+		}
+	}
+	return result
 }
 
 func readProviderDigest(path string) (string, error) {

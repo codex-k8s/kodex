@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -192,7 +193,11 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if input.ProjectRef != "prj_abcdefgh" {
 		t.Fatalf("runtime project binding = %q", input.ProjectRef)
 	}
-	if !hasEnv(pod.Spec.Containers[1], "HTTPS_PROXY", "http://egress-gateway.kodex-system.svc:8080") {
+	proxyValue, ok := envValue(pod.Spec.Containers[1], "HTTPS_PROXY")
+	proxyURL, proxyErr := url.Parse(proxyValue)
+	proxyPassword, hasProxyPassword := proxyURL.User.Password()
+	if !ok || proxyErr != nil || proxyURL.Scheme != "http" || proxyURL.Host != "egress-gateway.kodex-system.svc:8084" ||
+		proxyURL.User.Username() != "kodex" || !hasProxyPassword || proxyPassword == "" {
 		t.Fatal("provider runtime is not fenced through the egress gateway")
 	}
 	if !hasEnv(pod.Spec.Containers[0], "OTEL_SDK_DISABLED", "true") ||
@@ -1720,7 +1725,8 @@ func testManagerConfig() Config {
 		ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
 		CallbackTLSServerName:  "runtime-controller-callback.kodex-system.svc.cluster.local",
 		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
-		ProviderHTTPSProxy:      "http://egress-gateway.kodex-system.svc:8080",
+		ProviderHTTPSProxy:      "http://egress-gateway.kodex-system.svc:8084",
+		RuntimeEgressSigningKey: []byte("0123456789abcdef0123456789abcdef"),
 		ProviderAppArmorProfile: "kodex-provider-runtime",
 		KubernetesAPIServiceIP:  "10.43.0.1",
 		StorageClass:            "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
@@ -1923,6 +1929,20 @@ func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironment
 		ResourcesDigest: policy.ResourcesDigest, VolumesDigest: policy.VolumesDigest,
 		NetworkDigest: policy.NetworkDigest, RbacDigest: policy.RBACDigest,
 	}
+	result.Network.WebAccess = &controlplanev1.RuntimeWebAccess{Mode: controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE}
+	switch policy.Network.WebAccess.Mode {
+	case runtimecontract.RuntimeWebAccessAllowlistReadOnly:
+		result.Network.WebAccess.Mode = controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY
+	case runtimecontract.RuntimeWebAccessAllowlistFull:
+		result.Network.WebAccess.Mode = controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL
+	case runtimecontract.RuntimeWebAccessFullPublic:
+		result.Network.WebAccess.Mode = controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC
+	}
+	for _, rule := range policy.Network.WebAccess.Rules {
+		result.Network.WebAccess.Rules = append(result.Network.WebAccess.Rules, &controlplanev1.RuntimeWebAccessRule{
+			DomainPattern: rule.DomainPattern, Protocol: rule.Protocol, Port: rule.Port, HttpMethods: append([]string(nil), rule.HTTPMethods...),
+		})
+	}
 	if policy.KubernetesAccess.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
 		result.KubernetesAccess.Kind = controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
 	}
@@ -1995,6 +2015,15 @@ func hasEnv(container corev1.Container, name, value string) bool {
 		}
 	}
 	return false
+}
+
+func envValue(container corev1.Container, name string) (string, bool) {
+	for _, item := range container.Env {
+		if item.Name == name {
+			return item.Value, true
+		}
+	}
+	return "", false
 }
 
 func containerByName(t *testing.T, containers []corev1.Container, name string) corev1.Container {

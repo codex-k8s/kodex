@@ -701,7 +701,7 @@
     "network_policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["deny_by_default", "egress"],
+      "required": ["deny_by_default", "egress", "web_access"],
       "properties": {
         "deny_by_default": {"const": true},
         "egress": {
@@ -710,7 +710,34 @@
           "maxItems": 5,
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/network_egress"}
+        },
+        "web_access": {"$ref": "#/$defs/web_access"}
+      }
+    },
+    "web_access_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain_pattern", "protocol", "port", "http_methods"],
+      "properties": {
+        "domain_pattern": {"type": "string", "minLength": 3, "maxLength": 253},
+        "protocol": {"const": "HTTPS"},
+        "port": {"const": 443},
+        "http_methods": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {"enum": ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]}
         }
+      }
+    },
+    "web_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "rules"],
+      "properties": {
+        "mode": {"enum": ["NONE", "ALLOWLIST_READ_ONLY", "ALLOWLIST_FULL", "FULL_PUBLIC"]},
+        "rules": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/web_access_rule"}}
       }
     },
     "kubernetes_access_profile": {

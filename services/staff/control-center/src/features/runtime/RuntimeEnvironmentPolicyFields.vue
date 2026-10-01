@@ -10,6 +10,7 @@ import {
 
 import {
   emptyRuntimeVolume,
+  emptyRuntimeWebAccessRule,
   mandatoryRuntimeNetworkDestinations,
   runtimeResourceBounds,
   runtimeVolumeBounds,
@@ -19,6 +20,8 @@ import type {
   RuntimeEnvironmentPolicyInput,
   RuntimeResourcePolicy,
   RuntimeVolumeInput,
+  RuntimeWebAccessMode,
+  RuntimeWebAccessRule,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
@@ -139,6 +142,57 @@ function changeAccess(event: Event): void {
   );
   emit("update:policy", next);
 }
+
+function changeWebAccessMode(event: Event): void {
+  if (props.disabled) return;
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) return;
+  const mode = target.value as RuntimeWebAccessMode;
+  const rules = mode === "NONE" || mode === "FULL_PUBLIC"
+    ? []
+    : props.policy.webAccess.rules.length
+      ? props.policy.webAccess.rules.map((rule) => ({
+          ...rule,
+          httpMethods: (mode === "ALLOWLIST_READ_ONLY"
+            ? ["GET", "HEAD", "OPTIONS"]
+            : ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]) as RuntimeWebAccessRule["httpMethods"],
+        }))
+      : [emptyRuntimeWebAccessRule(mode)];
+  emit("update:policy", { ...props.policy, webAccess: { mode, rules } });
+}
+
+function addWebRule(): void {
+  if (props.disabled || props.policy.webAccess.rules.length >= 64) return;
+  emit("update:policy", {
+    ...props.policy,
+    webAccess: {
+      ...props.policy.webAccess,
+      rules: [...props.policy.webAccess.rules, emptyRuntimeWebAccessRule(props.policy.webAccess.mode)],
+    },
+  });
+}
+
+function removeWebRule(index: number): void {
+  if (props.disabled) return;
+  emit("update:policy", {
+    ...props.policy,
+    webAccess: { ...props.policy.webAccess, rules: props.policy.webAccess.rules.filter((_, current) => current !== index) },
+  });
+}
+
+function changeWebRule(index: number, event: Event): void {
+  if (props.disabled) return;
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  emit("update:policy", {
+    ...props.policy,
+    webAccess: {
+      ...props.policy.webAccess,
+      rules: props.policy.webAccess.rules.map((rule, current) => current === index ? { ...rule, domainPattern: target.value } : rule),
+    },
+  });
+}
+
 </script>
 
 <template>
@@ -300,6 +354,55 @@ function changeAccess(event: Event): void {
           />
         </article>
       </div>
+      <div class="web-access-editor">
+        <label class="field">
+          <span>{{ $t("runtime.webAccessMode") }}</span>
+          <select
+            name="runtime-web-access-mode"
+            :value="policy.webAccess.mode"
+            :disabled="disabled"
+            @change="changeWebAccessMode"
+          >
+            <option value="NONE">{{ $t("runtime.webAccessModeLabel.NONE") }}</option>
+            <option value="ALLOWLIST_READ_ONLY">{{ $t("runtime.webAccessModeLabel.ALLOWLIST_READ_ONLY") }}</option>
+            <option value="ALLOWLIST_FULL">{{ $t("runtime.webAccessModeLabel.ALLOWLIST_FULL") }}</option>
+            <option value="FULL_PUBLIC">{{ $t("runtime.webAccessModeLabel.FULL_PUBLIC") }}</option>
+          </select>
+        </label>
+        <p class="secondary-text">{{ $t(`runtime.webAccessModeHelp.${policy.webAccess.mode}`) }}</p>
+        <template v-if="policy.webAccess.mode.startsWith('ALLOWLIST')">
+          <article
+            v-for="(rule, index) in policy.webAccess.rules"
+            :key="index"
+            class="web-rule-row"
+          >
+            <label class="field web-rule-domain">
+              <span>{{ $t("runtime.webAccessDomain") }}</span>
+              <input
+                :name="`runtime-web-domain-${index}`"
+                :value="rule.domainPattern"
+                placeholder="api.example.com или **.example.com"
+                :disabled="disabled"
+                @input="changeWebRule(index, $event)"
+              />
+            </label>
+            <div class="web-rule-transport">
+              <span>HTTPS</span><code>443</code>
+            </div>
+            <div class="method-list" :aria-label="$t('runtime.webAccessMethods')">
+              <span class="method-list__label">{{ $t("runtime.webAccessMethods") }}</span>
+              <code v-for="method in rule.httpMethods" :key="method">{{ method }}</code>
+            </div>
+            <button class="icon-button icon-button--danger" type="button" :aria-label="$t('common.delete')" :disabled="disabled" @click="removeWebRule(index)">
+              <Trash2 :size="16" aria-hidden="true" />
+            </button>
+          </article>
+          <button class="button web-rule-add" type="button" :disabled="disabled || policy.webAccess.rules.length >= 64" @click="addWebRule">
+            <Plus :size="15" aria-hidden="true" />
+            {{ $t("runtime.addWebAccessRule") }}
+          </button>
+        </template>
+      </div>
     </section>
 
     <section class="policy-group">
@@ -409,6 +512,46 @@ function changeAccess(event: Event): void {
   margin: 4px 0 0;
   color: var(--text-secondary);
 }
+.web-access-editor {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.web-rule-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) auto minmax(360px, 1fr) 36px;
+  align-items: end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+.web-rule-transport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+}
+.method-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0;
+  padding: 0;
+}
+.method-list__label {
+  width: 100%;
+  color: var(--text-secondary);
+}
+.method-list code {
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--surface-subtle);
+  font-size: 12px;
+}
+.web-rule-add { justify-self: start; }
 .access-toggle {
   display: flex;
   align-items: flex-start;

@@ -141,6 +141,7 @@ describe("runtime environment form", () => {
       },
       volumes: [],
       networkDestinations: ["DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"],
+      webAccess: { mode: "NONE", rules: [] },
       kubernetesAccess: "NONE",
     });
 
@@ -172,10 +173,11 @@ describe("runtime environment form", () => {
           egress: [
             { destination: "DNS", protocol: "TCP", port: 53 },
             { destination: "DNS", protocol: "UDP", port: 53 },
-            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8080 },
+            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
             { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
             { destination: "KUBERNETES_API", protocol: "TCP", port: 443 },
           ],
+          webAccess: { mode: "NONE", rules: [] },
         },
         kubernetesAccess: {
           kind: "READ_OWN_EXECUTION",
@@ -201,6 +203,7 @@ describe("runtime environment form", () => {
         "RUNTIME_CALLBACK",
         "KUBERNETES_API",
       ],
+      webAccess: { mode: "NONE", rules: [] },
       kubernetesAccess: "READ_OWN_EXECUTION",
     });
   });

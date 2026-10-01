@@ -11412,6 +11412,7 @@ const (
 	SystemAssistantService_PurgeAssistantConversation_FullMethodName         = "/controlplane.v1.SystemAssistantService/PurgeAssistantConversation"
 	SystemAssistantService_MoveAssistantConversationToProject_FullMethodName = "/controlplane.v1.SystemAssistantService/MoveAssistantConversationToProject"
 	SystemAssistantService_AddAssistantTurn_FullMethodName                   = "/controlplane.v1.SystemAssistantService/AddAssistantTurn"
+	SystemAssistantService_CancelAssistantTurn_FullMethodName                = "/controlplane.v1.SystemAssistantService/CancelAssistantTurn"
 	SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName           = "/controlplane.v1.SystemAssistantService/UpdateAssistantPlanDraft"
 	SystemAssistantService_ValidateAssistantPlan_FullMethodName              = "/controlplane.v1.SystemAssistantService/ValidateAssistantPlan"
 	SystemAssistantService_ApplyAssistantPlan_FullMethodName                 = "/controlplane.v1.SystemAssistantService/ApplyAssistantPlan"
@@ -11433,6 +11434,7 @@ type SystemAssistantServiceClient interface {
 	PurgeAssistantConversation(ctx context.Context, in *PurgeAssistantConversationRequest, opts ...grpc.CallOption) (*PurgeAssistantConversationResponse, error)
 	MoveAssistantConversationToProject(ctx context.Context, in *MoveAssistantConversationToProjectRequest, opts ...grpc.CallOption) (*MoveAssistantConversationToProjectResponse, error)
 	AddAssistantTurn(ctx context.Context, in *AddAssistantTurnRequest, opts ...grpc.CallOption) (*AddAssistantTurnResponse, error)
+	CancelAssistantTurn(ctx context.Context, in *CancelAssistantTurnRequest, opts ...grpc.CallOption) (*CancelAssistantTurnResponse, error)
 	UpdateAssistantPlanDraft(ctx context.Context, in *UpdateAssistantPlanDraftRequest, opts ...grpc.CallOption) (*UpdateAssistantPlanDraftResponse, error)
 	ValidateAssistantPlan(ctx context.Context, in *ValidateAssistantPlanRequest, opts ...grpc.CallOption) (*ValidateAssistantPlanResponse, error)
 	ApplyAssistantPlan(ctx context.Context, in *ApplyAssistantPlanRequest, opts ...grpc.CallOption) (*ApplyAssistantPlanResponse, error)
@@ -11539,6 +11541,16 @@ func (c *systemAssistantServiceClient) AddAssistantTurn(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *systemAssistantServiceClient) CancelAssistantTurn(ctx context.Context, in *CancelAssistantTurnRequest, opts ...grpc.CallOption) (*CancelAssistantTurnResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelAssistantTurnResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_CancelAssistantTurn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *systemAssistantServiceClient) UpdateAssistantPlanDraft(ctx context.Context, in *UpdateAssistantPlanDraftRequest, opts ...grpc.CallOption) (*UpdateAssistantPlanDraftResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateAssistantPlanDraftResponse)
@@ -11612,6 +11624,7 @@ type SystemAssistantServiceServer interface {
 	PurgeAssistantConversation(context.Context, *PurgeAssistantConversationRequest) (*PurgeAssistantConversationResponse, error)
 	MoveAssistantConversationToProject(context.Context, *MoveAssistantConversationToProjectRequest) (*MoveAssistantConversationToProjectResponse, error)
 	AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error)
+	CancelAssistantTurn(context.Context, *CancelAssistantTurnRequest) (*CancelAssistantTurnResponse, error)
 	UpdateAssistantPlanDraft(context.Context, *UpdateAssistantPlanDraftRequest) (*UpdateAssistantPlanDraftResponse, error)
 	ValidateAssistantPlan(context.Context, *ValidateAssistantPlanRequest) (*ValidateAssistantPlanResponse, error)
 	ApplyAssistantPlan(context.Context, *ApplyAssistantPlanRequest) (*ApplyAssistantPlanResponse, error)
@@ -11654,6 +11667,9 @@ func (UnimplementedSystemAssistantServiceServer) MoveAssistantConversationToProj
 }
 func (UnimplementedSystemAssistantServiceServer) AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddAssistantTurn not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) CancelAssistantTurn(context.Context, *CancelAssistantTurnRequest) (*CancelAssistantTurnResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelAssistantTurn not implemented")
 }
 func (UnimplementedSystemAssistantServiceServer) UpdateAssistantPlanDraft(context.Context, *UpdateAssistantPlanDraftRequest) (*UpdateAssistantPlanDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateAssistantPlanDraft not implemented")
@@ -11857,6 +11873,24 @@ func _SystemAssistantService_AddAssistantTurn_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SystemAssistantService_CancelAssistantTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelAssistantTurnRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).CancelAssistantTurn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_CancelAssistantTurn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).CancelAssistantTurn(ctx, req.(*CancelAssistantTurnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SystemAssistantService_UpdateAssistantPlanDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdateAssistantPlanDraftRequest)
 	if err := dec(in); err != nil {
@@ -12007,6 +12041,10 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddAssistantTurn",
 			Handler:    _SystemAssistantService_AddAssistantTurn_Handler,
+		},
+		{
+			MethodName: "CancelAssistantTurn",
+			Handler:    _SystemAssistantService_CancelAssistantTurn_Handler,
 		},
 		{
 			MethodName: "UpdateAssistantPlanDraft",

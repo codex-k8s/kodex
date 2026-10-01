@@ -146,6 +146,7 @@ function parsePolicy(
       "networkDestinations",
       "resources",
       "volumes",
+      "webAccess",
     ]) ||
     (value.kubernetesAccess !== "NONE" &&
       value.kubernetesAccess !== "READ_OWN_EXECUTION") ||
@@ -156,6 +157,8 @@ function parsePolicy(
       ),
     ) ||
     !isRecord(value.resources) ||
+    !isRecord(value.webAccess) ||
+    !Array.isArray(value.webAccess.rules) ||
     !hasExactKeys(value.resources, [
       "cpuLimitMilli",
       "cpuRequestMilli",
@@ -176,6 +179,7 @@ function parsePolicy(
     volumes,
     networkDestinations:
       value.networkDestinations as RuntimeEnvironmentPolicyInput["networkDestinations"],
+    webAccess: value.webAccess as unknown as RuntimeEnvironmentPolicyInput["webAccess"],
     kubernetesAccess: value.kubernetesAccess,
   };
 }

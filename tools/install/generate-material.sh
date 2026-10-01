@@ -241,12 +241,15 @@ unset username password
 openssl rand -hex 32 >"$output_directory/control-api/session-current.hex"
 openssl rand -hex 32 >"$output_directory/control-api/session-previous.hex"
 openssl rand -base64 48 | tr -d '\n' >"$output_directory/control-api/lease-signing.key"
+openssl rand -base64 48 | tr -d '\n' >"$output_directory/control-api/runtime-egress-signing.key"
 put_material kodex/control-api-gateway/session current.hex \
   "$output_directory/control-api/session-current.hex"
 put_material kodex/control-api-gateway/session previous.hex \
   "$output_directory/control-api/session-previous.hex"
 put_material kodex/control-plane/lease-signing key \
   "$output_directory/control-api/lease-signing.key"
+put_material kodex/runtime-egress/signing key \
+  "$output_directory/control-api/runtime-egress-signing.key"
 
 control_api_tls_source=$(jq -cn '{
   authority:"pki", profile:"kodex-control-api-gateway",

@@ -7,7 +7,7 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --context <exact-context> --state-directory <path> --mode reconcile|checkpoint|commit\n' \
+  printf 'Usage: %s --context <exact-context> --state-directory <path> --mode reconcile|checkpoint|commit|upgrade-runtime-egress-signing\n' \
     "$0" >&2
 }
 
@@ -25,7 +25,7 @@ while (($# > 0)); do
 done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
-case "$mode" in reconcile|checkpoint|commit) ;; *) fail 'mode is invalid' ;; esac
+case "$mode" in reconcile|checkpoint|commit|upgrade-runtime-egress-signing) ;; *) fail 'mode is invalid' ;; esac
 [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" &&
   "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'state directory is invalid'
@@ -72,6 +72,40 @@ expected_revision=$(jq -cn \
       natsMaterialContractSHA256:$nats_digest
     }
   ')
+
+if [[ "$mode" == upgrade-runtime-egress-signing ]]; then
+  runtime_key="$material_directory/control-api/runtime-egress-signing.key"
+  runtime_material="$material_directory/material/kodex/runtime-egress/signing/key"
+  runtime_projection="$material_directory/projections/runtime-egress-signing/key"
+  [[ -d "$material_directory" && ! -L "$material_directory" &&
+    -f "$marker" && ! -L "$marker" &&
+    -d "$material_directory/control-api" && ! -L "$material_directory/control-api" &&
+    -d "$material_directory/material" && ! -L "$material_directory/material" &&
+    -d "$material_directory/projections" && ! -L "$material_directory/projections" ]] ||
+    fail 'existing local material is not eligible for additive runtime egress upgrade'
+  if [[ -e "$runtime_key" || -L "$runtime_key" || -e "$runtime_material" || -L "$runtime_material" ||
+    -e "$runtime_projection" || -L "$runtime_projection" ]]; then
+    [[ -s "$runtime_key" && -s "$runtime_material" && -s "$runtime_projection" &&
+      ! -L "$runtime_key" && ! -L "$runtime_material" && ! -L "$runtime_projection" &&
+      "$(sha256sum "$runtime_key" | awk '{print $1}')" == "$(sha256sum "$runtime_material" | awk '{print $1}')" &&
+      "$(sha256sum "$runtime_key" | awk '{print $1}')" == "$(sha256sum "$runtime_projection" | awk '{print $1}')" ]] ||
+      fail 'partial runtime egress signing material exists'
+  else
+    temporary_key=$(mktemp "$state_directory/.runtime-egress-signing.XXXXXX")
+    trap 'rm -f -- "$temporary_key"' EXIT
+    openssl rand -base64 48 | tr -d '\n' >"$temporary_key"
+    [[ "$(stat -c '%s' "$temporary_key")" -ge 48 ]] || fail 'runtime egress signing material is invalid'
+    mkdir -p "$(dirname -- "$runtime_material")" "$(dirname -- "$runtime_projection")"
+    install -m 0600 "$temporary_key" "$runtime_key"
+    install -m 0600 "$temporary_key" "$runtime_material"
+    install -m 0600 "$temporary_key" "$runtime_projection"
+  fi
+  find "$material_directory/projections" -type f -print0 | sort -z | xargs -0 sha256sum \
+    >"$material_directory/projections.sha256"
+  chmod 0600 "$material_directory/projections.sha256"
+  printf 'Kodex local runtime egress signing material upgraded\n'
+  exit 0
+fi
 
 if [[ "$mode" == commit || "$mode" == checkpoint ]]; then
   [[ -d "$material_directory" && ! -L "$material_directory" &&

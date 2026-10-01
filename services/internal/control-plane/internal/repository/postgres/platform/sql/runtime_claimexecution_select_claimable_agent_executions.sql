@@ -755,7 +755,10 @@ WHERE n.organization_id = $1::uuid
       JOIN control_plane.runs earlier_run ON earlier_run.id = earlier.run_id
       WHERE earlier_run.session_id = r.session_id
         AND earlier_run.root_run_id <> r.root_run_id
-        AND earlier.created_at < n.created_at
+        AND (
+          earlier_run.dispatch_priority > r.dispatch_priority
+          OR (earlier_run.dispatch_priority = r.dispatch_priority AND earlier.created_at < n.created_at)
+        )
         AND earlier.type = 'AGENT_EXECUTION'
         AND earlier.state IN ('QUEUED', 'RUNNING', 'WAITING')
   )

@@ -300,6 +300,7 @@ func TestEnvironmentDraftPolicyKeepsTypedResourceAndNetworkSettings(t *testing.T
 			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK,
 			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY,
 		}, KubernetesAccess: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE,
+		WebAccess: &controlplanev1.RuntimeWebAccess{Mode: controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE},
 	}
 	view, ok := environmentDraftPolicyView(input)
 	if !ok || view == nil {

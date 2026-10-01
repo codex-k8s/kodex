@@ -80,6 +80,8 @@ func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 		"EGRESS_GATEWAY_INTEGRATION_CONNECT_LISTEN": ":8083",
 		"EGRESS_GATEWAY_INTEGRATION_POLICY_FILE":    "/var/run/config/kodex/egress-gateway-integration/integration-policy.json",
 		"EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST":  strings.Repeat("c", 64),
+		"EGRESS_GATEWAY_RUNTIME_CONNECT_LISTEN":     ":8084",
+		"EGRESS_GATEWAY_RUNTIME_SIGNING_KEY_FILE":   "/var/run/secrets/kodex/egress-gateway/runtime-signing/key",
 		"EGRESS_GATEWAY_TECHNICAL_LISTEN":           ":9090",
 		"EGRESS_GATEWAY_RESOLV_CONF":                "/etc/resolv.conf",
 	}

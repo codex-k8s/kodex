@@ -33,6 +33,7 @@ export async function installEnvironmentFixture(
     },
     volumes: [],
     networkDestinations: ["DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"],
+    webAccess: { mode: "NONE", rules: [] },
     kubernetesAccess: "NONE",
   };
   const empty: RuntimeEnvironmentDraftSpecification = {
@@ -93,7 +94,7 @@ export async function installEnvironmentFixture(
       policy: {
         resources: policy.resources,
         volumes: [],
-        network: { denyByDefault: true, egress: [] },
+        network: { denyByDefault: true, egress: [], webAccess: { mode: "NONE", rules: [] } },
         kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
         resourcesDigest: digest,
         volumesDigest: digest,

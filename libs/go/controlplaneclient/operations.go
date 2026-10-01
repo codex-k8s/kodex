@@ -326,6 +326,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.assistant.conversations.purge":                        controlplanev1.SystemAssistantService_PurgeAssistantConversation_FullMethodName,
 		"platform.assistant.conversations.project.move":                 controlplanev1.SystemAssistantService_MoveAssistantConversationToProject_FullMethodName,
 		"platform.assistant.turns.add":                                  controlplanev1.SystemAssistantService_AddAssistantTurn_FullMethodName,
+		"platform.assistant.turns.cancel":                               controlplanev1.SystemAssistantService_CancelAssistantTurn_FullMethodName,
 		"platform.assistant.plans.apply":                                controlplanev1.SystemAssistantService_ApplyAssistantPlan_FullMethodName,
 		"platform.assistant.plans.draft.update":                         controlplanev1.SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName,
 		"platform.assistant.plans.validate":                             controlplanev1.SystemAssistantService_ValidateAssistantPlan_FullMethodName,

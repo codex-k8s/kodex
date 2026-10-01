@@ -13,12 +13,14 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/gateway"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/integrationpolicy"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/mailpolicy"
 	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/runtimepolicy"
 )
 
 const (
@@ -176,6 +178,19 @@ func runActive(
 		}
 		current.connects = append(current.connects, server)
 	}
+	runtimeKey, err := securefile.Read(config.RuntimeSigningKeyFile, 4096)
+	if err != nil {
+		return errors.New("read runtime egress signing key")
+	}
+	runtimePolicy, err := runtimepolicy.New(activePolicy, runtimeKey)
+	if err != nil {
+		return err
+	}
+	runtimeServer, err := gateway.NewAuthenticated(runContext, config.RuntimeConnectAddress, runtimePolicy, resolver, &gateway.NetDialer{}, current.state, business)
+	if err != nil {
+		return err
+	}
+	current.connects = append(current.connects, runtimeServer)
 	mailResolver, err := dnsresolver.New(activePolicy.DNS(), servers, nil, func(outcome string, reason dnsresolver.Reason) {
 		business.DNSObserver(outcome, string(reason))
 	})

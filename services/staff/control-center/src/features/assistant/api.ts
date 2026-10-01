@@ -3,6 +3,7 @@ import {
   addAssistantTurn,
   archiveAssistantConversation,
   applyAssistantPlan,
+  cancelAssistantTurn as cancelAssistantTurnRequest,
   createAssistantConversation,
   getSystemAssistant,
   listAssistantConversations,
@@ -216,6 +217,7 @@ export async function appendTurn(
   content: string,
   context: AssistantContextDescriptor,
   attachmentSetRef?: string,
+  deliveryMode: "QUEUE" | "INTERRUPT_ACTIVE" = "QUEUE",
 ): Promise<AssistantConversation> {
   return (
     await mutateWithRetry((headers) =>
@@ -224,6 +226,7 @@ export async function appendTurn(
         body: {
           content,
           context,
+          deliveryMode,
           ...(attachmentSetRef ? { attachmentSetRef } : {}),
         },
         headers: {
@@ -234,6 +237,27 @@ export async function appendTurn(
       }),
     )
   ).data;
+}
+
+export async function cancelAssistantTurn(
+  conversation: AssistantConversation,
+): Promise<string> {
+  const result = await mutate(
+    (headers) =>
+      cancelAssistantTurnRequest({
+        path: { conversationRef: conversation.ref },
+        headers: {
+          "If-Match": headers["If-Match"] ?? "",
+          "Idempotency-Key": headers["Idempotency-Key"],
+          "X-CSRF-Token": headers["X-CSRF-Token"],
+        },
+        signal: requestSignal(),
+      }),
+    conversation.version,
+  );
+  if (result.data.conversationRef !== conversation.ref)
+    throw new Error("Assistant cancellation receipt mismatch");
+  return result.data.runRef;
 }
 
 export async function savePlanDraft(

@@ -2264,7 +2264,7 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 	defer rows.Close()
 	for rows.Next() {
 		var turn entity.AssistantTurn
-		if err := rows.Scan(&turn.Ref, &turn.Sequence, &turn.Actor, &turn.ActorName, &turn.Content, &turn.State, &turn.AttachmentSetRef, &turn.CreatedAt, &turn.CompletedAt); err != nil {
+		if err := rows.Scan(&turn.Ref, &turn.Sequence, &turn.Actor, &turn.ActorName, &turn.Content, &turn.State, &turn.AttachmentSetRef, &turn.CreatedAt, &turn.CompletedAt, &turn.RunRef, &turn.RunVersion); err != nil {
 			return errs.ErrUnavailable
 		}
 		item.Turns = append(item.Turns, turn)

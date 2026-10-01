@@ -818,10 +818,10 @@ type AssistantPlanReceipt struct {
 }
 
 type AssistantTurn struct {
-	Ref, Actor, ActorName, Content, State, AttachmentSetRef string
-	Sequence                                                int64
-	CreatedAt                                               time.Time
-	CompletedAt                                             *time.Time
+	Ref, Actor, ActorName, Content, State, AttachmentSetRef, RunRef string
+	Sequence, RunVersion                                            int64
+	CreatedAt                                                       time.Time
+	CompletedAt                                                     *time.Time
 }
 
 type AssistantConversation struct {

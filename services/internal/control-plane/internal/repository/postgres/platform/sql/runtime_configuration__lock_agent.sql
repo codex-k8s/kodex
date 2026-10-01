@@ -2,6 +2,7 @@
 SELECT agent.id::text,
        COALESCE(agent.project_id::text, ''),
        COALESCE(project.ref, ''),
+       COALESCE(agent.system_key, ''),
        agent.version,
        config.version_number,
        overlay_version.id::text,

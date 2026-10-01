@@ -328,7 +328,17 @@ func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput
 		MemoryRequestMib: input.Resources.MemoryRequestMib, MemoryLimitMib: input.Resources.MemoryLimitMib,
 		EphemeralStorageRequestMib: input.Resources.EphemeralStorageRequestMib,
 		EphemeralStorageLimitMib:   input.Resources.EphemeralStorageLimitMib,
-	}, KubernetesAccess: runtimeKubernetesAccessKind(string(input.KubernetesAccess))}
+	}, KubernetesAccess: runtimeKubernetesAccessKind(string(input.KubernetesAccess)),
+		WebAccess: &controlplanev1.RuntimeWebAccess{Mode: runtimeWebAccessMode(string(input.WebAccess.Mode))}}
+	for _, rule := range input.WebAccess.Rules {
+		methods := make([]string, 0, len(rule.HttpMethods))
+		for _, method := range rule.HttpMethods {
+			methods = append(methods, string(method))
+		}
+		result.WebAccess.Rules = append(result.WebAccess.Rules, &controlplanev1.RuntimeWebAccessRule{
+			DomainPattern: rule.DomainPattern, Protocol: string(rule.Protocol), Port: int32(rule.Port), HttpMethods: methods,
+		})
+	}
 	for _, volume := range input.Volumes {
 		if !volume.Kind.Valid() {
 			return nil, false
@@ -344,6 +354,21 @@ func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput
 		result.NetworkDestinations = append(result.NetworkDestinations, runtimeNetworkDestination(string(destination)))
 	}
 	return result, true
+}
+
+func runtimeWebAccessMode(value string) controlplanev1.RuntimeWebAccessMode {
+	switch value {
+	case "NONE":
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE
+	case "ALLOWLIST_READ_ONLY":
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY
+	case "ALLOWLIST_FULL":
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL
+	case "FULL_PUBLIC":
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC
+	default:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_UNSPECIFIED
+	}
 }
 
 func runtimeVolumeKind(value string) controlplanev1.RuntimeVolumeKind {

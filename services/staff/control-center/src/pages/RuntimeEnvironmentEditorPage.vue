@@ -381,6 +381,13 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
     resources: { ...value.policy.resources },
     volumes: value.policy.volumes.map((item) => ({ ...item })),
     networkDestinations: [...value.policy.networkDestinations],
+    webAccess: {
+      mode: value.policy.webAccess.mode,
+      rules: value.policy.webAccess.rules.map((item) => ({
+        ...item,
+        httpMethods: [...item.httpMethods],
+      })),
+    },
     kubernetesAccess: value.policy.kubernetesAccess,
   };
 

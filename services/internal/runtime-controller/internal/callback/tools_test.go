@@ -399,9 +399,35 @@ func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 	}
 	policy := fields["policy"].(map[string]any)
 	policyFields := policy["properties"].(map[string]any)
-	if policy["additionalProperties"] != false || len(policyFields) != 4 ||
+	if policy["additionalProperties"] != false || len(policyFields) != 5 || policyFields["webAccess"] == nil ||
 		policyFields["hostPath"] != nil || policyFields["serviceAccountName"] != nil || policyFields["secretValue"] != nil {
 		t.Fatalf("environment policy schema escaped its closed boundary: %#v", policy)
+	}
+}
+
+func TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{
+		SystemAssistant: true, AgentRef: "agt_system123", RuntimeEnvironmentRef: "renv_system123",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "PROJECT", EntityRef: "prj_12345678",
+			AllowedOperations: []string{"CREATE_AGENT"}},
+	}
+	schemas := assistantPlanOperationSchemas(input)
+	var parameters map[string]any
+	for _, schema := range schemas {
+		properties := schema["properties"].(map[string]any)
+		if properties["type"].(map[string]any)["const"] == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+			parameters = properties["parameters"].(map[string]any)
+			break
+		}
+	}
+	if parameters == nil {
+		t.Fatal("system assistant environment operation is not discoverable")
+	}
+	fields := parameters["properties"].(map[string]any)
+	if fields["environmentRef"].(map[string]any)["enum"].([]string)[0] != input.RuntimeEnvironmentRef ||
+		fields["systemAssistantRef"].(map[string]any)["enum"].([]string)[0] != input.AgentRef {
+		t.Fatalf("system assistant environment schema is not pinned: %#v", fields)
 	}
 }
 

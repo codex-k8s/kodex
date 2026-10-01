@@ -283,7 +283,7 @@ spec:
             rule.to[0].podSelector.matchLabels['app.kubernetes.io/name'] == 'runtime-controller' &&
             rule.to[0].podSelector.matchLabels['app.kubernetes.io/component'] == 'internal-controller' &&
             !has(rule.to[0].ipBlock)) ||
-           (rule.ports[0].port == 8080 &&
+           (rule.ports[0].port == 8084 &&
             rule.ports[0].protocol == 'TCP' &&
             has(rule.to[0].namespaceSelector) &&
             size(rule.to[0].namespaceSelector.matchLabels) == 1 &&
@@ -305,7 +305,7 @@ spec:
           rule.ports[0].port == 53 && rule.ports[0].protocol == 'TCP')) == 1 &&
         size(object.spec.egress.filter(rule,
           rule.ports[0].port == 53 && rule.ports[0].protocol == 'UDP')) == 1 &&
-        size(object.spec.egress.filter(rule, rule.ports[0].port == 8080)) == 1 &&
+        size(object.spec.egress.filter(rule, rule.ports[0].port == 8084)) == 1 &&
         size(object.spec.egress.filter(rule, rule.ports[0].port == 8444)) == 1 &&
         size(object.spec.egress.filter(rule, rule.ports[0].port == 443)) <= 1
       message: execution NetworkPolicy contains a wildcard or unsupported egress rule
@@ -737,11 +737,13 @@ spec:
           item.value == '/workspace/.kodex/state/codex-home' &&
           !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
-          item.name == 'HTTPS_PROXY' && item.value ==
-            'http://egress-gateway.kodex-system.svc:8080' && !has(item.valueFrom))) == 1 &&
+          item.name == 'HTTPS_PROXY' &&
+            item.value.matches('^http://kodex:[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+@egress-gateway\\.kodex-system\\.svc:8084$') &&
+            !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
-          item.name == 'HTTP_PROXY' && item.value ==
-            'http://egress-gateway.kodex-system.svc:8080' && !has(item.valueFrom))) == 1 &&
+          item.name == 'HTTP_PROXY' &&
+            item.value.matches('^http://kodex:[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+@egress-gateway\\.kodex-system\\.svc:8084$') &&
+            !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
           item.name == 'NO_PROXY' && item.value == '127.0.0.1,localhost' &&
           !has(item.valueFrom))) == 1 &&

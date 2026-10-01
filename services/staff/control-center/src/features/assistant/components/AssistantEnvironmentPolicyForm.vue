@@ -14,6 +14,7 @@ import type {
   RuntimeEnvironmentPolicyInput,
   RuntimeNetworkDestination,
   RuntimeVolumeInput,
+  RuntimeWebAccess,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const props = defineProps<{
@@ -50,6 +51,7 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
       "resources",
       "volumes",
       "networkDestinations",
+      "webAccess",
       "kubernetesAccess",
     ])
   )
@@ -105,6 +107,14 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
       value.kubernetesAccess !== "READ_OWN_EXECUTION")
   )
     return undefined;
+  const webAccess = value.webAccess;
+  if (!record(webAccess)) return undefined;
+  const typedWebAccess = webAccess as unknown as RuntimeWebAccess;
+  if (
+    !["NONE", "ALLOWLIST_READ_ONLY", "ALLOWLIST_FULL", "FULL_PUBLIC"].includes(typedWebAccess.mode) ||
+    !Array.isArray(typedWebAccess.rules)
+  )
+    return undefined;
   return {
     resources: {
       cpuRequestMilli: resources.cpuRequestMilli as number,
@@ -118,6 +128,13 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
     volumes,
     networkDestinations:
       value.networkDestinations as RuntimeNetworkDestination[],
+    webAccess: {
+      mode: typedWebAccess.mode,
+      rules: typedWebAccess.rules.map((rule) => ({
+        ...rule,
+        httpMethods: [...rule.httpMethods],
+      })),
+    },
     kubernetesAccess: value.kubernetesAccess,
   };
 }

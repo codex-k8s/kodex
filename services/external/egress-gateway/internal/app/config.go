@@ -22,6 +22,8 @@ type Config struct {
 	MailPolicyFile            string `env:"EGRESS_GATEWAY_MAIL_POLICY_FILE"`
 	MailExpectedDigest        string `env:"EGRESS_GATEWAY_MAIL_POLICY_DIGEST"`
 	IntegrationConnectAddress string `env:"EGRESS_GATEWAY_INTEGRATION_CONNECT_LISTEN"`
+	RuntimeConnectAddress     string `env:"EGRESS_GATEWAY_RUNTIME_CONNECT_LISTEN"`
+	RuntimeSigningKeyFile     string `env:"EGRESS_GATEWAY_RUNTIME_SIGNING_KEY_FILE"`
 	IntegrationPolicyFile     string `env:"EGRESS_GATEWAY_INTEGRATION_POLICY_FILE"`
 	IntegrationExpectedDigest string `env:"EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST"`
 	TechnicalAddress          string `env:"EGRESS_GATEWAY_TECHNICAL_LISTEN,required"`
@@ -45,7 +47,7 @@ func (config Config) validate() error {
 	}
 	paths := []string{config.PolicyFile, config.ResolverConfig}
 	if config.Mode == "" {
-		paths = append(paths, config.MailPolicyFile, config.IntegrationPolicyFile)
+		paths = append(paths, config.MailPolicyFile, config.IntegrationPolicyFile, config.RuntimeSigningKeyFile)
 	}
 	for _, path := range paths {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -57,7 +59,8 @@ func (config Config) validate() error {
 		listeners = append(listeners,
 			struct{ address, port string }{config.STTConnectAddress, "8081"},
 			struct{ address, port string }{config.MailConnectAddress, "8082"},
-			struct{ address, port string }{config.IntegrationConnectAddress, "8083"})
+			struct{ address, port string }{config.IntegrationConnectAddress, "8083"},
+			struct{ address, port string }{config.RuntimeConnectAddress, "8084"})
 	}
 	for _, listener := range listeners {
 		if _, port, err := net.SplitHostPort(listener.address); err != nil || port != listener.port {

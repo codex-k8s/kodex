@@ -340,6 +340,7 @@ service SystemAssistantService {
   rpc PurgeAssistantConversation(PurgeAssistantConversationRequest) returns (PurgeAssistantConversationResponse);
   rpc MoveAssistantConversationToProject(MoveAssistantConversationToProjectRequest) returns (MoveAssistantConversationToProjectResponse);
   rpc AddAssistantTurn(AddAssistantTurnRequest) returns (AddAssistantTurnResponse);
+  rpc CancelAssistantTurn(CancelAssistantTurnRequest) returns (CancelAssistantTurnResponse);
   rpc UpdateAssistantPlanDraft(UpdateAssistantPlanDraftRequest) returns (UpdateAssistantPlanDraftResponse);
   rpc ValidateAssistantPlan(ValidateAssistantPlanRequest) returns (ValidateAssistantPlanResponse);
   rpc ApplyAssistantPlan(ApplyAssistantPlanRequest) returns (ApplyAssistantPlanResponse);
@@ -1603,6 +1604,14 @@ message AssistantTurn {
   AssistantPlan plan = 6;
   google.protobuf.Timestamp created_at = 7;
   string attachment_set_ref = 8;
+  string run_ref = 9;
+  int64 run_version = 10;
+}
+
+enum AssistantTurnDeliveryMode {
+  ASSISTANT_TURN_DELIVERY_MODE_UNSPECIFIED = 0;
+  ASSISTANT_TURN_DELIVERY_MODE_QUEUE = 1;
+  ASSISTANT_TURN_DELIVERY_MODE_INTERRUPT_ACTIVE = 2;
 }
 
 enum AssistantConversationState {
@@ -2846,10 +2855,20 @@ message AddAssistantTurnRequest {
   reserved "artifact_refs";
   string attachment_set_ref = 5;
   AssistantContextDescriptor context = 6;
+  AssistantTurnDeliveryMode delivery_mode = 7;
 }
 message AddAssistantTurnResponse {
   AssistantConversation conversation = 1;
   SystemAssistant assistant = 2;
+}
+message CancelAssistantTurnRequest {
+  MutationContext mutation = 1;
+  string conversation_ref = 2;
+}
+message CancelAssistantTurnResponse {
+  string conversation_ref = 1;
+  string run_ref = 2;
+  bool cancelled = 3;
 }
 message UpdateAssistantPlanDraftRequest {
   MutationContext mutation = 1;
@@ -5101,6 +5120,14 @@ enum RuntimeNetworkProtocol {
   RUNTIME_NETWORK_PROTOCOL_UDP = 2;
 }
 
+enum RuntimeWebAccessMode {
+  RUNTIME_WEB_ACCESS_MODE_UNSPECIFIED = 0;
+  RUNTIME_WEB_ACCESS_MODE_NONE = 1;
+  RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY = 2;
+  RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL = 3;
+  RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC = 4;
+}
+
 enum RuntimeKubernetesAccessKind {
   RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED = 0;
   RUNTIME_KUBERNETES_ACCESS_KIND_NONE = 1;
@@ -5134,6 +5161,7 @@ message RuntimeEnvironmentPolicyInput {
   repeated RuntimeVolumeInput volumes = 2;
   repeated RuntimeNetworkDestination network_destinations = 3;
   RuntimeKubernetesAccessKind kubernetes_access = 4;
+  RuntimeWebAccess web_access = 5;
 }
 
 message RuntimeNetworkEgress {
@@ -5145,6 +5173,19 @@ message RuntimeNetworkEgress {
 message RuntimeNetworkPolicy {
   bool deny_by_default = 1;
   repeated RuntimeNetworkEgress egress = 2;
+  RuntimeWebAccess web_access = 3;
+}
+
+message RuntimeWebAccessRule {
+  string domain_pattern = 1;
+  string protocol = 2;
+  int32 port = 3;
+  repeated string http_methods = 4;
+}
+
+message RuntimeWebAccess {
+  RuntimeWebAccessMode mode = 1;
+  repeated RuntimeWebAccessRule rules = 2;
 }
 
 message RuntimeKubernetesAccessProfile {

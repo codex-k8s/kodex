@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 
 import {
   appendTurn,
+  cancelAssistantTurn,
   archiveConversation,
   applyPlanDraft,
   createConversation,
@@ -508,6 +509,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   async function send(
     content: string,
     attachmentSetRef?: string,
+    deliveryMode: "QUEUE" | "INTERRUPT_ACTIVE" = "QUEUE",
   ): Promise<void> {
     const normalized = content.trim();
     if (!normalized) return;
@@ -533,9 +535,33 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
             normalized,
             context.value,
             attachmentSetRef,
+            deliveryMode,
           )
-        : await appendTurn(conversation, normalized, context.value);
+        : await appendTurn(
+            conversation,
+            normalized,
+            context.value,
+            undefined,
+            deliveryMode,
+          );
       upsertConversation(appended);
+    });
+  }
+
+  async function stopActiveTurn(): Promise<void> {
+    const conversation = selectedConversation.value;
+    if (!conversation) return;
+    await runMutation(async () => {
+      const runRef = await cancelAssistantTurn(conversation);
+      upsertConversation({
+        ...conversation,
+        turns: conversation.turns.map((turn) =>
+          turn.runRef === runRef &&
+          (turn.state === "QUEUED" || turn.state === "RUNNING")
+            ? { ...turn, state: "CANCELLED" }
+            : turn,
+        ),
+      });
     });
   }
 
@@ -622,6 +648,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     startConversation,
     changeTitle,
     send,
+    stopActiveTurn,
     saveDraft,
     validate,
     apply,

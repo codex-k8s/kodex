@@ -183,12 +183,36 @@ func (server *Server) AddAssistantTurn(w http.ResponseWriter, r *http.Request, r
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Assistant.AddAssistantTurn(r.Context(), &controlplanev1.AddAssistantTurnRequest{Mutation: m, ConversationRef: ref, Content: body.Content, AttachmentSetRef: stringValue(body.AttachmentSetRef), Context: assistantContextInput(body.Context)})
+	deliveryMode := controlplanev1.AssistantTurnDeliveryMode_ASSISTANT_TURN_DELIVERY_MODE_QUEUE
+	if body.DeliveryMode != nil && string(*body.DeliveryMode) == "INTERRUPT_ACTIVE" {
+		deliveryMode = controlplanev1.AssistantTurnDeliveryMode_ASSISTANT_TURN_DELIVERY_MODE_INTERRUPT_ACTIVE
+	}
+	response, err := server.control.Assistant.AddAssistantTurn(r.Context(), &controlplanev1.AddAssistantTurnRequest{Mutation: m, ConversationRef: ref, Content: body.Content, AttachmentSetRef: stringValue(body.AttachmentSetRef), Context: assistantContextInput(body.Context), DeliveryMode: deliveryMode})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusAccepted, response, "conversation", "")
+}
+func (server *Server) CancelAssistantTurn(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.CancelAssistantTurnParams) {
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	m, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.CancelAssistantTurn(r.Context(), &controlplanev1.CancelAssistantTurnRequest{Mutation: m, ConversationRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if response.GetConversationRef() != ref || response.GetCancelled() && !opaqueHTTPReference.MatchString(response.GetRunRef()) || !response.GetCancelled() && response.GetRunRef() != "" {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "")
 }
 func (server *Server) ApplyAssistantPlan(w http.ResponseWriter, r *http.Request, ref generated.PlanRef, p generated.ApplyAssistantPlanParams) {
 	body, decoded := decodeJSON[generated.ApplyAssistantPlanJSONBody](w, r)

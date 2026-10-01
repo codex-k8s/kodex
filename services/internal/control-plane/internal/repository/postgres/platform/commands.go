@@ -344,7 +344,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.ConfigureEmailCredential:
 		return repository.configureEmailCredential(ctx, tx, scope, input)
-	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn,
+	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn, command.CancelAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)
@@ -2291,10 +2291,10 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		}
 		rows.Close()
 	}
-	var runID, rootRunID, projectID, projectRef, state string
+	var runID, rootRunID, projectID, projectRef, state, targetType string
 	var version int64
 	var attempt int32
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsOrganizationIdRef, scope.organizationID, payload.RunRef).Scan(&runID, &rootRunID, &projectID, &projectRef, &state, &version, &attempt); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsOrganizationIdRef, scope.organizationID, payload.RunRef).Scan(&runID, &rootRunID, &projectID, &projectRef, &state, &version, &attempt, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {
@@ -2370,12 +2370,16 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: projectRef, resourceKind: "RUN", resourceRef: payload.RunRef, summary: "i18n:RUN_CANCELLED"}, nil
+		platformEvent := ""
+		if targetType == "SYSTEM_ASSISTANT" {
+			platformEvent = "SYSTEM_ASSISTANT_CHANGED"
+		}
+		return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: projectRef, resourceKind: "RUN", resourceRef: payload.RunRef, summary: "i18n:RUN_CANCELLED", platformEvent: platformEvent}, nil
 	}
 	if !contains([]string{"FAILED", "CANCELLED"}, state) {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	var targetType, targetRef, title, titleSource, task, sessionRef, source string
+	var targetRef, title, titleSource, task, sessionRef, source string
 	var raw []byte
 	var attachmentSetRef, attachmentPurpose string
 	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &titleSource, &task, &sessionRef, &source, &raw, &attachmentSetRef, &attachmentPurpose); err != nil {

@@ -228,15 +228,36 @@ func domainRuntimeEnvironmentPolicy(input *controlplanev1.RuntimeEnvironmentPoli
 	for _, destination := range input.GetNetworkDestinations() {
 		destinations = append(destinations, domainRuntimeNetworkDestination(destination))
 	}
+	webAccess := runtimecontract.RuntimeWebAccess{Mode: domainRuntimeWebAccessMode(input.GetWebAccess().GetMode())}
+	for _, rule := range input.GetWebAccess().GetRules() {
+		webAccess.Rules = append(webAccess.Rules, runtimecontract.RuntimeWebAccessRule{
+			DomainPattern: rule.GetDomainPattern(), Protocol: rule.GetProtocol(), Port: rule.GetPort(), HTTPMethods: append([]string(nil), rule.GetHttpMethods()...),
+		})
+	}
 	return runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{
 		Resources: runtimecontract.RuntimeResourcePolicy{
 			CPURequestMilli: resources.GetCpuRequestMilli(), CPULimitMilli: resources.GetCpuLimitMilli(),
 			MemoryRequestMiB: resources.GetMemoryRequestMib(), MemoryLimitMiB: resources.GetMemoryLimitMib(),
 			EphemeralStorageRequestMiB: resources.GetEphemeralStorageRequestMib(),
 			EphemeralStorageLimitMiB:   resources.GetEphemeralStorageLimitMib(),
-		}, Volumes: volumes, NetworkDestinations: destinations,
+		}, Volumes: volumes, NetworkDestinations: destinations, WebAccess: webAccess,
 		KubernetesAccess: domainRuntimeKubernetesAccessKind(input.GetKubernetesAccess()),
 	})
+}
+
+func domainRuntimeWebAccessMode(value controlplanev1.RuntimeWebAccessMode) string {
+	switch value {
+	case controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE:
+		return runtimecontract.RuntimeWebAccessNone
+	case controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY:
+		return runtimecontract.RuntimeWebAccessAllowlistReadOnly
+	case controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL:
+		return runtimecontract.RuntimeWebAccessAllowlistFull
+	case controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC:
+		return runtimecontract.RuntimeWebAccessFullPublic
+	default:
+		return ""
+	}
 }
 
 func domainRuntimeVolumeKind(value controlplanev1.RuntimeVolumeKind) string {

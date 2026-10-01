@@ -106,7 +106,11 @@ func (server *Server) UpdateAssistantConversationTitle(ctx context.Context, requ
 }
 
 func (server *Server) AddAssistantTurn(ctx context.Context, request *controlplanev1.AddAssistantTurnRequest) (*controlplanev1.AddAssistantTurnResponse, error) {
-	payload := command.AssistantTurnInput{ConversationRef: request.GetConversationRef(), Content: request.GetContent(), AttachmentSetRef: request.GetAttachmentSetRef()}
+	deliveryMode := strings.TrimPrefix(request.GetDeliveryMode().String(), "ASSISTANT_TURN_DELIVERY_MODE_")
+	if deliveryMode == "UNSPECIFIED" {
+		deliveryMode = "QUEUE"
+	}
+	payload := command.AssistantTurnInput{ConversationRef: request.GetConversationRef(), Content: request.GetContent(), AttachmentSetRef: request.GetAttachmentSetRef(), DeliveryMode: deliveryMode}
 	if request.GetContext() != nil {
 		context := assistantContext(request.GetContext())
 		payload.Context = &context
@@ -116,6 +120,20 @@ func (server *Server) AddAssistantTurn(ctx context.Context, request *controlplan
 		return nil, err
 	}
 	return &controlplanev1.AddAssistantTurnResponse{Conversation: castConversation(*result.Conversation), Assistant: castAssistant(*result.Assistant)}, nil
+}
+
+func (server *Server) CancelAssistantTurn(ctx context.Context, request *controlplanev1.CancelAssistantTurnRequest) (*controlplanev1.CancelAssistantTurnResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_CancelAssistantTurn_FullMethodName, command.CancelAssistantTurn, request.GetMutation(), command.AssistantTurnCancellationInput{ConversationRef: request.GetConversationRef()})
+	if err != nil {
+		return nil, err
+	}
+	conversationRef, _ := result.Runtime["conversationRef"].(string)
+	runRef, _ := result.Runtime["runRef"].(string)
+	cancelled, _ := result.Runtime["cancelled"].(bool)
+	if conversationRef == "" {
+		return nil, status.Error(codes.Internal, "assistant cancellation result is missing")
+	}
+	return &controlplanev1.CancelAssistantTurnResponse{ConversationRef: conversationRef, RunRef: runRef, Cancelled: cancelled}, nil
 }
 
 func (server *Server) ApplyAssistantPlan(ctx context.Context, request *controlplanev1.ApplyAssistantPlanRequest) (*controlplanev1.ApplyAssistantPlanResponse, error) {
