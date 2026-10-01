@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"io"
+	"log/slog"
 	"math"
 	"time"
 
@@ -523,6 +524,7 @@ func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *control
 	}
 	assistant, desired, required, err := server.service.ReconcileWarmRuntime(ctx, p, request.GetWorkloadInstance())
 	if err != nil {
+		slog.WarnContext(ctx, "warm runtime reconciliation rejected", "error", err)
 		return nil, transportError(err)
 	}
 	return &controlplanev1.ReconcileWarmRuntimeResponse{Assistant: castAssistant(assistant), DesiredRevision: castRuntimeRevision(desired), MaterializationRequired: required}, nil

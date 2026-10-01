@@ -106,7 +106,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	}
 	canonicalOverlay, verifiedOverlayDigest, err := runtimecontract.CanonicalConfigOverlay(configOverlay)
 	if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("verify config overlay: %w", errs.ErrConflict)
 	}
 	currentBinding, err := repository.lockWarmSessionBinding(ctx, tx, scope.organizationID)
 	if err != nil {
@@ -125,7 +125,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	}
 	parsedOverlay, err := runtimecontract.ParseConfigOverlay(configOverlay)
 	if err != nil {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("parse config overlay: %w", errs.ErrConflict)
 	}
 	effectiveEffort := parsedOverlay.ModelReasoningEffort
 	if effectiveEffort == "" {
@@ -138,11 +138,11 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	var environmentValues []runtimecontract.RuntimeEnvironmentValue
 	var secretProjections []runtimecontract.RuntimeSecretProjection
 	if err := decodeStoredRuntimeEnvironment(rawEnvironmentValues, rawSecretProjections, &environmentValues, &secretProjections); err != nil {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("decode runtime environment values: %w", errs.ErrConflict)
 	}
 	var environmentTools []runtimecontract.RuntimeEnvironmentTool
 	if err := decodeStrict(rawEnvironmentTools, &environmentTools); err != nil {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("decode runtime environment tools: %w", errs.ErrConflict)
 	}
 	environmentImage := runtimecontract.RuntimeEnvironmentImage{
 		Reference: repository.roleImages.DefaultImageReference,
@@ -151,21 +151,21 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	environmentPolicy, err := decodeRuntimeEnvironmentPolicy(rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy,
 		rawKubernetesAccessProfile, resourcesDigest, volumesDigest, networkDigest, rbacDigest)
 	if err != nil || environmentPolicy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("verify runtime environment policy: %w", errs.ErrConflict)
 	}
 	effectiveKubernetesAccess, err := runtimecontract.RuntimeKubernetesAccessForExecution(
 		environmentPolicy.KubernetesAccess, "agent-runner", "system-assistant-warm")
 	if err != nil {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("resolve runtime Kubernetes access: %w", errs.ErrConflict)
 	}
 	verifiedCoreDigest, err := runtimecontract.RuntimeEnvironmentCoreDigest(environmentValues, secretProjections, environmentImage, environmentTools)
 	if err != nil || verifiedCoreDigest != environmentCoreDigest {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("verify runtime environment core digest: %w", errs.ErrConflict)
 	}
 	verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(
 		environmentValues, secretProjections, environmentImage, environmentTools, environmentPolicy)
 	if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("verify runtime environment digest: %w", errs.ErrConflict)
 	}
 	_ = json.Unmarshal(limits, &assistant.ResourceLimits)
 	assistant.OwnerInstructions = ownerInstructions
@@ -183,7 +183,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	}
 	materializedPrompt, err := promptservice.MaterializeWarm(promptContent, ownerInstructions, promptRef, promptDigest, assistant.Ref, systemSessionRef)
 	if err != nil || !materializedPrompt.Complete {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("materialize warm prompt: %w", errs.ErrConflict)
 	}
 	resolvedInstructions := materializedPrompt.Prompt
 	resolvedInstructionsSum := sha256.Sum256([]byte(resolvedInstructions))
@@ -257,7 +257,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	required = required || specificationChanged
 	revisionDigest, err := runtimeRevisionDigestFromSnapshot(snapshot)
 	if err != nil {
-		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+		return entity.SystemAssistant{}, nil, false, fmt.Errorf("digest warm runtime revision: %w", errs.ErrConflict)
 	}
 	snapshot["revisionDigest"] = revisionDigest
 	if err := tx.Commit(ctx); err != nil {
