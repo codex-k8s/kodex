@@ -153,6 +153,11 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.assistant.turns.cancel",
+      "source_binding_sha256": "ef7e57231d866135dafdae1108d6448f464ba43abe70631bb06b051b2ed1668e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.command.agent-capabilities.change",
       "source_binding_sha256": "325f46489f249ea68bbb4415402138c76197c19609212c52e5c527397aa82531",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"

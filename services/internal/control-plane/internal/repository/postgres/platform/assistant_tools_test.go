@@ -323,6 +323,74 @@ func TestAssistantInstructionDraftRequiresExactAgentAndSeparatePublication(t *te
 	}
 }
 
+func TestAssistantSystemInstructionPlanPreservesOwnerBoundary(t *testing.T) {
+	t.Parallel()
+	proposed := entity.AssistantPlanOperation{
+		Type: "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", Key: "update-kodex-instructions",
+		Title: "Update Kodex instructions", Summary: "Add an owner instruction after confirmation.",
+		Parameters: map[string]any{
+			"systemAssistantRef": "agt_system123",
+			"instructions":       "Before changing an entity, summarize the expected result.",
+		},
+	}
+	if !assistantOperationMatchesContext("PROJECT", "prj_12345678", proposed) {
+		t.Fatal("system assistant instruction plan was tied to the current screen")
+	}
+	hydrated, err := hydrateAssistantSystemInstructionFields(entity.SystemAssistant{
+		Ref: "agt_system123", Name: "Kodex", OwnerInstructions: "Keep responses concise.", Version: 9,
+	}, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.UpdateAssistantInstructions || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 9 {
+		t.Fatalf("system assistant instruction plan mapped incorrectly: %#v, %v", mapped, err)
+	}
+	payload := mapped.Payload.(command.AssistantInstructionsInput)
+	if payload.Instructions != "Before changing an entity, summarize the expected result." ||
+		assistantString(hydrated.Before, "instructions") != "Keep responses concise." {
+		t.Fatalf("system assistant instruction snapshots changed: %#v", hydrated)
+	}
+	edited := hydrated
+	edited.Parameters = map[string]any{
+		"systemAssistantRef": "agt_system123",
+		"instructions":       "Before changing an entity, list the expected result and important risks.",
+	}
+	edited.Target.Ref = "agt_forged"
+	edited.ExpectedVersion = nil
+	updated, err := rehydrateEditedAssistantSystemInstructions(hydrated, edited)
+	if err != nil || updated.Target.Ref != "agt_system123" || updated.ExpectedVersion == nil || *updated.ExpectedVersion != 9 {
+		t.Fatalf("edited instruction plan escaped the owner snapshot: %#v, %v", updated, err)
+	}
+}
+
+func TestAssistantSelfConfigurationOperationRequiresPinnedAssistant(t *testing.T) {
+	t.Parallel()
+	for _, operationType := range []string{
+		"PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+		"UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS",
+	} {
+		operation := entity.AssistantPlanOperation{Type: operationType, Parameters: map[string]any{
+			"systemAssistantRef": "agt_system123",
+		}}
+		if !assistantSelfConfigurationOperation("agt_system123", "system-assistant", operation) ||
+			!assistantSelfConfigurationOperation("agt_system123", "system-assistant", entity.AssistantPlanOperation{
+				Type: operationType, Parameters: map[string]any{"systemAssistantRef": "system-assistant"},
+			}) || assistantSelfConfigurationOperation("agt_other", "other-assistant", operation) {
+			t.Fatalf("self-configuration boundary changed for %s", operationType)
+		}
+	}
+	if assistantSelfConfigurationOperation("agt_system123", "system-assistant", entity.AssistantPlanOperation{
+		Type: "UPDATE_PROJECT", Parameters: map[string]any{"systemAssistantRef": "agt_system123"},
+	}) {
+		t.Fatal("ordinary operation escaped the context allowlist")
+	}
+}
+
 func TestHydrateAssistantAgentCapabilityFields(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{

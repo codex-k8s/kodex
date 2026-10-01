@@ -617,6 +617,8 @@ const friendlyInputsReady = computed(() =>
           agentProfileValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_INSTRUCTION_DRAFT" ||
           fieldValue(operation, "instructions").trim().length >= 20) &&
+        (operation.value.type !== "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
+          fieldValue(operation, "instructions").length <= 20000) &&
         (operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT" ||
           bindingFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_SCHEDULE" &&
@@ -1537,7 +1539,9 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
-                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT'
+                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT' &&
+                  operation.value.type !==
+                    'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
                 "
                 class="field"
               >
@@ -1563,7 +1567,9 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
-                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT'
+                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT' &&
+                  operation.value.type !==
+                    'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
                 "
                 class="field"
               >
@@ -2069,6 +2075,30 @@ function validationProblemLabel(problem: string): string {
                 />
                 <p class="assistant-plan-friendly__hint">
                   {{ $t("assistant.planEditor.instructionDraftNextSteps") }}
+                </p>
+              </template>
+              <template
+                v-else-if="
+                  operation.value.type ===
+                  'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
+                "
+              >
+                <TemplateSourceField
+                  :model-value="fieldValue(operation, 'instructions')"
+                  :label="
+                    $t('assistant.planEditor.systemAssistantInstructions')
+                  "
+                  :disabled="!editable"
+                  @update:model-value="
+                    updateOperationParameter(operation, 'instructions', $event)
+                  "
+                />
+                <p class="assistant-plan-friendly__hint">
+                  {{
+                    $t(
+                      "assistant.planEditor.systemAssistantInstructionsBoundary",
+                    )
+                  }}
                 </p>
               </template>
             </template>

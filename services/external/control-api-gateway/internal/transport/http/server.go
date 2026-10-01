@@ -677,6 +677,8 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 var runtimeEnvironmentEnumPrefixes = map[protoreflect.FullName]string{
 	"controlplane.v1.RuntimeVolumeKind":           "RUNTIME_VOLUME_KIND_",
 	"controlplane.v1.RuntimeNetworkDestination":   "RUNTIME_NETWORK_DESTINATION_",
+	"controlplane.v1.RuntimeNetworkProtocol":      "RUNTIME_NETWORK_PROTOCOL_",
+	"controlplane.v1.RuntimeWebAccessMode":        "RUNTIME_WEB_ACCESS_MODE_",
 	"controlplane.v1.RuntimeKubernetesAccessKind": "RUNTIME_KUBERNETES_ACCESS_KIND_",
 }
 

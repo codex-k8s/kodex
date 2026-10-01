@@ -397,6 +397,14 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
+	selfInstructionsOperation := input.SystemAssistant && input.AgentRef != ""
+	if selfInstructionsOperation {
+		result = append(result, assistantOperationSchema("UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", objectSchema(
+			[]string{"systemAssistantRef", "instructions"}, map[string]any{
+				"systemAssistantRef": enumSchema(input.AgentRef),
+				"instructions":       stringSchema(0, 20000),
+			})))
+	}
 	selfEnvironmentOperation := input.SystemAssistant && input.AgentRef != "" && input.RuntimeEnvironmentRef != "" &&
 		(input.AssistantContext == nil || input.AssistantContext.EntityKind != "ENVIRONMENT")
 	if selfEnvironmentOperation {
@@ -440,7 +448,9 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	filtered := make([]map[string]any, 0, len(result))
 	for _, operation := range result {
 		kind := operation["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
-		if _, ok := allowed[kind]; ok || selfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+		if _, ok := allowed[kind]; ok ||
+			selfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
+			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
 			filtered = append(filtered, operation)
 		}
 	}
@@ -567,7 +577,7 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true

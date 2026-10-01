@@ -632,6 +632,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                     AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
 	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
 	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                    AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
 	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                    AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
 )
 
@@ -683,6 +684,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW:
 		return true
@@ -812,6 +815,7 @@ const (
 	AssistantPlanOperationTypeUPDATEPROJECT                     AssistantPlanOperationType = "UPDATE_PROJECT"
 	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE             AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
 	AssistantPlanOperationTypeUPDATESCHEDULE                    AssistantPlanOperationType = "UPDATE_SCHEDULE"
+	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
 	AssistantPlanOperationTypeUPDATEWORKFLOW                    AssistantPlanOperationType = "UPDATE_WORKFLOW"
 )
 
@@ -863,6 +867,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE:
 		return true
 	case AssistantPlanOperationTypeUPDATESCHEDULE:
+		return true
+	case AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS:
 		return true
 	case AssistantPlanOperationTypeUPDATEWORKFLOW:
 		return true

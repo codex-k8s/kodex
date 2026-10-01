@@ -728,6 +728,49 @@ describe("assistant plan card", () => {
 });
 
 describe("assistant plan editor model", () => {
+  it("показывает изменение инструкций Kodex как редактируемую штатную форму", () => {
+    const parameters = {
+      systemAssistantRef: "agt_system123",
+      instructions: "Перед изменением сущности перечисляй ожидаемый результат.",
+    };
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS",
+        action: "UPDATE",
+        target: {
+          kind: "SYSTEM_ASSISTANT",
+          ref: "agt_system123",
+          name: "Kodex",
+        },
+        expectedVersion: 9,
+        parameters,
+        before: {
+          systemAssistantRef: "agt_system123",
+          name: "Kodex",
+          instructions: "",
+        },
+        after: { ...parameters },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe(
+      "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS",
+    );
+    updateOperationParameter(
+      first,
+      "instructions",
+      "Перед изменением сущности перечисляй результат и риски.",
+    );
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters.instructions).toBe(
+      "Перед изменением сущности перечисляй результат и риски.",
+    );
+    expect(changed?.parameters.systemAssistantRef).toBe("agt_system123");
+  });
+
   it("убирает устаревшую сводку после изменения полей формы", () => {
     const item = {
       ...operation(),

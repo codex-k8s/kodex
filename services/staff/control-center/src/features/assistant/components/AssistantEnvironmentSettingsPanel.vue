@@ -2,7 +2,10 @@
 import { Save, ServerCog } from "@lucide/vue";
 import { computed, onMounted, reactive, ref } from "vue";
 
-import { loadAgentRuntime, saveRuntimeEnvironment } from "@/features/agents/detail/runtime-api";
+import {
+  loadAgentRuntime,
+  saveRuntimeEnvironment,
+} from "@/features/agents/detail/runtime-api";
 import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
 import RuntimeEnvironmentPolicyFields from "@/features/runtime/RuntimeEnvironmentPolicyFields.vue";
 import {
@@ -56,7 +59,9 @@ const validation = computed(() =>
     imageArtifactRef: "imgart_system_assistant",
   }).filter((item) => item.field !== "imageArtifactRef"),
 );
-const dirty = computed(() => Boolean(initial.value) && fingerprint.value !== initial.value);
+const dirty = computed(
+  () => Boolean(initial.value) && fingerprint.value !== initial.value,
+);
 
 function sync(current: RuntimeEnvironmentSet): void {
   input.name = current.name;
@@ -65,7 +70,9 @@ function sync(current: RuntimeEnvironmentSet): void {
   input.tools = [];
   input.values = current.currentVersion.values.map((item) => ({ ...item }));
   input.secretBindings = [];
-  input.policy = editableRuntimeEnvironmentPolicy(current.currentVersion.policy);
+  input.policy = editableRuntimeEnvironmentPolicy(
+    current.currentVersion.policy,
+  );
   initial.value = JSON.stringify(normalizeRuntimeEnvironmentInput(input));
 }
 
@@ -75,7 +82,9 @@ async function load(): Promise<void> {
   try {
     const result = await loadAgentRuntime(props.agentRef);
     if (result.environment.projectRef)
-      throw new Error("System assistant environment must be organization scoped");
+      throw new Error(
+        "System assistant environment must be organization scoped",
+      );
     view.value = result;
     sync(result.environment);
   } catch (error) {
@@ -87,7 +96,14 @@ async function load(): Promise<void> {
 
 async function save(): Promise<void> {
   const current = environment.value;
-  if (!current || busy.value || !props.canEdit || !dirty.value || validation.value.length) return;
+  if (
+    !current ||
+    busy.value ||
+    !props.canEdit ||
+    !dirty.value ||
+    validation.value.length
+  )
+    return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -119,11 +135,19 @@ onMounted(() => void load());
         <div class="form-grid">
           <label class="field">
             <span>{{ $t("common.name") }}</span>
-            <input v-model="input.name" maxlength="120" :disabled="busy || !canEdit" />
+            <input
+              v-model="input.name"
+              maxlength="120"
+              :disabled="busy || !canEdit"
+            />
           </label>
           <label class="field field--wide">
             <span>{{ $t("common.description") }}</span>
-            <VoiceTextarea v-model="input.description" maxlength="1000" :disabled="busy || !canEdit" />
+            <VoiceTextarea
+              v-model="input.description"
+              maxlength="1000"
+              :disabled="busy || !canEdit"
+            />
           </label>
           <div class="field field--wide">
             <span>{{ $t("assistant.settings.platformImage") }}</span>
@@ -146,11 +170,18 @@ onMounted(() => void load());
         @update:policy="input.policy = $event"
       />
       <ul v-if="validation.length" class="field-error" role="alert">
-        <li v-for="item in validation" :key="`${item.field}:${item.message}`">{{ $t(item.message) }}</li>
+        <li v-for="item in validation" :key="`${item.field}:${item.message}`">
+          {{ $t(item.message) }}
+        </li>
       </ul>
       <ProblemNotice v-if="problem" :problem="problem" compact />
       <div class="assistant-environment-settings__actions">
-        <button class="button button--primary" type="button" :disabled="busy || !canEdit || !dirty || !!validation.length" @click="save">
+        <button
+          class="button button--primary"
+          type="button"
+          :disabled="busy || !canEdit || !dirty || !!validation.length"
+          @click="save"
+        >
           <Save :size="16" aria-hidden="true" />
           {{ $t("common.save") }}
         </button>
@@ -160,15 +191,54 @@ onMounted(() => void load());
 </template>
 
 <style scoped>
-.assistant-environment-settings { display: grid; gap: 16px; }
-.assistant-environment-settings__general { display: grid; gap: 16px; padding: 16px; }
-.section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.section-header h3, .section-header p { margin: 0; }
-.section-header p, small { color: var(--muted); }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.field { display: grid; gap: 6px; }
-.field--wide { grid-column: 1 / -1; }
-.field code { overflow-wrap: anywhere; }
-.field-error { margin: 0; color: var(--danger); }
-.assistant-environment-settings__actions { display: flex; justify-content: flex-end; position: sticky; bottom: -28px; padding: 12px 0 0; background: var(--surface); }
+.assistant-environment-settings {
+  display: grid;
+  gap: 16px;
+}
+.assistant-environment-settings__general {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.section-header h3,
+.section-header p {
+  margin: 0;
+}
+.section-header p,
+small {
+  color: var(--muted);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field--wide {
+  grid-column: 1 / -1;
+}
+.field code {
+  overflow-wrap: anywhere;
+}
+.field-error {
+  margin: 0;
+  color: var(--danger);
+}
+.assistant-environment-settings__actions {
+  display: flex;
+  justify-content: flex-end;
+  position: sticky;
+  bottom: -28px;
+  padding: 12px 0 0;
+  background: var(--surface);
+}
 </style>

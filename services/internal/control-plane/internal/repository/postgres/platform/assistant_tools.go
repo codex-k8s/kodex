@@ -48,6 +48,10 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	actorScope.organizationID = machineScope.organizationID
+	systemAssistant, err := repository.getAssistantTx(ctx, tx, actorScope)
+	if err != nil || assistantRef != systemAssistant.Ref && assistantRef != systemAssistant.StableKey {
+		return commandOutcome{}, errs.ErrForbidden
+	}
 	seen := make(map[string]struct{}, len(payload.Operations))
 	normalizedOperations := make([]entity.AssistantPlanOperation, 0, len(payload.Operations))
 	for _, operation := range payload.Operations {
@@ -58,7 +62,8 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		seen[operation.Key] = struct{}{}
-		if !contains(allowedOperations, operation.Type) {
+		if !contains(allowedOperations, operation.Type) &&
+			!assistantSelfConfigurationOperation(systemAssistant.Ref, systemAssistant.StableKey, operation) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		if !assistantOperationMatchesContext(contextKind, contextRef, operation) {
@@ -136,6 +141,15 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	return proposal, nil
 }
 
+func assistantSelfConfigurationOperation(assistantRef, assistantStableKey string, operation entity.AssistantPlanOperation) bool {
+	requestedRef := assistantString(operation.Parameters, "systemAssistantRef")
+	if assistantRef == "" || requestedRef != assistantRef && requestedRef != assistantStableKey {
+		return false
+	}
+	return operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
+		operation.Type == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+}
+
 func assistantPlanDigest(summary string, rawOperations []byte) string {
 	digest := sha256.Sum256(append(append([]byte(strings.TrimSpace(summary)), '\n'), rawOperations...))
 	return fmt.Sprintf("%x", digest[:])
@@ -146,7 +160,7 @@ func assistantOperationType(value string) bool {
 	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
-		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		return true
 	default:
 		return false
@@ -157,6 +171,8 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 	switch operation.Type {
 	case "PUBLISH_INTEGRATION_DEFINITION":
 		return contextKind == "" && contextRef == ""
+	case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+		return assistantString(operation.Parameters, "systemAssistantRef") != ""
 	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		return contextKind == "AGENT" && contextRef != "" && assistantString(operation.Parameters, "agentRef") == contextRef
 	case "UPDATE_WORKFLOW":
@@ -205,6 +221,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "PUBLISH_INTEGRATION_DEFINITION" {
 		return repository.hydrateAssistantIntegrationDefinitionPublication(ctx, tx, actorScope, projectRef, operation)
+	}
+	if operation.Type == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+		return repository.hydrateAssistantSystemInstructions(ctx, tx, actorScope, operation)
 	}
 
 	if targetKind, targetName, ok := assistantCreateTarget(operation.Type, operation.Parameters); ok {
@@ -777,7 +796,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -841,6 +860,9 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "PUBLISH_INTEGRATION_DEFINITION":
 		expectedTargetKind = "INTEGRATION_DEFINITION"
 		expectedTargetRef = assistantString(operation.Parameters, "configurationRef")
+	case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+		expectedTargetKind = "SYSTEM_ASSISTANT"
+		expectedTargetRef = assistantString(operation.Parameters, "systemAssistantRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
@@ -1017,6 +1039,8 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
 		return assistantEnvironmentRevisionCommand(operation)
+	case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+		return assistantSystemInstructionsCommand(operation)
 	case "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		return assistantAgentEnvironmentBindingCommand(operation)
 	case "CREATE_ROLE_IMAGE_RECIPE":

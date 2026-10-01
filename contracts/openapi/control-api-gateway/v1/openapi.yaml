@@ -17114,6 +17114,7 @@ components:
                 BIND_AGENT_RUNTIME_ENVIRONMENT,
                 CREATE_ROLE_IMAGE_RECIPE,
                 UPDATE_ROLE_IMAGE_RECIPE,
+                UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS,
               ],
           }
         action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, EXECUTE] }
@@ -17284,6 +17285,7 @@ components:
                   CREATE_INSTRUCTION_DRAFT,
                   CREATE_RUNTIME_ENVIRONMENT_DRAFT,
                   PREPARE_RUNTIME_ENVIRONMENT_REVISION,
+                  UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS,
                   BIND_AGENT_RUNTIME_ENVIRONMENT,
                   CREATE_ROLE_IMAGE_RECIPE,
                   UPDATE_ROLE_IMAGE_RECIPE,

@@ -431,6 +431,42 @@ func TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContex
 	}
 }
 
+func TestSystemAssistantCanProposeOwnInstructionsFromAnyContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{
+		SystemAssistant: true,
+		AgentRef:        "agt_system123",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{
+			EntityKind: "PROJECT", EntityRef: "prj_12345678", EntityName: "Marketplace",
+			AllowedOperations: []string{"CREATE_AGENT"},
+		},
+	}
+	var schema map[string]any
+	for _, candidate := range assistantPlanOperationSchemas(input) {
+		properties := candidate["properties"].(map[string]any)
+		if properties["type"].(map[string]any)["const"] == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+			schema = candidate
+			break
+		}
+	}
+	if schema == nil {
+		t.Fatal("system assistant instruction operation is not discoverable")
+	}
+	properties := schema["properties"].(map[string]any)
+	parameters := properties["parameters"].(map[string]any)["properties"].(map[string]any)
+	if properties["action"].(map[string]any)["const"] != "UPDATE" ||
+		parameters["systemAssistantRef"].(map[string]any)["enum"].([]string)[0] != input.AgentRef ||
+		parameters["instructions"].(map[string]any)["maxLength"] != 20000 {
+		t.Fatalf("system assistant instruction schema is not pinned: %#v", schema)
+	}
+	target := assistantServerTarget("UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", map[string]any{
+		"systemAssistantRef": input.AgentRef,
+	}, input.AssistantContext)
+	if target == nil || target["kind"] != "SYSTEM_ASSISTANT" || target["name"] != "Kodex" {
+		t.Fatalf("system assistant target is unavailable: %#v", target)
+	}
+}
+
 func TestAgentEnvironmentBindingSchemaIsExact(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",

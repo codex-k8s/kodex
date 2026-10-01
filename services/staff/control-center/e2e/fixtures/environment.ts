@@ -94,7 +94,11 @@ export async function installEnvironmentFixture(
       policy: {
         resources: policy.resources,
         volumes: [],
-        network: { denyByDefault: true, egress: [], webAccess: { mode: "NONE", rules: [] } },
+        network: {
+          denyByDefault: true,
+          egress: [],
+          webAccess: { mode: "NONE", rules: [] },
+        },
         kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
         resourcesDigest: digest,
         volumesDigest: digest,

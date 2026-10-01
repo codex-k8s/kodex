@@ -109,9 +109,11 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
     return undefined;
   const webAccess = value.webAccess;
   if (!record(webAccess)) return undefined;
-  const typedWebAccess = webAccess as unknown as RuntimeWebAccess;
+  const typedWebAccess = webAccess as RuntimeWebAccess;
   if (
-    !["NONE", "ALLOWLIST_READ_ONLY", "ALLOWLIST_FULL", "FULL_PUBLIC"].includes(typedWebAccess.mode) ||
+    !["NONE", "ALLOWLIST_READ_ONLY", "ALLOWLIST_FULL", "FULL_PUBLIC"].includes(
+      typedWebAccess.mode,
+    ) ||
     !Array.isArray(typedWebAccess.rules)
   )
     return undefined;

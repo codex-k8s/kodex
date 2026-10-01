@@ -8,7 +8,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v39" {
+	if CorePromptRevision != "system-assistant-core-v40" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -58,6 +58,8 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"применить любой сохранённый вариант",
 		"сам `secretSuggestions` не создаёт Secret и не является привязкой",
 		"`CREATE_INSTRUCTION_DRAFT` только сохраняет черновик",
+		"`UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS`",
+		"системные ограничения, полномочия или скрытые настройки",
 		"Не составляй полный список `steps` или `inputFields` по памяти",
 		"предложи владельцу просмотреть его в штатной форме",
 		"Не переписывай его по памяти",

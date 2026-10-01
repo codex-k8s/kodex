@@ -134,6 +134,12 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 				return commandOutcome{}, err
 			}
 			payload.Operations[index] = updated
+		case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+			updated, err := rehydrateEditedAssistantSystemInstructions(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		case "UPDATE_INTEGRATION_CONNECTION":
 			updated, err := rehydrateEditedAssistantConnection(original, operation)
 			if err != nil {
@@ -339,6 +345,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 				continue
 			}
 		}
+		if operation.Type == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+			matching, snapshotErr := repository.assistantSystemInstructionsSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
 		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
 			matching, snapshotErr := repository.assistantAgentBindingSnapshotMatches(ctx, tx, scope, projectRef, operation)
 			if snapshotErr != nil || !matching {
@@ -504,6 +517,15 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 		kind, ref = "WORKFLOW", operation.Target.Ref
 	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
 		kind, ref = "ENVIRONMENT", operation.Target.Ref
+	case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+		assistant, err := repository.getAssistantTx(ctx, tx, scope)
+		if err != nil {
+			return 0, true, err
+		}
+		if assistant.Ref != operation.Target.Ref {
+			return 0, true, errs.ErrNotFound
+		}
+		return assistant.Version, true, nil
 	case "CHANGE_INTEGRATION_GRANT", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION":
 		kind, ref = "INTEGRATION_CONNECTION", assistantString(operation.Input, "connectionRef")
 	case "UPDATE_SCHEDULE":

@@ -1293,6 +1293,13 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				err = errs.ErrConflict
 			}
 		}
+		if operation.Type == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+			var matching bool
+			matching, err = repository.assistantSystemInstructionsSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
 			err = repository.lockAssistantBindingEnvironment(ctx, operationEffectsTx, scope, conversationProjectRef,
 				assistantString(operation.Parameters, "environmentRef"))

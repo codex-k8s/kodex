@@ -281,6 +281,7 @@ export type FriendlyPlanOperationType =
   | "CREATE_AGENT"
   | "UPDATE_AGENT"
   | "CREATE_INSTRUCTION_DRAFT"
+  | "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
   | "CHANGE_CAPABILITY"
   | "CHANGE_INTEGRATION_GRANT"
   | "CREATE_WORKFLOW"
@@ -335,28 +336,32 @@ export function friendlyPlanOperationType(
         ? "ROLE_IMAGE_RECIPE"
         : operation.value.type === "PUBLISH_INTEGRATION_DEFINITION"
           ? "INTEGRATION_DEFINITION"
-          : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
-              operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
-              operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
-              operation.value.type === "CHANGE_INTEGRATION_GRANT"
-            ? "INTEGRATION_CONNECTION"
-            : operation.value.type === "CREATE_WORKFLOW" ||
-                operation.value.type === "UPDATE_WORKFLOW" ||
-                operation.value.type === "ARCHIVE_WORKFLOW"
-              ? "WORKFLOW"
-              : operation.value.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-                ? "ENVIRONMENT"
-                : operation.value.type === "CREATE_SCHEDULE" ||
-                    operation.value.type === "UPDATE_SCHEDULE"
-                  ? "SCHEDULE"
-                  : operation.value.type.endsWith("PROJECT")
-                    ? "PROJECT"
-                    : operation.value.type ===
-                        "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-                      ? "RUNTIME_ENVIRONMENT_DRAFT"
-                      : "AGENT";
+          : operation.value.type === "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+            ? "SYSTEM_ASSISTANT"
+            : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+                operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
+                operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
+                operation.value.type === "CHANGE_INTEGRATION_GRANT"
+              ? "INTEGRATION_CONNECTION"
+              : operation.value.type === "CREATE_WORKFLOW" ||
+                  operation.value.type === "UPDATE_WORKFLOW" ||
+                  operation.value.type === "ARCHIVE_WORKFLOW"
+                ? "WORKFLOW"
+                : operation.value.type ===
+                    "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+                  ? "ENVIRONMENT"
+                  : operation.value.type === "CREATE_SCHEDULE" ||
+                      operation.value.type === "UPDATE_SCHEDULE"
+                    ? "SCHEDULE"
+                    : operation.value.type.endsWith("PROJECT")
+                      ? "PROJECT"
+                      : operation.value.type ===
+                          "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                        ? "RUNTIME_ENVIRONMENT_DRAFT"
+                        : "AGENT";
   const expectedAction =
-    operation.value.type === "CREATE_INSTRUCTION_DRAFT"
+    operation.value.type === "CREATE_INSTRUCTION_DRAFT" ||
+    operation.value.type === "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
       ? "UPDATE"
       : operation.value.type === "ARCHIVE_AGENT" ||
           operation.value.type === "ARCHIVE_WORKFLOW"

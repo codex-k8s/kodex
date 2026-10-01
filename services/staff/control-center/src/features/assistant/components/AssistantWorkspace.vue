@@ -1961,7 +1961,12 @@ onBeforeUnmount(() => {
                     @click="send('QUEUE')"
                   >
                     <Send v-if="!awaitingReply" :size="19" aria-hidden="true" />
-                    <ArrowUp v-else :size="20" stroke-width="2.5" aria-hidden="true" />
+                    <ArrowUp
+                      v-else
+                      :size="20"
+                      stroke-width="2.5"
+                      aria-hidden="true"
+                    />
                   </button>
                   <button
                     v-if="awaitingReply"
@@ -2116,17 +2121,23 @@ onBeforeUnmount(() => {
             type="button"
             :class="{ selected: settingsTab === 'RUNTIME' }"
             @click="settingsTab = 'RUNTIME'"
-          >{{ $t("assistant.settings.runtime") }}</button>
+          >
+            {{ $t("assistant.settings.runtime") }}
+          </button>
           <button
             type="button"
             :class="{ selected: settingsTab === 'ENVIRONMENT' }"
             @click="settingsTab = 'ENVIRONMENT'"
-          >{{ $t("assistant.settings.environment") }}</button>
+          >
+            {{ $t("assistant.settings.environment") }}
+          </button>
           <button
             type="button"
             :class="{ selected: settingsTab === 'INSTRUCTIONS' }"
             @click="settingsTab = 'INSTRUCTIONS'"
-          >{{ $t("assistant.settings.instructions") }}</button>
+          >
+            {{ $t("assistant.settings.instructions") }}
+          </button>
         </nav>
         <div class="assistant-settings-dialog__body">
           <AgentRuntimePanel
@@ -2150,9 +2161,13 @@ onBeforeUnmount(() => {
             <button
               class="button button--primary"
               type="button"
-              :disabled="settingsBusy || !store.assistant?.nextActions.includes('EDIT')"
+              :disabled="
+                settingsBusy || !store.assistant?.nextActions.includes('EDIT')
+              "
               @click="saveAssistantInstructions"
-            >{{ $t("common.save") }}</button>
+            >
+              {{ $t("common.save") }}
+            </button>
             <ProblemNotice
               v-if="settingsProblem"
               :problem="settingsProblem"

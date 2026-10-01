@@ -19,7 +19,11 @@ import type {
   RuntimeEnvironmentSet,
   RuntimeSelection,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, mutateWithRetry, type MutationHeaders } from "@/shared/api/mutation";
+import {
+  mutate,
+  mutateWithRetry,
+  type MutationHeaders,
+} from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 import { readWithRetry } from "@/shared/api/read-retry";
 
@@ -174,7 +178,11 @@ export async function searchRuntimeEnvironments(
   if (!projectRef) {
     let cursor = pageToken;
     const items: RuntimeEnvironmentPage["items"] = [];
-    for (let attempt = 0; attempt < 10 && items.length < pageSize; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < 10 && items.length < pageSize;
+      attempt += 1
+    ) {
       const page = await readWithRetry(
         async () =>
           (
@@ -201,14 +209,14 @@ export async function searchRuntimeEnvironments(
       (
         await unwrap(
           listRuntimeEnvironmentSets({
-                path: { projectRef },
-                query: {
-                  ...(search.trim() ? { query: search.trim() } : {}),
-                  ...(pageToken ? { pageToken } : {}),
-                  pageSize,
-                },
-                signal: requestSignal(),
-              }),
+            path: { projectRef },
+            query: {
+              ...(search.trim() ? { query: search.trim() } : {}),
+              ...(pageToken ? { pageToken } : {}),
+              pageSize,
+            },
+            signal: requestSignal(),
+          }),
         )
       ).data,
   );

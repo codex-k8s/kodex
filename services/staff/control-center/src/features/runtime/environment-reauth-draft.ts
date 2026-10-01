@@ -179,7 +179,8 @@ function parsePolicy(
     volumes,
     networkDestinations:
       value.networkDestinations as RuntimeEnvironmentPolicyInput["networkDestinations"],
-    webAccess: value.webAccess as unknown as RuntimeEnvironmentPolicyInput["webAccess"],
+    webAccess:
+      value.webAccess as unknown as RuntimeEnvironmentPolicyInput["webAccess"],
     kubernetesAccess: value.kubernetesAccess,
   };
 }

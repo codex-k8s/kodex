@@ -1475,9 +1475,12 @@ const ru = {
     },
     webAccessModeHelp: {
       NONE: "Рабочие инструменты не могут обращаться к публичным сайтам; соединение с моделью сохраняется.",
-      ALLOWLIST_READ_ONLY: "Разрешены только GET, HEAD и OPTIONS к указанным доменам.",
-      ALLOWLIST_FULL: "Разрешены GET, HEAD, OPTIONS, POST, PUT, PATCH и DELETE к указанным доменам.",
-      FULL_PUBLIC: "Разрешён HTTPS-доступ к публичным адресам через управляемый proxy с SSRF-защитой.",
+      ALLOWLIST_READ_ONLY:
+        "Разрешены только GET, HEAD и OPTIONS к указанным доменам.",
+      ALLOWLIST_FULL:
+        "Разрешены GET, HEAD, OPTIONS, POST, PUT, PATCH и DELETE к указанным доменам.",
+      FULL_PUBLIC:
+        "Разрешён HTTPS-доступ к публичным адресам через управляемый proxy с SSRF-защитой.",
     },
     webAccessDomain: "Домен или scoped wildcard",
     webAccessMethods: "HTTP-методы",
@@ -1596,12 +1599,16 @@ const ru = {
       networkDestinations:
         "Сеть должна содержать DNS, provider proxy и runtime callback, а Kubernetes API — только при READ_OWN_EXECUTION.",
       webAccessMode: "Неизвестный режим публичного доступа.",
-      webAccessRulesForMode: "Для выбранного режима список доменов должен быть пустым.",
+      webAccessRulesForMode:
+        "Для выбранного режима список доменов должен быть пустым.",
       webAccessRulesRequired: "Добавьте от 1 до 64 доменных правил.",
-      webAccessDomain: "Укажите точный домен, *.example.com или **.example.com. Глобальный wildcard запрещён.",
+      webAccessDomain:
+        "Укажите точный домен, *.example.com или **.example.com. Глобальный wildcard запрещён.",
       webAccessDuplicateDomain: "Доменные правила не должны повторяться.",
-      webAccessTransport: "В прототипе поддерживается только HTTPS на порту 443.",
-      webAccessMethods: "Выберите уникальные HTTP-методы, допустимые для режима.",
+      webAccessTransport:
+        "В прототипе поддерживается только HTTPS на порту 443.",
+      webAccessMethods:
+        "Выберите уникальные HTTP-методы, допустимые для режима.",
       secretDescriptorRequired:
         "Заполните все обязательные поля Secret descriptor.",
       sha256: "SHA-256 должен содержать 64 строчные шестнадцатеричные цифры.",
@@ -3488,6 +3495,7 @@ const ru = {
       UPDATE_PROJECT: "Изменить Проект",
       UPDATE_AGENT: "Изменить сотрудника",
       CREATE_INSTRUCTION_DRAFT: "Подготовить черновик инструкций сотрудника",
+      UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS: "Изменить инструкции Kodex",
       UPDATE_INTEGRATION_CONNECTION: "Изменить подключение",
       CREATE_AGENT: "Создать сотрудника",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
@@ -3523,15 +3531,19 @@ const ru = {
     stop: "Остановить текущий ход",
     settings: {
       title: "Настройки Kodex",
-      description: "Та же конфигурация модели, окружения и инструкций, что у ИИ-сотрудников.",
+      description:
+        "Та же конфигурация модели, окружения и инструкций, что у ИИ-сотрудников.",
       runtime: "Модель и выполнение",
       environment: "Окружение",
       instructions: "Инструкции",
-      instructionsHelp: "Дополнение владельца применяется к следующим ходам. Изменения, предложенные самим Kodex, сначала показываются как подтверждаемый черновик.",
+      instructionsHelp:
+        "Дополнение владельца применяется к следующим ходам. Изменения, предложенные самим Kodex, сначала показываются как подтверждаемый черновик.",
       environmentTitle: "Рабочее окружение Kodex",
-      environmentHelp: "Переменные, ресурсы и сетевой доступ применятся к следующим ходам. Доступ к интернету требует свежего подтверждения владельца.",
+      environmentHelp:
+        "Переменные, ресурсы и сетевой доступ применятся к следующим ходам. Доступ к интернету требует свежего подтверждения владельца.",
       platformImage: "Платформенный образ",
-      platformImageHelp: "Образ и встроенные инструменты системного помощника обновляются платформой и здесь не заменяются.",
+      platformImageHelp:
+        "Образ и встроенные инструменты системного помощника обновляются платформой и здесь не заменяются.",
     },
     workContext: "Контекст работы",
     contextReady: "Готов помочь на этом экране",
@@ -3849,6 +3861,7 @@ const ru = {
       projectLanguage: "Язык проекта",
       agentRole: "Роль сотрудника",
       agentInstructions: "Инструкции сотруднику",
+      systemAssistantInstructions: "Дополнительные инструкции Kodex",
       agentCapabilities: "Возможности сотрудника",
       capabilityAgent: "Сотрудник",
       capabilityName: "Возможность",
@@ -3881,6 +3894,8 @@ const ru = {
         "Образ, рабочее окружение и остальные доступы настраиваются отдельно. Проверьте их перед запуском сотрудника.",
       instructionDraftNextSteps:
         "План сохранит только черновик инструкций. После применения откройте штатную форму сотрудника, проверьте шаблон и отдельно опубликуйте его.",
+      systemAssistantInstructionsBoundary:
+        "Изменение затронет только дополнительные инструкции владельца. Системные ограничения, полномочия и базовый prompt Kodex останутся неизменными; новые инструкции вступят в силу только после проверки и подтверждения плана.",
       environmentDescription: "Описание окружения",
       environmentImageArtifact: "Ссылка на проверенный образ (необязательно)",
       environmentChooseImage: "Выбрать готовый образ",
@@ -5694,9 +5709,12 @@ const en = {
     },
     webAccessModeHelp: {
       NONE: "Workspace tools cannot access public sites; model connectivity remains available.",
-      ALLOWLIST_READ_ONLY: "Only GET, HEAD and OPTIONS are allowed for listed domains.",
-      ALLOWLIST_FULL: "GET, HEAD, OPTIONS, POST, PUT, PATCH and DELETE are allowed for listed domains.",
-      FULL_PUBLIC: "HTTPS access to public addresses is allowed through the managed SSRF-protected proxy.",
+      ALLOWLIST_READ_ONLY:
+        "Only GET, HEAD and OPTIONS are allowed for listed domains.",
+      ALLOWLIST_FULL:
+        "GET, HEAD, OPTIONS, POST, PUT, PATCH and DELETE are allowed for listed domains.",
+      FULL_PUBLIC:
+        "HTTPS access to public addresses is allowed through the managed SSRF-protected proxy.",
     },
     webAccessDomain: "Domain or scoped wildcard",
     webAccessMethods: "HTTP methods",
@@ -5812,9 +5830,11 @@ const en = {
       networkDestinations:
         "Network policy must include DNS, provider proxy and runtime callback; Kubernetes API is allowed only with READ_OWN_EXECUTION.",
       webAccessMode: "Unknown public network access mode.",
-      webAccessRulesForMode: "The domain list must be empty for the selected mode.",
+      webAccessRulesForMode:
+        "The domain list must be empty for the selected mode.",
       webAccessRulesRequired: "Add between 1 and 64 domain rules.",
-      webAccessDomain: "Enter an exact domain, *.example.com, or **.example.com. A global wildcard is forbidden.",
+      webAccessDomain:
+        "Enter an exact domain, *.example.com, or **.example.com. A global wildcard is forbidden.",
       webAccessDuplicateDomain: "Domain rules must be unique.",
       webAccessTransport: "The prototype supports HTTPS on port 443 only.",
       webAccessMethods: "Select unique HTTP methods supported by the mode.",
@@ -7611,6 +7631,7 @@ const en = {
       UPDATE_PROJECT: "Update Project",
       UPDATE_AGENT: "Update employee",
       CREATE_INSTRUCTION_DRAFT: "Prepare employee instruction draft",
+      UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS: "Update Kodex instructions",
       UPDATE_INTEGRATION_CONNECTION: "Update connection",
       CREATE_AGENT: "Create agent",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
@@ -7646,15 +7667,19 @@ const en = {
     stop: "Stop the current turn",
     settings: {
       title: "Kodex settings",
-      description: "The same model, environment and instruction controls used for AI employees.",
+      description:
+        "The same model, environment and instruction controls used for AI employees.",
       runtime: "Model and runtime",
       environment: "Environment",
       instructions: "Instructions",
-      instructionsHelp: "Owner instructions apply to future turns. Changes proposed by Kodex itself are shown as a draft for confirmation first.",
+      instructionsHelp:
+        "Owner instructions apply to future turns. Changes proposed by Kodex itself are shown as a draft for confirmation first.",
       environmentTitle: "Kodex runtime environment",
-      environmentHelp: "Variables, resources and network access apply to future turns. Internet access requires fresh owner confirmation.",
+      environmentHelp:
+        "Variables, resources and network access apply to future turns. Internet access requires fresh owner confirmation.",
       platformImage: "Platform image",
-      platformImageHelp: "The system assistant image and built-in tools are managed by the platform and cannot be replaced here.",
+      platformImageHelp:
+        "The system assistant image and built-in tools are managed by the platform and cannot be replaced here.",
     },
     workContext: "Work context",
     contextReady: "Ready to help on this screen",
@@ -7967,6 +7992,7 @@ const en = {
       projectLanguage: "Project language",
       agentRole: "Employee role",
       agentInstructions: "Employee instructions",
+      systemAssistantInstructions: "Additional Kodex instructions",
       agentCapabilities: "Employee capabilities",
       capabilityAgent: "Employee",
       capabilityName: "Capability",
@@ -7999,6 +8025,8 @@ const en = {
         "The image, work environment, and other access grants are configured separately. Review them before launching the employee.",
       instructionDraftNextSteps:
         "This plan only saves an instruction draft. After applying it, open the employee form, validate the template, and publish it separately.",
+      systemAssistantInstructionsBoundary:
+        "This change affects only the owner's additional instructions. Kodex system constraints, permissions, and core prompt remain unchanged; the new instructions take effect only after plan review and confirmation.",
       environmentDescription: "Environment description",
       environmentImageArtifact: "Verified image reference (optional)",
       environmentChooseImage: "Choose a ready image",

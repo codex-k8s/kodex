@@ -35,13 +35,14 @@ func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Conte
 		}
 	} else {
 		assistant, err := repository.getAssistantTx(ctx, tx, actorScope)
-		if err != nil || assistant.Ref != systemAssistantRef {
+		if err != nil || systemAssistantRef != assistant.Ref && systemAssistantRef != assistant.StableKey {
 			return nil, 0, errs.ErrForbidden
 		}
-		view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, actorScope, systemAssistantRef)
+		view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, actorScope, assistant.Ref)
 		if err != nil || view.Environment.Ref != environmentRef || view.Environment.ProjectRef != "" {
 			return nil, 0, errs.ErrForbidden
 		}
+		systemAssistantRef = assistant.Ref
 		projectRef = ""
 	}
 	environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, actorScope, environmentRef)
@@ -125,7 +126,7 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 func (repository *Repository) hydrateAssistantEnvironmentOperation(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
-	if projectRef == "" || !onlyAssistantFields(operation.Parameters,
+	if !onlyAssistantFields(operation.Parameters,
 		append([]string{"environmentRef"}, assistantEnvironmentProposalFields...)...) {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
@@ -134,6 +135,9 @@ func (repository *Repository) hydrateAssistantEnvironmentOperation(ctx context.C
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	systemAssistantRef := assistantString(operation.Parameters, "systemAssistantRef")
+	if systemAssistantRef == "" && projectRef == "" {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
 	before, version, err := repository.readAssistantEnvironmentSnapshot(ctx, tx, actorScope, projectRef, ref, systemAssistantRef)
 	if err != nil {
 		return entity.AssistantPlanOperation{}, err

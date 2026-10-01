@@ -80,7 +80,12 @@ export const runtimeWebAccessModes = [
   "FULL_PUBLIC",
 ] as const satisfies readonly RuntimeWebAccessMode[];
 export const runtimeWebReadMethods = ["GET", "HEAD", "OPTIONS"] as const;
-export const runtimeWebWriteMethods = ["POST", "PUT", "PATCH", "DELETE"] as const;
+export const runtimeWebWriteMethods = [
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+] as const;
 
 export function defaultRuntimeEnvironmentPolicy(): RuntimeEnvironmentPolicyInput {
   return {
@@ -408,7 +413,11 @@ function validateRuntimePolicy(
       message: "runtime.errors.networkDestinations",
     });
 
-  validateRuntimeWebAccess(policy.webAccess.mode, policy.webAccess.rules, problems);
+  validateRuntimeWebAccess(
+    policy.webAccess.mode,
+    policy.webAccess.rules,
+    problems,
+  );
 }
 
 function validateRuntimeWebAccess(
@@ -417,46 +426,86 @@ function validateRuntimeWebAccess(
   problems: EnvironmentFormProblem[],
 ): void {
   if (!runtimeWebAccessModes.includes(mode)) {
-    problems.push({ field: "policy.webAccess.mode", message: "runtime.errors.webAccessMode" });
+    problems.push({
+      field: "policy.webAccess.mode",
+      message: "runtime.errors.webAccessMode",
+    });
     return;
   }
   if (mode === "NONE" || mode === "FULL_PUBLIC") {
     if (rules.length)
-      problems.push({ field: "policy.webAccess.rules", message: "runtime.errors.webAccessRulesForMode" });
+      problems.push({
+        field: "policy.webAccess.rules",
+        message: "runtime.errors.webAccessRulesForMode",
+      });
     return;
   }
   if (!rules.length || rules.length > 64) {
-    problems.push({ field: "policy.webAccess.rules", message: "runtime.errors.webAccessRulesRequired" });
+    problems.push({
+      field: "policy.webAccess.rules",
+      message: "runtime.errors.webAccessRulesRequired",
+    });
     return;
   }
-  const domainPattern = /^(?:\*\*\.|\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+  const domainPattern =
+    /^(?:\*\*\.|\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
   const seen = new Set<string>();
   for (const [index, rule] of rules.entries()) {
     const domain = rule.domainPattern.trim().toLowerCase();
-    if (!domainPattern.test(domain) || domain === "*")
-      problems.push({ field: `policy.webAccess.rules.${String(index)}.domainPattern`, message: "runtime.errors.webAccessDomain" });
+    const hostname = domain.replace(/^\*\*?\./, "");
+    if (
+      !domainPattern.test(domain) ||
+      domain === "*" ||
+      isIPv4Literal(hostname)
+    )
+      problems.push({
+        field: `policy.webAccess.rules.${String(index)}.domainPattern`,
+        message: "runtime.errors.webAccessDomain",
+      });
     if (seen.has(domain))
-      problems.push({ field: `policy.webAccess.rules.${String(index)}.domainPattern`, message: "runtime.errors.webAccessDuplicateDomain" });
+      problems.push({
+        field: `policy.webAccess.rules.${String(index)}.domainPattern`,
+        message: "runtime.errors.webAccessDuplicateDomain",
+      });
     seen.add(domain);
-    if (rule.protocol !== "HTTPS" || rule.port !== 443)
-      problems.push({ field: `policy.webAccess.rules.${String(index)}`, message: "runtime.errors.webAccessTransport" });
-    const expected = mode === "ALLOWLIST_READ_ONLY"
-      ? [...runtimeWebReadMethods].sort()
-      : [...runtimeWebReadMethods, ...runtimeWebWriteMethods].sort();
+    const expected =
+      mode === "ALLOWLIST_READ_ONLY"
+        ? [...runtimeWebReadMethods].sort()
+        : [...runtimeWebReadMethods, ...runtimeWebWriteMethods].sort();
     const actual = [...rule.httpMethods].sort();
-    if (actual.length !== expected.length || actual.some((method, methodIndex) => method !== expected[methodIndex]))
-      problems.push({ field: `policy.webAccess.rules.${String(index)}.httpMethods`, message: "runtime.errors.webAccessMethods" });
+    if (
+      actual.length !== expected.length ||
+      actual.some((method, methodIndex) => method !== expected[methodIndex])
+    )
+      problems.push({
+        field: `policy.webAccess.rules.${String(index)}.httpMethods`,
+        message: "runtime.errors.webAccessMethods",
+      });
   }
 }
 
-export function emptyRuntimeWebAccessRule(mode: RuntimeWebAccessMode): RuntimeWebAccessRule {
+function isIPv4Literal(value: string): boolean {
+  const parts = value.split(".");
+  return (
+    parts.length === 4 &&
+    parts.every(
+      (part) =>
+        /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255,
+    )
+  );
+}
+
+export function emptyRuntimeWebAccessRule(
+  mode: RuntimeWebAccessMode,
+): RuntimeWebAccessRule {
   return {
     domainPattern: "",
     protocol: "HTTPS",
     port: 443,
-    httpMethods: mode === "ALLOWLIST_READ_ONLY"
-      ? [...runtimeWebReadMethods]
-      : [...runtimeWebReadMethods, ...runtimeWebWriteMethods],
+    httpMethods:
+      mode === "ALLOWLIST_READ_ONLY"
+        ? [...runtimeWebReadMethods]
+        : [...runtimeWebReadMethods, ...runtimeWebWriteMethods],
   };
 }
 

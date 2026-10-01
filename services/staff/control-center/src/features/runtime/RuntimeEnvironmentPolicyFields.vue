@@ -148,16 +148,25 @@ function changeWebAccessMode(event: Event): void {
   const target = event.target;
   if (!(target instanceof HTMLSelectElement)) return;
   const mode = target.value as RuntimeWebAccessMode;
-  const rules = mode === "NONE" || mode === "FULL_PUBLIC"
-    ? []
-    : props.policy.webAccess.rules.length
-      ? props.policy.webAccess.rules.map((rule) => ({
-          ...rule,
-          httpMethods: (mode === "ALLOWLIST_READ_ONLY"
-            ? ["GET", "HEAD", "OPTIONS"]
-            : ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]) as RuntimeWebAccessRule["httpMethods"],
-        }))
-      : [emptyRuntimeWebAccessRule(mode)];
+  const rules =
+    mode === "NONE" || mode === "FULL_PUBLIC"
+      ? []
+      : props.policy.webAccess.rules.length
+        ? props.policy.webAccess.rules.map((rule) => ({
+            ...rule,
+            httpMethods: (mode === "ALLOWLIST_READ_ONLY"
+              ? ["GET", "HEAD", "OPTIONS"]
+              : [
+                  "DELETE",
+                  "GET",
+                  "HEAD",
+                  "OPTIONS",
+                  "PATCH",
+                  "POST",
+                  "PUT",
+                ]) as RuntimeWebAccessRule["httpMethods"],
+          }))
+        : [emptyRuntimeWebAccessRule(mode)];
   emit("update:policy", { ...props.policy, webAccess: { mode, rules } });
 }
 
@@ -167,7 +176,10 @@ function addWebRule(): void {
     ...props.policy,
     webAccess: {
       ...props.policy.webAccess,
-      rules: [...props.policy.webAccess.rules, emptyRuntimeWebAccessRule(props.policy.webAccess.mode)],
+      rules: [
+        ...props.policy.webAccess.rules,
+        emptyRuntimeWebAccessRule(props.policy.webAccess.mode),
+      ],
     },
   });
 }
@@ -176,7 +188,12 @@ function removeWebRule(index: number): void {
   if (props.disabled) return;
   emit("update:policy", {
     ...props.policy,
-    webAccess: { ...props.policy.webAccess, rules: props.policy.webAccess.rules.filter((_, current) => current !== index) },
+    webAccess: {
+      ...props.policy.webAccess,
+      rules: props.policy.webAccess.rules.filter(
+        (_, current) => current !== index,
+      ),
+    },
   });
 }
 
@@ -188,11 +205,12 @@ function changeWebRule(index: number, event: Event): void {
     ...props.policy,
     webAccess: {
       ...props.policy.webAccess,
-      rules: props.policy.webAccess.rules.map((rule, current) => current === index ? { ...rule, domainPattern: target.value } : rule),
+      rules: props.policy.webAccess.rules.map((rule, current) =>
+        current === index ? { ...rule, domainPattern: target.value } : rule,
+      ),
     },
   });
 }
-
 </script>
 
 <template>
@@ -363,13 +381,23 @@ function changeWebRule(index: number, event: Event): void {
             :disabled="disabled"
             @change="changeWebAccessMode"
           >
-            <option value="NONE">{{ $t("runtime.webAccessModeLabel.NONE") }}</option>
-            <option value="ALLOWLIST_READ_ONLY">{{ $t("runtime.webAccessModeLabel.ALLOWLIST_READ_ONLY") }}</option>
-            <option value="ALLOWLIST_FULL">{{ $t("runtime.webAccessModeLabel.ALLOWLIST_FULL") }}</option>
-            <option value="FULL_PUBLIC">{{ $t("runtime.webAccessModeLabel.FULL_PUBLIC") }}</option>
+            <option value="NONE">
+              {{ $t("runtime.webAccessModeLabel.NONE") }}
+            </option>
+            <option value="ALLOWLIST_READ_ONLY">
+              {{ $t("runtime.webAccessModeLabel.ALLOWLIST_READ_ONLY") }}
+            </option>
+            <option value="ALLOWLIST_FULL">
+              {{ $t("runtime.webAccessModeLabel.ALLOWLIST_FULL") }}
+            </option>
+            <option value="FULL_PUBLIC">
+              {{ $t("runtime.webAccessModeLabel.FULL_PUBLIC") }}
+            </option>
           </select>
         </label>
-        <p class="secondary-text">{{ $t(`runtime.webAccessModeHelp.${policy.webAccess.mode}`) }}</p>
+        <p class="secondary-text">
+          {{ $t(`runtime.webAccessModeHelp.${policy.webAccess.mode}`) }}
+        </p>
         <template v-if="policy.webAccess.mode.startsWith('ALLOWLIST')">
           <article
             v-for="(rule, index) in policy.webAccess.rules"
@@ -389,15 +417,33 @@ function changeWebRule(index: number, event: Event): void {
             <div class="web-rule-transport">
               <span>HTTPS</span><code>443</code>
             </div>
-            <div class="method-list" :aria-label="$t('runtime.webAccessMethods')">
-              <span class="method-list__label">{{ $t("runtime.webAccessMethods") }}</span>
-              <code v-for="method in rule.httpMethods" :key="method">{{ method }}</code>
+            <div
+              class="method-list"
+              :aria-label="$t('runtime.webAccessMethods')"
+            >
+              <span class="method-list__label">{{
+                $t("runtime.webAccessMethods")
+              }}</span>
+              <code v-for="method in rule.httpMethods" :key="method">{{
+                method
+              }}</code>
             </div>
-            <button class="icon-button icon-button--danger" type="button" :aria-label="$t('common.delete')" :disabled="disabled" @click="removeWebRule(index)">
+            <button
+              class="icon-button icon-button--danger"
+              type="button"
+              :aria-label="$t('common.delete')"
+              :disabled="disabled"
+              @click="removeWebRule(index)"
+            >
               <Trash2 :size="16" aria-hidden="true" />
             </button>
           </article>
-          <button class="button web-rule-add" type="button" :disabled="disabled || policy.webAccess.rules.length >= 64" @click="addWebRule">
+          <button
+            class="button web-rule-add"
+            type="button"
+            :disabled="disabled || policy.webAccess.rules.length >= 64"
+            @click="addWebRule"
+          >
             <Plus :size="15" aria-hidden="true" />
             {{ $t("runtime.addWebAccessRule") }}
           </button>
@@ -551,7 +597,9 @@ function changeWebRule(index: number, event: Event): void {
   background: var(--surface-subtle);
   font-size: 12px;
 }
-.web-rule-add { justify-self: start; }
+.web-rule-add {
+  justify-self: start;
+}
 .access-toggle {
   display: flex;
   align-items: flex-start;

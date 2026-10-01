@@ -336,9 +336,15 @@ func TestEnvironmentDraftRejectsUnknownPolicyEnumBeforeRPC(t *testing.T) {
 
 func TestRuntimeEnvironmentReadbackUsesOpenAPIEnums(t *testing.T) {
 	policy := &controlplanev1.RuntimeEnvironmentPolicy{
-		Resources:        &controlplanev1.RuntimeResourcePolicy{},
-		Volumes:          []*controlplanev1.RuntimeVolume{{Name: "scratch", Kind: controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK}},
-		Network:          &controlplanev1.RuntimeNetworkPolicy{Egress: []*controlplanev1.RuntimeNetworkEgress{{Destination: controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS}}},
+		Resources: &controlplanev1.RuntimeResourcePolicy{},
+		Volumes:   []*controlplanev1.RuntimeVolume{{Name: "scratch", Kind: controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK}},
+		Network: &controlplanev1.RuntimeNetworkPolicy{
+			Egress: []*controlplanev1.RuntimeNetworkEgress{{
+				Destination: controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS,
+				Protocol:    controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_TCP,
+			}},
+			WebAccess: &controlplanev1.RuntimeWebAccess{Mode: controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE},
+		},
 		KubernetesAccess: &controlplanev1.RuntimeKubernetesAccessProfile{Kind: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE},
 	}
 	value, err := messageMap(&controlplanev1.GetRuntimeEnvironmentSetResponse{Environment: &controlplanev1.RuntimeEnvironmentSet{CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{Policy: policy}}})
@@ -348,13 +354,17 @@ func TestRuntimeEnvironmentReadbackUsesOpenAPIEnums(t *testing.T) {
 	environment := value["environment"].(map[string]any)
 	version := environment["currentVersion"].(map[string]any)
 	policyView := version["policy"].(map[string]any)
+	network := policyView["network"].(map[string]any)
+	egress := network["egress"].([]any)[0].(map[string]any)
 	if policyView["kubernetesAccess"].(map[string]any)["kind"] != "NONE" ||
 		policyView["volumes"].([]any)[0].(map[string]any)["kind"] != "EPHEMERAL_DISK" ||
-		policyView["network"].(map[string]any)["egress"].([]any)[0].(map[string]any)["destination"] != "DNS" {
+		egress["destination"] != "DNS" ||
+		egress["protocol"] != "TCP" ||
+		network["webAccess"].(map[string]any)["mode"] != "NONE" {
 		t.Fatal("runtime environment enum was not normalized to OpenAPI")
 	}
 	encoded, _ := json.Marshal(value)
-	for _, forbidden := range []string{"RUNTIME_VOLUME_KIND_", "RUNTIME_NETWORK_DESTINATION_", "RUNTIME_KUBERNETES_ACCESS_KIND_"} {
+	for _, forbidden := range []string{"RUNTIME_VOLUME_KIND_", "RUNTIME_NETWORK_DESTINATION_", "RUNTIME_NETWORK_PROTOCOL_", "RUNTIME_WEB_ACCESS_MODE_", "RUNTIME_KUBERNETES_ACCESS_KIND_"} {
 		if strings.Contains(string(encoded), forbidden) {
 			t.Fatalf("Proto enum prefix leaked to HTTP readback: %s", forbidden)
 		}

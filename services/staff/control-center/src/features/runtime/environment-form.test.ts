@@ -247,6 +247,44 @@ describe("runtime environment form", () => {
     );
   });
 
+  it("разрешает только доменные allowlist-шаблоны и отклоняет wildcard и IP", () => {
+    const input = {
+      name: "Окружение",
+      description: "",
+      imageArtifactRef: "imgart_main",
+      tools: [],
+      values: [],
+      secretBindings: [],
+      policy: defaultRuntimeEnvironmentPolicy(),
+    };
+    input.policy.webAccess = {
+      mode: "ALLOWLIST_READ_ONLY",
+      rules: [
+        {
+          domainPattern: "api.example.com",
+          protocol: "HTTPS",
+          port: 443,
+          httpMethods: ["GET", "HEAD", "OPTIONS"],
+        },
+      ],
+    };
+
+    expect(validateEnvironmentInput(input)).toEqual([]);
+    const rule = input.policy.webAccess.rules[0];
+    expect(rule).toBeDefined();
+    if (!rule) return;
+    for (const accepted of ["*.example.com", "**.example.com"]) {
+      rule.domainPattern = accepted;
+      expect(validateEnvironmentInput(input)).toEqual([]);
+    }
+    for (const rejected of ["*", "127.0.0.1"]) {
+      rule.domainPattern = rejected;
+      expect(
+        validateEnvironmentInput(input).map((problem) => problem.message),
+      ).toContain("runtime.errors.webAccessDomain");
+    }
+  });
+
   it("фиксирует единый ограниченный размер редактируемых коллекций", () => {
     expect(runtimeEnvironmentCollectionLimit).toBe(128);
   });

@@ -1502,6 +1502,8 @@ message AssistantPlanOperation {
     TYPE_UPDATE_SCHEDULE = 23;
     // Создать проверенный текстовый файл Проекта через подтверждаемый план помощника.
     TYPE_CREATE_PROJECT_FILE = 24;
+    // Изменить owner-инструкции системного помощника по точной версии.
+    TYPE_UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS = 25;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
