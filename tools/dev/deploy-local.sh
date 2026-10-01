@@ -96,8 +96,17 @@ filter_render() {
 # CP владеет поколением OpenAPI egress-policy. Локальный apply Deployment
 # сохраняет его exact live-поля вместо попытки вернуть bootstrap generation 1.
 preserve_live_egress_projection() {
-  local output=$1 live="$temporary_directory/egress-live.json" updated="$temporary_directory/egress-updated.yaml"
-  if [[ "$(yq -N -r 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") | .metadata.name' "$output")" != egress-gateway ]]; then
+  local output=$1 live="$temporary_directory/egress-live.json" \
+    live_service="$temporary_directory/egress-service-live.json" \
+    live_network_policy="$temporary_directory/egress-network-policy-live.json" \
+    updated="$temporary_directory/egress-updated.yaml"
+  if ! yq -e '
+    select(
+      (.kind == "Deployment" and .metadata.name == "egress-gateway") or
+      (.kind == "Service" and .metadata.name == "egress-gateway-openapi") or
+      (.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-integration-destinations")
+    )
+  ' "$output" >/dev/null; then
     return
   fi
   kubectl -n "$namespace" get deployment/egress-gateway --ignore-not-found -o json >"$live" ||
@@ -130,7 +139,30 @@ preserve_live_egress_projection() {
   actual_digest=$(kubectl -n "$namespace" get "configmap/$policy_name" -o json |
     jq -j '.data["integration-policy.json"]' | sha256sum | awk '{print $1}')
   [[ "$actual_digest" == "$expected_digest" ]] || fail 'live egress policy digest changed'
-  yq -N -o=json -I=0 '.' "$output" | jq -s --slurpfile live "$live" '
+  kubectl -n "$namespace" get service/egress-gateway-openapi -o json >"$live_service" ||
+    fail 'local egress Service discovery failed'
+  kubectl -n "$namespace" get networkpolicy/egress-gateway-integration-destinations -o json >"$live_network_policy" ||
+    fail 'local egress NetworkPolicy discovery failed'
+  jq -e --arg generation "$(jq -r '.spec.template.metadata.annotations["kodex.dev/integration-egress-generation"]' "$live")" '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    .spec.selector["app.kubernetes.io/name"] == "egress-gateway" and
+    .spec.selector["app.kubernetes.io/component"] == "platform-egress" and
+    .spec.selector["kodex.dev/integration-egress-generation"] == $generation
+  ' "$live_service" >/dev/null || fail 'live egress Service projection is not exact'
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    .spec.podSelector.matchLabels["app.kubernetes.io/name"] == "egress-gateway" and
+    .spec.podSelector.matchLabels["app.kubernetes.io/component"] == "platform-egress" and
+    (.spec.egress | type == "array")
+  ' "$live_network_policy" >/dev/null || fail 'live egress NetworkPolicy projection is not exact'
+  yq -N -o=json -I=0 '.' "$output" | jq -s \
+    --slurpfile live "$live" \
+    --slurpfile liveService "$live_service" \
+    --slurpfile liveNetworkPolicy "$live_network_policy" '
     ($live[0].spec.template) as $template |
     ($template.spec.containers[] | select(.name == "egress-gateway") |
       .env[] | select(.name == "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST")) as $policyEnv |
@@ -146,6 +178,10 @@ preserve_live_egress_projection() {
         .env |= map(if .name == "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST" then $policyEnv else . end)
       else . end) |
       .spec.template.spec.volumes |= map(if .name == "integration-policy" then $policyVolume else . end)
+    elif .kind == "Service" and .metadata.name == "egress-gateway-openapi" then
+      .spec.selector = $liveService[0].spec.selector
+    elif .kind == "NetworkPolicy" and .metadata.name == "egress-gateway-integration-destinations" then
+      .spec.egress = $liveNetworkPolicy[0].spec.egress
     else . end
   ' | yq -p=json -P >"$updated" || fail 'local egress projection preservation failed'
   # JSON→YAML roundtrip не должен превращать строковые env вроде "off" в bool.
@@ -157,14 +193,46 @@ preserve_live_egress_projection() {
   mv -- "$updated" "$output"
 }
 
+# Старые локальные запуски меняли cache-volume обычным kubectl patch, поэтому
+# поле оставалось у случайного field manager и блокировало следующий trusted
+# render после переноса state directory. Забираем только exact hostPath после
+# проверки принадлежности Deployment локальному профилю.
+reconcile_frontend_cache_field_ownership() {
+  local output=$1 desired live
+  desired=$(yq -N -r '
+    select(.kind == "Deployment" and .metadata.name == "staff-control-center") |
+    .spec.template.spec.volumes[] | select(.name == "dev-node-modules") | .hostPath.path
+  ' "$output")
+  [[ -n "$desired" ]] || return
+  [[ "$desired" == "$state_directory"/cache/frontend-v1/*/node_modules ]] ||
+    fail 'rendered frontend cache path is outside the trusted local state directory'
+  live=$(kubectl -n "$namespace" get deployment/staff-control-center --ignore-not-found -o json) ||
+    fail 'local frontend Deployment discovery failed'
+  [[ -n "$live" ]] || return
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster"
+  ' <<<"$live" >/dev/null || fail 'live frontend Deployment is not owned by the trusted local profile'
+  jq -n --arg path "$desired" '{
+    apiVersion:"apps/v1",
+    kind:"Deployment",
+    metadata:{name:"staff-control-center",namespace:"kodex-system"},
+    spec:{template:{spec:{volumes:[{
+      name:"dev-node-modules",
+      hostPath:{path:$path,type:"Directory"}
+    }]}}}
+  }' | kubectl apply --server-side --force-conflicts \
+    --field-manager=kodex-local-cache-migration -f - >/dev/null
+}
+
 apply_render() {
   local name=$1 expression=$2 output
   output=$(filter_render "$name" "$expression")
   if [[ "$security_profile" == trusted-cluster ]]; then
     verify_local_resource_ownership "$output"
-    if [[ "$stage" == core ]]; then
-      preserve_live_egress_projection "$output"
-    fi
+    preserve_live_egress_projection "$output"
+    reconcile_frontend_cache_field_ownership "$output"
     kubectl apply --server-side --field-manager=kodex-local-dev -f "$output" >/dev/null
     return
   fi

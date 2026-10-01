@@ -79,7 +79,7 @@ type RuntimeNetworkEgress struct {
 
 // RuntimeWebAccessRule задаёт доступ к публичному HTTPS endpoint. Scoped
 // wildcard не равен глобальному wildcard: *.example.com разрешает только один
-// уровень, **.example.com — любое число поддоменов, но не сам example.com.
+// уровень, **.example.com — apex и любое число поддоменов.
 type RuntimeWebAccessRule struct {
 	DomainPattern string   `json:"domain_pattern"`
 	Protocol      string   `json:"protocol"`

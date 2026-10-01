@@ -97,7 +97,7 @@ func RuntimeWebAccessAllowsHost(access RuntimeWebAccess, hostname string) bool {
 		switch {
 		case strings.HasPrefix(pattern, "**."):
 			suffix := strings.TrimPrefix(pattern, "**.")
-			if hostname != suffix && strings.HasSuffix(hostname, "."+suffix) {
+			if hostname == suffix || strings.HasSuffix(hostname, "."+suffix) {
 				return true
 			}
 		case strings.HasPrefix(pattern, "*."):
