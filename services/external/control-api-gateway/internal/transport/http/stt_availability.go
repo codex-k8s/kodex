@@ -13,7 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const speechAvailabilityTimeout = 5 * time.Second
+const (
+	speechAvailabilityTimeout      = 5 * time.Second
+	speechAvailabilityLeaseTimeout = 30 * time.Second
+)
 
 func (server *Server) writeBootstrapState(w http.ResponseWriter, r *http.Request, state *controlplanev1.BootstrapState) {
 	if state == nil {
@@ -47,7 +50,10 @@ func SpeechAvailability(ctx context.Context, speech sttv1.SpeechToTextServiceCli
 	if speech == nil {
 		return result
 	}
-	ctx, cancel := context.WithTimeout(ctx, speechAvailabilityTimeout)
+	// Realtime обновляет доступность раз в 15 секунд. Проверка получает
+	// отдельный deadline, чтобы подтверждённый lease не истекал между двумя
+	// heartbeat; фактический STT-вызов всё равно ограничен собственным timeout.
+	ctx, cancel := context.WithTimeout(ctx, speechAvailabilityLeaseTimeout)
 	defer cancel()
 	availability, err := sttapi.CheckAvailability(ctx, speech)
 	if err != nil || ctx.Err() != nil {
