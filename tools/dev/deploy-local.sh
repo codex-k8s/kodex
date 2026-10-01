@@ -100,15 +100,15 @@ preserve_live_egress_projection() {
     live_service="$temporary_directory/egress-service-live.json" \
     live_network_policy="$temporary_directory/egress-network-policy-live.json" \
     updated="$temporary_directory/egress-updated.yaml"
-  if ! yq -e '
+  local projection_targets
+  projection_targets=$(yq -N -r '
     select(
       (.kind == "Deployment" and .metadata.name == "egress-gateway") or
       (.kind == "Service" and .metadata.name == "egress-gateway-openapi") or
       (.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-integration-destinations")
-    )
-  ' "$output" >/dev/null; then
-    return
-  fi
+    ) | .metadata.name
+  ' "$output")
+  [[ -n "$projection_targets" ]] || return 0
   kubectl -n "$namespace" get deployment/egress-gateway --ignore-not-found -o json >"$live" ||
     fail 'local egress Deployment discovery failed'
   [[ -s "$live" ]] || return
@@ -203,7 +203,7 @@ reconcile_frontend_cache_field_ownership() {
     select(.kind == "Deployment" and .metadata.name == "staff-control-center") |
     .spec.template.spec.volumes[] | select(.name == "dev-node-modules") | .hostPath.path
   ' "$output")
-  [[ -n "$desired" ]] || return
+  [[ -n "$desired" ]] || return 0
   [[ "$desired" == "$state_directory"/cache/frontend-v1/*/node_modules ]] ||
     fail 'rendered frontend cache path is outside the trusted local state directory'
   live=$(kubectl -n "$namespace" get deployment/staff-control-center --ignore-not-found -o json) ||

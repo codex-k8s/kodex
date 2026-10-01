@@ -887,7 +887,7 @@ bash "$repository_root/tools/dev/prepare-local-integration-fixture.sh" \
   --state-directory "$state_directory" --mode commit >/dev/null
 record_source_provenance_evidence "$state_directory/source-provenance-up.json" up
 if [[ "$security_profile" == trusted-cluster ]]; then
-  for stage in data network migrate core; do
+  for stage in data network migrate supply-chain core; do
     "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
       --render "$state_directory/render.yaml" --state-directory "$state_directory" \
       --tls-mode "$tls_mode" --security-profile "$security_profile" --stage "$stage"

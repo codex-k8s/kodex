@@ -68,6 +68,31 @@ func TestRuntimeEnvironmentPolicyFromInputMaterializesExactBoundary(t *testing.T
 	}
 }
 
+func TestRuntimeEnvironmentPolicyNetworkDigestsMatchMigration(t *testing.T) {
+	t.Parallel()
+
+	withoutKubernetes := DefaultRuntimeEnvironmentPolicy()
+	if withoutKubernetes.NetworkDigest != "7d4998b5d8c1db3a90002ea8e56bc4c1103a5facbf5eba9b313355f3b55ca765" {
+		t.Fatalf("default network digest = %q", withoutKubernetes.NetworkDigest)
+	}
+	withKubernetes, err := RuntimeEnvironmentPolicyFromInput(RuntimeEnvironmentPolicyInput{
+		Resources: withoutKubernetes.Resources,
+		NetworkDestinations: []string{
+			RuntimeEgressDNS,
+			RuntimeEgressProviderProxy,
+			RuntimeEgressRuntimeCallback,
+			RuntimeEgressKubernetesAPI,
+		},
+		KubernetesAccess: RuntimeKubernetesAccessReadOwnExecution,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withKubernetes.NetworkDigest != "de9f8cf5f3f75e49dc9d0df8e4776a33e17fbdc1501536d6284ec746342830d9" {
+		t.Fatalf("Kubernetes network digest = %q", withKubernetes.NetworkDigest)
+	}
+}
+
 func TestRuntimeEnvironmentPolicyRejectsPrivilegeExpansion(t *testing.T) {
 	t.Parallel()
 	defaults := DefaultRuntimeEnvironmentPolicy()
