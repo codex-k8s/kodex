@@ -87,6 +87,15 @@ export const runtimeWebWriteMethods = [
   "DELETE",
 ] as const;
 
+export function runtimeWebMethodsForMode(
+  mode: RuntimeWebAccessMode,
+): RuntimeWebAccessRule["httpMethods"] {
+  if (mode === "ALLOWLIST_READ_ONLY") return [...runtimeWebReadMethods];
+  if (mode === "ALLOWLIST_FULL")
+    return [...runtimeWebReadMethods, ...runtimeWebWriteMethods];
+  return [];
+}
+
 export function defaultRuntimeEnvironmentPolicy(): RuntimeEnvironmentPolicyInput {
   return {
     resources: {
@@ -468,14 +477,12 @@ function validateRuntimeWebAccess(
         message: "runtime.errors.webAccessDuplicateDomain",
       });
     seen.add(domain);
-    const expected =
-      mode === "ALLOWLIST_READ_ONLY"
-        ? [...runtimeWebReadMethods].sort()
-        : [...runtimeWebReadMethods, ...runtimeWebWriteMethods].sort();
+    const allowed = new Set(runtimeWebMethodsForMode(mode));
     const actual = [...rule.httpMethods].sort();
     if (
-      actual.length !== expected.length ||
-      actual.some((method, methodIndex) => method !== expected[methodIndex])
+      !actual.length ||
+      new Set(actual).size !== actual.length ||
+      actual.some((method) => !allowed.has(method))
     )
       problems.push({
         field: `policy.webAccess.rules.${String(index)}.httpMethods`,
@@ -502,10 +509,7 @@ export function emptyRuntimeWebAccessRule(
     domainPattern: "",
     protocol: "HTTPS",
     port: 443,
-    httpMethods:
-      mode === "ALLOWLIST_READ_ONLY"
-        ? [...runtimeWebReadMethods]
-        : [...runtimeWebReadMethods, ...runtimeWebWriteMethods],
+    httpMethods: runtimeWebMethodsForMode(mode),
   };
 }
 

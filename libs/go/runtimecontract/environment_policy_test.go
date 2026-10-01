@@ -152,3 +152,46 @@ func TestRuntimeEnvironmentPolicyInputRequiresClosedDestinationSet(t *testing.T)
 		t.Fatalf("excess Kubernetes API destination error = %v", err)
 	}
 }
+
+func TestRuntimeEnvironmentPolicyAllowsExactHTTPMethodSubset(t *testing.T) {
+	t.Parallel()
+	defaults := DefaultRuntimeEnvironmentPolicy()
+	base := defaults
+	base.Network.WebAccess = RuntimeWebAccess{
+		Mode: RuntimeWebAccessAllowlistFull,
+		Rules: []RuntimeWebAccessRule{{
+			DomainPattern: "api.example.com",
+			Protocol:      RuntimeWebProtocolHTTPS,
+			Port:          443,
+			HTTPMethods:   []string{RuntimeHTTPMethodGet, RuntimeHTTPMethodPost},
+		}},
+	}
+	policy, err := NormalizeRuntimeEnvironmentPolicy(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !RuntimeWebAccessAllowsRequest(policy.Network.WebAccess, "api.example.com", RuntimeHTTPMethodPost) ||
+		RuntimeWebAccessAllowsRequest(policy.Network.WebAccess, "api.example.com", RuntimeHTTPMethodDelete) {
+		t.Fatalf("method policy = %#v", policy.Network.WebAccess)
+	}
+
+	invalid := []RuntimeWebAccessRule{
+		{DomainPattern: "api.example.com", Protocol: RuntimeWebProtocolHTTPS, Port: 443},
+		{DomainPattern: "api.example.com", Protocol: RuntimeWebProtocolHTTPS, Port: 443, HTTPMethods: []string{RuntimeHTTPMethodGet, RuntimeHTTPMethodGet}},
+	}
+	for _, rule := range invalid {
+		candidate := defaults
+		candidate.Network.WebAccess = RuntimeWebAccess{Mode: RuntimeWebAccessAllowlistFull, Rules: []RuntimeWebAccessRule{rule}}
+		if _, err := NormalizeRuntimeEnvironmentPolicy(candidate); err == nil {
+			t.Fatalf("invalid method policy was accepted: %#v", rule)
+		}
+	}
+	readOnly := defaults
+	readOnly.Network.WebAccess = RuntimeWebAccess{Mode: RuntimeWebAccessAllowlistReadOnly, Rules: []RuntimeWebAccessRule{{
+		DomainPattern: "api.example.com", Protocol: RuntimeWebProtocolHTTPS, Port: 443,
+		HTTPMethods: []string{RuntimeHTTPMethodPost},
+	}}}
+	if _, err := NormalizeRuntimeEnvironmentPolicy(readOnly); err == nil {
+		t.Fatal("write method was accepted in read-only mode")
+	}
+}

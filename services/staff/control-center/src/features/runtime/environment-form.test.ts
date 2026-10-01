@@ -283,6 +283,22 @@ describe("runtime environment form", () => {
         validateEnvironmentInput(input).map((problem) => problem.message),
       ).toContain("runtime.errors.webAccessDomain");
     }
+
+    rule.domainPattern = "api.example.com";
+    rule.httpMethods = ["GET"];
+    expect(validateEnvironmentInput(input)).toEqual([]);
+    rule.httpMethods = [];
+    expect(
+      validateEnvironmentInput(input).map((problem) => problem.message),
+    ).toContain("runtime.errors.webAccessMethods");
+    rule.httpMethods = ["GET", "GET"];
+    expect(
+      validateEnvironmentInput(input).map((problem) => problem.message),
+    ).toContain("runtime.errors.webAccessMethods");
+    rule.httpMethods = ["POST"];
+    expect(
+      validateEnvironmentInput(input).map((problem) => problem.message),
+    ).toContain("runtime.errors.webAccessMethods");
   });
 
   it("фиксирует единый ограниченный размер редактируемых коллекций", () => {

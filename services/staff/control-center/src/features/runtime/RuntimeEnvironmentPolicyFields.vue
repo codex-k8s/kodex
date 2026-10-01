@@ -13,6 +13,7 @@ import {
   emptyRuntimeWebAccessRule,
   mandatoryRuntimeNetworkDestinations,
   runtimeResourceBounds,
+  runtimeWebMethodsForMode,
   runtimeVolumeBounds,
   setRuntimeKubernetesAccess,
 } from "@/features/runtime/environment-form";
@@ -148,26 +149,50 @@ function changeWebAccessMode(event: Event): void {
   const target = event.target;
   if (!(target instanceof HTMLSelectElement)) return;
   const mode = target.value as RuntimeWebAccessMode;
+  const allowedMethods = runtimeWebMethodsForMode(mode);
   const rules =
     mode === "NONE" || mode === "FULL_PUBLIC"
       ? []
       : props.policy.webAccess.rules.length
-        ? props.policy.webAccess.rules.map((rule) => ({
-            ...rule,
-            httpMethods: (mode === "ALLOWLIST_READ_ONLY"
-              ? ["GET", "HEAD", "OPTIONS"]
-              : [
-                  "DELETE",
-                  "GET",
-                  "HEAD",
-                  "OPTIONS",
-                  "PATCH",
-                  "POST",
-                  "PUT",
-                ]) as RuntimeWebAccessRule["httpMethods"],
-          }))
+        ? props.policy.webAccess.rules.map((rule) => {
+            const retained = rule.httpMethods.filter((method) =>
+              allowedMethods.includes(method),
+            );
+            return {
+              ...rule,
+              httpMethods: retained.length ? retained : [...allowedMethods],
+            };
+          })
         : [emptyRuntimeWebAccessRule(mode)];
   emit("update:policy", { ...props.policy, webAccess: { mode, rules } });
+}
+
+function toggleWebMethod(
+  index: number,
+  method: RuntimeWebAccessRule["httpMethods"][number],
+  event: Event,
+): void {
+  if (props.disabled) return;
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  emit("update:policy", {
+    ...props.policy,
+    webAccess: {
+      ...props.policy.webAccess,
+      rules: props.policy.webAccess.rules.map((rule, current) => {
+        if (current !== index) return rule;
+        const selected = target.checked
+          ? [...rule.httpMethods, method]
+          : rule.httpMethods.filter((value) => value !== method);
+        return {
+          ...rule,
+          httpMethods: runtimeWebMethodsForMode(
+            props.policy.webAccess.mode,
+          ).filter((value) => selected.includes(value)),
+        };
+      }),
+    },
+  });
 }
 
 function addWebRule(): void {
@@ -424,9 +449,21 @@ function changeWebRule(index: number, event: Event): void {
               <span class="method-list__label">{{
                 $t("runtime.webAccessMethods")
               }}</span>
-              <code v-for="method in rule.httpMethods" :key="method">{{
-                method
-              }}</code>
+              <label
+                v-for="method in runtimeWebMethodsForMode(
+                  policy.webAccess.mode,
+                )"
+                :key="method"
+                class="method-option"
+              >
+                <input
+                  type="checkbox"
+                  :checked="rule.httpMethods.includes(method)"
+                  :disabled="disabled"
+                  @change="toggleWebMethod(index, method, $event)"
+                />
+                <code>{{ method }}</code>
+              </label>
             </div>
             <button
               class="icon-button icon-button--danger"
@@ -591,7 +628,16 @@ function changeWebRule(index: number, event: Event): void {
   width: 100%;
   color: var(--text-secondary);
 }
-.method-list code {
+.method-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.method-option input {
+  margin: 0;
+}
+.method-option code {
   padding: 3px 6px;
   border-radius: 5px;
   background: var(--surface-subtle);

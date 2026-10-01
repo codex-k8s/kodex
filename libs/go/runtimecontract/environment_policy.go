@@ -398,14 +398,16 @@ func validateRuntimeWebAccess(value RuntimeWebAccess) error {
 		if !validRuntimeDomainPattern(rule.DomainPattern) || rule.Protocol != RuntimeWebProtocolHTTPS || rule.Port != 443 || rule.DomainPattern == previous {
 			return errors.New("runtime web access rule is invalid")
 		}
-		expected := runtimeWebAccessMethods(value.Mode)
-		if len(rule.HTTPMethods) != len(expected) {
+		allowed := runtimeWebAccessMethods(value.Mode)
+		if len(rule.HTTPMethods) == 0 || len(rule.HTTPMethods) > len(allowed) {
 			return errors.New("runtime web access method set is invalid")
 		}
-		for index, method := range rule.HTTPMethods {
-			if method != expected[index] {
+		previousMethod := ""
+		for _, method := range rule.HTTPMethods {
+			if method == previousMethod || !containsString(allowed, method) {
 				return errors.New("runtime web access method set is invalid")
 			}
+			previousMethod = method
 		}
 		previous = rule.DomainPattern
 	}
