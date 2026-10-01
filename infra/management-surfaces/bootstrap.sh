@@ -6,7 +6,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode preflight|apply-monitoring|apply-surfaces|readback|reconcile" \
     '  --oidc-issuer <https-url> --oidc-connect-address <service.namespace.svc.cluster.local:port>' \
-    '  --oidc-target-port <port> --control-center-host <dns> --grafana-host <dns>' \
+    '  --oidc-target-port <port> [--oidc-ca-file <absolute-path>] --control-center-host <dns> --grafana-host <dns>' \
     '  --headlamp-host <dns>' \
     '  --ingress-class <name> --cluster-issuer <name> --ingress-namespace <name>' \
     '  --ingress-pod-name <label> --kubernetes-api-service-cidr <host-cidr>' \
@@ -19,6 +19,7 @@ mode=""
 oidc_issuer=""
 oidc_connect_address=""
 oidc_target_port=""
+oidc_ca_file=""
 control_center_host=""
 grafana_host=""
 headlamp_host=""
@@ -36,6 +37,7 @@ while (($# > 0)); do
     --oidc-issuer) oidc_issuer="${2:-}"; shift 2 ;;
     --oidc-connect-address) oidc_connect_address="${2:-}"; shift 2 ;;
     --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
+    --oidc-ca-file) oidc_ca_file="${2:-}"; shift 2 ;;
     --control-center-host) control_center_host="${2:-}"; shift 2 ;;
     --grafana-host) grafana_host="${2:-}"; shift 2 ;;
     --headlamp-host) headlamp_host="${2:-}"; shift 2 ;;
@@ -63,6 +65,12 @@ oidc_service_port=${BASH_REMATCH[5]}
 if [[ ! "$oidc_target_port" =~ ^[1-9][0-9]{0,4}$ ]] || ((10#$oidc_target_port > 65535)); then
   fail 'OIDC target port is invalid'
 fi
+if [[ -n "$oidc_ca_file" ]]; then
+  [[ "$oidc_ca_file" == /* && -f "$oidc_ca_file" && ! -L "$oidc_ca_file" ]] ||
+    fail 'OIDC CA file must be an absolute regular file'
+  openssl x509 -in "$oidc_ca_file" -noout -checkend 3600 >/dev/null ||
+    fail 'OIDC CA certificate is invalid or expires too soon'
+fi
 for host in "$control_center_host" "$grafana_host" "$headlamp_host"; do
   [[ "$host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$host" == *.* ]] || fail 'surface host is invalid'
 done
@@ -74,7 +82,7 @@ host_count=$(printf '%s\n' "$oidc_host" "$control_center_host" "$grafana_host" "
 for value in "$ingress_class" "$cluster_issuer" "$ingress_namespace" "$ingress_pod_name"; do
   [[ "$value" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'deployment selector is invalid'
 done
-for command_name in go helm jq kubectl sha256sum yq; do
+for command_name in go helm jq kubectl openssl sha256sum yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
@@ -229,6 +237,32 @@ render_oauth_values() {
       "$output" "$script_directory/control-center-session-store-values.yaml" >"$output.session"
     mv "$output.session" "$output"
   fi
+  if [[ -n "$oidc_ca_file" ]]; then
+    yq -i '
+      .extraArgs."provider-ca-file" = "/oidc-provider-ca/ca.crt" |
+      .extraArgs."use-system-trust-store" = "true" |
+      .extraVolumes = ((.extraVolumes // []) + [{
+        "name": "oidc-provider-ca",
+        "configMap": {
+          "name": "oauth2-oidc-provider-ca",
+          "items": [{"key": "ca.crt", "path": "ca.crt"}]
+        }
+      }]) |
+      .extraVolumeMounts = ((.extraVolumeMounts // []) + [{
+        "name": "oidc-provider-ca",
+        "mountPath": "/oidc-provider-ca",
+        "readOnly": true
+      }])
+    ' "$output"
+  fi
+}
+
+apply_oidc_ca() {
+  local namespace=$1
+  [[ -n "$oidc_ca_file" ]] || return 0
+  kubectl -n "$namespace" create configmap oauth2-oidc-provider-ca \
+    --from-file="ca.crt=$oidc_ca_file" --dry-run=client -o yaml |
+    kubectl apply --server-side --field-manager=kodex-management -f - >/dev/null
 }
 
 if [[ "$mode" == preflight || "$mode" == reconcile ]]; then
@@ -266,6 +300,7 @@ if [[ "$mode" == apply-surfaces || "$mode" == reconcile ]]; then
   for binding in control-center:kodex-system grafana:observability headlamp:platform-admin; do
     surface=${binding%%:*}; namespace=${binding#*:}
     kubectl -n "$namespace" get secret "oauth2-$surface" >/dev/null 2>&1 || fail "OAuth2 Secret is absent: $surface"
+    apply_oidc_ca "$namespace"
   done
   recover_interrupted_helm_release kodex-headlamp platform-admin
   helm upgrade --install kodex-headlamp "$headlamp_chart" --namespace platform-admin \
@@ -304,6 +339,22 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
       any(.spec.template.spec.containers[]; .name == "oauth2-proxy" and (.args | index($role)) != null) and
       .spec.template.spec.hostAliases == [{ip:$oidc_ip, hostnames:[$oidc_host]}]
     ' >/dev/null || fail "OAuth2 Proxy role gate mismatch: $deployment"
+    if [[ -n "$oidc_ca_file" ]]; then
+      kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e '
+        any(.spec.template.spec.containers[];
+          .name == "oauth2-proxy" and
+          (.args | index("--provider-ca-file=/oidc-provider-ca/ca.crt")) != null and
+          (.args | index("--use-system-trust-store=true")) != null and
+          any(.volumeMounts[]?;
+            .name == "oidc-provider-ca" and
+            .mountPath == "/oidc-provider-ca" and
+            .readOnly == true)) and
+        any(.spec.template.spec.volumes[]?;
+          .name == "oidc-provider-ca" and
+          .configMap.name == "oauth2-oidc-provider-ca" and
+          .configMap.items == [{key:"ca.crt",path:"ca.crt"}])
+      ' >/dev/null || fail "OAuth2 Proxy OIDC CA mismatch: $deployment"
+    fi
   done
   for binding in \
     oauth2-control-center-exact-paths:kodex-system \

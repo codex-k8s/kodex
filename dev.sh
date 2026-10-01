@@ -915,6 +915,9 @@ management_surface_arguments=(
   --kubernetes-api-endpoint-cidrs "$api_endpoint_ip/32"
   --kubernetes-api-endpoint-ports "$api_endpoint_port"
 )
+if [[ "$tls_mode" == local-ca ]]; then
+  management_surface_arguments+=(--oidc-ca-file "$oidc_ca_file")
+fi
 "$repository_root/infra/management-surfaces/bootstrap.sh" \
   --mode reconcile "${management_surface_arguments[@]}"
 

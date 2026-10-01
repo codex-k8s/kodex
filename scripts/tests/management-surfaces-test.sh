@@ -62,24 +62,24 @@ validate_grafana_render() {
 bash -n "$bootstrap"
 bash -n "$keycloak_bootstrap"
 (
-  rollback_arguments=""
   helm() {
     case "$1" in
       status) printf '{"info":{"status":"pending-upgrade"}}\n' ;;
       history)
         printf '[{"revision":1,"status":"superseded"},{"revision":2,"status":"deployed"},{"revision":3,"status":"pending-upgrade"}]\n'
         ;;
-      rollback) rollback_arguments="$*" ;;
+      rollback) return 1 ;;
       *) return 1 ;;
     esac
   }
   source <(sed -n '/^recover_interrupted_helm_release() {$/,/^}$/p' "$bootstrap")
-  recover_interrupted_helm_release oauth2-control-center kodex-system
-  [[ "$rollback_arguments" == 'rollback oauth2-control-center 2 --namespace kodex-system --wait --timeout 10m' ]]
-) || fail 'interrupted Helm release recovery contract is invalid'
+  if (recover_interrupted_helm_release oauth2-control-center kodex-system) 2>/dev/null; then
+    exit 1
+  fi
+) || fail 'Control Center session-store release accepted an incompatible Helm rollback'
 routes_apply_line=$(grep -n 'kubectl apply --server-side --field-manager=kodex-management -f "$routes"' \
   "$bootstrap" | cut -d: -f1)
-oauth2_upgrade_line=$(grep -n 'helm upgrade --install "oauth2-$surface"' "$bootstrap" | cut -d: -f1)
+oauth2_upgrade_line=$(grep -n 'helm upgrade --install "oauth2-$surface"' "$bootstrap" | cut -d: -f1 | head -n 1)
 [[ -n "$routes_apply_line" && -n "$oauth2_upgrade_line" &&
   "$routes_apply_line" -lt "$oauth2_upgrade_line" ]] ||
   fail 'OAuth2 routes and NetworkPolicy are not applied before proxy rollout'
@@ -340,6 +340,12 @@ if kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e '
 fi
 yq -e '.extraArgs."allowed-role" == "__KODEX_ALLOWED_ROLE__"' "$values" >/dev/null ||
   fail 'OAuth2 Proxy role gate is absent'
+rg -Fq -- '--provider-ca-file=/oidc-provider-ca/ca.crt' "$bootstrap" ||
+  fail 'OAuth2 Proxy private OIDC CA is not wired'
+rg -Fq -- '--use-system-trust-store=true' "$bootstrap" ||
+  fail 'OAuth2 Proxy private OIDC CA replaces the system trust store'
+rg -Fq -- '--oidc-ca-file "$oidc_ca_file"' "$repository_root/dev.sh" ||
+  fail 'local development does not pass the OIDC CA to management surfaces'
 yq -e '
   (.hostAliases | length) == 1 and
   .hostAliases[0].ip == "__KODEX_OIDC_CONNECT_IP__" and
