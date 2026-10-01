@@ -1476,9 +1476,9 @@ const ru = {
     webAccessModeHelp: {
       NONE: "Рабочие инструменты не могут обращаться к публичным сайтам; соединение с моделью сохраняется.",
       ALLOWLIST_READ_ONLY:
-        "Разрешены только GET, HEAD и OPTIONS к указанным доменам.",
+        "Для указанных доменов можно выбрать непустой набор из GET, HEAD и OPTIONS.",
       ALLOWLIST_FULL:
-        "Разрешены GET, HEAD, OPTIONS, POST, PUT, PATCH и DELETE к указанным доменам.",
+        "Для указанных доменов можно выбрать непустой набор из GET, HEAD, OPTIONS, POST, PUT, PATCH и DELETE.",
       FULL_PUBLIC:
         "Разрешён HTTPS-доступ к публичным адресам через управляемый proxy с SSRF-защитой.",
     },
@@ -5710,9 +5710,9 @@ const en = {
     webAccessModeHelp: {
       NONE: "Workspace tools cannot access public sites; model connectivity remains available.",
       ALLOWLIST_READ_ONLY:
-        "Only GET, HEAD and OPTIONS are allowed for listed domains.",
+        "Choose any non-empty subset of GET, HEAD and OPTIONS for the listed domains.",
       ALLOWLIST_FULL:
-        "GET, HEAD, OPTIONS, POST, PUT, PATCH and DELETE are allowed for listed domains.",
+        "Choose any non-empty subset of GET, HEAD, OPTIONS, POST, PUT, PATCH and DELETE for the listed domains.",
       FULL_PUBLIC:
         "HTTPS access to public addresses is allowed through the managed SSRF-protected proxy.",
     },

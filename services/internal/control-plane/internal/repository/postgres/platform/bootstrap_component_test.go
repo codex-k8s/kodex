@@ -6787,7 +6787,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	turn, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-turn-1"}, Payload: command.AssistantTurnInput{
-			ConversationRef: created.Conversation.Ref, Content: "Create a sales project", AttachmentSetRef: assistantAttachmentSetRef,
+			ConversationRef: created.Conversation.Ref, Content: "Create a sales project", AttachmentSetRef: assistantAttachmentSetRef, DeliveryMode: "QUEUE",
 		}})
 	if err != nil || turn.Plan != nil {
 		t.Fatalf("queue assistant turn without keyword fallback: plan=%#v err=%v", turn.Plan, err)
@@ -6839,7 +6839,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-turn-deleted-input-1"}, Payload: command.AssistantTurnInput{
-			ConversationRef: rejectedConversation.Conversation.Ref, Content: "Must not bind deleted input", AttachmentSetRef: assistantAttachmentSetRef,
+			ConversationRef: rejectedConversation.Conversation.Ref, Content: "Must not bind deleted input", AttachmentSetRef: assistantAttachmentSetRef, DeliveryMode: "QUEUE",
 		}}); !errors.Is(err, domainerrs.ErrConflict) {
 		t.Fatalf("new assistant turn accepted soft-deleted attachment snapshot: %v", err)
 	}

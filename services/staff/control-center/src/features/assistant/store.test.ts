@@ -12,6 +12,7 @@ import { AppProblem } from "@/shared/api/problem";
 
 const createConversationMock = vi.hoisted(() => vi.fn());
 const appendTurnMock = vi.hoisted(() => vi.fn());
+const cancelAssistantTurnMock = vi.hoisted(() => vi.fn());
 const archiveConversationMock = vi.hoisted(() => vi.fn());
 const applyPlanDraftMock = vi.hoisted(() => vi.fn());
 const readAssistantMock = vi.hoisted(() => vi.fn());
@@ -22,6 +23,7 @@ vi.mock("@/features/assistant/api", () => ({
   readConversations: readConversationsMock,
   createConversation: createConversationMock,
   appendTurn: appendTurnMock,
+  cancelAssistantTurn: cancelAssistantTurnMock,
   archiveConversation: archiveConversationMock,
   renameConversation: vi.fn(),
   savePlanDraft: vi.fn(),
@@ -563,6 +565,62 @@ describe("assistant workspace store", () => {
       "aset_contracts",
       "QUEUE",
     );
+  });
+
+  it("передаёт выбранный режим доставки и оптимистично останавливает точный ход", async () => {
+    const initial = {
+      ...conversation(),
+      version: 4,
+      turns: [
+        {
+          ...userTurn("RUNNING"),
+          runRef: "run_active",
+          runVersion: 2,
+        },
+      ],
+    };
+    const accepted = {
+      ...initial,
+      version: 5,
+      turns: [
+        ...initial.turns,
+        {
+          ...userTurn("QUEUED"),
+          ref: "trn_immediate",
+          sequence: 3,
+          content: "Выполни это сейчас",
+          runRef: "run_immediate",
+        },
+      ],
+    };
+    appendTurnMock.mockResolvedValue(accepted);
+    cancelAssistantTurnMock.mockResolvedValue("run_immediate");
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [initial];
+    store.selectedRef = initial.ref;
+
+    await store.send("Выполни это сейчас", undefined, "INTERRUPT_ACTIVE");
+    expect(appendTurnMock).toHaveBeenCalledWith(
+      initial,
+      "Выполни это сейчас",
+      context,
+      undefined,
+      "INTERRUPT_ACTIVE",
+    );
+
+    await store.stopActiveTurn();
+    expect(cancelAssistantTurnMock).toHaveBeenCalledWith(accepted);
+    expect(
+      store.selectedConversation?.turns.find(
+        (turn) => turn.runRef === "run_immediate",
+      )?.state,
+    ).toBe("CANCELLED");
+    expect(
+      store.selectedConversation?.turns.find(
+        (turn) => turn.runRef === "run_active",
+      )?.state,
+    ).toBe("RUNNING");
   });
 
   it("применяет terminal ответ из realtime snapshot без polling", async () => {

@@ -277,7 +277,7 @@ func environmentPolicySchema() map[string]any {
 		},
 		"protocol": enumSchema("HTTPS"),
 		"port":     map[string]any{"type": "integer", "const": 443},
-		"httpMethods": map[string]any{"type": "array", "minItems": 3, "maxItems": 7, "uniqueItems": true,
+		"httpMethods": map[string]any{"type": "array", "minItems": 1, "maxItems": 7, "uniqueItems": true,
 			"items": enumSchema("GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE")},
 	})
 	webAccess := objectSchema([]string{"mode", "rules"}, map[string]any{

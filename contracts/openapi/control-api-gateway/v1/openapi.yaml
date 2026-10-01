@@ -11988,7 +11988,7 @@ components:
         port: { type: integer, format: int32, enum: [443] }
         httpMethods:
           type: array
-          minItems: 3
+          minItems: 1
           maxItems: 7
           uniqueItems: true
           items: { type: string, enum: [GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE] }

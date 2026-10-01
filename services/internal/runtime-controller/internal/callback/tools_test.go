@@ -403,6 +403,12 @@ func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 		policyFields["hostPath"] != nil || policyFields["serviceAccountName"] != nil || policyFields["secretValue"] != nil {
 		t.Fatalf("environment policy schema escaped its closed boundary: %#v", policy)
 	}
+	webAccessFields := policyFields["webAccess"].(map[string]any)["properties"].(map[string]any)
+	ruleFields := webAccessFields["rules"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	httpMethods := ruleFields["httpMethods"].(map[string]any)
+	if httpMethods["minItems"] != 1 || httpMethods["maxItems"] != 7 || httpMethods["uniqueItems"] != true {
+		t.Fatalf("environment policy schema does not allow an exact non-empty HTTP method subset: %#v", httpMethods)
+	}
 }
 
 func TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContext(t *testing.T) {

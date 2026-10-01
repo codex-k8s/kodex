@@ -37,7 +37,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	}
 	turn, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-move-global-turn"}, Payload: command.AssistantTurnInput{
-			ConversationRef: created.Conversation.Ref, Content: "Prepare the conversation for a project move",
+			ConversationRef: created.Conversation.Ref, Content: "Prepare the conversation for a project move", DeliveryMode: "QUEUE",
 		}})
 	if err != nil || turn.Conversation == nil {
 		t.Fatalf("queue global assistant turn: conversation=%#v err=%v", turn.Conversation, err)

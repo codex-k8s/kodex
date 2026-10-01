@@ -1738,6 +1738,51 @@ func testManagerConfig() Config {
 	}
 }
 
+func TestWarmRuntimeProxyGrantSupportsManagedWebAccess(t *testing.T) {
+	t.Parallel()
+	manager := &Manager{config: testManagerConfig()}
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	policy.Network.WebAccess = runtimecontract.RuntimeWebAccess{
+		Mode: runtimecontract.RuntimeWebAccessAllowlistReadOnly,
+		Rules: []runtimecontract.RuntimeWebAccessRule{{
+			DomainPattern: "api.example.com",
+			Protocol:      runtimecontract.RuntimeWebProtocolHTTPS,
+			Port:          443,
+			HTTPMethods:   []string{runtimecontract.RuntimeHTTPMethodGet},
+		}},
+	}
+	policy, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
+	if err != nil {
+		t.Fatalf("normalize runtime environment policy: %v", err)
+	}
+	input := runtimecontract.RunnerInput{
+		Mode: runtimecontract.RunnerModeWarm, OrganizationRef: "org_abcdefgh",
+		SessionRef: "session_abcdefgh", RuntimeRevisionRef: "revision_abcdefgh",
+		RuntimeRevisionDigest: strings.Repeat("a", 64), EnvironmentPolicy: policy,
+	}
+	proxyValue, err := manager.runtimeProxyURL(input)
+	if err != nil {
+		t.Fatalf("runtimeProxyURL() error = %v", err)
+	}
+	proxyURL, err := url.Parse(proxyValue)
+	if err != nil || proxyURL.User == nil {
+		t.Fatalf("parse warm runtime proxy URL: %v", err)
+	}
+	credential, ok := proxyURL.User.Password()
+	if !ok {
+		t.Fatal("warm runtime proxy credential is missing")
+	}
+	grant, err := runtimecontract.VerifyRuntimeWebAccessGrant(manager.config.RuntimeEgressSigningKey, credential)
+	if err != nil {
+		t.Fatalf("verify warm runtime proxy grant: %v", err)
+	}
+	wantWorkloadRef := "warm:org_abcdefgh:session_abcdefgh:revision_abcdefgh:" + strings.Repeat("a", 64)
+	if grant.WorkloadRef != wantWorkloadRef ||
+		!runtimecontract.RuntimeWebAccessAllowsRequest(grant.WebAccess, "api.example.com", "GET") {
+		t.Fatalf("warm runtime proxy grant = %#v", grant)
+	}
+}
+
 func testCredentialProjection(input runtimecontract.RunnerInput) CredentialProjection {
 	keys := make(map[string]string, len(input.SecretProjections))
 	for _, item := range input.SecretProjections {

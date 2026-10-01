@@ -2124,7 +2124,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 
 func (manager *Manager) runtimeProxyURL(input runtimecontract.RunnerInput) (string, error) {
 	workloadRef := input.LeaseRef
-	if workloadRef == "" && input.Mode == runtimecontract.RunnerModeWarm && input.EnvironmentPolicy.Network.WebAccess.Mode == runtimecontract.RuntimeWebAccessNone {
+	if workloadRef == "" && input.Mode == runtimecontract.RunnerModeWarm {
 		workloadRef = "warm:" + input.OrganizationRef + ":" + input.SessionRef + ":" + input.RuntimeRevisionRef + ":" + input.RuntimeRevisionDigest
 	}
 	grant, err := runtimecontract.SignRuntimeWebAccessGrant(manager.config.RuntimeEgressSigningKey, workloadRef, input.EnvironmentPolicy.NetworkDigest, input.EnvironmentPolicy.Network.WebAccess)
