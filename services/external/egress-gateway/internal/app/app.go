@@ -186,7 +186,19 @@ func runActive(
 	if err != nil {
 		return err
 	}
-	runtimeServer, err := gateway.NewAuthenticated(runContext, config.RuntimeConnectAddress, runtimePolicy, resolver, &gateway.NetDialer{}, current.state, business)
+	runtimeProxyCACertificate, err := securefile.Read(config.RuntimeProxyCACertificate, 64<<10)
+	if err != nil {
+		return errors.New("read runtime proxy CA certificate")
+	}
+	runtimeProxyCAPrivateKey, err := securefile.Read(config.RuntimeProxyCAPrivateKey, 64<<10)
+	if err != nil {
+		return errors.New("read runtime proxy CA private key")
+	}
+	runtimeProxyCA, err := gateway.NewTLSInterceptAuthority(runtimeProxyCACertificate, runtimeProxyCAPrivateKey)
+	if err != nil {
+		return err
+	}
+	runtimeServer, err := gateway.NewAuthenticated(runContext, config.RuntimeConnectAddress, runtimePolicy, resolver, &gateway.NetDialer{}, current.state, business, runtimeProxyCA)
 	if err != nil {
 		return err
 	}

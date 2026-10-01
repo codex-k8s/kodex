@@ -24,6 +24,7 @@ data:
   RUNTIME_CONTROLLER_SECRET_BROKER_CA_FILE: "/var/run/config/kodex/runtime-controller/control-plane/ca.pem"
   RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY: "http://egress-gateway.kodex-system.svc:8084"
   RUNTIME_CONTROLLER_EGRESS_SIGNING_KEY_FILE: "/var/run/secrets/kodex/runtime-controller/egress-signing/key"
+  RUNTIME_CONTROLLER_EGRESS_CA_SECRET: "runtime-egress-proxy-ca"
   # Empty means the installation-selected default StorageClass.
   RUNTIME_CONTROLLER_STORAGE_CLASS: ""
   RUNTIME_CONTROLLER_SESSION_PVC_SIZE: "20Gi"

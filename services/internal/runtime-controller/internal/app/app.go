@@ -120,6 +120,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		CallbackTLSServerName: config.CallbackTLSServerName, CallbackClientCASecret: config.CallbackClientCASecret,
 		CallbackClientTLSSecret: config.CallbackClientTLSSecret, ProviderHTTPSProxy: config.ProviderHTTPSProxy,
 		RuntimeEgressSigningKey: egressSigningKey,
+		RuntimeEgressCASecret:   config.RuntimeEgressCASecret,
 		ProviderAppArmorProfile: config.ProviderAppArmorProfile,
 		KubernetesAPIServiceIP:  config.KubernetesAPIServiceIP,
 		StorageClass:            config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,

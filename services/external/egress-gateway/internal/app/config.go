@@ -24,6 +24,8 @@ type Config struct {
 	IntegrationConnectAddress string `env:"EGRESS_GATEWAY_INTEGRATION_CONNECT_LISTEN"`
 	RuntimeConnectAddress     string `env:"EGRESS_GATEWAY_RUNTIME_CONNECT_LISTEN"`
 	RuntimeSigningKeyFile     string `env:"EGRESS_GATEWAY_RUNTIME_SIGNING_KEY_FILE"`
+	RuntimeProxyCACertificate string `env:"EGRESS_GATEWAY_RUNTIME_PROXY_CA_CERTIFICATE_FILE"`
+	RuntimeProxyCAPrivateKey  string `env:"EGRESS_GATEWAY_RUNTIME_PROXY_CA_PRIVATE_KEY_FILE"`
 	IntegrationPolicyFile     string `env:"EGRESS_GATEWAY_INTEGRATION_POLICY_FILE"`
 	IntegrationExpectedDigest string `env:"EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST"`
 	TechnicalAddress          string `env:"EGRESS_GATEWAY_TECHNICAL_LISTEN,required"`
@@ -47,7 +49,8 @@ func (config Config) validate() error {
 	}
 	paths := []string{config.PolicyFile, config.ResolverConfig}
 	if config.Mode == "" {
-		paths = append(paths, config.MailPolicyFile, config.IntegrationPolicyFile, config.RuntimeSigningKeyFile)
+		paths = append(paths, config.MailPolicyFile, config.IntegrationPolicyFile, config.RuntimeSigningKeyFile,
+			config.RuntimeProxyCACertificate, config.RuntimeProxyCAPrivateKey)
 	}
 	for _, path := range paths {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {

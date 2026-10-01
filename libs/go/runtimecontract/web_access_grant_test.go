@@ -33,3 +33,19 @@ func TestRuntimeWebAccessAllowsHostScopedWildcards(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimeWebAccessAllowsRequestHonorsMethodPolicy(t *testing.T) {
+	readOnly := RuntimeWebAccess{Mode: RuntimeWebAccessAllowlistReadOnly, Rules: []RuntimeWebAccessRule{{
+		DomainPattern: "example.com", Protocol: RuntimeWebProtocolHTTPS, Port: 443,
+		HTTPMethods: []string{RuntimeHTTPMethodGet, RuntimeHTTPMethodHead, RuntimeHTTPMethodOptions},
+	}}}
+	if !RuntimeWebAccessAllowsRequest(readOnly, "example.com", "GET") {
+		t.Fatal("read-only GET was rejected")
+	}
+	if RuntimeWebAccessAllowsRequest(readOnly, "example.com", "POST") {
+		t.Fatal("read-only POST was accepted")
+	}
+	if RuntimeWebAccessAllowsRequest(readOnly, "other.example.com", "GET") {
+		t.Fatal("foreign hostname was accepted")
+	}
+}

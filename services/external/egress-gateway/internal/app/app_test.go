@@ -69,21 +69,23 @@ func TestInvalidPolicyUsesSharedReadinessAndSafeReadback(t *testing.T) {
 
 func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 	values := map[string]string{
-		"EGRESS_GATEWAY_POLICY_FILE":                "/var/run/config/kodex/egress-gateway/policy.json",
-		"EGRESS_GATEWAY_EXPECTED_POLICY_REVISION":   "2026-08-07.1",
-		"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST":     strings.Repeat("a", 64),
-		"EGRESS_GATEWAY_CONNECT_LISTEN":             ":8080",
-		"EGRESS_GATEWAY_STT_CONNECT_LISTEN":         ":8081",
-		"EGRESS_GATEWAY_MAIL_CONNECT_LISTEN":        ":8082",
-		"EGRESS_GATEWAY_MAIL_POLICY_FILE":           "/var/run/config/kodex/egress-gateway-mail/policy.json",
-		"EGRESS_GATEWAY_MAIL_POLICY_DIGEST":         strings.Repeat("b", 64),
-		"EGRESS_GATEWAY_INTEGRATION_CONNECT_LISTEN": ":8083",
-		"EGRESS_GATEWAY_INTEGRATION_POLICY_FILE":    "/var/run/config/kodex/egress-gateway-integration/integration-policy.json",
-		"EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST":  strings.Repeat("c", 64),
-		"EGRESS_GATEWAY_RUNTIME_CONNECT_LISTEN":     ":8084",
-		"EGRESS_GATEWAY_RUNTIME_SIGNING_KEY_FILE":   "/var/run/secrets/kodex/egress-gateway/runtime-signing/key",
-		"EGRESS_GATEWAY_TECHNICAL_LISTEN":           ":9090",
-		"EGRESS_GATEWAY_RESOLV_CONF":                "/etc/resolv.conf",
+		"EGRESS_GATEWAY_POLICY_FILE":                       "/var/run/config/kodex/egress-gateway/policy.json",
+		"EGRESS_GATEWAY_EXPECTED_POLICY_REVISION":          "2026-08-07.1",
+		"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST":            strings.Repeat("a", 64),
+		"EGRESS_GATEWAY_CONNECT_LISTEN":                    ":8080",
+		"EGRESS_GATEWAY_STT_CONNECT_LISTEN":                ":8081",
+		"EGRESS_GATEWAY_MAIL_CONNECT_LISTEN":               ":8082",
+		"EGRESS_GATEWAY_MAIL_POLICY_FILE":                  "/var/run/config/kodex/egress-gateway-mail/policy.json",
+		"EGRESS_GATEWAY_MAIL_POLICY_DIGEST":                strings.Repeat("b", 64),
+		"EGRESS_GATEWAY_INTEGRATION_CONNECT_LISTEN":        ":8083",
+		"EGRESS_GATEWAY_INTEGRATION_POLICY_FILE":           "/var/run/config/kodex/egress-gateway-integration/integration-policy.json",
+		"EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST":         strings.Repeat("c", 64),
+		"EGRESS_GATEWAY_RUNTIME_CONNECT_LISTEN":            ":8084",
+		"EGRESS_GATEWAY_RUNTIME_SIGNING_KEY_FILE":          "/var/run/secrets/kodex/egress-gateway/runtime-signing/key",
+		"EGRESS_GATEWAY_RUNTIME_PROXY_CA_CERTIFICATE_FILE": "/var/run/secrets/kodex/egress-gateway/runtime-proxy-ca/tls.crt",
+		"EGRESS_GATEWAY_RUNTIME_PROXY_CA_PRIVATE_KEY_FILE": "/var/run/secrets/kodex/egress-gateway/runtime-proxy-ca/tls.key",
+		"EGRESS_GATEWAY_TECHNICAL_LISTEN":                  ":9090",
+		"EGRESS_GATEWAY_RESOLV_CONF":                       "/etc/resolv.conf",
 	}
 	for key, value := range values {
 		t.Setenv(key, value)

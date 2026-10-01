@@ -54,6 +54,8 @@ spec:
             - {name: EGRESS_GATEWAY_INTEGRATION_POLICY_FILE, value: /var/run/config/kodex/egress-gateway-integration/integration-policy.json}
             - {name: EGRESS_GATEWAY_RUNTIME_CONNECT_LISTEN, value: ":8084"}
             - {name: EGRESS_GATEWAY_RUNTIME_SIGNING_KEY_FILE, value: /var/run/secrets/kodex/egress-gateway/runtime-signing/key}
+            - {name: EGRESS_GATEWAY_RUNTIME_PROXY_CA_CERTIFICATE_FILE, value: /var/run/secrets/kodex/egress-gateway/runtime-proxy-ca/tls.crt}
+            - {name: EGRESS_GATEWAY_RUNTIME_PROXY_CA_PRIVATE_KEY_FILE, value: /var/run/secrets/kodex/egress-gateway/runtime-proxy-ca/tls.key}
             - {name: EGRESS_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
             - {name: EGRESS_GATEWAY_RESOLV_CONF, value: /etc/resolv.conf}
           ports:
@@ -102,9 +104,14 @@ spec:
             - name: runtime-signing
               mountPath: /var/run/secrets/kodex/egress-gateway/runtime-signing
               readOnly: true
+            - name: runtime-proxy-ca
+              mountPath: /var/run/secrets/kodex/egress-gateway/runtime-proxy-ca
+              readOnly: true
       volumes:
         - name: runtime-signing
           secret: {secretName: runtime-egress-signing, defaultMode: 0440}
+        - name: runtime-proxy-ca
+          secret: {secretName: runtime-egress-proxy-ca, defaultMode: 0440}
         - name: policy
           configMap:
             name: egress-gateway-policy

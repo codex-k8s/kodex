@@ -1727,6 +1727,7 @@ func testManagerConfig() Config {
 		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
 		ProviderHTTPSProxy:      "http://egress-gateway.kodex-system.svc:8084",
 		RuntimeEgressSigningKey: []byte("0123456789abcdef0123456789abcdef"),
+		RuntimeEgressCASecret:   "runtime-egress-proxy-ca",
 		ProviderAppArmorProfile: "kodex-provider-runtime",
 		KubernetesAPIServiceIP:  "10.43.0.1",
 		StorageClass:            "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",

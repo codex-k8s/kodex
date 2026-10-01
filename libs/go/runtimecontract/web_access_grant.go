@@ -82,33 +82,50 @@ func validateRuntimeWebAccessGrant(claims RuntimeWebAccessGrant) error {
 }
 
 func RuntimeWebAccessAllowsHost(access RuntimeWebAccess, hostname string) bool {
+	return runtimeWebAccessRule(access, hostname) != nil || access.Mode == RuntimeWebAccessFullPublic
+}
+
+// RuntimeWebAccessAllowsRequest проверяет exact HTTP method уже после TLS
+// termination управляемым proxy. Проверка одного hostname на CONNECT-границе
+// недостаточна: иначе режим read-only превращается в unrestricted tunnel.
+func RuntimeWebAccessAllowsRequest(access RuntimeWebAccess, hostname, method string) bool {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	if access.Mode == RuntimeWebAccessFullPublic {
+		return containsString(runtimeWebAccessMethods(RuntimeWebAccessAllowlistFull), method)
+	}
+	rule := runtimeWebAccessRule(access, hostname)
+	if rule == nil {
+		return false
+	}
+	return containsString(rule.HTTPMethods, method)
+}
+
+func runtimeWebAccessRule(access RuntimeWebAccess, hostname string) *RuntimeWebAccessRule {
 	hostname = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(hostname), "."))
 	if !validRuntimeDomainPattern(hostname) {
-		return false
-	}
-	if access.Mode == RuntimeWebAccessFullPublic {
-		return true
+		return nil
 	}
 	if access.Mode != RuntimeWebAccessAllowlistReadOnly && access.Mode != RuntimeWebAccessAllowlistFull {
-		return false
+		return nil
 	}
-	for _, rule := range access.Rules {
+	for index := range access.Rules {
+		rule := &access.Rules[index]
 		pattern := rule.DomainPattern
 		switch {
 		case strings.HasPrefix(pattern, "**."):
 			suffix := strings.TrimPrefix(pattern, "**.")
 			if hostname == suffix || strings.HasSuffix(hostname, "."+suffix) {
-				return true
+				return rule
 			}
 		case strings.HasPrefix(pattern, "*."):
 			suffix := strings.TrimPrefix(pattern, "*.")
 			prefix := strings.TrimSuffix(hostname, "."+suffix)
 			if prefix != hostname && prefix != "" && !strings.Contains(prefix, ".") {
-				return true
+				return rule
 			}
 		case hostname == pattern:
-			return true
+			return rule
 		}
 	}
-	return false
+	return nil
 }

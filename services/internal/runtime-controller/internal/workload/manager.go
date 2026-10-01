@@ -101,6 +101,7 @@ type Config struct {
 	StorageClass, SessionPVCSize, RunnerServiceAccount                                 string
 	ProviderHTTPSProxy                                                                 string
 	RuntimeEgressSigningKey                                                            []byte
+	RuntimeEgressCASecret                                                              string
 	ProviderAppArmorProfile                                                            string
 	KubernetesAPIServiceIP                                                             string
 	PromotedRoleImageRepository, DefaultRoleImageReference                             string
@@ -161,6 +162,7 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 		(config.RPCProfile == "" && (config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" || config.CallbackClientTLSSecret == "")) ||
 		config.ProviderHTTPSProxy == "" ||
 		len(config.RuntimeEgressSigningKey) < 32 ||
+		!validDNSLabel(config.RuntimeEgressCASecret) ||
 		(config.ProviderAppArmorProfile != "" && config.ProviderAppArmorProfile != "kodex-provider-runtime") ||
 		net.ParseIP(config.KubernetesAPIServiceIP) == nil ||
 		(config.StorageClass != "" && !validDNSSubdomain(config.StorageClass)) ||
@@ -1968,6 +1970,8 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "callback-ca", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientCASecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-client", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientTLSSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "provider-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: providerSecretName, DefaultMode: int32Pointer(0o400)}}},
+		{Name: "runtime-egress-ca", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.RuntimeEgressCASecret, DefaultMode: int32Pointer(0o440), Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}}},
+		{Name: "runtime-egress-trust", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("2Mi"))}}},
 		{Name: "provider-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("8Mi"))}}},
 		{Name: "provider-credential-relay", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("8Mi"))}}},
 		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
@@ -1995,6 +1999,8 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		corev1.VolumeMount{Name: "runtime-ticket", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true},
 		corev1.VolumeMount{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true},
 		corev1.VolumeMount{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true},
+		corev1.VolumeMount{Name: "runtime-egress-ca", MountPath: "/var/run/config/kodex/runtime/egress-ca", ReadOnly: true},
+		corev1.VolumeMount{Name: "runtime-egress-trust", MountPath: "/var/run/config/kodex/runtime/egress-trust"},
 		corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"},
 	)
 	for _, item := range input.EnvironmentPolicy.Volumes {
@@ -2034,6 +2040,11 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	provider := corev1.Container{Name: "provider-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
 			{Name: "HTTPS_PROXY", Value: providerProxy}, {Name: "HTTP_PROXY", Value: providerProxy},
+			{Name: "SSL_CERT_FILE", Value: "/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt"},
+			{Name: "CURL_CA_BUNDLE", Value: "/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt"},
+			{Name: "REQUESTS_CA_BUNDLE", Value: "/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt"},
+			{Name: "NODE_EXTRA_CA_CERTS", Value: "/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt"},
+			{Name: "GIT_SSL_CAINFO", Value: "/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt"},
 			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: providerSandboxSecurityContext(10002, manager.config.ProviderAppArmorProfile),
 		VolumeMounts: append(append([]corev1.VolumeMount(nil), sandboxWorkspaceMounts...), []corev1.VolumeMount{
 			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true},
@@ -2042,6 +2053,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			{Name: "provider-socket", MountPath: "/run/kodex/provider"},
 			{Name: "provider-credential-relay", MountPath: "/run/kodex/provider-credential-relay"},
 			{Name: "provider-tmp", MountPath: "/tmp"},
+			{Name: "runtime-egress-trust", MountPath: "/var/run/config/kodex/runtime/egress-trust", ReadOnly: true},
 		}...),
 		Resources: smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
 	relay := corev1.Container{Name: "provider-credential-relay", Image: manager.config.DefaultRoleImageReference, ImagePullPolicy: corev1.PullIfNotPresent,

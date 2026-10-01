@@ -97,7 +97,7 @@ create_authority() {
     -out "$directory/ca.crt" >/dev/null 2>&1
 }
 
-for authority in pki pki-buildkit-push pki-node-pull pki-public; do
+for authority in pki pki-buildkit-push pki-node-pull pki-public pki-runtime-web-proxy; do
   create_authority "$authority"
 done
 
@@ -250,6 +250,10 @@ put_material kodex/control-plane/lease-signing key \
   "$output_directory/control-api/lease-signing.key"
 put_material kodex/runtime-egress/signing key \
   "$output_directory/control-api/runtime-egress-signing.key"
+put_material kodex/runtime-egress/proxy-ca tls.crt \
+  "$output_directory/authorities/pki-runtime-web-proxy/ca.crt"
+put_material kodex/runtime-egress/proxy-ca tls.key \
+  "$output_directory/authorities/pki-runtime-web-proxy/ca.key"
 
 control_api_tls_source=$(jq -cn '{
   authority:"pki", profile:"kodex-control-api-gateway",

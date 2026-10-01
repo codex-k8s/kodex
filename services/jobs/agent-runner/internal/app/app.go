@@ -83,6 +83,9 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return credentialrelay.Serve(lifecycleContext, input)
 	}
 	if mode == "runtime-init-workspace" {
+		if err := materializeRuntimeEgressTrust(); err != nil {
+			return err
+		}
 		snapshot, err := input.RequiredContextSnapshot(time.Now())
 		if err != nil {
 			return err

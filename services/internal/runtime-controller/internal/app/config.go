@@ -58,6 +58,7 @@ type Config struct {
 	RoleRuntimeContractSHA256      string        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256"`
 	ProviderHTTPSProxy             string        `env:"RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY"`
 	RuntimeEgressSigningKeyFile    string        `env:"RUNTIME_CONTROLLER_EGRESS_SIGNING_KEY_FILE"`
+	RuntimeEgressCASecret          string        `env:"RUNTIME_CONTROLLER_EGRESS_CA_SECRET"`
 	ProviderAppArmorProfile        string        `env:"RUNTIME_CONTROLLER_PROVIDER_APPARMOR_PROFILE"`
 	KubernetesAPIServiceIP         string        `env:"KUBERNETES_SERVICE_HOST"`
 	StorageClass                   string        `env:"RUNTIME_CONTROLLER_STORAGE_CLASS"`
@@ -95,6 +96,7 @@ func loadConfig() (Config, error) {
 		DefaultRoleImageReference:   "registry-pull.invalid/kodex/agent-runner@sha256:" + strings.Repeat("0", 64),
 		ProviderHTTPSProxy:          "http://egress-gateway.kodex-system.svc:8084",
 		RuntimeEgressSigningKeyFile: "/var/run/secrets/kodex/runtime-controller/egress-signing/key",
+		RuntimeEgressCASecret:       "runtime-egress-proxy-ca",
 		ProviderAppArmorProfile:     "",
 		KubernetesAPIServiceIP:      "10.43.0.1",
 		StorageClass:                "", SessionPVCSize: "20Gi",
@@ -135,7 +137,7 @@ func (config Config) validate() error {
 			return errors.New("runtime controller file path is invalid")
 		}
 	}
-	if !filepath.IsAbs(config.RuntimeEgressSigningKeyFile) {
+	if !filepath.IsAbs(config.RuntimeEgressSigningKeyFile) || !validDNSLabel(config.RuntimeEgressCASecret) {
 		return errors.New("runtime egress signing key path is invalid")
 	}
 	if !filepath.IsAbs(config.ArtifactSpoolDirectory) || filepath.Clean(config.ArtifactSpoolDirectory) != config.ArtifactSpoolDirectory {
