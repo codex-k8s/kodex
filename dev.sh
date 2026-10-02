@@ -521,10 +521,15 @@ commit_local_authority_source_state() {
 endpoint_ip=${KODEX_DEV_ENDPOINT_IP:-127.0.0.1}
 [[ "$endpoint_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail 'KODEX_DEV_ENDPOINT_IP must use IPv4'
-if [[ "$endpoint_ip" != 127.0.0.1 ]]; then
-  ip -4 -o address show | awk '{print $4}' | cut -d/ -f1 | grep -Fxq "$endpoint_ip" ||
-    fail 'KODEX_DEV_ENDPOINT_IP is not assigned to this host'
-fi
+ip -4 route get "$endpoint_ip" 2>/dev/null |
+  awk -v endpoint="$endpoint_ip" '
+    $1 == "local" && $2 == endpoint {
+      for (index = 3; index <= NF; index++) {
+        if ($index == "dev" && $(index + 1) == "lo") found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' || fail 'KODEX_DEV_ENDPOINT_IP is not local to this host'
 dns_suffix=${endpoint_ip//./.}.nip.io
 public_host=${KODEX_DEV_PUBLIC_HOST:-control.$dns_suffix}
 oidc_host=${KODEX_DEV_OIDC_HOST:-sso.$dns_suffix}
