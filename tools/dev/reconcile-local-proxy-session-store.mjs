@@ -108,7 +108,14 @@ function main(argv) {
       `certificate/${certificate}`,
       "--timeout=5m",
     ]);
-  kubectl(["rollout", "status", `statefulset/${storeName}`, "--timeout=5m"]);
+  // OnDelete преднамеренно запрещает неявный rollout этого stateful workload,
+  // поэтому readiness проверяется по авторитетному счётчику StatefulSet.
+  kubectl([
+    "wait",
+    "--for=jsonpath={.status.readyReplicas}=1",
+    `statefulset/${storeName}`,
+    "--timeout=5m",
+  ]);
 
   const secret = get("secret", storeSecretName);
   assert(
@@ -144,8 +151,11 @@ if (
 ) {
   try {
     main(process.argv.slice(2));
-  } catch {
-    process.stderr.write("Local proxy session store reconciliation failed\n");
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "UNKNOWN_FAILURE";
+    process.stderr.write(
+      `Local proxy session store reconciliation failed: ${code}\n`,
+    );
     process.exitCode = 1;
   }
 }
