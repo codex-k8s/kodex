@@ -111,7 +111,7 @@ preserve_live_egress_projection() {
   [[ -n "$projection_targets" ]] || return 0
   kubectl -n "$namespace" get deployment/egress-gateway --ignore-not-found -o json >"$live" ||
     fail 'local egress Deployment discovery failed'
-  [[ -s "$live" ]] || return
+  [[ -s "$live" ]] || return 0
   jq -e '
     .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
     .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
@@ -208,7 +208,7 @@ reconcile_frontend_cache_field_ownership() {
     fail 'rendered frontend cache path is outside the trusted local state directory'
   live=$(kubectl -n "$namespace" get deployment/staff-control-center --ignore-not-found -o json) ||
     fail 'local frontend Deployment discovery failed'
-  [[ -n "$live" ]] || return
+  [[ -n "$live" ]] || return 0
   jq -e '
     .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
     .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
