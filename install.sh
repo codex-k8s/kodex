@@ -38,11 +38,17 @@ kodex_require_env KODEX_INSTALL_MODE KODEX_NAMESPACE KODEX_KUBECONFIG \
 KODEX_INGRESS_SERVICE_NAME=${KODEX_INGRESS_SERVICE_NAME:-${KODEX_INGRESS_POD_NAME:-}}
 KODEX_PUBLIC_TLS_MODE=${KODEX_PUBLIC_TLS_MODE:-enabled}
 KODEX_DISABLE_OBSERVABILITY=${KODEX_DISABLE_OBSERVABILITY:-true}
-export KODEX_INGRESS_SERVICE_NAME KODEX_PUBLIC_TLS_MODE KODEX_DISABLE_OBSERVABILITY
+KODEX_MANAGEMENT_SURFACES=${KODEX_MANAGEMENT_SURFACES:-all}
+export KODEX_INGRESS_SERVICE_NAME KODEX_PUBLIC_TLS_MODE KODEX_DISABLE_OBSERVABILITY \
+  KODEX_MANAGEMENT_SURFACES
 [[ "$KODEX_PUBLIC_TLS_MODE" == deferred || "$KODEX_PUBLIC_TLS_MODE" == enabled ]] ||
   fail 'KODEX_PUBLIC_TLS_MODE must be deferred or enabled'
 [[ "$KODEX_DISABLE_OBSERVABILITY" == true || "$KODEX_DISABLE_OBSERVABILITY" == false ]] ||
   fail 'KODEX_DISABLE_OBSERVABILITY must be true or false'
+case "$KODEX_MANAGEMENT_SURFACES" in
+  all|control-center-grafana|control-center) ;;
+  *) fail 'KODEX_MANAGEMENT_SURFACES is invalid' ;;
+esac
 if [[ "$KODEX_DISABLE_OBSERVABILITY" == false && -z "${KODEX_SENTRY_DSN:-}" ]]; then
   fail 'KODEX_SENTRY_DSN is required when external observability exporters are enabled'
 fi
@@ -287,19 +293,30 @@ fi
 
 if component_selected identity; then
   "$repository_root/tools/deploy/materialize-identity-secrets.sh" \
-    --context "$KODEX_KUBE_CONTEXT" --material-directory "$material_directory"
+    --context "$KODEX_KUBE_CONTEXT" --material-directory "$material_directory" \
+    --management-surfaces "$KODEX_MANAGEMENT_SURFACES"
   "$repository_root/infra/identity/bootstrap.sh" --context "$KODEX_KUBE_CONTEXT" \
     --mode apply --oidc-host "$KODEX_OIDC_HOST" \
     --ingress-class "$KODEX_INGRESS_CLASS" --cluster-issuer "$KODEX_CLUSTER_ISSUER" \
     --ingress-namespace "$KODEX_INGRESS_NAMESPACE" --ingress-pod-name "$KODEX_INGRESS_POD_NAME"
-  "$repository_root/tools/deploy/configure-keycloak.sh" --context "$KODEX_KUBE_CONTEXT" \
-    --mode apply --public-origin "https://$KODEX_CONTROL_HOST" \
-    --grafana-origin "https://$KODEX_GRAFANA_HOST" \
+  keycloak_arguments=(
+    --context "$KODEX_KUBE_CONTEXT"
+    --management-surfaces "$KODEX_MANAGEMENT_SURFACES"
+    --public-origin "https://$KODEX_CONTROL_HOST"
+    --grafana-origin "https://$KODEX_GRAFANA_HOST"
     --headlamp-origin "https://$KODEX_HEADLAMP_HOST"
-  "$repository_root/tools/deploy/configure-keycloak.sh" --context "$KODEX_KUBE_CONTEXT" \
-    --mode readback --public-origin "https://$KODEX_CONTROL_HOST" \
-    --grafana-origin "https://$KODEX_GRAFANA_HOST" \
-    --headlamp-origin "https://$KODEX_HEADLAMP_HOST"
+  )
+  if [[ -n "${KODEX_KEYCLOAK_SMTP_CONFIG_FILE:-}" ]]; then
+    [[ "$KODEX_KEYCLOAK_SMTP_CONFIG_FILE" == /* &&
+      -f "$KODEX_KEYCLOAK_SMTP_CONFIG_FILE" &&
+      ! -L "$KODEX_KEYCLOAK_SMTP_CONFIG_FILE" ]] ||
+      fail 'KODEX_KEYCLOAK_SMTP_CONFIG_FILE is invalid'
+    keycloak_arguments+=(--smtp-config-file "$KODEX_KEYCLOAK_SMTP_CONFIG_FILE")
+  fi
+  "$repository_root/tools/deploy/configure-keycloak.sh" \
+    --mode apply "${keycloak_arguments[@]}"
+  "$repository_root/tools/deploy/configure-keycloak.sh" \
+    --mode readback "${keycloak_arguments[@]}"
 fi
 
 if component_selected trust; then
@@ -321,6 +338,7 @@ if component_selected management; then
   kodex_require_env KODEX_PUBLIC_IPV4_CIDR || exit 1
   "$repository_root/infra/management-surfaces/bootstrap.sh" \
     --context "$KODEX_KUBE_CONTEXT" --mode apply-monitoring \
+    --management-surfaces "$KODEX_MANAGEMENT_SURFACES" \
     --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
     --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
     --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
@@ -333,6 +351,7 @@ if component_selected management; then
     --kubernetes-api-endpoint-ports "$api_endpoint_ports"
   "$repository_root/infra/management-surfaces/bootstrap.sh" \
     --context "$KODEX_KUBE_CONTEXT" --mode apply-surfaces \
+    --management-surfaces "$KODEX_MANAGEMENT_SURFACES" \
     --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
     --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
     --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
@@ -455,6 +474,7 @@ fi
 if component_selected management; then
   "$repository_root/infra/management-surfaces/bootstrap.sh" \
     --context "$KODEX_KUBE_CONTEXT" --mode readback \
+    --management-surfaces "$KODEX_MANAGEMENT_SURFACES" \
     --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
     --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
     --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \

@@ -22,6 +22,8 @@ export KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES=2001:db8::10
 export KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS=7
 export KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS=9
 export KODEX_SERVER_PUBLIC_IPV6_ADDRESS=2606:4700:4700::1111
+export KODEX_MANAGEMENT_SURFACES=control-center-grafana
+export KODEX_KEYCLOAK_SMTP_CONFIG_FILE=/run/user/1000/kodex-smtp.json
 env_file="$temporary_directory/.kodex-env"
 "$repository_root/tools/install/write-env-file.sh" --output "$env_file" >/dev/null
 [[ "$(stat -c '%a' "$env_file")" == 600 ]] || fail '.kodex-env mode differs from 0600'
@@ -33,6 +35,7 @@ unset KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES
 unset KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES
 unset KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS
 unset KODEX_SERVER_PUBLIC_IPV6_ADDRESS
+unset KODEX_MANAGEMENT_SURFACES KODEX_KEYCLOAK_SMTP_CONFIG_FILE
 # shellcheck source=../../tools/install/load-env.sh
 source "$repository_root/tools/install/load-env.sh"
 kodex_load_env "$env_file" || fail 'generated .kodex-env was not loaded'
@@ -43,7 +46,9 @@ kodex_load_env "$env_file" || fail 'generated .kodex-env was not loaded'
   "$KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES" == 2001:db8::10 &&
   "$KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS" == 7 &&
   "$KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS" == 9 &&
-  "$KODEX_SERVER_PUBLIC_IPV6_ADDRESS" == 2606:4700:4700::1111 ]] ||
+  "$KODEX_SERVER_PUBLIC_IPV6_ADDRESS" == 2606:4700:4700::1111 &&
+  "$KODEX_MANAGEMENT_SURFACES" == control-center-grafana &&
+  "$KODEX_KEYCLOAK_SMTP_CONFIG_FILE" == /run/user/1000/kodex-smtp.json ]] ||
   fail 'generated .kodex-env readback mismatch'
 
 chmod 0644 "$env_file"
@@ -61,13 +66,50 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/reconcile-pull-docker-config.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
   tools/install/verify-oidc-target.sh tools/install/write-env-file.sh \
-  tools/dev/install-tsh-client.sh tools/dev/preflight-public-hosts.sh tools/dev/remote-dev.sh \
+  tools/dev/configure-k3d-edge.sh tools/dev/install-tsh-client.sh \
+  tools/dev/install-user-nss-tools.sh tools/dev/install-user-render-tools.sh \
+  tools/dev/prepare-k3d-hot-reload-cluster.sh tools/dev/preflight-public-hosts.sh \
+  tools/dev/remote-dev.sh \
   infra/teleport/bootstrap.sh infra/teleport/bootstrap-host.sh; do
   [[ -x "$repository_root/$script" ]] || fail "installer entrypoint is not executable: $script"
   bash -n "$repository_root/$script"
 done
+[[ -x "$repository_root/tools/install/prepare-keycloak-smtp.py" ]] ||
+  fail 'Keycloak SMTP normalizer is not executable'
+python3 -m py_compile "$repository_root/tools/install/prepare-keycloak-smtp.py"
 bash -n "$repository_root/tools/deploy/generate-identity-material.sh" \
   "$repository_root/tools/deploy/materialize-identity-secrets.sh"
+
+smtp_password="$temporary_directory/smtp-password"
+smtp_config="$temporary_directory/smtp.json"
+smtp_realm="$temporary_directory/smtp-realm.json"
+printf '%s' 'fixture-smtp-password' >"$smtp_password"
+chmod 0600 "$smtp_password"
+jq -n --arg password_file "$smtp_password" '{
+  version:1,
+  host:"smtp.example.test",
+  port:587,
+  security:"starttls",
+  from:"owner@example.test",
+  replyTo:"support@example.test",
+  authentication:{mode:"password",username:"owner@example.test",passwordFile:$password_file}
+}' >"$smtp_config"
+chmod 0600 "$smtp_config"
+python3 "$repository_root/tools/install/prepare-keycloak-smtp.py" \
+  --config "$smtp_config" --output "$smtp_realm"
+[[ "$(stat -c '%a' "$smtp_realm")" == 600 ]] || fail 'Keycloak SMTP realm file is not private'
+jq -e '
+  .smtpServer == {
+    host:"smtp.example.test",port:"587",from:"owner@example.test",
+    ssl:"false",starttls:"true",replyTo:"support@example.test",
+    auth:"true",user:"owner@example.test",password:"fixture-smtp-password"
+  }
+' "$smtp_realm" >/dev/null || fail 'Keycloak SMTP realm render mismatch'
+chmod 0644 "$smtp_config"
+if python3 "$repository_root/tools/install/prepare-keycloak-smtp.py" \
+  --config "$smtp_config" --output "$smtp_realm" >/dev/null 2>&1; then
+  fail 'over-permissive Keycloak SMTP configuration was accepted'
+fi
 
 oidc_fixture="$temporary_directory/oidc-pods.json"
 fake_bin="$temporary_directory/bin"

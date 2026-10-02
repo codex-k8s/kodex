@@ -5,6 +5,7 @@ fail() { printf 'Management surfaces bootstrap failed: %s\n' "$*" >&2; exit 1; }
 usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode preflight|apply-monitoring|apply-surfaces|readback|reconcile" \
+    '  [--management-surfaces all|control-center-grafana|control-center]' \
     '  --oidc-issuer <https-url> --oidc-connect-address <service.namespace.svc.cluster.local:port>' \
     '  --oidc-target-port <port> [--oidc-ca-file <absolute-path>] --control-center-host <dns> --grafana-host <dns>' \
     '  --headlamp-host <dns>' \
@@ -16,6 +17,7 @@ usage() {
 
 context=""
 mode=""
+management_surfaces=all
 oidc_issuer=""
 oidc_connect_address=""
 oidc_target_port=""
@@ -34,6 +36,7 @@ while (($# > 0)); do
   case "$1" in
     --context) context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
+    --management-surfaces) management_surfaces="${2:-}"; shift 2 ;;
     --oidc-issuer) oidc_issuer="${2:-}"; shift 2 ;;
     --oidc-connect-address) oidc_connect_address="${2:-}"; shift 2 ;;
     --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
@@ -55,6 +58,11 @@ done
 
 [[ -n "$context" ]] || fail 'exact context is required'
 case "$mode" in preflight|apply-monitoring|apply-surfaces|readback|reconcile) ;; *) fail 'mode is invalid' ;; esac
+case "$management_surfaces" in all|control-center-grafana|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
+include_grafana=false
+include_headlamp=false
+[[ "$management_surfaces" == control-center ]] || include_grafana=true
+[[ "$management_surfaces" == all ]] && include_headlamp=true
 [[ "$oidc_issuer" =~ ^https://[a-zA-Z0-9._:-]+/realms/[a-zA-Z0-9._-]+$ ]] || fail 'OIDC issuer is invalid'
 [[ "$oidc_connect_address" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.svc\.cluster\.local:([1-9][0-9]{0,4})$ ]] ||
   fail 'OIDC connect address must identify an exact in-cluster Service'
@@ -160,9 +168,11 @@ recover_interrupted_helm_release() {
   esac
 }
 
-monitoring_chart=$(download_chart kube-prometheus-stack)
 oauth2_chart=$(download_chart oauth2-proxy)
-headlamp_chart=$(download_chart headlamp)
+monitoring_chart=""
+headlamp_chart=""
+[[ "$include_grafana" == false ]] || monitoring_chart=$(download_chart kube-prometheus-stack)
+[[ "$include_headlamp" == false ]] || headlamp_chart=$(download_chart headlamp)
 
 routes="$temporary_directory/routes.yaml"
 OIDC_TARGET_PORT="$oidc_target_port" INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
@@ -180,6 +190,22 @@ KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq '
     sub("__KODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_API_SERVICE_CIDR))
   )
 ' "$script_directory/routes.yaml" >"$routes"
+if [[ "$include_headlamp" == false ]]; then
+  yq -i '
+    select(.metadata.namespace != "platform-admin") |
+    with(select(.kind == "NetworkPolicy" and .metadata.name == "sso-oauth2-proxy-ingress");
+      .spec.ingress[0].from = [.spec.ingress[0].from[] |
+        select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" != "platform-admin")])
+  ' "$routes"
+fi
+if [[ "$include_grafana" == false ]]; then
+  yq -i '
+    select(.metadata.namespace != "observability") |
+    with(select(.kind == "NetworkPolicy" and .metadata.name == "sso-oauth2-proxy-ingress");
+      .spec.ingress[0].from = [.spec.ingress[0].from[] |
+        select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" != "observability")])
+  ' "$routes"
+fi
 OIDC_TARGET_PORT="$oidc_target_port" yq -i '
   with(select(.kind == "NetworkPolicy" and
     ((.metadata.name | test("^oauth2-.+-exact-paths$")) or
@@ -192,18 +218,22 @@ OIDC_TARGET_PORT="$oidc_target_port" yq -i '
 endpoint_destinations=$(printf '%s\n' "${api_endpoint_cidrs[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | {ipBlock:{cidr:.}})')
 endpoint_ports=$(printf '%s\n' "${api_endpoint_ports[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | {protocol:"TCP",port:tonumber})')
 endpoint_rule=$(jq -cn --argjson to "$endpoint_destinations" --argjson ports "$endpoint_ports" '{to:$to,ports:$ports}')
-KUBERNETES_API_ENDPOINT_RULE="$endpoint_rule" yq -i '
-  with(select(.kind == "NetworkPolicy" and
-    .metadata.namespace == "platform-admin" and .metadata.name == "headlamp-exact-paths");
-    .spec.egress += [(strenv(KUBERNETES_API_ENDPOINT_RULE) | from_json)])
-' "$routes"
+if [[ "$include_headlamp" == true ]]; then
+  KUBERNETES_API_ENDPOINT_RULE="$endpoint_rule" yq -i '
+    with(select(.kind == "NetworkPolicy" and
+      .metadata.namespace == "platform-admin" and .metadata.name == "headlamp-exact-paths");
+      .spec.egress += [(strenv(KUBERNETES_API_ENDPOINT_RULE) | from_json)])
+  ' "$routes"
+fi
 ! grep -Eq '__KODEX_[A-Z0-9_]+__' "$routes" || fail 'management route render contains placeholders'
 kubectl apply --dry-run=client --validate=false -f "$routes" >/dev/null
 
 render_monitoring_values="$temporary_directory/monitoring-values.yaml"
-GRAFANA_ORIGIN="https://$grafana_host" yq '
-  (.. | select(tag == "!!str")) |= sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN))
-' "$script_directory/kube-prometheus-stack-values.yaml" >"$render_monitoring_values"
+if [[ "$include_grafana" == true ]]; then
+  GRAFANA_ORIGIN="https://$grafana_host" yq '
+    (.. | select(tag == "!!str")) |= sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN))
+  ' "$script_directory/kube-prometheus-stack-values.yaml" >"$render_monitoring_values"
+fi
 
 render_oauth_values() {
   local surface=$1 host=$2 role=$3 issuer=$4 output=$5
@@ -265,26 +295,60 @@ apply_oidc_ca() {
     kubectl apply --server-side --field-manager=kodex-management -f - >/dev/null
 }
 
+oauth_bindings=("control-center|kodex-system|$control_center_host|kodex-owner|$oidc_issuer")
+secret_bindings=(control-center:kodex-system)
+readback_bindings=(oauth2-control-center:kodex-system:kodex-owner)
+policy_bindings=(oauth2-control-center-exact-paths:kodex-system)
+ingress_bindings=()
+if [[ "$include_grafana" == true ]]; then
+  oauth_bindings+=("grafana|observability|$grafana_host|kodex-owner|$oidc_issuer")
+  secret_bindings+=(grafana:observability)
+  readback_bindings+=(oauth2-grafana:observability:kodex-owner)
+  policy_bindings+=(oauth2-grafana-exact-paths:observability)
+  ingress_bindings+=("kodex-grafana|observability|$grafana_host")
+fi
+if [[ "$include_headlamp" == true ]]; then
+  oauth_bindings+=("headlamp|platform-admin|$headlamp_host|admin|$oidc_origin/realms/master")
+  secret_bindings+=(headlamp:platform-admin)
+  readback_bindings+=(oauth2-headlamp:platform-admin:admin)
+  policy_bindings+=(oauth2-headlamp-exact-paths:platform-admin)
+  ingress_bindings+=("kodex-headlamp|platform-admin|$headlamp_host")
+fi
+
 if [[ "$mode" == preflight || "$mode" == reconcile ]]; then
-  helm template kodex-monitoring "$monitoring_chart" --namespace observability --values "$render_monitoring_values" >/dev/null
-  for binding in \
-    "control-center|kodex-system|$control_center_host|kodex-owner|$oidc_issuer" \
-    "grafana|observability|$grafana_host|kodex-owner|$oidc_issuer" \
-    "headlamp|platform-admin|$headlamp_host|admin|$oidc_origin/realms/master"; do
+  if [[ "$include_grafana" == true ]]; then
+    helm template kodex-monitoring "$monitoring_chart" --namespace observability --values "$render_monitoring_values" >/dev/null
+  fi
+  for binding in "${oauth_bindings[@]}"; do
     IFS='|' read -r surface namespace host role issuer <<<"$binding"
     values="$temporary_directory/oauth-$surface.yaml"
     render_oauth_values "$surface" "$host" "$role" "$issuer" "$values"
     helm template "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" --values "$values" >/dev/null
   done
-  helm template kodex-headlamp "$headlamp_chart" --namespace platform-admin --values "$script_directory/headlamp-values.yaml" >/dev/null
+  if [[ "$include_headlamp" == true ]]; then
+    helm template kodex-headlamp "$headlamp_chart" --namespace platform-admin --values "$script_directory/headlamp-values.yaml" >/dev/null
+  fi
   if [[ "$mode" == preflight ]]; then
     printf 'Management surfaces preflight completed\n'
     exit 0
   fi
 fi
 
-kubectl apply --server-side --field-manager=kodex-management -f "$script_directory/namespaces.yaml" >/dev/null
-if [[ "$mode" == apply-monitoring || "$mode" == reconcile ]]; then
+if [[ "$include_grafana" == true ]]; then
+  observability_namespace="$temporary_directory/observability-namespace.yaml"
+  yq 'select(.metadata.name == "observability")' "$script_directory/namespaces.yaml" \
+    >"$observability_namespace"
+  kubectl apply --server-side --field-manager=kodex-management \
+    -f "$observability_namespace" >/dev/null
+fi
+if [[ "$include_headlamp" == true ]]; then
+  platform_admin_namespace="$temporary_directory/platform-admin-namespace.yaml"
+  yq 'select(.metadata.name == "platform-admin")' "$script_directory/namespaces.yaml" \
+    >"$platform_admin_namespace"
+  kubectl apply --server-side --field-manager=kodex-management \
+    -f "$platform_admin_namespace" >/dev/null
+fi
+if [[ ( "$mode" == apply-monitoring || "$mode" == reconcile ) && "$include_grafana" == true ]]; then
   kubectl -n observability get secret grafana-admin >/dev/null 2>&1 || fail 'Grafana admin Secret is absent'
   recover_interrupted_helm_release kodex-monitoring observability
   helm upgrade --install kodex-monitoring "$monitoring_chart" --namespace observability \
@@ -297,21 +361,20 @@ if [[ "$mode" == apply-surfaces || "$mode" == reconcile ]]; then
     jq -e '.spec.replicas == 1 and .status.readyReplicas == 1' >/dev/null ||
     fail 'owned proxy session store must be ready before management surfaces'
 
-  for binding in control-center:kodex-system grafana:observability headlamp:platform-admin; do
+  for binding in "${secret_bindings[@]}"; do
     surface=${binding%%:*}; namespace=${binding#*:}
     kubectl -n "$namespace" get secret "oauth2-$surface" >/dev/null 2>&1 || fail "OAuth2 Secret is absent: $surface"
     apply_oidc_ca "$namespace"
   done
-  recover_interrupted_helm_release kodex-headlamp platform-admin
-  helm upgrade --install kodex-headlamp "$headlamp_chart" --namespace platform-admin \
-    --values "$script_directory/headlamp-values.yaml" --atomic --wait --timeout 10m
+  if [[ "$include_headlamp" == true ]]; then
+    recover_interrupted_helm_release kodex-headlamp platform-admin
+    helm upgrade --install kodex-headlamp "$headlamp_chart" --namespace platform-admin \
+      --values "$script_directory/headlamp-values.yaml" --atomic --wait --timeout 10m
+  fi
   # Новые OAuth2 Proxy должны получить точный путь к issuer до OIDC discovery
   # на старте; Helm не сможет завершить rollout под прежней egress policy.
   kubectl apply --server-side --field-manager=kodex-management -f "$routes" >/dev/null
-  for binding in \
-    "control-center|kodex-system|$control_center_host|kodex-owner|$oidc_issuer" \
-    "grafana|observability|$grafana_host|kodex-owner|$oidc_issuer" \
-    "headlamp|platform-admin|$headlamp_host|admin|$oidc_origin/realms/master"; do
+  for binding in "${oauth_bindings[@]}"; do
     IFS='|' read -r surface namespace host role issuer <<<"$binding"
     values="$temporary_directory/oauth-$surface.yaml"
     render_oauth_values "$surface" "$host" "$role" "$issuer" "$values"
@@ -328,10 +391,7 @@ if [[ "$mode" == apply-surfaces || "$mode" == reconcile ]]; then
 fi
 
 if [[ "$mode" == readback || "$mode" == reconcile ]]; then
-  for binding in \
-    oauth2-control-center:kodex-system:kodex-owner \
-    oauth2-grafana:observability:kodex-owner \
-    oauth2-headlamp:platform-admin:admin; do
+  for binding in "${readback_bindings[@]}"; do
     IFS=: read -r deployment namespace role <<<"$binding"
     kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout=3m >/dev/null || fail "OAuth2 Proxy rollout failed: $deployment"
     kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e \
@@ -356,10 +416,7 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
       ' >/dev/null || fail "OAuth2 Proxy OIDC CA mismatch: $deployment"
     fi
   done
-  for binding in \
-    oauth2-control-center-exact-paths:kodex-system \
-    oauth2-grafana-exact-paths:observability \
-    oauth2-headlamp-exact-paths:platform-admin; do
+  for binding in "${policy_bindings[@]}"; do
     IFS=: read -r policy namespace <<<"$binding"
     kubectl -n "$namespace" get networkpolicy "$policy" -o json | jq -e \
       --argjson target_port "$oidc_target_port" '
@@ -375,54 +432,57 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
       )
     ' >/dev/null || fail "OAuth2 Proxy OIDC egress mismatch: $policy"
   done
+  expected_sso_sources='[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kodex-system"}},"podSelector":{"matchLabels":{"app.kubernetes.io/instance":"oauth2-control-center"}}}]'
+  if [[ "$include_grafana" == true ]]; then
+    expected_sso_sources=$(jq -c '. + [{namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"observability"}},podSelector:{matchLabels:{"app.kubernetes.io/instance":"oauth2-grafana"}}}]' <<<"$expected_sso_sources")
+  fi
+  if [[ "$include_headlamp" == true ]]; then
+    expected_sso_sources=$(jq -c '. + [{namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"platform-admin"}},podSelector:{matchLabels:{"app.kubernetes.io/instance":"oauth2-headlamp"}}}]' <<<"$expected_sso_sources")
+  fi
   kubectl -n identity get networkpolicy sso-oauth2-proxy-ingress -o json | jq -e \
-    --argjson target_port "$oidc_target_port" '
+    --argjson target_port "$oidc_target_port" --argjson expected_sources "$expected_sso_sources" '
     .spec.podSelector.matchLabels == {
       "app.kubernetes.io/name":"sso",
       "app.kubernetes.io/component":"identity-provider"
     } and
     .spec.policyTypes == ["Ingress"] and
     .spec.ingress == [{
-      from:[
-        {
-          namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"kodex-system"}},
-          podSelector:{matchLabels:{"app.kubernetes.io/instance":"oauth2-control-center"}}
-        },
-        {
-          namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"observability"}},
-          podSelector:{matchLabels:{"app.kubernetes.io/instance":"oauth2-grafana"}}
-        },
-        {
-          namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"platform-admin"}},
-          podSelector:{matchLabels:{"app.kubernetes.io/instance":"oauth2-headlamp"}}
-        }
-      ],
+      from:$expected_sources,
       ports:[{protocol:"TCP",port:$target_port}]
     }]
   ' >/dev/null || fail 'Keycloak OAuth2 Proxy ingress mismatch'
-  kubectl -n platform-admin rollout status deployment/kodex-headlamp --timeout=3m >/dev/null || fail 'Headlamp rollout failed'
-  kubectl get clusterrolebinding kodex-headlamp-admin -o json | jq -e '
-    .metadata.name == "kodex-headlamp-admin" and
-    .roleRef == {
-      apiGroup: "rbac.authorization.k8s.io",
-      kind: "ClusterRole",
-      name: "cluster-admin"
-    } and
-    .subjects == [{
-      kind: "ServiceAccount",
-      name: "kodex-headlamp",
-      namespace: "platform-admin"
-    }]
-  ' >/dev/null || fail 'Headlamp cluster-admin binding mismatch'
-  kubectl -n observability rollout status statefulset/kodex-monitoring-grafana --timeout=3m >/dev/null || fail 'Grafana rollout failed'
-  kubectl -n observability get prometheus -o json | jq -e '
-    (.items | length) == 1 and (.items[0].status.availableReplicas // 0) >= 1
-  ' >/dev/null || fail 'Prometheus readback failed'
-  kubectl -n observability get alertmanager -o json | jq -e '
-    (.items | length) == 1 and (.items[0].status.availableReplicas // 0) >= 1
-  ' >/dev/null || fail 'Alertmanager readback failed'
-  for binding in kodex-grafana:observability:"$grafana_host" kodex-headlamp:platform-admin:"$headlamp_host"; do
-    IFS=: read -r ingress namespace host <<<"$binding"
+  if [[ "$include_headlamp" == true ]]; then
+    kubectl -n platform-admin rollout status deployment/kodex-headlamp --timeout=3m >/dev/null || fail 'Headlamp rollout failed'
+    kubectl get clusterrolebinding kodex-headlamp-admin -o json | jq -e '
+      .metadata.name == "kodex-headlamp-admin" and
+      .roleRef == {
+        apiGroup: "rbac.authorization.k8s.io",
+        kind: "ClusterRole",
+        name: "cluster-admin"
+      } and
+      .subjects == [{
+        kind: "ServiceAccount",
+        name: "kodex-headlamp",
+        namespace: "platform-admin"
+      }]
+    ' >/dev/null || fail 'Headlamp cluster-admin binding mismatch'
+  else
+    ! kubectl -n platform-admin get deployment kodex-headlamp >/dev/null 2>&1 ||
+      fail 'excluded Headlamp deployment is still installed'
+    ! kubectl get clusterrolebinding kodex-headlamp-admin >/dev/null 2>&1 ||
+      fail 'excluded Headlamp cluster-admin binding is still installed'
+  fi
+  if [[ "$include_grafana" == true ]]; then
+    kubectl -n observability rollout status statefulset/kodex-monitoring-grafana --timeout=3m >/dev/null || fail 'Grafana rollout failed'
+    kubectl -n observability get prometheus -o json | jq -e '
+      (.items | length) == 1 and (.items[0].status.availableReplicas // 0) >= 1
+    ' >/dev/null || fail 'Prometheus readback failed'
+    kubectl -n observability get alertmanager -o json | jq -e '
+      (.items | length) == 1 and (.items[0].status.availableReplicas // 0) >= 1
+    ' >/dev/null || fail 'Alertmanager readback failed'
+  fi
+  for binding in "${ingress_bindings[@]}"; do
+    IFS='|' read -r ingress namespace host <<<"$binding"
     [[ "$(kubectl -n "$namespace" get ingress "$ingress" -o jsonpath='{.spec.rules[0].host}')" == "$host" ]] || fail "surface Ingress mismatch: $ingress"
     kubectl -n "$namespace" get ingress "$ingress" -o json | jq -e '
       .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] | test("oauth2-.+-chain@kubernetescrd$")

@@ -127,8 +127,12 @@ EOF
 cat >"$temporary_directory/bin/helm" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == template ]]; then
+  exit 0
+fi
 [[ "${1:-}" == pull ]]
 chart=${2:-}
+[[ -z "${FAKE_HELM_LOG:-}" ]] || printf 'pull %s\n' "$chart" >>"$FAKE_HELM_LOG"
 destination=""
 while (($# > 0)); do
   case "$1" in
@@ -281,18 +285,42 @@ expect_readback_rejected() {
     >"$temporary_directory/$label.out" 2>"$temporary_directory/$label.err"; then
     fail "management readback accepted $label"
   fi
-  grep -Fq "$expected_error" "$temporary_directory/$label.err" ||
+  if ! grep -Fq "$expected_error" "$temporary_directory/$label.err"; then
+    cat "$temporary_directory/$label.err" >&2
     fail "management readback rejected $label for an unexpected reason"
+  fi
 }
 
-run_readback kodex-headlamp-admin cluster-admin StatefulSet >/dev/null ||
+if ! run_readback kodex-headlamp-admin cluster-admin StatefulSet \
+  >"$temporary_directory/readback.out" 2>"$temporary_directory/readback.err"; then
+  cat "$temporary_directory/readback.err" >&2
   fail 'management readback rejected the exact pinned chart resources'
+fi
 expect_readback_rejected kodex-headlamp cluster-admin StatefulSet \
   'Headlamp cluster-admin binding mismatch' wrong-binding-name
 expect_readback_rejected kodex-headlamp-admin view StatefulSet \
   'Headlamp cluster-admin binding mismatch' wrong-binding-role
 expect_readback_rejected kodex-headlamp-admin cluster-admin Deployment \
   'Grafana rollout failed' wrong-grafana-kind
+
+headlamp_free_log="$temporary_directory/headlamp-free-helm.log"
+PATH="$temporary_directory/bin:$PATH" \
+  FIXTURE_HEADLAMP_CHART="$headlamp_chart" \
+  FIXTURE_MONITORING_CHART="$monitoring_chart" \
+  FIXTURE_OAUTH2_CHART="$oauth2_chart" \
+  FAKE_HELM_LOG="$headlamp_free_log" \
+  "$bootstrap" "${readback_arguments[@]/readback/preflight}" \
+    --management-surfaces control-center-grafana >/dev/null ||
+  fail 'Headlamp-free management preflight failed'
+grep -Fxq 'pull oauth2-proxy' "$headlamp_free_log" ||
+  fail 'Headlamp-free profile omitted OAuth2 Proxy'
+grep -Fxq 'pull kube-prometheus-stack' "$headlamp_free_log" ||
+  fail 'Headlamp-free profile omitted monitoring'
+if grep -Fxq 'pull headlamp' "$headlamp_free_log"; then
+  fail 'Headlamp-free profile downloaded the Headlamp chart'
+fi
+rg -Fq 'management_surfaces=control-center-grafana' "$repository_root/dev.sh" ||
+  fail 'local development does not default to the Headlamp-free profile'
 
 for surface in control-center grafana headlamp; do
   rg -q "oauth2-$surface" "$bootstrap" || fail "OAuth2 surface is absent: $surface"

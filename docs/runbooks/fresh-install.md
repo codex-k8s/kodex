@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.2.1
-updated: 2026-09-02
+version: 2.3.0
+updated: 2026-10-02
 ---
 
 # Чистое развертывание Kodex
@@ -24,7 +24,8 @@ bare-metal узла уничтожает все Kubernetes workloads, PVC и con
 2. k3s с encryption at rest;
 3. cert-manager и trust-manager;
 4. Keycloak;
-5. Grafana, Prometheus, Alertmanager и Headlamp;
+5. выбранные management surfaces: Grafana/Prometheus/Alertmanager и, только
+   при явном профиле `all`, Headlamp;
 6. локальный OCI registry;
 7. GitHub Actions Runner Controller и rootless BuildKit sidecar;
 8. PostgreSQL, NATS и control-plane deployables в `kodex-system`, а runtime
@@ -103,6 +104,26 @@ credential и режим `local-development` запрещены: они не с�
 `dev.sh down` удаляет только application namespaces `kodex-runtime`,
 `kodex-system`, `identity` и `kodex-trust`; общие контроллеры k3s сохраняются.
 
+Локальный профиль по умолчанию использует
+`--management-surfaces control-center-grafana`: Grafana устанавливается, а
+Headlamp, его OAuth2 Proxy, Keycloak client, Secret, Ingress, NetworkPolicy и
+`cluster-admin` binding не создаются. Headlamp включается только явным
+`--management-surfaces all`. Для уже существующего k3d/k3s-кластера можно
+независимо выбрать владение общими capabilities:
+
+```bash
+./dev.sh up \
+  --cert-manager-mode managed \
+  --ingress-mode existing \
+  --api-endpoint-mode existing \
+  --provider-sandbox-mode disabled \
+  --security-profile trusted-cluster
+```
+
+`disabled` для provider sandbox допустим только в локальном
+`trusted-cluster`; release-профиль такой режим не принимает. Эти параметры не
+устанавливают k3s на хосте и не изменяют уже выбранный ingress controller.
+
 При первом `dev.sh up` локальный профиль создаёт host-only dummy-интерфейс
 `kodex-api0` с адресом `10.254.254.1/32` и настраивает k3s
 `advertise-address` на него. Поэтому точный Kubernetes API destination в
@@ -125,7 +146,7 @@ chmod 0600 .kodex-env
 - режим, kubeconfig/context, публичный IPv4, точный непривилегированный
   `KODEX_HOST_OPERATOR_USER` с настроенным SSH-ключом и необязательный точный
   глобальный IPv6 адрес bare-metal сервера;
-- DNS Control Center, SSO, Grafana, Headlamp и registry;
+- DNS Control Center, SSO, выбранных management surfaces и registry;
 - необязательный отдельный DNS SAN для восстановления Control Center TLS после
   внешнего ACME duplicate-certificate rate limit;
 - режим публичного TLS `KODEX_PUBLIC_TLS_MODE=deferred|enabled`;
@@ -134,6 +155,8 @@ chmod 0600 .kodex-env
 - exact connect address, TLS server name и Kubernetes selector OIDC workload;
 - ACME email, ingress workload selector и имя ingress Service;
 - постоянного Keycloak administrator и первого owner;
+- профиль `KODEX_MANAGEMENT_SURFACES=all|control-center-grafana|control-center`;
+- необязательный приватный `KODEX_KEYCLOAK_SMTP_CONFIG_FILE`;
 - owner PAT и ARC PAT GitHub;
 - registry write identity для existing-Kubernetes без bundled registry;
 - Codex `auth.json` как base64 либо путь к файлу;
@@ -163,6 +186,36 @@ Bundled MVP по умолчанию использует `KODEX_DISABLE_OBSERVAB
 
 Установщик принимает только `KODEX_*` assignments, запрещает shell evaluation
 и требует mode `0600`. Значения никогда не печатаются.
+
+### SMTP Keycloak
+
+SMTP включается только при заданном абсолютном пути
+`KODEX_KEYCLOAK_SMTP_CONFIG_FILE`. JSON и отдельный файл пароля должны
+принадлежать запускающему пользователю и иметь mode `0600`; password нельзя
+помещать в `.kodex-env`, JSON или Git. Без этого параметра Keycloak работает
+без исходящей почты.
+
+Пример безопасной структуры:
+
+```json
+{
+  "version": 1,
+  "host": "smtp.example.com",
+  "port": 587,
+  "security": "starttls",
+  "from": "owner@example.com",
+  "replyTo": "support@example.com",
+  "authentication": {
+    "mode": "password",
+    "username": "owner@example.com",
+    "passwordFile": "/run/user/1000/kodex-smtp-password"
+  }
+}
+```
+
+Установщик передаёт нормализованный realm update в Keycloak через stdin,
+сверяет не секретные SMTP-поля и только факт наличия password. Значение пароля
+не попадает в argv, логи, Git или readback.
 
 `KODEX_CONTROL_TLS_RECOVERY_HOST` обычно остается пустым. Если удостоверяющий
 центр временно запретил повторную выдачу для точного набора identifiers после
@@ -425,8 +478,9 @@ labels и затем воссоздаётся из exact render. Такой же
 - Traefik подключается к Keycloak с exact public SNI через привязанный к
   `Service` `ServersTransport`, а публичный OIDC discovery отвечает без TLS
   fallback;
-- Control Center, Grafana и Headlamp закрыты OAuth2 Proxy;
-- Headlamp пропускает только Keycloak `admin` и использует `cluster-admin`;
+- Control Center и выбранные management surfaces закрыты OAuth2 Proxy;
+- при профиле `all` Headlamp пропускает только Keycloak `admin` и использует
+  `cluster-admin`; при остальных профилях его workload и binding отсутствуют;
 - все platform StatefulSet/Deployment готовы, migration Jobs успешны;
 - production control-plane прошёл authenticated `HeadBucket` внешнего S3, а
   local SeaweedFS, S3 EndpointSlice и `seaweedfs-bucket-bootstrap` готовы;
