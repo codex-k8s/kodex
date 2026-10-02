@@ -24,6 +24,15 @@ grep -Fq 'ctr -n k8s.io images import --base-name "$repository" "$archive"' "$im
 grep -Fq 'ctr -n k8s.io images tag --force "$tag" "$exact_reference"' "$image_import" ||
   fail 'exact digest tagging is absent'
 
+k3d_registry="$root/tools/dev/configure-k3d-node-registry.sh"
+grep -Fq 'wait_container_stable "$node"' "$k3d_registry" ||
+  fail 'k3d registry configuration does not wait for stable node containers'
+grep -Fq 'docker restart "$node"' "$k3d_registry" ||
+  fail 'k3d registry configuration does not restart nodes one at a time'
+if grep -Fq 'docker restart "${nodes[@]}"' "$k3d_registry"; then
+  fail 'k3d registry configuration restarts all nodes at once'
+fi
+
 for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh build-local-stt.sh build-local-image-supply-chain.sh; do
   path="$root/tools/dev/$builder"
   grep -Fq '"$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"' "$path" ||
@@ -35,6 +44,10 @@ grep -Fq "grep -Eq '^Status:[[:space:]]+running$'" "$buildx_bootstrap" ||
   fail 'Buildx bootstrap does not verify the effective running status'
 grep -Fq 'docker context show' "$buildx_bootstrap" ||
   fail 'Buildx bootstrap does not bind a replacement to the current Docker context'
+grep -Fq -- '--driver-opt network=host' "$buildx_bootstrap" ||
+  fail 'Buildx bootstrap does not provide host DNS reachability'
+grep -Fq '[[ "$network_mode" == host ]]' "$buildx_bootstrap" ||
+  fail 'Buildx bootstrap does not read back the daemon network mode'
 
 dev_script="$root/dev.sh"
 [[ $(grep -Fc '"$repository_root/tools/dev/build-local-stt.sh"' "$dev_script") -eq 2 ]] ||

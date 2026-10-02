@@ -64,6 +64,25 @@ mapfile -t nodes < <(k3d node list -o json | jq -r --arg cluster "$cluster" '
   select(.role == "server" or .role == "agent") | .name
 ' | sort)
 ((${#nodes[@]} > 0)) || fail 'k3d workload nodes are absent'
+
+wait_container_stable() {
+  local node=$1 attempt consecutive=0
+  for attempt in $(seq 1 120); do
+    if [[ "$(docker inspect --format '{{.State.Status}}' "$node" 2>/dev/null || true)" == running ]] &&
+      docker exec "$node" true >/dev/null 2>&1; then
+      ((consecutive += 1))
+      ((consecutive >= 3)) && return 0
+    else
+      consecutive=0
+    fi
+    sleep 1
+  done
+  fail "k3d node did not become stable: $node"
+}
+
+for node in "${nodes[@]}"; do
+  wait_container_stable "$node"
+done
 load_balancer="k3d-$cluster-serverlb"
 load_balancer_ip=$(docker inspect "$load_balancer" --format \
   '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
@@ -134,7 +153,12 @@ if [[ "$mode" == apply && "$changed" == true ]]; then
     docker exec "$node" chmod 0600 "$system_ca" "$system_certificate" \
       "$system_private_key" "$registry_configuration"
   done
-  docker restart "${nodes[@]}" >/dev/null
+  # Перезапускать ноды нужно последовательно: одновременный перезапуск control
+  # plane и worker создаёт краткий restart loop на нагруженном dev-стенде.
+  for node in "${nodes[@]}"; do
+    docker restart "$node" >/dev/null
+    wait_container_stable "$node"
+  done
 fi
 
 for attempt in $(seq 1 120); do
