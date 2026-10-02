@@ -973,6 +973,9 @@ else
 fi
 commit_local_authority_source_state
 
+node "$repository_root/tools/dev/reconcile-local-proxy-session-store.mjs" \
+  --context "$context" --mode apply
+
 management_surface_arguments=(
   --context "$context"
   --management-surfaces "$management_surfaces"

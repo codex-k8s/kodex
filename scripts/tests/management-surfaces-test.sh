@@ -3,6 +3,7 @@ set -euo pipefail
 
 fail() { printf 'Management surfaces test failed: %s\n' "$*" >&2; exit 1; }
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+dev_entrypoint="$repository_root/dev.sh"
 bootstrap="$repository_root/infra/management-surfaces/bootstrap.sh"
 routes="$repository_root/infra/management-surfaces/routes.yaml"
 values="$repository_root/infra/management-surfaces/oauth2-proxy-values.yaml"
@@ -61,6 +62,11 @@ validate_grafana_render() {
 
 bash -n "$bootstrap"
 bash -n "$keycloak_bootstrap"
+session_store_line=$(grep -n 'reconcile-local-proxy-session-store.mjs' "$dev_entrypoint" | cut -d: -f1)
+surface_bootstrap_line=$(grep -n 'infra/management-surfaces/bootstrap.sh' "$dev_entrypoint" | cut -d: -f1)
+[[ -n "$session_store_line" && -n "$surface_bootstrap_line" &&
+  "$session_store_line" -lt "$surface_bootstrap_line" ]] ||
+  fail 'local proxy session store is not reconciled before management surfaces'
 (
   helm() {
     case "$1" in
