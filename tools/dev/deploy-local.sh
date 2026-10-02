@@ -1720,7 +1720,7 @@ PY
       else
       apply_render core-applications '
         select(.kind == "Deployment" and
-          (.metadata.name | test("^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge)$")))
+          (.metadata.name | test("^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge)$")))
       '
       fi
     fi
