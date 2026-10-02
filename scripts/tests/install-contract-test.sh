@@ -204,6 +204,9 @@ rg -Fq 'credential_matches "$material_directory/nats/users/$user_name.creds"' \
 rg -Fq 'Kubernetes Secret content readback mismatch' \
   "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
   fail 'NATS materialization does not compare exact Kubernetes Secret content'
+rg -Fq 'Kubernetes Secret ownership readback mismatch' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not bind Secrets to the security profile'
 rg -Fq 'NATS credential revocation ordering mismatch' \
   "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
   fail 'NATS materialization does not prove previous credential revocation ordering'

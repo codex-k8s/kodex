@@ -237,7 +237,8 @@ if any_component_selected identity management registry arc secrets platform; the
 fi
 if any_component_selected secrets platform; then
   "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
-    --context "$KODEX_KUBE_CONTEXT" --material-directory "$material_directory"
+    --context "$KODEX_KUBE_CONTEXT" --material-directory "$material_directory" \
+    --security-profile protected
 fi
 if any_component_selected arc platform; then
   write_env_input KODEX_GITHUB_OWNER_PAT "$material_directory/inputs/github-owner-pat"

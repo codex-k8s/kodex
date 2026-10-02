@@ -835,7 +835,8 @@ if [[ "$command_name" == identity ]]; then
 fi
 
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
-  --context "$context" --material-directory "$material_directory"
+  --context "$context" --material-directory "$material_directory" \
+  --security-profile "$security_profile"
 default_provider_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"
 provider_auth=${KODEX_LOCAL_PROVIDER_AUTH_FILE:-${KODEX_DEV_PROVIDER_AUTH_FILE:-$default_provider_auth}}
 provider_mode=configured
