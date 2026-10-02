@@ -239,6 +239,8 @@ fi
 install -d -m 0700 "$state_directory" "$state_directory/cache" "$state_directory/inputs"
 "$repository_root/tools/dev/install-user-render-tools.sh" --mode apply \
   --state-directory "$state_directory" >/dev/null
+"$repository_root/tools/dev/install-user-material-tools.sh" --mode apply \
+  --state-directory "$state_directory" >/dev/null
 export PATH="$state_directory/tools/bin:$PATH"
 
 read_authority_snapshot_revision() {

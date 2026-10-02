@@ -67,6 +67,7 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
   tools/install/verify-oidc-target.sh tools/install/write-env-file.sh \
   tools/dev/configure-k3d-edge.sh tools/dev/install-tsh-client.sh \
+  tools/dev/install-user-material-tools.sh \
   tools/dev/install-user-nss-tools.sh tools/dev/install-user-render-tools.sh \
   tools/dev/prepare-k3d-hot-reload-cluster.sh tools/dev/preflight-public-hosts.sh \
   tools/dev/remote-dev.sh \
@@ -76,7 +77,10 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
 done
 [[ -x "$repository_root/tools/install/prepare-keycloak-smtp.py" ]] ||
   fail 'Keycloak SMTP normalizer is not executable'
+[[ -x "$repository_root/tools/dev/htpasswd.py" ]] ||
+  fail 'local htpasswd helper is not executable'
 python3 -m py_compile "$repository_root/tools/install/prepare-keycloak-smtp.py"
+python3 -m py_compile "$repository_root/tools/dev/htpasswd.py"
 bash -n "$repository_root/tools/deploy/generate-identity-material.sh" \
   "$repository_root/tools/deploy/materialize-identity-secrets.sh"
 
