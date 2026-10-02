@@ -105,6 +105,12 @@ fi
   fail 'state directory must be an exact safe absolute path'
 case "$requested_profile" in ''|web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
 deployment_profile=${requested_profile:-web-only}
+if [[ "$command_name" != down && -f "$state_directory/render.yaml" &&
+  ! -L "$state_directory/render.yaml" ]]; then
+  "$repository_root/tools/dev/install-user-render-tools.sh" --mode readback \
+    --state-directory "$state_directory" >/dev/null
+  export PATH="$state_directory/tools/bin:$PATH"
+fi
 if [[ "$command_name" != down ]]; then
   deployment_profile=$("$repository_root/tools/dev/resolve-local-profile.sh" \
     "$requested_profile" "$state_directory/render.yaml")
