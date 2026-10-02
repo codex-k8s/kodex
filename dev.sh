@@ -524,8 +524,8 @@ endpoint_ip=${KODEX_DEV_ENDPOINT_IP:-127.0.0.1}
 ip -4 route get "$endpoint_ip" 2>/dev/null |
   awk -v endpoint="$endpoint_ip" '
     $1 == "local" && $2 == endpoint {
-      for (index = 3; index <= NF; index++) {
-        if ($index == "dev" && $(index + 1) == "lo") found = 1
+      for (field = 3; field <= NF; field++) {
+        if ($field == "dev" && $(field + 1) == "lo") found = 1
       }
     }
     END { exit(found ? 0 : 1) }
