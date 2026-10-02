@@ -283,15 +283,39 @@ trust_system_ca() {
 }
 
 trust_browser_ca() {
+  local nss_database="sql:$HOME/.pki/nssdb"
+  local desired_nickname='Kodex Local Development CA'
+  local source_fingerprint existing_fingerprint line nickname trusted_nickname=""
   install -d -m 0700 "$HOME/.pki/nssdb"
   if [[ ! -f "$HOME/.pki/nssdb/cert9.db" ]]; then
-    certutil -N --empty-password -d "sql:$HOME/.pki/nssdb" >/dev/null ||
+    certutil -N --empty-password -d "$nss_database" >/dev/null ||
       fail 'browser NSS database initialization failed'
   fi
-  certutil -D -d "sql:$HOME/.pki/nssdb" -n 'Kodex Local Development CA' >/dev/null 2>&1 || true
-  certutil -A -d "sql:$HOME/.pki/nssdb" -n 'Kodex Local Development CA' \
-    -t 'C,,' -i "$state_directory/kodex-local-ca.crt" || fail 'browser CA trust update failed'
-  certutil -L -d "sql:$HOME/.pki/nssdb" -n 'Kodex Local Development CA' >/dev/null ||
+
+  source_fingerprint=$(openssl x509 -in "$state_directory/kodex-local-ca.crt" \
+    -noout -fingerprint -sha256) || fail 'browser CA fingerprint calculation failed'
+  while IFS= read -r line; do
+    [[ "$line" =~ ^(.+[^[:space:]])[[:space:]]+([[:alpha:],]+)[[:space:]]*$ ]] || continue
+    nickname=${BASH_REMATCH[1]}
+    existing_fingerprint=$(certutil -L -d "$nss_database" -n "$nickname" -a 2>/dev/null |
+      openssl x509 -noout -fingerprint -sha256 2>/dev/null) || continue
+    if [[ "$existing_fingerprint" == "$source_fingerprint" ]]; then
+      trusted_nickname=$nickname
+      break
+    fi
+  done < <(certutil -L -d "$nss_database")
+  if [[ -z "$trusted_nickname" ]]; then
+    certutil -D -d "$nss_database" -n "$desired_nickname" >/dev/null 2>&1 || true
+    certutil -A -d "$nss_database" -n "$desired_nickname" \
+      -t 'C,,' -i "$state_directory/kodex-local-ca.crt" || fail 'browser CA trust update failed'
+    trusted_nickname=$desired_nickname
+  else
+    certutil -M -d "$nss_database" -n "$trusted_nickname" -t 'C,,' ||
+      fail 'browser CA trust update failed'
+  fi
+  certutil -L -d "$nss_database" -n "$trusted_nickname" -a 2>/dev/null |
+    openssl x509 -noout -fingerprint -sha256 |
+    grep -Fqx "$source_fingerprint" ||
     fail 'browser CA trust readback failed'
 }
 
