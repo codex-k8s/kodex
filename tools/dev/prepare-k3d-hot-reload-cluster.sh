@@ -85,11 +85,11 @@ if [[ "$mode" == apply && "$cluster_matches" == false ]]; then
     kubectl get persistentvolume -o json | jq -e '.items | length == 0' >/dev/null ||
       fail 'cluster contains persistent volumes'
     k3s_image=$(docker inspect "k3d-$cluster-server-0" --format '{{.Config.Image}}')
-    [[ "$k3s_image" =~ ^rancher/k3s:v[0-9]+\.[0-9]+\.[0-9]+-k3s[0-9]+$ ]] ||
+    [[ "$k3s_image" =~ ^(docker\.io/)?rancher/k3s:v[0-9]+\.[0-9]+\.[0-9]+-k3s[0-9]+$ ]] ||
       fail 'existing k3s image is not exact'
     k3d cluster delete "$cluster" >/dev/null
   else
-    k3s_image=rancher/k3s:v1.35.5-k3s1
+    k3s_image=docker.io/rancher/k3s:v1.35.5-k3s1
   fi
   k3d cluster create "$cluster" \
     --servers 1 --agents 1 --image "$k3s_image" \
