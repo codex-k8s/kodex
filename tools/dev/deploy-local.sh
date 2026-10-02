@@ -157,7 +157,7 @@ preserve_live_egress_projection() {
     .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
     .spec.podSelector.matchLabels["app.kubernetes.io/name"] == "egress-gateway" and
     .spec.podSelector.matchLabels["app.kubernetes.io/component"] == "platform-egress" and
-    (.spec.egress | type == "array")
+    ((.spec | has("egress") | not) or (.spec.egress | type == "array"))
   ' "$live_network_policy" >/dev/null || fail 'live egress NetworkPolicy projection is not exact'
   yq -N -o=json -I=0 '.' "$output" | jq -s \
     --slurpfile live "$live" \
@@ -181,7 +181,10 @@ preserve_live_egress_projection() {
     elif .kind == "Service" and .metadata.name == "egress-gateway-openapi" then
       .spec.selector = $liveService[0].spec.selector
     elif .kind == "NetworkPolicy" and .metadata.name == "egress-gateway-integration-destinations" then
-      .spec.egress = $liveNetworkPolicy[0].spec.egress
+      # Kubernetes canonicalizes an empty deny-all egress list by omitting the
+      # field from live JSON. Restore the equivalent explicit list expected by
+      # the rendered manifest instead of writing null back into the resource.
+      .spec.egress = ($liveNetworkPolicy[0].spec.egress // [])
     else . end
   ' | yq -p=json -P >"$updated" || fail 'local egress projection preservation failed'
   # JSON→YAML roundtrip не должен превращать строковые env вроде "off" в bool.
