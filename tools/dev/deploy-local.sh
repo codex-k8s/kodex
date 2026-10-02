@@ -514,6 +514,56 @@ wait_job() {
   fail "local Job timed out: $name"
 }
 
+bootstrap_clamav_database() {
+  local output="$temporary_directory/clamav-db-bootstrap.yaml" digest name state
+  # shellcheck disable=SC2016 # $job is a yq variable, not a shell variable.
+  yq 'select(.kind == "CronJob" and .metadata.name == "clamav-db-updater") |
+    .spec.jobTemplate as $job |
+    {
+      "apiVersion":"batch/v1",
+      "kind":"Job",
+      "metadata":($job.metadata // {}),
+      "spec":$job.spec
+    } |
+    .metadata.namespace = "kodex-system"
+  ' "$render" >"$output"
+  [[ -s "$output" ]] || fail 'ClamAV bootstrap Job source is absent'
+  digest=$(sha256sum "$output" | awk '{print $1}')
+  name="clamav-db-bootstrap-${digest:0:12}"
+  JOB_NAME="$name" JOB_INPUT_DIGEST="$digest" yq -i '
+    .metadata.name = strenv(JOB_NAME) |
+    .metadata.labels."app.kubernetes.io/part-of" = "kodex" |
+    .metadata.labels."kodex.dev/local-profile" = "hot-reload" |
+    .metadata.labels."kodex.dev/security-profile" = "trusted-cluster" |
+    .metadata.labels."kodex.dev/clamav-bootstrap" = "true" |
+    .metadata.annotations."kodex.dev/job-input-sha256" = strenv(JOB_INPUT_DIGEST)
+  ' "$output"
+  state=$(kubectl -n "$namespace" get "job/$name" --ignore-not-found -o json) ||
+    fail 'ClamAV bootstrap Job discovery failed'
+  if [[ -n "$state" ]]; then
+    jq -e '
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+      .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+      .metadata.labels["kodex.dev/clamav-bootstrap"] == "true"
+    ' <<<"$state" >/dev/null || fail 'ClamAV bootstrap Job ownership mismatch'
+    if jq -e 'any(.status.conditions[]?; .type == "Complete" and .status == "True")' \
+      <<<"$state" >/dev/null; then
+      return 0
+    fi
+    if jq -e 'any(.status.conditions[]?; .type == "Failed" and .status == "True")' \
+      <<<"$state" >/dev/null; then
+      kubectl -n "$namespace" delete "job/$name" --wait=true --timeout=2m >/dev/null ||
+        fail 'failed ClamAV bootstrap Job cleanup failed'
+    fi
+  fi
+  if ! kubectl -n "$namespace" get "job/$name" >/dev/null 2>&1; then
+    verify_local_resource_ownership "$output"
+    kubectl apply --server-side --field-manager=kodex-local-dev -f "$output" >/dev/null
+  fi
+  wait_job "$name"
+}
+
 verify_email_projection_generation() {
   local source_file="$temporary_directory/mail-current.json" expected actual
   expected=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-dev-source-provenance") |
@@ -1374,6 +1424,7 @@ PY
     apply_render admission-parameters 'select(.kind == "ConfigMap")'
     apply_render foundation '
       select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
+        .kind != "CronJob" and
         .kind != "Secret" and .kind != "CustomResourceDefinition" and .kind != "Namespace")
     '
     ensure_email_projection_secret
@@ -1624,6 +1675,9 @@ PY
         apply_render clamav-egress-workload '
           select(.kind == "Deployment" and .metadata.name == "clamav-egress-gateway")
         '
+        kubectl -n "$namespace" rollout status deployment/clamav-egress-gateway --timeout=5m >/dev/null ||
+          fail 'ClamAV egress gateway is unavailable before database bootstrap'
+        bootstrap_clamav_database
         apply_render clamav-db-updater-schedule '
           select(.kind == "CronJob" and .metadata.name == "clamav-db-updater")
         '
@@ -1699,6 +1753,7 @@ if [[ "$mode" == apply ]]; then
   reconcile_local_mutable_configmaps
   apply_render foundation '
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
+      .kind != "CronJob" and
       .kind != "Secret" and .kind != "CustomResourceDefinition")
   '
   cleanup_local_frontend_transport
