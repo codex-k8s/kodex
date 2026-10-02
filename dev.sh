@@ -762,11 +762,6 @@ material_action=$("$repository_root/tools/dev/reconcile-local-material.sh" --con
   --state-directory "$state_directory" --mode reconcile)
 printf 'Kodex local material action: %s\n' "$material_action"
 
-kubectl create namespace kodex-system --dry-run=client -o yaml |
-  kubectl apply --server-side --field-manager=kodex-local-dev -f - >/dev/null
-kubectl label namespace kodex-system app.kubernetes.io/part-of=kodex \
-  kodex.dev/environment=staging kodex.dev/local-profile=hot-reload --overwrite >/dev/null
-
 if [[ ! -d "$material_directory" ]]; then
   draft_recovery_directory="$state_directory/draft-key-recovery"
   [[ ! -L "$draft_recovery_directory" ]] || fail 'draft recovery directory is invalid'
@@ -791,6 +786,11 @@ if [[ ! -d "$material_directory" ]]; then
   "$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
     --state-directory "$state_directory" --mode checkpoint >/dev/null
 fi
+
+kubectl create namespace kodex-system --dry-run=client -o yaml |
+  kubectl apply --server-side --field-manager=kodex-local-dev -f - >/dev/null
+kubectl label namespace kodex-system app.kubernetes.io/part-of=kodex \
+  kodex.dev/environment=staging kodex.dev/local-profile=hot-reload --overwrite >/dev/null
 
 if [[ ! -d "$material_directory/identity" ]]; then
   for input in admin-username admin-password owner-username owner-email owner-password; do
