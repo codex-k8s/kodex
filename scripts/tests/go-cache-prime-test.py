@@ -174,6 +174,11 @@ class CachePrime(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('FOREIGN_REPOSITORY', result.stderr)
 
+    def test_canonical_https_origin_without_suffix_allowed(self):
+        self.git('remote', 'set-url', 'origin', 'https://github.com/codex-k8s/kodex')
+        result, _ = self.run_cli(phase='plan')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_paths_and_profile_rejected(self):
         alias = self.directory / 'alias'
         alias.symlink_to(self.source)
