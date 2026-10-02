@@ -7,15 +7,17 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --source-root <path> --state-directory <path>\n' "$0" >&2
+  printf 'Usage: %s --source-root <path> --state-directory <path> --context <context>\n' "$0" >&2
 }
 
 source_root=""
 state_directory=""
+context=""
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
+    --context) context=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -24,12 +26,11 @@ done
 [[ "$source_root" == /* && -f "$source_root/services/jobs/agent-runner/Dockerfile" ]] ||
   fail 'source root is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / ]] || fail 'state directory is invalid'
-for command_name in docker jq k3s sha256sum sudo tar python3 git; do
+[[ -n "$context" ]] || fail 'exact context is required'
+for command_name in docker jq sha256sum tar python3 git; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
-[[ -S /run/k3s/containerd/containerd.sock ]] || fail 'local k3s containerd socket is absent'
-sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for local k3s image import'
 
 builder=kodex-local-dev
 verifier="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../release" && pwd)/runner-binary-provenance.py"
@@ -74,10 +75,8 @@ python3 -B "$verifier" "$provenance_phase" --source-root "$source_root" \
   --revision "$revision" --archive "$archive" --expected-manifest "$manifest_digest" \
   --expected-input-digest "$input_digest" --repository "$repository" --output "$provenance"
 
-sudo -n k3s ctr -n k8s.io images import \
-  --base-name "$repository" "$archive" >/dev/null
-sudo -n k3s ctr -n k8s.io images tag --force \
-  "$tag" "$exact_reference" >/dev/null
+"$source_root/tools/dev/import-local-image.sh" --context "$context" --archive "$archive" \
+  --repository "$repository" --tag "$tag" --exact-reference "$exact_reference" >/dev/null
 
 printf '%s\n' "$exact_reference" >"$state_directory/agent-runner-image"
 chmod 0600 "$state_directory/agent-runner-image"

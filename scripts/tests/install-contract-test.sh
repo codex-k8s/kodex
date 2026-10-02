@@ -67,8 +67,10 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
   tools/install/verify-oidc-target.sh tools/install/write-env-file.sh \
   tools/dev/configure-k3d-edge.sh tools/dev/install-tsh-client.sh \
+  tools/dev/configure-k3d-node-registry.sh \
   tools/dev/install-user-material-tools.sh \
   tools/dev/install-user-nss-tools.sh tools/dev/install-user-render-tools.sh \
+  tools/dev/import-local-image.sh \
   tools/dev/prepare-k3d-hot-reload-cluster.sh tools/dev/preflight-public-hosts.sh \
   tools/dev/remote-dev.sh \
   infra/teleport/bootstrap.sh infra/teleport/bootstrap-host.sh; do

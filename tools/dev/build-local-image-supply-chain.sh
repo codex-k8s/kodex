@@ -33,18 +33,17 @@ done
   fail 'source root is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'state directory is invalid'
-for command_name in docker git jq k3s sha256sum sudo tar; do
+[[ -n "$context" && "$(kubectl config current-context)" == "$context" ]] ||
+  fail 'exact staging context is required'
+for command_name in docker git jq kubectl sha256sum tar; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
-sudo -n k3s ctr version >/dev/null 2>&1 || fail 'local k3s containerd is unavailable'
-sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for local k3s image import'
 
 if [[ "$component" == authority-security ]]; then
-  [[ -n "$context" && "${context,,}" != *prod* &&
-    "$(sudo -n k3s kubectl --context "$context" config current-context)" == "$context" ]] ||
+  [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
     fail 'exact staging context is required'
-  sudo -n k3s kubectl --context "$context" get namespace kodex-system -o json | jq -e '
+  kubectl --context "$context" get namespace kodex-system -o json | jq -e '
     .metadata.labels."app.kubernetes.io/part-of" == "kodex" and
     .metadata.labels."kodex.dev/environment" == "staging"' >/dev/null || fail 'staging namespace is required'
   [[ "$state_directory" != "$source_root" && "$state_directory" != "$source_root/"* && ! -L "$state_directory" ]] ||
@@ -91,10 +90,8 @@ import_oci() {
   [[ "$manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]] ||
     fail "OCI manifest digest is invalid: $repository"
   exact_reference="$repository@$manifest_digest"
-  sudo -n k3s ctr -n k8s.io images import \
-    --base-name "$repository" "$archive" >/dev/null
-  sudo -n k3s ctr -n k8s.io images tag --force \
-    "$tag" "$exact_reference" >/dev/null
+  "$source_root/tools/dev/import-local-image.sh" --context "$context" --archive "$archive" \
+    --repository "$repository" --tag "$tag" --exact-reference "$exact_reference" >/dev/null
   printf '%s' "$exact_reference"
 }
 
@@ -128,18 +125,13 @@ if [[ "$component" == authority-security ]]; then
   build_target image-admission tools/dev/Dockerfile.local-image-supply-chain \
     image-admission registry.local.kodex/kodex/image-admission \
     --build-arg "SOURCE_SHA=$source_revision"
-  for name in internal-rpc-authority image-admission; do
-    reference=$(<"$state_directory/$name-image")
-    sudo -n k3s ctr -n k8s.io images list --quiet | grep -Fx "$reference" >/dev/null ||
-      fail 'imported immutable image reference is absent'
-    sudo -n k3s ctr -n k8s.io content get "${reference#*@}" | sha256sum |
-      awk -v expected="${reference#*@sha256:}" '$1 == expected { found=1 } END { exit !found }' ||
-      fail 'imported image manifest digest mismatch'
-  done
+  image_store_profile=single-host-k3s-image-store
+  [[ "$context" != k3d-* ]] || image_store_profile=multi-node-k3d-image-store
   jq -n --arg revision "$source_revision" \
     --arg authority "$(<"$state_directory/internal-rpc-authority-image")" \
     --arg admission "$(<"$state_directory/image-admission-image")" \
-    '{version:1,profile:"single-host-k3s-image-store",revision:$revision,authorityImage:$authority,imageAdmissionImage:$admission,digestReadback:true}' \
+    --arg profile "$image_store_profile" \
+    '{version:1,profile:$profile,revision:$revision,authorityImage:$authority,imageAdmissionImage:$admission,digestReadback:true}' \
     >"$state_directory/authority-security-images.json"
   chmod 0600 "$state_directory/authority-security-images.json"
   printf 'Authority security images imported with exact digest readback for source %s\n' "$source_revision"

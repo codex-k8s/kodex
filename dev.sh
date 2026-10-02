@@ -640,9 +640,9 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     e2e_start_fingerprint=$(jq -r '.currentContentSHA256' "$source_evidence")
     if [[ -z "$component_manifest" ]]; then
       "$repository_root/tools/dev/build-local-session-archive.sh" \
-        --source-root "$repository_root" --state-directory "$state_directory"
+        --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
       "$repository_root/tools/dev/build-local-stt.sh" \
-        --source-root "$repository_root" --state-directory "$state_directory"
+        --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
     fi
   fi
   if [[ -z "$component_manifest" ]]; then
@@ -868,22 +868,22 @@ fi
   --promoted-pull-host "$promoted_pull_host"
 
 "$repository_root/tools/dev/build-local-runner.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 runner_image=$(<"$state_directory/agent-runner-image")
 "$repository_root/tools/dev/build-local-session-archive.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 session_archive_image=$(<"$state_directory/session-archive-image")
 "$repository_root/tools/dev/build-local-stt.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 stt_hot_reload_image=$(<"$state_directory/stt-hot-reload-image")
 "$repository_root/tools/dev/build-local-integration.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 integration_hot_reload_image=$(<"$state_directory/integration-hot-reload-image")
 "$repository_root/tools/dev/build-local-backup-controller.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 backup_controller_image=$(<"$state_directory/backup-controller-image")
 "$repository_root/tools/dev/build-local-image-supply-chain.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 role_image_builder_image=$(<"$state_directory/role-image-builder-image")
 image_admission_image=$(<"$state_directory/image-admission-image")
 image_admission_tools_image=$(<"$state_directory/image-admission-tools-image")
