@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --cluster <name> --context <k3d-context> --mode apply|readback" \
     '  --source-root <absolute-repository-path> --state-directory <absolute-path>' \
-    '  [--host-ip <127.x.x.x>] [--replace-empty]' >&2
+    '  [--host-ip <127.x.x.x>] [--replace-empty|--replace-owned]' >&2
 }
 
 cluster=""
@@ -20,6 +20,7 @@ source_root=""
 state_directory=""
 host_ip=127.0.0.2
 replace_empty=false
+replace_owned=false
 while (($# > 0)); do
   case "$1" in
     --cluster) cluster=${2:-}; shift 2 ;;
@@ -29,10 +30,13 @@ while (($# > 0)); do
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --host-ip) host_ip=${2:-}; shift 2 ;;
     --replace-empty) replace_empty=true; shift ;;
+    --replace-owned) replace_owned=true; shift ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+[[ "$replace_empty" != true || "$replace_owned" != true ]] ||
+  fail 'cluster replacement modes are mutually exclusive'
 
 [[ "$cluster" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || fail 'cluster is invalid'
 [[ "$context" == "k3d-$cluster" ]] || fail 'context and cluster do not match'
@@ -65,25 +69,52 @@ node_mounts_match() {
     ' >/dev/null
 }
 
-cluster_matches=false
+cluster_source_matches=false
 if [[ "$cluster_count" == 1 ]] &&
   node_mounts_match "k3d-$cluster-server-0" &&
   node_mounts_match "k3d-$cluster-agent-0"; then
+  cluster_source_matches=true
+fi
+
+api_binding_matches() {
+  docker inspect "k3d-$cluster-serverlb" --format '{{json .HostConfig.PortBindings}}' | jq -e \
+    --arg host_ip "$host_ip" '
+      any(.["6443/tcp"][]?; .HostIp == $host_ip and .HostPort == "6443")
+    ' >/dev/null
+}
+
+cluster_matches=false
+if [[ "$cluster_source_matches" == true ]] &&
+  api_binding_matches; then
   cluster_matches=true
 fi
 
 if [[ "$mode" == apply && "$cluster_matches" == false ]]; then
-  [[ "$replace_empty" == true ]] || fail 'cluster replacement requires --replace-empty'
+  [[ "$replace_empty" == true || "$replace_owned" == true ]] ||
+    fail 'cluster replacement requires an explicit replacement mode'
   if [[ "$cluster_count" == 1 ]]; then
     [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
     kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
-    kubectl get namespace -o json | jq -e '
-      [.items[].metadata.name |
-        select(. != "default" and . != "kube-node-lease" and
-          . != "kube-public" and . != "kube-system")] | length == 0
-    ' >/dev/null || fail 'cluster contains non-system namespaces'
-    kubectl get persistentvolume -o json | jq -e '.items | length == 0' >/dev/null ||
-      fail 'cluster contains persistent volumes'
+    if [[ "$replace_owned" == true ]]; then
+      [[ "$cluster_source_matches" == true ]] || fail 'owned cluster source mounts mismatch'
+      kubectl get namespace -o json | jq -e '
+        all(.items[].metadata.name;
+          . == "default" or . == "kube-node-lease" or . == "kube-public" or
+          . == "kube-system" or . == "cert-manager" or . == "identity" or
+          . == "kodex-runtime" or . == "kodex-secret-drafts" or
+          . == "kodex-system" or . == "kodex-trust" or . == "observability")
+      ' >/dev/null || fail 'owned cluster contains an unexpected namespace'
+      kubectl -n default get deployment,statefulset,daemonset,job,cronjob -o json | jq -e \
+        '.items | length == 0' >/dev/null || fail 'default namespace contains workloads'
+    else
+      kubectl get namespace -o json | jq -e '
+        [.items[].metadata.name |
+          select(. != "default" and . != "kube-node-lease" and
+            . != "kube-public" and . != "kube-system")] | length == 0
+      ' >/dev/null || fail 'cluster contains non-system namespaces'
+      kubectl get persistentvolume -o json | jq -e '.items | length == 0' >/dev/null ||
+        fail 'cluster contains persistent volumes'
+    fi
     k3s_image=$(docker inspect "k3d-$cluster-server-0" --format '{{.Config.Image}}')
     [[ "$k3s_image" =~ ^(docker\.io/)?rancher/k3s:v[0-9]+\.[0-9]+\.[0-9]+-k3s[0-9]+$ ]] ||
       fail 'existing k3s image is not exact'
@@ -93,6 +124,7 @@ if [[ "$mode" == apply && "$cluster_matches" == false ]]; then
   fi
   k3d cluster create "$cluster" \
     --servers 1 --agents 1 --image "$k3s_image" \
+    --api-port "$host_ip:6443" \
     --port "$host_ip:80:80@loadbalancer" \
     --port "$host_ip:443:443@loadbalancer" \
     --volume "$source_root:$source_root:ro@all" \
@@ -105,6 +137,7 @@ fi
 kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable after preparation'
 node_mounts_match "k3d-$cluster-server-0" || fail 'server mount contract mismatch'
 node_mounts_match "k3d-$cluster-agent-0" || fail 'agent mount contract mismatch'
+api_binding_matches || fail 'Kubernetes API loopback binding contract mismatch'
 "$(dirname -- "$0")/configure-k3d-edge.sh" --context "$context" --cluster "$cluster" \
   --mode "$mode" --host-ip "$host_ip" >/dev/null
 

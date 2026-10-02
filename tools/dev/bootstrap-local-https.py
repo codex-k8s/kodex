@@ -3,6 +3,7 @@
 
 import argparse
 import base64
+import ipaddress
 import json
 import pathlib
 import subprocess
@@ -30,7 +31,12 @@ def main():
     kube = ('kubectl', '--kubeconfig', args.kubeconfig, '--context', args.context)
     config = json.loads(run(*kube, 'config', 'view', '--minify', '-o', 'json'))
     server = urlsplit(config['clusters'][0]['cluster']['server'])
-    require(server.scheme == 'https' and server.hostname == '127.0.0.1',
+    try:
+        api_address = ipaddress.ip_address(server.hostname or '')
+    except ValueError:
+        api_address = None
+    require(server.scheme == 'https' and api_address is not None and
+            api_address.version == 4 and api_address.is_loopback,
             'Only the explicit loopback Kubernetes API is supported')
     for namespace in ('kodex-system', 'identity'):
         obj = json.loads(run(*kube, 'get', 'namespace', namespace, '-o', 'json'))

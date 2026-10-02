@@ -1334,6 +1334,7 @@ readback_local_image_supply_chain() {
 if [[ "$security_profile" == trusted-cluster ]]; then
   python3 - "$render" "$script_directory" "$context" <<'PY'
 import json
+import ipaddress
 import os
 from pathlib import Path
 import subprocess
@@ -1346,7 +1347,12 @@ import trusted_cluster_render
 config = json.loads(subprocess.check_output(['kubectl', '--context', sys.argv[3],
                                             'config', 'view', '--minify', '-o', 'json']))
 server = urlsplit(config['clusters'][0]['cluster']['server'])
-if server.scheme != 'https' or server.hostname != '127.0.0.1':
+try:
+    api_address = ipaddress.ip_address(server.hostname or '')
+except ValueError:
+    api_address = None
+if (server.scheme != 'https' or api_address is None or
+        api_address.version != 4 or not api_address.is_loopback):
     raise SystemExit('Local trusted deployment requires loopback Kubernetes API')
 resources = [obj for obj in yaml.safe_load_all(open(sys.argv[1])) if obj]
 trusted_cluster_render.verify(resources, 'trusted-cluster')
