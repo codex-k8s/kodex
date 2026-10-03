@@ -379,8 +379,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, err
 	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
-		scope.organizationID, payload.Limit, repository.roleImages.DefaultImageReference,
-		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractRevision,
+		scope.organizationID, payload.Limit, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
 	if err != nil {
 		return commandOutcome{}, fmt.Errorf("select claimable executions: %v: %w", err, errs.ErrUnavailable)

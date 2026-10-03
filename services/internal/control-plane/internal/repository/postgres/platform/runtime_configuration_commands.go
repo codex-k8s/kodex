@@ -103,12 +103,6 @@ func (repository *Repository) ensureBootstrapRuntimeEnvironmentImage(
 	organizationID, agentID, projectID, createdBy string,
 ) (string, entity.RuntimeEnvironmentImage, []byte, error) {
 	emptyTools, _ := json.Marshal([]entity.RuntimeEnvironmentTool{})
-	if projectID == "" {
-		return "", entity.RuntimeEnvironmentImage{
-			Reference: repository.roleImages.DefaultImageReference,
-			Digest:    repository.roleImages.DefaultImageDigest,
-		}, emptyTools, nil
-	}
 	image, err := scanBootstrapRuntimeEnvironmentImage(tx.QueryRow(ctx,
 		queryRuntimeConfigurationResolveBootstrapImage, pgx.StrictNamedArgs{
 			"organization_id": organizationID, "project_id": projectID,
@@ -705,16 +699,6 @@ func (repository *Repository) resolveRuntimeEnvironmentImage(
 	organizationID, projectID, artifactRef string,
 	tools []entity.RuntimeEnvironmentTool,
 ) (string, entity.RuntimeEnvironmentImage, []entity.RuntimeEnvironmentTool, []byte, error) {
-	if projectID == "" {
-		if artifactRef != "" || len(tools) != 0 {
-			return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
-		}
-		emptyTools, _ := json.Marshal([]entity.RuntimeEnvironmentTool{})
-		return "", entity.RuntimeEnvironmentImage{
-			Reference: repository.roleImages.DefaultImageReference,
-			Digest:    repository.roleImages.DefaultImageDigest,
-		}, []entity.RuntimeEnvironmentTool{}, emptyTools, nil
-	}
 	if !strings.HasPrefix(artifactRef, "imgart_") || len(artifactRef) > 96 || len(tools) > 128 {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
 	}
@@ -880,9 +864,6 @@ func (repository *Repository) resolveEnvironmentPayload(
 	bindings []entity.RuntimeSecretBinding,
 ) ([]byte, []byte, []runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection, error) {
 	if len(bindings) > 128 {
-		return nil, nil, nil, nil, errs.ErrInvalid
-	}
-	if projectID == "" && len(bindings) != 0 {
 		return nil, nil, nil, nil, errs.ErrInvalid
 	}
 	seen := make(map[string]struct{}, len(bindings))

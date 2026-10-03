@@ -545,14 +545,10 @@ SELECT n.id::text,
        COALESCE(role_image.artifact_id::text, ''),
        COALESCE(role_image.artifact_ref, ''),
        COALESCE(role_image.recipe_generation, 0),
-       CASE WHEN a.system_key = 'system-assistant' THEN $3
-            ELSE COALESCE(role_image.promoted_reference, '') END,
-       CASE WHEN a.system_key = 'system-assistant' THEN $4
-            ELSE COALESCE(role_image.manifest_digest, '') END,
-       CASE WHEN a.system_key = 'system-assistant' THEN $5
-            ELSE COALESCE(role_image.role_runtime_contract_revision, 0) END,
-       CASE WHEN a.system_key = 'system-assistant' THEN $6
-            ELSE COALESCE(role_image.role_runtime_contract_sha256, '') END,
+       COALESCE(role_image.promoted_reference, ''),
+       COALESCE(role_image.manifest_digest, ''),
+       COALESCE(role_image.role_runtime_contract_revision, 0),
+       COALESCE(role_image.role_runtime_contract_sha256, ''),
        runtime_config.id::text,
        runtime_config.ref,
        runtime_config.version_number,
@@ -693,13 +689,16 @@ LEFT JOIN LATERAL (
     JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
     WHERE artifact.id = runtime_environment.role_image_artifact_id
       AND artifact.organization_id = r.organization_id
-      AND recipe.project_id = r.project_id
+      AND recipe.organization_id = a.organization_id
+      AND recipe.project_id IS NOT DISTINCT FROM a.project_id
+      AND artifact.project_id IS NOT DISTINCT FROM a.project_id
+      AND environment_set.project_id IS NOT DISTINCT FROM a.project_id
       AND recipe.state = 'ACTIVE'
       AND artifact.admission_state = 'ACCEPTED'
       AND artifact.promotion_state = 'PROMOTED'
       AND artifact.promoted_reference <> ''
-      AND artifact.role_runtime_contract_revision = $5
-      AND artifact.role_runtime_contract_sha256 = $6
+      AND artifact.role_runtime_contract_revision = $3
+      AND artifact.role_runtime_contract_sha256 = $4
     LIMIT 1
 ) role_image ON true
 WHERE n.organization_id = $1::uuid
@@ -708,11 +707,8 @@ WHERE n.organization_id = $1::uuid
   AND r.state IN ('RUNNING', 'QUEUED')
   AND root.state IN ('RUNNING', 'QUEUED')
   AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
-  AND (
-      (a.system_key = 'system-assistant' AND runtime_environment.role_image_artifact_id IS NULL)
-      OR
-      (a.system_key IS NULL AND runtime_environment.role_image_artifact_id IS NOT NULL AND role_image.artifact_id IS NOT NULL)
-  )
+  AND runtime_environment.role_image_artifact_id IS NOT NULL
+  AND role_image.artifact_id IS NOT NULL
   AND (
       input_attachment_set.id IS NULL
       OR input_attachment_set.item_count = (

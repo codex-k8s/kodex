@@ -381,6 +381,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("system assistant runtime image creates an immutable environment revision", func(t *testing.T) {
 		testSystemAssistantRuntimeEnvironmentReconciliation(t, ctx, repository, pool)
 	})
+	t.Run("organization runtime images reject cross scope and retain custom configuration", func(t *testing.T) {
+		testOrganizationRuntimeImageScope(t, ctx, repository, pool)
+	})
 	t.Run("system assistant warm runtime fails over through provider policy", func(t *testing.T) {
 		testSystemAssistantWarmRuntimeProviderFailover(t, ctx, repository, pool)
 	})
@@ -1819,7 +1822,20 @@ func testSystemAssistantRuntimeEnvironmentReconciliation(t *testing.T, ctx conte
 		}
 	}
 	reconcile()
-	image := entity.RuntimeEnvironmentImage{Reference: config.DefaultImageReference, Digest: "sha256:" + strings.Repeat("e", 64)}
+	var image entity.RuntimeEnvironmentImage
+	if err := pool.QueryRow(ctx, `
+		SELECT artifact.ref, recipe.ref, artifact.recipe_generation,
+		       artifact.promoted_reference, artifact.manifest_digest
+		FROM control_plane.assistant_runtime runtime
+		JOIN control_plane.agent_runtime_environment_bindings binding ON binding.agent_id = runtime.agent_id
+		JOIN control_plane.runtime_environment_sets environment ON environment.id = binding.environment_set_id
+		JOIN control_plane.runtime_environment_versions version ON version.id = environment.current_version_id
+		JOIN control_plane.image_artifacts artifact ON artifact.id = version.role_image_artifact_id
+		JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
+		WHERE runtime.stable_key = 'system-assistant'
+	`).Scan(&image.ArtifactRef, &image.RecipeRef, &image.RecipeGeneration, &image.Reference, &image.Digest); err != nil {
+		t.Fatalf("read exact system runtime image: %v", err)
+	}
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
 	expectedCoreDigest, expectedDigest, err := runtimeEnvironmentConfigurationDigests(nil, nil, image, nil, policy)
 	if err != nil {

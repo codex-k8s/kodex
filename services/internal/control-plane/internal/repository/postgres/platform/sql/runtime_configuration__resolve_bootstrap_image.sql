@@ -13,10 +13,14 @@ JOIN control_plane.image_artifacts artifact
 JOIN control_plane.role_image_recipes recipe
   ON recipe.id = artifact.recipe_id
 WHERE environment.organization_id = @organization_id::uuid
-  AND environment.project_id = @project_id::uuid
+  AND environment.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
   AND environment.name = 'i18n:DEFAULT_RUNTIME_ENVIRONMENT'
   AND environment.state = 'ACTIVE'
-  AND recipe.project_id = environment.project_id
+  AND recipe.project_id IS NOT DISTINCT FROM environment.project_id
+  AND artifact.project_id IS NOT DISTINCT FROM environment.project_id
+  AND recipe.organization_id = environment.organization_id
+  AND artifact.organization_id = environment.organization_id
+  AND version.organization_id = environment.organization_id
   AND recipe.state = 'ACTIVE'
   AND artifact.admission_state = 'ACCEPTED'
   AND artifact.promotion_state = 'PROMOTED'

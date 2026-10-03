@@ -12,7 +12,7 @@ JOIN control_plane.runtime_secret_revisions revision
   ON revision.secret_id = secret.id
  AND revision.revision = CASE WHEN @revision::bigint=0 THEN secret.current_revision ELSE @revision::bigint END
 WHERE secret.organization_id = @organization_id::uuid
-  AND secret.project_id = @project_id::uuid
+  AND secret.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
   AND secret.ref = @secret_ref
   AND secret.state = 'ACTIVE'
   AND revision.state='ACTIVE'

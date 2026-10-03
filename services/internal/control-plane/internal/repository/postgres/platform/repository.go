@@ -595,18 +595,24 @@ func (repository *Repository) reconcileSystemAssistantCorePrompt(
 }
 
 func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx context.Context, tx pgx.Tx) error {
-	var organizationID, agentID, environmentID, currentVersionID, currentCoreDigest, currentDigest string
+	var organizationID, agentID, environmentID, currentVersionID, createdBy, imageArtifactID, currentCoreDigest, currentDigest string
+	var platformBootstrapImage bool
 	var currentVersion int64
 	var rawValues, rawSecrets, rawTools []byte
 	var rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
 	var resourcesDigest, volumesDigest, networkDigest, rbacDigest string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectAssistantRuntimeEnvironment).Scan(
-		&organizationID, &agentID, &environmentID, &currentVersionID, &currentVersion,
+		&organizationID, &agentID, &environmentID, &currentVersionID, &createdBy, &imageArtifactID, &platformBootstrapImage, &currentVersion,
 		&rawValues, &rawSecrets, &rawTools, &currentCoreDigest, &currentDigest,
 		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&resourcesDigest, &volumesDigest, &networkDigest, &rbacDigest,
 	); err != nil {
 		return errors.New("read system assistant runtime environment")
+	}
+	// Опубликованный exact artifact является пользовательской конфигурацией.
+	// Bootstrap не перепривязывает и не переписывает такую immutable версию.
+	if imageArtifactID != "" && !platformBootstrapImage {
+		return nil
 	}
 	var values []runtimecontract.RuntimeEnvironmentValue
 	var secrets []runtimecontract.RuntimeSecretProjection
@@ -622,15 +628,18 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 	if err != nil || policy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
 		return errors.New("verify system assistant runtime policy")
 	}
-	image := entity.RuntimeEnvironmentImage{
-		Reference: repository.roleImages.DefaultImageReference,
-		Digest:    repository.roleImages.DefaultImageDigest,
+	imageArtifactID, image, _, err := repository.ensureBootstrapRuntimeEnvironmentImage(
+		ctx, tx, organizationID, agentID, "", createdBy,
+	)
+	if err != nil || imageArtifactID == "" {
+		return errors.New("materialize system assistant runtime image")
 	}
 	expectedCoreDigest, expectedDigest, err := runtimeEnvironmentConfigurationDigests(values, secrets, image, tools, policy)
 	if err != nil {
 		return errors.New("compute system assistant runtime environment digest")
 	}
-	if currentCoreDigest == expectedCoreDigest && currentDigest == expectedDigest {
+	if imageArtifactID != "" && image.ArtifactRef != "" &&
+		currentCoreDigest == expectedCoreDigest && currentDigest == expectedDigest {
 		return nil
 	}
 	versionRef, err := newRef("renvv")
@@ -643,6 +652,7 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 		"organization_id": organizationID, "agent_id": agentID, "environment_id": environmentID,
 		"current_version_id": currentVersionID, "current_version": currentVersion, "version_ref": versionRef,
 		"expected_core_digest": expectedCoreDigest, "expected_digest": expectedDigest,
+		"image_artifact_id":     imageArtifactID,
 		"next_runtime_revision": nextRuntimeRevision,
 	}).Scan(&activatedVersionID); err != nil || activatedVersionID == "" {
 		return errors.New("activate system assistant runtime environment revision")
