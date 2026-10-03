@@ -421,7 +421,9 @@ readback_confidential_client() {
   jq -e --arg origin "$origin" --arg redirect "$redirect" '
     .enabled == true and .publicClient == false and .standardFlowEnabled == true and
     .implicitFlowEnabled == false and .directAccessGrantsEnabled == false and
-    .serviceAccountsEnabled == false and .redirectUris == [$redirect] and .webOrigins == [$origin]
+    .serviceAccountsEnabled == false and .redirectUris == [$redirect] and .webOrigins == [$origin] and
+    .attributes."pkce.code.challenge.method" == "S256" and
+    .attributes."post.logout.redirect.uris" == ($origin + "/*")
   ' <<<"$client_json" >/dev/null || fail "management OIDC client readback failed: $client_id"
   mapper_json=$(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm")
   audience_config=$(jq -cn --arg audience "$client_id" '{

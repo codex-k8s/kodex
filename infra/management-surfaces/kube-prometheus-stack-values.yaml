@@ -41,6 +41,7 @@ grafana:
     auth:
       disable_login_form: true
       disable_signout_menu: false
+      signout_redirect_url: __KODEX_GRAFANA_SIGNOUT_REDIRECT_URL__
     auth.proxy:
       enabled: true
       header_name: X-Auth-Request-User

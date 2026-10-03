@@ -112,7 +112,9 @@ yq -e '
   .grafana."grafana.ini".analytics.check_for_plugin_updates == false and
   .grafana."grafana.ini".analytics.feedback_links_enabled == false and
   .grafana."grafana.ini".security.disable_gravatar == true and
-  .grafana."grafana.ini".news.news_feed_enabled == false
+  .grafana."grafana.ini".news.news_feed_enabled == false and
+  .grafana."grafana.ini".auth.signout_redirect_url ==
+    "__KODEX_GRAFANA_SIGNOUT_REDIRECT_URL__"
 ' "$monitoring_values" >/dev/null || fail 'Grafana external telemetry and content are not disabled'
 
 headlamp_chart=$(download_chart headlamp)
@@ -123,14 +125,22 @@ monitoring_render="$temporary_directory/monitoring.yaml"
 rendered_monitoring_values="$temporary_directory/monitoring-values.yaml"
 helm template kodex-headlamp "$headlamp_chart" --namespace platform-admin \
   --values "$headlamp_values" >"$headlamp_render"
-GRAFANA_ORIGIN=https://grafana.example.test yq '
-  (.. | select(tag == "!!str")) |=
-    sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN))
+grafana_signout_redirect='https://grafana.example.test/oauth2/sign_out?rd=https%3A%2F%2Fsso.example.test%2Frealms%2Fkodex%2Fprotocol%2Fopenid-connect%2Flogout%3Fid_token_hint%3D%7Bid_token%7D%26post_logout_redirect_uri%3Dhttps%253A%252F%252Fgrafana.example.test%252F'
+GRAFANA_ORIGIN=https://grafana.example.test \
+GRAFANA_SIGNOUT_REDIRECT_URL="$grafana_signout_redirect" yq '
+  (.. | select(tag == "!!str")) |= (
+    sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN)) |
+    sub("__KODEX_GRAFANA_SIGNOUT_REDIRECT_URL__"; strenv(GRAFANA_SIGNOUT_REDIRECT_URL))
+  )
 ' "$monitoring_values" >"$rendered_monitoring_values"
 helm template kodex-monitoring "$monitoring_chart" --namespace observability \
   --values "$rendered_monitoring_values" >"$monitoring_render"
 validate_headlamp_render "$headlamp_render" || fail 'Headlamp exact binding render is invalid'
 validate_grafana_render "$monitoring_render" || fail 'Grafana exact StatefulSet render is invalid'
+GRAFANA_SIGNOUT_REDIRECT_URL="$grafana_signout_redirect" yq -e '
+  .grafana."grafana.ini".auth.signout_redirect_url ==
+    strenv(GRAFANA_SIGNOUT_REDIRECT_URL)
+' "$rendered_monitoring_values" >/dev/null || fail 'Grafana logout chain render is invalid'
 
 mkdir -p "$temporary_directory/bin"
 cat >"$temporary_directory/bin/go" <<'EOF'
@@ -157,6 +167,8 @@ if [[ "${1:-}" == template ]]; then
       ([.extraArgs[] | select(test("^--allowed-group="))] | sort | join("|")) ==
         "--allowed-group=kodex-admins|--allowed-group=kodex-developers|--allowed-group=kodex-monitoring|--allowed-group=kodex-owners" and
       ([.extraArgs[] | select(. == "--oidc-groups-claim=groups")] | length) == 1 and
+      ([.extraArgs[] | select(. == "--whitelist-domain=grafana.example.test")] | length) == 1 and
+      ([.extraArgs[] | select(. == "--whitelist-domain=sso.example.test")] | length) == 1 and
       ([.extraArgs[] | select(test("^--allowed-role="))] | length) == 0
     ' "$values" >/dev/null
   fi
@@ -220,7 +232,7 @@ if [[ "$arguments" == *' get deployment oauth2-'*' -o json '* ]]; then
   role=kodex-owner
   [[ "$arguments" != *' get deployment oauth2-headlamp '* ]] || role=admin
   if [[ "$arguments" == *' get deployment oauth2-grafana '* ]]; then
-    printf '%s\n' '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--oidc-groups-claim=groups","--allowed-group=kodex-admins","--allowed-group=kodex-owners","--allowed-group=kodex-monitoring","--allowed-group=kodex-developers"]}]}}}}'
+    printf '%s\n' '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--whitelist-domain=grafana.example.test","--whitelist-domain=sso.example.test","--oidc-groups-claim=groups","--allowed-group=kodex-admins","--allowed-group=kodex-owners","--allowed-group=kodex-monitoring","--allowed-group=kodex-developers"]}]}}}}'
   else
     printf '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--allowed-role=%s"]}]}}}}\n' "$role"
   fi

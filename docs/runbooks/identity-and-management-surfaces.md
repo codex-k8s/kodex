@@ -4,7 +4,7 @@ title: Identity и административные интерфейсы
 type: runbook
 status: approved
 owner: sre
-version: 2.0.6
+version: 2.0.7
 updated: 2026-10-03
 ---
 
@@ -65,6 +65,10 @@ OIDC client secrets, cookie secrets и Grafana admin password генерирую
   одной из четырёх утверждённых групп;
 - Grafana не загружает внешнюю новостную ленту и Gravatar, не отправляет
   usage reporting и не обращается наружу за обновлениями Grafana и plugins;
+- выход из Grafana последовательно закрывает Grafana session, точную cookie
+  `oauth2-grafana` и Keycloak SSO session через RP-initiated logout; внешний
+  redirect разрешён только на точный host OIDC issuer, а возврат — только на
+  зарегистрированный Grafana origin;
 - OAuth2 Proxy разрешает публичное имя issuer во внутренний ClusterIP
   `identity/sso`, проверяет исходный TLS/SNI и имеет egress только к pod
   Keycloak на объявленный target port; корректность входа не зависит от

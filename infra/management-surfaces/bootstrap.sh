@@ -230,8 +230,16 @@ kubectl apply --dry-run=client --validate=false -f "$routes" >/dev/null
 
 render_monitoring_values="$temporary_directory/monitoring-values.yaml"
 if [[ "$include_grafana" == true ]]; then
-  GRAFANA_ORIGIN="https://$grafana_host" yq '
-    (.. | select(tag == "!!str")) |= sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN))
+  grafana_post_logout_redirect=$(jq -rn --arg url "https://$grafana_host/" '$url | @uri')
+  grafana_provider_logout="$oidc_issuer/protocol/openid-connect/logout?id_token_hint={id_token}&post_logout_redirect_uri=$grafana_post_logout_redirect"
+  grafana_provider_logout_redirect=$(jq -rn --arg url "$grafana_provider_logout" '$url | @uri')
+  grafana_signout_redirect="https://$grafana_host/oauth2/sign_out?rd=$grafana_provider_logout_redirect"
+  GRAFANA_ORIGIN="https://$grafana_host" \
+  GRAFANA_SIGNOUT_REDIRECT_URL="$grafana_signout_redirect" yq '
+    (.. | select(tag == "!!str")) |= (
+      sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN)) |
+      sub("__KODEX_GRAFANA_SIGNOUT_REDIRECT_URL__"; strenv(GRAFANA_SIGNOUT_REDIRECT_URL))
+    )
   ' "$script_directory/kube-prometheus-stack-values.yaml" >"$render_monitoring_values"
 fi
 
@@ -286,10 +294,11 @@ render_oauth_values() {
     ' "$output"
   fi
   if [[ "$surface" == grafana ]]; then
-    yq -i '
+    OIDC_HOST="$oidc_host" yq -i '
       .extraArgs = ([.extraArgs | to_entries[] |
         select(.key != "allowed-role") |
         "--" + .key + "=" + (.value | tostring)] + [
+          "--whitelist-domain=" + strenv(OIDC_HOST),
           "--oidc-groups-claim=groups",
           "--allowed-group=kodex-admins",
           "--allowed-group=kodex-owners",
@@ -409,13 +418,17 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
     kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout=3m >/dev/null || fail "OAuth2 Proxy rollout failed: $deployment"
     if [[ "$deployment" == oauth2-grafana ]]; then
       kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e \
-        --arg oidc_host "$oidc_host" --arg oidc_ip "$oidc_connect_ip" '
+        --arg oidc_host "$oidc_host" --arg oidc_ip "$oidc_connect_ip" \
+        --arg issuer_whitelist "--whitelist-domain=$oidc_host" \
+        --arg surface_whitelist "--whitelist-domain=$grafana_host" '
         ["--allowed-group=kodex-admins", "--allowed-group=kodex-owners",
           "--allowed-group=kodex-monitoring", "--allowed-group=kodex-developers"] as $groups |
         any(.spec.template.spec.containers[];
           . as $container |
           .name == "oauth2-proxy" and
           (.args | index("--oidc-groups-claim=groups")) != null and
+          (.args | index($issuer_whitelist)) != null and
+          (.args | index($surface_whitelist)) != null and
           all($groups[]; . as $group | ($container.args | index($group)) != null) and
           all($container.args[]; startswith("--allowed-role=") | not)) and
         .spec.template.spec.hostAliases == [{ip:$oidc_ip, hostnames:[$oidc_host]}]
