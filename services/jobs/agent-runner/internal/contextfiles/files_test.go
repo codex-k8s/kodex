@@ -89,7 +89,7 @@ func TestMaterializesExactSkillAndMemoryThenClearsRemovedContext(t *testing.T) {
 
 func TestWarmContextReusesOnlyIdenticalPins(t *testing.T) {
 	input, snapshot, source, now := fixture()
-	input.SystemAssistant = true
+	input.AssistantScope = runtimecontract.AssistantScopeSystem
 	input.Mode = runtimecontract.RunnerModeWarm
 	root := t.TempDir()
 	if err := materializeAt(t.Context(), root, input, snapshot, source, now); err != nil {
@@ -107,6 +107,22 @@ func TestWarmContextReusesOnlyIdenticalPins(t *testing.T) {
 	snapshot.Digest, _ = snapshot.ComputeDigest()
 	if verifyAt(root, input, snapshot, now, false) == nil {
 		t.Fatal("removed memory retained old warm tree")
+	}
+}
+
+func TestProjectAssistantContextCannotReuseForeignAttemptPins(t *testing.T) {
+	input, snapshot, source, now := fixture()
+	input.AssistantScope = runtimecontract.AssistantScopeProject
+	input.AssistantProfileRef = "asstprof_abcdefgh"
+	input.Mode = runtimecontract.RunnerModeTurn
+	root := t.TempDir()
+	if err := materializeAt(t.Context(), root, input, snapshot, source, now); err != nil {
+		t.Fatal(err)
+	}
+	input.Attempt++
+	input.TurnRef = "turn_ijklmnop"
+	if verifyAt(root, input, snapshot, now, false) == nil {
+		t.Fatal("project assistant reused another attempt context authority")
 	}
 }
 

@@ -1,6 +1,6 @@
 -- name: catalog_project_cards :many
 WITH requested AS MATERIALIZED (
-    SELECT p.id,p.ref,p.organization_id
+    SELECT p.id,p.ref,p.organization_id,p.lifecycle,p.created_by
     FROM control_plane.projects p
     WHERE p.organization_id=@organization_id::uuid AND p.ref=ANY(@refs::text[])
       AND (@authority_project='' OR p.id=NULLIF(@authority_project,'')::uuid)
@@ -46,5 +46,10 @@ SELECT p.ref,
                      AND (NOT c.enabled OR NOT c.grant_enabled OR c.state IN ('NOT_CONNECTED','DEGRADED','DISABLED'))) THEN 'DEGRADED'
          WHEN EXISTS(SELECT 1 FROM connections c WHERE c.project_id=p.id AND c.state<>'CONNECTED') THEN 'UNKNOWN'
          ELSE 'READY'
-       END
+       END,
+       p.lifecycle='ACTIVE' AND NOT EXISTS (
+           SELECT 1 FROM control_plane.project_assistant_profiles profile
+           WHERE profile.organization_id=p.organization_id AND profile.project_id=p.id
+       ) AND control_plane.catalog_resource_visible(p.organization_id,@actor_id::uuid,'project.manage',
+           'PROJECT',p.id,p.id,p.created_by,'{}'::jsonb,statement_timestamp())
 FROM requested p;

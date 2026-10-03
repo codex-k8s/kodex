@@ -3,6 +3,7 @@ set -euo pipefail
 
 fail() { printf 'Management surfaces test failed: %s\n' "$*" >&2; exit 1; }
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+dev_entrypoint="$repository_root/dev.sh"
 bootstrap="$repository_root/infra/management-surfaces/bootstrap.sh"
 routes="$repository_root/infra/management-surfaces/routes.yaml"
 values="$repository_root/infra/management-surfaces/oauth2-proxy-values.yaml"
@@ -61,25 +62,30 @@ validate_grafana_render() {
 
 bash -n "$bootstrap"
 bash -n "$keycloak_bootstrap"
+session_store_line=$(grep -n 'reconcile-local-proxy-session-store.mjs' "$dev_entrypoint" | cut -d: -f1)
+surface_bootstrap_line=$(grep -n 'infra/management-surfaces/bootstrap.sh' "$dev_entrypoint" | cut -d: -f1)
+[[ -n "$session_store_line" && -n "$surface_bootstrap_line" &&
+  "$session_store_line" -lt "$surface_bootstrap_line" ]] ||
+  fail 'local proxy session store is not reconciled before management surfaces'
 (
-  rollback_arguments=""
   helm() {
     case "$1" in
       status) printf '{"info":{"status":"pending-upgrade"}}\n' ;;
       history)
         printf '[{"revision":1,"status":"superseded"},{"revision":2,"status":"deployed"},{"revision":3,"status":"pending-upgrade"}]\n'
         ;;
-      rollback) rollback_arguments="$*" ;;
+      rollback) return 1 ;;
       *) return 1 ;;
     esac
   }
   source <(sed -n '/^recover_interrupted_helm_release() {$/,/^}$/p' "$bootstrap")
-  recover_interrupted_helm_release oauth2-control-center kodex-system
-  [[ "$rollback_arguments" == 'rollback oauth2-control-center 2 --namespace kodex-system --wait --timeout 10m' ]]
-) || fail 'interrupted Helm release recovery contract is invalid'
+  if (recover_interrupted_helm_release oauth2-control-center kodex-system) 2>/dev/null; then
+    exit 1
+  fi
+) || fail 'Control Center session-store release accepted an incompatible Helm rollback'
 routes_apply_line=$(grep -n 'kubectl apply --server-side --field-manager=kodex-management -f "$routes"' \
   "$bootstrap" | cut -d: -f1)
-oauth2_upgrade_line=$(grep -n 'helm upgrade --install "oauth2-$surface"' "$bootstrap" | cut -d: -f1)
+oauth2_upgrade_line=$(grep -n 'helm upgrade --install "oauth2-$surface"' "$bootstrap" | cut -d: -f1 | head -n 1)
 [[ -n "$routes_apply_line" && -n "$oauth2_upgrade_line" &&
   "$routes_apply_line" -lt "$oauth2_upgrade_line" ]] ||
   fail 'OAuth2 routes and NetworkPolicy are not applied before proxy rollout'
@@ -100,6 +106,16 @@ jq -e '
   ([.charts[].name] | sort) == ["headlamp","kube-prometheus-stack","oauth2-proxy"] and
   all(.charts[]; (.sha256 | test("^[a-f0-9]{64}$")))
 ' "$lock" >/dev/null || fail 'management chart lock is invalid'
+yq -e '
+  .grafana."grafana.ini".analytics.reporting_enabled == false and
+  .grafana."grafana.ini".analytics.check_for_updates == false and
+  .grafana."grafana.ini".analytics.check_for_plugin_updates == false and
+  .grafana."grafana.ini".analytics.feedback_links_enabled == false and
+  .grafana."grafana.ini".security.disable_gravatar == true and
+  .grafana."grafana.ini".news.news_feed_enabled == false and
+  .grafana."grafana.ini".auth.signout_redirect_url ==
+    "__KODEX_GRAFANA_SIGNOUT_REDIRECT_URL__"
+' "$monitoring_values" >/dev/null || fail 'Grafana external telemetry and content are not disabled'
 
 headlamp_chart=$(download_chart headlamp)
 monitoring_chart=$(download_chart kube-prometheus-stack)
@@ -109,14 +125,22 @@ monitoring_render="$temporary_directory/monitoring.yaml"
 rendered_monitoring_values="$temporary_directory/monitoring-values.yaml"
 helm template kodex-headlamp "$headlamp_chart" --namespace platform-admin \
   --values "$headlamp_values" >"$headlamp_render"
-GRAFANA_ORIGIN=https://grafana.example.test yq '
-  (.. | select(tag == "!!str")) |=
-    sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN))
+grafana_signout_redirect='https://grafana.example.test/oauth2/sign_out?rd=https%3A%2F%2Fsso.example.test%2Frealms%2Fkodex%2Fprotocol%2Fopenid-connect%2Flogout%3Fid_token_hint%3D%7Bid_token%7D%26post_logout_redirect_uri%3Dhttps%253A%252F%252Fgrafana.example.test%252F'
+GRAFANA_ORIGIN=https://grafana.example.test \
+GRAFANA_SIGNOUT_REDIRECT_URL="$grafana_signout_redirect" yq '
+  (.. | select(tag == "!!str")) |= (
+    sub("__KODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN)) |
+    sub("__KODEX_GRAFANA_SIGNOUT_REDIRECT_URL__"; strenv(GRAFANA_SIGNOUT_REDIRECT_URL))
+  )
 ' "$monitoring_values" >"$rendered_monitoring_values"
 helm template kodex-monitoring "$monitoring_chart" --namespace observability \
   --values "$rendered_monitoring_values" >"$monitoring_render"
 validate_headlamp_render "$headlamp_render" || fail 'Headlamp exact binding render is invalid'
 validate_grafana_render "$monitoring_render" || fail 'Grafana exact StatefulSet render is invalid'
+GRAFANA_SIGNOUT_REDIRECT_URL="$grafana_signout_redirect" yq -e '
+  .grafana."grafana.ini".auth.signout_redirect_url ==
+    strenv(GRAFANA_SIGNOUT_REDIRECT_URL)
+' "$rendered_monitoring_values" >/dev/null || fail 'Grafana logout chain render is invalid'
 
 mkdir -p "$temporary_directory/bin"
 cat >"$temporary_directory/bin/go" <<'EOF'
@@ -127,8 +151,32 @@ EOF
 cat >"$temporary_directory/bin/helm" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == template ]]; then
+  release=${2:-}
+  values=""
+  while (($# > 0)); do
+    case "$1" in
+      --values) values=${2:-}; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  if [[ "$release" == oauth2-grafana ]]; then
+    [[ -n "$values" && -f "$values" ]]
+    yq -e '
+      (.extraArgs | tag) == "!!seq" and
+      ([.extraArgs[] | select(test("^--allowed-group="))] | sort | join("|")) ==
+        "--allowed-group=kodex-admins|--allowed-group=kodex-developers|--allowed-group=kodex-monitoring|--allowed-group=kodex-owners" and
+      ([.extraArgs[] | select(. == "--oidc-groups-claim=groups")] | length) == 1 and
+      ([.extraArgs[] | select(. == "--whitelist-domain=grafana.example.test")] | length) == 1 and
+      ([.extraArgs[] | select(. == "--whitelist-domain=sso.example.test")] | length) == 1 and
+      ([.extraArgs[] | select(test("^--allowed-role="))] | length) == 0
+    ' "$values" >/dev/null
+  fi
+  exit 0
+fi
 [[ "${1:-}" == pull ]]
 chart=${2:-}
+[[ -z "${FAKE_HELM_LOG:-}" ]] || printf 'pull %s\n' "$chart" >>"$FAKE_HELM_LOG"
 destination=""
 while (($# > 0)); do
   case "$1" in
@@ -183,7 +231,11 @@ fi
 if [[ "$arguments" == *' get deployment oauth2-'*' -o json '* ]]; then
   role=kodex-owner
   [[ "$arguments" != *' get deployment oauth2-headlamp '* ]] || role=admin
-  printf '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--allowed-role=%s"]}]}}}}\n' "$role"
+  if [[ "$arguments" == *' get deployment oauth2-grafana '* ]]; then
+    printf '%s\n' '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--whitelist-domain=grafana.example.test","--whitelist-domain=sso.example.test","--oidc-groups-claim=groups","--allowed-group=kodex-admins","--allowed-group=kodex-owners","--allowed-group=kodex-monitoring","--allowed-group=kodex-developers"]}]}}}}'
+  else
+    printf '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--allowed-role=%s"]}]}}}}\n' "$role"
+  fi
   exit 0
 fi
 if [[ "$arguments" == *' get networkpolicy oauth2-'*'-exact-paths -o json '* ]]; then
@@ -281,18 +333,42 @@ expect_readback_rejected() {
     >"$temporary_directory/$label.out" 2>"$temporary_directory/$label.err"; then
     fail "management readback accepted $label"
   fi
-  grep -Fq "$expected_error" "$temporary_directory/$label.err" ||
+  if ! grep -Fq "$expected_error" "$temporary_directory/$label.err"; then
+    cat "$temporary_directory/$label.err" >&2
     fail "management readback rejected $label for an unexpected reason"
+  fi
 }
 
-run_readback kodex-headlamp-admin cluster-admin StatefulSet >/dev/null ||
+if ! run_readback kodex-headlamp-admin cluster-admin StatefulSet \
+  >"$temporary_directory/readback.out" 2>"$temporary_directory/readback.err"; then
+  cat "$temporary_directory/readback.err" >&2
   fail 'management readback rejected the exact pinned chart resources'
+fi
 expect_readback_rejected kodex-headlamp cluster-admin StatefulSet \
   'Headlamp cluster-admin binding mismatch' wrong-binding-name
 expect_readback_rejected kodex-headlamp-admin view StatefulSet \
   'Headlamp cluster-admin binding mismatch' wrong-binding-role
 expect_readback_rejected kodex-headlamp-admin cluster-admin Deployment \
   'Grafana rollout failed' wrong-grafana-kind
+
+headlamp_free_log="$temporary_directory/headlamp-free-helm.log"
+PATH="$temporary_directory/bin:$PATH" \
+  FIXTURE_HEADLAMP_CHART="$headlamp_chart" \
+  FIXTURE_MONITORING_CHART="$monitoring_chart" \
+  FIXTURE_OAUTH2_CHART="$oauth2_chart" \
+  FAKE_HELM_LOG="$headlamp_free_log" \
+  "$bootstrap" "${readback_arguments[@]/readback/preflight}" \
+    --management-surfaces control-center-grafana >/dev/null ||
+  fail 'Headlamp-free management preflight failed'
+grep -Fxq 'pull oauth2-proxy' "$headlamp_free_log" ||
+  fail 'Headlamp-free profile omitted OAuth2 Proxy'
+grep -Fxq 'pull kube-prometheus-stack' "$headlamp_free_log" ||
+  fail 'Headlamp-free profile omitted monitoring'
+if grep -Fxq 'pull headlamp' "$headlamp_free_log"; then
+  fail 'Headlamp-free profile downloaded the Headlamp chart'
+fi
+rg -Fq 'management_surfaces=control-center-grafana' "$repository_root/dev.sh" ||
+  fail 'local development does not default to the Headlamp-free profile'
 
 for surface in control-center grafana headlamp; do
   rg -q "oauth2-$surface" "$bootstrap" || fail "OAuth2 surface is absent: $surface"
@@ -340,6 +416,18 @@ if kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e '
 fi
 yq -e '.extraArgs."allowed-role" == "__KODEX_ALLOWED_ROLE__"' "$values" >/dev/null ||
   fail 'OAuth2 Proxy role gate is absent'
+for group in kodex-admins kodex-owners kodex-monitoring kodex-developers; do
+  rg -Fq -- "--allowed-group=$group" "$bootstrap" ||
+    fail "Grafana OAuth2 group gate is absent: $group"
+done
+rg -Fq -- '--oidc-groups-claim=groups' "$bootstrap" ||
+  fail 'Grafana OAuth2 groups claim is absent'
+rg -Fq -- '--provider-ca-file=/oidc-provider-ca/ca.crt' "$bootstrap" ||
+  fail 'OAuth2 Proxy private OIDC CA is not wired'
+rg -Fq -- '--use-system-trust-store=true' "$bootstrap" ||
+  fail 'OAuth2 Proxy private OIDC CA replaces the system trust store'
+rg -Fq -- '--oidc-ca-file "$oidc_ca_file"' "$repository_root/dev.sh" ||
+  fail 'local development does not pass the OIDC CA to management surfaces'
 yq -e '
   (.hostAliases | length) == 1 and
   .hostAliases[0].ip == "__KODEX_OIDC_CONNECT_IP__" and

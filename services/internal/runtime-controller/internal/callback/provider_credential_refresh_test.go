@@ -199,7 +199,7 @@ func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runt
 		ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
 		CallbackTLSServerName:  "runtime-controller-callback.kodex-system.svc.cluster.local",
 		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
-		ProviderHTTPSProxy: "http://egress-gateway.kodex-system.svc:8080", KubernetesAPIServiceIP: "10.43.0.1",
+		ProviderHTTPSProxy: "http://egress-gateway.kodex-system.svc:8084", RuntimeEgressSigningKey: []byte("0123456789abcdef0123456789abcdef"), RuntimeEgressCASecret: "runtime-egress-proxy-ca",
 		SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner", PromotedRoleImageRepository: "registry.example/runner",
 		DefaultRoleImageReference:   "registry.example/default@" + imageDigest,
 		RoleRuntimeContractRevision: 1, RoleRuntimeContractSHA256: contractDigest,
@@ -220,7 +220,7 @@ func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runt
 	input := validWarmExecutionInput()
 	input.ImageReference = "registry.example/runner@" + imageDigest
 	input.ImageManifestDigest = imageDigest
-	input.EnvironmentImage = runtimecontract.RuntimeEnvironmentImage{Reference: input.ImageReference, Digest: imageDigest}
+	input.EnvironmentImage = runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh", RecipeGeneration: 1, Reference: input.ImageReference, Digest: imageDigest}
 	input.RoleRuntimeContractSHA256 = contractDigest
 	input.ProviderCredentialSHA256 = oldDigestHex
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()

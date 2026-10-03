@@ -4,14 +4,14 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.311
-updated: 2026-09-29
+version: 1.0.326
+updated: 2026-10-04
 ---
 
 # Совместная отладка прототипа
 
-Область: локальный `trusted-cluster`, единственный клон
-`/home/s/projects/matter-codex`, эпик #1763, текущие Issue #1784 и PR #1785.
+Область: локальный `trusted-cluster`, единственный обслуживаемый клон
+`/home/s/projects/kodex`, эпик #1763, текущие Issue #1789 и Draft PR #1790.
 Это рабочий журнал, а не доказательство приёмки. Слияние PR — только по
 отдельной команде владельца; staging и production не затрагиваются.
 
@@ -6826,3 +6826,518 @@ GitHub checks не считается `PASS`.
   STT, повторная device-code авторизация и восстановление после reboot в
   соответствии с решением владельца в эту отмашку не входят. PR остаётся
   Draft и не сливается без отдельной команды.
+
+## 3 октября: первичная настройка и компактные поля, PR #1790
+
+- [x] Первичная настройка заменена шестью понятными шагами: модель, проект,
+      образ, секреты и окружение, сотрудники и процессы, автоматизации и запуск.
+      У каждого шага есть штатные формы и переход к помощнику с подготовленным
+      сообщением; сообщение не отправляется автоматически.
+- [x] Без подключённого аккаунта показана причина недоступности модели, а не
+      выдуманное восстановление помощника. После авторизации готовность обновляется
+      из текущего состояния; показаны русские и английские тексты.
+- [x] Выбранный проект и этап сохраняются в пределах пользователя и вкладки.
+      Возврат из формы сотрудника после обновления без кэша сохраняет нужный шаг.
+      Выбор проекта использует штатный селектор с поиском и загрузкой по курсору.
+- [x] Новый проект не отправляется в пустые селекторы образа и окружения:
+      объяснено создание базовых настроек вместе с первым сотрудником. Для своего
+      образа сначала нужна роль сотрудника; для первого запуска — готовый исполнитель.
+      Завершение остаётся недоступным до готового сотрудника и успешного запуска.
+- [x] Общая высота обычных полей, закрытых селекторов и кнопок — 32 px.
+      Из закрытого селектора убраны нижние описания; подробности сохранены в
+      выпадающих списках. Также уплотнены фильтры сотрудников, файлов, автоматизаций,
+      решений, аудита и каталога переменных; выбор прошлой сессии приведён к тому же виду.
+- [x] Пустой черновик окружения больше не показывает ложное восстановление и
+      загрузку отсутствующего образа; добавлен регрессионный тест.
+- [x] Локально в Pod выполнены адресные frontend unit-проверки: 9 файлов,
+      125 тестов; lint, typecheck, форматирование и production build прошли.
+      Build сохраняет предупреждение о размере общих chunks; это не ошибка сборки.
+- [x] Chrome MCP: создание временного проекта вручную, переходы базовой настройки,
+      открытие и отмена формы сотрудника, возврат после обновления без кэша,
+      форма запуска без отправки, подготовка и удаление неотправленного текста
+      помощника. Console error/warn пуста, финальные XHR/fetch — 2xx.
+      Снимки: `/tmp/kodex-compact-environment.png`, `/tmp/kodex-compact-run.png`,
+      `/tmp/kodex-onboarding-final-project.png`. Горизонтального переполнения нет;
+      видимые обычные поля, селекторы и кнопки измерены как 32 px.
+- [x] Исходники `/home/s/projects/kodex` обслуживаются через текущие read-only
+      hostPath mounts и hot reload. SHA256 компонента настройки и общего селектора
+      совпадают на хосте и в frontend Pod. В stdout бэка за окно проверки нет записей;
+      это не самостоятельное доказательство успешности серверных сценариев.
+- [x] Временный проект после проверки перемещён в корзину штатной командой;
+      необратимая очистка не выполнялась, срок восстановления — 30 дней.
+- [ ] Реальный запуск ИИ, ответы помощника, STT и повторная device-code
+      авторизация — `NOT RUN`: оставлены владельцу. Эти проверки являются отладкой
+      разрешённого локального стенда, а не staging/production приёмкой.
+
+## 03.10.2026 — gpt-6.1-sol, помощник и свободное завершение настройки
+
+Решение владельца: модель по умолчанию `gpt-6.1-sol`, reasoning `medium`.
+Второй шаг — системный помощник; завершение не требует всех остальных шагов.
+
+- [x] Семь шагов, отдельный переход к существующим настройкам Kodex,
+      подтверждаемое «Настрою остальное позже», постоянный пункт бокового меню
+      для владельца/администратора, RU/EN. Галочки отражают готовность, а не
+      фиктивное прохождение после завершения.
+- [x] Каталог API дополнен подтверждённой моделью и усилиями
+      `low|medium|high|xhigh|max`; `none` не добавлен. Проверены официальная
+      страница модели OpenAI и Context7 `/openai/codex` для `model/list`.
+- [x] Runtime default изменяется отдельной forward-only migration только для
+      прежнего `builtin-safe-runtime`. Существующие immutable настройки
+      сотрудников и снимки выполняемых/terminal задач не переписываются.
+      Новая конфигурация gpt-6.1-sol получает канонический overlay `medium`.
+      Каталог провайдера предпочитает доступный platform default; если его нет,
+      сохраняется авторитетный default провайдера. Недоступная модель не выдаётся
+      за доступную.
+- [x] Карта: owner UI → существующая COMPLETE_ONBOARDING с server nextActions →
+      gateway → control-plane owner transaction → installation, receipt/audit и
+      SYSTEM_ASSISTANT_CHANGED → bootstrap/realtime. Повтор сохраняет прежний
+      onboarding timestamp. Навигация к настройкам сама ничего не создаёт и не
+      запускает. Cancel/Delete/Retry/leases/grants текущих задач не меняются;
+      новая RuntimeRevision следующего хода разрешает новую конфигурацию штатно.
+- [x] Frontend: 61 тест, ESLint, typecheck, production build; Go: providercredential,
+      control-plane app и platform unit; host-hardening contract — PASS.
+      Go suites повторены с закреплённым Go 1.26.6; agent-runner/codex — PASS.
+- [x] Пересобран и применён pinned Codex CLI 0.160.0. Фактический подписочный
+      каталог возвращает gpt-6.1-sol; API и подписочный picker не смешиваются.
+      Offline wire: девять API-моделей, 49 explicit selections и внешний
+      синтетический token wire — PASS, сеть отключена, turn/start не выполнялся.
+- [x] Migration применена репозиторным deploy-local; runtime-selections readback:
+      builtin-safe-runtime / gpt-6.1-sol / ready=true. Host/Pod SHA256 компонента
+      onboarding и API catalog совпадают. Runner digest
+      `sha256:f6015d7929f70231c1ce19888d9ab09cbbb078d1c06a50218a3bdf19c486cc50`,
+      сборка исходников `28aa18d5a0066bb518c0c97ecb42657c1a6f826a`.
+- [x] Chrome: завершение через штатную COMPLETE_ONBOARDING без проекта/запуска,
+      возврат из главной и сохранение этапа; настройки помощника через второй
+      шаг. В UI сохранена новая модель и опубликован overlay medium:
+      runtime v4, overlay v3. После hard reload настройки сохранены.
+      Снимки `/tmp/kodex-gpt61-medium-settings.png` и
+      `/tmp/kodex-onboarding-seven-steps-1920.png`; 1920×1080, нет переполнения.
+      Console error/warn пуста; финальные XHR/fetch 2xx. Единственный 503 во
+      время перезапуска control-plane разобран: retryable UNAVAILABLE;
+      после готовности Pod и обновления страницы рабочий путь проходит.
+- [x] Устаревшие install-contract assertions приведены к реальным
+      PostgreSQL profile counters и запуску Playwright через точный Node;
+      provenance-fixture дополнена изолированными заглушками новых host helpers.
+      Полный install-contract — PASS. ShellCheck сообщает прежние SC2034/SC1090
+      в тестовой оснастке; bash -n и diff-check проходят. Это не доказательство
+      реальной установки на новом сервере.
+- [ ] Реальные ИИ/STT/device-code и staging/production — NOT RUN.
+
+## 03.10.2026 — полная системная и проектная конфигурация помощника
+
+Последнее решение владельца заменяет промежуточные варианты «только
+общеплатформенный контур» и «только проектная привязка». В onboarding полностью
+настраивается системный Kodex; дополнительно у каждого проекта может быть
+собственная конфигурация помощника. Владелец подтвердил вариант 1: отдельные
+системные ресурсы организации, без служебного проекта; ограничение фиксированного
+образа в #1789 снято и readback обновлённого Issue подтверждён. Это требования
+и план, не результат проверки всей новой функциональности.
+
+- [ ] Общеплатформенные образы и секреты имеют явную организационную область,
+      без фиктивного проекта и без обхода сборки, допуска или secret-broker.
+- [x] Лимит параллельных выполнений аккаунта провайдера по умолчанию — 10
+      вместо 1. Настраивается в параметрах аккаунта через штатные API и UI
+      владельцем/администратором, RU/EN; сохраняется в CP с OCC, idempotency,
+      аудитом и событием. Это общий лимит аккаунта для помощников и сотрудников,
+      а не число диалогов и не внешняя квота провайдера. Диапазон существующей
+      границы — 1..256; не оставлять второй жёстко заданный лимит 1.
+- [x] Новая forward-only migration задаёт DEFAULT 10; текущий подключённый
+      аккаунт получает 10 штатным проверяемым путём. Уже применённая migration
+      не редактируется; явные пользовательские настройки сохраняются.
+      Изменение лимита не переписывает RuntimeRevision и не обрывает активные
+      ходы. При снижении лимита новые задания ждут освобождения слотов.
+      Миграция и перевод текущего аккаунта проверены на локальном стенде;
+      снижение при активных ходах — в disposable PostgreSQL (этап 2).
+      Это не проверка живого inference и не приёмка остальных путей.
+- [ ] Полная системная настройка: модель/аккаунт/reasoning, образ, проверенные
+      инструменты, окружение, несекретные переменные, привязки секретов, ресурсы,
+      тома, сетевой доступ и инструкции. Доступ — владелец/администратор.
+- [ ] Отдельная конфигурация помощника проекта использует ресурсы только своего
+      проекта. Системные секреты, grants и полномочия не копируются автоматически.
+- [ ] Несколько диалогов исполняются одновременно: отдельные session, workspace,
+      execution, leases/grants и история. Warm runtime переиспользуется только
+      при совпадении exact session/config; занятый единичный warm-процесс не
+      превращается в общую очередь всех чатов. Исполнители создаются по спросу,
+      не запускать десять постоянных Pod ради значения DEFAULT 10.
+- [ ] Внутри одного диалога остаётся один активный ход: QUEUE добавляет сообщение
+      после текущего, INTERRUPT_ACTIVE прерывает только его граф. Stop, delete,
+      retry, lease expiry и отзыв доступа изолированы по диалогу; завершение
+      корня атомарно закрывает принадлежащие ему дочерние работы.
+- [ ] В чате и настройках явно различимы системный и проектный помощники;
+      каждый диалог сохраняет собственные черновик, состояние и привязку.
+      Смена проекта/чата не перепривязывает историю или активный ход и не
+      останавливает фоновые чаты. События WebSocket обновляют точный диалог
+      без polling и мигания; после reconnect выполняется корректный rejoin.
+- [ ] Scheduler/controller согласуют общий лимит аккаунта с ресурсами кластера
+      и ёмкостью controller. Claim атомарно проверяет свободные слоты, не
+      переподписывает один session и не допускает превышения при гонках.
+      В UI различимы очередь, выполнение и ожидание мощности; отдельный чат
+      не блокирует остальные. Внешние rate/usage limits обрабатываются отдельно,
+      лимит Kodex 10 не выдаётся за гарантию десяти запросов провайдеру.
+- [ ] Системный помощник подготавливает изменения себе и проектному помощнику;
+      настроенный проектный помощник — себе. Полномочия определяет текущий actor,
+      а не имя помощника, текст запроса или идентификатор из tool payload.
+- [ ] Все пути подготовки создают один versioned draft с объяснением изменений,
+      проверкой и редактируемой штатной формой. Публикация требует отдельного
+      подтверждения; текст секрета вводится только в защищённую форму.
+- [ ] Onboarding сохраняет настройку системного помощника вторым шагом; сначала
+      видны основные действия, расширенные параметры доступны под раскрытием.
+      Настройку можно закончить раньше и затем вернуться к ней.
+- [x] Подпись модели: локализованная дата каталога Kodex без account ref и сырых
+      timestamps; reasoning отсортирован от меньшего к большему.
+- [ ] READ_OWN_EXECUTION полностью удалён из контрактов, типов, настройки и
+      выдачи runtime-прав; совместимость со старым профилем не поддерживается.
+- [ ] Contract/codegen, Go/unit/disposable PostgreSQL, frontend/lint/typecheck/build,
+      итоговый render, hot-reload readback и Chrome MCP со скриншотами, Console и
+      relevant Network. Проверить 2 и 10 одновременных диалогов, очередь 11-го,
+      смену/снижение лимита, Stop/retry/delete одного из чатов, переподключение,
+      рестарт controller и отсутствие смешивания истории/секретов. Устранить
+      текущий FAIL полного компонентного набора, активировать новый runner и
+      проверить exact digest в обслуживаемом runtime. Реальный inference, STT,
+      device-code и production — NOT RUN без отдельного решения владельца.
+
+### 03.10.2026 — решение о параллельных диалогах
+
+Владелец отменил сериализацию всех запусков значением 1 и задал DEFAULT 10
+с настройкой на уровне аккаунта. Проверка исходников: значение 1 добавлено
+в `20260830000300_provider_execution_capacity.sql`; это локальный параметр
+Kodex, а не полученная от провайдера квота. Проверка текущей БД на момент
+планирования: один enabled/AUTHORIZED аккаунт, его max_concurrent_executions — 1.
+Лимит в рабочей БД ещё не изменён: этот раздел фиксирует план, не реализацию.
+
+У каждого создаваемого диалога уже отдельный session; claim-запрос упорядочивает
+ходы внутри session. Controller допускает до 16 отслеживаемых ходов по
+умолчанию и ограничивает claim текущей ёмкостью аккаунта. Совместимость warm
+runtime включает SessionRef, а его цикл исполняет один ход за раз; несовместимый
+session направляется в отдельный turn runtime. Эти механизмы ещё не являются
+доказательством сквозного прохождения десяти параллельных чатов.
+
+### Карта полномочий и жизненного цикла
+
+Для настройки ёмкости аккаунта фиксируется отдельный путь: проверенная owner/admin
+session → `PUT /api/v1/provider-accounts/{providerAccountRef}/concurrency` →
+gateway → `PlatformCommandService.SetProviderAccountConcurrency` → команда
+`SET_PROVIDER_ACCOUNT_CONCURRENCY` → owner-транзакция CP. Подписанная operation
+`platform.command.provider-accounts.concurrency.set` связывает полный метод,
+точный account ref, expected version, idempotency и verified actor; project и
+owner не берутся из payload. CP разрешает аккаунт внутри org до OCC/receipt,
+проверяет owner/admin и диапазон 1..256, блокирует ту же строку аккаунта, что
+использует claim, сохраняет значение, новую version, receipt, audit и
+`PROVIDER_ACCOUNT_CHANGED` атомарно. Ответ — актуальный `ProviderAccount`,
+включая maximumConcurrentExecutions; unknown/чужой ref — NOT_FOUND, отсутствие
+прав — FORBIDDEN, stale version/idempotency — штатный conflict, invalid limit —
+INVALID_REQUEST. Consumers: scheduler/controller через авторитетный claim;
+frontend cache через существующий scoped event/read path. Задачи не создаются,
+leases/grants/attempts и текущие RuntimeRevision не меняются; cancel/delete/retry
+этой настройке неприменимы. Снижение ёмкости запрещает новые claims, но не
+прерывает ранее выданные. Конкретная реализация и проверки ещё не завершены.
+
+| Сценарий                | Инициатор и authority                                                                             | Владелец состояния и эффект                                                                                          | Потребитель / terminal                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Системная настройка     | Owner/admin через проверенную browser session; отдельный системный API, org назначает CP          | CP: специализированная команда, точный ресурс организации, OCC/idempotency, immutable версия, audit/outbox           | Runtime-controller и secret-broker заново разрешают зависимости следующего хода; текущий snapshot не меняется                  |
+| Проектная настройка     | Проверенная session и актуальное право управления конкретным проектом; projectRef — locator       | CP разрешает Project и профиль внутри tenant до версии/receipt; новая неизменяемая конфигурация                      | Следующий ход связан с точным профилем/проектом; чужой проект скрывается как отсутствующий                                     |
+| Образ                   | Специализированные recipe/build/promotion commands; отдельно image source/build/promote authority | CP назначает recipe, generation, attempt, immutable input; прежние fenced claim/renew/complete и admission           | Только ACCEPTED + PROMOTED exact digest/ABI; cancel/retry/expiry закрывают прежний build-граф штатно                           |
+| Секрет                  | Специализированные create/rotate/revoke/draft commands; свежий scope и отдельный reveal gate      | CP хранит только descriptor, broker — material; OCC/idempotency, audit и точная immutable revision                   | Materialize/validate проверяют exact execution/lease/attempt и область секрета; terminal/cancel/expiry отзывают прежний допуск |
+| Настройка через чат     | Системный или уже настроенный проектный помощник, но authority принадлежит текущему root actor    | PREPARE draft → validation → редактируемая форма → подтверждаемая application; сохраняются target/ref/version/digest | CP повторно проверяет текущие права до применения и receipt replay; stale/отозванный draft не применяется                      |
+| Смена проекта / профиля | Навигация либо создание нового диалога через проверенную session                                  | Сам выбор ничего не публикует и не запускает; существующая история сохраняет привязку                                | Отправка разрешает профиль сервером; Stop закрывает только текущий граф выбранного диалога                                     |
+
+Физический формат новых scoped API, Proto и таблиц фиксируется вместе с
+реализацией до изменения контрактов; существующие project endpoints не
+получают неявное значение «системный» через произвольный projectRef.
+
+### Отказ от READ_OWN_EXECUTION: карта применимого изменения
+
+Источник — решение владельца от 03.10.2026 и checklist #1789. Владелец явно
+исключил обратную совместимость. Enum, schema и обработчики содержат только
+NONE; неизвестные профили закрыто отклоняются, включая read/rollback.
+Это решение относится и к дальнейшей переработке помощников: прежний
+фиксированный системный профиль не сохраняется как параллельный fallback,
+старые API и декодеры не поддерживаются ради совместимости. Если существующим
+данным потребуется преобразование, оно выполняется однократно проверяемой
+forward-only migration, без второго действующего источника состояния.
+Read-only проверка текущей БД: несовместимых environment versions и runtime
+revisions — 0. Данные не переписывались. Ранее применённые миграции остаются
+неизменяемой историей схемы, а не действующим контуром совместимости.
+
+| Сценарий | Authority и точный путь | Результат / event / consumer |
+| --- | --- | --- |
+| Новая среда или версия | Проверенная user session → createRuntimeEnvironmentSet / publishRuntimeEnvironmentVersion → RuntimeConfigurationService.CreateRuntimeEnvironmentSet / PublishRuntimeEnvironmentVersion → CreateRuntimeEnvironment / PublishRuntimeEnvironment; CP разрешает org/project/resource до OCC/idempotency | Input принимает только NONE; READ_OWN_EXECUTION и KUBERNETES_API отклоняются INVALID_REQUEST, без business state, receipt или события. Успешный NONE сохраняет прежний audit/outbox и version-pinned readback |
+| Черновик, assistant plan | Проверенная session/root actor → create/save/validate/publishRuntimeEnvironmentDraft либо PREPARE_RUNTIME_ENVIRONMENT_REVISION → те же typed policy parser и activation admission владельца CP | Неизвестный параметр не проходит validation/publication; plan не выдаёт authority. Read path также принимает только NONE |
+| Rollback | Проверенная session → rollbackRuntimeEnvironment → RuntimeConfigurationService.RollbackRuntimeEnvironment; owner resolves exact environment/version, OCC/idempotency | Неизвестный профиль закрыто отклоняется без новой версии или события. NONE rollback сохраняет прежние immutable/audit/outbox semantics |
+| Execution/retry/continuation | CP разрешает свежую exact RuntimeRevision и execution lease → RuntimeKubernetesAccessForExecution → runtime-controller ValidateRuntimeKubernetesAccess / ensureExecutionPolicy | READ-правила не выпускаются; подделанный старый input закрыто отклоняется до выдачи Role/RoleBinding/token. NONE использует ServiceAccount без token mount и штатное отсутствие execution RBAC |
+| Terminal/cancel/delete/expiry | Прежние server-owned task/session/lease/attempt transitions, без изменения consumer topology | Прежние атомарные owner events и exact resource cleanup. Отдельного события удаления capability нет; read path — существующие environment/version/execution API с единственным профилем NONE |
+
+### Проверки текущего пакета 03.10.2026
+
+- PASS: runtimecontract unit, runtime-controller целиком, gateway HTTP,
+  scoped CP environment/assistant-tool unit, agent-runner, Proto
+  lint/build/codegen, authority-policy codegen, SQL boundary, оба release render.
+- PASS: frontend — 54 теста шести связанных файлов, scoped ESLint, typecheck,
+  production build с configLoader runner; без реального вызова модели.
+- PASS: disposable PostgreSQL — отдельный компонентный сценарий fresh auth,
+  permission и отказа неизвестному Kubernetes-профилю при create/publish;
+  опубликованная версия после отказа не изменилась. На этом хосте Docker DNAT
+  недоступен: использован явный KODEX_TEST_POSTGRES_NETWORK=host, PostgreSQL
+  слушал только 127.0.0.1. Firewall и общая БД не менялись.
+- PASS: полный `TestBootstrapComponent` на текущем рабочем дереве — 81,6 с;
+  дополнительно прошли worker-grant и runner-policy read-only queries. Это
+  закрывает прежний каскад shared fixture/lifecycle, но не заменяет browser,
+  реальные ИИ/STT/device-code, staging/production и ручной допуск владельца.
+- PASS: Chrome hard reload, настройки модели и окружения; блок RBAC отсутствует,
+  ошибок/предупреждений Console нет, все 58 fetch/xhr текущей навигации — 200.
+  Сверены одинаковые host/Pod SHA256 shared policy, controller и UI-компонента.
+- NOT RUN: реальный агент, STT, повторная авторизация, staging/production.
+  Runner пересобран на `eec10c3690bfe3a20e776556ae87070a00e8f235`, точный
+  manifest — `sha256:3f48bbe91e090b168e2fe2362a906e1b606a4cd32446bfbbc72933fb322ed69a`,
+  binary SHA256 — `b649caf6bb33271d8a1ce7c2645a789e4d85484c32250cebb59d13d4cb87f115`.
+  Provenance и импорт в локальные ноды — PASS; отдельный repo-owned runner seed
+  подтвердил этот digest в promotion registry. Docker-контекст ограничен
+  исходниками runner и libs/go: приватные env, ключи, Git и frontend caches
+  исключены. Обновление действующей admission-policy и переключение системного
+  runtime на новый образ ещё NOT RUN: подготовка артефакта не считается его
+  активацией. Checkbox удаления capability остаётся незакрытым до readback.
+
+### Этап 1 — параметры параллельности аккаунта
+
+- [x] Отдельная команда `SetProviderAccountConcurrency` и
+      `PUT /api/v1/provider-accounts/{providerAccountRef}/concurrency`:
+      точные account/version/idempotency, закрытая регистрация операции,
+      owner/admin и domain permission до проверки версии или replay.
+      Изменение фиксируется общей транзакцией CP с receipt/audit/outbox.
+- [x] Account read/list и usage возвращают один сохранённый лимит.
+      В UI — настройки аккаунта, RU/EN и слайдер 1..256 с текущим значением;
+      элементы управления высотой 32 px. Устаревшие запросы и поздние ответы
+      после переключения аккаунта либо утраты доступа не применяются.
+- [x] Новая forward-only migration `20261003000300` меняет только DEFAULT.
+      На локальном стенде применена единственная выбранная Job
+      `control-plane-migrate` через repo-owned `render-local.sh` и
+      `deploy-local.sh --stage migrate --workload control-plane-migrate`.
+      Readback: schema default = 10, ledger = 20261003000300. Существующие
+      значения аккаунтов не изменяются миграцией.
+- [x] Текущий подключённый аккаунт переведён с 1 на 10 штатной командой
+      из Chrome MCP: PUT = 200; повторное чтение PostgreSQL подтверждает 10.
+      Авторизация и credential revision этой командой не меняются.
+- [x] Локальные проверки: control-plane domain/repository/gRPC unit,
+      controlplaneclient/policygen, gateway HTTP, Proto lint/codegen,
+      policy codegen и SQL boundary; отдельный PostgreSQL subtest
+      `TestBootstrapComponent/provider_concurrency_settings_are_versioned_and_isolated`.
+      Проверены 0/-1/257, 1/10/256, stale version, exact replay, иной payload,
+      обычный участник с делегированным manage, отсутствие EDIT у него,
+      отказ по полномочиям до раскрытия результата проверки версии.
+- [x] Frontend: 73 теста девяти файлов, typecheck, scoped ESLint и build.
+      Через Chrome: hard reload, сохранение, скриншот слайдера, смена значения
+      до 256 без сохранения и возврат к 10, отсутствие overflow и ошибок Console.
+      Совпадают host/Pod SHA256 миграции, SQL команды и компонента слайдера.
+- [ ] Общая матрица параллельного admission: 2/10 чатов, очередь 11-го,
+      race двух claim workers, снижение лимита с активными leases,
+      Stop/delete/retry отдельного графа и восстановление после restart/rejoin.
+      Изменение только account row ещё не доказывает всю эту матрицу.
+- [x] Полный `TestBootstrapComponent` повторён на общей последовательной
+      fixture и завершён PASS за 81,6 с; отдельно прошли worker-grant и
+      runner-policy read-only queries. Общеплатформенные ресурсы и проектные
+      профили, активация нового runner, реальные ИИ/STT/device-code и
+      staging/production этим не объявлены проверенными.
+
+Документация Context7: PostgreSQL 18 — DEFAULT при ALTER и row locks;
+Vue — реактивные props/watch и cleanup устаревших асинхронных запросов.
+
+### Этап 2 — смена лимита не отзывает каталог
+
+- [x] Исправлен подтверждённый disposable-дефект: versioned смена лимита
+      переводила свежий каталог в PENDING и claim закрывал ожидающие ходы
+      как FAILED на стадии session_catalog. Новая migration
+      `20261003000400` назначает server-owned catalog authority floor.
+      Только ёмкость и её метаданные сохраняют границу; другие изменения
+      аккаунта требуют новой версии наблюдения. Credential/freshness/lifecycle
+      и exact task proof не ослаблены; immutable snapshots не переписываются.
+- [x] Отдельный PostgreSQL сценарий: уникальные sessions и history refs
+      11 диалогов; 2 активных хода; два конкурирующих claim worker заполняют
+      ровно 10; 11-й ждёт; лимит 1 не отменяет 10 действующих leases;
+      Stop одного оставляет 9 других RUNNING, late completion закрыто
+      отклоняется; возврат лимита 10 выпускает только ожидающий 11-й.
+      При каждой смене лимита проверяются READY и прежний digest каталога.
+      Synthetic warm readiness и созданные run-графы очищаются штатными
+      командами; реальный provider и runtime Pods не запускаются.
+- [x] Локальный render и только выбранная migration Job применены
+      repo-owned путём. SHA256 миграции и catalog SQL одинаковы на host
+      и в control-plane Pod. Chrome после hard reload видит подключённый
+      аккаунт и сохранённое значение слайдера 10.
+- [x] Повторный локальный gateway HTTP на
+      `5238aa73fd5710034ca41a3138e5d15ac0e9df9c` — PASS.
+      Новые SQL boundary и Go domain/repository unit — PASS на рабочем diff.
+- [x] Полный component suite PASS на общей последовательной fixture.
+      Исправлены server-owned model capability ожидания, полный lifecycle
+      environment snapshot, точный audit kind runtime claim, очистка synthetic
+      leases, starvation заполненного provider account и учёт workflow child
+      concurrency без coordinator node. Временная БД удалена оснасткой.
+- [ ] Browser-проверка 10 активных synthetic диалогов, retry/delete,
+      interruption/queue, reconnect/restart, активация нового runner и
+      полные системные/проектные профили остаются впереди.
+
+После публикации `dc127c9138cdb8d01cca4db935b7b62dfe884765` Chrome MCP
+подтвердил модалку настройки подключённого аккаунта: слайдер 1..256 имеет
+сохранённое значение 10, кнопка сохранения без изменений disabled. Получен
+скриншот `/tmp/kodex-provider-concurrency-dc127c91.png`; Console без
+error/warn/issue, bootstrap, session callback/ticket и administration
+завершились HTTP 200. Новые агенты не запускались. Вкладки пользователя не
+закрывались, STT/device-code/inference не выполнялись.
+
+Контрольный commit кода этапа 2 —
+`57a2d5f01334720dbf5f9ecb144c3e5b88ec15e1`. Повторены Go domain/repository unit
+и SQL boundary — PASS. Readback локальной БД: ledger 20261003000400,
+catalog_authority_version существует, единственный enabled/AUTHORIZED
+аккаунт имеет лимит 10. Полный component FAIL не заменяется этими проверками.
+
+При повторе вместе с соседним provider lifecycle выявлена оставшаяся
+регистрация synthetic warm consumer. Оснастка после terminal всех своих
+графов освобождает её через versioned `RecoverAssistant`, а не через
+подмену SQL или отключение revoke guard. Это также выявило недостижимый
+путь действующего Recovery RPC: его пустой typed payload не имел
+command access target. Добавлена точная организация и `organization.manage`
+для этой закрытой команды; project-bound authority и неверный payload
+отклоняются до эффекта. Unit проверяет target/отказы, component повторяет
+реальную owner-команду. Общая проверка остальных Recovery lifecycle и
+фактический restart controller ещё не объявлены PASS.
+
+Путь Recovery: owner session → POST `/api/v1/system-assistant/commands`
+с единственным RECOVER → gateway `RecoverSystemAssistant` → CP
+`RecoverAssistant` → organisation access target и `organization.manage`
+до OCC/receipt → versioned update `assistant_runtime` и атомарный
+`SYSTEM_ASSISTANT_CHANGED`. Actor и организация разрешаются CP из
+проверенного principal; пустой payload не назначает authority.
+Readback — `GetSystemAssistant`; revision/сессия и история не переписываются.
+Late или project-bound caller не получает permission от пустого request.
+
+После исправления cleanup отдельно совместно пройдены concurrency settings,
+parallel admission и `TestBootstrapComponentProviderAccountLifecycle` — PASS
+на рабочем diff; Go repository/domain/gRPC unit также PASS. Соседний lifecycle
+вновь может отозвать освобождённый fixture account. Console после локальной
+миграции без errors/warnings; bootstrap/session/ticket возвращают 200.
+Цель остаётся активной; следующий этап — полные системные и проектные
+runtime-профили, browser smoke и ручная приёмка по checklist выше.
+
+### Этап 2.2 — общий admission и полный component readback
+
+- [x] Полный `TestBootstrapComponent` выполнен в новой disposable PostgreSQL
+      БД: PASS за 81,6 с. Worker grant и runner policy read-only queries — PASS.
+- [x] Runtime admission отбрасывает заполненные provider accounts до
+      `ORDER BY/LIMIT`, затем сохраняет точную account lock и повторный подсчёт
+      в owner-транзакции. Старейшая очередь заполненного аккаунта больше не
+      блокирует доступную работу другого аккаунта.
+- [x] `workflow.concurrency` ограничивает параллельные дочерние этапы;
+      coordinator и его continuation не занимают child slot. Self-delegation
+      при concurrency=1 и нелинейная делегация проходят в общей fixture.
+- [x] Synthetic матрица после 2/10/race/Stop завершает оставшиеся leases
+      штатными worker callbacks и подтверждает active=0; последующие сценарии
+      больше не зависят от 30-секундного lease expiry.
+- [x] Environment lifecycle snapshot содержит полный image contract, включая
+      platform-owned marker; disable/enable/delete и immutable readback — PASS.
+- [x] Server-owned `DefaultReasoningEffort` и `ModelCapabilityDigest` не
+      принимаются обратно как client input. Stale selected-model capability
+      закрывает claim, изменение посторонней модели сохранённый pin не отзывает.
+- [x] Локально на том же дереве: `make check-sql-boundary` — PASS;
+      `go test -p 2 ./internal/...` control-plane — PASS.
+- [x] Browser smoke после публикации `dc127c91`: slider 1..256, значение 10,
+      disabled save без изменений, screenshot и Console/Network readback —
+      PASS. Host/Pod SHA256 обоих изменённых SQL совпадают; hot reload собрал
+      control-plane и readiness восстановилась.
+- [ ] Полный owner acceptance и runtime-сценарии выше остаются впереди.
+      Реальные ИИ, STT, device-code и staging/production — `NOT RUN` по
+      ограничениям владельца.
+
+### Этап 3.1 — организационный образ и неизменяемая привязка
+
+- [x] Новая forward-only migration `20261003000500` вводит явную область
+      `ORGANIZATION|PROJECT` для рецептов и дескрипторов секретов, nullable
+      project только для организации и scoped уникальность имени секрета.
+      Применённые миграции не меняются; фиктивный проект не создаётся.
+- [x] Системное окружение закрепляет точный admitted/promoted artifact,
+      digest и runtime ABI. Claim и warm reconciliation больше не обходят
+      эти проверки ради фиксированного образа из конфигурации установки.
+- [x] Bootstrap обновляет только свой platform-owned baseline; пользовательский
+      организационный образ сохраняется вместе с неизменяемой версией окружения.
+      Чужая область закрыто отклоняется в обоих направлениях.
+- [x] На точном SHA `f658f3767d11e9bb9a60749be6650fed91301373`, в отдельном
+      чистом test-only worktree и новой disposable PostgreSQL: полный
+      `TestBootstrapComponent` — PASS за 83,310 с; повторное применение
+      migration, worker grant и runner policy read-only queries — PASS.
+      SQL boundary — PASS. Test-only worktree не примонтирован в платформу.
+- [ ] Общеплатформенные API каталогов, реальная сборка собственного образа,
+      секреты через broker и подтверждаемая публикация окружения ещё не
+      завершены. Этот этап не закрывает общий пункт организационных ресурсов.
+- [ ] Migration `20261003000500`, изменённый runner и admission policy
+      ещё не активированы на обслуживаемом локальном стенде: `NOT RUN`.
+      Synthetic проверка сохранения custom marker не является реальной
+      сборкой, допуском или production acceptance.
+
+Правило продолжения владельца: текущая цель завершается только после полного
+checklist выше. Затем основной агент, без субагентов, создаёт отдельную цель,
+полностью читает и выполняет `.agents/full-qa-task.md`. В обеих целях каждые
+10–15 вызовов инструментов или каждые 5–10 минут (по раннему порогу) получает
+список вкладок Chrome через MCP. Чужие вкладки не закрывает; будущий QA-файл
+в текущем этапе заранее не читает.
+
+### Этап 3.2 — системный и проектный профили, checkpoint рабочего дерева
+
+Состояние после `7097c4a3`: большой интеграционный diff ещё не опубликован.
+Общий checklist намеренно не закрыт; перечисленное ниже — адресные доказательства,
+а не полный owner acceptance.
+
+- PASS: новые project profile/create/read и обязательная область диалога
+  `SYSTEM|PROJECT`; профиль, actor, agent, session и project закрепляются CP.
+  UI выбирает профиль явно, хранит отдельные history/draft/selection и открывает
+  штатный редактор сотрудника для проектного окружения/инструкций.
+- PASS: новый runner input V8 с единственным `AssistantScope` и exact profile ref.
+  Старый bool и decoder отсутствуют; старые схемы V4/V6/V7 удалены из активного
+  реестра/исходников и остаются доступными только через Git. Полные runtimecontract,
+  runtime-controller, agent-runner и публичный runner-test — локальный PASS.
+- PASS: CP полный Go unit, gateway HTTP/app/WebSocket, Proto lint/build/codegen,
+  authority policy/codegen и SQL boundary. Snapshot owner/caster/controller
+  проверяют один digest; область и profile pin входят в digest.
+- PASS: отдельные disposable component сценарии project profiles и parallel
+  lifecycle: QUEUE/INTERRUPT, late callback, retry, restart repository,
+  archive/purge одного диалога и lease expiry не затрагивают соседний.
+  Системный помощник может подготовить создание проектного профиля; эффект
+  появляется только после validation и отдельного подтверждения плана.
+- PASS: frontend typecheck, scoped lint и полный Vitest — 318 suites / 2117 тестов;
+  provider lifecycle и runtime detail — 9 synthetic browser сценариев. Найденные
+  отдельным визуальным ревью PROJECT header на 390 px и карточка результата
+  создания профиля исправлены отдельным пакетом: 85 targeted unit и 8 synthetic
+  browser сценариев — PASS. Скриншоты 1440/390 px RU/EN проверены; Console и
+  page errors — 0. Переход выполняется только после exact GET profile → GET agent;
+  четыре несовпадения scope/ref блокируют ссылку. Итоговый общий frontend набор
+  после этого пакета повторяется на checkpoint.
+- PASS после исправлений: четыре suites в одном публичном disposable запуске
+  на Go 1.26.6: credentials 4,03 с, parallel lifecycle 2,88 с, полный Bootstrap
+  80,79 с и project profiles 3,94 с; общий package 91,709 с. Повторное применение
+  migrations и worker grant / runner policy read-only queries — PASS.
+  Новые suites клонируют отдельную пустую мигрированную БД; старый bootstrap
+  по-прежнему проверяет точное состояние. Read-only authorization не берёт
+  `FOR SHARE`. Strict oracle списка действий дополнен новой согласованной
+  `CREATE_PROJECT_ASSISTANT`, без ослабления сравнения.
+- PASS: профиль переживает disable и исторический archived state, generic
+  archive защищён от необратимой потери assignment. Purge проекта учитывает
+  новый измеренный граф связей (97 таблиц / 248 рёбер), закрывает принадлежащий
+  ему assistant graph и не удаляет чужой профиль/диалог; активный граф блокирует
+  преждевременный purge. Общий creation gate использует текущие права из БД.
+- PASS: root actor должен быть active одновременно на materialization proof,
+  trusted credential recovery и credential consumer. Отдельный rollback fixture
+  доказывает отказ всех трёх путей при отключении точного root actor.
+- PASS отдельно: SQL secret consumer разрешает только exact ORGANIZATION/null
+  project либо exact PROJECT/project и immutable UID/RV/key/hash. Secret-broker
+  fake Kubernetes / owner unit проверяет SYSTEM-организационные дескрипторы,
+  PROJECT-дескрипторы, точное копирование, replay, recovery и изолированный отзыв.
+  Runtimecontract/controller/runner/broker full unit и vet — Go 1.26.6 PASS.
+  Это не свежая RuntimeRevision через ещё не реализованный организационный API.
+- FAIL render повторяем после freeze: сначала host Go 1.27.1 не соответствовал
+  закреплённому 1.26.6, затем устаревший default cache пересекался с serving
+  source. Оснастка теперь выбирает внешний cache. Последний запуск закрыто
+  обнаружил смену worktree provenance во время параллельных правок; проверку
+  не ослабляем, повторяем на неизменяемом checkpoint.
+- NOT RUN: организационные image/secret API и broker materialization,
+  fresh owner-reauth публикация полной системной среды, live migration 5/6,
+  rebuild/активация runner V8 и exact admission/render/Chrome acceptance.
+  Реальные ИИ, STT/device-code и staging/production не запускаются.
+  Read-only Kubernetes проверка: control-plane сейчас 1/2 и завершается на
+  materialization системного образа; новая организационная migration ещё не
+  применена live. Green остальных Pod не считается готовностью платформы.

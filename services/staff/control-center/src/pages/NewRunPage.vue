@@ -28,10 +28,7 @@ import NewRunSessionPicker, {
   type NewRunSessionPickerLabels,
 } from "@/features/new-run/components/NewRunSessionPicker.vue";
 import NewRunSessionPolicy from "@/features/new-run/components/NewRunSessionPolicy.vue";
-import {
-  formatTimestamp,
-  type NewRunTargetType,
-} from "@/features/new-run/model";
+import { type NewRunTargetType } from "@/features/new-run/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import {
@@ -820,13 +817,6 @@ watch(
                     <strong>
                       {{ selectedSession?.title ?? $t("runs.chooseSession") }}
                     </strong>
-                    <small v-if="selectedSession">
-                      {{ selectedSession.target.displayName }} ·
-                      {{ formatTimestamp(selectedSession.createdAt, locale) }}
-                    </small>
-                    <small v-else>{{
-                      $t("runs.newRun.session.searchHint")
-                    }}</small>
                   </span>
                   <ChevronDown :size="17" aria-hidden="true" />
                 </button>
@@ -1201,10 +1191,11 @@ watch(
 .entity-picker-trigger {
   display: flex;
   width: 100%;
-  min-height: 56px;
+  height: var(--control-height, 32px);
+  min-height: var(--control-height, 32px);
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 6px 9px;
   border: 1px solid var(--border-strong);
   border-radius: 7px;
   background: var(--surface);
@@ -1222,15 +1213,10 @@ watch(
   flex: 1;
   gap: 3px;
 }
-.entity-picker-trigger strong,
-.entity-picker-trigger small {
+.entity-picker-trigger strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.entity-picker-trigger small {
-  color: var(--text-secondary);
-  font-weight: 400;
 }
 .notification-choice {
   position: relative;
@@ -1416,7 +1402,7 @@ watch(
 .launch-summary__actions .button {
   width: 100%;
   min-width: 0;
-  min-height: 46px;
+  min-height: var(--control-height);
   padding-inline: 10px;
 }
 @media (max-width: 1100px) {

@@ -22,7 +22,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" -o /out/stt-provider-smoke ./cmd/stt-provider-smoke
 
 FROM docker.io/library/alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40 AS runtime
-RUN apk add --no-cache ffmpeg=8.0.1-r1 ca-certificates=20260611-r0
+RUN apk add --no-cache ffmpeg=8.0.1-r1 ca-certificates=20260909-r0
 COPY --from=build --chmod=0555 /out/ /usr/local/bin/
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/stt-tts-service"]

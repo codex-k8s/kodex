@@ -2,11 +2,15 @@
 -- Только owner назначает scope; полная eligibility проверяется следующим
 -- credential_projection_resolve_runtime в той же repeatable-read транзакции.
 SELECT root_run.initiated_by::text, revision.organization_id::text,
-       COALESCE(revision.project_id::text, ''), lease.expires_at
+       COALESCE(agent.project_id::text, ''), lease.expires_at
 FROM control_plane.runtime_leases lease
 JOIN control_plane.runtime_revisions revision ON revision.id = lease.runtime_revision_id
 JOIN control_plane.runs root_run ON root_run.id = revision.root_run_id
+JOIN control_plane.subjects actor ON actor.id = root_run.initiated_by AND actor.organization_id = revision.organization_id
+JOIN control_plane.agents agent ON agent.id = revision.agent_id
+  AND agent.organization_id = revision.organization_id
 WHERE lease.organization_id = @organization_id::uuid
+  AND actor.active
   AND revision.organization_id = lease.organization_id
   AND root_run.organization_id = revision.organization_id
   AND lease.ref = @lease_ref

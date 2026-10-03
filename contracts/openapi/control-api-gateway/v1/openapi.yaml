@@ -1846,6 +1846,38 @@ paths:
                 { schema: { $ref: "#/components/schemas/ProviderAccount" } },
             }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/provider-accounts/{providerAccountRef}/concurrency:
+    put:
+      tags: [Agents]
+      operationId: setProviderAccountConcurrency
+      parameters:
+        [
+          { $ref: "#/components/parameters/ProviderAccountRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  {
+                    $ref: "#/components/schemas/ProviderAccountConcurrencyInput",
+                  },
+              },
+          }
+      responses:
+        "200":
+          description: Лимит параллельных выполнений изменён без остановки активных ходов
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ProviderAccount" } },
+            }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/prompt-templates/catalog:
     get:
       tags: [Agents]
@@ -4793,11 +4825,55 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SystemAssistant" }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/projects/{projectRef}/assistant:
+    parameters:
+      - { $ref: "#/components/parameters/ProjectRef" }
+    get:
+      tags: [Assistant]
+      operationId: getProjectAssistant
+      responses:
+        "200":
+          description: Собственный профиль помощника проекта
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectAssistantProfile" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Assistant]
+      operationId: createProjectAssistant
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, purpose, instructions]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                purpose: { type: string, minLength: 1, maxLength: 2000 }
+                instructions: { type: string, minLength: 1, maxLength: 32768 }
+      responses:
+        "201":
+          description: Профиль создан без копирования системных секретов или прав
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectAssistantProfile" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/assistant-conversations:
     get:
       tags: [Assistant]
       operationId: listAssistantConversations
       parameters:
+        - name: assistantScope
+          in: query
+          schema: { $ref: "#/components/schemas/AssistantScope" }
+        - name: assistantRef
+          in: query
+          schema: { $ref: "#/components/schemas/OpaqueRef" }
         - { $ref: "#/components/parameters/ProjectRefQuery" }
         - { $ref: "#/components/parameters/Query" }
         - { $ref: "#/components/parameters/PageSize" }
@@ -4838,7 +4914,9 @@ paths:
             schema:
               type: object
               additionalProperties: false
+              required: [assistantScope]
               properties:
+                assistantScope: { $ref: "#/components/schemas/AssistantScope" }
                 projectRef: { $ref: "#/components/schemas/OpaqueRef" }
                 context:
                   { $ref: "#/components/schemas/AssistantContextDescriptor" }
@@ -4982,6 +5060,10 @@ paths:
               required: [content]
               properties:
                 content: { type: string, minLength: 1, maxLength: 32768 }
+                deliveryMode:
+                  type: string
+                  enum: [QUEUE, INTERRUPT_ACTIVE]
+                  default: QUEUE
                 attachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
                 context:
                   { $ref: "#/components/schemas/AssistantContextDescriptor" }
@@ -4991,6 +5073,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AssistantConversation" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/assistant-conversations/{conversationRef}/active-turn/cancellation:
+    post:
+      tags: [Assistant]
+      operationId: cancelAssistantTurn
+      description: Атомарно находит и отменяет активный корневой Run выбранного диалога; переданный клиентом runRef не используется.
+      parameters:
+        [
+          { $ref: "#/components/parameters/ConversationRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      responses:
+        "200":
+          description: Активный ход отменён либо уже отсутствовал
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [conversationRef, runRef, cancelled]
+                properties:
+                  conversationRef: { $ref: "#/components/schemas/OpaqueRef" }
+                  runRef: { type: string }
+                  cancelled: { type: boolean }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/assistant-plans/{planRef}/application:
     post:
@@ -8671,6 +8779,7 @@ components:
           APPLY_PLAN,
           RECOVER,
           CREATE_AGENT,
+          CREATE_PROJECT_ASSISTANT,
           CREATE_WORKFLOW,
           CREATE_RUN,
           CREATE_SCHEDULE,
@@ -11937,13 +12046,48 @@ components:
       enum: [EPHEMERAL_DISK, EPHEMERAL_MEMORY]
     RuntimeNetworkDestination:
       type: string
-      enum: [DNS, RUNTIME_CALLBACK, PROVIDER_PROXY, KUBERNETES_API]
+      enum: [DNS, RUNTIME_CALLBACK, PROVIDER_PROXY]
     RuntimeNetworkProtocol:
       type: string
       enum: [TCP, UDP]
+    RuntimeWebAccessMode:
+      type: string
+      enum: [NONE, ALLOWLIST_READ_ONLY, ALLOWLIST_FULL, FULL_PUBLIC]
+    RuntimeWebAccessRule:
+      type: object
+      additionalProperties: false
+      required: [domainPattern, protocol, port, httpMethods]
+      properties:
+        domainPattern:
+          type: string
+          minLength: 3
+          maxLength: 253
+          pattern: '^(?:\*\*\.|\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$'
+        protocol: { type: string, enum: [HTTPS] }
+        port: { type: integer, format: int32, enum: [443] }
+        httpMethods:
+          type: array
+          minItems: 1
+          maxItems: 7
+          uniqueItems: true
+          items:
+            {
+              type: string,
+              enum: [GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE],
+            }
+    RuntimeWebAccess:
+      type: object
+      additionalProperties: false
+      required: [mode, rules]
+      properties:
+        mode: { $ref: "#/components/schemas/RuntimeWebAccessMode" }
+        rules:
+          type: array
+          maxItems: 64
+          items: { $ref: "#/components/schemas/RuntimeWebAccessRule" }
     RuntimeKubernetesAccessKind:
       type: string
-      enum: [NONE, READ_OWN_EXECUTION]
+      enum: [NONE]
     RuntimeResourcePolicy:
       type: object
       additionalProperties: false
@@ -11993,7 +12137,8 @@ components:
     RuntimeEnvironmentPolicyInput:
       type: object
       additionalProperties: false
-      required: [resources, volumes, networkDestinations, kubernetesAccess]
+      required:
+        [resources, volumes, networkDestinations, kubernetesAccess, webAccess]
       properties:
         resources: { $ref: "#/components/schemas/RuntimeResourcePolicy" }
         volumes:
@@ -12005,11 +12150,12 @@ components:
         networkDestinations:
           type: array
           minItems: 3
-          maxItems: 4
+          maxItems: 3
           uniqueItems: true
           items: { $ref: "#/components/schemas/RuntimeNetworkDestination" }
         kubernetesAccess:
           { $ref: "#/components/schemas/RuntimeKubernetesAccessKind" }
+        webAccess: { $ref: "#/components/schemas/RuntimeWebAccess" }
     RuntimeNetworkEgress:
       type: object
       additionalProperties: false
@@ -12021,16 +12167,17 @@ components:
     RuntimeNetworkPolicy:
       type: object
       additionalProperties: false
-      required: [denyByDefault, egress]
+      required: [denyByDefault, egress, webAccess]
       properties:
         denyByDefault: { type: boolean, enum: [true] }
         egress:
           {
             type: array,
             minItems: 4,
-            maxItems: 5,
+            maxItems: 4,
             items: { $ref: "#/components/schemas/RuntimeNetworkEgress" },
           }
+        webAccess: { $ref: "#/components/schemas/RuntimeWebAccess" }
     RuntimeKubernetesAccessProfile:
       type: object
       additionalProperties: false
@@ -12660,7 +12807,11 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
-        imageArtifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        imageArtifactRef:
+          description: Для системного помощника пустая строка означает платформенный образ; Проектные окружения по-прежнему требуют точный artifact ref.
+          type: string
+          maxLength: 128
+          pattern: "^$|^[A-Za-z0-9_-]{8,128}$"
         tools:
           {
             type: array,
@@ -15572,6 +15723,7 @@ components:
           state,
           enabled,
           ready,
+          maximumConcurrentExecutions,
           nextActions,
           createdAt,
           updatedAt,
@@ -15616,6 +15768,8 @@ components:
           }
         enabled: { type: boolean }
         ready: { type: boolean }
+        maximumConcurrentExecutions:
+          { type: integer, format: int32, minimum: 1, maximum: 256 }
         usage: { $ref: "#/components/schemas/ProviderAccountUsage" }
         authorization: { $ref: "#/components/schemas/ProviderAuthorization" }
         deletion: { $ref: "#/components/schemas/ProviderAccountDeletion" }
@@ -15625,6 +15779,13 @@ components:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         updatedAt: { $ref: "#/components/schemas/Timestamp" }
+    ProviderAccountConcurrencyInput:
+      type: object
+      additionalProperties: false
+      required: [maximumConcurrentExecutions]
+      properties:
+        maximumConcurrentExecutions:
+          { type: integer, format: int32, minimum: 1, maximum: 256 }
     ProviderAccountDeletion:
       type: object
       additionalProperties: false
@@ -17026,6 +17187,7 @@ components:
                 CREATE_PROJECT,
                 CREATE_PROJECT_FILE,
                 CREATE_AGENT,
+                CREATE_PROJECT_ASSISTANT,
                 CREATE_WORKFLOW,
                 UPDATE_WORKFLOW,
                 CHANGE_CAPABILITY,
@@ -17047,6 +17209,7 @@ components:
                 BIND_AGENT_RUNTIME_ENVIRONMENT,
                 CREATE_ROLE_IMAGE_RECIPE,
                 UPDATE_ROLE_IMAGE_RECIPE,
+                UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS,
               ],
           }
         action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, EXECUTE] }
@@ -17133,13 +17296,35 @@ components:
         sequence: { type: integer, format: int64, minimum: 1 }
         role: { type: string, enum: [USER, ASSISTANT, SYSTEM_RECEIPT] }
         content: { type: string, maxLength: 32768 }
-        state: { type: string, enum: [QUEUED, RUNNING, COMPLETED, FAILED] }
+        state:
+          {
+            type: string,
+            enum: [QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED],
+          }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runVersion: { type: integer, format: int64, minimum: 1 }
         plan: { $ref: "#/components/schemas/AssistantPlan" }
         attachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
     AssistantConversationState:
       type: string
       enum: [ACTIVE, CLOSED, ARCHIVED]
+    AssistantScope:
+      type: string
+      enum: [SYSTEM, PROJECT]
+    ProjectAssistantProfile:
+      type: object
+      additionalProperties: false
+      required: [ref, projectRef, agentRef, name, state, version, createdAt, updatedAt]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        agentRef: { $ref: "#/components/schemas/OpaqueRef" }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        state: { type: string, enum: [ACTIVE, DISABLED, ARCHIVED] }
+        version: { type: integer, format: int64, minimum: 1 }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+        updatedAt: { $ref: "#/components/schemas/Timestamp" }
     AssistantConversation:
       type: object
       additionalProperties: false
@@ -17154,12 +17339,17 @@ components:
           turns,
           updatedAt,
           state,
+          assistantScope,
+          assistantRef,
         ]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         title: { type: string, maxLength: 160 }
         state: { $ref: "#/components/schemas/AssistantConversationState" }
+        assistantScope: { $ref: "#/components/schemas/AssistantScope" }
+        assistantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantProfileRef: { $ref: "#/components/schemas/OpaqueRef" }
         titleSource:
           { type: string, enum: [SERVER_DEFAULT, AGENT_PROPOSED, USER_EDITED] }
         titleRevision: { type: integer, format: int64, minimum: 1 }
@@ -17193,6 +17383,7 @@ components:
                   CREATE_PROJECT,
                   CREATE_PROJECT_FILE,
                   CREATE_AGENT,
+                  CREATE_PROJECT_ASSISTANT,
                   CREATE_WORKFLOW,
                   UPDATE_WORKFLOW,
                   CHANGE_CAPABILITY,
@@ -17211,6 +17402,7 @@ components:
                   CREATE_INSTRUCTION_DRAFT,
                   CREATE_RUNTIME_ENVIRONMENT_DRAFT,
                   PREPARE_RUNTIME_ENVIRONMENT_REVISION,
+                  UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS,
                   BIND_AGENT_RUNTIME_ENVIRONMENT,
                   CREATE_ROLE_IMAGE_RECIPE,
                   UPDATE_ROLE_IMAGE_RECIPE,

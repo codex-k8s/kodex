@@ -168,11 +168,14 @@ func acceptanceTurnFixture(t *testing.T, mode string) model.Input {
 	input.SessionRef, input.TurnRef, input.Attempt, input.LeaseRef = "ses_current", "turn_current", 2, "lease_fixture"
 	input.ExecutionBindingDigest = strings.Repeat("b", 64)
 	input.WorkspacePolicy = runtimecontract.RuntimeWorkspacePolicyV1()
-	input.SystemAssistant = mode == "assistant"
+	input.AssistantScope = runtimecontract.AssistantScopeNone
+	if mode == "assistant" {
+		input.AssistantScope = runtimecontract.AssistantScopeSystem
+	}
 	if mode == "provider resume" {
 		input.CodexSessionID = "previous-provider-thread"
 	}
-	if !input.SystemAssistant {
+	if !input.IsSystemAssistant() {
 		input.Capabilities = []string{runtimecontract.ArtifactCapability}
 		input.CodexSandbox = "workspace-write"
 	}

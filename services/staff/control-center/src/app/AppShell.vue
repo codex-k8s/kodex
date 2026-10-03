@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  ListChecks,
   UsersRound,
   Workflow,
   X,
@@ -42,6 +43,8 @@ import { resolveAssistantContext } from "@/features/assistant/context";
 import { useAssistantStore } from "@/features/assistant/store";
 import { useAccessStore } from "@/features/access/store";
 import { usePlatformStore } from "@/features/platform/store";
+import OnboardingReturn from "@/features/onboarding/components/OnboardingReturn.vue";
+import { useOnboardingStore } from "@/features/onboarding/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useRoleImagesStore } from "@/features/role-images/store";
 import { useRuntimeStore } from "@/features/runtime/store";
@@ -74,6 +77,7 @@ import {
 const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
+const onboarding = useOnboardingStore();
 const access = useAccessStore();
 const realtime = useRealtimeStore();
 const roleImages = useRoleImagesStore();
@@ -121,7 +125,7 @@ useCursorInfiniteScroll({
 const projectRef = computed(
   () =>
     routeProjectRef(route.params) ??
-    (route.name === "configuration-catalog"
+    (route.name === "configuration-catalog" || route.name === "onboarding"
       ? routeProjectRef(route.query)
       : undefined),
 );
@@ -759,6 +763,22 @@ onBeforeUnmount(() => {
       </nav>
       <div class="sidebar-footer">
         <RouterLink
+          v-if="
+            ['OWNER', 'ADMINISTRATOR'].includes(
+              platform.bootstrap?.platformRole ?? '',
+            )
+          "
+          :to="onboarding.returnTo"
+          class="nav-link"
+          :class="{ 'nav-link--active': route.name === 'onboarding' }"
+        >
+          <span class="nav-link__label"
+            ><ListChecks :size="17" aria-hidden="true" /><span>{{
+              $t("onboarding.yourSetup")
+            }}</span></span
+          >
+        </RouterLink>
+        <RouterLink
           :to="administrationLink.path"
           class="nav-link nav-link--administration"
           :class="{ 'nav-link--active': activeSection === 'administration' }"
@@ -792,6 +812,7 @@ onBeforeUnmount(() => {
           </li>
         </ol>
       </nav>
+      <OnboardingReturn v-if="route.name !== 'onboarding'" />
       <RouterView />
     </div>
 

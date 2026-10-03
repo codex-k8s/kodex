@@ -1,3 +1,4 @@
+-- name: configuration_hydrateassistantoperation_select_integration_grant :one
 WITH admission AS (
     SELECT *
     FROM control_plane.integration_grant_admission(

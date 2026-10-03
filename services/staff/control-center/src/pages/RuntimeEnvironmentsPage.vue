@@ -633,16 +633,6 @@ onBeforeUnmount(() => {
                   {{ $t("runtime.denyByDefault") }}
                 </dd>
               </div>
-              <div>
-                <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
-                <dd>
-                  {{
-                    $t(
-                      `runtime.kubernetesAccessLabel.${selected.currentVersion.policy.kubernetesAccess.kind}`,
-                    )
-                  }}
-                </dd>
-              </div>
             </dl>
           </section>
           <section class="environment-lifecycle">

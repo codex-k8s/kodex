@@ -78,7 +78,7 @@ func (coordinator *Coordinator) Register(input runtimecontract.RunnerInput) <-ch
 }
 
 func (coordinator *Coordinator) EnqueueWarm(input runtimecontract.RunnerInput, compatibilityDigest string) error {
-	if input.Mode != runtimecontract.RunnerModeTurn || !input.SystemAssistant || input.Validate() != nil ||
+	if input.Mode != runtimecontract.RunnerModeTurn || !input.IsSystemAssistant() || input.Validate() != nil ||
 		len(compatibilityDigest) != sha256.Size*2 {
 		return errors.New("warm execution input is invalid")
 	}
@@ -576,7 +576,7 @@ func emptyMCPParams(raw json.RawMessage) bool {
 func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
 	result = append(result, runtimeFileTools(input)...)
-	if input.SystemAssistant {
+	if input.IsAssistant() {
 		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
@@ -815,7 +815,7 @@ func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
 }
 
 func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
-	if !input.SystemAssistant || !onlyKeys(arguments, "summary", "operations") {
+	if !input.IsAssistant() || !onlyKeys(arguments, "summary", "operations") {
 		return nil, invalidAssistantPlan("top_level_shape")
 	}
 	summary, _ := arguments["summary"].(string)
@@ -838,6 +838,9 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 			return nil, normalizeErr
 		}
 		kind, _ := operation["type"].(string)
+		if kind == "CREATE_PROJECT_ASSISTANT" && !input.IsSystemAssistant() {
+			return nil, invalidAssistantPlan("operation_scope")
+		}
 		serverHydrated := assistantServerHydratedOperation(kind)
 		action, _ := operation["action"].(string)
 		title, _ := operation["title"].(string)
@@ -857,7 +860,7 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		selected, selectedOK := operation["selected"].(bool)
 		if serverHydrated {
 			action = assistantServerAction(kind)
-			target = assistantServerTarget(kind, parameters, input.AssistantContext)
+			target = assistantServerTarget(kind, parameters, assistantOperationTargetContext(input, kind, parameters))
 			targetOK = target != nil
 			selected, selectedOK = true, true
 		}
@@ -972,7 +975,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	}
 	normalized["type"] = kind
 	normalized["parameters"] = normalizedParameters
-	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" {
+	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
 		normalized["title"] = assistantOperationTitle(kind, normalizedParameters, projectName)
 	}
 	if operationSummary, _ := normalized["summary"].(string); strings.TrimSpace(operationSummary) == "" {
@@ -1018,7 +1021,7 @@ func assistantEnvironmentVariableNamesValid(parameters map[string]any) bool {
 
 func assistantProjectScopedOperation(kind string) bool {
 	switch kind {
-	case "UPDATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
+	case "UPDATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
 		return true
 	default:
 		return false
@@ -1101,7 +1104,10 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		"CREATE_PROJECT_FILE":                  "Создать файл",
 		"UPDATE_PROJECT":                       "Изменить Проект",
 		"CREATE_AGENT":                         "Создать ИИ-сотрудника",
+		"CREATE_PROJECT_ASSISTANT":             "Настроить помощника Проекта",
 		"UPDATE_AGENT":                         "Изменить ИИ-сотрудника",
+		"CREATE_INSTRUCTION_DRAFT":             "Подготовить инструкции ИИ-сотрудника",
+		"BIND_AGENT_RUNTIME_ENVIRONMENT":       "Назначить окружение ИИ-сотрудника",
 		"CREATE_WORKFLOW":                      "Создать Процесс",
 		"CREATE_INTEGRATION_CONNECTION":        "Создать подключение",
 		"UPDATE_INTEGRATION_CONNECTION":        "Изменить подключение",
@@ -1113,6 +1119,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		"CREATE_ROLE_IMAGE_RECIPE":             "Создать рецепт образа",
 		"UPDATE_ROLE_IMAGE_RECIPE":             "Изменить рецепт образа",
 		"PUBLISH_INTEGRATION_DEFINITION":       "Опубликовать интеграцию",
+		"UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS": "Изменить инструкции Kodex",
 	}
 	label := labels[kind]
 	if strings.TrimSpace(name) == "" {
@@ -1143,7 +1150,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION":
+	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		return true
 	default:
 		return false
@@ -1151,10 +1158,31 @@ func assistantServerHydratedOperation(kind string) bool {
 }
 
 func assistantServerAction(kind string) string {
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
 		return "UPDATE"
 	}
 	return "CREATE"
+}
+
+// Контекст самонастройки PROJECT берётся только из immutable execution,
+// параметры остаются locator и повторно проверяются владельцем перед draft.
+func assistantOperationTargetContext(input runtimecontract.RunnerInput, kind string, parameters map[string]any) *runtimecontract.RunnerAssistantContext {
+	if input.AssistantScope != runtimecontract.AssistantScopeProject {
+		return input.AssistantContext
+	}
+	if kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
+		requested, _ := parameters["agentRef"].(string)
+		if requested != "" && requested == input.AgentRef {
+			return &runtimecontract.RunnerAssistantContext{EntityKind: "AGENT", EntityRef: input.AgentRef, EntityName: input.AgentRef}
+		}
+	}
+	if kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+		requested, _ := parameters["environmentRef"].(string)
+		if requested != "" && requested == input.RuntimeEnvironmentRef {
+			return &runtimecontract.RunnerAssistantContext{EntityKind: "ENVIRONMENT", EntityRef: input.RuntimeEnvironmentRef, EntityName: input.RuntimeEnvironmentRef}
+		}
+	}
+	return input.AssistantContext
 }
 
 func assistantServerTarget(kind string, parameters map[string]any, context *runtimecontract.RunnerAssistantContext) map[string]any {
@@ -1218,11 +1246,21 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 		return map[string]any{"kind": "WORKFLOW", "name": context.EntityName}
 	} else if kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 		requestedRef, _ := parameters["environmentRef"].(string)
+		systemAssistantRef, _ := parameters["systemAssistantRef"].(string)
+		if strings.TrimSpace(systemAssistantRef) != "" && strings.TrimSpace(requestedRef) != "" {
+			return map[string]any{"kind": "ENVIRONMENT", "name": "Среда Kodex"}
+		}
 		if context == nil || context.EntityKind != "ENVIRONMENT" || context.EntityRef == "" ||
 			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
 			return nil
 		}
 		return map[string]any{"kind": "ENVIRONMENT", "name": context.EntityName}
+	} else if kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+		requestedRef, _ := parameters["systemAssistantRef"].(string)
+		if strings.TrimSpace(requestedRef) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "SYSTEM_ASSISTANT", "name": "Kodex"}
 	}
 	name, _ := parameters["name"].(string)
 	if strings.TrimSpace(name) == "" {
@@ -1243,7 +1281,7 @@ func exactJSONInt64(value any) (int64, bool) {
 }
 
 func (server *Server) proposeAssistantMetadata(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
-	if !input.SystemAssistant || !onlyKeys(arguments, "title") {
+	if !input.IsAssistant() || !onlyKeys(arguments, "title") {
 		return nil, errors.New("assistant metadata tool is not available")
 	}
 	title, _ := arguments["title"].(string)
@@ -1344,17 +1382,17 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	}
 	switch tool {
 	case "get_configuration_catalog":
-		return map[string]any{}, "platform.configuration.read", "", input.SystemAssistant
+		return map[string]any{}, "platform.configuration.read", "", input.IsAssistant()
 	case "get_integration_catalog":
 		return map[string]any{}, "platform.integration.catalog", "", len(input.IntegrationGrants) != 0
 	case "find_platform_resources":
-		return map[string]any{}, "platform.resources.search", "", input.SystemAssistant
+		return map[string]any{}, "platform.resources.search", "", input.IsAssistant()
 	case "propose_configuration_plan":
 		operations, _ := arguments["operations"].([]any)
-		return map[string]any{"operation_count": len(operations)}, "platform.configuration.plan", "", input.SystemAssistant
+		return map[string]any{"operation_count": len(operations)}, "platform.configuration.plan", "", input.IsAssistant()
 	case "propose_assistant_metadata":
 		title, _ := arguments["title"].(string)
-		return map[string]any{"title": truncateRunes(title, 160)}, "platform.presentation.propose", "", input.SystemAssistant
+		return map[string]any{"title": truncateRunes(title, 160)}, "platform.presentation.propose", "", input.IsAssistant()
 	case "propose_run_metadata":
 		title, _ := arguments["title"].(string)
 		activity, _ := arguments["activity_summary"].(string)

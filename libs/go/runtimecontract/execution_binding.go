@@ -34,13 +34,16 @@ type runtimeExecutionIdentity struct {
 }
 
 func RuntimeExecutionBindingDigests(input RunnerInput) (string, string, error) {
+	if input.validateAssistantScope() != nil {
+		return "", "", errors.New("runtime execution assistant scope is invalid")
+	}
 	identity := runtimeExecutionIdentity{OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, RunRef: input.RunRef, NodeRef: input.NodeRef,
 		SessionRef: input.SessionRef, TurnRef: input.TurnRef, Attempt: input.Attempt, LeaseRef: input.LeaseRef,
 		LeaseFence:      input.LeaseFence,
 		LeaseGeneration: input.LeaseGeneration, RuntimeRevisionRef: input.RuntimeRevisionRef,
 		RuntimeRevisionVersion: input.RuntimeRevisionVersion, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
 		InputDigest: input.InputDigest}
-	if input.Mode != RunnerModeTurn || input.WorkloadInstance == "" || identity.OrganizationRef == "" || identity.ProjectRef == "" && !input.SystemAssistant || identity.RunRef == "" || identity.NodeRef == "" || identity.SessionRef == "" ||
+	if input.Mode != RunnerModeTurn || input.WorkloadInstance == "" || identity.OrganizationRef == "" || identity.ProjectRef == "" && !input.IsSystemAssistant() || identity.RunRef == "" || identity.NodeRef == "" || identity.SessionRef == "" ||
 		identity.TurnRef == "" || identity.Attempt < 1 || identity.LeaseRef == "" || identity.LeaseFence == "" || identity.LeaseGeneration < 1 ||
 		identity.RuntimeRevisionRef == "" || identity.RuntimeRevisionVersion < 1 || identity.RuntimeRevisionDigest == "" || identity.InputDigest == "" {
 		return "", "", errors.New("runtime execution identity is incomplete")

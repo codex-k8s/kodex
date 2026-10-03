@@ -58,7 +58,7 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.SystemAssistant || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset") {
+	if !input.IsAssistant() || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset") {
 		return nil, errors.New("configuration catalog is not available")
 	}
 	agentQuery := ""
@@ -270,15 +270,30 @@ func environmentPolicySchema() map[string]any {
 		"ephemeralStorageRequestMib": map[string]any{"type": "integer", "minimum": 256, "maximum": 20480},
 		"ephemeralStorageLimitMib":   map[string]any{"type": "integer", "minimum": 256, "maximum": 102400},
 	})
-	return objectSchema([]string{"resources", "volumes", "networkDestinations", "kubernetesAccess"}, map[string]any{
+	webAccessRule := objectSchema([]string{"domainPattern", "protocol", "port", "httpMethods"}, map[string]any{
+		"domainPattern": map[string]any{
+			"type": "string", "minLength": 3, "maxLength": 253,
+			"pattern": `^(?:\*\*\.|\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`,
+		},
+		"protocol": enumSchema("HTTPS"),
+		"port":     map[string]any{"type": "integer", "const": 443},
+		"httpMethods": map[string]any{"type": "array", "minItems": 1, "maxItems": 7, "uniqueItems": true,
+			"items": enumSchema("GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE")},
+	})
+	webAccess := objectSchema([]string{"mode", "rules"}, map[string]any{
+		"mode":  enumSchema("NONE", "ALLOWLIST_READ_ONLY", "ALLOWLIST_FULL", "FULL_PUBLIC"),
+		"rules": map[string]any{"type": "array", "maxItems": 64, "items": webAccessRule},
+	})
+	return objectSchema([]string{"resources", "volumes", "networkDestinations", "webAccess", "kubernetesAccess"}, map[string]any{
 		"resources": resources,
 		"volumes": map[string]any{"type": "array", "maxItems": 16, "items": objectSchema([]string{"name", "kind", "sizeMib"}, map[string]any{
 			"name": stringSchema(1, 32), "kind": enumSchema("EPHEMERAL_DISK", "EPHEMERAL_MEMORY"),
 			"sizeMib": map[string]any{"type": "integer", "minimum": 16, "maximum": 10240},
 		})},
-		"networkDestinations": map[string]any{"type": "array", "minItems": 3, "maxItems": 4, "uniqueItems": true,
-			"items": enumSchema("DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "KUBERNETES_API")},
-		"kubernetesAccess": enumSchema("NONE", "READ_OWN_EXECUTION"),
+		"networkDestinations": map[string]any{"type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+			"items": enumSchema("DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK")},
+		"webAccess":        webAccess,
+		"kubernetesAccess": enumSchema("NONE"),
 	})
 }
 
@@ -290,6 +305,29 @@ func environmentSecretSuggestionsSchema() map[string]any {
 			"valueType": enumSchema("STRING", "JSON", "BINARY"), "sourceHelp": stringSchema(1, 1000),
 		}),
 	}
+}
+
+func environmentRevisionInputSchema(environmentRef map[string]any, systemAssistantRef map[string]any) map[string]any {
+	required := []string{"environmentRef"}
+	properties := map[string]any{
+		"environmentRef": environmentRef, "name": stringSchema(1, 120),
+		"description": stringSchema(0, 1000), "imageArtifactRef": stringSchema(0, 96),
+		"publicValues": environmentPublicValuesSchema(), "publicValueUpdates": environmentPublicValueUpdatesSchema(),
+		"publicValueRemovals": environmentPublicValueRemovalsSchema(), "secretBindings": environmentSecretBindingsSchema(),
+		"tools": environmentToolsSchema(), "policy": environmentPolicySchema(),
+	}
+	if systemAssistantRef != nil {
+		required = append(required, "systemAssistantRef")
+		properties["systemAssistantRef"] = systemAssistantRef
+	}
+	schema := objectSchema(required, properties)
+	schema["anyOf"] = []map[string]any{
+		{"required": []string{"name"}}, {"required": []string{"description"}},
+		{"required": []string{"imageArtifactRef"}}, {"required": []string{"publicValues"}},
+		{"required": []string{"publicValueUpdates"}}, {"required": []string{"publicValueRemovals"}},
+		{"required": []string{"secretBindings"}}, {"required": []string{"tools"}}, {"required": []string{"policy"}},
+	}
+	return schema
 }
 
 func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[string]any {
@@ -359,10 +397,47 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
+	if input.IsSystemAssistant() {
+		result = append(result, assistantOperationSchema("CREATE_PROJECT_ASSISTANT", objectSchema(
+			[]string{"projectRef", "name", "purpose", "instructions"}, map[string]any{
+				"projectRef": projectRef, "name": stringSchema(1, 120), "purpose": stringSchema(1, 1000),
+				"instructions": assistantAgentInstructionsSchema(),
+			})))
+	}
+	selfInstructionsOperation := input.IsSystemAssistant() && input.AgentRef != ""
+	if selfInstructionsOperation {
+		result = append(result, assistantOperationSchema("UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", objectSchema(
+			[]string{"systemAssistantRef", "instructions"}, map[string]any{
+				"systemAssistantRef": enumSchema(input.AgentRef),
+				"instructions":       stringSchema(0, 20000),
+			})))
+	}
+	selfEnvironmentOperation := input.IsSystemAssistant() && input.AgentRef != "" && input.RuntimeEnvironmentRef != "" &&
+		(input.AssistantContext == nil || input.AssistantContext.EntityKind != "ENVIRONMENT")
+	if selfEnvironmentOperation {
+		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+			environmentRevisionInputSchema(enumSchema(input.RuntimeEnvironmentRef), enumSchema(input.AgentRef))))
+	}
+	projectSelfOperation := input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != ""
+	if projectSelfOperation {
+		result = append(result,
+			assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(projectSelfTargetSchema(input, "UPDATE_AGENT", "AGENT", input.AgentRef))),
+			assistantOperationSchema("CREATE_INSTRUCTION_DRAFT", objectSchema([]string{"agentRef", "instructions"}, map[string]any{
+				"agentRef": projectSelfTargetSchema(input, "CREATE_INSTRUCTION_DRAFT", "AGENT", input.AgentRef), "instructions": assistantAgentInstructionsSchema(),
+			})),
+			assistantOperationSchema("BIND_AGENT_RUNTIME_ENVIRONMENT", objectSchema([]string{"agentRef", "environmentRef"}, map[string]any{
+				"agentRef": projectSelfTargetSchema(input, "BIND_AGENT_RUNTIME_ENVIRONMENT", "AGENT", input.AgentRef), "environmentRef": opaqueRefSchema(),
+			})))
+	}
+	projectSelfEnvironmentOperation := input.AssistantScope == runtimecontract.AssistantScopeProject && input.RuntimeEnvironmentRef != ""
+	if projectSelfEnvironmentOperation {
+		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+			environmentRevisionInputSchema(projectSelfTargetSchema(input, "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "ENVIRONMENT", input.RuntimeEnvironmentRef), nil)))
+	}
 	if input.AssistantContext == nil {
 		return result
 	}
-	if input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef != "" {
+	if input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef != "" && !projectSelfOperation {
 		result = append(result, assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(enumSchema(input.AssistantContext.EntityRef))))
 		result = append(result, assistantOperationSchema("CREATE_INSTRUCTION_DRAFT", objectSchema(
 			[]string{"agentRef", "instructions"}, map[string]any{
@@ -376,22 +451,9 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "WORKFLOW" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_WORKFLOW", workflowUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
-	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" {
-		schema := objectSchema([]string{"environmentRef"}, map[string]any{
-			"environmentRef": enumSchema(input.AssistantContext.EntityRef), "name": stringSchema(1, 120),
-			"description": stringSchema(0, 1000), "imageArtifactRef": stringSchema(0, 96),
-			"publicValues": environmentPublicValuesSchema(), "publicValueUpdates": environmentPublicValueUpdatesSchema(),
-			"publicValueRemovals": environmentPublicValueRemovalsSchema(), "secretBindings": environmentSecretBindingsSchema(),
-			"tools":  environmentToolsSchema(),
-			"policy": environmentPolicySchema(),
-		})
-		schema["anyOf"] = []map[string]any{
-			{"required": []string{"name"}}, {"required": []string{"description"}},
-			{"required": []string{"imageArtifactRef"}}, {"required": []string{"publicValues"}},
-			{"required": []string{"publicValueUpdates"}}, {"required": []string{"publicValueRemovals"}},
-			{"required": []string{"secretBindings"}}, {"required": []string{"tools"}}, {"required": []string{"policy"}},
-		}
-		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION", schema))
+	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" && !projectSelfEnvironmentOperation {
+		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+			environmentRevisionInputSchema(enumSchema(input.AssistantContext.EntityRef), nil)))
 	}
 	if input.AssistantContext.EntityKind == "INTEGRATION_CONNECTION" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_INTEGRATION_CONNECTION", connectionUpdateInputSchema(input.AssistantContext.EntityRef)))
@@ -399,7 +461,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "SCHEDULE" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_SCHEDULE", scheduleUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
-	if len(input.AssistantContext.AllowedOperations) == 0 {
+	if len(input.AssistantContext.AllowedOperations) == 0 && !projectSelfOperation && !projectSelfEnvironmentOperation {
 		return nil
 	}
 	allowed := make(map[string]struct{}, len(input.AssistantContext.AllowedOperations))
@@ -409,11 +471,28 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	filtered := make([]map[string]any, 0, len(result))
 	for _, operation := range result {
 		kind := operation["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
-		if _, ok := allowed[kind]; ok {
+		if _, ok := allowed[kind]; ok ||
+			selfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
+			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
+			projectSelfOperation && (kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT") ||
+			projectSelfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 			filtered = append(filtered, operation)
 		}
 	}
 	return filtered
+}
+
+func projectSelfTargetSchema(input runtimecontract.RunnerInput, operation, kind, ownRef string) map[string]any {
+	refs := []string{ownRef}
+	if context := input.AssistantContext; context != nil && context.EntityKind == kind && context.EntityRef != "" && context.EntityRef != ownRef {
+		for _, allowed := range context.AllowedOperations {
+			if allowed == operation {
+				refs = append(refs, context.EntityRef)
+				break
+			}
+		}
+	}
+	return enumSchema(refs...)
 }
 
 func assistantAgentCapabilitySchema() map[string]any {
@@ -536,7 +615,7 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true

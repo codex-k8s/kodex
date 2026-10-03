@@ -25,7 +25,13 @@ WITH current_environment AS (
       AND environment.state = 'ACTIVE'
       AND environment.current_version_id = @current_version_id::uuid
       AND current_version.version_number = @current_version
-      AND current_version.role_image_artifact_id IS NULL
+      AND (current_version.role_image_artifact_id IS NULL OR EXISTS (
+          SELECT 1
+          FROM control_plane.image_artifacts current_artifact
+          WHERE current_artifact.id = current_version.role_image_artifact_id
+            AND current_artifact.organization_id = current_version.organization_id
+            AND current_artifact.signature_identity = 'platform-owned-bootstrap'
+      ))
     FOR UPDATE OF environment
 ), inserted_version AS (
     INSERT INTO control_plane.runtime_environment_versions
@@ -35,7 +41,8 @@ WITH current_environment AS (
          resources_digest, volumes_digest, network_digest, rbac_digest, digest, created_by)
     SELECT @version_ref, current_environment.organization_id, current_environment.id,
            current_environment.version_number + 1, current_environment.current_version_id,
-           current_environment.non_secret_values, current_environment.secret_descriptors, NULL,
+           current_environment.non_secret_values, current_environment.secret_descriptors,
+           @image_artifact_id::uuid,
            current_environment.selected_tools, @expected_core_digest,
            current_environment.resource_policy, current_environment.volume_policy,
            current_environment.network_policy, current_environment.kubernetes_access_profile,

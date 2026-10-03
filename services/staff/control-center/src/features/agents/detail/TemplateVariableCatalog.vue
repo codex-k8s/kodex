@@ -320,7 +320,7 @@ useCursorInfiniteScroll({
 .variable-catalog__scope select {
   width: 100%;
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--control-height);
   border: 0;
   outline: 0;
   background: transparent;

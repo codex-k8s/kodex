@@ -8,6 +8,11 @@ type Page struct {
 	Token string
 }
 
+type AssistantConversationFilter struct {
+	Filter
+	AssistantScope, AssistantRef string
+}
+
 type Filter struct {
 	ProviderUsage                                                                   *entity.ProviderAccountUsageContext `json:",omitempty"`
 	VFSKinds                                                                        []string                            `json:",omitempty"`

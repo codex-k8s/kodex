@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/callback"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/credentialprojection"
@@ -108,14 +109,19 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, credentials.Close()) }()
+	egressSigningKey, err := securefile.Read(config.RuntimeEgressSigningKeyFile, 4096)
+	if err != nil {
+		return errors.New("read runtime egress signing key")
+	}
 	manager, err := workload.InCluster(workload.Config{
 		RPCProfile:  config.RPCProfile,
 		Environment: config.Environment, ControlNamespace: config.ControlNamespace, RuntimeNamespace: config.RuntimeNamespace,
 		ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
 		CallbackTLSServerName: config.CallbackTLSServerName, CallbackClientCASecret: config.CallbackClientCASecret,
 		CallbackClientTLSSecret: config.CallbackClientTLSSecret, ProviderHTTPSProxy: config.ProviderHTTPSProxy,
+		RuntimeEgressSigningKey: egressSigningKey,
+		RuntimeEgressCASecret:   config.RuntimeEgressCASecret,
 		ProviderAppArmorProfile: config.ProviderAppArmorProfile,
-		KubernetesAPIServiceIP:  config.KubernetesAPIServiceIP,
 		StorageClass:            config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
 		PromotedRoleImageRepository: config.PromotedRoleImageRepository, RoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
 		DefaultRoleImageReference: config.DefaultRoleImageReference,

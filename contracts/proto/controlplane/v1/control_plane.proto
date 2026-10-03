@@ -227,6 +227,7 @@ service PlatformCommandService {
   rpc DeleteProviderAccount(DeleteProviderAccountRequest) returns (DeleteProviderAccountResponse);
   rpc CancelProviderAccountQueuedWork(CancelProviderAccountQueuedWorkRequest) returns (CancelProviderAccountQueuedWorkResponse);
   rpc SetProviderAccountEnabled(SetProviderAccountEnabledRequest) returns (SetProviderAccountEnabledResponse);
+  rpc SetProviderAccountConcurrency(SetProviderAccountConcurrencyRequest) returns (SetProviderAccountConcurrencyResponse);
   rpc CreateIntegrationConnection(CreateIntegrationConnectionRequest) returns (CreateIntegrationConnectionResponse);
   rpc UpdateIntegrationConnection(UpdateIntegrationConnectionRequest) returns (UpdateIntegrationConnectionResponse);
   rpc DeleteIntegrationConnection(DeleteIntegrationConnectionRequest) returns (DeleteIntegrationConnectionResponse);
@@ -332,6 +333,8 @@ service RuntimeSecretWorkService {
 
 service SystemAssistantService {
   rpc GetSystemAssistant(GetSystemAssistantRequest) returns (GetSystemAssistantResponse);
+  rpc CreateProjectAssistant(CreateProjectAssistantRequest) returns (CreateProjectAssistantResponse);
+  rpc GetProjectAssistant(GetProjectAssistantRequest) returns (GetProjectAssistantResponse);
   rpc ListAssistantConversations(ListAssistantConversationsRequest) returns (ListAssistantConversationsResponse);
   rpc CreateAssistantConversation(CreateAssistantConversationRequest) returns (CreateAssistantConversationResponse);
   rpc UpdateAssistantConversationTitle(UpdateAssistantConversationTitleRequest) returns (UpdateAssistantConversationTitleResponse);
@@ -340,6 +343,7 @@ service SystemAssistantService {
   rpc PurgeAssistantConversation(PurgeAssistantConversationRequest) returns (PurgeAssistantConversationResponse);
   rpc MoveAssistantConversationToProject(MoveAssistantConversationToProjectRequest) returns (MoveAssistantConversationToProjectResponse);
   rpc AddAssistantTurn(AddAssistantTurnRequest) returns (AddAssistantTurnResponse);
+  rpc CancelAssistantTurn(CancelAssistantTurnRequest) returns (CancelAssistantTurnResponse);
   rpc UpdateAssistantPlanDraft(UpdateAssistantPlanDraftRequest) returns (UpdateAssistantPlanDraftResponse);
   rpc ValidateAssistantPlan(ValidateAssistantPlanRequest) returns (ValidateAssistantPlanResponse);
   rpc ApplyAssistantPlan(ApplyAssistantPlanRequest) returns (ApplyAssistantPlanResponse);
@@ -518,6 +522,7 @@ enum NextAction {
   NEXT_ACTION_REQUEST_BUILD = 40;
   NEXT_ACTION_PURGE = 41;
   NEXT_ACTION_CANCEL_BUILD = 42;
+  NEXT_ACTION_CREATE_PROJECT_ASSISTANT = 43;
 }
 
 enum EntityLifecycle {
@@ -1501,6 +1506,10 @@ message AssistantPlanOperation {
     TYPE_UPDATE_SCHEDULE = 23;
     // Создать проверенный текстовый файл Проекта через подтверждаемый план помощника.
     TYPE_CREATE_PROJECT_FILE = 24;
+    // Изменить owner-инструкции системного помощника по точной версии.
+    TYPE_UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS = 25;
+    // Подготовить отдельного помощника проекта без копирования системных grants.
+    TYPE_CREATE_PROJECT_ASSISTANT = 26;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -1603,6 +1612,14 @@ message AssistantTurn {
   AssistantPlan plan = 6;
   google.protobuf.Timestamp created_at = 7;
   string attachment_set_ref = 8;
+  string run_ref = 9;
+  int64 run_version = 10;
+}
+
+enum AssistantTurnDeliveryMode {
+  ASSISTANT_TURN_DELIVERY_MODE_UNSPECIFIED = 0;
+  ASSISTANT_TURN_DELIVERY_MODE_QUEUE = 1;
+  ASSISTANT_TURN_DELIVERY_MODE_INTERRUPT_ACTIVE = 2;
 }
 
 enum AssistantConversationState {
@@ -1610,6 +1627,25 @@ enum AssistantConversationState {
   ASSISTANT_CONVERSATION_STATE_ACTIVE = 1;
   ASSISTANT_CONVERSATION_STATE_CLOSED = 2;
   ASSISTANT_CONVERSATION_STATE_ARCHIVED = 3;
+}
+
+// Область профиля независима от проекта контекста системного диалога.
+enum AssistantScope {
+  ASSISTANT_SCOPE_UNSPECIFIED = 0;
+  ASSISTANT_SCOPE_NONE = 1;
+  ASSISTANT_SCOPE_SYSTEM = 2;
+  ASSISTANT_SCOPE_PROJECT = 3;
+}
+
+message ProjectAssistantProfile {
+  string ref = 1;
+  string project_ref = 2;
+  string agent_ref = 3;
+  string name = 4;
+  string state = 5;
+  int64 version = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
 }
 
 message AssistantConversation {
@@ -1623,6 +1659,9 @@ message AssistantConversation {
   int64 title_revision = 8;
   AssistantContextDescriptor context = 9;
   AssistantConversationState state = 10;
+  AssistantScope assistant_scope = 11;
+  string assistant_ref = 12;
+  string assistant_profile_ref = 13;
 }
 
 message SystemAssistant {
@@ -2780,12 +2819,30 @@ message GetSystemAssistantRequest {}
 message GetSystemAssistantResponse {
   SystemAssistant assistant = 1;
 }
+message CreateProjectAssistantRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string purpose = 4;
+  string instructions = 5;
+}
+message CreateProjectAssistantResponse {
+  ProjectAssistantProfile profile = 1;
+}
+message GetProjectAssistantRequest {
+  string project_ref = 1;
+}
+message GetProjectAssistantResponse {
+  ProjectAssistantProfile profile = 1;
+}
 message ListAssistantConversationsRequest {
   PageRequest page = 1;
   string project_ref = 2;
   string query = 3;
   AssistantConversationState state = 4;
   bool match_localized_default_title = 5;
+  AssistantScope assistant_scope = 6;
+  string assistant_ref = 7;
 }
 message ListAssistantConversationsResponse {
   repeated AssistantConversation conversations = 1;
@@ -2797,6 +2854,7 @@ message CreateAssistantConversationRequest {
   reserved "title";
   string project_ref = 3;
   AssistantContextDescriptor context = 4;
+  AssistantScope assistant_scope = 5;
 }
 message CreateAssistantConversationResponse {
   AssistantConversation conversation = 1;
@@ -2846,10 +2904,20 @@ message AddAssistantTurnRequest {
   reserved "artifact_refs";
   string attachment_set_ref = 5;
   AssistantContextDescriptor context = 6;
+  AssistantTurnDeliveryMode delivery_mode = 7;
 }
 message AddAssistantTurnResponse {
   AssistantConversation conversation = 1;
   SystemAssistant assistant = 2;
+}
+message CancelAssistantTurnRequest {
+  MutationContext mutation = 1;
+  string conversation_ref = 2;
+}
+message CancelAssistantTurnResponse {
+  string conversation_ref = 1;
+  string run_ref = 2;
+  bool cancelled = 3;
 }
 message UpdateAssistantPlanDraftRequest {
   MutationContext mutation = 1;
@@ -2998,7 +3066,7 @@ message RuntimeRevisionSnapshot {
   repeated Artifact artifacts = 13;
   string input_digest = 14;
   string revision_digest = 15;
-  bool system_assistant = 16;
+  AssistantScope assistant_scope = 16;
   repeated DelegationTarget delegation_targets = 17;
   string callback_edge_ref = 18;
   repeated SessionContextMessage session_context = 19;
@@ -3065,6 +3133,7 @@ message RuntimeRevisionSnapshot {
   string prompt_service_template_revision = 74;
   string prompt_service_template_digest = 75;
   string prompt_target_kind = 76;
+  string assistant_profile_ref = 77;
 }
 
 enum RuntimeFilePurpose {
@@ -5092,7 +5161,6 @@ enum RuntimeNetworkDestination {
   RUNTIME_NETWORK_DESTINATION_DNS = 1;
   RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK = 2;
   RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY = 3;
-  RUNTIME_NETWORK_DESTINATION_KUBERNETES_API = 4;
 }
 
 enum RuntimeNetworkProtocol {
@@ -5101,10 +5169,17 @@ enum RuntimeNetworkProtocol {
   RUNTIME_NETWORK_PROTOCOL_UDP = 2;
 }
 
+enum RuntimeWebAccessMode {
+  RUNTIME_WEB_ACCESS_MODE_UNSPECIFIED = 0;
+  RUNTIME_WEB_ACCESS_MODE_NONE = 1;
+  RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY = 2;
+  RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL = 3;
+  RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC = 4;
+}
+
 enum RuntimeKubernetesAccessKind {
   RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED = 0;
   RUNTIME_KUBERNETES_ACCESS_KIND_NONE = 1;
-  RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION = 2;
 }
 
 message RuntimeResourcePolicy {
@@ -5134,6 +5209,7 @@ message RuntimeEnvironmentPolicyInput {
   repeated RuntimeVolumeInput volumes = 2;
   repeated RuntimeNetworkDestination network_destinations = 3;
   RuntimeKubernetesAccessKind kubernetes_access = 4;
+  RuntimeWebAccess web_access = 5;
 }
 
 message RuntimeNetworkEgress {
@@ -5145,6 +5221,19 @@ message RuntimeNetworkEgress {
 message RuntimeNetworkPolicy {
   bool deny_by_default = 1;
   repeated RuntimeNetworkEgress egress = 2;
+  RuntimeWebAccess web_access = 3;
+}
+
+message RuntimeWebAccessRule {
+  string domain_pattern = 1;
+  string protocol = 2;
+  int32 port = 3;
+  repeated string http_methods = 4;
+}
+
+message RuntimeWebAccess {
+  RuntimeWebAccessMode mode = 1;
+  repeated RuntimeWebAccessRule rules = 2;
 }
 
 message RuntimeKubernetesAccessProfile {
@@ -5467,6 +5556,7 @@ message ProviderAccount {
   ProviderAccountUsage usage = 14;
   ProviderAccountDeletion deletion = 15;
   ProviderAccountVerification verification = 16;
+  int32 maximum_concurrent_executions = 17;
 }
 
 enum ProviderAccountBlockerKind {
@@ -5769,6 +5859,15 @@ message CancelProviderAccountQueuedWorkResponse {
   ProviderAccount account = 1;
   repeated ProviderAccountQueuedWorkResult outcomes = 2;
 }
+message SetProviderAccountConcurrencyRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+  int32 maximum_concurrent_executions = 3;
+}
+message SetProviderAccountConcurrencyResponse {
+  ProviderAccount account = 1;
+}
+
 message SetProviderAccountEnabledRequest {
   MutationContext mutation = 1;
   string account_ref = 2;

@@ -259,7 +259,8 @@ func castRuntimeEnvironmentPolicy(value runtimecontract.RuntimeEnvironmentPolicy
 			MemoryRequestMib: value.Resources.MemoryRequestMiB, MemoryLimitMib: value.Resources.MemoryLimitMiB,
 			EphemeralStorageRequestMib: value.Resources.EphemeralStorageRequestMiB,
 			EphemeralStorageLimitMib:   value.Resources.EphemeralStorageLimitMiB,
-		}, Network: &controlplanev1.RuntimeNetworkPolicy{DenyByDefault: value.Network.DenyByDefault},
+		}, Network: &controlplanev1.RuntimeNetworkPolicy{DenyByDefault: value.Network.DenyByDefault,
+			WebAccess: &controlplanev1.RuntimeWebAccess{Mode: castRuntimeWebAccessMode(value.Network.WebAccess.Mode)}},
 		KubernetesAccess: &controlplanev1.RuntimeKubernetesAccessProfile{
 			Kind: castRuntimeKubernetesAccessKind(value.KubernetesAccess.Kind), Namespace: value.KubernetesAccess.Namespace,
 		}, ResourcesDigest: value.ResourcesDigest, VolumesDigest: value.VolumesDigest,
@@ -275,7 +276,27 @@ func castRuntimeEnvironmentPolicy(value runtimecontract.RuntimeEnvironmentPolicy
 			Destination: castRuntimeNetworkDestination(egress.Destination), Protocol: castRuntimeNetworkProtocol(egress.Protocol), Port: egress.Port,
 		})
 	}
+	for _, rule := range value.Network.WebAccess.Rules {
+		result.Network.WebAccess.Rules = append(result.Network.WebAccess.Rules, &controlplanev1.RuntimeWebAccessRule{
+			DomainPattern: rule.DomainPattern, Protocol: rule.Protocol, Port: rule.Port, HttpMethods: append([]string(nil), rule.HTTPMethods...),
+		})
+	}
 	return result
+}
+
+func castRuntimeWebAccessMode(value string) controlplanev1.RuntimeWebAccessMode {
+	switch value {
+	case runtimecontract.RuntimeWebAccessNone:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE
+	case runtimecontract.RuntimeWebAccessAllowlistReadOnly:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY
+	case runtimecontract.RuntimeWebAccessAllowlistFull:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL
+	case runtimecontract.RuntimeWebAccessFullPublic:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC
+	default:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_UNSPECIFIED
+	}
 }
 
 func castRuntimeVolumeKind(value string) controlplanev1.RuntimeVolumeKind {
@@ -293,8 +314,6 @@ func castRuntimeNetworkDestination(value string) controlplanev1.RuntimeNetworkDe
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK
 	case runtimecontract.RuntimeEgressProviderProxy:
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY
-	case runtimecontract.RuntimeEgressKubernetesAPI:
-		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API
 	default:
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_UNSPECIFIED
 	}
@@ -308,8 +327,8 @@ func castRuntimeNetworkProtocol(value string) controlplanev1.RuntimeNetworkProto
 }
 
 func castRuntimeKubernetesAccessKind(value string) controlplanev1.RuntimeKubernetesAccessKind {
-	if value == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
+	if value != runtimecontract.RuntimeKubernetesAccessNone {
+		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED
 	}
 	return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
 }
@@ -696,6 +715,8 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 	}
 	result := &controlplanev1.AssistantConversation{Ref: value.Ref, Version: value.Version, Title: value.Title,
 		TitleSource: value.TitleSource, TitleRevision: value.TitleRevision, ProjectRef: value.ProjectRef,
+		AssistantScope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+value.AssistantScope]),
+		AssistantRef:   value.AssistantRef, AssistantProfileRef: value.AssistantProfileRef,
 		Context: context, UpdatedAt: timestamp(value.UpdatedAt), State: controlplanev1.AssistantConversationState(controlplanev1.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+value.State])}
 	nextSequence := int64(1)
 	plans := value.Plans
@@ -708,7 +729,7 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: plan.Ref, Sequence: sequence, Role: "ASSISTANT", Content: plan.Summary, State: "COMPLETED", Plan: castPlan(plan), CreatedAt: timestamp(plan.CreatedAt)})
 	}
 	for _, turn := range value.Turns {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, CreatedAt: timestamp(turn.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, RunRef: turn.RunRef, RunVersion: turn.RunVersion, CreatedAt: timestamp(turn.CreatedAt)})
 		if turn.Sequence >= nextSequence {
 			nextSequence = turn.Sequence + 1
 		}

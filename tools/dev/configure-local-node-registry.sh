@@ -37,6 +37,12 @@ case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
   fail 'material directory is invalid'
 [[ "$promoted_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
   "$promoted_pull_host" == *.* ]] || fail 'promoted pull host is invalid'
+script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+if [[ "$context" == k3d-* ]]; then
+  exec "$script_directory/configure-k3d-node-registry.sh" --mode "$mode" \
+    --context "$context" --material-directory "$material_directory" \
+    --promoted-pull-host "$promoted_pull_host"
+fi
 for command_name in jq kubectl sha256sum stat sudo systemctl yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -69,8 +75,8 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"; unset password' EXIT
 
 existing_json='{}'
-if sudo test -f "$registry_configuration"; then
-  sudo yq -o=json "$registry_configuration" |
+if sudo -n test -f "$registry_configuration"; then
+  sudo -n yq -o=json "$registry_configuration" |
     jq -c . >"$temporary_directory/existing.json"
   existing_json=$(jq -c 'if type == "object" then . else {} end' "$temporary_directory/existing.json")
 fi
@@ -88,10 +94,10 @@ printf '%s\n' "$expected_json" | yq -P >"$temporary_directory/registries.yaml"
 chmod 0600 "$temporary_directory/registries.yaml"
 
 changed=false
-if ! sudo test -f "$registry_configuration"; then
+if ! sudo -n test -f "$registry_configuration"; then
   changed=true
 else
-  actual=$(sudo yq -o=json "$registry_configuration" | jq -cS .)
+  actual=$(sudo -n yq -o=json "$registry_configuration" | jq -cS .)
   expected=$(jq -cS . <<<"$expected_json")
   [[ "$actual" == "$expected" ]] || changed=true
 fi
@@ -100,8 +106,8 @@ for pair in "$ca_file:$system_ca" "$certificate_file:$system_certificate" "$priv
   target_path=${pair#*:}
   source_digest=$(sha256sum "$source_path" | awk '{print $1}')
   target_digest=""
-  if sudo test -f "$target_path"; then
-    target_digest=$(sudo sha256sum "$target_path" | awk '{print $1}')
+  if sudo -n test -f "$target_path"; then
+    target_digest=$(sudo -n sha256sum "$target_path" | awk '{print $1}')
   fi
   if [[ "$source_digest" != "$target_digest" ]]; then
     changed=true
@@ -109,13 +115,13 @@ for pair in "$ca_file:$system_ca" "$certificate_file:$system_certificate" "$priv
 done
 
 if [[ "$mode" == apply && "$changed" == true ]]; then
-  sudo install -d -m 0700 "$system_directory"
-  sudo install -m 0600 "$ca_file" "$system_ca"
-  sudo install -m 0600 "$certificate_file" "$system_certificate"
-  sudo install -m 0600 "$private_key_file" "$system_private_key"
-  sudo install -d -m 0700 /etc/rancher/k3s
-  sudo install -m 0600 "$temporary_directory/registries.yaml" "$registry_configuration"
-  sudo systemctl restart k3s
+  sudo -n install -d -m 0700 "$system_directory"
+  sudo -n install -m 0600 "$ca_file" "$system_ca"
+  sudo -n install -m 0600 "$certificate_file" "$system_certificate"
+  sudo -n install -m 0600 "$private_key_file" "$system_private_key"
+  sudo -n install -d -m 0700 /etc/rancher/k3s
+  sudo -n install -m 0600 "$temporary_directory/registries.yaml" "$registry_configuration"
+  sudo -n systemctl restart k3s
 fi
 
 for attempt in $(seq 1 120); do
@@ -123,8 +129,8 @@ for attempt in $(seq 1 120); do
   ((attempt < 120)) || fail 'Kubernetes API did not recover after registry configuration'
   sleep 2
 done
-sudo test -f "$registry_configuration" || fail 'K3s registry configuration is absent'
-actual_host=$(sudo yq -o=json "$registry_configuration" | jq -cS --arg host "$promoted_pull_host" '
+sudo -n test -f "$registry_configuration" || fail 'K3s registry configuration is absent'
+actual_host=$(sudo -n yq -o=json "$registry_configuration" | jq -cS --arg host "$promoted_pull_host" '
   {mirror:.mirrors[$host],config:.configs[$host]}
 ')
 expected_host=$(jq -cS --arg host "$promoted_pull_host" '
@@ -135,7 +141,7 @@ for pair in "$ca_file:$system_ca" "$certificate_file:$system_certificate" "$priv
   source_path=${pair%%:*}
   target_path=${pair#*:}
   source_digest=$(sha256sum "$source_path" | awk '{print $1}')
-  target_digest=$(sudo sha256sum "$target_path" | awk '{print $1}')
+  target_digest=$(sudo -n sha256sum "$target_path" | awk '{print $1}')
   [[ "$source_digest" == "$target_digest" ]] ||
     fail 'K3s promoted pull TLS material mismatch'
 done

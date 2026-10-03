@@ -31,23 +31,23 @@ func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *
 		t.Fatalf("history reader project: %v", err)
 	}
 	foreign := contextProjectReader(t, ctx, repository, service, owner, project.Project.Ref, "ASSISTANT")
-	defaultConversation, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "history-create-default"}, Payload: command.AssistantConversationInput{ProjectRef: project.Project.Ref}})
+	defaultConversation, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "history-create-default"}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM", ProjectRef: project.Project.Ref}})
 	if err != nil || defaultConversation.Conversation == nil {
 		t.Fatalf("create default history fixture: %v", err)
 	}
-	withoutDefault, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Query: "New conversation", Page: query.Page{Size: 10}})
+	withoutDefault, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{ProjectRef: project.Project.Ref, Query: "New conversation", Page: query.Page{Size: 10}}})
 	if err != nil || len(withoutDefault) != 0 {
 		t.Fatalf("localized title unexpectedly matched the stored message key: count=%d %v", len(withoutDefault), err)
 	}
-	withDefault, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Query: "New conversation", MatchAssistantLocalizedDefaultTitle: true, Page: query.Page{Size: 10}})
+	withDefault, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{ProjectRef: project.Project.Ref, Query: "New conversation", MatchAssistantLocalizedDefaultTitle: true, Page: query.Page{Size: 10}}})
 	if err != nil || len(withDefault) != 1 || withDefault[0].Ref != defaultConversation.Conversation.Ref {
 		t.Fatalf("localized default title search failed: count=%d %v", len(withDefault), err)
 	}
-	if _, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{MatchAssistantLocalizedDefaultTitle: true, Page: query.Page{Size: 10}}); !errors.Is(err, errs.ErrInvalid) {
+	if _, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{MatchAssistantLocalizedDefaultTitle: true, Page: query.Page{Size: 10}}}); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("default title expansion without a query was accepted: %v", err)
 	}
 	for _, key := range []string{"one", "two", "three"} {
-		created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "history-create-" + key}, Payload: command.AssistantConversationInput{}})
+		created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "history-create-" + key}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM"}})
 		if err != nil || created.Conversation == nil {
 			t.Fatalf("create history fixture: %v", err)
 		}
@@ -60,7 +60,7 @@ func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *
 	var items []entity.AssistantConversation
 	var firstToken string
 	for {
-		page, next, err := service.ListAssistantConversations(ctx, owner, filter)
+		page, next, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: filter})
 		if err != nil || len(page) != 1 {
 			t.Fatalf("history page: count=%d %v", len(page), err)
 		}
@@ -80,15 +80,15 @@ func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *
 		t.Fatal("history pagination duplicated or omitted conversation")
 	}
 	changed := query.Filter{Query: "other", Page: query.Page{Size: 1, Token: firstToken}}
-	if _, _, err := service.ListAssistantConversations(ctx, owner, changed); !errors.Is(err, errs.ErrInvalid) {
+	if _, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: changed}); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("history cursor crossed search: %v", err)
 	}
 	changed.Query = "history archive"
-	if _, _, err := service.ListAssistantConversations(ctx, foreign, changed); !errors.Is(err, errs.ErrInvalid) {
+	if _, _, err := service.ListAssistantConversations(ctx, foreign, query.AssistantConversationFilter{Filter: changed}); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("history cursor crossed actor: %v", err)
 	}
 	changed.Page.Token = ""
-	if page, _, err := service.ListAssistantConversations(ctx, foreign, changed); err != nil || len(page) != 0 {
+	if page, _, err := service.ListAssistantConversations(ctx, foreign, query.AssistantConversationFilter{Filter: changed}); err != nil || len(page) != 0 {
 		t.Fatalf("another actor read conversations: count=%d %v", len(page), err)
 	}
 	archive := command.Command{Kind: command.ArchiveAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "history-archive", ExpectedVersion: &items[0].Version}, Payload: command.AssistantConversationArchiveInput{ConversationRef: items[0].Ref}}
@@ -110,11 +110,11 @@ func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *
 	if replay, err := service.Execute(ctx, archive); err != nil || replay.Conversation == nil || replay.Conversation.Version != result.Conversation.Version {
 		t.Fatalf("archive replay: %v", err)
 	}
-	active, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Query: "history archive", Page: query.Page{Size: 10}})
+	active, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Query: "history archive", Page: query.Page{Size: 10}}})
 	if err != nil || len(active) != 2 {
 		t.Fatalf("archived chat remains active: %d %v", len(active), err)
 	}
-	archived, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Query: "history archive", State: "ARCHIVED", Page: query.Page{Size: 10}})
+	archived, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Query: "history archive", State: "ARCHIVED", Page: query.Page{Size: 10}}})
 	if err != nil || len(archived) != 1 || archived[0].Ref != items[0].Ref {
 		t.Fatalf("archived history missing: %d %v", len(archived), err)
 	}
@@ -135,12 +135,12 @@ func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *
 		Payload:  command.AssistantConversationArchiveInput{ConversationRef: items[0].Ref}}); err != nil {
 		t.Fatalf("purge history: %v", err)
 	}
-	archived, _, err = service.ListAssistantConversations(ctx, owner, query.Filter{Query: "history archive", State: "ARCHIVED", Page: query.Page{Size: 10}})
+	archived, _, err = service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Query: "history archive", State: "ARCHIVED", Page: query.Page{Size: 10}}})
 	if err != nil || len(archived) != 0 {
 		t.Fatalf("purged history remains readable: %d %v", len(archived), err)
 	}
 	retained, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "history-retention-create"}, Payload: command.AssistantConversationInput{ProjectRef: project.Project.Ref}})
+		Mutation: value.Mutation{IdempotencyKey: "history-retention-create"}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM", ProjectRef: project.Project.Ref}})
 	if err != nil || retained.Conversation == nil {
 		t.Fatalf("create assistant retention fixture: %v", err)
 	}

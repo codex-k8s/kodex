@@ -6,7 +6,8 @@ FROM control_plane.runtime_secrets secret
 JOIN control_plane.runtime_secret_revisions revision
   ON revision.secret_id = secret.id AND revision.state='ACTIVE'
 WHERE secret.organization_id = @organization_id::uuid
-  AND secret.project_id = @project_id::uuid
+  AND secret.scope_kind = @scope_kind
+  AND secret.project_id IS NOT DISTINCT FROM @project_id::uuid
   AND secret.state = 'ACTIVE'
   AND revision.secret_name = @secret_name
   AND revision.secret_key = @secret_key

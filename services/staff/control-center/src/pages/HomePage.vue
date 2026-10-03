@@ -220,7 +220,7 @@ function chooseActionProject(value: unknown): void {
 
 <style scoped>
 .home-page :deep(.page-header__actions .button--primary) {
-  min-height: 38px;
+  min-height: var(--control-height);
   padding-inline: 16px;
 }
 .home-dashboard {

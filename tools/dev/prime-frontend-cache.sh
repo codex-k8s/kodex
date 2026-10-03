@@ -53,7 +53,11 @@ cleanup() {
 trap cleanup EXIT
 # В контейнер передаются только публичные manifests, без host npmrc/credentials.
 cp -- "$frontend/package.json" "$frontend/package-lock.json" "$staging/"
-timeout 300s docker run "${container_args[@]}" --cidfile "$staging/container-id" \
+# Наполнение кеша — доверенный host-side шаг. Host network сохраняет установку
+# работоспособной на серверах, где Docker bridge не имеет исходящего маршрута;
+# runtime-контейнер по-прежнему запускается offline с --network none.
+timeout 300s docker run "${container_args[@]}" --network host \
+  --cidfile "$staging/container-id" \
   -v "$staging:/install" -w /install \
   "$node_image" sh -ec '
     npm ci --ignore-scripts --include=dev --include=optional --no-audit --no-fund >&2

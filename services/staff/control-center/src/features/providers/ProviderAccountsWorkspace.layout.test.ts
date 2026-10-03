@@ -79,7 +79,11 @@ describe("provider account layout", () => {
     expect(workspace).not.toContain("loadProviderAccount");
     expect(lifecycle).not.toContain("pollTimer");
     expect(lifecycle).not.toContain("scheduleObservation");
-    expect(lifecycle).not.toContain("loadProviderAccount");
+    expect(lifecycle).toContain("async function rereadAccount()");
+    expect(lifecycle).toContain('@click="rereadAccount"');
+    expect(lifecycle).toContain(
+      "await loadProviderAccount(props.account.ref, signal)",
+    );
     expect(lifecycle).toContain("props.account.deletion?.version");
   });
 });

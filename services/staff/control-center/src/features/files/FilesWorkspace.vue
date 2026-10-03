@@ -1882,7 +1882,7 @@ onBeforeUnmount(() => {
 }
 .files-workspace__toolbar select {
   width: 148px;
-  min-height: 36px;
+  min-height: var(--control-height);
   max-width: 168px;
 }
 .files-workspace__toolbar > label:not(.files-workspace__search) {
@@ -1901,7 +1901,7 @@ onBeforeUnmount(() => {
 .files-workspace__search input {
   width: 100%;
   min-width: 0;
-  min-height: 34px;
+  min-height: var(--control-height);
   padding: 0;
   border: 0;
   outline: 0;

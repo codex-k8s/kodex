@@ -24,7 +24,7 @@ import { environmentReadinessMessage } from "@/features/runtime/environment-read
 
 const props = defineProps<{
   agentRef: string;
-  projectRef: string;
+  projectRef?: string;
   canEdit: boolean;
 }>();
 const emit = defineEmits<{

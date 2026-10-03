@@ -8,16 +8,30 @@ fail() {
   exit 1
 }
 
-for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh build-local-stt.sh; do
+for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh build-local-stt.sh build-local-integration.sh; do
   path="$root/tools/dev/$builder"
-  grep -Fq 'images import \' "$path" || fail "$builder does not import its cached OCI archive"
-  grep -Fq -- '--base-name "$repository" "$archive"' "$path" ||
-    fail "$builder does not restore the exact repository tag from cache"
-  import_line=$(grep -n -F 'images import \' "$path" | cut -d: -f1)
-  tag_line=$(grep -n -F 'images tag --force' "$path" | cut -d: -f1)
-  [[ "$import_line" =~ ^[0-9]+$ && "$tag_line" =~ ^[0-9]+$ && "$import_line" -lt "$tag_line" ]] ||
-    fail "$builder tags the exact digest before restoring its source tag"
+  grep -Fq 'tools/dev/import-local-image.sh' "$path" ||
+    fail "$builder does not import its cached OCI archive"
+  grep -Fq -- '--repository "$repository" --tag "$tag" --exact-reference "$exact_reference"' "$path" ||
+    fail "$builder does not restore and verify the exact repository reference"
 done
+
+image_import="$root/tools/dev/import-local-image.sh"
+grep -Fq 'k3d image import "$archive"' "$image_import" ||
+  fail 'k3d archive import is absent'
+grep -Fq 'ctr -n k8s.io images import --base-name "$repository" "$archive"' "$image_import" ||
+  fail 'single-host k3s archive import is absent'
+grep -Fq 'ctr -n k8s.io images tag --force "$tag" "$exact_reference"' "$image_import" ||
+  fail 'exact digest tagging is absent'
+
+k3d_registry="$root/tools/dev/configure-k3d-node-registry.sh"
+grep -Fq 'wait_container_stable "$node"' "$k3d_registry" ||
+  fail 'k3d registry configuration does not wait for stable node containers'
+grep -Fq 'docker restart "$node"' "$k3d_registry" ||
+  fail 'k3d registry configuration does not restart nodes one at a time'
+if grep -Fq 'docker restart "${nodes[@]}"' "$k3d_registry"; then
+  fail 'k3d registry configuration restarts all nodes at once'
+fi
 
 for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh build-local-stt.sh build-local-image-supply-chain.sh; do
   path="$root/tools/dev/$builder"
@@ -30,6 +44,10 @@ grep -Fq "grep -Eq '^Status:[[:space:]]+running$'" "$buildx_bootstrap" ||
   fail 'Buildx bootstrap does not verify the effective running status'
 grep -Fq 'docker context show' "$buildx_bootstrap" ||
   fail 'Buildx bootstrap does not bind a replacement to the current Docker context'
+grep -Fq -- '--driver-opt network=host' "$buildx_bootstrap" ||
+  fail 'Buildx bootstrap does not provide host DNS reachability'
+grep -Fq '[[ "$network_mode" == host ]]' "$buildx_bootstrap" ||
+  fail 'Buildx bootstrap does not read back the daemon network mode'
 
 dev_script="$root/dev.sh"
 [[ $(grep -Fc '"$repository_root/tools/dev/build-local-stt.sh"' "$dev_script") -eq 2 ]] ||
@@ -51,7 +69,7 @@ e2e_guard_end_line=$(awk -v start="$e2e_guard_line" \
 
 runner_builder="$root/tools/dev/build-local-runner.sh"
 runner_verify_line=$(grep -n -F 'python3 -B "$verifier" "$provenance_phase"' "$runner_builder" | cut -d: -f1)
-runner_import_line=$(grep -n -F 'images import \' "$runner_builder" | cut -d: -f1)
+runner_import_line=$(grep -n -F 'tools/dev/import-local-image.sh' "$runner_builder" | cut -d: -f1)
 [[ "$runner_verify_line" =~ ^[0-9]+$ && "$runner_verify_line" -lt "$runner_import_line" ]] ||
   fail 'runner import must follow exact OCI provenance verification'
 grep -Fq 'input_digest=$(python3 -B "$verifier" input' "$runner_builder" ||

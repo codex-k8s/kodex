@@ -1,0 +1,18 @@
+# Контекст runner содержит только исходники сборки, без проектных секретов.
+**
+!libs/
+!libs/go/
+!libs/go/**
+!services/
+!services/jobs/
+!services/jobs/agent-runner/
+!services/jobs/agent-runner/**
+**/.env
+**/.env.*
+**/agent-secrets.env
+**/node_modules
+**/.git
+**/dist
+**/coverage
+**/*.key
+**/*.pem

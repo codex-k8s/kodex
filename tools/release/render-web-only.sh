@@ -332,7 +332,7 @@ if [[ "$profile" == "web-with-mattermost" ]]; then
   ' "$rendered"
 fi
 
-runtime_contract_file="$repository_root/contracts/runtime-controller/v7/agent-runner-input.schema.json"
+runtime_contract_file="$repository_root/contracts/runtime-controller/v8/agent-runner-input.schema.json"
 runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
 [[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
   "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||

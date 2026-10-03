@@ -4,7 +4,10 @@ SELECT conversation.id::text,
        conversation.version,
        COALESCE(conversation.project_id::text, ''),
        COALESCE(project.ref, ''),
-       context.allowed_operations,
+       context.allowed_operations || CASE
+           WHEN control_plane.assistant_project_profile_creation_allowed(run.organization_id,
+               run.initiated_by,conversation.project_id,conversation.assistant_scope,run.assistant_context_entity_kind)
+               THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[] ELSE '{}'::text[] END,
        run.assistant_context_entity_kind,
        run.assistant_context_entity_ref,
        run.target_ref,
@@ -18,6 +21,16 @@ JOIN control_plane.assistant_conversations conversation
   ON conversation.organization_id = run.organization_id
  AND conversation.session_id = run.session_id
  AND conversation.state = 'ACTIVE'
+ AND conversation.created_by = run.initiated_by
+JOIN control_plane.agents assistant
+  ON assistant.id=conversation.assistant_agent_id AND assistant.organization_id=run.organization_id
+ AND assistant.ref=run.target_ref
+JOIN control_plane.sessions session
+  ON session.id=conversation.session_id AND session.organization_id=run.organization_id
+ AND session.created_by=conversation.created_by AND session.target_ref=assistant.ref
+LEFT JOIN control_plane.project_assistant_profiles profile
+  ON profile.id=conversation.assistant_profile_id AND profile.organization_id=conversation.organization_id
+ AND profile.project_id=conversation.project_id AND profile.agent_id=assistant.id
 JOIN control_plane.subjects actor
   ON actor.organization_id = run.organization_id
  AND actor.id = run.initiated_by
@@ -38,6 +51,8 @@ LEFT JOIN LATERAL (
 WHERE run.organization_id = $1::uuid
   AND run.id = $2::uuid
   AND run.target_type = 'SYSTEM_ASSISTANT'
+  AND ((conversation.assistant_scope='SYSTEM' AND assistant.system_key='system-assistant' AND assistant.project_id IS NULL)
+    OR (conversation.assistant_scope='PROJECT' AND assistant.system_key IS NULL AND profile.id IS NOT NULL))
   AND (conversation.project_id IS NULL OR (project.lifecycle='ACTIVE' AND control_plane.catalog_resource_visible(
       run.organization_id,actor.id,'project.view','PROJECT',project.id,project.id,project.created_by,'{}'::jsonb,transaction_timestamp())))
   AND EXISTS (

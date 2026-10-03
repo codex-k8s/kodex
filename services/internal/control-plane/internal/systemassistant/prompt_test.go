@@ -8,7 +8,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v38" {
+	if CorePromptRevision != "system-assistant-core-v42" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -44,6 +44,11 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"`secretBindings`",
 		"полный список `tools` только из точного опубликованного образа",
 		"типизированную `policy`",
+		"`ALLOWLIST_READ_ONLY`",
+		"точный непустой набор из всех поддержанных HTTP-методов",
+		"управляемый proxy с локальной временной CA",
+		"точные `systemAssistantRef` и глобальный `environmentRef`",
+		"влияет лишь на следующие ходы",
 		"произвольные egress, hostPath, PVC, ServiceAccount и расширение RBAC запрещены",
 		"понадобится свежий вход",
 		"создаёт только редактируемый черновик",
@@ -54,6 +59,8 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"применить любой сохранённый вариант",
 		"сам `secretSuggestions` не создаёт Secret и не является привязкой",
 		"`CREATE_INSTRUCTION_DRAFT` только сохраняет черновик",
+		"`UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS`",
+		"системные ограничения, полномочия или скрытые настройки",
 		"Не составляй полный список `steps` или `inputFields` по памяти",
 		"предложи владельцу просмотреть его в штатной форме",
 		"Не переписывай его по памяти",

@@ -6,6 +6,8 @@ export async function checkAssistantHistory(
 ): Promise<void> {
   const conversation: AssistantConversation = {
     ref: "cnv_recent",
+    assistantScope: "SYSTEM",
+    assistantRef: "ast_system_assistant",
     state: "ACTIVE",
     projectRef,
     version: 1,

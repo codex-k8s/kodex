@@ -323,6 +323,120 @@ func TestAssistantInstructionDraftRequiresExactAgentAndSeparatePublication(t *te
 	}
 }
 
+func TestAssistantSystemInstructionPlanPreservesOwnerBoundary(t *testing.T) {
+	t.Parallel()
+	proposed := entity.AssistantPlanOperation{
+		Type: "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", Key: "update-kodex-instructions",
+		Title: "Update Kodex instructions", Summary: "Add an owner instruction after confirmation.",
+		Parameters: map[string]any{
+			"systemAssistantRef": "agt_system123",
+			"instructions":       "Before changing an entity, summarize the expected result.",
+		},
+	}
+	if !assistantOperationMatchesContext("PROJECT", "prj_12345678", proposed) {
+		t.Fatal("system assistant instruction plan was tied to the current screen")
+	}
+	hydrated, err := hydrateAssistantSystemInstructionFields(entity.SystemAssistant{
+		Ref: "agt_system123", Name: "Kodex", OwnerInstructions: "Keep responses concise.", Version: 9,
+	}, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.UpdateAssistantInstructions || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 9 {
+		t.Fatalf("system assistant instruction plan mapped incorrectly: %#v, %v", mapped, err)
+	}
+	payload := mapped.Payload.(command.AssistantInstructionsInput)
+	if payload.Instructions != "Before changing an entity, summarize the expected result." ||
+		assistantString(hydrated.Before, "instructions") != "Keep responses concise." {
+		t.Fatalf("system assistant instruction snapshots changed: %#v", hydrated)
+	}
+	edited := hydrated
+	edited.Parameters = map[string]any{
+		"systemAssistantRef": "agt_system123",
+		"instructions":       "Before changing an entity, list the expected result and important risks.",
+	}
+	edited.Target.Ref = "agt_forged"
+	edited.ExpectedVersion = nil
+	updated, err := rehydrateEditedAssistantSystemInstructions(hydrated, edited)
+	if err != nil || updated.Target.Ref != "agt_system123" || updated.ExpectedVersion == nil || *updated.ExpectedVersion != 9 {
+		t.Fatalf("edited instruction plan escaped the owner snapshot: %#v, %v", updated, err)
+	}
+}
+
+func TestAssistantSelfConfigurationOperationRequiresPinnedAssistant(t *testing.T) {
+	t.Parallel()
+	for _, operationType := range []string{
+		"PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+		"UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS",
+	} {
+		operation := entity.AssistantPlanOperation{Type: operationType, Parameters: map[string]any{
+			"systemAssistantRef": "agt_system123",
+		}}
+		if !assistantSelfConfigurationOperation("agt_system123", "SYSTEM", operation) ||
+			assistantSelfConfigurationOperation("agt_system123", "SYSTEM", entity.AssistantPlanOperation{
+				Type: operationType, Parameters: map[string]any{"systemAssistantRef": "system-assistant"},
+			}) || assistantSelfConfigurationOperation("agt_other", "SYSTEM", operation) {
+			t.Fatalf("self-configuration boundary changed for %s", operationType)
+		}
+	}
+	if assistantSelfConfigurationOperation("agt_system123", "SYSTEM", entity.AssistantPlanOperation{
+		Type: "UPDATE_PROJECT", Parameters: map[string]any{"systemAssistantRef": "agt_system123"},
+	}) {
+		t.Fatal("ordinary operation escaped the context allowlist")
+	}
+	for _, operationType := range []string{"CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_AGENT"} {
+		operation := entity.AssistantPlanOperation{Type: operationType, Parameters: map[string]any{"agentRef": "agt_project123"}}
+		if !assistantSelfConfigurationOperation("agt_project123", "PROJECT", operation) ||
+			assistantSelfConfigurationOperation("agt_other", "PROJECT", operation) ||
+			assistantSelfConfigurationOperation("agt_project123", "SYSTEM", operation) {
+			t.Fatalf("project self-configuration escaped its pinned profile: %s", operationType)
+		}
+	}
+}
+
+func TestProjectAssistantOperationScopeIsClosed(t *testing.T) {
+	t.Parallel()
+	for _, operationType := range []string{"CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UNKNOWN"} {
+		if projectAssistantOperation(operationType) {
+			t.Fatalf("project assistant accepted organization operation: %s", operationType)
+		}
+	}
+	for _, operationType := range []string{"CREATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "CHANGE_INTEGRATION_GRANT"} {
+		if !projectAssistantOperation(operationType) {
+			t.Fatalf("project assistant rejected project operation: %s", operationType)
+		}
+	}
+}
+
+func TestAssistantOperationCreatesProjectProfileThroughSpecializedCommand(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{Key: "create-project-assistant", Type: "CREATE_PROJECT_ASSISTANT",
+		Title: "Create project assistant", Summary: "Prepare isolated project assistant",
+		Parameters: map[string]any{"projectRef": "prj_target123", "name": "Assistant", "purpose": "Configure project", "instructions": "Use this project only."},
+		Before:     map[string]any{}, After: map[string]any{"projectRef": "prj_target123", "name": "Assistant", "purpose": "Configure project", "instructions": "Use this project only."},
+		Target: entity.AssistantPlanTarget{Kind: "PROJECT_ASSISTANT", Name: "Assistant"}}
+	normalized, err := normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := bindAssistantOperationProject(normalized, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(bound)
+	if err != nil || mapped.Kind != command.CreateProjectAssistant || mapped.Payload.(command.ProjectAssistantInput).ProjectRef != "prj_target123" {
+		t.Fatalf("project assistant draft did not use its specialized command: %#v %v", mapped, err)
+	}
+	if _, err := bindAssistantOperationProject(normalized, "prj_foreign123"); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("profile draft escaped selected project context: %v", err)
+	}
+}
+
 func TestHydrateAssistantAgentCapabilityFields(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{
@@ -456,7 +570,7 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 		{"projectRef": "prj_example", "name": "Environment", "secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "valueType": "FILE", "sourceHelp": "Provider dashboard"}}},
 		{"projectRef": "prj_example", "name": "Environment", "tools": []any{map[string]any{"name": "Shell", "command": "sh;rm", "description": "Unsafe command"}}},
 		{"projectRef": "prj_example", "name": "Environment", "tools": []any{map[string]any{"name": "Git", "command": "git", "description": "First"}, map[string]any{"name": "Git again", "command": "git", "description": "Second"}}},
-		{"projectRef": "prj_example", "name": "Environment", "policy": map[string]any{"kubernetesAccess": "READ_OWN_EXECUTION", "networkDestinations": []any{"DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "ANY"}}},
+		{"projectRef": "prj_example", "name": "Environment", "policy": map[string]any{"kubernetesAccess": "UNSUPPORTED", "networkDestinations": []any{"DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "ANY"}}},
 		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "DUPLICATE", "value": "safe"}}, "secretBindings": []any{map[string]any{"name": "DUPLICATE", "secretRef": "sec_example1"}}},
 		{"projectRef": "prj_example", "name": "Environment", "imageArtifactRef": "https://untrusted.example/image"},
 		{"projectRef": "", "name": "Environment"},

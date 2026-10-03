@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"errors"
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -31,6 +32,10 @@ func TestRuntimeGrantSnapshotBuildTurnInput(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	input, _, err := manager.BuildTurnInput(claim)
 	if err != nil {
+		var failure *TurnInputBuildError
+		if errors.As(err, &failure) {
+			t.Logf("fixture input rejected at stage=%s cause=%v", failure.Stage, failure.Cause)
+		}
 		t.Fatalf("complete owner snapshot rejected: %v", err)
 	}
 	if len(input.IntegrationGrants) != 1 || input.IntegrationGrants[0].Operation != "SEND" || input.ExecutionBindingDigest == "" || input.MCPBindingDigest == "" {

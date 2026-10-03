@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -192,7 +193,11 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if input.ProjectRef != "prj_abcdefgh" {
 		t.Fatalf("runtime project binding = %q", input.ProjectRef)
 	}
-	if !hasEnv(pod.Spec.Containers[1], "HTTPS_PROXY", "http://egress-gateway.kodex-system.svc:8080") {
+	proxyValue, ok := envValue(pod.Spec.Containers[1], "HTTPS_PROXY")
+	proxyURL, proxyErr := url.Parse(proxyValue)
+	proxyPassword, hasProxyPassword := proxyURL.User.Password()
+	if !ok || proxyErr != nil || proxyURL.Scheme != "http" || proxyURL.Host != "egress-gateway.kodex-system.svc:8084" ||
+		proxyURL.User.Username() != "kodex" || !hasProxyPassword || proxyPassword == "" {
 		t.Fatal("provider runtime is not fenced through the egress gateway")
 	}
 	if !hasEnv(pod.Spec.Containers[0], "OTEL_SDK_DISABLED", "true") ||
@@ -1408,7 +1413,7 @@ func TestSessionPVCRejectsCrossTenantAndProjectReuse(t *testing.T) {
 func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", SystemAssistant: true}
+	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", AssistantScope: runtimecontract.AssistantScopeSystem}
 	if err := manager.ensureSessionPVC(t.Context(), global); err != nil {
 		t.Fatalf("create global assistant volume: %v", err)
 	}
@@ -1462,7 +1467,7 @@ func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
 func TestAssistantSessionPVCPromotesAfterExactTerminatingConsumerIsDrained(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", SystemAssistant: true}
+	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", AssistantScope: runtimecontract.AssistantScopeSystem}
 	if err := manager.ensureSessionPVC(t.Context(), global); err != nil {
 		t.Fatalf("create global assistant volume: %v", err)
 	}
@@ -1668,6 +1673,55 @@ func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
 	}
 }
 
+func TestRetiredKubernetesAccessCannotMaterializeExecutionPolicy(t *testing.T) {
+	t.Parallel()
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, _, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.EnvironmentPolicy.KubernetesAccess.Kind = "UNSUPPORTED"
+	input.EffectiveKubernetesAccess.Profile = input.EnvironmentPolicy.KubernetesAccess
+	client.ClearActions()
+	if err := manager.ensureExecutionPolicy(context.Background(), input, runtimecontract.RuntimeTurnPodName(input.LeaseRef)); err == nil {
+		t.Fatal("retired Kubernetes access was accepted")
+	}
+	if len(client.Actions()) != 0 {
+		t.Fatal("retired access touched Kubernetes resources before denial")
+	}
+	input.EnvironmentPolicy.Network.Egress = append(input.EnvironmentPolicy.Network.Egress, runtimecontract.RuntimeNetworkEgress{
+		Destination: "UNSUPPORTED", Protocol: runtimecontract.RuntimeProtocolTCP, Port: 443,
+	})
+	if _, err := manager.executionNetworkPolicy(input, runtimecontract.RuntimeTurnPodName(input.LeaseRef)); err == nil {
+		t.Fatal("retired Kubernetes API egress was materialized")
+	}
+}
+
+func TestRuntimePodDoesNotProjectKubernetesToken(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	input, binding, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials := testCredentialProjection(input)
+	pod := manager.runtimePod(input, binding, &credentials, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
+	if pod == nil || pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken {
+		t.Fatal("runtime Pod did not disable Kubernetes token automount")
+	}
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Projected == nil {
+			continue
+		}
+		for _, source := range volume.Projected.Sources {
+			if source.ServiceAccountToken != nil {
+				t.Fatal("runtime Pod projects a Kubernetes ServiceAccount token")
+			}
+		}
+	}
+}
+
 func TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1720,14 +1774,60 @@ func testManagerConfig() Config {
 		ControllerPodUID: "controller-pod-uid", ControllerPodIP: "10.0.0.10",
 		CallbackTLSServerName:  "runtime-controller-callback.kodex-system.svc.cluster.local",
 		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
-		ProviderHTTPSProxy:      "http://egress-gateway.kodex-system.svc:8080",
+		ProviderHTTPSProxy:      "http://egress-gateway.kodex-system.svc:8084",
+		RuntimeEgressSigningKey: []byte("0123456789abcdef0123456789abcdef"),
+		RuntimeEgressCASecret:   "runtime-egress-proxy-ca",
 		ProviderAppArmorProfile: "kodex-provider-runtime",
-		KubernetesAPIServiceIP:  "10.43.0.1",
 		StorageClass:            "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
 		PromotedRoleImageRepository: "registry.example/kodex/roles",
 		DefaultRoleImageReference:   "registry.example/kodex/agent-runner@" + testDefaultDigest,
 		RoleRuntimeContractRevision: 1,
 		RoleRuntimeContractSHA256:   testContractDigest,
+	}
+}
+
+func TestWarmRuntimeProxyGrantSupportsManagedWebAccess(t *testing.T) {
+	t.Parallel()
+	manager := &Manager{config: testManagerConfig()}
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	policy.Network.WebAccess = runtimecontract.RuntimeWebAccess{
+		Mode: runtimecontract.RuntimeWebAccessAllowlistReadOnly,
+		Rules: []runtimecontract.RuntimeWebAccessRule{{
+			DomainPattern: "api.example.com",
+			Protocol:      runtimecontract.RuntimeWebProtocolHTTPS,
+			Port:          443,
+			HTTPMethods:   []string{runtimecontract.RuntimeHTTPMethodGet},
+		}},
+	}
+	policy, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
+	if err != nil {
+		t.Fatalf("normalize runtime environment policy: %v", err)
+	}
+	input := runtimecontract.RunnerInput{
+		Mode: runtimecontract.RunnerModeWarm, OrganizationRef: "org_abcdefgh",
+		SessionRef: "session_abcdefgh", RuntimeRevisionRef: "revision_abcdefgh",
+		RuntimeRevisionDigest: strings.Repeat("a", 64), EnvironmentPolicy: policy,
+	}
+	proxyValue, err := manager.runtimeProxyURL(input)
+	if err != nil {
+		t.Fatalf("runtimeProxyURL() error = %v", err)
+	}
+	proxyURL, err := url.Parse(proxyValue)
+	if err != nil || proxyURL.User == nil {
+		t.Fatalf("parse warm runtime proxy URL: %v", err)
+	}
+	credential, ok := proxyURL.User.Password()
+	if !ok {
+		t.Fatal("warm runtime proxy credential is missing")
+	}
+	grant, err := runtimecontract.VerifyRuntimeWebAccessGrant(manager.config.RuntimeEgressSigningKey, credential)
+	if err != nil {
+		t.Fatalf("verify warm runtime proxy grant: %v", err)
+	}
+	wantWorkloadRef := "warm:org_abcdefgh:session_abcdefgh:revision_abcdefgh:" + strings.Repeat("a", 64)
+	if grant.WorkloadRef != wantWorkloadRef ||
+		!runtimecontract.RuntimeWebAccessAllowsRequest(grant.WebAccess, "api.example.com", "GET") {
+		t.Fatalf("warm runtime proxy grant = %#v", grant)
 	}
 }
 
@@ -1754,6 +1854,10 @@ func TestProviderSandboxSecurityContextDoesNotAssumeNodeLocalAppArmor(t *testing
 }
 
 func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
+	assistantScope := controlplanev1.AssistantScope_ASSISTANT_SCOPE_NONE
+	if systemAssistant {
+		assistantScope = controlplanev1.AssistantScope_ASSISTANT_SCOPE_SYSTEM
+	}
 	attachmentSetRef := "aset_abcdefgh"
 	attachmentPurpose := "RUN_INPUT"
 	artifact := &controlplanev1.RuntimeInputArtifact{
@@ -1774,7 +1878,7 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 		Revision: &controlplanev1.RuntimeRevisionSnapshot{
 			Ref: "revision_abcdefgh", Version: 1, OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", Attempt: 1,
 			AgentRef: "agent_abcdefgh", Instructions: "Complete the server-owned task.", Runtime: &controlplanev1.RuntimeSelection{Ref: "builtin-safe-runtime", Revision: "revision-1", Provider: "openai", Model: "codex"},
-			RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
+			RevisionDigest: strings.Repeat("a", 64), AssistantScope: assistantScope,
 			RoleDefinitionRef: "roledef_abcdefgh", InstructionRef: "instruction_abcdefgh", InstructionDigest: strings.Repeat("4", 64),
 			PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("5", 64), PromptMaterializationDigest: strings.Repeat("6", 64),
 			ImageReference: "registry.example/kodex/roles@" + testDigest, ImageManifestDigest: testDigest,
@@ -1802,10 +1906,10 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 		},
 		Lease: &controlplanev1.WorkLease{Ref: "lease_abcdefgh", Fence: "fence-1", Generation: 1}, Task: "Prepare the result.",
 	}
+	execution.Revision.RoleImageRecipeRef = "imgrec_abcdefgh"
+	execution.Revision.RoleImageArtifactRef = "imgart_abcdefgh"
+	execution.Revision.RoleImageRecipeGeneration = 1
 	if !systemAssistant {
-		execution.Revision.RoleImageRecipeRef = "imgrec_abcdefgh"
-		execution.Revision.RoleImageArtifactRef = "imgart_abcdefgh"
-		execution.Revision.RoleImageRecipeGeneration = 1
 		execution.Revision.EnvironmentTools = []*controlplanev1.RuntimeEnvironmentTool{{
 			Name: "GitHub CLI", Command: "gh", Description: "Работа с GitHub", UsageHint: "Используй gh api",
 		}}
@@ -1923,8 +2027,19 @@ func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironment
 		ResourcesDigest: policy.ResourcesDigest, VolumesDigest: policy.VolumesDigest,
 		NetworkDigest: policy.NetworkDigest, RbacDigest: policy.RBACDigest,
 	}
-	if policy.KubernetesAccess.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		result.KubernetesAccess.Kind = controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
+	result.Network.WebAccess = &controlplanev1.RuntimeWebAccess{Mode: controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE}
+	switch policy.Network.WebAccess.Mode {
+	case runtimecontract.RuntimeWebAccessAllowlistReadOnly:
+		result.Network.WebAccess.Mode = controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY
+	case runtimecontract.RuntimeWebAccessAllowlistFull:
+		result.Network.WebAccess.Mode = controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL
+	case runtimecontract.RuntimeWebAccessFullPublic:
+		result.Network.WebAccess.Mode = controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC
+	}
+	for _, rule := range policy.Network.WebAccess.Rules {
+		result.Network.WebAccess.Rules = append(result.Network.WebAccess.Rules, &controlplanev1.RuntimeWebAccessRule{
+			DomainPattern: rule.DomainPattern, Protocol: rule.Protocol, Port: rule.Port, HttpMethods: append([]string(nil), rule.HTTPMethods...),
+		})
 	}
 	for _, volume := range policy.Volumes {
 		kind := controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK
@@ -1938,7 +2053,6 @@ func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironment
 			runtimecontract.RuntimeEgressDNS:             controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS,
 			runtimecontract.RuntimeEgressRuntimeCallback: controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK,
 			runtimecontract.RuntimeEgressProviderProxy:   controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY,
-			runtimecontract.RuntimeEgressKubernetesAPI:   controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API,
 		}[egress.Destination]
 		protocol := controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_TCP
 		if egress.Protocol == runtimecontract.RuntimeProtocolUDP {
@@ -1951,9 +2065,6 @@ func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironment
 
 func testRuntimeKubernetesAccessProto(access runtimecontract.RuntimeKubernetesAccess) *controlplanev1.RuntimeKubernetesAccess {
 	profileKind := controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
-	if access.Profile.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		profileKind = controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
-	}
 	result := &controlplanev1.RuntimeKubernetesAccess{Profile: &controlplanev1.RuntimeKubernetesAccessProfile{
 		Kind: profileKind, Namespace: access.Profile.Namespace,
 	}, ServiceAccountName: access.ServiceAccountName, Digest: access.Digest}
@@ -1995,6 +2106,15 @@ func hasEnv(container corev1.Container, name, value string) bool {
 		}
 	}
 	return false
+}
+
+func envValue(container corev1.Container, name string) (string, bool) {
+	for _, item := range container.Env {
+		if item.Name == name {
+			return item.Value, true
+		}
+	}
+	return "", false
 }
 
 func containerByName(t *testing.T, containers []corev1.Container, name string) corev1.Container {

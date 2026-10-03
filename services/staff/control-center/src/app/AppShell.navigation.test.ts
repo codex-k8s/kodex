@@ -35,6 +35,7 @@ describe("AppShell navigation", () => {
     expect(source).toContain("router.isReady().then");
     expect(source).toContain("selectProjectRef(projectRef.value)");
     expect(source).toContain('route.name === "configuration-catalog"');
+    expect(source).toContain('route.name === "onboarding"');
     expect(source).toContain("routeProjectRef(route.query)");
     expect(source).toContain("realtime.openPlatform()");
     expect(source).not.toContain("platform.loadPendingGateCount()");

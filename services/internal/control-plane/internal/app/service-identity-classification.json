@@ -143,6 +143,16 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.assistant.project.create",
+      "source_binding_sha256": "0db62bf5426b9669aacddd8ff32c38a390007c98dfedd8648c096282117f361d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.project.get",
+      "source_binding_sha256": "3dc82a275ef767c762d9abea2c045c9ce5c2b9625af31a1fa7e8c9e2702d00c9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.assistant.recover",
       "source_binding_sha256": "349786c5e16ce69402019f088b21e54dd3827993ea5ed86fef4a3c5bb1e5d538",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
@@ -150,6 +160,11 @@
     {
       "operation_id": "platform.assistant.turns.add",
       "source_binding_sha256": "46c7801c3f79b4d8069956d37c70fb89f0411786460bc174d1a5dea6dfdb9686",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.turns.cancel",
+      "source_binding_sha256": "ef7e57231d866135dafdae1108d6448f464ba43abe70631bb06b051b2ed1668e",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
@@ -640,6 +655,11 @@
     {
       "operation_id": "platform.command.provider-accounts.authorization.refresh",
       "source_binding_sha256": "7936212ee6a9c775c1753c310411a0986427b9b16d81a397cbc3473ca295016d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.concurrency.set",
+      "source_binding_sha256": "4d10025df2bb19d2e09dd295f21f8bdfa403fcdc4014ecf5f3ddccfcbbeba26f",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {

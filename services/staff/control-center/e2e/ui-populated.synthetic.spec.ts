@@ -36,6 +36,8 @@ const shell = (body: string) =>
   `<!doctype html><meta charset="UTF-8"><style>body{margin:0}.topbar{height:58px}.app-shell{display:block}</style><div class="app-shell"><div class="topbar"></div><div class="page-header"><h1>Fixture</h1></div>${body}</div>`;
 const conversation = (index = 0) => ({
   ref: `conversation_${String(index)}`,
+  assistantScope: "SYSTEM",
+  assistantRef: "assistant_fixture",
   version: 1,
   title: `Fixture conversation ${String(index)}`,
   state: "ACTIVE",

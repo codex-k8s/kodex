@@ -18,8 +18,8 @@ builder_identity=spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
 build_type=https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
 tools_digest=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 policy_revision=7
-grype_database_url=https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.9_2026-08-31T00:36:25Z_1788158251.tar.zst
-grype_database_sha256=70e70f6232f41281063bd2a0a20600758ae12d6e60ba571b16070f950e2f99d3
+grype_database_url=https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.9_2026-10-02T00:35:12Z_1790922713.tar.zst
+grype_database_sha256=3c368df5c3624fe083ad646ca3be59525739dfe9caa4b6d14c7f252d155fbd98
 jq -n --arg image "$image_hex" --arg base "$base_hex" --arg frontend "$frontend_hex" \
   --arg subject "$subject" \
   --arg builder "$builder_identity" --arg build_type "$build_type" \

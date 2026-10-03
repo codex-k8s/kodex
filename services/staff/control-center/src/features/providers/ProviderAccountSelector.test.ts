@@ -32,6 +32,7 @@ function account(selectedContext = context): ProviderAccount {
     definitionKey: "openai-codex",
     enabled: true,
     ready: true,
+    maximumConcurrentExecutions: 10,
     state: "AUTHORIZED",
     externalAccountMasked: "",
     nextActions: [],

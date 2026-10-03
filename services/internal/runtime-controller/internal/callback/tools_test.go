@@ -143,7 +143,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	if encoded, _ := json.Marshal(tools(runtimecontract.RunnerInput{})); strings.Contains(string(encoded), "propose_configuration_plan") {
 		t.Fatal("ordinary runtime must not receive the system assistant tool")
 	}
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_12345678", Name: "Analyst"}}}
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_12345678", Name: "Analyst"}}}
 	available := tools(input)
 	if len(available) != 6 {
 		t.Fatalf("unexpected assistant tool catalog: %#v", available)
@@ -176,7 +176,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatal("assistant plan envelope lost the allowed operation types")
 	}
 	oneOf := assistantPlanOperationSchemas(input)
-	if len(oneOf) != 17 {
+	if len(oneOf) != 18 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
@@ -296,7 +296,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 
 func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{
 		{Ref: "agt_writer01", Name: "Writer", Purpose: "Write"},
 		{Ref: "agt_analyst1", Name: "Analyst", Purpose: "Analyze"},
 	}}
@@ -308,7 +308,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
 	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 0 ||
-		len(catalog["operation_types"].([]string)) != 17 {
+		len(catalog["operation_types"].([]string)) != 18 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
@@ -316,7 +316,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
 	if err != nil || len(compact.(map[string]any)["operation_schemas"].([]map[string]any)) != 0 ||
-		len(compact.(map[string]any)["operation_types"].([]string)) != 17 {
+		len(compact.(map[string]any)["operation_types"].([]string)) != 18 {
 		t.Fatalf("compact configuration catalog is invalid: %v", err)
 	}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN", "CREATE_WORKFLOW"}})
@@ -352,7 +352,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 
 func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678",
 		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "WORKFLOW", EntityRef: "wfl_12345678",
 			AllowedOperations: []string{"UPDATE_WORKFLOW"}}}
 	schemas := assistantPlanOperationSchemas(input)
@@ -378,7 +378,7 @@ func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 
 func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678",
 		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "ENVIRONMENT", EntityRef: "renv_12345678",
 			AllowedOperations: []string{"PREPARE_RUNTIME_ENVIRONMENT_REVISION"}}}
 	schemas := assistantPlanOperationSchemas(input)
@@ -399,15 +399,83 @@ func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 	}
 	policy := fields["policy"].(map[string]any)
 	policyFields := policy["properties"].(map[string]any)
-	if policy["additionalProperties"] != false || len(policyFields) != 4 ||
+	if policy["additionalProperties"] != false || len(policyFields) != 5 || policyFields["webAccess"] == nil ||
 		policyFields["hostPath"] != nil || policyFields["serviceAccountName"] != nil || policyFields["secretValue"] != nil {
 		t.Fatalf("environment policy schema escaped its closed boundary: %#v", policy)
+	}
+	webAccessFields := policyFields["webAccess"].(map[string]any)["properties"].(map[string]any)
+	ruleFields := webAccessFields["rules"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	httpMethods := ruleFields["httpMethods"].(map[string]any)
+	if httpMethods["minItems"] != 1 || httpMethods["maxItems"] != 7 || httpMethods["uniqueItems"] != true {
+		t.Fatalf("environment policy schema does not allow an exact non-empty HTTP method subset: %#v", httpMethods)
+	}
+}
+
+func TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{
+		AssistantScope: runtimecontract.AssistantScopeSystem, AgentRef: "agt_system123", RuntimeEnvironmentRef: "renv_system123",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "PROJECT", EntityRef: "prj_12345678",
+			AllowedOperations: []string{"CREATE_AGENT"}},
+	}
+	schemas := assistantPlanOperationSchemas(input)
+	var parameters map[string]any
+	for _, schema := range schemas {
+		properties := schema["properties"].(map[string]any)
+		if properties["type"].(map[string]any)["const"] == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+			parameters = properties["parameters"].(map[string]any)
+			break
+		}
+	}
+	if parameters == nil {
+		t.Fatal("system assistant environment operation is not discoverable")
+	}
+	fields := parameters["properties"].(map[string]any)
+	if fields["environmentRef"].(map[string]any)["enum"].([]string)[0] != input.RuntimeEnvironmentRef ||
+		fields["systemAssistantRef"].(map[string]any)["enum"].([]string)[0] != input.AgentRef {
+		t.Fatalf("system assistant environment schema is not pinned: %#v", fields)
+	}
+}
+
+func TestSystemAssistantCanProposeOwnInstructionsFromAnyContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{
+		AssistantScope: runtimecontract.AssistantScopeSystem,
+		AgentRef:       "agt_system123",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{
+			EntityKind: "PROJECT", EntityRef: "prj_12345678", EntityName: "Marketplace",
+			AllowedOperations: []string{"CREATE_AGENT"},
+		},
+	}
+	var schema map[string]any
+	for _, candidate := range assistantPlanOperationSchemas(input) {
+		properties := candidate["properties"].(map[string]any)
+		if properties["type"].(map[string]any)["const"] == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+			schema = candidate
+			break
+		}
+	}
+	if schema == nil {
+		t.Fatal("system assistant instruction operation is not discoverable")
+	}
+	properties := schema["properties"].(map[string]any)
+	parameters := properties["parameters"].(map[string]any)["properties"].(map[string]any)
+	if properties["action"].(map[string]any)["const"] != "UPDATE" ||
+		parameters["systemAssistantRef"].(map[string]any)["enum"].([]string)[0] != input.AgentRef ||
+		parameters["instructions"].(map[string]any)["maxLength"] != 20000 {
+		t.Fatalf("system assistant instruction schema is not pinned: %#v", schema)
+	}
+	target := assistantServerTarget("UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", map[string]any{
+		"systemAssistantRef": input.AgentRef,
+	}, input.AssistantContext)
+	if target == nil || target["kind"] != "SYSTEM_ASSISTANT" || target["name"] != "Kodex" {
+		t.Fatalf("system assistant target is unavailable: %#v", target)
 	}
 }
 
 func TestAgentEnvironmentBindingSchemaIsExact(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678",
 		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "AGENT", EntityRef: "agt_12345678",
 			AllowedOperations: []string{"BIND_AGENT_RUNTIME_ENVIRONMENT"}}}
 	schemas := assistantPlanOperationSchemas(input)
@@ -429,7 +497,7 @@ func TestAgentEnvironmentBindingSchemaIsExact(t *testing.T) {
 
 func TestIntegrationGrantSchemaBindsRecipientToCurrentContext(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678",
 		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "AGENT", EntityRef: "agt_12345678",
 			AllowedOperations: []string{"CHANGE_INTEGRATION_GRANT"}}}
 	schemas := assistantPlanOperationSchemas(input)
@@ -452,7 +520,7 @@ func TestIntegrationGrantSchemaBindsRecipientToCurrentContext(t *testing.T) {
 
 func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current"}
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_current"}
 	for index := range 45 {
 		input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{
 			Ref: fmt.Sprintf("agt_%08d", index), Name: fmt.Sprintf("Сотрудник %03d", index),
@@ -503,7 +571,7 @@ func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
 
 func TestConfigurationCatalogPinsAgentUpdateToExactContext(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
 		EntityKind: "AGENT", EntityRef: "agt_current", EntityName: "Coordinator", AllowedOperations: []string{"UPDATE_AGENT"},
 	}}
 	input.DelegationTargets = []runtimecontract.RunnerDelegationTarget{
@@ -547,7 +615,7 @@ func TestConfigurationCatalogPinsAgentUpdateToExactContext(t *testing.T) {
 
 func TestConfigurationCatalogPinsConnectionUpdateToExactContext(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, AssistantContext: &runtimecontract.RunnerAssistantContext{
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, AssistantContext: &runtimecontract.RunnerAssistantContext{
 		EntityKind: "INTEGRATION_CONNECTION", EntityRef: "con_current", EntityName: "Source", AllowedOperations: []string{"UPDATE_INTEGRATION_CONNECTION"},
 	}}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"UPDATE_INTEGRATION_CONNECTION"}})
@@ -574,7 +642,7 @@ func TestConfigurationCatalogPinsConnectionUpdateToExactContext(t *testing.T) {
 
 func TestConfigurationCatalogPinsScheduleUpdateToExactContext(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
 		EntityKind: "SCHEDULE", EntityRef: "sch_current", EntityName: "Daily review", AllowedOperations: []string{"UPDATE_SCHEDULE"},
 	}}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"UPDATE_SCHEDULE"}})
@@ -661,7 +729,7 @@ func TestDecodeMCPToolCallParamsRejectsUnknownAuthorityFields(t *testing.T) {
 func TestAssistantPlanInputErrorsKeepAClosedFailureClass(t *testing.T) {
 	t.Parallel()
 	server := &Server{}
-	_, err := server.proposeAssistantPlan(t.Context(), runtimecontract.RunnerInput{SystemAssistant: true}, map[string]any{
+	_, err := server.proposeAssistantPlan(t.Context(), runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem}, map[string]any{
 		"summary": "Create one agent",
 		"operations": []any{map[string]any{
 			"action":     "DELETE_PROJECT",

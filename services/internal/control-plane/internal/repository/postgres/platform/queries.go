@@ -753,7 +753,9 @@ func agentActions(agent entity.Agent, canManage, canLaunch bool) []string {
 		actions = append(actions, "ENABLE")
 	}
 	if canManage {
-		actions = append(actions, "ARCHIVE")
+		if !agent.AssistantBacked {
+			actions = append(actions, "ARCHIVE")
+		}
 		switch {
 		case agent.DraftInstructions != nil && agent.DraftInstructions.State == "VALID":
 			actions = append(actions, "PUBLISH")
@@ -1196,6 +1198,11 @@ func (repository *Repository) applyResultActionPermissions(
 			return err
 		}
 		result.Conversation.Context, result.Conversation.ProjectRef = descriptor, project
+		assistant, err := repository.conversationAssistantTx(ctx, runner, scope, result.Conversation.Ref)
+		if err != nil {
+			return err
+		}
+		assistant.projectConversation(result.Conversation)
 	}
 	if result.ProviderAccount != nil {
 		target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: result.ProviderAccount.Ref}
@@ -2178,7 +2185,7 @@ func (repository *Repository) GetSystemAssistant(ctx context.Context, principal 
 	return repository.getAssistant(ctx, scope)
 }
 
-func (repository *Repository) ListAssistantConversations(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.AssistantConversation, string, error) {
+func (repository *Repository) ListAssistantConversations(ctx context.Context, principal value.Principal, filter query.AssistantConversationFilter) ([]entity.AssistantConversation, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	filter.Query = strings.TrimSpace(filter.Query)
@@ -2186,6 +2193,7 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 		filter.State = "ACTIVE"
 	}
 	if len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) ||
+		!contains([]string{"", "SYSTEM", "PROJECT"}, filter.AssistantScope) || len(filter.AssistantRef) > 96 || strings.ContainsRune(filter.AssistantRef, 0) ||
 		(filter.MatchAssistantLocalizedDefaultTitle && filter.Query == "") ||
 		(filter.State != "ACTIVE" && filter.State != "CLOSED" && filter.State != "ARCHIVED") {
 		return nil, "", errs.ErrInvalid
@@ -2194,7 +2202,8 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	if err != nil {
 		return nil, "", err
 	}
-	cursor, err := decodeCatalogCursor(scope, "ASSISTANT_CONVERSATIONS", filter)
+	cursorKind := "ASSISTANT_CONVERSATIONS:" + filter.AssistantScope + ":" + filter.AssistantRef
+	cursor, err := decodeCatalogCursor(scope, cursorKind, filter.Filter)
 	if err != nil {
 		return nil, "", err
 	}
@@ -2219,6 +2228,7 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx, queryQueriesListassistantconversationsSelectAssistantConversationsOrganizationIdRef, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "actor_id": scope.actorID, "project_ref": filter.ProjectRef, "authority_project": scope.authorityProjectID,
+		"assistant_scope": filter.AssistantScope, "assistant_ref": filter.AssistantRef,
 		"query": filter.Query, "match_localized_default_title": filter.MatchAssistantLocalizedDefaultTitle,
 		"state": filter.State, "evaluated_at": time.Now().UTC(), "cursor_at": cursorAt, "cursor_ref": cursorRef, "page_size": limit + 1})
 	if err != nil {
@@ -2231,7 +2241,8 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 		if err := rows.Scan(&item.Ref, &item.Title, &item.TitleSource, &item.TitleRevision, &item.ProjectRef,
 			&item.SessionRef, &item.State, &item.Version, &item.Context.Route, &item.Context.EntityKind,
 			&item.Context.EntityRef, &item.Context.EntityName, &item.Context.EntityVersion,
-			&item.Context.AllowedOperations, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			&item.Context.AllowedOperations, &item.CreatedAt, &item.UpdatedAt,
+			&item.AssistantScope, &item.AssistantRef, &item.AssistantProfileRef); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
 		result = append(result, item)
@@ -2244,7 +2255,7 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	if len(result) > int(limit) {
 		result = result[:limit]
 		last := result[len(result)-1]
-		next = encodeCatalogCursor(scope, "ASSISTANT_CONVERSATIONS", filter, last.CreatedAt.UTC().Format(time.RFC3339Nano)+"|"+last.Ref)
+		next = encodeCatalogCursor(scope, cursorKind, filter.Filter, last.CreatedAt.UTC().Format(time.RFC3339Nano)+"|"+last.Ref)
 	}
 	for index := range result {
 		if err := repository.attachConversation(ctx, tx, scope, &result[index]); err != nil {
@@ -2264,7 +2275,7 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 	defer rows.Close()
 	for rows.Next() {
 		var turn entity.AssistantTurn
-		if err := rows.Scan(&turn.Ref, &turn.Sequence, &turn.Actor, &turn.ActorName, &turn.Content, &turn.State, &turn.AttachmentSetRef, &turn.CreatedAt, &turn.CompletedAt); err != nil {
+		if err := rows.Scan(&turn.Ref, &turn.Sequence, &turn.Actor, &turn.ActorName, &turn.Content, &turn.State, &turn.AttachmentSetRef, &turn.CreatedAt, &turn.CompletedAt, &turn.RunRef, &turn.RunVersion); err != nil {
 			return errs.ErrUnavailable
 		}
 		item.Turns = append(item.Turns, turn)

@@ -44,11 +44,20 @@ Typed Skills/Memory materialization и карта owner→controller→runner о
 эти виды. Исполняемый input требует явный `context_snapshot`, даже для пустого
 контекста. Changed pins меняют RuntimeRevision и warm compatibility digests.
 
-Канонический input — `kodex.agent-runner-input.v7`, схема находится в
-`contracts/runtime-controller/v7/agent-runner-input.schema.json`, типы — в
+Канонический input — `kodex.agent-runner-input.v8`, схема находится в
+`contracts/runtime-controller/v8/agent-runner-input.schema.json`, типы — в
 `libs/go/runtimecontract`. Input связывает organization/project/agent/session/
 turn/run/node/attempt, revision digest, role image digest, bounded input,
 capabilities и credential references. Payload не назначает owner или lineage.
+
+`assistant_scope=NONE|SYSTEM|PROJECT` — единственный runtime discriminator;
+старого `system_assistant` и совместимого decoder нет. PROJECT требует точные
+`project_ref` и `assistant_profile_ref`, закреплённые immutable owner revision.
+Оба помощника получают MCP настройки платформы, но только SYSTEM использует
+организационную credential materialization и warm runtime. Выбор PROJECT в
+контексте экрана не меняет SYSTEM resource authority. Собственная настройка
+проектного помощника использует обычные project operations и exact Agent/environment
+refs, без организационных credential или `systemAssistantRef`.
 
 Protected init/runner входят в trusted runtime ABI role image. Provider process
 работает без Kubernetes token и authority credential. Role Pod не получает

@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -17,19 +18,32 @@ var assistantEnvironmentTextFields = []string{"name", "description", "imageArtif
 var assistantEnvironmentEditableFields = []string{"name", "description", "imageArtifactRef", "publicValues", "secretBindings", "tools", "policy"}
 var assistantEnvironmentProposalFields = []string{
 	"name", "description", "imageArtifactRef", "publicValues", "publicValueUpdates", "publicValueRemovals",
-	"secretBindings", "tools", "policy",
+	"secretBindings", "tools", "policy", "systemAssistantRef",
 }
 
 func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Context, tx pgx.Tx, actorScope scope,
-	projectRef, environmentRef string,
+	projectRef, environmentRef, systemAssistantRef string,
 ) (map[string]any, int64, error) {
-	projection, err := repository.resolveAssistantContext(ctx, tx, actorScope,
-		entity.AssistantContextDescriptor{EntityKind: "ENVIRONMENT", EntityRef: environmentRef}, projectRef)
-	if err != nil {
-		return nil, 0, err
-	}
-	if !contains(projection.AllowedOperations, "PREPARE_RUNTIME_ENVIRONMENT_REVISION") {
-		return nil, 0, errs.ErrForbidden
+	if systemAssistantRef == "" {
+		projection, err := repository.resolveAssistantContext(ctx, tx, actorScope,
+			entity.AssistantContextDescriptor{EntityKind: "ENVIRONMENT", EntityRef: environmentRef}, projectRef)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !contains(projection.AllowedOperations, "PREPARE_RUNTIME_ENVIRONMENT_REVISION") {
+			return nil, 0, errs.ErrForbidden
+		}
+	} else {
+		assistant, err := repository.getAssistantTx(ctx, tx, actorScope)
+		if err != nil || systemAssistantRef != assistant.Ref && systemAssistantRef != assistant.StableKey {
+			return nil, 0, errs.ErrForbidden
+		}
+		view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, actorScope, assistant.Ref)
+		if err != nil || view.Environment.Ref != environmentRef || view.Environment.ProjectRef != "" {
+			return nil, 0, errs.ErrForbidden
+		}
+		systemAssistantRef = assistant.Ref
+		projectRef = ""
 	}
 	environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, actorScope, environmentRef)
 	if err != nil {
@@ -59,14 +73,18 @@ func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Conte
 	if json.Unmarshal(raw, &safeSpecification) != nil {
 		return nil, 0, errs.ErrUnavailable
 	}
-	return map[string]any{
+	snapshot := map[string]any{
 		"environmentRef": environment.Ref, "projectRef": environment.ProjectRef,
 		"name": environment.Name, "description": environment.Description,
 		"imageArtifactRef": environment.CurrentVersion.Image.ArtifactRef,
 		"versionRef":       environment.CurrentVersion.Ref, "versionDigest": environment.CurrentVersion.Digest,
 		"specification": safeSpecification,
 		"policyInput":   assistantEnvironmentPolicyInput(environment.CurrentVersion.Policy),
-	}, environment.Version, nil
+	}
+	if systemAssistantRef != "" {
+		snapshot["systemAssistantRef"] = systemAssistantRef
+	}
+	return snapshot, environment.Version, nil
 }
 
 func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPolicy) map[string]any {
@@ -76,8 +94,16 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 		volumes = append(volumes, map[string]any{"name": volume.Name, "kind": volume.Kind, "sizeMib": volume.SizeMiB})
 	}
 	destinations := []string{runtimecontract.RuntimeEgressDNS, runtimecontract.RuntimeEgressProviderProxy, runtimecontract.RuntimeEgressRuntimeCallback}
-	if policy.KubernetesAccess.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		destinations = append(destinations, runtimecontract.RuntimeEgressKubernetesAPI)
+	webRules := make([]map[string]any, 0, len(policy.Network.WebAccess.Rules))
+	for _, rule := range policy.Network.WebAccess.Rules {
+		webRules = append(webRules, map[string]any{
+			"domainPattern": rule.DomainPattern,
+			"protocol":      rule.Protocol,
+			"port":          rule.Port,
+		})
+	}
+	if webRules == nil {
+		webRules = []map[string]any{}
 	}
 	return map[string]any{
 		"resources": map[string]any{
@@ -87,6 +113,9 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 			"ephemeralStorageLimitMib":   resources.EphemeralStorageLimitMiB,
 		},
 		"volumes": volumes, "networkDestinations": destinations,
+		"webAccess": map[string]any{
+			"mode": policy.Network.WebAccess.Mode, "rules": webRules,
+		},
 		"kubernetesAccess": policy.KubernetesAccess.Kind,
 	}
 }
@@ -94,7 +123,7 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 func (repository *Repository) hydrateAssistantEnvironmentOperation(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
-	if projectRef == "" || !onlyAssistantFields(operation.Parameters,
+	if !onlyAssistantFields(operation.Parameters,
 		append([]string{"environmentRef"}, assistantEnvironmentProposalFields...)...) {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
@@ -102,7 +131,11 @@ func (repository *Repository) hydrateAssistantEnvironmentOperation(ctx context.C
 	if ref == "" {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
-	before, version, err := repository.readAssistantEnvironmentSnapshot(ctx, tx, actorScope, projectRef, ref)
+	systemAssistantRef := assistantString(operation.Parameters, "systemAssistantRef")
+	if systemAssistantRef == "" && projectRef == "" {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	before, version, err := repository.readAssistantEnvironmentSnapshot(ctx, tx, actorScope, projectRef, ref, systemAssistantRef)
 	if err != nil {
 		return entity.AssistantPlanOperation{}, err
 	}
@@ -116,6 +149,9 @@ func hydrateAssistantEnvironmentFields(before map[string]any, version int64,
 		"environmentRef": before["environmentRef"], "projectRef": before["projectRef"],
 		"name": before["name"], "description": before["description"],
 		"imageArtifactRef": before["imageArtifactRef"],
+	}
+	if systemAssistantRef := assistantString(before, "systemAssistantRef"); systemAssistantRef != "" {
+		after["systemAssistantRef"] = systemAssistantRef
 	}
 	changed := false
 	for _, field := range assistantEnvironmentTextFields {
@@ -214,12 +250,16 @@ func rehydrateEditedAssistantEnvironment(original, edited entity.AssistantPlanOp
 	if original.Type != "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || original.Key != edited.Key ||
 		original.Target.Kind != "ENVIRONMENT" || original.Target.Ref == "" ||
 		original.ExpectedVersion == nil || *original.ExpectedVersion < 1 || edited.Parameters == nil ||
-		!onlyAssistantFields(edited.Parameters, append([]string{"environmentRef", "projectRef"}, assistantEnvironmentEditableFields...)...) ||
+		!onlyAssistantFields(edited.Parameters, append([]string{"environmentRef", "projectRef", "systemAssistantRef"}, assistantEnvironmentEditableFields...)...) ||
 		assistantString(edited.Parameters, "environmentRef") != original.Target.Ref ||
-		assistantString(edited.Parameters, "projectRef") != assistantString(original.Before, "projectRef") {
+		assistantString(edited.Parameters, "projectRef") != assistantString(original.Before, "projectRef") ||
+		assistantString(edited.Parameters, "systemAssistantRef") != assistantString(original.Before, "systemAssistantRef") {
 		return entity.AssistantPlanOperation{}, errs.ErrForbidden
 	}
 	parameters := map[string]any{"environmentRef": original.Target.Ref}
+	if systemAssistantRef := assistantString(original.Before, "systemAssistantRef"); systemAssistantRef != "" {
+		parameters["systemAssistantRef"] = systemAssistantRef
+	}
 	for _, field := range assistantEnvironmentEditableFields {
 		if value, supplied := edited.Parameters[field]; supplied {
 			parameters[field] = value
@@ -241,7 +281,12 @@ func rehydrateEditedAssistantEnvironment(original, edited entity.AssistantPlanOp
 func (repository *Repository) assistantEnvironmentSnapshotMatches(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (bool, error) {
-	before, version, err := repository.readAssistantEnvironmentSnapshot(ctx, tx, actorScope, projectRef, operation.Target.Ref)
+	systemAssistantRef := assistantString(operation.Parameters, "systemAssistantRef")
+	effectiveProjectRef := projectRef
+	if systemAssistantRef != "" {
+		effectiveProjectRef = ""
+	}
+	before, version, err := repository.readAssistantEnvironmentSnapshot(ctx, tx, actorScope, effectiveProjectRef, operation.Target.Ref, systemAssistantRef)
 	if err != nil {
 		return false, err
 	}
@@ -251,17 +296,18 @@ func (repository *Repository) assistantEnvironmentSnapshotMatches(ctx context.Co
 		assistantEnvironmentSnapshotIdentityMatches(operation.Before, before) &&
 		reflect.DeepEqual(operation.Parameters, operation.After) &&
 		assistantString(operation.Parameters, "environmentRef") == operation.Target.Ref &&
-		assistantString(operation.Parameters, "projectRef") == projectRef, nil
+		assistantString(operation.Parameters, "projectRef") == effectiveProjectRef &&
+		assistantString(operation.Parameters, "systemAssistantRef") == systemAssistantRef, nil
 }
 
 func assistantEnvironmentSnapshotIdentityMatches(stored, current map[string]any) bool {
 	if !onlyAssistantFields(stored, "environmentRef", "projectRef", "name", "description", "imageArtifactRef",
-		"versionRef", "versionDigest", "specification", "policyInput") ||
+		"versionRef", "versionDigest", "specification", "policyInput", "systemAssistantRef") ||
 		!onlyAssistantFields(current, "environmentRef", "projectRef", "name", "description", "imageArtifactRef",
-			"versionRef", "versionDigest", "specification", "policyInput") {
+			"versionRef", "versionDigest", "specification", "policyInput", "systemAssistantRef") {
 		return false
 	}
-	for _, field := range []string{"environmentRef", "projectRef", "name", "description", "imageArtifactRef", "versionRef", "versionDigest"} {
+	for _, field := range []string{"environmentRef", "projectRef", "name", "description", "imageArtifactRef", "versionRef", "versionDigest", "systemAssistantRef"} {
 		if assistantString(stored, field) != assistantString(current, field) {
 			return false
 		}
@@ -271,7 +317,7 @@ func assistantEnvironmentSnapshotIdentityMatches(stored, current map[string]any)
 
 func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	input := operation.Input
-	if !onlyAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "tools", "policy", "expectedVersion") ||
+	if !onlyAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "tools", "policy", "systemAssistantRef", "expectedVersion") ||
 		!hasAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "expectedVersion") ||
 		assistantString(input, "environmentRef") != assistantString(operation.Before, "environmentRef") ||
 		assistantString(input, "projectRef") != assistantString(operation.Before, "projectRef") {
@@ -327,6 +373,15 @@ func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation
 	}
 	if !assistantEnvironmentBindingsCompatible(specification.Values, specification.SecretBindings) {
 		return command.Command{}, errs.ErrInvalid
+	}
+	if assistantString(input, "systemAssistantRef") != "" {
+		if assistantString(input, "projectRef") != "" || specification.ImageArtifactRef != "" || len(specification.SecretBindings) != 0 || len(specification.Tools) != 0 {
+			return command.Command{}, errs.ErrInvalid
+		}
+		return command.Command{Kind: command.PublishRuntimeEnvironment, Payload: command.RuntimeEnvironmentInput{
+			Ref: assistantString(input, "environmentRef"), Name: specification.Name, Description: specification.Description,
+			Values: specification.Values, Policy: specification.Policy,
+		}, Mutation: value.Mutation{ExpectedVersion: &version}}, nil
 	}
 	return command.Command{Kind: command.CreateRuntimeEnvironmentDraft, Payload: command.RuntimeEnvironmentDraftInput{
 		ProjectRef: assistantString(input, "projectRef"), EnvironmentRef: assistantString(input, "environmentRef"),

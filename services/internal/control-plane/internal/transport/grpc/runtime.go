@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"io"
+	"log/slog"
 	"math"
 	"time"
 
@@ -82,7 +83,8 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	if agentRef == "" {
 		agentRef = mapString(values, "assistantRef")
 	}
-	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), OrganizationRef: mapString(values, "organizationRef"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), CodexSessionId: mapString(values, "codexSessionID"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
+	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), OrganizationRef: mapString(values, "organizationRef"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), CodexSessionId: mapString(values, "codexSessionID"),
+		AssistantScope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+mapString(values, "assistantScope")]), AssistantProfileRef: mapString(values, "assistantProfileRef")}
 	result.RoleDefinitionRef = mapString(values, "roleDefinitionRef")
 	result.EffectiveReasoningEffort = mapString(values, "effectiveReasoningEffort")
 	result.ReasoningMode = controlplanev1.RuntimeReasoningMode(controlplanev1.RuntimeReasoningMode_value["RUNTIME_REASONING_MODE_"+mapString(values, "reasoningMode")])
@@ -523,6 +525,7 @@ func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *control
 	}
 	assistant, desired, required, err := server.service.ReconcileWarmRuntime(ctx, p, request.GetWorkloadInstance())
 	if err != nil {
+		slog.WarnContext(ctx, "warm runtime reconciliation rejected", "error", err)
 		return nil, transportError(err)
 	}
 	return &controlplanev1.ReconcileWarmRuntimeResponse{Assistant: castAssistant(assistant), DesiredRevision: castRuntimeRevision(desired), MaterializationRequired: required}, nil

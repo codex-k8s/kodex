@@ -10,6 +10,8 @@ replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/obs
 
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 
+replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
+
 require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/kodex/libs/go/dnsresolver v0.0.0
@@ -18,6 +20,8 @@ require (
 	github.com/codex-k8s/kodex/libs/go/integrationegresspolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
 	github.com/google/jsonschema-go v0.3.0
 	github.com/prometheus/client_golang v1.23.2
@@ -34,12 +38,12 @@ replace github.com/codex-k8s/kodex/libs/go/dnsresolver => ../../../libs/go/dnsre
 replace github.com/codex-k8s/kodex/libs/go/integrationegresspolicy => ../../../libs/go/integrationegresspolicy
 
 require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
-	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
 	github.com/getsentry/sentry-go v0.48.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

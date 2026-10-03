@@ -3,6 +3,9 @@ SELECT runtime.organization_id::text,
        runtime.agent_id::text,
        environment.id::text,
        current_version.id::text,
+       current_version.created_by::text,
+       COALESCE(current_version.role_image_artifact_id::text, ''),
+       COALESCE(image_artifact.signature_identity = 'platform-owned-bootstrap', false),
        current_version.version_number,
        current_version.non_secret_values,
        current_version.secret_descriptors,
@@ -32,6 +35,7 @@ JOIN control_plane.runtime_environment_sets environment
 JOIN control_plane.runtime_environment_versions current_version
   ON current_version.id = environment.current_version_id
  AND current_version.organization_id = runtime.organization_id
- AND current_version.role_image_artifact_id IS NULL
+LEFT JOIN control_plane.image_artifacts image_artifact
+  ON image_artifact.id = current_version.role_image_artifact_id
 WHERE runtime.stable_key = 'system-assistant'
 FOR UPDATE OF runtime, environment;

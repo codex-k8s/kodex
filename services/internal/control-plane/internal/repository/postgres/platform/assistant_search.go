@@ -47,11 +47,11 @@ func (repository *Repository) ListAssistantIntegrationDefinitions(ctx context.Co
 		_ = tx.Rollback(cleanup)
 	}()
 	fenceDigest := sha256.Sum256([]byte(fence))
-	var actorRef, actorID string
+	var actorRef, actorID, authorityProjectID, assistantProjectRef string
 	err = tx.QueryRow(ctx, queryAssistantSearchResolveLease, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "lease_ref": leaseRef,
 		"fence_digest": hex.EncodeToString(fenceDigest[:]), "generation": generation,
-	}).Scan(&actorRef, &actorID)
+	}).Scan(&actorRef, &actorID, &authorityProjectID, &assistantProjectRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, 0, errs.ErrNotFound
 	}
@@ -122,10 +122,11 @@ func (repository *Repository) SearchAssistantResources(ctx context.Context, prin
 		_ = tx.Rollback(cleanup)
 	}()
 	fenceDigest := sha256.Sum256([]byte(fence))
+	var assistantProjectRef string
 	err = tx.QueryRow(ctx, queryAssistantSearchResolveLease, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "lease_ref": leaseRef,
 		"fence_digest": hex.EncodeToString(fenceDigest[:]), "generation": generation,
-	}).Scan(&current.actorRef, &current.actorID)
+	}).Scan(&current.actorRef, &current.actorID, &current.authorityProjectID, &assistantProjectRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, errs.ErrNotFound
 	}
@@ -148,7 +149,7 @@ func (repository *Repository) SearchAssistantResources(ctx context.Context, prin
 	candidates := make([]rankedResult, 0, maximumAssistantSearchCandidates)
 	for _, statement := range []string{queryQueriesSearchSelectEligibleResources, queryAssistantSearchExtra} {
 		rows, queryErr := tx.Query(ctx, statement, pgx.StrictNamedArgs{
-			"organization_id": current.organizationID, "query": search, "project_ref": "",
+			"organization_id": current.organizationID, "query": search, "project_ref": assistantProjectRef,
 		})
 		if queryErr != nil {
 			return nil, false, errs.ErrUnavailable

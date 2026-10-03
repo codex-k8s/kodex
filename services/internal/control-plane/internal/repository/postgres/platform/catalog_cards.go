@@ -42,7 +42,8 @@ func projectProjectCards(ctx context.Context, runner queryRunner, current scope,
 	for rows.Next() {
 		var ref string
 		var card entity.Project
-		if err := rows.Scan(&ref, &card.AgentCount, &card.WorkflowCount, &card.ActiveRunCount, &card.PendingGateCount, &card.LastActivityAt, &card.IntegrationState); err != nil {
+		var canCreateAssistant bool
+		if err := rows.Scan(&ref, &card.AgentCount, &card.WorkflowCount, &card.ActiveRunCount, &card.PendingGateCount, &card.LastActivityAt, &card.IntegrationState, &canCreateAssistant); err != nil {
 			return errs.ErrUnavailable
 		}
 		item, ok := byRef[ref]
@@ -51,6 +52,16 @@ func projectProjectCards(ctx context.Context, runner queryRunner, current scope,
 		}
 		item.AgentCount, item.WorkflowCount, item.ActiveRunCount, item.PendingGateCount = card.AgentCount, card.WorkflowCount, card.ActiveRunCount, card.PendingGateCount
 		item.LastActivityAt, item.IntegrationState = card.LastActivityAt, card.IntegrationState
+		freshActions := make([]string, 0, len(item.NextActions)+1)
+		for _, action := range item.NextActions {
+			if action != "CREATE_PROJECT_ASSISTANT" {
+				freshActions = append(freshActions, action)
+			}
+		}
+		item.NextActions = freshActions
+		if canCreateAssistant {
+			item.NextActions = append(item.NextActions, "CREATE_PROJECT_ASSISTANT")
+		}
 		delete(byRef, ref)
 	}
 	if rows.Err() != nil {
@@ -80,7 +91,8 @@ func projectAgentCards(ctx context.Context, runner queryRunner, current scope, i
 	defer rows.Close()
 	for rows.Next() {
 		var ref, runRef string
-		if err := rows.Scan(&ref, &runRef); err != nil {
+		var assistantBacked bool
+		if err := rows.Scan(&ref, &runRef, &assistantBacked); err != nil {
 			return errs.ErrUnavailable
 		}
 		item, ok := byRef[ref]
@@ -88,6 +100,16 @@ func projectAgentCards(ctx context.Context, runner queryRunner, current scope, i
 			return errs.ErrConflict
 		}
 		item.CurrentRunRef = runRef
+		item.AssistantBacked = assistantBacked
+		if assistantBacked {
+			freshActions := make([]string, 0, len(item.NextActions))
+			for _, action := range item.NextActions {
+				if action != "ARCHIVE" && action != "DELETE" && action != "PURGE" {
+					freshActions = append(freshActions, action)
+				}
+			}
+			item.NextActions = freshActions
+		}
 	}
 	if rows.Err() != nil {
 		return errs.ErrUnavailable

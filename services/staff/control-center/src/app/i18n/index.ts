@@ -1011,7 +1011,8 @@ const ru = {
   },
   onboarding: {
     title: "Настроим Kodex",
-    subtitle: "Помощник уже готов и проведёт через первый рабочий запуск.",
+    subtitle:
+      "От подключения модели до первого результата — по шагам, самостоятельно или с помощником.",
     ready: "Системный помощник готов",
     webOnly: "Внешние интеграции не нужны для начала работы",
     stepProject: "Создайте первый Проект",
@@ -1019,6 +1020,163 @@ const ru = {
     stepRun: "Дайте первое задание",
     startAssistant: "Начать с помощником",
     finish: "Завершить настройку",
+    yourSetup: "Первичная настройка",
+    progress: "Готово {count} из {total} шагов",
+    stepsLabel: "Шаги первичной настройки",
+    currentStep: "Шаг {step} из {total}",
+    done: "Готово",
+    previous: "Назад",
+    next: "Далее",
+    backToSetup: "Вернуться к настройке",
+    finishLater: "Настрою остальное позже",
+    finishLaterConfirm:
+      "Первичная настройка завершится без создания проектов и запуска задач. Сохранённые настройки останутся. Продолжить можно в любой момент через «Первичная настройка» в боковом меню.",
+    configureAssistant: "Настроить системного помощника",
+    assistantConfigurationHelp:
+      "Выберите модель и аккаунт, образ и проверенные инструменты, переменные и секреты, добавьте инструкции. Ресурсы, тома и сетевой доступ доступны в расширенных настройках. Это системный Kodex; отдельного помощника проекта можно настроить позже.",
+    assistantDefaultsTitle: "Можно начать с базовых настроек",
+    assistantDefaultsHelp:
+      "Помощник уже настроен для безопасной работы. Изменения необязательны: переходите к проекту и возвращайтесь к настройкам, когда понадобится.",
+    saveHelp:
+      "Настройки сохраняются в своих разделах. Можно вернуться к любому шагу; галочка появляется по фактической готовности.",
+    modelRequired: "Для помощника и запусков подключите аккаунт модели",
+    providerUnknown: "Не удалось проверить доступность аккаунта модели",
+    assistantReady: "Помощник готов к работе",
+    assistantFailed:
+      "Аккаунт подключён, но помощник не готов. Проверьте его настройки",
+    assistantPreparing: "Аккаунт подключён. Помощник подготавливается к работе",
+    assistantSettings: "Настройки помощника",
+    connectProviderTitle: "Подключите аккаунт OpenAI",
+    connectedProviderTitle: "Аккаунт модели подключён",
+    connectedProviderHelp:
+      "Авторизация подтверждена. Теперь можно создавать проект и настраивать работу с помощью Kodex. Другие аккаунты можно добавить позже.",
+    continueAfterModel:
+      "Первый шаг готов. Нажмите «Далее», чтобы проверить настройки системного помощника.",
+    connectProviderHelp:
+      "Войдите через device-code, чтобы использовать подписку, или добавьте API key. Авторизация выполняется в защищённой форме; не отправляйте ключи в чат.",
+    connectModel: "Подключить аккаунт модели",
+    manageModel: "Управлять аккаунтами модели",
+    defaultModelHelp:
+      "Модель и уровень рассуждений по умолчанию. Их можно изменить отдельно для помощника и каждого ИИ-сотрудника.",
+    manualWithoutModel:
+      "Модель нужна для работы ИИ. Проект, образ и окружение можно подготовить вручную уже сейчас — нажмите «Далее».",
+    selectProject: "Проект для дальнейшей настройки",
+    chooseProject: "Выберите проект",
+    projectTitle: "Отдельное пространство для вашей задачи",
+    projectHelp:
+      "Укажите название и цель проекта. Здесь будут храниться его сотрудники, процессы, секреты и результаты. Можно создать новый проект или продолжить настройку существующего.",
+    createProject: "Создать проект вручную",
+    openProject: "Открыть проект",
+    projectRequired: "Сначала выберите или создайте проект",
+    projectRequiredHelp:
+      "Образы, окружения, сотрудники и процессы принадлежат проекту. Вернитесь на предыдущий шаг, чтобы выбрать, где их создавать.",
+    goToProject: "Перейти к проекту",
+    baseImage: "Базовый образ — быстрый старт",
+    baseImageHelp:
+      "Для обычных задач начните с поставляемого платформой образа. Базовый образ и окружение появятся при создании первого сотрудника; отдельная сборка не нужна.",
+    useBaseImage: "Продолжить с базовым образом",
+    customImage: "Свой образ — если нужны дополнительные инструменты",
+    customImageHelp:
+      "Добавьте пакеты или Dockerfile, выполните сборку и проверку, затем опубликуйте образ. Его можно выбрать в окружении после успешной сборки.",
+    configureImage: "Настроить свой образ",
+    imageNeedsRole:
+      "Свой образ связан с ролью сотрудника. Сначала создайте сотрудника с базовыми настройками, затем вернитесь сюда, чтобы добавить инструменты и настроить собственный образ.",
+    createEmployeeForImage: "Создать сотрудника с базовым образом",
+    existingImages: "Посмотреть образы",
+    environmentTitle: "Подготовьте рабочее окружение",
+    environmentHelp:
+      "Используйте окружение по умолчанию или создайте своё: выберите образ, добавьте переменные и настройте ресурсы и доступ. Проверьте готовность и опубликуйте изменения.",
+    configureEnvironment: "Выбрать и настроить окружение",
+    defaultEnvironmentHelp:
+      "Окружение по умолчанию создаётся вместе с первым сотрудником. Для старта можно перейти дальше, а переменные, секреты и ограничения добавить позже.",
+    useDefaultEnvironment: "Продолжить с настройками по умолчанию",
+    newEnvironment: "Создать окружение",
+    secretsTitle: "Секреты для внешних сервисов",
+    secretsHelp:
+      "Если нужны токены или пароли, создайте их в защищённой форме и привяжите к окружению. Для задач без внешних сервисов этот пункт можно пропустить. Значения секретов не передаются в чат.",
+    configureSecrets: "Настроить секреты",
+    optional: "При необходимости",
+    employeeTitle: "Добавьте первого ИИ-сотрудника",
+    employeeHelp:
+      "Опишите его задачу, выберите модель и окружение, настройте полномочия и опубликуйте инструкции. Готовый сотрудник сможет выполнять поручения.",
+    createEmployee: "Создать ИИ-сотрудника",
+    existingEmployees: "Посмотреть сотрудников",
+    processTitle: "Объедините работу в процесс",
+    processHelp:
+      "Процесс связывает несколько этапов и исполнителей. Если пока достаточно одного сотрудника, начните без процесса — его можно добавить позже.",
+    createProcess: "Создать процесс",
+    firstRunTitle: "Получите первый результат",
+    firstRunNeedsEmployee:
+      "В проекте пока нет готового исполнителя. Сначала создайте и настройте сотрудника, затем вернитесь сюда для первого запуска.",
+    goToEmployees: "Перейти к сотрудникам",
+    firstRunHelp:
+      "Выберите сотрудника или процесс, задайте входные данные и запустите работу. Следите за ходом выполнения, отвечайте на запросы согласования и проверьте результат.",
+    firstRun: "Запустить первую работу",
+    results: "Посмотреть запуски",
+    automationTitle: "Автоматизируйте повторяющиеся задачи",
+    automationHelp:
+      "После первого успешного запуска добавьте расписание или триггер, если работу нужно повторять. Для первого запуска автоматизация не обязательна.",
+    configureAutomations: "Настроить автоматизации",
+    assistantHelp: "Предпочитаете описать задачу словами?",
+    assistantNeedsModel:
+      "Сначала подключите аккаунт модели на шаге 1. Ручная настройка доступна без него.",
+    finishHelp:
+      "Все шаги необязательны. Можно завершить настройку сейчас и продолжить позже через боковое меню.",
+    steps: {
+      model: {
+        title: "Модель",
+        short: "Подключение аккаунта",
+        description:
+          "Подключите модель, чтобы помощник и ИИ-сотрудники могли выполнять задачи. Для старта достаточно одного аккаунта.",
+      },
+      assistant: {
+        title: "Системный помощник",
+        short: "Модель, доступ и инструкции",
+        description:
+          "Настройте Kodex под себя. Его модель, окружение и инструкции задаются отдельно от настроек ИИ-сотрудников проекта.",
+      },
+      project: {
+        title: "Проект",
+        short: "Цель и рабочее пространство",
+        description:
+          "Создайте проект сами или поручите это помощнику. Для каждого следующего шага будем использовать выбранный проект.",
+      },
+      image: {
+        title: "Образ",
+        short: "Базовый или собственный",
+        description:
+          "Образ определяет инструменты, доступные сотруднику. Базового достаточно для старта; собственный нужен для особых зависимостей.",
+      },
+      environment: {
+        title: "Секреты и окружение",
+        short: "Переменные, ресурсы и доступ",
+        description:
+          "Выберите базовые настройки или подготовьте собственное окружение с переменными, секретами и правилами доступа.",
+      },
+      team: {
+        title: "Сотрудники и процессы",
+        short: "Исполнители и этапы работы",
+        description:
+          "Определите, кто будет работать и что должен сделать. Начните с одного сотрудника; многоэтапный процесс добавьте по необходимости.",
+      },
+      launch: {
+        title: "Автоматизации и запуск",
+        short: "Первый результат и расписания",
+        description:
+          "Сначала выполните задачу вручную и убедитесь в результате. Затем настройте повторение, если оно нужно.",
+      },
+    },
+    assistantPrompts: {
+      project:
+        "Помоги создать мой первый проект. Уточни его цель и предложи заполненный черновик проекта для моего подтверждения.",
+      image:
+        "Помоги подобрать образ для текущего проекта: начни с базового. Если нужны дополнительные инструменты, предложи черновик собственного образа и после подтверждения проверь сборку.",
+      environment:
+        "Помоги настроить рабочее окружение текущего проекта: образ, переменные, ресурсы и доступ. Если нужны секреты, запроси их через защищённую форму. Подготовь черновик для подтверждения.",
+      team: "Помоги создать первого ИИ-сотрудника в текущем проекте: уточни задачу, настрой инструкции, модель, окружение и права. Если нужны несколько этапов, предложи процесс. Все изменения подготовь как черновики для подтверждения.",
+      launch:
+        "Помоги выполнить первую задачу в текущем проекте. Проверь готовность сотрудника или процесса и предложи запуск для моего подтверждения. После успешного результата предложи автоматизацию, если она полезна.",
+    },
   },
   home: {
     failedRuns: "Запуски с ошибкой",
@@ -1453,35 +1611,37 @@ const ru = {
       DNS: "DNS",
       PROVIDER_PROXY: "Provider proxy",
       RUNTIME_CALLBACK: "Runtime callback",
-      KUBERNETES_API: "Kubernetes API",
     },
     networkDestinationHelp: {
       DNS: "Разрешение имён через DNS кластера, TCP/UDP 53.",
       PROVIDER_PROXY:
-        "Вызовы провайдера только через платформенный proxy, TCP 8080.",
+        "Вызовы провайдера и разрешённый веб-доступ только через платформенный proxy, TCP 8084.",
       RUNTIME_CALLBACK:
         "Возврат событий выполнения в runtime-controller, TCP 8444.",
-      KUBERNETES_API:
-        "Добавляется только вместе с профилем чтения собственного execution, TCP 443.",
     },
     mandatoryDestination: "Обязательно",
     scopedAccessEnabled: "Scoped доступ",
+    webAccessMode: "Доступ к публичной сети",
+    webAccessModeLabel: {
+      NONE: "Без веб-доступа",
+      ALLOWLIST_READ_ONLY: "Allowlist: только чтение",
+      ALLOWLIST_FULL: "Allowlist: чтение и изменение",
+      FULL_PUBLIC: "Полный публичный доступ",
+    },
+    webAccessModeHelp: {
+      NONE: "Рабочие инструменты не могут обращаться к публичным сайтам; соединение с моделью сохраняется.",
+      ALLOWLIST_READ_ONLY:
+        "Для указанных доменов можно выбрать непустой набор из GET, HEAD и OPTIONS.",
+      ALLOWLIST_FULL:
+        "Для указанных доменов можно выбрать непустой набор из GET, HEAD, OPTIONS, POST, PUT, PATCH и DELETE.",
+      FULL_PUBLIC:
+        "Разрешён HTTPS-доступ к публичным адресам через управляемый proxy с SSRF-защитой.",
+    },
+    webAccessDomain: "Домен или scoped wildcard",
+    webAccessMethods: "HTTP-методы",
+    addWebAccessRule: "Добавить домен",
     networkPolicyUnavailable:
       "API не предоставляет typed destinations и итоговый NetworkPolicy preview.",
-    kubernetesRbac: "Ограниченные права Kubernetes (RBAC)",
-    kubernetesAccessLabel: {
-      NONE: "Нет доступа к Kubernetes API",
-      READ_OWN_EXECUTION: "Чтение собственного запуска",
-    },
-    kubernetesRbacHelp:
-      "Профиль не выдаёт произвольный доступ и ограничен объектами текущего execution.",
-    readOwnExecution: "Разрешить чтение собственного execution",
-    readOwnExecutionHelp:
-      "READ_OWN_EXECUTION: только точные Pod и Pod logs, назначенные текущему запуску.",
-    kubernetesAccessBoundary:
-      "ServiceAccount, resourceNames и namespace kodex-runtime назначает сервер. List, watch, exec и доступ к Secret не выдаются.",
-    kubernetesRbacUnavailable:
-      "API не возвращает workload identity, RBAC profile и effective grants.",
     effectivePolicyPreview: "Итоговые правила доступа",
     effectivePolicyPreviewHelp:
       "Черновик отправляется как typed policy; после публикации ниже показывается авторитетная нормализованная policy сервера.",
@@ -1576,9 +1736,20 @@ const ru = {
       volumeKind: "Разрешены только EPHEMERAL_DISK и EPHEMERAL_MEMORY.",
       volumeSizeRange:
         "Размер тома должен быть целым числом от 16 до 10 240 MiB.",
-      kubernetesAccess: "Неизвестный профиль Kubernetes доступа.",
+      kubernetesAccess: "Доступ агента к Kubernetes больше не поддерживается.",
       networkDestinations:
-        "Сеть должна содержать DNS, provider proxy и runtime callback, а Kubernetes API — только при READ_OWN_EXECUTION.",
+        "Сеть должна содержать только DNS, прокси провайдера и обратный вызов среды выполнения.",
+      webAccessMode: "Неизвестный режим публичного доступа.",
+      webAccessRulesForMode:
+        "Для выбранного режима список доменов должен быть пустым.",
+      webAccessRulesRequired: "Добавьте от 1 до 64 доменных правил.",
+      webAccessDomain:
+        "Укажите точный домен, *.example.com или **.example.com. Глобальный wildcard запрещён.",
+      webAccessDuplicateDomain: "Доменные правила не должны повторяться.",
+      webAccessTransport:
+        "В прототипе поддерживается только HTTPS на порту 443.",
+      webAccessMethods:
+        "Выберите уникальные HTTP-методы, допустимые для режима.",
       secretDescriptorRequired:
         "Заполните все обязательные поля Secret descriptor.",
       sha256: "SHA-256 должен содержать 64 строчные шестнадцатеричные цифры.",
@@ -3198,6 +3369,14 @@ const ru = {
   },
   providers: {
     catalogObserved: "Проверено",
+    accountSettings: "Настройки аккаунта",
+    accountSettingsTitle: "Настройки аккаунта: {name}",
+    concurrencyLimit: "Параллельные выполнения",
+    concurrencyHint:
+      "Общий лимит для помощников и ИИ-сотрудников, использующих этот аккаунт. По умолчанию — 10, допустимо от 1 до 256.",
+    concurrencyActiveHint:
+      "При снижении лимита текущие работы продолжаются. Новые ходы ждут освобождения места. Это ограничение Kodex, а не квота провайдера.",
+    catalogAsOf: "Каталог Kodex от {date}",
     catalogPending: "Каталог проверяется",
     catalogReady: "Каталог актуален",
     catalogFailed: "Не удалось проверить каталог",
@@ -3427,6 +3606,24 @@ const ru = {
   assistant: {
     replaceDraftConfirm:
       "Заменить текущий неотправленный текст запросом на публикацию интеграции?",
+    projectProfile: {
+      needsSetupBadge: "Требует настройки",
+      title: "Помощник Проекта",
+      scopeLabel: "Какой помощник ведёт диалог",
+      createTitle: "Отдельный помощник Проекта",
+      createHelp:
+        "Создайте собственную конфигурацию. Диалоги, инструкции и окружение не смешиваются с общесистемным помощником.",
+      create: "Создать помощника",
+      configure: "Настроить помощника",
+      ready: "Помощник Проекта готов к работе",
+      needsSetup:
+        "Настройте модель, инструкции и окружение перед отправкой сообщения. Диалоги можно создать уже сейчас.",
+      environmentHelp:
+        "Выберите собственный образ и проверенные инструменты, окружение, переменные и секреты Проекта. Настройка выполняется в полном редакторе с проверкой готовности и подтверждением доступа.",
+      instructionsHelp:
+        "Инструкции помощника Проекта имеют собственные черновики и опубликованные версии. Изменения проверяются перед публикацией.",
+      openEditor: "Открыть полный редактор",
+    },
     replaceDraftWithBuildDebugConfirm:
       "Заменить текущий неотправленный текст запросом на разбор сборки?",
     replaceDraftWithRunDebugConfirm:
@@ -3465,8 +3662,10 @@ const ru = {
       UPDATE_PROJECT: "Изменить Проект",
       UPDATE_AGENT: "Изменить сотрудника",
       CREATE_INSTRUCTION_DRAFT: "Подготовить черновик инструкций сотрудника",
+      UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS: "Изменить инструкции Kodex",
       UPDATE_INTEGRATION_CONNECTION: "Изменить подключение",
       CREATE_AGENT: "Создать сотрудника",
+      CREATE_PROJECT_ASSISTANT: "Создать помощника Проекта",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION:
         "Подготовить новую ревизию окружения",
@@ -3486,7 +3685,7 @@ const ru = {
     subtitle:
       "Настраивает платформу через те же типизированные команды и ваши полномочия",
     ready: "Всегда готов",
-    working: "Kodex отвечает",
+    working: "Kodex работает",
     providerAccountRequired: "Подключите аккаунт модели",
     providerAccountRequiredHelp:
       "Создайте provider account и завершите авторизацию. До этого Kodex не запускает модели и не создаёт диалоги.",
@@ -3495,6 +3694,29 @@ const ru = {
     newConversation: "Новый диалог",
     message: "Опишите, что нужно настроить или запустить",
     send: "Отправить помощнику",
+    queue: "Добавить сообщение в очередь",
+    sendNow: "Остановить текущий ход и отправить сейчас",
+    stop: "Остановить текущий ход",
+    settings: {
+      title: "Настройки Kodex",
+      description:
+        "Та же конфигурация модели, окружения и инструкций, что у ИИ-сотрудников.",
+      runtime: "Модель и выполнение",
+      environment: "Окружение",
+      instructions: "Инструкции",
+      instructionsHelp:
+        "Дополнение владельца применяется к следующим ходам. Изменения, предложенные самим Kodex, сначала показываются как подтверждаемый черновик.",
+      environmentTitle: "Рабочее окружение Kodex",
+      environmentHelp:
+        "Образ, инструменты, переменные и секреты применятся к следующим ходам. Ресурсы и сетевой доступ доступны в расширенных настройках; доступ к интернету требует свежего подтверждения владельца.",
+      imageCatalogUnavailable:
+        "Каталог образов пока недоступен. Точная сохранённая версия и инструменты сохранятся при изменении остальных параметров.",
+      secretCatalogUnavailable:
+        "Каталог секретов пока недоступен. Сохранённые привязки и их ревизии не изменятся.",
+      environmentAdvanced: "Ресурсы, тома и сетевой доступ",
+      systemScope: "Общесистемный помощник",
+      projectScope: "Помощник проекта",
+    },
     workContext: "Контекст работы",
     contextReady: "Готов помочь на этом экране",
     outcomeHelp:
@@ -3674,6 +3896,11 @@ const ru = {
     },
     createdEntity: {
       loadFailed: "Не удалось прочитать объект. Повторите обновление.",
+      PROJECT_ASSISTANT: {
+        title: "Созданный помощник проекта",
+        next: "Настройте модель, образ, окружение и инструкции помощника перед первым запуском.",
+        open: "Настроить помощника",
+      },
       PROJECT: {
         title: "Созданный проект",
         updatedTitle: "Изменённый проект",
@@ -3811,6 +4038,7 @@ const ru = {
       projectLanguage: "Язык проекта",
       agentRole: "Роль сотрудника",
       agentInstructions: "Инструкции сотруднику",
+      systemAssistantInstructions: "Дополнительные инструкции Kodex",
       agentCapabilities: "Возможности сотрудника",
       capabilityAgent: "Сотрудник",
       capabilityName: "Возможность",
@@ -3843,6 +4071,8 @@ const ru = {
         "Образ, рабочее окружение и остальные доступы настраиваются отдельно. Проверьте их перед запуском сотрудника.",
       instructionDraftNextSteps:
         "План сохранит только черновик инструкций. После применения откройте штатную форму сотрудника, проверьте шаблон и отдельно опубликуйте его.",
+      systemAssistantInstructionsBoundary:
+        "Изменение затронет только дополнительные инструкции владельца. Системные ограничения, полномочия и базовый prompt Kodex останутся неизменными; новые инструкции вступят в силу только после проверки и подтверждения плана.",
       environmentDescription: "Описание окружения",
       environmentImageArtifact: "Ссылка на проверенный образ (необязательно)",
       environmentChooseImage: "Выбрать готовый образ",
@@ -3858,6 +4088,8 @@ const ru = {
         "Подсказка о секрете некорректна. Попросите помощника подготовить новый план.",
       environmentRevisionBoundary:
         "Проверьте название, описание, образ, инструменты, параметры, привязки секретов и политику. Применение создаст только черновик новой ревизии.",
+      systemEnvironmentBoundary:
+        "Это окружение самого Kodex. Платформенный образ и секреты здесь не меняются; проверьте публичные переменные, ресурсы и сетевой доступ.",
       environmentPolicyInvalid:
         "Политика окружения повреждена или содержит недопустимые поля. Попросите подготовить новый план.",
       environmentPolicyFreshAuthentication:
@@ -3870,6 +4102,8 @@ const ru = {
         "Укажите название и корректную ссылку на образ или оставьте поле образа пустым.",
       environmentRevisionNextSteps:
         "После подтверждения будет создан черновик новой ревизии. Откройте его, проверьте влияние на сотрудников и опубликуйте отдельно.",
+      systemEnvironmentNextSteps:
+        "После подтверждения новая ревизия будет опубликована для следующих ходов Kodex; текущий ход продолжит работать на закреплённой ревизии.",
       bindingBoundary:
         "Назначается только готовая опубликованная среда этого проекта. Секреты и параметры окружения здесь не меняются.",
       bindingLoadFailed:
@@ -5186,7 +5420,8 @@ const en = {
   onboarding: {
     ...ru.onboarding,
     title: "Set up Kodex",
-    subtitle: "The assistant is ready to guide your first working run.",
+    subtitle:
+      "From connecting a model to your first result — step by step, on your own or with the assistant.",
     ready: "System assistant is ready",
     webOnly: "External integrations are not required",
     stepProject: "Create your first Project",
@@ -5194,6 +5429,163 @@ const en = {
     stepRun: "Give the first task",
     startAssistant: "Start with assistant",
     finish: "Complete setup",
+    yourSetup: "Getting started",
+    progress: "{count} of {total} steps ready",
+    stepsLabel: "Setup steps",
+    currentStep: "Step {step} of {total}",
+    done: "Ready",
+    previous: "Back",
+    next: "Next",
+    backToSetup: "Return to setup",
+    finishLater: "Set up the rest later",
+    finishLaterConfirm:
+      "This will finish onboarding without creating projects or running tasks. Saved settings will remain. You can resume any time using Getting started in the sidebar.",
+    configureAssistant: "Configure system assistant",
+    assistantConfigurationHelp:
+      "Choose a model and account, image and verified tools, variables and secrets, and add instructions. Resources, volumes and network access are available in advanced settings. This is system Kodex; a separate project assistant can be configured later.",
+    assistantDefaultsTitle: "Start with the base settings",
+    assistantDefaultsHelp:
+      "The assistant is already configured for safe work. Changes are optional: continue to your project and revisit these settings whenever needed.",
+    saveHelp:
+      "Settings are saved in their own sections. Revisit any step; checkmarks reflect actual readiness.",
+    modelRequired: "Connect a model account to use the assistant and run tasks",
+    providerUnknown: "Could not check model account availability",
+    assistantReady: "Assistant is ready",
+    assistantFailed:
+      "Account connected, but the assistant is not ready. Check its settings",
+    assistantPreparing: "Account connected. The assistant is getting ready",
+    assistantSettings: "Assistant settings",
+    connectProviderTitle: "Connect an OpenAI account",
+    connectedProviderTitle: "Model account connected",
+    connectedProviderHelp:
+      "Authorization is confirmed. You can now create a project and set up work with Kodex. Add other accounts later if needed.",
+    continueAfterModel:
+      "The first step is ready. Select Next to review the system assistant settings.",
+    connectProviderHelp:
+      "Sign in with device-code to use your subscription, or add an API key. Use the protected form; do not send keys in chat.",
+    connectModel: "Connect model account",
+    manageModel: "Manage model accounts",
+    defaultModelHelp:
+      "Default model and reasoning level. You can adjust them separately for the assistant and each AI employee.",
+    manualWithoutModel:
+      "AI tasks require a model. You can already prepare a project, image and environment manually — select Next.",
+    selectProject: "Project to configure",
+    chooseProject: "Select a project",
+    projectTitle: "A workspace for your task",
+    projectHelp:
+      "Give the project a name and purpose. Its employees, processes, secrets and results will live here. Create a new project or continue setting up an existing one.",
+    createProject: "Create project manually",
+    openProject: "Open project",
+    projectRequired: "Select or create a project first",
+    projectRequiredHelp:
+      "Images, environments, employees and processes belong to a project. Return to the project step to select where to create them.",
+    goToProject: "Go to project step",
+    baseImage: "Base image — a quick start",
+    baseImageHelp:
+      "Start with the platform's supplied image for everyday tasks. The base image and environment are created with your first employee; no separate build is needed.",
+    useBaseImage: "Continue with base image",
+    customImage: "Custom image — for extra tools",
+    customImageHelp:
+      "Add packages or a Dockerfile, build and verify, then publish the image. Select it in an environment after a successful build.",
+    configureImage: "Configure custom image",
+    imageNeedsRole:
+      "A custom image belongs to an employee role. Create an employee with the base settings first, then return here to add tools and configure a custom image.",
+    createEmployeeForImage: "Create employee with base image",
+    existingImages: "View images",
+    environmentTitle: "Prepare a work environment",
+    environmentHelp:
+      "Use the default environment or create your own: select an image, add variables, and configure resources and access. Check readiness and publish changes.",
+    configureEnvironment: "Select and configure environment",
+    defaultEnvironmentHelp:
+      "The default environment is created with your first employee. Continue to the next step now and add variables, secrets and restrictions later.",
+    useDefaultEnvironment: "Continue with default settings",
+    newEnvironment: "Create environment",
+    secretsTitle: "Secrets for external services",
+    secretsHelp:
+      "If you need tokens or passwords, create them in the protected form and bind them to the environment. Skip this for tasks without external services. Secret values are never sent in chat.",
+    configureSecrets: "Configure secrets",
+    optional: "If needed",
+    employeeTitle: "Add your first AI employee",
+    employeeHelp:
+      "Describe the task, choose a model and environment, configure permissions, and publish instructions. A ready employee can carry out assignments.",
+    createEmployee: "Create AI employee",
+    existingEmployees: "View employees",
+    processTitle: "Combine work into a process",
+    processHelp:
+      "A process connects multiple stages and employees. If one employee is enough, start without a process and add one later.",
+    createProcess: "Create process",
+    firstRunTitle: "Get your first result",
+    firstRunNeedsEmployee:
+      "There is no ready executor in this project yet. Create and configure an employee first, then return here for your first run.",
+    goToEmployees: "Go to employees",
+    firstRunHelp:
+      "Select an employee or process, provide input and start work. Follow progress, respond to approval requests, and check the result.",
+    firstRun: "Start first task",
+    results: "View runs",
+    automationTitle: "Automate recurring work",
+    automationHelp:
+      "After your first successful run, add a schedule or trigger if the task should repeat. Automation is not required for the first run.",
+    configureAutomations: "Configure automations",
+    assistantHelp: "Prefer describing the task in words?",
+    assistantNeedsModel:
+      "Connect a model account in step 1 first. Manual setup is available without one.",
+    finishHelp:
+      "All steps are optional. Finish setup now and resume later using the sidebar.",
+    steps: {
+      model: {
+        title: "Model",
+        short: "Connect an account",
+        description:
+          "Connect a model so the assistant and AI employees can perform tasks. One account is enough to get started.",
+      },
+      assistant: {
+        title: "System assistant",
+        short: "Model, access and instructions",
+        description:
+          "Customize Kodex. Its model, environment and instructions are configured separately from project AI employees.",
+      },
+      project: {
+        title: "Project",
+        short: "Purpose and workspace",
+        description:
+          "Create a project yourself or ask the assistant. The following steps will use your selected project.",
+      },
+      image: {
+        title: "Image",
+        short: "Base or custom",
+        description:
+          "An image defines the tools an employee can use. Start with the base image; create a custom one for special dependencies.",
+      },
+      environment: {
+        title: "Secrets and environment",
+        short: "Variables, resources and access",
+        description:
+          "Choose the base settings or prepare a custom environment with variables, secrets and access rules.",
+      },
+      team: {
+        title: "Employees and processes",
+        short: "People and stages of work",
+        description:
+          "Define who will work and what they should do. Start with one employee; add a multi-stage process if needed.",
+      },
+      launch: {
+        title: "Automation and first run",
+        short: "First result and schedules",
+        description:
+          "Run a task manually and check the result first. Then configure recurrence if needed.",
+      },
+    },
+    assistantPrompts: {
+      project:
+        "Help create my first project. Ask about its purpose and propose a filled-out project draft for my approval.",
+      image:
+        "Help choose an image for the current project, starting with the base image. If extra tools are needed, propose a custom image draft and verify the build after approval.",
+      environment:
+        "Help configure the current project's work environment: image, variables, resources and access. Request secrets through the protected form if needed. Prepare a draft for approval.",
+      team: "Help create the current project's first AI employee: clarify the task and configure instructions, model, environment and permissions. Propose a process if multiple stages are needed. Prepare all changes as drafts for approval.",
+      launch:
+        "Help run the first task in the current project. Check employee or process readiness and propose a run for my approval. After a successful result, suggest automation if useful.",
+    },
   },
   home: {
     ...ru.home,
@@ -5630,35 +6022,37 @@ const en = {
       DNS: "DNS",
       PROVIDER_PROXY: "Provider proxy",
       RUNTIME_CALLBACK: "Runtime callback",
-      KUBERNETES_API: "Kubernetes API",
     },
     networkDestinationHelp: {
       DNS: "Name resolution through cluster DNS on TCP/UDP 53.",
       PROVIDER_PROXY:
-        "Provider calls only through the platform proxy on TCP 8080.",
+        "Provider calls and allowed web access only through the platform proxy on TCP 8084.",
       RUNTIME_CALLBACK:
         "Execution events returned to runtime-controller on TCP 8444.",
-      KUBERNETES_API:
-        "Added only with read access to the current execution on TCP 443.",
     },
     mandatoryDestination: "Required",
     scopedAccessEnabled: "Scoped access",
+    webAccessMode: "Public network access",
+    webAccessModeLabel: {
+      NONE: "No web access",
+      ALLOWLIST_READ_ONLY: "Allowlist: read only",
+      ALLOWLIST_FULL: "Allowlist: read and write",
+      FULL_PUBLIC: "Full public access",
+    },
+    webAccessModeHelp: {
+      NONE: "Workspace tools cannot access public sites; model connectivity remains available.",
+      ALLOWLIST_READ_ONLY:
+        "Choose any non-empty subset of GET, HEAD and OPTIONS for the listed domains.",
+      ALLOWLIST_FULL:
+        "Choose any non-empty subset of GET, HEAD, OPTIONS, POST, PUT, PATCH and DELETE for the listed domains.",
+      FULL_PUBLIC:
+        "HTTPS access to public addresses is allowed through the managed SSRF-protected proxy.",
+    },
+    webAccessDomain: "Domain or scoped wildcard",
+    webAccessMethods: "HTTP methods",
+    addWebAccessRule: "Add domain",
     networkPolicyUnavailable:
       "The API does not expose typed destinations or final NetworkPolicy preview.",
-    kubernetesRbac: "Scoped Kubernetes RBAC",
-    kubernetesAccessLabel: {
-      NONE: "No Kubernetes API access",
-      READ_OWN_EXECUTION: "Read own execution",
-    },
-    kubernetesRbacHelp:
-      "The profile grants no arbitrary access and is limited to current execution objects.",
-    readOwnExecution: "Allow reading the current execution",
-    readOwnExecutionHelp:
-      "READ_OWN_EXECUTION: exact Pods and Pod logs assigned to the current run only.",
-    kubernetesAccessBoundary:
-      "The server assigns ServiceAccount, resourceNames and the kodex-runtime namespace. List, watch, exec and Secret access are not granted.",
-    kubernetesRbacUnavailable:
-      "The API does not return workload identity, RBAC profile or effective grants.",
     effectivePolicyPreview: "Effective policy preview",
     effectivePolicyPreviewHelp:
       "The draft is sent as typed policy; after publishing this view shows the authoritative normalized server policy.",
@@ -5750,9 +6144,18 @@ const en = {
       duplicateVolume: "Ephemeral volume names must be unique.",
       volumeKind: "Only EPHEMERAL_DISK and EPHEMERAL_MEMORY are allowed.",
       volumeSizeRange: "Volume size must be an integer from 16 to 10,240 MiB.",
-      kubernetesAccess: "Unknown Kubernetes access profile.",
+      kubernetesAccess: "Agent access to Kubernetes is no longer supported.",
       networkDestinations:
-        "Network policy must include DNS, provider proxy and runtime callback; Kubernetes API is allowed only with READ_OWN_EXECUTION.",
+        "Network policy must include only DNS, provider proxy and runtime callback.",
+      webAccessMode: "Unknown public network access mode.",
+      webAccessRulesForMode:
+        "The domain list must be empty for the selected mode.",
+      webAccessRulesRequired: "Add between 1 and 64 domain rules.",
+      webAccessDomain:
+        "Enter an exact domain, *.example.com, or **.example.com. A global wildcard is forbidden.",
+      webAccessDuplicateDomain: "Domain rules must be unique.",
+      webAccessTransport: "The prototype supports HTTPS on port 443 only.",
+      webAccessMethods: "Select unique HTTP methods supported by the mode.",
       secretDescriptorRequired:
         "Complete all required Secret descriptor fields.",
       sha256: "SHA-256 must contain 64 lowercase hexadecimal digits.",
@@ -7279,7 +7682,15 @@ const en = {
   },
   providers: {
     ...ru.providers,
+    accountSettings: "Account settings",
+    accountSettingsTitle: "Account settings: {name}",
+    concurrencyLimit: "Concurrent executions",
+    concurrencyHint:
+      "Shared limit for assistants and AI employees using this account. The default is 10; allowed values are 1–256.",
+    concurrencyActiveHint:
+      "Lowering the limit does not stop active work. New turns wait for capacity. This is a Kodex limit, not a provider quota.",
     catalogObserved: "Observed",
+    catalogAsOf: "Kodex catalog as of {date}",
     catalogPending: "Checking catalog",
     catalogReady: "Catalog is current",
     catalogFailed: "Catalog check failed",
@@ -7506,6 +7917,24 @@ const en = {
   },
   assistant: {
     ...ru.assistant,
+    projectProfile: {
+      needsSetupBadge: "Needs setup",
+      title: "Project assistant",
+      scopeLabel: "Conversation assistant",
+      createTitle: "Dedicated project assistant",
+      createHelp:
+        "Create a separate configuration. Conversations, instructions, and environments are isolated from the system assistant.",
+      create: "Create assistant",
+      configure: "Configure assistant",
+      ready: "Project assistant is ready",
+      needsSetup:
+        "Configure the model, instructions, and environment before sending a message. Conversations can be created now.",
+      environmentHelp:
+        "Choose an admitted image and tools, an environment, variables, and secrets owned by this project. The full editor checks readiness and confirms access.",
+      instructionsHelp:
+        "Project assistant instructions have separate drafts and published versions. Changes are validated before publication.",
+      openEditor: "Open full editor",
+    },
     replaceDraftConfirm:
       "Replace the unsent draft with an integration publication request?",
     replaceDraftWithBuildDebugConfirm:
@@ -7546,8 +7975,10 @@ const en = {
       UPDATE_PROJECT: "Update Project",
       UPDATE_AGENT: "Update employee",
       CREATE_INSTRUCTION_DRAFT: "Prepare employee instruction draft",
+      UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS: "Update Kodex instructions",
       UPDATE_INTEGRATION_CONNECTION: "Update connection",
       CREATE_AGENT: "Create agent",
+      CREATE_PROJECT_ASSISTANT: "Create project assistant",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION: "Prepare environment revision",
       CREATE_ROLE_IMAGE_RECIPE: "Create image recipe",
@@ -7567,7 +7998,7 @@ const en = {
     subtitle:
       "Configures the platform through the same typed commands and your permissions",
     ready: "Always ready",
-    working: "Kodex is responding",
+    working: "Kodex is working",
     providerAccountRequired: "Connect a model account",
     providerAccountRequiredHelp:
       "Create a provider account and complete authorization. Until then, Kodex does not run models or create conversations.",
@@ -7576,6 +8007,29 @@ const en = {
     newConversation: "New conversation",
     message: "Describe what to configure or launch",
     send: "Send to assistant",
+    queue: "Queue message",
+    sendNow: "Stop the current turn and send now",
+    stop: "Stop the current turn",
+    settings: {
+      title: "Kodex settings",
+      description:
+        "The same model, environment and instruction controls used for AI employees.",
+      runtime: "Model and runtime",
+      environment: "Environment",
+      instructions: "Instructions",
+      instructionsHelp:
+        "Owner instructions apply to future turns. Changes proposed by Kodex itself are shown as a draft for confirmation first.",
+      environmentTitle: "Kodex runtime environment",
+      environmentHelp:
+        "Image, tools, variables and secrets apply to future turns. Resources and network access are available in advanced settings; internet access requires fresh owner confirmation.",
+      imageCatalogUnavailable:
+        "The image catalog is currently unavailable. The exact saved version and tools will be preserved when other settings change.",
+      secretCatalogUnavailable:
+        "The secret catalog is currently unavailable. Saved bindings and their revisions will remain unchanged.",
+      environmentAdvanced: "Resources, volumes and network access",
+      systemScope: "System assistant",
+      projectScope: "Project assistant",
+    },
     workContext: "Work context",
     contextReady: "Ready to help on this screen",
     outcomeHelp:
@@ -7752,6 +8206,11 @@ const en = {
     },
     createdEntity: {
       loadFailed: "Could not read the resource. Refresh to try again.",
+      PROJECT_ASSISTANT: {
+        title: "Created project assistant",
+        next: "Configure the assistant's model, image, environment, and instructions before the first run.",
+        open: "Configure assistant",
+      },
       PROJECT: {
         title: "Created project",
         updatedTitle: "Updated project",
@@ -7887,6 +8346,7 @@ const en = {
       projectLanguage: "Project language",
       agentRole: "Employee role",
       agentInstructions: "Employee instructions",
+      systemAssistantInstructions: "Additional Kodex instructions",
       agentCapabilities: "Employee capabilities",
       capabilityAgent: "Employee",
       capabilityName: "Capability",
@@ -7919,6 +8379,8 @@ const en = {
         "The image, work environment, and other access grants are configured separately. Review them before launching the employee.",
       instructionDraftNextSteps:
         "This plan only saves an instruction draft. After applying it, open the employee form, validate the template, and publish it separately.",
+      systemAssistantInstructionsBoundary:
+        "This change affects only the owner's additional instructions. Kodex system constraints, permissions, and core prompt remain unchanged; the new instructions take effect only after plan review and confirmation.",
       environmentDescription: "Environment description",
       environmentImageArtifact: "Verified image reference (optional)",
       environmentChooseImage: "Choose a ready image",
@@ -7934,6 +8396,8 @@ const en = {
         "The secret suggestion is invalid. Ask the assistant to prepare a new plan.",
       environmentRevisionBoundary:
         "Review the name, description, image, tools, values, secret bindings, and policy. Applying this creates only a new revision draft.",
+      systemEnvironmentBoundary:
+        "This is Kodex's own environment. The platform image and secrets stay fixed; review public values, resources, and network access.",
       environmentPolicyInvalid:
         "The environment policy is damaged or contains unsupported fields. Request a new plan.",
       environmentPolicyFreshAuthentication:
@@ -7946,6 +8410,8 @@ const en = {
         "Provide a name and a valid image reference, or leave the image field empty.",
       environmentRevisionNextSteps:
         "Confirmation creates a revision draft. Open it, review its impact on employees, and publish separately.",
+      systemEnvironmentNextSteps:
+        "Confirmation publishes a new revision for subsequent Kodex turns; the current turn keeps its pinned revision.",
       bindingBoundary:
         "Only a ready, published environment in this project can be assigned. Secrets and environment settings do not change here.",
       bindingLoadFailed:

@@ -407,6 +407,10 @@ export const serverTokenTranslations = {
     "Assistant message accepted",
   ],
   ASSISTANT_TURN_QUEUED: ["Сообщение поставлено в очередь", "Message queued"],
+  ASSISTANT_TURN_CANCELLED: [
+    "Ход помощника остановлен",
+    "Assistant turn stopped",
+  ],
   ATTACHMENT_SET_DRAFT_CREATED: [
     "Черновик вложений создан",
     "Attachment draft created",
@@ -842,6 +846,11 @@ export const serverTokenTranslations = {
   SYSTEM_ASSISTANT_PURPOSE: [
     "Помощь в управлении платформой",
     "Help manage the platform",
+  ],
+  PROJECT_ASSISTANT_ROLE: ["Помощник Проекта", "Project assistant"],
+  PROJECT_ASSISTANT_CREATED: [
+    "Помощник Проекта создан",
+    "Project assistant created",
   ],
   SYSTEM_ASSISTANT_ROLE_DESCRIPTION: [
     "Системный помощник владельца платформы",

@@ -28,7 +28,9 @@ done
   fail 'source root is invalid'
 timeout 30s python3 "$source_root/scripts/tests/registry-credential-files-test.py"
 timeout 30s python3 "$source_root/scripts/tests/worker-grant-rollout-test.py"
-[[ -n "$cache_root" ]] || cache_root="$source_root/.kodex-dev/cache"
+# Общий cache не пересекается с исходниками: его writable mounts не должны
+# открывать Pod доступ на запись к serving clone.
+[[ -n "$cache_root" ]] || cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/kodex-dev/render-contract"
 [[ "$cache_root" == /* && "$cache_root" != / && "$cache_root" != "$HOME" ]] ||
   fail 'cache root is invalid'
 for command_name in git jq kubectl readelf rg sha256sum yq; do
@@ -327,7 +329,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       contains("variables.admissionId")))
 ' >/dev/null || fail 'image-admission admission policy does not bind Job and PodTemplate identities'
 expected_runtime_contract_digest=$(
-  jq -cS . "$source_root/contracts/runtime-controller/v7/agent-runner-input.schema.json" |
+  jq -cS . "$source_root/contracts/runtime-controller/v8/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'
 )
 actual_policy_digest=$(jq -cS '.data | del(.orchestrationRevision, .policySHA256)' \

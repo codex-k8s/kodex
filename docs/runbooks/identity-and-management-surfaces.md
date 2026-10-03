@@ -4,8 +4,8 @@ title: Identity и административные интерфейсы
 type: runbook
 status: approved
 owner: sre
-version: 2.0.4
-updated: 2026-09-08
+version: 2.0.7
+updated: 2026-10-03
 ---
 
 # Identity и административные интерфейсы
@@ -16,13 +16,18 @@ Kodex устанавливает Keycloak и три административн
 | Интерфейс      | Realm и role           | Kubernetes authority                     |
 | -------------- | ---------------------- | ---------------------------------------- |
 | Control Center | `kodex`, `kodex-owner` | собственная API authorization            |
-| Grafana        | `kodex`, `kodex-owner` | auth-proxy header только от OAuth2 Proxy |
+| Grafana        | `kodex`, одна из групп `kodex-admins`, `kodex-owners`, `kodex-monitoring`, `kodex-developers` | auth-proxy header только от OAuth2 Proxy |
 | Headlamp       | `master`, `admin`      | отдельный ServiceAccount `cluster-admin` |
 
 Keycloak administrators намеренно получают полный доступ к кластеру через
 Headlamp. Обычный owner realm `kodex` такого доступа не получает. Keycloak
 Admin Console использует собственную аутентификацию, иначе возникла бы
 циклическая зависимость от OAuth2 Proxy.
+
+При bundled Keycloak установщик идемпотентно создаёт четыре группы доступа к
+Grafana и добавляет первого owner в `kodex-owners`. Для внешнего Keycloak эти
+группы и multivalued claim `groups` создаёт его администратор; отсутствие claim
+или членства закрыто отклоняется OAuth2 Proxy до обращения к Grafana.
 
 ## Входные параметры
 
@@ -55,7 +60,15 @@ OIDC client secrets, cookie secrets и Grafana admin password генерирую
 - redirect URI каждого client равен только его `/oauth2/callback`;
 - implicit/direct grants выключены, PKCE `S256` включён;
 - access token не передаётся upstream административным UI;
-- OAuth2 Proxy проверяет exact role;
+- OAuth2 Proxy Control Center и Headlamp проверяет exact role;
+- OAuth2 Proxy Grafana проверяет claim `groups` и допускает членство хотя бы в
+  одной из четырёх утверждённых групп;
+- Grafana не загружает внешнюю новостную ленту и Gravatar, не отправляет
+  usage reporting и не обращается наружу за обновлениями Grafana и plugins;
+- выход из Grafana последовательно закрывает Grafana session, точную cookie
+  `oauth2-grafana` и Keycloak SSO session через RP-initiated logout; внешний
+  redirect разрешён только на точный host OIDC issuer, а возврат — только на
+  зарегистрированный Grafana origin;
 - OAuth2 Proxy разрешает публичное имя issuer во внутренний ClusterIP
   `identity/sso`, проверяет исходный TLS/SNI и имеет egress только к pod
   Keycloak на объявленный target port; корректность входа не зависит от

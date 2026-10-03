@@ -15,9 +15,11 @@
       import "../../src/app/styles/base.css";
       import UiProofFixture from "./UiProofFixture.vue";
       if (
-        ["integration-terminal", "assistant-openapi-create"].includes(
-          new URLSearchParams(location.search).get("fixture"),
-        )
+        [
+          "integration-terminal",
+          "assistant-openapi-create",
+          "project-assistant",
+        ].includes(new URLSearchParams(location.search).get("fixture"))
       ) {
         const { loadRuntimeConfig } =
           await import("../../src/shared/config/runtime");
@@ -25,7 +27,19 @@
       }
       const router = createRouter({
         history: createMemoryHistory(),
-        routes: [{ path: "/:pathMatch(.*)*", component: UiProofFixture }],
+        routes: [
+          {
+            path: "/projects/:projectRef/agents/:agentRef",
+            name: "agent",
+            component: UiProofFixture,
+          },
+          {
+            path: "/projects/:projectRef",
+            name: "project",
+            component: UiProofFixture,
+          },
+          { path: "/:pathMatch(.*)*", component: UiProofFixture },
+        ],
       });
       await router.push("/");
       i18n.global.locale.value =

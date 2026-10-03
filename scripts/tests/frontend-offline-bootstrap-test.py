@@ -19,6 +19,9 @@ def run(*args, **kwargs):
 
 
 def main():
+    prime_source = (ROOT / "tools/dev/prime-frontend-cache.sh").read_text()
+    assert 'docker run "${container_args[@]}" --network host' in prime_source
+    assert 'docker run "${container_args[@]}" --network none' in prime_source
     # Те же пустые mountpoints, которые renderer создаёт перед read-only bind.
     (FRONTEND / "node_modules").mkdir(exist_ok=True)
     (FRONTEND / "public/config").mkdir(exist_ok=True)

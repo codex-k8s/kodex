@@ -21,6 +21,22 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.RetryRun:
+		if handled, err := repository.authorizeAssistantRetry(ctx, tx, current, input); handled {
+			return err
+		}
+	case command.SetProviderAccountConcurrency:
+		permission, target, err := repository.commandAccessTarget(ctx, tx, current, input)
+		if err != nil {
+			return err
+		}
+		if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
+			return errs.ErrNotFound
+		}
+		if current.role != "OWNER" && current.role != "ADMINISTRATOR" {
+			return errs.ErrForbidden
+		}
+		return nil
 	case command.CreateAssistantRoleImageRecipe:
 		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
 		if !ok {
@@ -112,6 +128,13 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 		return errs.ErrNotFound
 	}
+	if input.Kind == command.ArchiveAgent {
+		payload, ok := input.Payload.(command.AgentInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		return repository.rejectAssistantAgentArchive(ctx, tx, current, payload.Ref)
+	}
 	if input.Kind == command.CreateAgent {
 		payload, ok := input.Payload.(command.AgentInput)
 		if !ok {
@@ -168,6 +191,15 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 
 func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, resolvedAccessTarget, error) {
 	organization := resolvedAccessTarget{scope: organizationTarget(current.organizationRef)}
+	if input.Kind == command.RecoverAssistant {
+		if _, ok := input.Payload.(struct{}); !ok {
+			return "", resolvedAccessTarget{}, errs.ErrInvalid
+		}
+		if current.authorityProjectID != "" {
+			return "", resolvedAccessTarget{}, errs.ErrForbidden
+		}
+		return "organization.manage", organization, nil
+	}
 	switch payload := input.Payload.(type) {
 	case command.InteractionIdentityInput:
 		if current.authorityProjectID != "" {
@@ -201,6 +233,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.Ref, payload.ProjectRef)
+	case command.ProjectAssistantInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 	case command.AgentAvatarInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.AgentBindingInput:
@@ -210,7 +244,7 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 	case command.ConfigOverlayInput:
 		return repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", payload.AgentRef)
 	case command.RuntimeEnvironmentBindingInput:
-		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+		return repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", payload.AgentRef)
 	case command.RuntimeEnvironmentRebindInput:
 		lookup := current
 		lookup.role = "OWNER"
@@ -249,6 +283,9 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, lookupScope, payload.Ref)
 		if err != nil {
 			return "", resolvedAccessTarget{}, err
+		}
+		if environment.ProjectRef == "" {
+			return "organization.manage", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
 	case command.RuntimeEnvironmentDraftInput:
@@ -402,8 +439,17 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "organization.view", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", payload.ProjectRef, payload.ProjectRef)
-	case command.AssistantTurnInput, command.AssistantConversationTitleInput,
-		command.AssistantPlanInput, command.AssistantPlanDraftInput, command.AssistantInstructionsInput:
+	case command.AssistantTurnInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "agent.launch")
+	case command.AssistantTurnCancellationInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "agent.launch")
+	case command.AssistantConversationTitleInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "project.view")
+	case command.AssistantPlanInput:
+		return repository.assistantCommandTarget(ctx, tx, current, "", payload.PlanRef, "project.manage")
+	case command.AssistantPlanDraftInput:
+		return repository.assistantCommandTarget(ctx, tx, current, "", payload.PlanRef, "project.manage")
+	case command.AssistantInstructionsInput:
 		return "organization.manage", organization, nil
 	case command.ManagedConfigurationInput:
 		if input.Kind == command.CreateSystemSTTDraft {

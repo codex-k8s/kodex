@@ -31,7 +31,7 @@ func TestIntegrationEgressProjectionComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-6-sol", objectstoragetest.New())
+	repository, err := New(pool, "openai-codex", "gpt-5.6-sol", objectstoragetest.New())
 	if err != nil {
 		t.Fatal(err)
 	}

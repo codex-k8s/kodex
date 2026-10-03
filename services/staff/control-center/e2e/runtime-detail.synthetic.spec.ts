@@ -99,7 +99,20 @@ for (const width of [1440, 390, 2900]) {
               ephemeralStorageLimitMib: 2048,
             },
             volumes: [],
-            network: { denyByDefault: true, egress: [] },
+            network: {
+              denyByDefault: true,
+              egress: [
+                { destination: "DNS", protocol: "TCP", port: 53 },
+                { destination: "DNS", protocol: "UDP", port: 53 },
+                { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
+                {
+                  destination: "RUNTIME_CALLBACK",
+                  protocol: "TCP",
+                  port: 8444,
+                },
+              ],
+              webAccess: { mode: "NONE", rules: [] },
+            },
             kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
             resourcesDigest: digest,
             volumesDigest: digest,
@@ -184,7 +197,10 @@ for (const width of [1440, 390, 2900]) {
         digest: "b".repeat(64),
       };
       if (url.pathname === historyPath) {
-        expect(url.searchParams.get("pageSize")).toBe("30");
+        const pageSize = Number(url.searchParams.get("pageSize"));
+        expect(Number.isSafeInteger(pageSize)).toBe(true);
+        expect(pageSize).toBeGreaterThanOrEqual(1);
+        expect(pageSize).toBeLessThanOrEqual(100);
         await route.fulfill({ json: { items: [oldOverlay], total: 1 } });
         return;
       }
@@ -251,6 +267,7 @@ for (const width of [1440, 390, 2900]) {
         const account: ProviderAccount = {
           ref: "pacc_synthetic",
           version: 1,
+          maximumConcurrentExecutions: 10,
           name: "Учётная запись каталога",
           definitionKey: "openai-codex",
           state: "AUTHORIZED",

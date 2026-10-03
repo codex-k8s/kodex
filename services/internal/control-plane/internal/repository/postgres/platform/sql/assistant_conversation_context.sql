@@ -1,6 +1,10 @@
 -- name: assistant_conversation_context :one
 SELECT COALESCE(project.ref,''), conversation.context_route, conversation.context_entity_kind,
-       conversation.context_entity_ref, projection.entity_name, projection.entity_version, projection.allowed_operations
+       conversation.context_entity_ref, projection.entity_name, projection.entity_version,
+       projection.allowed_operations || CASE
+           WHEN control_plane.assistant_project_profile_creation_allowed(conversation.organization_id,
+               @actor_id::uuid,conversation.project_id,conversation.assistant_scope,conversation.context_entity_kind)
+               THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[] ELSE '{}'::text[] END
 FROM control_plane.assistant_conversations conversation
 LEFT JOIN control_plane.projects project ON project.id=conversation.project_id
 JOIN LATERAL control_plane.assistant_context_projection_v2(conversation.organization_id,@actor_id::uuid,

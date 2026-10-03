@@ -82,6 +82,9 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	if len(payload.Operations) != len(current) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	if err := repository.constrainAssistantPlanScope(ctx, tx, &scope, conversationRef, payload.Operations); err != nil {
+		return commandOutcome{}, err
+	}
 	currentByKey := make(map[string]entity.AssistantPlanOperation, len(current))
 	for _, operation := range current {
 		currentByKey[operation.Key] = operation
@@ -130,6 +133,12 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			payload.Operations[index] = updated
 		case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
 			updated, err := rehydrateEditedAssistantEnvironment(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+			updated, err := rehydrateEditedAssistantSystemInstructions(original, operation)
 			if err != nil {
 				return commandOutcome{}, err
 			}
@@ -287,6 +296,9 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.constrainAssistantPlanScope(ctx, tx, &scope, conversationRef, operations); err != nil {
+		return commandOutcome{}, err
+	}
 	problems := make([]string, 0)
 	for index, operation := range operations {
 		if !operation.Selected {
@@ -334,6 +346,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		}
 		if operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 			matching, snapshotErr := repository.assistantEnvironmentSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+			matching, snapshotErr := repository.assistantSystemInstructionsSnapshotMatches(ctx, tx, scope, operation)
 			if snapshotErr != nil || !matching {
 				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
 				continue
@@ -504,6 +523,15 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 		kind, ref = "WORKFLOW", operation.Target.Ref
 	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
 		kind, ref = "ENVIRONMENT", operation.Target.Ref
+	case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+		assistant, err := repository.getAssistantTx(ctx, tx, scope)
+		if err != nil {
+			return 0, true, err
+		}
+		if assistant.Ref != operation.Target.Ref {
+			return 0, true, errs.ErrNotFound
+		}
+		return assistant.Version, true, nil
 	case "CHANGE_INTEGRATION_GRANT", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION":
 		kind, ref = "INTEGRATION_CONNECTION", assistantString(operation.Input, "connectionRef")
 	case "UPDATE_SCHEDULE":

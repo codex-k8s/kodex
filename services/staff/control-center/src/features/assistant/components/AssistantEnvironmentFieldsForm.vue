@@ -15,11 +15,15 @@ import type {
   RuntimeSecretBinding,
 } from "@/shared/api/generated/openapi/types.gen";
 
-const props = defineProps<{
-  operation: EditablePlanOperation;
-  projectRef: string;
-  disabled: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    operation: EditablePlanOperation;
+    projectRef: string;
+    disabled: boolean;
+    allowSecrets?: boolean;
+  }>(),
+  { allowSecrets: true },
+);
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
@@ -165,6 +169,7 @@ function updateBindings(next: RuntimeSecretBinding[]): void {
       :secret-bindings="bindings ?? []"
       :project-ref="projectRef"
       :disabled="disabled || !values || !bindings"
+      :mode="allowSecrets ? 'BOTH' : 'VALUES'"
       @update:values="updateValues"
       @update:secret-bindings="updateBindings"
     />

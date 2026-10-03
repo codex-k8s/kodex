@@ -27,22 +27,22 @@ func TestProviderAccountActionsUseCanonicalNextActions(t *testing.T) {
 		item entity.ProviderAccount
 		want []string
 	}{
-		{name: "pending without attempt", item: entity.ProviderAccount{State: "PENDING_AUTHORIZATION"}, want: []string{"OPEN", "DELETE", "CONFIGURE_CREDENTIAL", "REVOKE"}},
+		{name: "pending without attempt", item: entity.ProviderAccount{State: "PENDING_AUTHORIZATION"}, want: []string{"OPEN", "EDIT", "DELETE", "CONFIGURE_CREDENTIAL", "REVOKE"}},
 		{name: "pending device authorization", item: entity.ProviderAccount{
 			State:         "PENDING_AUTHORIZATION",
 			Authorization: &entity.ProviderAuthorization{State: "PENDING"},
-		}, want: []string{"OPEN", "DELETE", "REFRESH_AUTHORIZATION", "REVOKE"}},
-		{name: "active", item: entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}, want: []string{"OPEN", "DELETE", "TEST", "REVOKE", "DISABLE"}},
-		{name: "disabled", item: entity.ProviderAccount{State: "DISABLED"}, want: []string{"OPEN", "DELETE", "REVOKE", "ENABLE"}},
-		{name: "configure", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED"}, want: []string{"OPEN", "DELETE", "CONFIGURE_CREDENTIAL", "REVOKE"}},
-		{name: "revoked", item: entity.ProviderAccount{State: "REVOKED"}, want: []string{"OPEN", "DELETE"}},
+		}, want: []string{"OPEN", "EDIT", "DELETE", "REFRESH_AUTHORIZATION", "REVOKE"}},
+		{name: "active", item: entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}, want: []string{"OPEN", "EDIT", "DELETE", "TEST", "REVOKE", "DISABLE"}},
+		{name: "disabled", item: entity.ProviderAccount{State: "DISABLED"}, want: []string{"OPEN", "EDIT", "DELETE", "REVOKE", "ENABLE"}},
+		{name: "configure", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED"}, want: []string{"OPEN", "EDIT", "DELETE", "CONFIGURE_CREDENTIAL", "REVOKE"}},
+		{name: "revoked", item: entity.ProviderAccount{State: "REVOKED"}, want: []string{"OPEN", "EDIT", "DELETE"}},
 		{name: "deleting", item: entity.ProviderAccount{State: "DELETING"}, want: []string{"OPEN"}},
 		{name: "deleted", item: entity.ProviderAccount{State: "DELETED"}, want: []string{"OPEN"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			if got := providerAccountActions(test.item, true, true, true); !reflect.DeepEqual(got, test.want) {
+			if got := providerAccountActions(test.item, true, true, true, true); !reflect.DeepEqual(got, test.want) {
 				t.Fatalf("provider account actions = %v, want %v", got, test.want)
 			}
 		})
@@ -289,7 +289,15 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	if err != nil || len(accounts) == 0 {
 		t.Fatalf("list provider accounts: accounts=%#v err=%v", accounts, err)
 	}
-	account := accounts[0]
+	// Выбираем точный bootstrap-аккаунт, а не первый элемент общего каталога.
+	var bootstrapAccountRef string
+	if err := pool.QueryRow(ctx, `SELECT ref FROM control_plane.provider_accounts WHERE stable_key = 'default-openai-codex'`).Scan(&bootstrapAccountRef); err != nil {
+		t.Fatalf("resolve bootstrap provider account: %v", err)
+	}
+	account, err := service.GetProviderAccountWithUsage(ctx, owner, bootstrapAccountRef, nil)
+	if err != nil {
+		t.Fatalf("read bootstrap provider account: %v", err)
+	}
 	materializerPrincipal, err := repository.ResolvePrincipal(ctx, owner)
 	if err != nil {
 		t.Fatalf("resolve provider materializer principal: %v", err)
@@ -316,12 +324,12 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 
 	account = executeProviderEnabledTransition(t, ctx, service, owner, account, false, "provider-disable-component")
 	if account.State != "DISABLED" || account.Enabled || account.Ready ||
-		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "REVOKE", "ENABLE"}) {
+		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE", "REVOKE", "ENABLE"}) {
 		t.Fatalf("disabled provider account = %#v", account)
 	}
 	account = executeProviderEnabledTransition(t, ctx, service, owner, account, true, "provider-enable-component")
 	if account.State != "AUTHORIZED" || !account.Enabled || !account.Ready ||
-		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "TEST", "REVOKE", "DISABLE"}) {
+		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE", "TEST", "REVOKE", "DISABLE"}) {
 		t.Fatalf("re-enabled provider account = %#v", account)
 	}
 	version := account.Version
@@ -335,7 +343,7 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	}
 	account = *revoked.ProviderAccount
 	if account.State != "REVOKED" || account.Enabled || account.Ready ||
-		!reflect.DeepEqual(account.NextActions, []string{"OPEN"}) {
+		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE"}) {
 		t.Fatalf("revoked provider account = %#v", account)
 	}
 	version = account.Version
@@ -446,7 +454,7 @@ func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
 func TestProviderAccountActionsForViewOnlyMember(t *testing.T) {
 	t.Parallel()
 	item := entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}
-	if got := providerAccountActions(item, false, false, false); !reflect.DeepEqual(got, []string{"OPEN"}) {
+	if got := providerAccountActions(item, false, false, false, false); !reflect.DeepEqual(got, []string{"OPEN"}) {
 		t.Fatalf("view-only provider account actions = %v, want [OPEN]", got)
 	}
 }

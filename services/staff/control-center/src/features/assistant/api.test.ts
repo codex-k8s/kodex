@@ -4,6 +4,7 @@ import type { AssistantConversation } from "@/shared/api/generated/openapi/types
 
 const mocks = vi.hoisted(() => ({
   addAssistantTurn: vi.fn(),
+  cancelAssistantTurn: vi.fn(),
   archiveAssistantConversation: vi.fn(),
   getSystemAssistant: vi.fn(),
   listAssistantConversations: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock("@/shared/api/client", () => ({
 }));
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   addAssistantTurn: mocks.addAssistantTurn,
+  cancelAssistantTurn: mocks.cancelAssistantTurn,
   archiveAssistantConversation: mocks.archiveAssistantConversation,
   applyAssistantPlan: vi.fn(),
   createAssistantConversation: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock("@/shared/api/problem", () => ({
 import {
   appendTurn,
   archiveConversation,
+  cancelAssistantTurn,
   readConversations,
 } from "@/features/assistant/api";
 
@@ -40,6 +43,8 @@ function conversation(
 ): AssistantConversation {
   return {
     ref: "cnv_sales",
+    assistantScope: "SYSTEM",
+    assistantRef: "ast_system_assistant",
     state: "ACTIVE",
     version: 2,
     title: "Продажи",
@@ -68,6 +73,7 @@ describe("assistant api mutation reconciliation", () => {
     });
     expect(mocks.listAssistantConversations).toHaveBeenCalledWith({
       query: {
+        assistantScope: "SYSTEM",
         projectRef: "prj_sales",
         pageToken: "cursor",
         pageSize: 40,
@@ -123,7 +129,12 @@ describe("assistant api mutation reconciliation", () => {
       data,
     );
     expect(mocks.listAssistantConversations).toHaveBeenCalledWith({
-      query: { projectRef: "prj_sales", pageToken: "before", pageSize: 40 },
+      query: {
+        assistantScope: "SYSTEM",
+        projectRef: "prj_sales",
+        pageToken: "before",
+        pageSize: 40,
+      },
       signal,
     });
   });
@@ -176,6 +187,7 @@ describe("assistant api mutation reconciliation", () => {
         content: "Измени назначение",
         context: initial.context,
         attachmentSetRef: "attachment-set-own",
+        deliveryMode: "QUEUE",
       },
       headers: {
         "Idempotency-Key": "stable-assistant-idempotency-key",
@@ -184,6 +196,74 @@ describe("assistant api mutation reconciliation", () => {
       signal: mocks.signal,
     });
     expect(mocks.listAssistantConversations).not.toHaveBeenCalled();
+  });
+
+  it("передаёт немедленный режим без расширения payload", async () => {
+    const initial = conversation([]);
+    const accepted = conversation([
+      {
+        ref: "trn_immediate",
+        sequence: 1,
+        role: "USER",
+        content: "Сначала выполни это",
+        state: "QUEUED",
+        runRef: "run_immediate",
+        createdAt: "2026-09-02T00:00:01Z",
+      },
+    ]);
+    mocks.addAssistantTurn.mockResolvedValue({ data: accepted });
+
+    await appendTurn(
+      initial,
+      "Сначала выполни это",
+      initial.context,
+      undefined,
+      "INTERRUPT_ACTIVE",
+    );
+
+    expect(mocks.addAssistantTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { conversationRef: initial.ref },
+        body: {
+          content: "Сначала выполни это",
+          context: initial.context,
+          deliveryMode: "INTERRUPT_ACTIVE",
+        },
+      }),
+    );
+  });
+
+  it("останавливает ход с OCC и проверяет точную квитанцию", async () => {
+    const initial = conversation([]);
+    mocks.cancelAssistantTurn.mockResolvedValue({
+      data: {
+        conversationRef: initial.ref,
+        runRef: "run_active",
+        cancelled: true,
+      },
+    });
+
+    await expect(cancelAssistantTurn(initial)).resolves.toBe("run_active");
+    expect(mocks.cancelAssistantTurn).toHaveBeenCalledWith({
+      path: { conversationRef: initial.ref },
+      headers: {
+        "If-Match": '"2"',
+        "Idempotency-Key": "stable-assistant-idempotency-key",
+        "X-CSRF-Token": "a".repeat(43),
+      },
+      signal: mocks.signal,
+    });
+
+    mocks.cancelAssistantTurn.mockResolvedValue({
+      data: {
+        conversationRef: "cnv_other",
+        runRef: "run_active",
+        cancelled: true,
+      },
+    });
+    await expect(cancelAssistantTurn(initial)).rejects.toThrow(
+      "receipt mismatch",
+    );
   });
 
   it("не принимает совпавший turn из параллельной вкладки", async () => {

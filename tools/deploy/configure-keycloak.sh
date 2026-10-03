@@ -6,16 +6,19 @@ fail() {
   exit 1
 }
 
+repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+
 usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode apply|readback|retire-initial-passwords" \
     '  --public-origin <https-origin> --grafana-origin <https-origin>' \
-    '  --headlamp-origin <https-origin> [--management-surfaces all|control-center]' \
+    '  --headlamp-origin <https-origin> [--management-surfaces all|control-center-grafana|control-center]' \
     '  [--namespace identity] [--deployment sso]' \
     '  [--realm kodex] [--admin-secret keycloak-admin-client]' \
     '  [--bootstrap-secret keycloak-bootstrap]' \
     '  [--identities-configmap keycloak-identities]' \
-    '  [--initial-password-secret keycloak-initial-passwords]' >&2
+    '  [--initial-password-secret keycloak-initial-passwords]' \
+    '  [--smtp-config-file <private-json-path>]' >&2
 }
 
 expected_context=""
@@ -31,6 +34,7 @@ admin_secret=keycloak-admin-client
 bootstrap_secret=keycloak-bootstrap
 identities_configmap=keycloak-identities
 initial_password_secret=keycloak-initial-passwords
+smtp_config_file=""
 while (($# > 0)); do
   case "$1" in
     --context) expected_context="${2:-}"; shift 2 ;;
@@ -46,13 +50,14 @@ while (($# > 0)); do
     --bootstrap-secret) bootstrap_secret="${2:-}"; shift 2 ;;
     --identities-configmap) identities_configmap="${2:-}"; shift 2 ;;
     --initial-password-secret) initial_password_secret="${2:-}"; shift 2 ;;
+    --smtp-config-file) smtp_config_file="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
 [[ -n "$expected_context" ]] || fail 'exact context is required'
-case "$management_surfaces" in all|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
+case "$management_surfaces" in all|control-center-grafana|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
 case "$mode" in apply|readback|retire-initial-passwords) ;; *) fail 'mode is invalid' ;; esac
 [[ "$public_origin" =~ ^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'public origin is invalid'
 for management_origin in "$grafana_origin" "$headlamp_origin"; do
@@ -65,7 +70,7 @@ for resource_name in "$namespace" "$deployment" "$realm" "$admin_secret" "$boots
   "$identities_configmap" "$initial_password_secret"; do
   [[ "$resource_name" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'resource name is invalid'
 done
-for command_name in base64 jq kubectl stat; do
+for command_name in base64 jq kubectl python3 stat; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail 'current Kubernetes context mismatch'
@@ -78,7 +83,7 @@ chmod 0700 "$temporary_directory"
 cleanup() {
   rm -rf -- "$temporary_directory"
   kubectl -n "$namespace" exec "deployment/$deployment" -- sh -ec \
-    'rm -f /tmp/kodex-kcadm.config /tmp/kodex-kcadm-bootstrap.config' \
+    'rm -f /tmp/kodex-kcadm.config /tmp/kodex-kcadm-bootstrap.config /tmp/kodex-smtp-realm.json' \
     >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -135,6 +140,14 @@ owner_email=$(read_single_line_secret "$temporary_directory/owner-email" 'bootst
   fail 'owner and administrator usernames must differ'
 [[ "$owner_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail 'owner email is invalid'
 
+grafana_access_groups=(
+  kodex-admins
+  kodex-owners
+  kodex-monitoring
+  kodex-developers
+)
+groups_mapper_config='{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+
 read_initial_password() {
   local key=$1 label=$2
   local path="$temporary_directory/$key"
@@ -157,6 +170,37 @@ keycloak_request() {
       exec "$command" "$@" --config "$config"
     ' sh "$@"
 }
+
+keycloak_update_realm_file() {
+  local resource=$1 input_file=$2
+  [[ -f "$input_file" && -s "$input_file" && ! -L "$input_file" ]] ||
+    fail 'Keycloak realm update file is invalid'
+  {
+    printf '%s\n%s\n' "$admin_client_id" "$admin_client_secret"
+    cat -- "$input_file"
+  } | kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
+    IFS= read -r client_id
+    IFS= read -r client_secret
+    config=/tmp/kodex-kcadm.config
+    input=/tmp/kodex-smtp-realm.json
+    command=/opt/keycloak/bin/kcadm.sh
+    trap '\''rm -f "$input"'\'' EXIT
+    cat >"$input"
+    chmod 600 "$input"
+    "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
+      --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
+    exec "$command" update "$1" --config "$config" -f "$input"
+  ' sh "$resource"
+}
+
+smtp_realm_file=""
+if [[ -n "$smtp_config_file" ]]; then
+  [[ "$smtp_config_file" == /* && -f "$smtp_config_file" && ! -L "$smtp_config_file" ]] ||
+    fail 'SMTP configuration file is invalid'
+  smtp_realm_file="$temporary_directory/smtp-realm.json"
+  python3 "$repository_root/tools/install/prepare-keycloak-smtp.py" \
+    --config "$smtp_config_file" --output "$smtp_realm_file"
+fi
 
 keycloak_bootstrap_request() {
   local bootstrap_username bootstrap_password
@@ -222,6 +266,31 @@ find_scope_id() {
       [ .[] | select(.name == $scope_name) ] |
       if length == 1 then .[0].id else error("client scope identity is ambiguous") end
     '
+}
+
+find_group_id() {
+  local group_name=$1 groups_json
+  groups_json=$(keycloak_request get groups -r "$realm" -q "search=$group_name" -q exact=true -q max=2) ||
+    fail "Keycloak group list is unavailable: $group_name"
+  jq -er --arg group_name "$group_name" '
+    [.[] | select(.name == $group_name and .path == ("/" + $group_name))] |
+    if length == 1 then .[0].id else error("group identity is ambiguous") end
+  ' <<<"$groups_json"
+}
+
+reconcile_group() {
+  local group_name=$1 groups_json group_count
+  groups_json=$(keycloak_request get groups -r "$realm" -q "search=$group_name" -q exact=true -q max=2) ||
+    fail "Keycloak group list is unavailable: $group_name"
+  group_count=$(jq -er --arg group_name "$group_name" '
+    [.[] | select(.name == $group_name and .path == ("/" + $group_name))] | length
+  ' <<<"$groups_json") || fail "Keycloak group list is invalid: $group_name"
+  case "$group_count" in
+    0) keycloak_request create groups -r "$realm" -s "name=$group_name" >/dev/null ;;
+    1) ;;
+    *) fail "Keycloak group is duplicated: $group_name" ;;
+  esac
+  find_group_id "$group_name" >/dev/null || fail "Keycloak group reconciliation failed: $group_name"
 }
 
 reconcile_mapper() {
@@ -313,7 +382,7 @@ read_management_client_secret() {
 
 reconcile_confidential_client() {
   local client_id=$1 origin=$2 namespace_name=$3 secret_name=$4
-  local client_realm=${5:-$realm} client_uuid client_secret attributes
+  local client_realm=${5:-$realm} include_groups=${6:-false} client_uuid client_secret attributes
   client_secret=$(read_management_client_secret "$client_id" "$namespace_name" "$secret_name")
   if ! find_client_id "$client_id" "$client_realm" >/dev/null 2>&1; then
     keycloak_request create clients -r "$client_realm" -s "clientId=$client_id" >/dev/null
@@ -338,17 +407,23 @@ reconcile_confidential_client() {
   reconcile_mapper "$client_uuid" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}' \
     "$client_realm"
+  if [[ "$include_groups" == true ]]; then
+    reconcile_mapper "$client_uuid" kodex-groups oidc-group-membership-mapper \
+      "$groups_mapper_config" "$client_realm"
+  fi
 }
 
 readback_confidential_client() {
-  local client_id=$1 origin=$2 redirect=$3 client_realm=${4:-$realm}
+  local client_id=$1 origin=$2 redirect=$3 client_realm=${4:-$realm} include_groups=${5:-false}
   local client_uuid client_json mapper_json audience_config roles_config
   client_uuid=$(find_client_id "$client_id" "$client_realm")
   client_json=$(keycloak_request get "clients/$client_uuid" -r "$client_realm")
   jq -e --arg origin "$origin" --arg redirect "$redirect" '
     .enabled == true and .publicClient == false and .standardFlowEnabled == true and
     .implicitFlowEnabled == false and .directAccessGrantsEnabled == false and
-    .serviceAccountsEnabled == false and .redirectUris == [$redirect] and .webOrigins == [$origin]
+    .serviceAccountsEnabled == false and .redirectUris == [$redirect] and .webOrigins == [$origin] and
+    .attributes."pkce.code.challenge.method" == "S256" and
+    .attributes."post.logout.redirect.uris" == ($origin + "/*")
   ' <<<"$client_json" >/dev/null || fail "management OIDC client readback failed: $client_id"
   mapper_json=$(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm")
   audience_config=$(jq -cn --arg audience "$client_id" '{
@@ -360,6 +435,10 @@ readback_confidential_client() {
     "$audience_config" || fail "management OIDC mapper readback failed: $client_id"
   require_mapper_exact "$mapper_json" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     "$roles_config" || fail "management OIDC mapper readback failed: $client_id"
+  if [[ "$include_groups" == true ]]; then
+    require_mapper_exact "$mapper_json" kodex-groups oidc-group-membership-mapper \
+      "$groups_mapper_config" || fail "management OIDC groups mapper readback failed: $client_id"
+  fi
 }
 
 ensure_admin_client
@@ -416,11 +495,17 @@ if [[ "$mode" == apply ]]; then
     -s duplicateEmailsAllowed=false -s verifyEmail=false -s accessTokenLifespan=300 \
     -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200 \
     -s revokeRefreshToken=true -s refreshTokenMaxReuse=0 >/dev/null
+  if [[ -n "$smtp_realm_file" ]]; then
+    keycloak_update_realm_file "realms/$realm" "$smtp_realm_file" >/dev/null
+  fi
 
   if ! keycloak_request get "roles/kodex-owner" -r "$realm" >/dev/null 2>&1; then
     keycloak_request create roles -r "$realm" -s name=kodex-owner \
       -s 'description=Kodex platform owner' >/dev/null
   fi
+  for group_name in "${grafana_access_groups[@]}"; do
+    reconcile_group "$group_name"
+  done
   if ! find_client_id kodex-control-api >/dev/null 2>&1; then
     keycloak_request create clients -r "$realm" -s clientId=kodex-control-api >/dev/null
   fi
@@ -481,7 +566,7 @@ if [[ "$mode" == apply ]]; then
   reconcile_mapper "$control_center_id" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
   reconcile_mapper "$control_center_id" kodex-groups oidc-group-membership-mapper \
-    '{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+    "$groups_mapper_config"
   reconcile_mapper "$control_center_id" kodex-acr oidc-acr-mapper \
     '{"access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"false"}'
   reconcile_mapper "$control_center_id" kodex-amr oidc-amr-mapper \
@@ -517,14 +602,23 @@ if [[ "$mode" == apply ]]; then
     -s "firstName=$owner_username" -s lastName=Owner -s 'requiredActions=[]' >/dev/null
   keycloak_request add-roles -r "$realm" --uusername "$owner_username" \
     --rolename kodex-owner >/dev/null
+  owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" -q exact=true -q max=2 |
+    jq -er --arg username "$owner_username" '
+      [.[] | select(.username == $username)] |
+      if length == 1 then .[0].id else error("owner identity is ambiguous") end
+    ')
+  owner_group_id=$(find_group_id kodex-owners)
+  keycloak_request update "users/$owner_id/groups/$owner_group_id" -r "$realm" -n >/dev/null
 
   reconcile_confidential_client kodex-control-center-proxy "$public_origin" \
     kodex-system oauth2-control-center
-  if [[ "$management_surfaces" == all ]]; then
+  if [[ "$management_surfaces" != control-center ]]; then
     reconcile_confidential_client kodex-grafana-proxy "$grafana_origin" \
-    observability oauth2-grafana
-  reconcile_confidential_client kodex-headlamp-proxy "$headlamp_origin" \
-    platform-admin oauth2-headlamp master
+      observability oauth2-grafana "$realm" true
+  fi
+  if [[ "$management_surfaces" == all ]]; then
+    reconcile_confidential_client kodex-headlamp-proxy "$headlamp_origin" \
+      platform-admin oauth2-headlamp master
   fi
 fi
 
@@ -533,6 +627,17 @@ jq -e '.enabled == true and .registrationAllowed == false and .accessTokenLifesp
   .ssoSessionIdleTimeout == 28800 and .ssoSessionMaxLifespan == 43200 and
   .revokeRefreshToken == true and .refreshTokenMaxReuse == 0' \
   <<<"$realm_json" >/dev/null || fail 'realm readback failed'
+if [[ -n "$smtp_realm_file" ]]; then
+  smtp_expected=$(jq -cS '.smtpServer | del(.password)' "$smtp_realm_file") ||
+    fail 'expected SMTP configuration is invalid'
+  smtp_auth=$(jq -r '.smtpServer.auth' "$smtp_realm_file")
+  jq -e --argjson expected "$smtp_expected" --arg auth "$smtp_auth" '
+    (.smtpServer | del(.password)) == $expected and
+    (if $auth == "true" then
+      (.smtpServer.password | type == "string" and length > 0)
+     else (.smtpServer | has("password") | not) end)
+  ' <<<"$realm_json" >/dev/null || fail 'realm SMTP readback failed'
+fi
 control_center_id=$(find_client_id kodex-control-center)
 client_json=$(keycloak_request get "clients/$control_center_id" -r "$realm")
 jq -e --arg origin "$public_origin" '
@@ -553,7 +658,6 @@ organization_mapper_config=$(jq -cn --arg value "$organization_id" '{
 session_mapper_config='{"claim.name":"session_revision","claim.value":"1","jsonType.label":"long","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 audience_mapper_config='{"included.client.audience":"kodex-control-api","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
 roles_mapper_config='{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
-groups_mapper_config='{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 require_mapper_exact "$mapper_json" kodex-organization-id oidc-hardcoded-claim-mapper \
   "$organization_mapper_config" || fail 'OIDC claim mapper readback failed'
 require_mapper_exact "$mapper_json" kodex-session-revision oidc-hardcoded-claim-mapper \
@@ -579,11 +683,21 @@ owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" 
   ')
 keycloak_request get "users/$owner_id/role-mappings/realm" -r "$realm" |
   jq -e 'any(.[]; .name == "kodex-owner")' >/dev/null || fail 'owner role readback failed'
+for group_name in "${grafana_access_groups[@]}"; do
+  find_group_id "$group_name" >/dev/null || fail "Keycloak group readback failed: $group_name"
+done
+owner_groups=$(keycloak_request get "users/$owner_id/groups" -r "$realm") ||
+  fail 'owner group membership readback failed'
+jq -e 'any(.[]; .name == "kodex-owners" and .path == "/kodex-owners")' \
+  <<<"$owner_groups" >/dev/null || fail 'owner Grafana access group is absent'
 
 readback_confidential_client kodex-control-center-proxy "$public_origin" "$public_origin/oauth2/callback"
+if [[ "$management_surfaces" != control-center ]]; then
+  readback_confidential_client kodex-grafana-proxy "$grafana_origin" \
+    "$grafana_origin/oauth2/callback" "$realm" true
+fi
 if [[ "$management_surfaces" == all ]]; then
-  readback_confidential_client kodex-grafana-proxy "$grafana_origin" "$grafana_origin/oauth2/callback"
-readback_confidential_client kodex-headlamp-proxy "$headlamp_origin" "$headlamp_origin/oauth2/callback" master
+  readback_confidential_client kodex-headlamp-proxy "$headlamp_origin" "$headlamp_origin/oauth2/callback" master
 fi
 
 administrator_id=$(keycloak_request get users -r master -q "username=$admin_username" |

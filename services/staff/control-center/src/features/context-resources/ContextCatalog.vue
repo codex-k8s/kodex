@@ -333,7 +333,7 @@ useCursorInfiniteScroll({
 }
 .context-toolbar select {
   width: 160px;
-  min-height: 36px;
+  min-height: var(--control-height);
   flex: 0 0 160px;
 }
 .context-toolbar__count {
@@ -355,7 +355,7 @@ useCursorInfiniteScroll({
 .context-search input {
   width: 100%;
   min-width: 0;
-  min-height: 34px;
+  min-height: var(--control-height);
   padding: 0;
   border: 0;
   outline: 0;

@@ -50,6 +50,26 @@ func (repository *Repository) changeProviderAccount(
 	summary := "i18n:PROVIDER_ACCOUNT_UPDATED"
 	emitEvent := true
 	switch input.Kind {
+	case command.SetProviderAccountConcurrency:
+		if payload.MaximumConcurrentExecutions < 1 || payload.MaximumConcurrentExecutions > 256 {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		if state == "DELETING" || state == "DELETED" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if current.role != "OWNER" && current.role != "ADMINISTRATOR" {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		tag, err := tx.Exec(ctx, queryProviderAccountsSetConcurrency, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "account_id": accountID,
+			"expected_version": version, "maximum_concurrent_executions": payload.MaximumConcurrentExecutions,
+		})
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
 	case command.VerifyProviderAuthorization:
 		if state != "AUTHORIZED" || !enabled || credentialID == nil {
 			return commandOutcome{}, errs.ErrConflict
@@ -356,7 +376,7 @@ func (repository *Repository) providerAccountByRef(ctx context.Context, tx pgx.T
 	if err != nil {
 		return entity.ProviderAccount{}, err
 	}
-	item.NextActions = providerAccountActions(item, true, true, true)
+	item.NextActions = providerAccountActions(item, true, true, true, current.role == "OWNER" || current.role == "ADMINISTRATOR")
 	items := []entity.ProviderAccount{item}
 	if err := repository.hydrateProviderAccountLifecycle(ctx, tx, current, items); err != nil {
 		return entity.ProviderAccount{}, err

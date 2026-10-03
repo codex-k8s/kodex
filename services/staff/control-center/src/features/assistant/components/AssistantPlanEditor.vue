@@ -32,6 +32,7 @@ import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import AgentFormFields from "@/features/platform/AgentFormFields.vue";
 import AgentProfileFields from "@/features/agents/detail/AgentProfileFields.vue";
 import TemplateSourceField from "@/features/agents/detail/TemplateSourceField.vue";
+import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import type { AgentProfileDraft } from "@/features/agents/detail/model";
 import {
   parseAssistantSecretSuggestions,
@@ -601,6 +602,7 @@ const friendlyInputsReady = computed(() =>
           environmentFieldsValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
+          isSystemAssistantEnvironment(operation) ||
           environmentToolsValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
@@ -612,10 +614,19 @@ const friendlyInputsReady = computed(() =>
           projectFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_AGENT" ||
           agentFormValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "CREATE_PROJECT_ASSISTANT" ||
+          Boolean(
+            props.plan.projectRef &&
+            fieldValue(operation, "name").trim() &&
+            fieldValue(operation, "purpose").trim() &&
+            fieldValue(operation, "instructions").trim(),
+          )) &&
         (operation.value.type !== "UPDATE_AGENT" ||
           agentProfileValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_INSTRUCTION_DRAFT" ||
           fieldValue(operation, "instructions").trim().length >= 20) &&
+        (operation.value.type !== "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
+          fieldValue(operation, "instructions").length <= 20000) &&
         (operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT" ||
           bindingFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_SCHEDULE" &&
@@ -768,6 +779,12 @@ const initialCapabilities = [
 function fieldValue(operation: EditablePlanOperation, key: string): string {
   const value = operationParameter(operation, key);
   return typeof value === "string" ? value : "";
+}
+
+function isSystemAssistantEnvironment(
+  operation: EditablePlanOperation,
+): boolean {
+  return fieldValue(operation, "systemAssistantRef").length > 0;
 }
 
 function agentProfile(operation: EditablePlanOperation): AgentProfileDraft {
@@ -1348,7 +1365,10 @@ function validationProblemLabel(problem: string): string {
                     updateOperationParameter(operation, key, value)
                 "
               />
-              <label class="field">
+              <label
+                v-if="!isSystemAssistantEnvironment(operation)"
+                class="field"
+              >
                 <span>{{ $t("runtime.exactImage") }}</span>
                 <AsyncEntityPicker
                   :model-value="fieldValue(operation, 'imageArtifactRef')"
@@ -1366,6 +1386,7 @@ function validationProblemLabel(problem: string): string {
                 :operation="operation"
                 :project-ref="plan.projectRef || ''"
                 :disabled="!editable"
+                :allow-secrets="!isSystemAssistantEnvironment(operation)"
                 @valid="environmentFieldsValidity[operation.value.ref] = $event"
                 @dirty="environmentFieldsTouched = true"
                 @parameter="
@@ -1374,6 +1395,7 @@ function validationProblemLabel(problem: string): string {
                 "
               />
               <AssistantEnvironmentToolsForm
+                v-if="!isSystemAssistantEnvironment(operation)"
                 :operation="operation"
                 :project-ref="plan.projectRef || ''"
                 :selected-image="selectedImage(operation)"
@@ -1525,7 +1547,9 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
-                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT'
+                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT' &&
+                  operation.value.type !==
+                    'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
                 "
                 class="field"
               >
@@ -1551,7 +1575,9 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
-                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT'
+                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT' &&
+                  operation.value.type !==
+                    'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
                 "
                 class="field"
               >
@@ -1676,6 +1702,39 @@ function validationProblemLabel(problem: string): string {
                     updateOperationParameter(operation, 'language', $event)
                   "
                 />
+              </template>
+              <template
+                v-else-if="operation.value.type === 'CREATE_PROJECT_ASSISTANT'"
+              >
+                <p class="assistant-plan-friendly__hint">
+                  {{ $t("assistant.projectProfile.createHelp") }}
+                </p>
+                <label class="field">
+                  <span>{{ $t("assistant.projectMove.destination") }}</span>
+                  <input
+                    :value="
+                      platform.projects[plan.projectRef ?? '']?.name ??
+                      plan.projectRef
+                    "
+                    readonly
+                  />
+                </label>
+                <label class="field">
+                  <span>{{ $t("assistant.settings.instructions") }}</span>
+                  <CodeEditorSurface
+                    language="markdown"
+                    :label="$t('assistant.settings.instructions')"
+                    :model-value="fieldValue(operation, 'instructions')"
+                    :readonly="!editable"
+                    @update:model-value="
+                      updateOperationParameter(
+                        operation,
+                        'instructions',
+                        $event,
+                      )
+                    "
+                  />
+                </label>
               </template>
               <template
                 v-else-if="
@@ -2057,6 +2116,30 @@ function validationProblemLabel(problem: string): string {
                 />
                 <p class="assistant-plan-friendly__hint">
                   {{ $t("assistant.planEditor.instructionDraftNextSteps") }}
+                </p>
+              </template>
+              <template
+                v-else-if="
+                  operation.value.type ===
+                  'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
+                "
+              >
+                <TemplateSourceField
+                  :model-value="fieldValue(operation, 'instructions')"
+                  :label="
+                    $t('assistant.planEditor.systemAssistantInstructions')
+                  "
+                  :disabled="!editable"
+                  @update:model-value="
+                    updateOperationParameter(operation, 'instructions', $event)
+                  "
+                />
+                <p class="assistant-plan-friendly__hint">
+                  {{
+                    $t(
+                      "assistant.planEditor.systemAssistantInstructionsBoundary",
+                    )
+                  }}
                 </p>
               </template>
             </template>

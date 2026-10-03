@@ -202,6 +202,8 @@ create_secret kodex-system kodex-installation-ca \
   --from-file=tls.key="$installation_ca/ca.key"
 create_secret kodex-trust kodex-installation-ca \
   --from-file=tls.crt="$installation_ca/ca.crt"
+create_secret "$runtime_namespace" runtime-egress-proxy-ca \
+  --from-file=ca.crt="$material_directory/authorities/pki-runtime-web-proxy/ca.crt"
 if [[ "$security_profile" == protected ]]; then
 create_secret "$runtime_namespace" runtime-execution-client-tls \
   --from-file=tls.crt="$runtime_execution_certificate" \

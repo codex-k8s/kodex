@@ -12,7 +12,11 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Send,
+  Settings,
   Sparkles,
+  Square,
+  Zap,
   Trash2,
   X,
 } from "@lucide/vue";
@@ -29,6 +33,9 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
+import AssistantEnvironmentSettingsPanel from "@/features/assistant/components/AssistantEnvironmentSettingsPanel.vue";
+import AssistantProjectProfileSetup from "./AssistantProjectProfileSetup.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
 import AssistantCreatedEntityCard from "@/features/assistant/components/AssistantCreatedEntityCard.vue";
 import AssistantCreatedProjectFileCard from "@/features/assistant/components/AssistantCreatedProjectFileCard.vue";
@@ -53,6 +60,8 @@ import {
 import {
   isAssistantRunDebugRequest,
   isAssistantRoleImageBuildDebugRequest,
+  isAssistantSetupRequest,
+  isAssistantSettingsRequest,
   notifyAssistantPlanApplied,
   openAssistantEvent,
   type AssistantIntegrationPublicationRequest,
@@ -81,6 +90,7 @@ import type {
   AssistantPlan,
   AssistantPlanReceipt,
   RunEvent,
+  AssistantScope,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
 import {
@@ -120,6 +130,7 @@ const planTargetKindTranslationKeys: Readonly<Record<string, string>> = {
   RUNTIME_ENVIRONMENT_DRAFT:
     "assistant.planEditor.targetKinds.RUNTIME_ENVIRONMENT_DRAFT",
   ROLE_IMAGE_RECIPE: "assistant.planEditor.targetKinds.ROLE_IMAGE_RECIPE",
+  PROJECT_ASSISTANT: "assistant.projectProfile.title",
   INTEGRATION_CONNECTION:
     "assistant.planEditor.targetKinds.INTEGRATION_CONNECTION",
   INTEGRATION_DEFINITION:
@@ -194,6 +205,35 @@ const message = ref("");
 const messageDrafts = new Map<string, string>();
 const titleDraft = ref("");
 const titleEditing = ref(false);
+const settingsOpen = ref(false);
+const settingsTab = ref<"RUNTIME" | "ENVIRONMENT" | "INSTRUCTIONS">("RUNTIME");
+const assistantInstructions = ref("");
+const settingsBusy = ref(false);
+const settingsProblem = ref<AppProblem>();
+const projectProfileName = ref("");
+const projectProfilePurpose = ref("");
+const projectProfileInstructions = ref("");
+const canCreateProjectProfile = computed(() =>
+  Boolean(
+    props.projectRef &&
+    platform.projects[props.projectRef]?.nextActions.includes(
+      "CREATE_PROJECT_ASSISTANT",
+    ),
+  ),
+);
+const activeSettingsAgentRef = computed(() => store.activeAssistantRef);
+const activeSettingsCanEdit = computed(() =>
+  store.assistantScope === "PROJECT"
+    ? Boolean(store.projectAssistantAgent?.nextActions.includes("EDIT"))
+    : Boolean(store.assistant?.nextActions.includes("EDIT")),
+);
+const projectAssistantCanRun = computed(() =>
+  Boolean(
+    store.projectAssistantAgent?.enabled &&
+    store.projectAssistantAgent.runtimeReady &&
+    store.projectAssistantAgent.nextActions.includes("LAUNCH"),
+  ),
+);
 const openPlanRef = ref<string>();
 const activeView = ref<"CHAT" | "ACTIVITY">("CHAT");
 const attachmentComposer = ref<AttachmentComposerHandle>();
@@ -266,9 +306,13 @@ const currentPlan = computed<AssistantPlan | undefined>(() => {
   return undefined;
 });
 const assistantRuntimeState = computed(() =>
-  store.assistant
-    ? assistantEffectiveRuntimeState(store.assistant)
-    : "RECOVERING",
+  store.assistantScope === "PROJECT"
+    ? projectAssistantCanRun.value
+      ? "READY"
+      : "NOT_CONFIGURED"
+    : store.assistant
+      ? assistantEffectiveRuntimeState(store.assistant)
+      : "RECOVERING",
 );
 const awaitingReply = computed(() =>
   assistantAwaitingReply(store.selectedConversation),
@@ -276,6 +320,7 @@ const awaitingReply = computed(() =>
 const providerAccountRequired = computed(
   () =>
     store.assistant !== undefined &&
+    store.assistantScope === "SYSTEM" &&
     assistantRequiresProviderAccount(store.assistant),
 );
 const setupSuggestions = computed(() =>
@@ -293,12 +338,21 @@ const assistantReadinessLabel = computed(() =>
     ? t("app.reconnecting")
     : providerAccountRequired.value
       ? t("assistant.providerAccountRequired")
-      : store.assistant?.readinessSummary,
+      : store.assistantScope === "PROJECT"
+        ? t(
+            projectAssistantCanRun.value
+              ? "assistant.projectProfile.ready"
+              : "assistant.projectProfile.needsSetupBadge",
+          )
+        : store.assistant?.readinessSummary,
 );
-const canCreateConversation = computed(
-  () =>
-    assistantRuntimeState.value === "READY" &&
-    Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
+const canCreateConversation = computed(() =>
+  store.assistantScope === "PROJECT"
+    ? Boolean(
+        store.projectAssistant && store.projectAssistant.state === "ACTIVE",
+      )
+    : assistantRuntimeState.value === "READY" &&
+      Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
 );
 const canSend = computed(
   () =>
@@ -306,7 +360,9 @@ const canSend = computed(
     !store.loading &&
     !store.busy &&
     assistantRuntimeState.value === "READY" &&
-    Boolean(store.assistant?.nextActions.includes("ADD_TURN")) &&
+    (store.assistantScope === "PROJECT"
+      ? projectAssistantCanRun.value
+      : Boolean(store.assistant?.nextActions.includes("ADD_TURN"))) &&
     (!store.selectedConversation ||
       store.selectedConversation.state === "ACTIVE") &&
     (Boolean(store.selectedConversation) ||
@@ -359,7 +415,9 @@ const contextIdentity = computed(() =>
   assistantContextIdentity(props.context, props.projectRef),
 );
 const currentDraftKey = computed(
-  () => store.selectedRef ?? `context:${contextIdentity.value}`,
+  () =>
+    store.selectedRef ??
+    `${store.assistantScope}:${store.activeAssistantRef ?? "unconfigured"}:context:${contextIdentity.value}`,
 );
 
 function handleOpenAssistant(event: Event): void {
@@ -367,6 +425,22 @@ function handleOpenAssistant(event: Event): void {
     const request =
       event instanceof CustomEvent ? (event.detail as unknown) : undefined;
     await show();
+    if (isAssistantSettingsRequest(request)) {
+      await store.selectAssistantScope("SYSTEM");
+      openAssistantSettings();
+      return;
+    }
+    if (isAssistantSetupRequest(request)) {
+      if (
+        message.value.trim() &&
+        !(await requestConfirmation(t("assistant.replaceDraftConfirm")))
+      )
+        return;
+      message.value = t(`onboarding.assistantPrompts.${request.step}`);
+      await nextTick();
+      composer.value?.focus();
+      return;
+    }
     if (isAssistantRoleImageBuildDebugRequest(request)) {
       if (
         message.value.trim() &&
@@ -454,7 +528,9 @@ function hydrateFromRealtimeSnapshot(): boolean {
 
 function loadWorkspace(): void {
   store.setContext(props.context, props.projectRef);
-  hydrateFromRealtimeSnapshot();
+  if (store.assistantScope === "PROJECT") {
+    void store.load(props.context, props.projectRef);
+  } else hydrateFromRealtimeSnapshot();
 }
 
 async function show(): Promise<void> {
@@ -733,11 +809,17 @@ async function saveTitle(): Promise<void> {
   titleEditing.value = false;
 }
 
-async function send(): Promise<void> {
+async function send(
+  deliveryMode: "QUEUE" | "INTERRUPT_ACTIVE" = "QUEUE",
+): Promise<void> {
   const value = message.value.trim();
   if (!value || !canSend.value) return;
   const attachmentSetRef = await attachmentComposer.value?.finalize();
-  if (!(await handleStoreMutation(() => store.send(value, attachmentSetRef))))
+  if (
+    !(await handleStoreMutation(() =>
+      store.send(value, attachmentSetRef, deliveryMode),
+    ))
+  )
     return;
   messageDrafts.delete(currentDraftKey.value);
   message.value = "";
@@ -745,6 +827,70 @@ async function send(): Promise<void> {
   await nextTick();
   scrollToLatest();
   composer.value?.focus();
+}
+
+async function stopActiveTurn(): Promise<void> {
+  await handleStoreMutation(() => store.stopActiveTurn());
+}
+
+function openAssistantSettings(): void {
+  assistantInstructions.value = store.assistant?.ownerInstructions ?? "";
+  settingsProblem.value = undefined;
+  settingsOpen.value = true;
+}
+
+async function selectAssistantScope(event: Event): Promise<void> {
+  const scope = (event.target as HTMLSelectElement).value;
+  if (scope !== "SYSTEM" && scope !== "PROJECT") return;
+  settingsOpen.value = false;
+  await store.selectAssistantScope(scope as AssistantScope);
+}
+
+async function createProjectProfile(): Promise<void> {
+  if (!canCreateProjectProfile.value) return;
+  if (
+    !projectProfileName.value.trim() ||
+    !projectProfilePurpose.value.trim() ||
+    !projectProfileInstructions.value.trim()
+  )
+    return;
+  await handleStoreMutation(() =>
+    store.createProjectProfile({
+      name: projectProfileName.value.trim(),
+      purpose: projectProfilePurpose.value.trim(),
+      instructions: projectProfileInstructions.value,
+    }),
+  );
+  if (store.projectAssistant) openAssistantSettings();
+}
+
+async function openProjectAssistantEditor(tab = "instructions"): Promise<void> {
+  const profile = store.projectAssistant;
+  if (!profile) return;
+  settingsOpen.value = false;
+  await close();
+  if (open.value) return;
+  void router.push({
+    name: "agent",
+    params: { projectRef: profile.projectRef, agentRef: profile.agentRef },
+    query: { tab },
+  });
+}
+
+async function saveAssistantInstructions(): Promise<void> {
+  if (store.assistantScope !== "SYSTEM") return;
+  if (!store.assistant?.nextActions.includes("EDIT")) return;
+  settingsBusy.value = true;
+  settingsProblem.value = undefined;
+  try {
+    await platform.updateAssistantInstructions(assistantInstructions.value);
+    await store.load(props.context, props.projectRef, false);
+  } catch (error) {
+    settingsProblem.value = error instanceof AppProblem ? error : undefined;
+    if (!(error instanceof AppProblem)) throw error;
+  } finally {
+    settingsBusy.value = false;
+  }
 }
 
 function scrollToLatest(): void {
@@ -795,7 +941,12 @@ function handleAssistantLink(event: MouseEvent): void {
     projectRef &&
     store.selectedConversation?.projectRef === projectRef
   ) {
-    persistAssistantConversationRef(projectRef, store.selectedConversation.ref);
+    persistAssistantConversationRef(
+      projectRef,
+      store.selectedConversation.ref,
+      undefined,
+      store.assistantScope,
+    );
   }
   if (
     !props.projectRef &&
@@ -830,7 +981,12 @@ async function confirmProjectMove(): Promise<void> {
   if (!target || !store.selectedConversation || store.busy) return;
   try {
     const moved = await store.moveSelectedToProject(target.projectRef);
-    persistAssistantConversationRef(target.projectRef, moved.ref);
+    persistAssistantConversationRef(
+      target.projectRef,
+      moved.ref,
+      undefined,
+      store.assistantScope,
+    );
     pendingProjectMove.value = undefined;
     await router.push(target.path);
   } catch (error) {
@@ -872,7 +1028,7 @@ function openCreatedDefinition(): void {
 function handleComposerKeydown(event: KeyboardEvent): void {
   if (event.key !== "Enter" || event.shiftKey) return;
   event.preventDefault();
-  void send();
+  void send("QUEUE");
 }
 
 async function openPlan(plan: AssistantPlan, event: MouseEvent): Promise<void> {
@@ -1098,6 +1254,8 @@ watch(
       persistAssistantConversationRef(
         props.projectRef,
         store.selectedConversation.ref,
+        undefined,
+        store.assistantScope,
       );
     titleEditing.value = false;
     openPlanRef.value = undefined;
@@ -1218,11 +1376,33 @@ onBeforeUnmount(() => {
           <Bot :size="21" />
         </span>
         <div class="assistant-drawer__identity">
-          <strong>Kodex</strong>
+          <strong>{{
+            store.assistantScope === "PROJECT"
+              ? (store.projectAssistant?.name ??
+                $t("assistant.projectProfile.title"))
+              : "Kodex"
+          }}</strong>
           <span>{{ contextTitle }}</span>
         </div>
+        <label v-if="projectRef" class="assistant-scope-selector">
+          <span class="sr-only">{{
+            $t("assistant.projectProfile.scopeLabel")
+          }}</span>
+          <select
+            :value="store.assistantScope"
+            :disabled="store.busy || store.loading"
+            @change="selectAssistantScope"
+          >
+            <option value="SYSTEM">
+              {{ $t("assistant.settings.systemScope") }}
+            </option>
+            <option value="PROJECT">
+              {{ $t("assistant.settings.projectScope") }}
+            </option>
+          </select>
+        </label>
         <StatusBadge
-          v-if="store.assistant"
+          v-if="activeSettingsAgentRef"
           :state="live ? assistantRuntimeState : 'RECOVERING'"
           :label="assistantReadinessLabel"
         />
@@ -1302,6 +1482,17 @@ onBeforeUnmount(() => {
             }}</span>
           </section>
         </div>
+        <button
+          v-if="activeSettingsAgentRef"
+          class="icon-button"
+          type="button"
+          :aria-label="$t('assistant.settings.title')"
+          :title="$t('assistant.settings.title')"
+          :disabled="store.busy"
+          @click="openAssistantSettings"
+        >
+          <Settings :size="19" aria-hidden="true" />
+        </button>
         <button
           class="icon-button"
           type="button"
@@ -1459,11 +1650,41 @@ onBeforeUnmount(() => {
         </nav>
 
         <div class="assistant-drawer__view">
+          <AssistantProjectProfileSetup
+            v-if="
+              store.assistantScope === 'PROJECT' &&
+              !store.projectAssistant &&
+              !store.loading &&
+              !store.problem
+            "
+            v-model:name="projectProfileName"
+            v-model:purpose="projectProfilePurpose"
+            v-model:instructions="projectProfileInstructions"
+            :busy="store.busy || !canCreateProjectProfile"
+            @create="createProjectProfile"
+          />
           <RunActivityView
-            v-if="activeView === 'ACTIVITY'"
+            v-else-if="activeView === 'ACTIVITY'"
             :events="runEvents"
           />
           <div v-else class="assistant-chat-view">
+            <p
+              v-if="
+                store.assistantScope === 'PROJECT' &&
+                store.projectAssistant &&
+                !projectAssistantCanRun
+              "
+              class="assistant-project-profile"
+            >
+              {{ $t("assistant.projectProfile.needsSetup") }}
+              <button
+                class="button"
+                type="button"
+                @click="openAssistantSettings"
+              >
+                {{ $t("assistant.projectProfile.configure") }}
+              </button>
+            </p>
             <button
               type="button"
               class="assistant-context-strip"
@@ -1735,6 +1956,7 @@ onBeforeUnmount(() => {
                         item.type === 'CREATE_PROJECT' ||
                         item.type === 'UPDATE_PROJECT' ||
                         item.type === 'CREATE_AGENT' ||
+                        item.type === 'CREATE_PROJECT_ASSISTANT' ||
                         item.type === 'UPDATE_AGENT',
                     )"
                     :key="`entity-${operation.ref}`"
@@ -1857,7 +2079,12 @@ onBeforeUnmount(() => {
                 "
                 @change="attachmentState = $event"
               />
-              <div class="assistant-composer__field">
+              <div
+                class="assistant-composer__field"
+                :class="{
+                  'assistant-composer__field--active': awaitingReply,
+                }"
+              >
                 <VoiceTextarea
                   ref="composer"
                   v-model="message"
@@ -1876,14 +2103,50 @@ onBeforeUnmount(() => {
                 />
                 <div>
                   <button
+                    v-if="awaitingReply"
+                    class="assistant-composer__send assistant-composer__send--stop"
+                    type="button"
+                    :aria-label="$t('assistant.stop')"
+                    :disabled="store.busy"
+                    :title="$t('assistant.stop')"
+                    @click="stopActiveTurn"
+                  >
+                    <Square :size="17" fill="currentColor" aria-hidden="true" />
+                  </button>
+                  <button
                     class="assistant-composer__send"
                     type="button"
-                    :aria-label="$t('assistant.send')"
+                    :aria-label="
+                      awaitingReply
+                        ? $t('assistant.queue')
+                        : $t('assistant.send')
+                    "
                     :disabled="!canSend || !message.trim()"
-                    :title="$t('assistant.send')"
-                    @click="send"
+                    :title="
+                      awaitingReply
+                        ? $t('assistant.queue')
+                        : $t('assistant.send')
+                    "
+                    @click="send('QUEUE')"
                   >
-                    <ArrowUp :size="21" stroke-width="2.5" aria-hidden="true" />
+                    <Send v-if="!awaitingReply" :size="19" aria-hidden="true" />
+                    <ArrowUp
+                      v-else
+                      :size="20"
+                      stroke-width="2.5"
+                      aria-hidden="true"
+                    />
+                  </button>
+                  <button
+                    v-if="awaitingReply"
+                    class="assistant-composer__send assistant-composer__send--immediate"
+                    type="button"
+                    :aria-label="$t('assistant.sendNow')"
+                    :disabled="!canSend || !message.trim()"
+                    :title="$t('assistant.sendNow')"
+                    @click="send('INTERRUPT_ACTIVE')"
+                  >
+                    <Zap :size="19" fill="currentColor" aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -1994,6 +2257,126 @@ onBeforeUnmount(() => {
       @click="closeAssistantForm"
     />
   </div>
+  <Teleport to="body">
+    <div v-if="open && settingsOpen" class="assistant-settings-layer">
+      <button
+        class="assistant-settings-layer__backdrop"
+        type="button"
+        :aria-label="$t('common.close')"
+        @click="settingsOpen = false"
+      />
+      <section
+        class="assistant-settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="$t('assistant.settings.title')"
+      >
+        <header>
+          <div>
+            <h2>{{ $t("assistant.settings.title") }}</h2>
+            <p>{{ $t("assistant.settings.description") }}</p>
+          </div>
+          <button
+            class="icon-button"
+            type="button"
+            :aria-label="$t('common.close')"
+            @click="settingsOpen = false"
+          >
+            <X :size="20" aria-hidden="true" />
+          </button>
+        </header>
+        <nav class="assistant-settings-dialog__tabs" aria-label="">
+          <button
+            type="button"
+            :class="{ selected: settingsTab === 'RUNTIME' }"
+            @click="settingsTab = 'RUNTIME'"
+          >
+            {{ $t("assistant.settings.runtime") }}
+          </button>
+          <button
+            type="button"
+            :class="{ selected: settingsTab === 'ENVIRONMENT' }"
+            @click="settingsTab = 'ENVIRONMENT'"
+          >
+            {{ $t("assistant.settings.environment") }}
+          </button>
+          <button
+            type="button"
+            :class="{ selected: settingsTab === 'INSTRUCTIONS' }"
+            @click="settingsTab = 'INSTRUCTIONS'"
+          >
+            {{ $t("assistant.settings.instructions") }}
+          </button>
+        </nav>
+        <div class="assistant-settings-dialog__body">
+          <AgentRuntimePanel
+            v-if="settingsTab === 'RUNTIME' && activeSettingsAgentRef"
+            :agent-ref="activeSettingsAgentRef"
+            :can-edit="activeSettingsCanEdit"
+            advanced-collapsed
+          />
+          <section
+            v-else-if="store.assistantScope === 'PROJECT'"
+            class="assistant-settings-dialog__instructions"
+          >
+            <p>
+              {{
+                $t(
+                  settingsTab === "ENVIRONMENT"
+                    ? "assistant.projectProfile.environmentHelp"
+                    : "assistant.projectProfile.instructionsHelp",
+                )
+              }}
+            </p>
+            <button
+              class="button button--primary"
+              type="button"
+              @click="
+                openProjectAssistantEditor(
+                  settingsTab === 'ENVIRONMENT'
+                    ? 'environment'
+                    : 'instructions',
+                )
+              "
+            >
+              {{ $t("assistant.projectProfile.openEditor") }}
+            </button>
+          </section>
+          <AssistantEnvironmentSettingsPanel
+            v-else-if="settingsTab === 'ENVIRONMENT' && store.assistant"
+            :agent-ref="store.assistant.ref"
+            :can-edit="store.assistant.nextActions.includes('EDIT')"
+            :resource-scope="{ kind: 'ORGANIZATION' }"
+            :image-catalog="undefined"
+          />
+          <section v-else class="assistant-settings-dialog__instructions">
+            <p>{{ $t("assistant.settings.instructionsHelp") }}</p>
+            <VoiceTextarea
+              v-model="assistantInstructions"
+              rows="8"
+              maxlength="32768"
+              :disabled="settingsBusy"
+            />
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="
+                settingsBusy || !store.assistant?.nextActions.includes('EDIT')
+              "
+              @click="saveAssistantInstructions"
+            >
+              {{ $t("common.save") }}
+            </button>
+            <ProblemNotice
+              v-if="settingsProblem"
+              :problem="settingsProblem"
+              compact
+            />
+          </section>
+        </div>
+      </section>
+    </div>
+  </Teleport>
   <section
     v-show="open && assistantFormActive"
     id="assistant-form-slot"
@@ -2058,11 +2441,105 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.assistant-scope-selector {
+  flex: 0 1 240px;
+  min-width: 0;
+}
+.assistant-scope-selector select {
+  width: 100%;
+  height: 32px;
+}
+.assistant-project-profile {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+.assistant-project-profile h3,
+.assistant-project-profile p {
+  margin: 0;
+}
+.assistant-project-profile label {
+  display: grid;
+  gap: 6px;
+}
 .assistant-secret-layer {
   position: fixed;
   z-index: 90;
   inset: 0;
   pointer-events: none;
+}
+.assistant-settings-layer {
+  position: fixed;
+  z-index: 95;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+.assistant-settings-layer__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(17 24 39 / 38%);
+}
+.assistant-settings-dialog {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(1180px, 94vw);
+  height: min(840px, 92dvh);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 24px 72px rgb(15 23 42 / 30%);
+  overflow: hidden;
+}
+.assistant-settings-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.assistant-settings-dialog h2,
+.assistant-settings-dialog p {
+  margin: 0;
+}
+.assistant-settings-dialog header p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.assistant-settings-dialog__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 24px 0;
+  border-bottom: 1px solid var(--border);
+}
+.assistant-settings-dialog__tabs button {
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.assistant-settings-dialog__tabs button.selected {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+.assistant-settings-dialog__body {
+  min-height: 0;
+  padding: 20px 24px 28px;
+  overflow: auto;
+}
+.assistant-settings-dialog__instructions {
+  display: grid;
+  gap: 14px;
+}
+.assistant-settings-dialog__instructions .button {
+  justify-self: start;
 }
 .assistant-credential-layer {
   position: fixed;
@@ -2358,6 +2835,11 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.assistant-drawer__identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .assistant-history {
   position: relative;
   flex: 0 0 auto;
@@ -2368,7 +2850,7 @@ onBeforeUnmount(() => {
 }
 .assistant-new-conversation {
   display: inline-flex;
-  min-height: 38px;
+  min-height: 32px;
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
@@ -2731,6 +3213,12 @@ onBeforeUnmount(() => {
 .assistant-composer :deep(.voice-textarea__action) {
   right: 58px;
 }
+.assistant-composer__field--active :deep(.voice-textarea__action) {
+  right: 150px;
+}
+.assistant-composer__field--active :deep(textarea) {
+  padding-right: 198px;
+}
 .assistant-composer :deep(.voice-input[data-state="recording"]) {
   padding-left: 8px;
   border-radius: 24px;
@@ -2764,6 +3252,15 @@ onBeforeUnmount(() => {
   background: var(--panel);
   color: var(--subtle);
   cursor: not-allowed;
+}
+.assistant-composer__send--stop {
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.assistant-composer__send--immediate {
+  background: var(--warning);
+  color: var(--text);
 }
 .assistant-composer__meta {
   display: flex;
@@ -2835,15 +3332,33 @@ onBeforeUnmount(() => {
     transform: translateX(-50%);
   }
   .assistant-drawer__header {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    height: auto;
     gap: 8px;
     padding-top: 14px;
   }
+  .assistant-drawer__identity {
+    flex: 1 1 80px;
+  }
+  .assistant-scope-selector {
+    order: 1;
+    flex: 1 0 100%;
+  }
   .assistant-new-conversation,
   .assistant-history__toggle {
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
     justify-content: center;
+    padding: 0;
+  }
+  .assistant-drawer__header > .icon-button,
+  .assistant-history > .icon-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
     padding: 0;
   }
   .assistant-new-conversation span,

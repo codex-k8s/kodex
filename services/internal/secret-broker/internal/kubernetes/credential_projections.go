@@ -226,7 +226,7 @@ func validateCredentialProjectionManifest(value CredentialProjectionManifest, na
 	}
 	assistant := value.Authority.CallerFullMethod == "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials"
 	if namespace != "kodex-runtime" || value.Authority.ActorID == "" || value.Authority.TenantID == "" ||
-		(assistant && (value.Authority.ProjectID != "" || len(value.RuntimeSecrets) != 0)) || (!assistant && value.Authority.ProjectID == "") ||
+		(assistant && value.Authority.ProjectID != "") || (!assistant && value.Authority.ProjectID == "") ||
 		value.Authority.SourceRevision == 0 || value.Authority.CallerCredentialRevision == 0 ||
 		!validProjectionDigest(value.Authority.SourceDigestSHA256) || value.Authority.CallerWorkloadID != "runtime-controller" ||
 		(!assistant && value.Authority.CallerFullMethod != "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials") ||

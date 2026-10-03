@@ -4,8 +4,8 @@ title: Диагностика runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 3.1.0
-updated: 2026-09-05
+version: 3.2.0
+updated: 2026-10-04
 ---
 
 # Диагностика runtime-controller
@@ -67,7 +67,10 @@ fence/generation, image `repository@sha256`, runtime ABI, ServiceAccount,
 resources, PVC и callback ticket. Display role name, prompt или caller-supplied
 Kubernetes locator не являются authority.
 
-`kodex.agent-runner-input.v7` должен пройти schema validation. Mutable
+`kodex.agent-runner-input.v8` должен пройти schema validation. Область
+`NONE|SYSTEM|PROJECT` обязательна; PROJECT закрепляет exact profile ref,
+SYSTEM использует организационные credentials независимо от проекта контекста.
+Старый bool и декодер предыдущей версии не обслуживаются. Mutable
 tag, image вне promoted repository, ABI mismatch, stale fence, extra container,
 broad ServiceAccount или host access закрыто отклоняются admission.
 

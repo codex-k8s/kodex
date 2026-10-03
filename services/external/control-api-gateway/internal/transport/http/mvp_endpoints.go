@@ -372,6 +372,33 @@ func (server *Server) SetProviderAccountEnabled(w http.ResponseWriter, r *http.R
 	writeMessage(w, http.StatusOK, response, "account", "")
 }
 
+func (server *Server) SetProviderAccountConcurrency(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.SetProviderAccountConcurrencyParams) {
+	body, ok := decodeJSON[generated.ProviderAccountConcurrencyInput](w, r)
+	if !ok {
+		return
+	}
+	if body.MaximumConcurrentExecutions < 1 || body.MaximumConcurrentExecutions > 256 {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	if mutation.ExpectedVersion == nil {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	response, err := server.control.Command.SetProviderAccountConcurrency(r.Context(), &controlplanev1.SetProviderAccountConcurrencyRequest{
+		Mutation: mutation, AccountRef: ref, MaximumConcurrentExecutions: body.MaximumConcurrentExecutions,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "account", "")
+}
+
 func (server *Server) ListPromptTemplateVariables(w http.ResponseWriter, r *http.Request, p generated.ListPromptTemplateVariablesParams) {
 	server.listTemplateVariables(w, r, stringValue(p.ProjectRef), stringValue(p.AgentRef), stringValue(p.RuntimeRevisionRef), stringValue(p.Query), stringValue(p.Source), p.PageSize, p.PageToken)
 }

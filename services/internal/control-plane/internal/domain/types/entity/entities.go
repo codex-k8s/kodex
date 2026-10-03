@@ -379,6 +379,7 @@ type ProviderCredentialDescriptor struct {
 }
 
 type ProviderAccount struct {
+	MaximumConcurrentExecutions                                              int32
 	Usage                                                                    *ProviderAccountUsage
 	Deletion                                                                 *ProviderAccountDeletion
 	Verification                                                             *ProviderAccountVerification
@@ -396,6 +397,7 @@ type AgentAvatar struct {
 }
 
 type Agent struct {
+	AssistantBacked                                                   bool `json:"-"`
 	CurrentRunRef                                                     string
 	InstructionBinding                                                *AgentInstructionsBinding
 	Ref, ProjectRef, RoleDefinitionRef, RoleDefinitionName, SystemKey string
@@ -818,21 +820,30 @@ type AssistantPlanReceipt struct {
 }
 
 type AssistantTurn struct {
-	Ref, Actor, ActorName, Content, State, AttachmentSetRef string
-	Sequence                                                int64
-	CreatedAt                                               time.Time
-	CompletedAt                                             *time.Time
+	Ref, Actor, ActorName, Content, State, AttachmentSetRef, RunRef string
+	Sequence, RunVersion                                            int64
+	CreatedAt                                                       time.Time
+	CompletedAt                                                     *time.Time
 }
 
 type AssistantConversation struct {
-	Ref, Title, ProjectRef, SessionRef, State string
-	TitleSource                               string
-	Version, TitleRevision                    int64
-	Context                                   AssistantContextDescriptor
-	Turns                                     []AssistantTurn
-	Plans                                     []AssistantPlan
-	LatestPlan                                *AssistantPlan
-	CreatedAt, UpdatedAt                      time.Time
+	Ref, Title, ProjectRef, SessionRef, State         string
+	AssistantScope, AssistantRef, AssistantProfileRef string
+	TitleSource                                       string
+	Version, TitleRevision                            int64
+	Context                                           AssistantContextDescriptor
+	Turns                                             []AssistantTurn
+	Plans                                             []AssistantPlan
+	LatestPlan                                        *AssistantPlan
+	CreatedAt, UpdatedAt                              time.Time
+}
+
+// ProjectAssistantProfile закрепляет отдельного помощника за одним проектом.
+// Исполняемая конфигурация принадлежит AgentRef, а не копии системного профиля.
+type ProjectAssistantProfile struct {
+	Ref, ProjectRef, AgentRef, Name, State string
+	Version                                int64
+	CreatedAt, UpdatedAt                   time.Time
 }
 
 type SystemAssistant struct {

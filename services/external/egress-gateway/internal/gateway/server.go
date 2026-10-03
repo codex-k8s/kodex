@@ -2,7 +2,9 @@
 package gateway
 
 import (
+	"bufio"
 	"context"
+	"crypto/x509"
 	"errors"
 	"io"
 	"net"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/connect"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
@@ -30,6 +33,11 @@ const (
 type AccessPolicy interface {
 	Allows(string, int) bool
 	Limits() policy.Limits
+}
+
+type AuthenticatedAccessPolicy interface {
+	AccessPolicy
+	AuthorizeAuthenticated(string, int, string) (runtimecontract.RuntimeWebAccess, bool)
 }
 
 // MailAccess принадлежит только почтовому listener: общий TLSMode не делает
@@ -74,21 +82,24 @@ func (server *Server) readyFor(host string) bool {
 
 // Server владеет listener, active connections и cancel/join boundary.
 type Server struct {
-	address   string
-	policy    AccessPolicy
-	resolver  Resolver
-	dialer    LiteralDialer
-	readiness Readiness
-	metrics   *observability.Metrics
-	context   context.Context
-	cancel    context.CancelFunc
-	listener  net.Listener
-	draining  atomic.Bool
-	global    chan struct{}
-	wait      sync.WaitGroup
-	mu        sync.Mutex
-	active    map[net.Conn]bool
-	perSource map[string]int
+	address       string
+	policy        AccessPolicy
+	resolver      Resolver
+	dialer        LiteralDialer
+	readiness     Readiness
+	metrics       *observability.Metrics
+	context       context.Context
+	cancel        context.CancelFunc
+	listener      net.Listener
+	draining      atomic.Bool
+	global        chan struct{}
+	wait          sync.WaitGroup
+	mu            sync.Mutex
+	active        map[net.Conn]bool
+	perSource     map[string]int
+	authenticated bool
+	interceptCA   *TLSInterceptAuthority
+	upstreamRoots *x509.CertPool
 }
 
 // New создаёт CONNECT server без фоновых goroutine.
@@ -103,6 +114,21 @@ func New(parent context.Context, address string, accessPolicy AccessPolicy, reso
 		context: lifecycleContext, cancel: cancel, global: make(chan struct{}, limits.MaximumConnections),
 		active: make(map[net.Conn]bool), perSource: make(map[string]int),
 	}, nil
+}
+
+// NewAuthenticated создаёт отдельный listener, который не принимает CONNECT
+// без runtime credential и никогда не понижает его до общей static policy.
+func NewAuthenticated(parent context.Context, address string, accessPolicy AuthenticatedAccessPolicy, resolver Resolver, dialer LiteralDialer, readiness Readiness, metrics *observability.Metrics, interceptCA *TLSInterceptAuthority) (*Server, error) {
+	if interceptCA == nil {
+		return nil, errors.New("authenticated gateway TLS interception authority is missing")
+	}
+	server, err := New(parent, address, accessPolicy, resolver, dialer, readiness, metrics)
+	if err != nil {
+		return nil, err
+	}
+	server.authenticated = true
+	server.interceptCA = interceptCA
+	return server, nil
 }
 
 // NewReadinessOnly создаёт fail-closed listener для compatibility readiness без CONNECT authority.
@@ -219,7 +245,19 @@ func (server *Server) Shutdown(ctx context.Context) error {
 
 func (server *Server) handle(client net.Conn) {
 	limits := server.policy.Limits()
-	request, reader, err := connect.Parse(client, limits.MaximumHeaderBytes, duration(limits.HeaderTimeoutMilliseconds), server.policy.Allows)
+	var request connect.Request
+	var reader *bufio.Reader
+	var err error
+	var webAccess runtimecontract.RuntimeWebAccess
+	if server.authenticated {
+		request, reader, err = connect.ParseAuthenticated(client, limits.MaximumHeaderBytes, duration(limits.HeaderTimeoutMilliseconds), func(hostname string, port int, credential string) bool {
+			var allowed bool
+			webAccess, allowed = server.policy.(AuthenticatedAccessPolicy).AuthorizeAuthenticated(hostname, port, credential)
+			return allowed
+		})
+	} else {
+		request, reader, err = connect.Parse(client, limits.MaximumHeaderBytes, duration(limits.HeaderTimeoutMilliseconds), server.policy.Allows)
+	}
 	if err != nil {
 		server.metrics.Connection("rejected", "connect", connectReason(err))
 		return
@@ -243,6 +281,10 @@ func (server *Server) handle(client net.Conn) {
 		return
 	}
 	_ = client.SetWriteDeadline(time.Time{})
+	if server.authenticated && (webAccess.Mode == runtimecontract.RuntimeWebAccessAllowlistReadOnly || webAccess.Mode == runtimecontract.RuntimeWebAccessAllowlistFull) {
+		server.proxyTLS(client, reader, target, webAccess, limits)
+		return
+	}
 	var buffered []byte
 	mail, isMail := server.policy.(MailAccess)
 	if !isMail || mail.TLSMode(target.Hostname, target.Port) != "starttls" {

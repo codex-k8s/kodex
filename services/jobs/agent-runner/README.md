@@ -24,7 +24,11 @@ command deadlines и exact RuntimeRevision/catalog authority.
 
 Runner:
 
-- читает и строго валидирует immutable `kodex.agent-runner-input.v7`;
+- читает и строго валидирует immutable `kodex.agent-runner-input.v8`;
+- принимает только явный `assistant_scope=NONE|SYSTEM|PROJECT`; PROJECT
+  связывается с точным профилем и проектом. Обе разновидности помощника получают
+  toolkit, но только SYSTEM допускается в warm runtime; прежний boolean
+  discriminator закрыто отклоняется;
 - подтверждает exact organization/project/run/node/session/turn/attempt/fence,
   полный execution binding и MCP binding через execution-scoped callback;
 - применяет готовые server-materialized instructions без повторного rendering;
@@ -107,7 +111,7 @@ digest. Historical snapshots без marker сохраняют прежний dig
 semantics; untyped v2/raw инструкции не получают угадываемого fallback.
 Для ранее неисполняемого snapshot нужна свежая owner revision, не его перезапись.
 Source-owned rollout согласованно доставляет CP, controller, runner и новый
-hash v7 schema; публичные API не расширяются.
+hash v8 schema; публичные API не расширяются.
 
 Перед nested mounts одноразовый `workspace-prepare` запускает защищённую
 `runtime-prepare-workspace` от UID 10001 с единственным mount `/workspace`.
@@ -122,7 +126,7 @@ containers эти mounts read-only. Session PVC смонтирован толь�
 
 Тот же порядок применяется к warm и turn. `.kodex` — единственный промежуточный
 parent nested workspace mount; `input`, `knowledge` и `context` находятся прямо
-под `/workspace`. V7 input schema не меняется: preparer не читает payload.
+под `/workspace`. V8 input schema не меняется: preparer не читает payload.
 `make test-workspace-parent-container` (360 секунд, `KODEX_WORKSPACE_TEST_IMAGE`
 с exact локальным image SHA) проверяет настоящий container startup и production
 directory materializer, replay и отрицательные owner/symlink/traversal границы.
@@ -221,7 +225,7 @@ make test-agent-runner
 | MVP-UI-61, положительная запись | `app.TestWorkspaceSubprocessWriteAndCompletionProvenance`: отдельный детерминированный процесс в bubblewrap создаёт вложенный файл, читает, заменяет inode через rename, читает и удаляет; runner собирает result и exact revision/attempt provenance в валидный completion |
 | Отдельные отрицательные записи | `app.TestWorkspaceSubprocessRejectsProtectedWrites`: immutable, credential, foreign, symlink, traversal; `workspace.TestRunCanaryRejectsSymlinkEscape` |
 | Bounded completion | `app.TestCompletionKeepsProvenanceAtArtifactLimit`; `TestCollectArtifactsDoesNotBlockOnFIFO`; `callback.TestCompleteRejectsMismatchedAttemptBeforeTransport` |
-| Readiness/deploy | `make test-agent-runner`: runtimecontract, runner, v6 schema assertions и локальный render `runtime-workloads`, ServiceAccount/RBAC/default-deny/exact warm egress |
+| Readiness/deploy | `make test-agent-runner`: runtimecontract, runner, v8 schema assertions и локальный render `runtime-workloads`, ServiceAccount/RBAC/default-deny/exact warm egress |
 
 Subprocess acceptance проверяет реальные операции файловой системы, но заменяет
 недетерминированную модель тестовым процессом. Это не live Codex/API smoke и не
@@ -255,13 +259,13 @@ Runner не владеет PostgreSQL/OCC, pagination, schedule или terminal 
 (`effort`, `personality`). Источник:
 https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md.
 
-Schema: `contracts/runtime-controller/v7/agent-runner-input.schema.json`.
+Schema: `contracts/runtime-controller/v8/agent-runner-input.schema.json`.
 Поле `runtime_profile_ref` содержит существующий `RuntimeSelection.ref`, то есть
 stable key профиля CP (в том числе `builtin-safe-runtime`), а не prefixed ID
 агрегата. Его отдельный validator совпадает с внешним контрактом: 8–128 ASCII
 символов `A-Za-z0-9_-`. Остальные opaque refs сохраняют строгую проверку
 prefix/suffix. Ключ по-прежнему входит в immutable revision и execution binding;
-валидная форма не заменяет owner selection или authority. Canonical v7 schema
+валидная форма не заменяет owner selection или authority. Canonical v8 schema
 редактируется как исходный контракт; generated Proto/SDK этим изменением не
 затрагиваются. Controller schema regression проверяет actual bootstrap key
 для warm и turn вплоть до runner decode, включая отрицательные границы.

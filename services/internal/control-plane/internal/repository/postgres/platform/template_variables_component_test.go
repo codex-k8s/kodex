@@ -47,6 +47,7 @@ func testTemplateVariableContext(t *testing.T, ctx context.Context, repository *
 	if err != nil || len(items) != 1 || total != int64(len(templateVariableCatalog())) || next == "" {
 		t.Fatalf("variable page: %v", err)
 	}
+	firstCursor := next
 	base.Page.Token = next
 	if _, _, _, err := service.ListTemplateVariables(ctx, owner, base); err != nil {
 		t.Fatal(err)
@@ -67,6 +68,7 @@ func testTemplateVariableContext(t *testing.T, ctx context.Context, repository *
 		t.Fatalf("unknown source: %v", err)
 	}
 	base.SourceKind = ""
+	base.Page = query.Page{Size: 1, Token: firstCursor}
 	base.TemplateContext = &query.TemplateVariableContext{AgentRef: agentRef}
 	if _, _, _, err := service.ListTemplateVariables(ctx, owner, base); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("context cursor reuse: %v", err)

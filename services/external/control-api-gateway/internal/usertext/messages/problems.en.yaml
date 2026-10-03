@@ -308,6 +308,8 @@ ASSISTANT_TURN_QUEUED:
   other: Assistant command queued
 ASSISTANT_TURN_ACCEPTED:
   other: Assistant command accepted
+ASSISTANT_TURN_CANCELLED:
+  other: Assistant turn stopped
 ASSISTANT_PLAN_APPLIED:
   other: Assistant plan applied
 ASSISTANT_PLAN_PROPOSED:

@@ -267,6 +267,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.provider-accounts.revoke":                     controlplanev1.PlatformCommandService_RevokeProviderAccount_FullMethodName,
 		"platform.command.provider-accounts.delete":                     controlplanev1.PlatformCommandService_DeleteProviderAccount_FullMethodName,
 		"platform.command.provider-accounts.queued-work.cancel":         controlplanev1.PlatformCommandService_CancelProviderAccountQueuedWork_FullMethodName,
+		"platform.command.provider-accounts.concurrency.set":            controlplanev1.PlatformCommandService_SetProviderAccountConcurrency_FullMethodName,
 		"platform.command.provider-accounts.enable":                     controlplanev1.PlatformCommandService_SetProviderAccountEnabled_FullMethodName,
 		"platform.command.integrations.create":                          controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName,
 		"platform.command.integrations.update":                          controlplanev1.PlatformCommandService_UpdateIntegrationConnection_FullMethodName,
@@ -318,6 +319,8 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.runtime-secrets.reveal":                       controlplanev1.PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName,
 		"platform.command.runtime-secrets.revoke":                       controlplanev1.PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName,
 		"platform.assistant.get":                                        controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName,
+		"platform.assistant.project.create":                             controlplanev1.SystemAssistantService_CreateProjectAssistant_FullMethodName,
+		"platform.assistant.project.get":                                controlplanev1.SystemAssistantService_GetProjectAssistant_FullMethodName,
 		"platform.assistant.conversations.list":                         controlplanev1.SystemAssistantService_ListAssistantConversations_FullMethodName,
 		"platform.assistant.conversations.create":                       controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName,
 		"platform.assistant.conversations.title.update":                 controlplanev1.SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName,
@@ -326,6 +329,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.assistant.conversations.purge":                        controlplanev1.SystemAssistantService_PurgeAssistantConversation_FullMethodName,
 		"platform.assistant.conversations.project.move":                 controlplanev1.SystemAssistantService_MoveAssistantConversationToProject_FullMethodName,
 		"platform.assistant.turns.add":                                  controlplanev1.SystemAssistantService_AddAssistantTurn_FullMethodName,
+		"platform.assistant.turns.cancel":                               controlplanev1.SystemAssistantService_CancelAssistantTurn_FullMethodName,
 		"platform.assistant.plans.apply":                                controlplanev1.SystemAssistantService_ApplyAssistantPlan_FullMethodName,
 		"platform.assistant.plans.draft.update":                         controlplanev1.SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName,
 		"platform.assistant.plans.validate":                             controlplanev1.SystemAssistantService_ValidateAssistantPlan_FullMethodName,
@@ -518,6 +522,8 @@ func InteractionGatewayOperations() map[string]string {
 // control-plane и поэтому не доверяют locator из браузера.
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
+		"platform.assistant.project.create":                  {},
+		"platform.assistant.project.get":                     {},
 		"platform.command.skill-bundle-drafts.create":        {},
 		"platform.command.memory-records.create":             {},
 		"platform.query.projects.get":                        {},

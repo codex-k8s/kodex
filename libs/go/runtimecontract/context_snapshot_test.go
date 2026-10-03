@@ -22,7 +22,7 @@ func TestContextSnapshotIsBoundToExecutionAndWarmCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	warm := input
-	warm.SystemAssistant = true
+	warm.AssistantScope = AssistantScopeSystem
 	warmBefore, err := WarmCompatibilityDigest(warm)
 	if err != nil {
 		t.Fatal(err)

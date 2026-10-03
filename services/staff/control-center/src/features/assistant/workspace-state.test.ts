@@ -37,6 +37,15 @@ describe("assistant workspace state", () => {
 
     persistAssistantConversationRef(undefined, "cnv_all", storage);
     persistAssistantConversationRef("prj_sales", "cnv_sales", storage);
+    persistAssistantConversationRef(
+      "prj_sales",
+      "cnv_project_helper",
+      storage,
+      "PROJECT",
+    );
+    expect(
+      restoreAssistantConversationRef("prj_sales", storage, "PROJECT"),
+    ).toBe("cnv_project_helper");
     expect(restoreAssistantConversationRef(undefined, storage)).toBe("cnv_all");
     expect(restoreAssistantConversationRef("prj_sales", storage)).toBe(
       "cnv_sales",

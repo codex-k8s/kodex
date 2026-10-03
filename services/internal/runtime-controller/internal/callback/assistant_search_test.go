@@ -37,7 +37,7 @@ func TestAssistantResourceSearchUsesOnlyVerifiedLeaseAndReturnsSafeRoutes(t *tes
 		},
 	}}
 	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
-	input := runtimecontract.RunnerInput{SystemAssistant: true, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 4, ProjectRef: "prj_current123"}
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 4, ProjectRef: "prj_current123"}
 	result, err := server.findPlatformResources(t.Context(), input, map[string]any{"query": "  Marketplace  "})
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func TestAssistantResourceSearchUsesOnlyVerifiedLeaseAndReturnsSafeRoutes(t *tes
 
 func TestAssistantResourceSearchRejectsInvalidScopeAndResults(t *testing.T) {
 	t.Parallel()
-	input := runtimecontract.RunnerInput{SystemAssistant: true, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 1}
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 1}
 	for _, test := range []struct {
 		name      string
 		input     runtimecontract.RunnerInput
@@ -71,7 +71,7 @@ func TestAssistantResourceSearchRejectsInvalidScopeAndResults(t *testing.T) {
 		response  *controlplanev1.SearchAssistantResourcesResponse
 	}{
 		{"ordinary runtime", runtimecontract.RunnerInput{LeaseRef: input.LeaseRef, LeaseFence: input.LeaseFence, LeaseGeneration: 1}, map[string]any{"query": "market"}, &controlplanev1.SearchAssistantResourcesResponse{}},
-		{"missing fence", runtimecontract.RunnerInput{SystemAssistant: true, LeaseRef: input.LeaseRef, LeaseGeneration: 1}, map[string]any{"query": "market"}, &controlplanev1.SearchAssistantResourcesResponse{}},
+		{"missing fence", runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, LeaseRef: input.LeaseRef, LeaseGeneration: 1}, map[string]any{"query": "market"}, &controlplanev1.SearchAssistantResourcesResponse{}},
 		{"unknown argument", input, map[string]any{"query": "market", "actor": "owner"}, &controlplanev1.SearchAssistantResourcesResponse{}},
 		{"short query", input, map[string]any{"query": "a"}, &controlplanev1.SearchAssistantResourcesResponse{}},
 		{"unknown kind", input, map[string]any{"query": "market"}, &controlplanev1.SearchAssistantResourcesResponse{Results: []*controlplanev1.SearchResult{{Kind: controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_UNSPECIFIED, Ref: "prj_target123", ProjectRef: "prj_target123"}}}},

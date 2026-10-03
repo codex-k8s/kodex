@@ -65,6 +65,7 @@ const (
 	ChangeMembership                   Kind = "CHANGE_MEMBERSHIP"
 	RemoveMembership                   Kind = "REMOVE_MEMBERSHIP"
 	CreateAgent                        Kind = "CREATE_AGENT"
+	CreateProjectAssistant             Kind = "CREATE_PROJECT_ASSISTANT"
 	UpdateAgent                        Kind = "UPDATE_AGENT"
 	SetAgentEnabled                    Kind = "SET_AGENT_ENABLED"
 	ArchiveAgent                       Kind = "ARCHIVE_AGENT"
@@ -131,6 +132,7 @@ const (
 	RevokeProviderAccount              Kind = "REVOKE_PROVIDER_ACCOUNT"
 	DeleteProviderAccount              Kind = "DELETE_PROVIDER_ACCOUNT"
 	SetProviderAccountEnabled          Kind = "SET_PROVIDER_ACCOUNT_ENABLED"
+	SetProviderAccountConcurrency      Kind = "SET_PROVIDER_ACCOUNT_CONCURRENCY"
 	CreateConnection                   Kind = "CREATE_INTEGRATION_CONNECTION"
 	UpdateConnection                   Kind = "UPDATE_INTEGRATION_CONNECTION"
 	DeleteConnection                   Kind = "DELETE_INTEGRATION_CONNECTION"
@@ -146,6 +148,7 @@ const (
 	PurgeAssistantConversation         Kind = "PURGE_ASSISTANT_CONVERSATION"
 	MoveAssistantConversationToProject Kind = "MOVE_ASSISTANT_CONVERSATION_TO_PROJECT"
 	AddAssistantTurn                   Kind = "ADD_ASSISTANT_TURN"
+	CancelAssistantTurn                Kind = "CANCEL_ASSISTANT_TURN"
 	UpdateAssistantPlan                Kind = "UPDATE_ASSISTANT_PLAN_DRAFT"
 	ValidateAssistantPlan              Kind = "VALIDATE_ASSISTANT_PLAN"
 	ApplyAssistantPlan                 Kind = "APPLY_ASSISTANT_PLAN"
@@ -353,6 +356,7 @@ type ScheduleInput struct {
 	Enabled                                                                                                          bool
 }
 type ProviderAccountInput struct {
+	MaximumConcurrentExecutions                                            int32
 	SelectedRunRefs                                                        []string
 	BlockersDigest                                                         string
 	AccountRef, DefinitionKey, Name, AuthorizationRef, AuthorizationMethod string
@@ -375,9 +379,10 @@ type IntegrationGrantInput struct {
 	Enabled                                             bool
 }
 type AssistantConversationInput struct {
-	ProjectRef string
-	Context    entity.AssistantContextDescriptor
+	ProjectRef, AssistantScope string
+	Context                    entity.AssistantContextDescriptor
 }
+type ProjectAssistantInput struct{ ProjectRef, Name, Purpose, Instructions string }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
 type AssistantConversationArchiveInput struct{ ConversationRef string }
 type AssistantConversationProjectInput struct{ ConversationRef, ProjectRef string }
@@ -388,9 +393,10 @@ type EmailCredentialInput struct {
 	ReplayOnly    bool
 }
 type AssistantTurnInput struct {
-	ConversationRef, Content, AttachmentSetRef string
-	Context                                    *entity.AssistantContextDescriptor
+	ConversationRef, Content, AttachmentSetRef, DeliveryMode string
+	Context                                                  *entity.AssistantContextDescriptor
 }
+type AssistantTurnCancellationInput struct{ ConversationRef string }
 type AssistantPlanInput struct {
 	PlanRef       string
 	Revision      int64
@@ -556,6 +562,7 @@ type Result struct {
 	Plan                      *entity.AssistantPlan
 	PlanReceipt               *entity.AssistantPlanReceipt
 	Assistant                 *entity.SystemAssistant
+	ProjectAssistant          *entity.ProjectAssistantProfile
 	Event                     *entity.RunEvent
 	CreatedRefs               []string
 	Duplicate                 bool

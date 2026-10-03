@@ -395,7 +395,9 @@ SELECT n.id::text,
            WHERE lease.node_id = n.id
        ), 0) + 1,
        COALESCE(t.ref, ''),
-       COALESCE(a.system_key, ''),
+       CASE WHEN r.target_type = 'SYSTEM_ASSISTANT' AND assistant_profile.id IS NOT NULL THEN 'project-assistant'
+            ELSE COALESCE(a.system_key, '') END,
+       CASE WHEN r.target_type = 'SYSTEM_ASSISTANT' THEN COALESCE(assistant_profile.ref, '') ELSE '' END,
        COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
                'ref', integration_grant.ref,
@@ -545,14 +547,10 @@ SELECT n.id::text,
        COALESCE(role_image.artifact_id::text, ''),
        COALESCE(role_image.artifact_ref, ''),
        COALESCE(role_image.recipe_generation, 0),
-       CASE WHEN a.system_key = 'system-assistant' THEN $3
-            ELSE COALESCE(role_image.promoted_reference, '') END,
-       CASE WHEN a.system_key = 'system-assistant' THEN $4
-            ELSE COALESCE(role_image.manifest_digest, '') END,
-       CASE WHEN a.system_key = 'system-assistant' THEN $5
-            ELSE COALESCE(role_image.role_runtime_contract_revision, 0) END,
-       CASE WHEN a.system_key = 'system-assistant' THEN $6
-            ELSE COALESCE(role_image.role_runtime_contract_sha256, '') END,
+       COALESCE(role_image.promoted_reference, ''),
+       COALESCE(role_image.manifest_digest, ''),
+       COALESCE(role_image.role_runtime_contract_revision, 0),
+       COALESCE(role_image.role_runtime_contract_sha256, ''),
        runtime_config.id::text,
        runtime_config.ref,
        runtime_config.version_number,
@@ -626,6 +624,14 @@ JOIN control_plane.provider_credential_revisions pcr
   ON pcr.id = pa.current_credential_revision_id
  AND pcr.organization_id = r.organization_id
 JOIN control_plane.agents a ON a.id = n.agent_id
+LEFT JOIN control_plane.project_assistant_profiles assistant_profile
+  ON assistant_profile.agent_id = a.id
+ AND assistant_profile.organization_id = a.organization_id
+ AND assistant_profile.project_id = a.project_id
+LEFT JOIN control_plane.assistant_conversations conversation
+  ON conversation.session_id = r.session_id
+ AND conversation.organization_id = r.organization_id
+ AND conversation.assistant_agent_id = a.id
 JOIN control_plane.agent_runtime_config_versions runtime_config ON runtime_config.id = a.current_runtime_config_id
 JOIN control_plane.provider_account_policy_versions provider_policy ON provider_policy.id = runtime_config.provider_account_policy_id
 JOIN control_plane.agent_config_overlay_versions config_overlay ON config_overlay.id = a.current_config_overlay_id AND config_overlay.state = 'PUBLISHED'
@@ -693,13 +699,16 @@ LEFT JOIN LATERAL (
     JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
     WHERE artifact.id = runtime_environment.role_image_artifact_id
       AND artifact.organization_id = r.organization_id
-      AND recipe.project_id = r.project_id
+      AND recipe.organization_id = a.organization_id
+      AND recipe.project_id IS NOT DISTINCT FROM a.project_id
+      AND artifact.project_id IS NOT DISTINCT FROM a.project_id
+      AND environment_set.project_id IS NOT DISTINCT FROM a.project_id
       AND recipe.state = 'ACTIVE'
       AND artifact.admission_state = 'ACCEPTED'
       AND artifact.promotion_state = 'PROMOTED'
       AND artifact.promoted_reference <> ''
-      AND artifact.role_runtime_contract_revision = $5
-      AND artifact.role_runtime_contract_sha256 = $6
+      AND artifact.role_runtime_contract_revision = $3
+      AND artifact.role_runtime_contract_sha256 = $4
     LIMIT 1
 ) role_image ON true
 WHERE n.organization_id = $1::uuid
@@ -707,12 +716,28 @@ WHERE n.organization_id = $1::uuid
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
   AND root.state IN ('RUNNING', 'QUEUED')
-  AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
   AND (
-      (a.system_key = 'system-assistant' AND runtime_environment.role_image_artifact_id IS NULL)
-      OR
-      (a.system_key IS NULL AND runtime_environment.role_image_artifact_id IS NOT NULL AND role_image.artifact_id IS NOT NULL)
+      r.target_type <> 'SYSTEM_ASSISTANT'
+      OR (
+          conversation.id IS NOT NULL
+          AND conversation.state = 'ACTIVE'
+          AND conversation.created_by = root.initiated_by
+          AND conversation.project_id IS NOT DISTINCT FROM r.project_id
+          AND r.target_ref = a.ref AND s.target_ref = a.ref
+          AND (
+              (conversation.assistant_scope = 'SYSTEM'
+               AND conversation.assistant_profile_id IS NULL
+               AND a.project_id IS NULL AND a.system_key = 'system-assistant')
+              OR (conversation.assistant_scope = 'PROJECT'
+                  AND conversation.assistant_profile_id = assistant_profile.id
+                  AND assistant_profile.project_id = r.project_id
+                  AND a.project_id = r.project_id AND a.system_key IS NULL)
+          )
+      )
   )
+  AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
+  AND runtime_environment.role_image_artifact_id IS NOT NULL
+  AND role_image.artifact_id IS NOT NULL
   AND (
       input_attachment_set.id IS NULL
       OR input_attachment_set.item_count = (
@@ -734,6 +759,11 @@ WHERE n.organization_id = $1::uuid
             AND input_content.size_bytes = input_item.size_bytes
       )
   )
+  -- Не позволяем старейшей очереди заполненного аккаунта вытеснить готовую
+  -- работу другого аккаунта до истечения lease. После выбора код всё равно
+  -- блокирует точный provider account и повторно считает active executions,
+  -- поэтому конкурентные worker не могут превысить лимит.
+  AND control_plane.provider_account_active_executions(r.organization_id, pa.id) < pa.max_concurrent_executions
   AND NOT EXISTS (
       SELECT 1
       FROM control_plane.run_edges edge
@@ -748,6 +778,7 @@ WHERE n.organization_id = $1::uuid
       WHERE active.root_run_id = r.root_run_id
         AND active.type = 'AGENT_EXECUTION'
         AND active.state = 'RUNNING'
+        AND active.workflow_step_key NOT LIKE 'workflow.coordinator.%'
   ) < root.concurrency_limit
   AND NOT EXISTS (
       SELECT 1
@@ -755,7 +786,10 @@ WHERE n.organization_id = $1::uuid
       JOIN control_plane.runs earlier_run ON earlier_run.id = earlier.run_id
       WHERE earlier_run.session_id = r.session_id
         AND earlier_run.root_run_id <> r.root_run_id
-        AND earlier.created_at < n.created_at
+        AND (
+          earlier_run.dispatch_priority > r.dispatch_priority
+          OR (earlier_run.dispatch_priority = r.dispatch_priority AND earlier.created_at < n.created_at)
+        )
         AND earlier.type = 'AGENT_EXECUTION'
         AND earlier.state IN ('QUEUED', 'RUNNING', 'WAITING')
   )

@@ -477,6 +477,13 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 	view.EnvironmentBinding.AgentRef = view.Configuration.AgentRef
 	view.EnvironmentBinding.EnvironmentRef = view.Environment.Ref
 	view.EnvironmentBinding.VersionRef = view.Environment.CurrentVersion.Ref
+	if view.Environment.ProjectRef == "" && view.Environment.CurrentVersion.Image.ArtifactRef == "" {
+		view.Environment.CurrentVersion.Image.Reference = repository.roleImages.DefaultImageReference
+		view.Environment.CurrentVersion.Image.Digest = repository.roleImages.DefaultImageDigest
+		view.Environment.CurrentVersion.Image.PlatformOwnedBootstrap = true
+		view.Environment.CurrentVersion.Image.RoleRuntimeContractRevision = int64(repository.roleImages.RoleRuntimeContractRevision)
+		view.Environment.CurrentVersion.Image.RoleRuntimeContractSHA256 = repository.roleImages.RoleRuntimeContractSHA256
+	}
 	if decodeStrict(rawCandidates, &view.Configuration.ProviderPolicy.AccountCandidates) != nil ||
 		decodeStrict(rawPublishedProblems, &view.PublishedOverlay.ValidationMessages) != nil ||
 		decodeStrict(rawValues, &view.Environment.CurrentVersion.Values) != nil ||
@@ -491,7 +498,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
 	values, secrets := runtimeEnvironmentContract(view.Environment.CurrentVersion)
-	if view.Environment.CurrentVersion.Image.ArtifactRef != "" {
+	if view.Environment.CurrentVersion.Image.Reference != "" {
 		storedCore, storedDigest, digestErr := runtimeEnvironmentConfigurationDigests(values, secrets,
 			view.Environment.CurrentVersion.Image, view.Environment.CurrentVersion.Tools, view.Environment.CurrentVersion.Policy)
 		if digestErr != nil || storedCore != coreDigest || storedDigest != view.Environment.CurrentVersion.Digest {
@@ -550,6 +557,13 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 		return entity.RuntimeEnvironmentSet{}, err
 	}
 	item.CurrentVersion.Version = item.CurrentVersion.Revision
+	if item.ProjectRef == "" && item.CurrentVersion.Image.ArtifactRef == "" {
+		item.CurrentVersion.Image.Reference = repository.roleImages.DefaultImageReference
+		item.CurrentVersion.Image.Digest = repository.roleImages.DefaultImageDigest
+		item.CurrentVersion.Image.PlatformOwnedBootstrap = true
+		item.CurrentVersion.Image.RoleRuntimeContractRevision = int64(repository.roleImages.RoleRuntimeContractRevision)
+		item.CurrentVersion.Image.RoleRuntimeContractSHA256 = repository.roleImages.RoleRuntimeContractSHA256
+	}
 	if decodeStrict(rawValues, &item.CurrentVersion.Values) != nil ||
 		decodeStrict(rawSecrets, &item.CurrentVersion.SecretDescriptors) != nil ||
 		decodeStrict(rawTools, &item.CurrentVersion.Tools) != nil {

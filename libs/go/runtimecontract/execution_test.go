@@ -13,7 +13,7 @@ func TestRunnerV7RejectsOldABIAndEffortTampering(t *testing.T) {
 	for name, mutate := range map[string]func(*RunnerInput){
 		"missing mode":    func(input *RunnerInput) { input.ReasoningMode = "" },
 		"changed mode":    func(input *RunnerInput) { input.ReasoningMode = ReasoningUnsupported },
-		"old ABI":         func(input *RunnerInput) { input.Schema = RunnerInputSchemaV6 },
+		"old ABI":         func(input *RunnerInput) { input.Schema = "kodex.agent-runner-input.v7" },
 		"missing effort":  func(input *RunnerInput) { input.EffectiveReasoningEffort = "" },
 		"tampered effort": func(input *RunnerInput) { input.EffectiveReasoningEffort = "high" },
 	} {
@@ -83,7 +83,7 @@ func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 
 func TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift(t *testing.T) {
 	turn := validRunnerInputFixture()
-	turn.SystemAssistant = true
+	turn.AssistantScope = AssistantScopeSystem
 	warm := turn
 	warm.Mode = RunnerModeWarm
 	warm.RunRef, warm.NodeRef, warm.TurnRef = "", "", ""
@@ -352,7 +352,7 @@ func validRunnerInputFixture() RunnerInput {
 	policy := DefaultRuntimeEnvironmentPolicy()
 	environmentDigest, _ := RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := RunnerInput{
-		Schema: RunnerInputSchemaV7, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
+		Schema: RunnerInputSchemaV8, AssistantScope: AssistantScopeNone, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
 		OrganizationRef: "org_abcdefgh",
 		RunRef:          "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
 		ProjectRef: "prj_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,

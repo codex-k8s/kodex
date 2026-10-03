@@ -6,6 +6,7 @@
   "sessionRef": "session_abcdefgh",
   "turnRef": "turn_abcdefgh",
   "agentRef": "agent_abcdefgh",
+  "assistantScope": "NONE",
   "attempt": 1,
   "leaseRef": "lease_abcdefgh",
   "inputDigest": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
@@ -96,7 +97,7 @@
   "reasoningMode": "SUPPORTED",
   "runtimeEnvironmentRef": "renv_abcdefgh",
   "runtimeEnvironmentVersion": 1,
-  "runtimeEnvironmentDigest": "e97f68222faa99f22c111b2abf8f399aacebb6621ea599f7c897bf045d943941",
+  "runtimeEnvironmentDigest": "fcf91c36a82d7b69205c6a8a08d862bbdade89e1dd04e6e616258d1b49b73e1c",
   "environmentBindingRef": "aenv_abcdefgh",
   "environmentBindingVersion": 1,
   "environmentBindingDigest": "3333333333333333333333333333333333333333333333333333333333333333",
@@ -126,14 +127,18 @@
         {
           "destination": "PROVIDER_PROXY",
           "protocol": "TCP",
-          "port": 8080
+          "port": 8084
         },
         {
           "destination": "RUNTIME_CALLBACK",
           "protocol": "TCP",
           "port": 8444
         }
-      ]
+      ],
+      "web_access": {
+        "mode": "NONE",
+        "rules": []
+      }
     },
     "kubernetes_access": {
       "kind": "NONE",
@@ -141,7 +146,7 @@
     },
     "resources_digest": "5cc6a50ed6896a06cea6acf2149f22c3d37fb52b6ef75f6305375d1bdde483b6",
     "volumes_digest": "d21f6a8d7834847c8c5e02c88ff36a1114ecbfdf43f0c6668fceff28334b3634",
-    "network_digest": "5572212990fe694f077ccac5b0b4ae4e4b979f812e061dd2daa8e0a66c46076b",
+    "network_digest": "7d4998b5d8c1db3a90002ea8e56bc4c1103a5facbf5eba9b313355f3b55ca765",
     "rbac_digest": "1b72c0704ea77cc1536f61d4e882306f12967fd39425fa6ea8d3f68500461d2e"
   },
   "workspacePolicy": {
@@ -193,7 +198,7 @@
   "runtimeProvider": "openai",
   "runtimeModel": "codex",
   "providerCredentialRevisionNumber": 1,
-  "revisionDigest": "d889eda33ab925ed541b389e33ca8ebc1f307e4cff8f50969796dfbc41899c81",
+  "revisionDigest": "cf2bd8005e457d71e0c8c3a93275c3d6ea2d608434802559d12aa1fe8485ae5b",
   "fence": "fence-1",
   "generation": 1,
   "roleRuntimeContractSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",

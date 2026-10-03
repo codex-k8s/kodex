@@ -4,8 +4,8 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 1.2.0
-updated: 2026-08-24
+version: 1.3.0
+updated: 2026-10-02
 ---
 
 # Профили развертывания
@@ -60,6 +60,17 @@ incident и не меняет core Run outcome.
 - полный service graph проверяется после rollout отдельной диагностикой;
 - role image build и platform release build используют изолированные
   identities и разные promotion credentials.
+
+Management surfaces выбираются отдельно от application-профиля:
+
+- `all` — Control Center, Grafana/Prometheus/Alertmanager и Headlamp;
+- `control-center-grafana` — Control Center и monitoring без Headlamp;
+- `control-center` — только OAuth2 boundary Control Center.
+
+Исключённая surface не считается скрытой или выключенной: её chart, OAuth2
+Proxy, Keycloak client, Secret, Ingress, NetworkPolicy и привилегированный
+binding не материализуются. Локальный hot-reload по умолчанию использует
+`control-center-grafana`.
 
 `platform-state` не фиксирует installation-specific `StorageClass`: PVC
 используют default class выбранного кластера. Shipped baseline использует один

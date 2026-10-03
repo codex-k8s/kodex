@@ -995,7 +995,17 @@ func (service *Service) GetSystemAssistant(ctx context.Context, p value.Principa
 	}
 	return service.repository.GetSystemAssistant(ctx, p)
 }
-func (service *Service) ListAssistantConversations(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.AssistantConversation, string, error) {
+func (service *Service) GetProjectAssistant(ctx context.Context, p value.Principal, projectRef string) (entity.ProjectAssistantProfile, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ProjectAssistantProfile{}, err
+	}
+	if strings.TrimSpace(projectRef) == "" {
+		return entity.ProjectAssistantProfile{}, errs.ErrInvalid
+	}
+	return service.repository.GetProjectAssistant(ctx, p, projectRef)
+}
+func (service *Service) ListAssistantConversations(ctx context.Context, p value.Principal, filter query.AssistantConversationFilter) ([]entity.AssistantConversation, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return nil, "", err
@@ -1340,11 +1350,11 @@ func knownCommand(kind command.Kind) bool {
 		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet, command.CreateSchedule,
 		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule,
 		command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
-		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled,
+		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled, command.SetProviderAccountConcurrency,
 		command.CreateConnection, command.UpdateConnection, command.DeleteConnection,
 		command.ConfigureConnectionCredential, command.ConfigureEmailCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
-		command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn,
+		command.CreateProjectAssistant, command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn, command.CancelAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,

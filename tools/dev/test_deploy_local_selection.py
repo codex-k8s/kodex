@@ -70,6 +70,13 @@ class DeployLocalSelectionTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("workload selection requires", result.stderr)
 
+    def test_full_core_applies_the_synthetic_integration_fixture(self):
+        source = SCRIPT.read_text()
+        core = source[source.index('  if [[ "$stage" == core ]]'):]
+        full_selection = core[core.index("apply_render core-applications"):]
+        full_selection = full_selection[:full_selection.index("      '")]
+        self.assertIn("integration-synthetic", full_selection)
+
 
 if __name__ == "__main__":
     unittest.main()
