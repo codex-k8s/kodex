@@ -180,6 +180,15 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 
 func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, resolvedAccessTarget, error) {
 	organization := resolvedAccessTarget{scope: organizationTarget(current.organizationRef)}
+	if input.Kind == command.RecoverAssistant {
+		if _, ok := input.Payload.(struct{}); !ok {
+			return "", resolvedAccessTarget{}, errs.ErrInvalid
+		}
+		if current.authorityProjectID != "" {
+			return "", resolvedAccessTarget{}, errs.ErrForbidden
+		}
+		return "organization.manage", organization, nil
+	}
 	switch payload := input.Payload.(type) {
 	case command.InteractionIdentityInput:
 		if current.authorityProjectID != "" {

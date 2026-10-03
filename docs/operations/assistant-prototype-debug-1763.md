@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.320
+version: 1.0.321
 updated: 2026-10-03
 ---
 
@@ -6941,13 +6941,14 @@ GitHub checks не считается `PASS`.
       аудитом и событием. Это общий лимит аккаунта для помощников и сотрудников,
       а не число диалогов и не внешняя квота провайдера. Диапазон существующей
       границы — 1..256; не оставлять второй жёстко заданный лимит 1.
-- [ ] Новая forward-only migration задаёт DEFAULT 10; текущий подключённый
+- [x] Новая forward-only migration задаёт DEFAULT 10; текущий подключённый
       аккаунт получает 10 штатным проверяемым путём. Уже применённая migration
       не редактируется; явные пользовательские настройки сохраняются.
       Изменение лимита не переписывает RuntimeRevision и не обрывает активные
       ходы. При снижении лимита новые задания ждут освобождения слотов.
-      Миграция и перевод текущего аккаунта уже проверены; сценарий снижения
-      лимита при активных ходах остаётся частью следующей матрицы admission.
+      Миграция и перевод текущего аккаунта проверены на локальном стенде;
+      снижение при активных ходах — в disposable PostgreSQL (этап 2).
+      Это не проверка живого inference и не приёмка остальных путей.
 - [ ] Полная системная настройка: модель/аккаунт/reasoning, образ, проверенные
       инструменты, окружение, несекретные переменные, привязки секретов, ресурсы,
       тома, сетевой доступ и инструкции. Доступ — владелец/администратор.
@@ -7177,5 +7178,37 @@ Vue — реактивные props/watch и cleanup устаревших аси�
 Скриншот самого слайдера ранее проверен. Повторный screenshot после новой
 миграции не получен из-за зависшего MCP-вызова; это не заявляется как PASS.
 Вкладки пользователя не закрывались, STT/device-code/inference не выполнялись.
+
+Контрольный commit кода этапа 2 —
+`57a2d5f01334720dbf5f9ecb144c3e5b88ec15e1`. Повторены Go domain/repository unit
+и SQL boundary — PASS. Readback локальной БД: ledger 20261003000400,
+catalog_authority_version существует, единственный enabled/AUTHORIZED
+аккаунт имеет лимит 10. Полный component FAIL не заменяется этими проверками.
+
+При повторе вместе с соседним provider lifecycle выявлена оставшаяся
+регистрация synthetic warm consumer. Оснастка после terminal всех своих
+графов освобождает её через versioned `RecoverAssistant`, а не через
+подмену SQL или отключение revoke guard. Это также выявило недостижимый
+путь действующего Recovery RPC: его пустой typed payload не имел
+command access target. Добавлена точная организация и `organization.manage`
+для этой закрытой команды; project-bound authority и неверный payload
+отклоняются до эффекта. Unit проверяет target/отказы, component повторяет
+реальную owner-команду. Общая проверка остальных Recovery lifecycle и
+фактический restart controller ещё не объявлены PASS.
+
+Путь Recovery: owner session → POST `/api/v1/system-assistant/commands`
+с единственным RECOVER → gateway `RecoverSystemAssistant` → CP
+`RecoverAssistant` → organisation access target и `organization.manage`
+до OCC/receipt → versioned update `assistant_runtime` и атомарный
+`SYSTEM_ASSISTANT_CHANGED`. Actor и организация разрешаются CP из
+проверенного principal; пустой payload не назначает authority.
+Readback — `GetSystemAssistant`; revision/сессия и история не переписываются.
+Late или project-bound caller не получает permission от пустого request.
+
+После исправления cleanup отдельно совместно пройдены concurrency settings,
+parallel admission и `TestBootstrapComponentProviderAccountLifecycle` — PASS
+на рабочем diff; Go repository/domain/gRPC unit также PASS. Соседний lifecycle
+вновь может отозвать освобождённый fixture account. Console после локальной
+миграции без errors/warnings; bootstrap/session/ticket возвращают 200.
 Цель остаётся активной; следующий этап — изолированное параллельное admission
 и полные системные/проектные runtime-профили по checklist выше.

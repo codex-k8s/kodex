@@ -47,10 +47,17 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		if _, err := service.ReportWarmRuntime(cleanup, warmWorker, command.WarmRuntimeInput{
-			WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: assistant.RuntimeState,
+		current, err := service.GetSystemAssistant(cleanup, owner)
+		if err != nil {
+			t.Errorf("read synthetic warm cleanup: %v", err)
+			return
+		}
+		// Одна смена статуса не освобождает зарегистрированный warm consumer.
+		if _, err := service.Execute(cleanup, command.Command{Kind: command.RecoverAssistant, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "parallel-release-synthetic-warm", ExpectedVersion: &current.Version},
+			Payload:  struct{}{},
 		}); err != nil {
-			t.Errorf("restore synthetic assistant readiness: %v", err)
+			t.Errorf("release synthetic assistant readiness: %v", err)
 		}
 	}()
 	var accountRef string
