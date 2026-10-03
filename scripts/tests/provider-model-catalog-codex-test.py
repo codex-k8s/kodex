@@ -92,8 +92,10 @@ def run(image):
         source_path = Path(__file__).resolve().parents[2] / "services/internal/secret-broker/internal/providercredential/api_model_capabilities.json"
         capabilities = json.loads(source_path.read_text())["models"]
         available = {model["model"] for model in models}
-        if len(capabilities) != 7 or any(model["id"] not in available for model in capabilities):
-            raise RuntimeError("Pinned runtime lacks a required API model")
+        # Picker подписки не является каталогом API: старые API-модели могут
+        # отсутствовать в model/list, но explicit selection проверяется ниже.
+        if len(capabilities) != 9 or "gpt-6.1-sol" not in available:
+            raise RuntimeError("Pinned runtime lacks the required default model")
         # Проверяется explicit selection, не значения Codex picker и не inference.
         # Никакого turn/start, credential или сетевого provider запроса.
         selections = 0
@@ -114,7 +116,7 @@ def run(image):
         login = call("account/login/start", {"type": "chatgptAuthTokens", "accessToken": token, "chatgptAccountId": "fixture-account"})
         if login != {"type": "chatgptAuthTokens"}:
             raise RuntimeError("Codex external token login wire changed")
-        print(f"Pinned Codex version, seven models, {selections} explicit API selections and external token wire passed without network; inference not run")
+        print(f"Pinned Codex version, nine API models, {selections} explicit API selections and external token wire passed without network; inference not run")
     finally:
         selector.close()
         process.stdin.close()

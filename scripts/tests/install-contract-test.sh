@@ -319,9 +319,14 @@ for role in ira_control_plane_issuer_g1 ira_secret_broker_verifier_g1 ira_stt_tt
     "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
     fail "PostgreSQL credential reconciler omits runtime principal: $role"
 done
-[[ $(rg -F -- '-eq 22' \
+[[ $(rg -F -- '-eq "$expected_role_count"' \
   "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" | wc -l) -eq 2 ]] ||
   fail 'PostgreSQL credential startup and SCRAM readback counts differ from the exact role registry'
+for count in 22 2; do
+  rg -Fq "expected_role_count=$count" \
+    "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
+    fail "PostgreSQL credential profile count is missing: $count"
+done
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||
 	fail 'dynamic Secret readback does not use the projection item registry'
 jq -e '
@@ -633,7 +638,7 @@ for remote_contract in \
 done
 for browser_contract in \
   'node_modules/.bin/playwright' \
-  'sudo -n "$playwright_cli" install-deps chromium' \
+  'sudo -n "$node_binary" "$playwright_cli" install-deps chromium' \
   '"$playwright_cli" install chromium' \
   'chromium.launch({ headless: true })'; do
   rg -Fq -- "$browser_contract" \

@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.313
+version: 1.0.314
 updated: 2026-10-03
 ---
 
@@ -6896,11 +6896,29 @@ GitHub checks не считается `PASS`.
       новая RuntimeRevision следующего хода разрешает новую конфигурацию штатно.
 - [x] Frontend: 61 тест, ESLint, typecheck, production build; Go: providercredential,
       control-plane app и platform unit; host-hardening contract — PASS.
-      Полный install-contract — FAIL на прежнем счётчике PostgreSQL/SCRAM, вне
-      изменения модели (не выдаётся за успешную проверку установки).
-- [ ] Пересобрать и применить pinned Codex CLI 0.160.0: CLI 0.153.4 на текущем
-      стенде ещё не возвращает gpt-6.1-sol в каталоге подписочного аккаунта.
-- [ ] Применить migration, сверить default/readback и host/Pod source hashes.
-- [ ] Chrome: hard reload без кэша, настройки помощника, каталог, завершение
-      без проекта/запуска, возврат; screenshot, Console и Network.
+      Go suites повторены с закреплённым Go 1.26.6; agent-runner/codex — PASS.
+- [x] Пересобран и применён pinned Codex CLI 0.160.0. Фактический подписочный
+      каталог возвращает gpt-6.1-sol; API и подписочный picker не смешиваются.
+      Offline wire: девять API-моделей, 49 explicit selections и внешний
+      синтетический token wire — PASS, сеть отключена, turn/start не выполнялся.
+- [x] Migration применена репозиторным deploy-local; runtime-selections readback:
+      builtin-safe-runtime / gpt-6.1-sol / ready=true. Host/Pod SHA256 компонента
+      onboarding и API catalog совпадают. Runner digest
+      `sha256:f6015d7929f70231c1ce19888d9ab09cbbb078d1c06a50218a3bdf19c486cc50`,
+      сборка исходников `28aa18d5a0066bb518c0c97ecb42657c1a6f826a`.
+- [x] Chrome: завершение через штатную COMPLETE_ONBOARDING без проекта/запуска,
+      возврат из главной и сохранение этапа; настройки помощника через второй
+      шаг. В UI сохранена новая модель и опубликован overlay medium:
+      runtime v4, overlay v3. После hard reload настройки сохранены.
+      Снимки `/tmp/kodex-gpt61-medium-settings.png` и
+      `/tmp/kodex-onboarding-seven-steps-1920.png`; 1920×1080, нет переполнения.
+      Console error/warn пуста; финальные XHR/fetch 2xx. Единственный 503 во
+      время перезапуска control-plane разобран: retryable UNAVAILABLE;
+      после готовности Pod и обновления страницы рабочий путь проходит.
+- [x] Устаревшие install-contract assertions приведены к реальным
+      PostgreSQL profile counters и запуску Playwright через точный Node;
+      provenance-fixture дополнена изолированными заглушками новых host helpers.
+      Полный install-contract — PASS. ShellCheck сообщает прежние SC2034/SC1090
+      в тестовой оснастке; bash -n и diff-check проходят. Это не доказательство
+      реальной установки на новом сервере.
 - [ ] Реальные ИИ/STT/device-code и staging/production — NOT RUN.
