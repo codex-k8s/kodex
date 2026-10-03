@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.322
+version: 1.0.323
 updated: 2026-10-03
 ---
 
@@ -7174,9 +7174,13 @@ Vue — реактивные props/watch и cleanup устаревших аси�
       interruption/queue, reconnect/restart, активация нового runner и
       полные системные/проектные профили остаются впереди.
 
-Скриншот самого слайдера ранее проверен. Повторный screenshot после новой
-миграции не получен из-за зависшего MCP-вызова; это не заявляется как PASS.
-Вкладки пользователя не закрывались, STT/device-code/inference не выполнялись.
+После публикации `dc127c9138cdb8d01cca4db935b7b62dfe884765` Chrome MCP
+подтвердил модалку настройки подключённого аккаунта: слайдер 1..256 имеет
+сохранённое значение 10, кнопка сохранения без изменений disabled. Получен
+скриншот `/tmp/kodex-provider-concurrency-dc127c91.png`; Console без
+error/warn/issue, bootstrap, session callback/ticket и administration
+завершились HTTP 200. Новые агенты не запускались. Вкладки пользователя не
+закрывались, STT/device-code/inference не выполнялись.
 
 Контрольный commit кода этапа 2 —
 `57a2d5f01334720dbf5f9ecb144c3e5b88ec15e1`. Повторены Go domain/repository unit
@@ -7233,6 +7237,10 @@ runtime-профили, browser smoke и ручная приёмка по checkl
       закрывает claim, изменение посторонней модели сохранённый pin не отзывает.
 - [x] Локально на том же дереве: `make check-sql-boundary` — PASS;
       `go test -p 2 ./internal/...` control-plane — PASS.
-- [ ] Browser smoke после публикации нового commit и полный owner acceptance
-      остаются впереди. Реальные ИИ, STT, device-code и staging/production —
-      `NOT RUN` по ограничениям владельца.
+- [x] Browser smoke после публикации `dc127c91`: slider 1..256, значение 10,
+      disabled save без изменений, screenshot и Console/Network readback —
+      PASS. Host/Pod SHA256 обоих изменённых SQL совпадают; hot reload собрал
+      control-plane и readiness восстановилась.
+- [ ] Полный owner acceptance и runtime-сценарии выше остаются впереди.
+      Реальные ИИ, STT, device-code и staging/production — `NOT RUN` по
+      ограничениям владельца.
