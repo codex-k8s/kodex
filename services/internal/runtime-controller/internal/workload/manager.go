@@ -514,7 +514,7 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 }
 
 func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionSnapshot) (runtimecontract.RunnerInput, ProviderSecretBinding, error) {
-	if revision == nil || revision.GetRuntime() == nil || !revision.GetSystemAssistant() {
+	if revision == nil || revision.GetRuntime() == nil || revision.GetAssistantScope() != controlplanev1.AssistantScope_ASSISTANT_SCOPE_SYSTEM {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, errors.New("warm runtime revision is invalid")
 	}
 	input, err := manager.baseInput(revision, runtimecontract.RunnerModeWarm)
@@ -582,6 +582,17 @@ func validateRunnerInput(input runtimecontract.RunnerInput) error {
 }
 
 func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapshot, mode string) (runtimecontract.RunnerInput, error) {
+	var assistantScope runtimecontract.AssistantScope
+	switch revision.GetAssistantScope() {
+	case controlplanev1.AssistantScope_ASSISTANT_SCOPE_NONE:
+		assistantScope = runtimecontract.AssistantScopeNone
+	case controlplanev1.AssistantScope_ASSISTANT_SCOPE_SYSTEM:
+		assistantScope = runtimecontract.AssistantScopeSystem
+	case controlplanev1.AssistantScope_ASSISTANT_SCOPE_PROJECT:
+		assistantScope = runtimecontract.AssistantScopeProject
+	default:
+		return runtimecontract.RunnerInput{}, errors.New("runtime revision assistant scope is invalid")
+	}
 	environmentPolicy, err := runtimeEnvironmentPolicyFromProto(revision.GetEnvironmentPolicy())
 	if err != nil {
 		return runtimecontract.RunnerInput{}, err
@@ -591,7 +602,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		return runtimecontract.RunnerInput{}, err
 	}
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV7, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+		Schema: runtimecontract.RunnerInputSchemaV8, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		OrganizationRef:    revision.GetOrganizationRef(),
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
@@ -605,7 +616,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		PromptTemplateRef: revision.GetPromptTemplateRef(), PromptTemplateDigest: revision.GetPromptTemplateDigest(), PromptMaterializationDigest: revision.GetPromptMaterializationDigest(),
 		PromptServiceTemplateRevision: revision.GetPromptServiceTemplateRevision(), PromptServiceTemplateDigest: revision.GetPromptServiceTemplateDigest(), PromptTargetKind: revision.GetPromptTargetKind(),
 		SystemSTTConfigurationRef: revision.GetSystemSttConfigurationRef(), SystemSTTConfigurationRevisionRef: revision.GetSystemSttConfigurationRevisionRef(), SystemSTTConfigurationVersion: revision.GetSystemSttConfigurationVersion(), SystemSTTConfigurationDigest: revision.GetSystemSttConfigurationDigest(),
-		SystemAssistant: revision.GetSystemAssistant(), Instructions: revision.GetInstructions(), Provider: revision.GetRuntime().GetProvider(), Model: revision.GetRuntime().GetModel(),
+		AssistantScope: assistantScope, AssistantProfileRef: revision.GetAssistantProfileRef(), Instructions: revision.GetInstructions(), Provider: revision.GetRuntime().GetProvider(), Model: revision.GetRuntime().GetModel(),
 		CodexSessionID:             revision.GetCodexSessionId(),
 		ProviderAccountRef:         revision.GetProviderCredential().GetAccountRef(),
 		ProviderCredentialRef:      revision.GetProviderCredential().GetCredentialRevisionRef(),
@@ -1774,7 +1785,7 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontr
 }
 
 func assistantSessionPVCNeedsPromotion(existing, desired *corev1.PersistentVolumeClaim, input runtimecontract.RunnerInput, storageClass string) bool {
-	if !input.SystemAssistant || input.ProjectRef == "" || existing == nil || desired == nil {
+	if !input.IsSystemAssistant() || input.ProjectRef == "" || existing == nil || desired == nil {
 		return false
 	}
 	global := desired.DeepCopy()

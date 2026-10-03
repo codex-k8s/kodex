@@ -55,7 +55,7 @@ func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {
 		Input   runtimecontract.RunnerInput
 		Catalog json.RawMessage
 	}
-	if json.Unmarshal(raw, &fixtures) != nil || len(fixtures) != 5 {
+	if json.Unmarshal(raw, &fixtures) != nil || len(fixtures) != 6 {
 		t.Fatal("catalog fixture invalid")
 	}
 	for _, fixture := range fixtures {

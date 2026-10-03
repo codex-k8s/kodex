@@ -1413,7 +1413,7 @@ func TestSessionPVCRejectsCrossTenantAndProjectReuse(t *testing.T) {
 func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", SystemAssistant: true}
+	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", AssistantScope: runtimecontract.AssistantScopeSystem}
 	if err := manager.ensureSessionPVC(t.Context(), global); err != nil {
 		t.Fatalf("create global assistant volume: %v", err)
 	}
@@ -1467,7 +1467,7 @@ func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
 func TestAssistantSessionPVCPromotesAfterExactTerminatingConsumerIsDrained(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", SystemAssistant: true}
+	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", AssistantScope: runtimecontract.AssistantScopeSystem}
 	if err := manager.ensureSessionPVC(t.Context(), global); err != nil {
 		t.Fatalf("create global assistant volume: %v", err)
 	}
@@ -1854,6 +1854,10 @@ func TestProviderSandboxSecurityContextDoesNotAssumeNodeLocalAppArmor(t *testing
 }
 
 func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
+	assistantScope := controlplanev1.AssistantScope_ASSISTANT_SCOPE_NONE
+	if systemAssistant {
+		assistantScope = controlplanev1.AssistantScope_ASSISTANT_SCOPE_SYSTEM
+	}
 	attachmentSetRef := "aset_abcdefgh"
 	attachmentPurpose := "RUN_INPUT"
 	artifact := &controlplanev1.RuntimeInputArtifact{
@@ -1874,7 +1878,7 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 		Revision: &controlplanev1.RuntimeRevisionSnapshot{
 			Ref: "revision_abcdefgh", Version: 1, OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", Attempt: 1,
 			AgentRef: "agent_abcdefgh", Instructions: "Complete the server-owned task.", Runtime: &controlplanev1.RuntimeSelection{Ref: "builtin-safe-runtime", Revision: "revision-1", Provider: "openai", Model: "codex"},
-			RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
+			RevisionDigest: strings.Repeat("a", 64), AssistantScope: assistantScope,
 			RoleDefinitionRef: "roledef_abcdefgh", InstructionRef: "instruction_abcdefgh", InstructionDigest: strings.Repeat("4", 64),
 			PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("5", 64), PromptMaterializationDigest: strings.Repeat("6", 64),
 			ImageReference: "registry.example/kodex/roles@" + testDigest, ImageManifestDigest: testDigest,
@@ -1902,10 +1906,10 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 		},
 		Lease: &controlplanev1.WorkLease{Ref: "lease_abcdefgh", Fence: "fence-1", Generation: 1}, Task: "Prepare the result.",
 	}
+	execution.Revision.RoleImageRecipeRef = "imgrec_abcdefgh"
+	execution.Revision.RoleImageArtifactRef = "imgart_abcdefgh"
+	execution.Revision.RoleImageRecipeGeneration = 1
 	if !systemAssistant {
-		execution.Revision.RoleImageRecipeRef = "imgrec_abcdefgh"
-		execution.Revision.RoleImageArtifactRef = "imgart_abcdefgh"
-		execution.Revision.RoleImageRecipeGeneration = 1
 		execution.Revision.EnvironmentTools = []*controlplanev1.RuntimeEnvironmentTool{{
 			Name: "GitHub CLI", Command: "gh", Description: "Работа с GitHub", UsageHint: "Используй gh api",
 		}}

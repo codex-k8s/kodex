@@ -82,6 +82,9 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	if len(payload.Operations) != len(current) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	if err := repository.constrainAssistantPlanScope(ctx, tx, &scope, conversationRef, payload.Operations); err != nil {
+		return commandOutcome{}, err
+	}
 	currentByKey := make(map[string]entity.AssistantPlanOperation, len(current))
 	for _, operation := range current {
 		currentByKey[operation.Key] = operation
@@ -291,6 +294,9 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 	}
 	operations, err := normalizeAssistantOperations(stored, projectRef)
 	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.constrainAssistantPlanScope(ctx, tx, &scope, conversationRef, operations); err != nil {
 		return commandOutcome{}, err
 	}
 	problems := make([]string, 0)

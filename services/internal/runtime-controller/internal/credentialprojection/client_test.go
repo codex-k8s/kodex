@@ -52,7 +52,7 @@ func TestMaterializationRequestDigestDistinguishesAssistantEnvelope(t *testing.T
 	if err != nil || len(projectDigest) != 64 {
 		t.Fatalf("project digest = %q, err = %v", projectDigest, err)
 	}
-	input.SystemAssistant = true
+	input.AssistantScope = runtimecontract.AssistantScopeSystem
 	input.ProjectRef = ""
 	assistantDigest, err := MaterializationRequestDigest(input)
 	if err != nil || len(assistantDigest) != 64 || assistantDigest == projectDigest {

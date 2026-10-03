@@ -220,7 +220,7 @@ func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runt
 	input := validWarmExecutionInput()
 	input.ImageReference = "registry.example/runner@" + imageDigest
 	input.ImageManifestDigest = imageDigest
-	input.EnvironmentImage = runtimecontract.RuntimeEnvironmentImage{Reference: input.ImageReference, Digest: imageDigest}
+	input.EnvironmentImage = runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh", RecipeGeneration: 1, Reference: input.ImageReference, Digest: imageDigest}
 	input.RoleRuntimeContractSHA256 = contractDigest
 	input.ProviderCredentialSHA256 = oldDigestHex
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()

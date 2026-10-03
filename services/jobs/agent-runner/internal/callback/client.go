@@ -166,7 +166,7 @@ func (client *Client) NextWarm(ctx context.Context, input model.Input) (model.In
 	if err != nil {
 		return model.Input{}, false, errors.New("decode warm runtime turn")
 	}
-	if turn.Mode != runtimecontract.RunnerModeTurn || !turn.SystemAssistant {
+	if turn.Mode != runtimecontract.RunnerModeTurn || !turn.IsSystemAssistant() {
 		return model.Input{}, false, errors.New("warm runtime turn kind is invalid")
 	}
 	warmCompatibility, warmErr := runtimecontract.WarmCompatibilityDigest(input)

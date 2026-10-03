@@ -6,6 +6,13 @@ import { useI18n } from "vue-i18n";
 import { safeSecretReference } from "@/features/runtime/environment-capabilities";
 import { runtimeEnvironmentCollectionLimit } from "@/features/runtime/environment-form";
 import {
+  assertRuntimeResourceScope,
+  runtimeResourceScopeKey,
+  type RuntimeResourceScope,
+} from "@/features/runtime/resource-scope";
+import type { RuntimeSecretCatalog } from "@/features/runtime/secret-catalog";
+import { requestSignal } from "@/shared/api/client";
+import {
   loadRuntimeSecretPage,
   readRuntimeSecret,
 } from "@/features/runtime-secrets/api";
@@ -26,6 +33,8 @@ const props = withDefaults(
     values: RuntimeEnvironmentValue[];
     secretBindings: RuntimeSecretBinding[];
     projectRef: string;
+    resourceScope?: RuntimeResourceScope;
+    secretCatalog?: RuntimeSecretCatalog;
     disabled: boolean;
     mode?: "VALUES" | "SECRETS" | "BOTH";
     descriptors?: RuntimeSecretDescriptor[];
@@ -39,9 +48,26 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const root = ref<HTMLElement>();
 const selectedSecrets = reactive<Record<string, AsyncEntityOption>>({});
+const scope = computed<RuntimeResourceScope>(
+  () =>
+    props.resourceScope ?? { kind: "PROJECT", projectRef: props.projectRef },
+);
+const scopeKey = computed(() =>
+  props.projectRef || props.resourceScope
+    ? runtimeResourceScopeKey(scope.value)
+    : "UNAVAILABLE",
+);
+const catalogAvailable = computed(() =>
+  Boolean(
+    props.secretCatalog ||
+    (scope.value.kind === "PROJECT" &&
+      Boolean(props.projectRef) &&
+      props.projectRef === scope.value.projectRef),
+  ),
+);
 
 watch(
-  () => props.projectRef,
+  () => scopeKey.value,
   () => {
     for (const key of Object.keys(selectedSecrets))
       Reflect.deleteProperty(selectedSecrets, key);
@@ -50,26 +76,28 @@ watch(
 
 watch(
   [
-    () => props.projectRef,
+    () => scopeKey.value,
+    () => props.secretCatalog,
     () =>
       props.secretBindings.map((binding) => binding.secretRef).join("\u0000"),
   ],
-  async ([projectRef], _previous, cleanup) => {
+  async (_current, _previous, cleanup) => {
     const controller = new AbortController();
     cleanup(() => controller.abort());
-    if (!projectRef) return;
+    if (!catalogAvailable.value) return;
     const refs = new Set(
       props.secretBindings.map((binding) => binding.secretRef),
     );
     for (const ref of refs) {
       if (!ref || selectedSecrets[ref]) continue;
       try {
-        const secret = await readRuntimeSecret(
-          ref,
-          projectRef,
-          controller.signal,
-        );
+        const secret = props.secretCatalog
+          ? await props.secretCatalog.read(scope.value, ref, controller.signal)
+          : await readRuntimeSecret(ref, props.projectRef, controller.signal);
         if (controller.signal.aborted) return;
+        assertRuntimeResourceScope(scope.value, secret.projectRef);
+        if (secret.ref !== ref)
+          throw new Error("Runtime secret catalog identity mismatch");
         selectedSecrets[ref] = {
           ref: secret.ref,
           title: secret.name,
@@ -161,16 +189,28 @@ function removeSecret(index: number): void {
 async function loadSecretPage(
   query: string,
   cursor?: string,
-  signal?: AbortSignal,
+  signal: AbortSignal = requestSignal(),
   pageSize = 20,
 ) {
-  const page = await loadRuntimeSecretPage(
-    props.projectRef,
-    query,
-    cursor,
-    signal,
-    pageSize,
-  );
+  if (!catalogAvailable.value)
+    throw new Error("Runtime secret catalog is unavailable");
+  const page = props.secretCatalog
+    ? await props.secretCatalog.loadPage(
+        scope.value,
+        query,
+        cursor,
+        signal,
+        pageSize,
+      )
+    : await loadRuntimeSecretPage(
+        props.projectRef,
+        query,
+        cursor,
+        signal,
+        pageSize,
+      );
+  for (const secret of page.items)
+    assertRuntimeResourceScope(scope.value, secret.projectRef);
   return {
     items: page.items.map(
       (secret: RuntimeSecret): AsyncEntityOption => ({
@@ -325,6 +365,7 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
           type="button"
           :disabled="
             disabled ||
+            !catalogAvailable ||
             secretBindings.length >= runtimeEnvironmentCollectionLimit
           "
           :title="
@@ -363,7 +404,7 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
           <button
             class="icon-button icon-button--danger"
             type="button"
-            :disabled="disabled"
+            :disabled="disabled || !catalogAvailable"
             :aria-label="$t('common.delete')"
             @click="removeSecret(index)"
           >
@@ -378,7 +419,7 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
               :name="`runtime-secret-binding-name-${index}`"
               data-environment-secret-name
               placeholder="SECRET_NAME"
-              :disabled="disabled"
+              :disabled="disabled || !catalogAvailable"
               @input="
                 changeSecret(
                   index,
@@ -396,7 +437,8 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
               :labels="secretPickerLabels"
               :placeholder="$t('runtime.chooseRuntimeSecret')"
               :search-placeholder="$t('runtime.searchRuntimeSecret')"
-              :disabled="disabled || !projectRef"
+              :context-key="scopeKey"
+              :disabled="disabled || !catalogAvailable"
               @update:model-value="
                 changeSecret(
                   index,

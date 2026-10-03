@@ -14,6 +14,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import ProviderLifecycleRecovery from "./ProviderLifecycleRecovery.vue";
+import { loadProviderAccount } from "./api";
 import {
   checkedProviderBlockerPage,
   loadProviderBlockers,
@@ -156,6 +157,32 @@ function search(): void {
     void load(true);
   }, 300);
 }
+async function rereadAccount(): Promise<void> {
+  if (blocked.value || ownerSignal.aborted) return;
+  const current = ++generation;
+  controller.abort();
+  controller = new AbortController();
+  const signal = AbortSignal.any([controller.signal, ownerSignal]);
+  loading.value = true;
+  problem.value = undefined;
+  try {
+    const fresh = await loadProviderAccount(props.account.ref, signal);
+    if (signal.aborted || current !== generation) return;
+    if (fresh.ref !== props.account.ref)
+      throw new Error("Provider refresh account scope changed");
+    applyAccount(fresh);
+    loading.value = false;
+    await load(true);
+  } catch (error) {
+    if (!signal.aborted && current === generation) {
+      problem.value = asProblem(error);
+      clearProjection();
+      emit("unavailable", props.account.ref);
+    }
+  } finally {
+    if (current === generation) loading.value = false;
+  }
+}
 async function submit(): Promise<void> {
   const current = currentAccount.value;
   const action = confirmation.value;
@@ -236,12 +263,12 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <section class="provider-lifecycle">
-    <ProblemNotice v-if="problem" :problem="problem" @retry="load(true)" />
+    <ProblemNotice v-if="problem" :problem="problem" @retry="rereadAccount" />
     <button
       type="button"
       class="button"
       :disabled="loading || busy"
-      @click="load(true)"
+      @click="rereadAccount"
     >
       {{ t("providerLifecycle.refresh") }}
     </button>

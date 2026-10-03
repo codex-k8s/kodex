@@ -57,7 +57,8 @@
       }
     ],
     "inputDigest": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-    "revisionDigest": "72daa3304ac6bde2019409d98be1874e41e02273fadc7c29f8cd04d96794e17e",
+    "revisionDigest": "cf2bd8005e457d71e0c8c3a93275c3d6ea2d608434802559d12aa1fe8485ae5b",
+    "assistantScope": "ASSISTANT_SCOPE_NONE",
     "roleDefinitionRef": "roledef_abcdefgh",
     "roleImageRecipeRef": "imgrec_abcdefgh",
     "roleImageArtifactRef": "imgart_abcdefgh",

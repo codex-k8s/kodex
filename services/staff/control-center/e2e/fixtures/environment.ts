@@ -96,7 +96,12 @@ export async function installEnvironmentFixture(
         volumes: [],
         network: {
           denyByDefault: true,
-          egress: [],
+          egress: [
+            { destination: "DNS", protocol: "TCP", port: 53 },
+            { destination: "DNS", protocol: "UDP", port: 53 },
+            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
+            { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
+          ],
           webAccess: { mode: "NONE", rules: [] },
         },
         kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },

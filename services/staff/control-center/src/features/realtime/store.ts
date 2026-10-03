@@ -26,6 +26,7 @@ import type { StreamKind } from "@/shared/api/generated/asyncapi/StreamKind";
 import { csrfToken } from "@/shared/api/mutation";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { usePlatformStore } from "@/features/platform/store";
+import { useAssistantStore } from "@/features/assistant/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import { useProvidersStore } from "@/features/providers/store";
 import { useAccessStore } from "@/features/access/store";
@@ -482,6 +483,14 @@ export const useRealtimeStore = defineStore("realtime", () => {
       }
       if (activeSocket(socket)) {
         platformSequence.value = cursor;
+        if (
+          envelope.mode === "DELTA" &&
+          (envelope.eventName === "AGENT_CHANGED" ||
+            envelope.eventName === "INSTRUCTIONS_PUBLISHED")
+        )
+          void useAssistantStore().invalidateProjectAssistantFromRealtime(
+            envelope.projectRef,
+          );
       }
       return true;
     }

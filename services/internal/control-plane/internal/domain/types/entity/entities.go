@@ -397,6 +397,7 @@ type AgentAvatar struct {
 }
 
 type Agent struct {
+	AssistantBacked                                                   bool `json:"-"`
 	CurrentRunRef                                                     string
 	InstructionBinding                                                *AgentInstructionsBinding
 	Ref, ProjectRef, RoleDefinitionRef, RoleDefinitionName, SystemKey string
@@ -826,14 +827,23 @@ type AssistantTurn struct {
 }
 
 type AssistantConversation struct {
-	Ref, Title, ProjectRef, SessionRef, State string
-	TitleSource                               string
-	Version, TitleRevision                    int64
-	Context                                   AssistantContextDescriptor
-	Turns                                     []AssistantTurn
-	Plans                                     []AssistantPlan
-	LatestPlan                                *AssistantPlan
-	CreatedAt, UpdatedAt                      time.Time
+	Ref, Title, ProjectRef, SessionRef, State         string
+	AssistantScope, AssistantRef, AssistantProfileRef string
+	TitleSource                                       string
+	Version, TitleRevision                            int64
+	Context                                           AssistantContextDescriptor
+	Turns                                             []AssistantTurn
+	Plans                                             []AssistantPlan
+	LatestPlan                                        *AssistantPlan
+	CreatedAt, UpdatedAt                              time.Time
+}
+
+// ProjectAssistantProfile закрепляет отдельного помощника за одним проектом.
+// Исполняемая конфигурация принадлежит AgentRef, а не копии системного профиля.
+type ProjectAssistantProfile struct {
+	Ref, ProjectRef, AgentRef, Name, State string
+	Version                                int64
+	CreatedAt, UpdatedAt                   time.Time
 }
 
 type SystemAssistant struct {

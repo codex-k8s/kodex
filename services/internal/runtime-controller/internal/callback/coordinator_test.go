@@ -39,12 +39,12 @@ func TestCoordinatorReturnsCompatibleWarmExecution(t *testing.T) {
 
 func validWarmExecutionInput() runtimecontract.RunnerInput {
 	digest := "sha256:" + strings.Repeat("a", 64)
-	image := runtimecontract.RuntimeEnvironmentImage{Reference: "registry.example/runner@" + digest, Digest: digest}
+	image := runtimecontract.RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh", RecipeGeneration: 1, Reference: "registry.example/runner@" + digest, Digest: digest}
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, "agent-runner", "system-assistant-warm")
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV7, Mode: runtimecontract.RunnerModeTurn,
+		Schema: runtimecontract.RunnerInputSchemaV8, Mode: runtimecontract.RunnerModeTurn,
 		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
 		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
@@ -57,7 +57,7 @@ func validWarmExecutionInput() runtimecontract.RunnerInput {
 		RuntimeProfileRef: "profile_abcdefgh", RuntimeProfileRevision: "profile-revision-1",
 		InstructionRef: "instr_abcdefgh", InstructionDigest: strings.Repeat("5", 64),
 		PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("6", 64),
-		PromptMaterializationDigest: strings.Repeat("7", 64), SystemAssistant: true,
+		PromptMaterializationDigest: strings.Repeat("7", 64), AssistantScope: runtimecontract.AssistantScopeSystem,
 		Instructions: "Complete the task.", Task: "Prepare the result.", Provider: "openai-codex", Model: "codex",
 		ProviderAccountRef: "pacc_abcdefgh", ProviderCredentialRef: "pcr_abcdefgh",
 		ProviderCredentialRevision: 1, ProviderCredentialSHA256: strings.Repeat("d", 64),

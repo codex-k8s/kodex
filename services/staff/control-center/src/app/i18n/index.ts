@@ -1033,7 +1033,7 @@ const ru = {
       "Первичная настройка завершится без создания проектов и запуска задач. Сохранённые настройки останутся. Продолжить можно в любой момент через «Первичная настройка» в боковом меню.",
     configureAssistant: "Настроить системного помощника",
     assistantConfigurationHelp:
-      "Выберите модель и аккаунт, проверьте сетевой доступ и рабочее окружение, добавьте свои инструкции. Это настройки системного Kodex, а не сотрудников проекта.",
+      "Выберите модель и аккаунт, образ и проверенные инструменты, переменные и секреты, добавьте инструкции. Ресурсы, тома и сетевой доступ доступны в расширенных настройках. Это системный Kodex; отдельного помощника проекта можно настроить позже.",
     assistantDefaultsTitle: "Можно начать с базовых настроек",
     assistantDefaultsHelp:
       "Помощник уже настроен для безопасной работы. Изменения необязательны: переходите к проекту и возвращайтесь к настройкам, когда понадобится.",
@@ -3606,6 +3606,24 @@ const ru = {
   assistant: {
     replaceDraftConfirm:
       "Заменить текущий неотправленный текст запросом на публикацию интеграции?",
+    projectProfile: {
+      needsSetupBadge: "Требует настройки",
+      title: "Помощник Проекта",
+      scopeLabel: "Какой помощник ведёт диалог",
+      createTitle: "Отдельный помощник Проекта",
+      createHelp:
+        "Создайте собственную конфигурацию. Диалоги, инструкции и окружение не смешиваются с общесистемным помощником.",
+      create: "Создать помощника",
+      configure: "Настроить помощника",
+      ready: "Помощник Проекта готов к работе",
+      needsSetup:
+        "Настройте модель, инструкции и окружение перед отправкой сообщения. Диалоги можно создать уже сейчас.",
+      environmentHelp:
+        "Выберите собственный образ и проверенные инструменты, окружение, переменные и секреты Проекта. Настройка выполняется в полном редакторе с проверкой готовности и подтверждением доступа.",
+      instructionsHelp:
+        "Инструкции помощника Проекта имеют собственные черновики и опубликованные версии. Изменения проверяются перед публикацией.",
+      openEditor: "Открыть полный редактор",
+    },
     replaceDraftWithBuildDebugConfirm:
       "Заменить текущий неотправленный текст запросом на разбор сборки?",
     replaceDraftWithRunDebugConfirm:
@@ -3647,6 +3665,7 @@ const ru = {
       UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS: "Изменить инструкции Kodex",
       UPDATE_INTEGRATION_CONNECTION: "Изменить подключение",
       CREATE_AGENT: "Создать сотрудника",
+      CREATE_PROJECT_ASSISTANT: "Создать помощника Проекта",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION:
         "Подготовить новую ревизию окружения",
@@ -3689,10 +3708,14 @@ const ru = {
         "Дополнение владельца применяется к следующим ходам. Изменения, предложенные самим Kodex, сначала показываются как подтверждаемый черновик.",
       environmentTitle: "Рабочее окружение Kodex",
       environmentHelp:
-        "Переменные, ресурсы и сетевой доступ применятся к следующим ходам. Доступ к интернету требует свежего подтверждения владельца.",
-      platformImage: "Платформенный образ",
-      platformImageHelp:
-        "Образ и встроенные инструменты системного помощника обновляются платформой и здесь не заменяются.",
+        "Образ, инструменты, переменные и секреты применятся к следующим ходам. Ресурсы и сетевой доступ доступны в расширенных настройках; доступ к интернету требует свежего подтверждения владельца.",
+      imageCatalogUnavailable:
+        "Каталог образов пока недоступен. Точная сохранённая версия и инструменты сохранятся при изменении остальных параметров.",
+      secretCatalogUnavailable:
+        "Каталог секретов пока недоступен. Сохранённые привязки и их ревизии не изменятся.",
+      environmentAdvanced: "Ресурсы, тома и сетевой доступ",
+      systemScope: "Общесистемный помощник",
+      projectScope: "Помощник проекта",
     },
     workContext: "Контекст работы",
     contextReady: "Готов помочь на этом экране",
@@ -3873,6 +3896,11 @@ const ru = {
     },
     createdEntity: {
       loadFailed: "Не удалось прочитать объект. Повторите обновление.",
+      PROJECT_ASSISTANT: {
+        title: "Созданный помощник проекта",
+        next: "Настройте модель, образ, окружение и инструкции помощника перед первым запуском.",
+        open: "Настроить помощника",
+      },
       PROJECT: {
         title: "Созданный проект",
         updatedTitle: "Изменённый проект",
@@ -5414,7 +5442,7 @@ const en = {
       "This will finish onboarding without creating projects or running tasks. Saved settings will remain. You can resume any time using Getting started in the sidebar.",
     configureAssistant: "Configure system assistant",
     assistantConfigurationHelp:
-      "Choose a model and account, review network access and the work environment, and add your instructions. These settings belong to the system Kodex assistant, not project employees.",
+      "Choose a model and account, image and verified tools, variables and secrets, and add instructions. Resources, volumes and network access are available in advanced settings. This is system Kodex; a separate project assistant can be configured later.",
     assistantDefaultsTitle: "Start with the base settings",
     assistantDefaultsHelp:
       "The assistant is already configured for safe work. Changes are optional: continue to your project and revisit these settings whenever needed.",
@@ -7889,6 +7917,24 @@ const en = {
   },
   assistant: {
     ...ru.assistant,
+    projectProfile: {
+      needsSetupBadge: "Needs setup",
+      title: "Project assistant",
+      scopeLabel: "Conversation assistant",
+      createTitle: "Dedicated project assistant",
+      createHelp:
+        "Create a separate configuration. Conversations, instructions, and environments are isolated from the system assistant.",
+      create: "Create assistant",
+      configure: "Configure assistant",
+      ready: "Project assistant is ready",
+      needsSetup:
+        "Configure the model, instructions, and environment before sending a message. Conversations can be created now.",
+      environmentHelp:
+        "Choose an admitted image and tools, an environment, variables, and secrets owned by this project. The full editor checks readiness and confirms access.",
+      instructionsHelp:
+        "Project assistant instructions have separate drafts and published versions. Changes are validated before publication.",
+      openEditor: "Open full editor",
+    },
     replaceDraftConfirm:
       "Replace the unsent draft with an integration publication request?",
     replaceDraftWithBuildDebugConfirm:
@@ -7932,6 +7978,7 @@ const en = {
       UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS: "Update Kodex instructions",
       UPDATE_INTEGRATION_CONNECTION: "Update connection",
       CREATE_AGENT: "Create agent",
+      CREATE_PROJECT_ASSISTANT: "Create project assistant",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION: "Prepare environment revision",
       CREATE_ROLE_IMAGE_RECIPE: "Create image recipe",
@@ -7974,10 +8021,14 @@ const en = {
         "Owner instructions apply to future turns. Changes proposed by Kodex itself are shown as a draft for confirmation first.",
       environmentTitle: "Kodex runtime environment",
       environmentHelp:
-        "Variables, resources and network access apply to future turns. Internet access requires fresh owner confirmation.",
-      platformImage: "Platform image",
-      platformImageHelp:
-        "The system assistant image and built-in tools are managed by the platform and cannot be replaced here.",
+        "Image, tools, variables and secrets apply to future turns. Resources and network access are available in advanced settings; internet access requires fresh owner confirmation.",
+      imageCatalogUnavailable:
+        "The image catalog is currently unavailable. The exact saved version and tools will be preserved when other settings change.",
+      secretCatalogUnavailable:
+        "The secret catalog is currently unavailable. Saved bindings and their revisions will remain unchanged.",
+      environmentAdvanced: "Resources, volumes and network access",
+      systemScope: "System assistant",
+      projectScope: "Project assistant",
     },
     workContext: "Work context",
     contextReady: "Ready to help on this screen",
@@ -8155,6 +8206,11 @@ const en = {
     },
     createdEntity: {
       loadFailed: "Could not read the resource. Refresh to try again.",
+      PROJECT_ASSISTANT: {
+        title: "Created project assistant",
+        next: "Configure the assistant's model, image, environment, and instructions before the first run.",
+        open: "Configure assistant",
+      },
       PROJECT: {
         title: "Created project",
         updatedTitle: "Updated project",

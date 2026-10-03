@@ -394,7 +394,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, "agent-runner", "system-assistant-warm")
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV7, Mode: runtimecontract.RunnerModeTurn,
+		Schema: runtimecontract.RunnerInputSchemaV8, Mode: runtimecontract.RunnerModeTurn,
 		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller-1", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
 		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh",
@@ -407,7 +407,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		RuntimeProfileRef: "profile_abcdefgh", RuntimeProfileRevision: "profile-revision-1",
 		InstructionRef: "instr_abcdefgh", InstructionDigest: strings.Repeat("5", 64),
 		PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("6", 64),
-		PromptMaterializationDigest: strings.Repeat("7", 64), SystemAssistant: true,
+		PromptMaterializationDigest: strings.Repeat("7", 64), AssistantScope: runtimecontract.AssistantScopeSystem,
 		Instructions: "Complete the bounded task.", Task: "Prepare the customer response.",
 		Provider: "openai", Model: "codex", ProviderAccountRef: "pacc_abcdefgh",
 		ProviderCredentialRef: "pcr_abcdefgh", ProviderCredentialRevision: 1,

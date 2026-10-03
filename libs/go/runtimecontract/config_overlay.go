@@ -57,8 +57,8 @@ type RuntimeSecretProjection struct {
 }
 
 // RuntimeEnvironmentImage связывает версию окружения с exact promoted image.
-// Для project-scoped окружений ArtifactRef/RecipeRef/RecipeGeneration обязательны.
-// Always-hot system assistant использует platform-owned exact reference без DB artifact.
+// ArtifactRef/RecipeRef/RecipeGeneration обязательны для всех окружений, включая
+// системного помощника: platform-owned образ проходит тот же exact admission.
 type RuntimeEnvironmentImage struct {
 	ArtifactRef      string `json:"artifact_ref,omitempty"`
 	RecipeRef        string `json:"recipe_ref,omitempty"`

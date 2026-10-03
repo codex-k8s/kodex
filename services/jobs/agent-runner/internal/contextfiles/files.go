@@ -243,7 +243,7 @@ func manifestBytes(input runtimecontract.RunnerInput, snapshot runtimecontract.R
 	// Always-hot assistant сохраняет одно дерево exact pins между turn. Его
 	// context compatibility уже проверяет controller; authority каждой attempt
 	// остаётся в свежем execution binding. Остальные manifests привязаны к attempt.
-	if input.SystemAssistant {
+	if input.IsSystemAssistant() {
 		input.RuntimeRevisionRef, input.RuntimeRevisionDigest, input.TurnRef, input.Attempt = "", "", "", 0
 	}
 	raw, err := json.Marshal(manifest{RuntimeRevisionRef: input.RuntimeRevisionRef, RuntimeRevisionDigest: input.RuntimeRevisionDigest,

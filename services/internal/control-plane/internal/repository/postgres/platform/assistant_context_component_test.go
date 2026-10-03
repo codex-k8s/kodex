@@ -30,7 +30,7 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "assistant-context-agent", "Private context agent")
 	reader := contextProjectReader(t, ctx, repository, service, owner, project.Project.Ref, "ASSISTANT_CONTEXT")
-	create := command.Command{Kind: command.CreateAssistantConversation, Principal: reader, Mutation: value.Mutation{IdempotencyKey: "assistant-context-create"}, Payload: command.AssistantConversationInput{ProjectRef: project.Project.Ref, Context: entity.AssistantContextDescriptor{EntityKind: "AGENT", EntityRef: agent.Ref, EntityName: "Forged context name", AllowedOperations: []string{"ARCHIVE_AGENT"}}}}
+	create := command.Command{Kind: command.CreateAssistantConversation, Principal: reader, Mutation: value.Mutation{IdempotencyKey: "assistant-context-create"}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM", ProjectRef: project.Project.Ref, Context: entity.AssistantContextDescriptor{EntityKind: "AGENT", EntityRef: agent.Ref, EntityName: "Forged context name", AllowedOperations: []string{"ARCHIVE_AGENT"}}}}
 	if _, err := service.Execute(ctx, create); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("project reader opened private agent context: %v", err)
 	}
@@ -56,7 +56,7 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if created.Conversation.Context.EntityName != agent.Name || created.Conversation.Context.EntityVersion == nil || *created.Conversation.Context.EntityVersion != agent.Version || len(created.Conversation.Context.AllowedOperations) != 0 {
 		t.Fatalf("context trusted caller metadata or operations: %#v", created.Conversation.Context)
 	}
-	listed, _, err := service.ListAssistantConversations(ctx, reader, query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 1}})
+	listed, _, err := service.ListAssistantConversations(ctx, reader, query.AssistantConversationFilter{Filter: query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 1}}})
 	if err != nil || len(listed) != 1 || listed[0].Context.EntityName != agent.Name {
 		t.Fatalf("context list: count=%d err=%v", len(listed), err)
 	}
@@ -66,13 +66,13 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if _, err := service.Execute(ctx, create); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("revoked context receipt replay: %v", err)
 	}
-	listed, _, err = service.ListAssistantConversations(ctx, reader, query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 1}})
+	listed, _, err = service.ListAssistantConversations(ctx, reader, query.AssistantConversationFilter{Filter: query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 1}}})
 	if err != nil || len(listed) != 0 {
 		t.Fatalf("revoked context remained before pagination: count=%d err=%v", len(listed), err)
 	}
 	unknown := create
 	unknown.Mutation.IdempotencyKey = "assistant-context-unknown"
-	unknown.Payload = command.AssistantConversationInput{ProjectRef: project.Project.Ref, Context: entity.AssistantContextDescriptor{EntityKind: "UNKNOWN", EntityRef: agent.Ref}}
+	unknown.Payload = command.AssistantConversationInput{AssistantScope: "SYSTEM", ProjectRef: project.Project.Ref, Context: entity.AssistantContextDescriptor{EntityKind: "UNKNOWN", EntityRef: agent.Ref}}
 	if _, err := service.Execute(ctx, unknown); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("unknown context kind: %v", err)
 	}
@@ -191,10 +191,10 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		{"INTEGRATION_CONNECTION", connection.Connection.Ref, connection.Connection.Name, connection.Connection.Version},
 		{"SCHEDULE", schedule.Schedule.Ref, schedule.Schedule.Name, schedule.Schedule.Version},
 	} {
-		input := command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "context-kind-" + resource.kind}, Payload: command.AssistantConversationInput{Context: entity.AssistantContextDescriptor{EntityKind: resource.kind, EntityRef: resource.ref, EntityName: "Forged", AllowedOperations: []string{"FORGED"}}}}
+		input := command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "context-kind-" + resource.kind}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM", Context: entity.AssistantContextDescriptor{EntityKind: resource.kind, EntityRef: resource.ref, EntityName: "Forged", AllowedOperations: []string{"FORGED"}}}}
 		var projection entity.AssistantContextDescriptor
 		if resource.kind == "SCHEDULE" {
-			input.Payload = command.AssistantConversationInput{ProjectRef: project.Project.Ref,
+			input.Payload = command.AssistantConversationInput{AssistantScope: "SYSTEM", ProjectRef: project.Project.Ref,
 				Context: input.Payload.(command.AssistantConversationInput).Context}
 			checkTx, beginErr := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 			if beginErr != nil {

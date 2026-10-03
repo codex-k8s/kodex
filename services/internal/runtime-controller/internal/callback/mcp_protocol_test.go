@@ -19,7 +19,7 @@ func TestMCPAcceptsInitializedNotificationWithoutAResponse(t *testing.T) {
 	))
 	response := httptest.NewRecorder()
 
-	server.serveMCP(response, request, runtimecontract.RunnerInput{SystemAssistant: true})
+	server.serveMCP(response, request, runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem})
 
 	if response.Code != http.StatusAccepted || response.Body.Len() != 0 {
 		t.Fatalf("initialized notification response = %d %q", response.Code, response.Body.String())
@@ -34,7 +34,7 @@ func TestMCPRejectsInitializedNotificationWithAuthorityLikeParams(t *testing.T) 
 	))
 	response := httptest.NewRecorder()
 
-	server.serveMCP(response, request, runtimecontract.RunnerInput{SystemAssistant: true})
+	server.serveMCP(response, request, runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem})
 
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid initialized notification response = %d", response.Code)
@@ -49,7 +49,7 @@ func TestMCPStillReturnsSystemAssistantToolsAfterInitialization(t *testing.T) {
 	))
 	response := httptest.NewRecorder()
 
-	server.serveMCP(response, request, runtimecontract.RunnerInput{SystemAssistant: true})
+	server.serveMCP(response, request, runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem})
 
 	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"name":"get_configuration_catalog"`)) {
 		t.Fatalf("tools/list response = %d %q", response.Code, response.Body.String())

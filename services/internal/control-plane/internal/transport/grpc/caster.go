@@ -715,6 +715,8 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 	}
 	result := &controlplanev1.AssistantConversation{Ref: value.Ref, Version: value.Version, Title: value.Title,
 		TitleSource: value.TitleSource, TitleRevision: value.TitleRevision, ProjectRef: value.ProjectRef,
+		AssistantScope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+value.AssistantScope]),
+		AssistantRef:   value.AssistantRef, AssistantProfileRef: value.AssistantProfileRef,
 		Context: context, UpdatedAt: timestamp(value.UpdatedAt), State: controlplanev1.AssistantConversationState(controlplanev1.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+value.State])}
 	nextSequence := int64(1)
 	plans := value.Plans

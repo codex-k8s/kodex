@@ -319,6 +319,8 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.runtime-secrets.reveal":                       controlplanev1.PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName,
 		"platform.command.runtime-secrets.revoke":                       controlplanev1.PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName,
 		"platform.assistant.get":                                        controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName,
+		"platform.assistant.project.create":                             controlplanev1.SystemAssistantService_CreateProjectAssistant_FullMethodName,
+		"platform.assistant.project.get":                                controlplanev1.SystemAssistantService_GetProjectAssistant_FullMethodName,
 		"platform.assistant.conversations.list":                         controlplanev1.SystemAssistantService_ListAssistantConversations_FullMethodName,
 		"platform.assistant.conversations.create":                       controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName,
 		"platform.assistant.conversations.title.update":                 controlplanev1.SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName,
@@ -520,6 +522,8 @@ func InteractionGatewayOperations() map[string]string {
 // control-plane и поэтому не доверяют locator из браузера.
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
+		"platform.assistant.project.create":                  {},
+		"platform.assistant.project.get":                     {},
 		"platform.command.skill-bundle-drafts.create":        {},
 		"platform.command.memory-records.create":             {},
 		"platform.query.projects.get":                        {},

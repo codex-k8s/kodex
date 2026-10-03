@@ -199,6 +199,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	snapshot := map[string]any{
 		"organizationRef": scope.organizationRef, "assistantRef": assistant.Ref, "agentRef": assistant.Ref,
 		"stableKey": assistant.StableKey, "sessionRef": systemSessionRef,
+		"assistantScope":   string(runtimecontract.AssistantScopeSystem),
 		"systemSessionRef": systemSessionRef, "runtimeRevisionRef": assistant.DesiredRuntimeRevision,
 		"runtimeRevisionVersion": assistant.Version, "runtimeRevision": profileRevision,
 		"runtimeKey": runtimeKey, "profileRevision": profileRevision,

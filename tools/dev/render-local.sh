@@ -212,7 +212,7 @@ done
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 [[ "$repository_root" == "$source_root" ]] || fail 'source root must match the current worktree'
 lock_file="$repository_root/tools/dev/components.lock.json"
-runtime_contract_file="$repository_root/contracts/runtime-controller/v7/agent-runner-input.schema.json"
+runtime_contract_file="$repository_root/contracts/runtime-controller/v8/agent-runner-input.schema.json"
 runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
 [[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
   "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||

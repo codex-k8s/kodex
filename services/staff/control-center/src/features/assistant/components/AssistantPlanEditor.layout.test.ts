@@ -79,7 +79,10 @@ describe("AssistantPlanEditor layout", () => {
     expect(environmentFields).toContain("runtime-public-value-name-${index}");
     expect(environmentFields).toContain("runtime-secret-binding-name-${index}");
     expect(environmentPolicy).toContain("runtime-resource-${field.key}");
-    expect(environmentPolicy).toContain('name="runtime-read-own-execution"');
+    expect(environmentPolicy).not.toContain(
+      'name="runtime-read-own-execution"',
+    );
+    expect(environmentPolicy).toContain('name="runtime-web-access-mode"');
   });
 
   it("не помещает бинарное содержимое файла в текстовый редактор плана", () => {

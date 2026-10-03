@@ -26,7 +26,7 @@ func testClaimedRuntimeMaterializationProof(t *testing.T, ctx context.Context, r
 	}
 	execution.WorkloadInstance = workloadInstance
 	execution.RuntimeRevisionDigest = stringMap(lease, "revisionDigest")
-	execution.SystemAssistant = stringMap(lease, "projectRef") == ""
+	execution.SystemAssistant = stringMap(lease, "assistantScope") == "SYSTEM"
 	operation, digest, err := runtimeMaterializationDigest(execution)
 	if err != nil {
 		t.Fatalf("bind synthetic runtime request: %v", err)
@@ -35,6 +35,9 @@ func testClaimedRuntimeMaterializationProof(t *testing.T, ctx context.Context, r
 		CallerWorkload: "runtime-controller", Operation: operation,
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		ProjectRef: stringMap(lease, "projectRef"), RequestDigestSHA256: digest,
+	}
+	if execution.SystemAssistant {
+		input.ProjectRef = ""
 	}
 	proof, err := repository.ResolveProofAuthority(ctx, input)
 	if !allowed {

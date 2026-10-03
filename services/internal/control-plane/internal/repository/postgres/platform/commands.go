@@ -279,6 +279,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeMembership(ctx, tx, scope, input)
 	case command.CreateAgent:
 		return repository.createAgent(ctx, tx, scope, input.Payload)
+	case command.CreateProjectAssistant:
+		return repository.createProjectAssistant(ctx, tx, scope, input)
 	case command.CreateAssistantRoleImageRecipe:
 		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
 		if !ok {
@@ -954,6 +956,9 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.ArchiveAgent:
+		if err := repository.rejectAssistantAgentArchive(ctx, tx, scope, payload.Ref); err != nil {
+			return commandOutcome{}, err
+		}
 		err := tx.QueryRow(ctx, queryCommandsChangeagentArchiveAgent, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrConflict
@@ -2390,26 +2395,41 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: boundedRunTitle(title), TitleSource: titleSource, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
-	outcome, err := repository.launchRunWithAttachmentPolicy(ctx, tx, scope, nested, true)
+	var outcome commandOutcome
+	var err error
+	if targetType == "SYSTEM_ASSISTANT" {
+		outcome, err = repository.retryAssistantRun(ctx, tx, scope, input, runID)
+	} else {
+		outcome, err = repository.launchRunWithAttachmentPolicy(ctx, tx, scope, nested, true)
+	}
 	if err != nil {
 		return commandOutcome{}, err
 	}
 	var newRunID, newRootID, newRootNodeID, oldRootNodeID string
 	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsRef, outcome.result.Run.Ref).Scan(&newRunID, &newRootID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("read retry run identity: %w", errs.ErrUnavailable)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunsRetryOfRunIdAttempt, newRunID, runID, attempt+1); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("link retry run attempt: %w", errs.ErrUnavailable)
 	}
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	if targetType == "SYSTEM_ASSISTANT" {
+		if err := tx.QueryRow(ctx, queryAssistantRetryRootNode, scope.organizationID, rootRunID).Scan(&oldRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("read prior assistant retry node: %w", errs.ErrUnavailable)
+		}
+		if err := tx.QueryRow(ctx, queryAssistantRetryRootNode, scope.organizationID, newRootID).Scan(&newRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("read new assistant retry node: %w", errs.ErrUnavailable)
+		}
+	} else {
+		if err := tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("read prior retry root node: %w", errs.ErrUnavailable)
+		}
+		if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("read new retry root node: %w", errs.ErrUnavailable)
+		}
 	}
 	edgeRef, _ := newRef("edg")
 	if _, err := tx.Exec(ctx, queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, oldRootNodeID, newRootNodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("insert retry lineage edge: %w", errs.ErrUnavailable)
 	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "i18n:RUN_RETRY_CREATED", "QUEUED", ""); err != nil {
 		return commandOutcome{}, err

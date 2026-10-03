@@ -395,7 +395,9 @@ SELECT n.id::text,
            WHERE lease.node_id = n.id
        ), 0) + 1,
        COALESCE(t.ref, ''),
-       COALESCE(a.system_key, ''),
+       CASE WHEN r.target_type = 'SYSTEM_ASSISTANT' AND assistant_profile.id IS NOT NULL THEN 'project-assistant'
+            ELSE COALESCE(a.system_key, '') END,
+       CASE WHEN r.target_type = 'SYSTEM_ASSISTANT' THEN COALESCE(assistant_profile.ref, '') ELSE '' END,
        COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
                'ref', integration_grant.ref,
@@ -622,6 +624,14 @@ JOIN control_plane.provider_credential_revisions pcr
   ON pcr.id = pa.current_credential_revision_id
  AND pcr.organization_id = r.organization_id
 JOIN control_plane.agents a ON a.id = n.agent_id
+LEFT JOIN control_plane.project_assistant_profiles assistant_profile
+  ON assistant_profile.agent_id = a.id
+ AND assistant_profile.organization_id = a.organization_id
+ AND assistant_profile.project_id = a.project_id
+LEFT JOIN control_plane.assistant_conversations conversation
+  ON conversation.session_id = r.session_id
+ AND conversation.organization_id = r.organization_id
+ AND conversation.assistant_agent_id = a.id
 JOIN control_plane.agent_runtime_config_versions runtime_config ON runtime_config.id = a.current_runtime_config_id
 JOIN control_plane.provider_account_policy_versions provider_policy ON provider_policy.id = runtime_config.provider_account_policy_id
 JOIN control_plane.agent_config_overlay_versions config_overlay ON config_overlay.id = a.current_config_overlay_id AND config_overlay.state = 'PUBLISHED'
@@ -706,6 +716,25 @@ WHERE n.organization_id = $1::uuid
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
   AND root.state IN ('RUNNING', 'QUEUED')
+  AND (
+      r.target_type <> 'SYSTEM_ASSISTANT'
+      OR (
+          conversation.id IS NOT NULL
+          AND conversation.state = 'ACTIVE'
+          AND conversation.created_by = root.initiated_by
+          AND conversation.project_id IS NOT DISTINCT FROM r.project_id
+          AND r.target_ref = a.ref AND s.target_ref = a.ref
+          AND (
+              (conversation.assistant_scope = 'SYSTEM'
+               AND conversation.assistant_profile_id IS NULL
+               AND a.project_id IS NULL AND a.system_key = 'system-assistant')
+              OR (conversation.assistant_scope = 'PROJECT'
+                  AND conversation.assistant_profile_id = assistant_profile.id
+                  AND assistant_profile.project_id = r.project_id
+                  AND a.project_id = r.project_id AND a.system_key IS NULL)
+          )
+      )
+  )
   AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
   AND runtime_environment.role_image_artifact_id IS NOT NULL
   AND role_image.artifact_id IS NOT NULL

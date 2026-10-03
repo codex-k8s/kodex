@@ -65,6 +65,7 @@ const (
 	ChangeMembership                   Kind = "CHANGE_MEMBERSHIP"
 	RemoveMembership                   Kind = "REMOVE_MEMBERSHIP"
 	CreateAgent                        Kind = "CREATE_AGENT"
+	CreateProjectAssistant             Kind = "CREATE_PROJECT_ASSISTANT"
 	UpdateAgent                        Kind = "UPDATE_AGENT"
 	SetAgentEnabled                    Kind = "SET_AGENT_ENABLED"
 	ArchiveAgent                       Kind = "ARCHIVE_AGENT"
@@ -378,9 +379,10 @@ type IntegrationGrantInput struct {
 	Enabled                                             bool
 }
 type AssistantConversationInput struct {
-	ProjectRef string
-	Context    entity.AssistantContextDescriptor
+	ProjectRef, AssistantScope string
+	Context                    entity.AssistantContextDescriptor
 }
+type ProjectAssistantInput struct{ ProjectRef, Name, Purpose, Instructions string }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
 type AssistantConversationArchiveInput struct{ ConversationRef string }
 type AssistantConversationProjectInput struct{ ConversationRef, ProjectRef string }
@@ -560,6 +562,7 @@ type Result struct {
 	Plan                      *entity.AssistantPlan
 	PlanReceipt               *entity.AssistantPlanReceipt
 	Assistant                 *entity.SystemAssistant
+	ProjectAssistant          *entity.ProjectAssistantProfile
 	Event                     *entity.RunEvent
 	CreatedRefs               []string
 	Duplicate                 bool

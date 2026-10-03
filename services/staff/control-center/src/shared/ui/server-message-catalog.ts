@@ -847,6 +847,11 @@ export const serverTokenTranslations = {
     "Помощь в управлении платформой",
     "Help manage the platform",
   ],
+  PROJECT_ASSISTANT_ROLE: ["Помощник Проекта", "Project assistant"],
+  PROJECT_ASSISTANT_CREATED: [
+    "Помощник Проекта создан",
+    "Project assistant created",
+  ],
   SYSTEM_ASSISTANT_ROLE_DESCRIPTION: [
     "Системный помощник владельца платформы",
     "Platform owner's system assistant",

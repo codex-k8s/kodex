@@ -618,6 +618,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT            AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
 	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                     AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT            AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_ASSISTANT"
 	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                 AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
 	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
 	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT     AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
@@ -656,6 +657,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE:
 		return true
@@ -801,6 +804,7 @@ const (
 	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT            AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
 	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeCREATEPROJECT                     AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATEPROJECTASSISTANT            AssistantPlanOperationType = "CREATE_PROJECT_ASSISTANT"
 	AssistantPlanOperationTypeCREATEPROJECTFILE                 AssistantPlanOperationType = "CREATE_PROJECT_FILE"
 	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE             AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
 	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT     AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
@@ -839,6 +843,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeCREATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeCREATEPROJECTASSISTANT:
 		return true
 	case AssistantPlanOperationTypeCREATEPROJECTFILE:
 		return true
@@ -907,6 +913,24 @@ func (e AssistantPlanReceiptOutcome) Valid() bool {
 	case AssistantPlanReceiptOutcomeCONFLICT:
 		return true
 	case AssistantPlanReceiptOutcomeREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AssistantScope.
+const (
+	AssistantScopePROJECT AssistantScope = "PROJECT"
+	AssistantScopeSYSTEM  AssistantScope = "SYSTEM"
+)
+
+// Valid indicates whether the value is a known member of the AssistantScope enum.
+func (e AssistantScope) Valid() bool {
+	switch e {
+	case AssistantScopePROJECT:
+		return true
+	case AssistantScopeSYSTEM:
 		return true
 	default:
 		return false
@@ -2886,50 +2910,51 @@ func (e MembershipPlatformRole) Valid() bool {
 
 // Defines values for NextAction.
 const (
-	NextActionADDTURN              NextAction = "ADD_TURN"
-	NextActionAPPLYPLAN            NextAction = "APPLY_PLAN"
-	NextActionARCHIVE              NextAction = "ARCHIVE"
-	NextActionBIND                 NextAction = "BIND"
-	NextActionCANCEL               NextAction = "CANCEL"
-	NextActionCANCELBUILD          NextAction = "CANCEL_BUILD"
-	NextActionCOMPLETEONBOARDING   NextAction = "COMPLETE_ONBOARDING"
-	NextActionCONFIGURECREDENTIAL  NextAction = "CONFIGURE_CREDENTIAL"
-	NextActionCOPY                 NextAction = "COPY"
-	NextActionCREATEAGENT          NextAction = "CREATE_AGENT"
-	NextActionCREATECONNECTION     NextAction = "CREATE_CONNECTION"
-	NextActionCREATECONVERSATION   NextAction = "CREATE_CONVERSATION"
-	NextActionCREATEPROJECT        NextAction = "CREATE_PROJECT"
-	NextActionCREATERUN            NextAction = "CREATE_RUN"
-	NextActionCREATESCHEDULE       NextAction = "CREATE_SCHEDULE"
-	NextActionCREATEWORKFLOW       NextAction = "CREATE_WORKFLOW"
-	NextActionDELETE               NextAction = "DELETE"
-	NextActionDISABLE              NextAction = "DISABLE"
-	NextActionDOWNLOAD             NextAction = "DOWNLOAD"
-	NextActionEDIT                 NextAction = "EDIT"
-	NextActionENABLE               NextAction = "ENABLE"
-	NextActionLAUNCH               NextAction = "LAUNCH"
-	NextActionMANAGECAPABILITIES   NextAction = "MANAGE_CAPABILITIES"
-	NextActionMANAGEGRANTS         NextAction = "MANAGE_GRANTS"
-	NextActionMANAGEINTEGRATIONS   NextAction = "MANAGE_INTEGRATIONS"
-	NextActionMANAGEMEMBERS        NextAction = "MANAGE_MEMBERS"
-	NextActionOPEN                 NextAction = "OPEN"
-	NextActionPROMOTE              NextAction = "PROMOTE"
-	NextActionPUBLISH              NextAction = "PUBLISH"
-	NextActionPURGE                NextAction = "PURGE"
-	NextActionRECOVER              NextAction = "RECOVER"
-	NextActionREFRESHAUTHORIZATION NextAction = "REFRESH_AUTHORIZATION"
-	NextActionREQUESTBUILD         NextAction = "REQUEST_BUILD"
-	NextActionRESOLVEGATE          NextAction = "RESOLVE_GATE"
-	NextActionRESTORE              NextAction = "RESTORE"
-	NextActionRETRY                NextAction = "RETRY"
-	NextActionREVEAL               NextAction = "REVEAL"
-	NextActionREVOKE               NextAction = "REVOKE"
-	NextActionROLLBACK             NextAction = "ROLLBACK"
-	NextActionROTATE               NextAction = "ROTATE"
-	NextActionTEST                 NextAction = "TEST"
-	NextActionUPDATE               NextAction = "UPDATE"
-	NextActionUPLOADARTIFACT       NextAction = "UPLOAD_ARTIFACT"
-	NextActionVALIDATE             NextAction = "VALIDATE"
+	NextActionADDTURN                NextAction = "ADD_TURN"
+	NextActionAPPLYPLAN              NextAction = "APPLY_PLAN"
+	NextActionARCHIVE                NextAction = "ARCHIVE"
+	NextActionBIND                   NextAction = "BIND"
+	NextActionCANCEL                 NextAction = "CANCEL"
+	NextActionCANCELBUILD            NextAction = "CANCEL_BUILD"
+	NextActionCOMPLETEONBOARDING     NextAction = "COMPLETE_ONBOARDING"
+	NextActionCONFIGURECREDENTIAL    NextAction = "CONFIGURE_CREDENTIAL"
+	NextActionCOPY                   NextAction = "COPY"
+	NextActionCREATEAGENT            NextAction = "CREATE_AGENT"
+	NextActionCREATECONNECTION       NextAction = "CREATE_CONNECTION"
+	NextActionCREATECONVERSATION     NextAction = "CREATE_CONVERSATION"
+	NextActionCREATEPROJECT          NextAction = "CREATE_PROJECT"
+	NextActionCREATEPROJECTASSISTANT NextAction = "CREATE_PROJECT_ASSISTANT"
+	NextActionCREATERUN              NextAction = "CREATE_RUN"
+	NextActionCREATESCHEDULE         NextAction = "CREATE_SCHEDULE"
+	NextActionCREATEWORKFLOW         NextAction = "CREATE_WORKFLOW"
+	NextActionDELETE                 NextAction = "DELETE"
+	NextActionDISABLE                NextAction = "DISABLE"
+	NextActionDOWNLOAD               NextAction = "DOWNLOAD"
+	NextActionEDIT                   NextAction = "EDIT"
+	NextActionENABLE                 NextAction = "ENABLE"
+	NextActionLAUNCH                 NextAction = "LAUNCH"
+	NextActionMANAGECAPABILITIES     NextAction = "MANAGE_CAPABILITIES"
+	NextActionMANAGEGRANTS           NextAction = "MANAGE_GRANTS"
+	NextActionMANAGEINTEGRATIONS     NextAction = "MANAGE_INTEGRATIONS"
+	NextActionMANAGEMEMBERS          NextAction = "MANAGE_MEMBERS"
+	NextActionOPEN                   NextAction = "OPEN"
+	NextActionPROMOTE                NextAction = "PROMOTE"
+	NextActionPUBLISH                NextAction = "PUBLISH"
+	NextActionPURGE                  NextAction = "PURGE"
+	NextActionRECOVER                NextAction = "RECOVER"
+	NextActionREFRESHAUTHORIZATION   NextAction = "REFRESH_AUTHORIZATION"
+	NextActionREQUESTBUILD           NextAction = "REQUEST_BUILD"
+	NextActionRESOLVEGATE            NextAction = "RESOLVE_GATE"
+	NextActionRESTORE                NextAction = "RESTORE"
+	NextActionRETRY                  NextAction = "RETRY"
+	NextActionREVEAL                 NextAction = "REVEAL"
+	NextActionREVOKE                 NextAction = "REVOKE"
+	NextActionROLLBACK               NextAction = "ROLLBACK"
+	NextActionROTATE                 NextAction = "ROTATE"
+	NextActionTEST                   NextAction = "TEST"
+	NextActionUPDATE                 NextAction = "UPDATE"
+	NextActionUPLOADARTIFACT         NextAction = "UPLOAD_ARTIFACT"
+	NextActionVALIDATE               NextAction = "VALIDATE"
 )
 
 // Valid indicates whether the value is a known member of the NextAction enum.
@@ -2960,6 +2985,8 @@ func (e NextAction) Valid() bool {
 	case NextActionCREATECONVERSATION:
 		return true
 	case NextActionCREATEPROJECT:
+		return true
+	case NextActionCREATEPROJECTASSISTANT:
 		return true
 	case NextActionCREATERUN:
 		return true
@@ -3322,6 +3349,27 @@ func (e ProjectLifecycle) Valid() bool {
 	case ProjectLifecyclePURGEPENDING:
 		return true
 	case ProjectLifecycleTRASHED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectAssistantProfileState.
+const (
+	ProjectAssistantProfileStateACTIVE   ProjectAssistantProfileState = "ACTIVE"
+	ProjectAssistantProfileStateARCHIVED ProjectAssistantProfileState = "ARCHIVED"
+	ProjectAssistantProfileStateDISABLED ProjectAssistantProfileState = "DISABLED"
+)
+
+// Valid indicates whether the value is a known member of the ProjectAssistantProfileState enum.
+func (e ProjectAssistantProfileState) Valid() bool {
+	switch e {
+	case ProjectAssistantProfileStateACTIVE:
+		return true
+	case ProjectAssistantProfileStateARCHIVED:
+		return true
+	case ProjectAssistantProfileStateDISABLED:
 		return true
 	default:
 		return false
@@ -6294,25 +6342,25 @@ func (e SchedulePreviewInputOverlapPolicy) Valid() bool {
 
 // Defines values for SchedulePreviewInputPreset.
 const (
-	CUSTOM   SchedulePreviewInputPreset = "CUSTOM"
-	DAILY    SchedulePreviewInputPreset = "DAILY"
-	HOURLY   SchedulePreviewInputPreset = "HOURLY"
-	WEEKDAYS SchedulePreviewInputPreset = "WEEKDAYS"
-	WEEKLY   SchedulePreviewInputPreset = "WEEKLY"
+	SchedulePreviewInputPresetCUSTOM   SchedulePreviewInputPreset = "CUSTOM"
+	SchedulePreviewInputPresetDAILY    SchedulePreviewInputPreset = "DAILY"
+	SchedulePreviewInputPresetHOURLY   SchedulePreviewInputPreset = "HOURLY"
+	SchedulePreviewInputPresetWEEKDAYS SchedulePreviewInputPreset = "WEEKDAYS"
+	SchedulePreviewInputPresetWEEKLY   SchedulePreviewInputPreset = "WEEKLY"
 )
 
 // Valid indicates whether the value is a known member of the SchedulePreviewInputPreset enum.
 func (e SchedulePreviewInputPreset) Valid() bool {
 	switch e {
-	case CUSTOM:
+	case SchedulePreviewInputPresetCUSTOM:
 		return true
-	case DAILY:
+	case SchedulePreviewInputPresetDAILY:
 		return true
-	case HOURLY:
+	case SchedulePreviewInputPresetHOURLY:
 		return true
-	case WEEKDAYS:
+	case SchedulePreviewInputPresetWEEKDAYS:
 		return true
-	case WEEKLY:
+	case SchedulePreviewInputPresetWEEKLY:
 		return true
 	default:
 		return false
@@ -8562,16 +8610,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	DELETED SearchVFSParamsLifecycleState = "DELETED"
+	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case SearchVFSParamsLifecycleStateACTIVE:
 		return true
-	case DELETED:
+	case SearchVFSParamsLifecycleStateDELETED:
 		return true
 	default:
 		return false
@@ -9117,16 +9165,19 @@ type AssistantContextDescriptorAllowedOperations string
 
 // AssistantConversation defines model for AssistantConversation.
 type AssistantConversation struct {
-	Context       AssistantContextDescriptor       `json:"context"`
-	ProjectRef    *OpaqueRef                       `json:"projectRef,omitempty"`
-	Ref           OpaqueRef                        `json:"ref"`
-	State         AssistantConversationState       `json:"state"`
-	Title         string                           `json:"title"`
-	TitleRevision int64                            `json:"titleRevision"`
-	TitleSource   AssistantConversationTitleSource `json:"titleSource"`
-	Turns         []AssistantTurn                  `json:"turns"`
-	UpdatedAt     Timestamp                        `json:"updatedAt"`
-	Version       int64                            `json:"version"`
+	AssistantProfileRef *OpaqueRef                       `json:"assistantProfileRef,omitempty"`
+	AssistantRef        OpaqueRef                        `json:"assistantRef"`
+	AssistantScope      AssistantScope                   `json:"assistantScope"`
+	Context             AssistantContextDescriptor       `json:"context"`
+	ProjectRef          *OpaqueRef                       `json:"projectRef,omitempty"`
+	Ref                 OpaqueRef                        `json:"ref"`
+	State               AssistantConversationState       `json:"state"`
+	Title               string                           `json:"title"`
+	TitleRevision       int64                            `json:"titleRevision"`
+	TitleSource         AssistantConversationTitleSource `json:"titleSource"`
+	Turns               []AssistantTurn                  `json:"turns"`
+	UpdatedAt           Timestamp                        `json:"updatedAt"`
+	Version             int64                            `json:"version"`
 }
 
 // AssistantConversationTitleSource defines model for AssistantConversation.TitleSource.
@@ -9236,6 +9287,9 @@ type AssistantPlanTarget struct {
 	Ref     *OpaqueRef `json:"ref,omitempty"`
 	Version *int64     `json:"version,omitempty"`
 }
+
+// AssistantScope defines model for AssistantScope.
+type AssistantScope string
 
 // AssistantTurn defines model for AssistantTurn.
 type AssistantTurn struct {
@@ -10907,6 +10961,21 @@ type ProjectLanguage string
 
 // ProjectLifecycle defines model for Project.Lifecycle.
 type ProjectLifecycle string
+
+// ProjectAssistantProfile defines model for ProjectAssistantProfile.
+type ProjectAssistantProfile struct {
+	AgentRef   OpaqueRef                    `json:"agentRef"`
+	CreatedAt  Timestamp                    `json:"createdAt"`
+	Name       string                       `json:"name"`
+	ProjectRef OpaqueRef                    `json:"projectRef"`
+	Ref        OpaqueRef                    `json:"ref"`
+	State      ProjectAssistantProfileState `json:"state"`
+	UpdatedAt  Timestamp                    `json:"updatedAt"`
+	Version    int64                        `json:"version"`
+}
+
+// ProjectAssistantProfileState defines model for ProjectAssistantProfile.State.
+type ProjectAssistantProfileState string
 
 // ProjectInput defines model for ProjectInput.
 type ProjectInput struct {
@@ -14170,17 +14239,20 @@ type RestoreArtifactParams struct {
 
 // ListAssistantConversationsParams defines parameters for ListAssistantConversations.
 type ListAssistantConversationsParams struct {
-	ProjectRef *ProjectRefQuery            `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query      *Query                      `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	State      *AssistantConversationState `form:"state,omitempty" json:"state,omitempty"`
+	AssistantScope *AssistantScope             `form:"assistantScope,omitempty" json:"assistantScope,omitempty"`
+	AssistantRef   *OpaqueRef                  `form:"assistantRef,omitempty" json:"assistantRef,omitempty"`
+	ProjectRef     *ProjectRefQuery            `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query          *Query                      `form:"query,omitempty" json:"query,omitempty"`
+	PageSize       *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken      *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	State          *AssistantConversationState `form:"state,omitempty" json:"state,omitempty"`
 }
 
 // CreateAssistantConversationJSONBody defines parameters for CreateAssistantConversation.
 type CreateAssistantConversationJSONBody struct {
-	Context    *AssistantContextDescriptor `json:"context,omitempty"`
-	ProjectRef *OpaqueRef                  `json:"projectRef,omitempty"`
+	AssistantScope AssistantScope              `json:"assistantScope"`
+	Context        *AssistantContextDescriptor `json:"context,omitempty"`
+	ProjectRef     *OpaqueRef                  `json:"projectRef,omitempty"`
 }
 
 // CreateAssistantConversationParams defines parameters for CreateAssistantConversation.
@@ -14925,6 +14997,19 @@ type UploadArtifactParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 	XFileName      string         `json:"X-File-Name"`
+}
+
+// CreateProjectAssistantJSONBody defines parameters for CreateProjectAssistant.
+type CreateProjectAssistantJSONBody struct {
+	Instructions string `json:"instructions"`
+	Name         string `json:"name"`
+	Purpose      string `json:"purpose"`
+}
+
+// CreateProjectAssistantParams defines parameters for CreateProjectAssistant.
+type CreateProjectAssistantParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // CreateAttachmentSetDraftParams defines parameters for CreateAttachmentSetDraft.
@@ -16170,6 +16255,9 @@ type UpdateProjectJSONRequestBody = ProjectInput
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = AgentInput
 
+// CreateProjectAssistantJSONRequestBody defines body for CreateProjectAssistant for application/json ContentType.
+type CreateProjectAssistantJSONRequestBody CreateProjectAssistantJSONBody
+
 // CreateAttachmentSetDraftJSONRequestBody defines body for CreateAttachmentSetDraft for application/json ContentType.
 type CreateAttachmentSetDraftJSONRequestBody = AttachmentSetDraftInput
 
@@ -17151,6 +17239,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/projects/{projectRef}/artifacts)
 	UploadArtifact(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params UploadArtifactParams)
+
+	// (GET /api/v1/projects/{projectRef}/assistant)
+	GetProjectAssistant(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
+
+	// (POST /api/v1/projects/{projectRef}/assistant)
+	CreateProjectAssistant(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateProjectAssistantParams)
 
 	// (POST /api/v1/projects/{projectRef}/attachment-sets)
 	CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateAttachmentSetDraftParams)
@@ -22395,6 +22489,32 @@ func (siw *ServerInterfaceWrapper) ListAssistantConversations(w http.ResponseWri
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListAssistantConversationsParams
+
+	// ------------- Optional query parameter "assistantScope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "assistantScope", r.URL.Query(), &params.AssistantScope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "assistantScope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assistantScope", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "assistantRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "assistantRef", r.URL.Query(), &params.AssistantRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "assistantRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assistantRef", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "projectRef" -------------
 
@@ -31450,6 +31570,121 @@ func (siw *ServerInterfaceWrapper) UploadArtifact(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UploadArtifact(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProjectAssistant operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectAssistant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectAssistant(w, r, projectRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProjectAssistant operation middleware
+func (siw *ServerInterfaceWrapper) CreateProjectAssistant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateProjectAssistantParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProjectAssistant(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -45496,6 +45731,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/projects/{projectRef}/agents/{agentRef}/avatar", wrapper.UploadAgentAvatar)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.UploadArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant", wrapper.GetProjectAssistant)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant", wrapper.CreateProjectAssistant)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/attachment-sets", wrapper.CreateAttachmentSetDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.ListProjectMemberships)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.AddProjectMembership)

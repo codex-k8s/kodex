@@ -20,9 +20,76 @@ func (server *Server) GetSystemAssistant(w http.ResponseWriter, r *http.Request)
 	}
 	writeMessage(w, http.StatusOK, response, "assistant", "")
 }
+
+func (server *Server) GetProjectAssistant(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef) {
+	if !opaqueHTTPReference.MatchString(projectRef) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.GetProjectAssistant(r.Context(), &controlplanev1.GetProjectAssistantRequest{ProjectRef: projectRef})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if !validProjectAssistantProfile(response.GetProfile(), projectRef) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "profile", "")
+}
+
+func (server *Server) CreateProjectAssistant(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateProjectAssistantParams) {
+	body, ok := decodeJSON[generated.CreateProjectAssistantJSONBody](w, r)
+	if !ok {
+		return
+	}
+	if !opaqueHTTPReference.MatchString(projectRef) || !validSearchText(body.Name, 1, 160) ||
+		!validSearchText(body.Purpose, 1, 2000) || !utf8.ValidString(body.Instructions) ||
+		strings.TrimSpace(body.Instructions) == "" || utf8.RuneCountInString(body.Instructions) > 32768 {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, "")
+	if !ok {
+		return
+	}
+	r, ok = withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.CreateProjectAssistant(r.Context(), &controlplanev1.CreateProjectAssistantRequest{
+		Mutation: mutation, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, Instructions: body.Instructions,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if !validProjectAssistantProfile(response.GetProfile(), projectRef) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeMessage(w, http.StatusCreated, response, "profile", "")
+}
+
+func validProjectAssistantProfile(profile *controlplanev1.ProjectAssistantProfile, projectRef string) bool {
+	return profile != nil && strings.HasPrefix(profile.Ref, "asstp_") && opaqueHTTPReference.MatchString(profile.Ref) &&
+		profile.ProjectRef == projectRef && strings.HasPrefix(profile.AgentRef, "agt_") && opaqueHTTPReference.MatchString(profile.AgentRef) &&
+		validManagedVersion(profile.Version) && validSearchText(profile.Name, 1, 160) && profile.CreatedAt.CheckValid() == nil && profile.UpdatedAt.CheckValid() == nil &&
+		(profile.State == "ACTIVE" || profile.State == "DISABLED" || profile.State == "ARCHIVED")
+}
+
+func assistantScopeInput(scope generated.AssistantScope) controlplanev1.AssistantScope {
+	return controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+string(scope)])
+}
+
 func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.Request, p generated.ListAssistantConversationsParams) {
 	state := controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE
-	if !validSearchText(stringValue(p.Query), 0, 200) || p.State != nil && !p.State.Valid() {
+	if !validSearchText(stringValue(p.Query), 0, 200) || p.State != nil && !p.State.Valid() ||
+		p.AssistantScope != nil && !p.AssistantScope.Valid() || p.AssistantRef != nil && !opaqueHTTPReference.MatchString(*p.AssistantRef) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
@@ -39,7 +106,11 @@ func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.
 		localized := localizer.Localize("NEW_ASSISTANT_CONVERSATION")
 		matchLocalizedDefaultTitle = strings.Contains(strings.ToLower(localized), strings.ToLower(strings.TrimSpace(query)))
 	}
-	response, err := server.control.Assistant.ListAssistantConversations(r.Context(), &controlplanev1.ListAssistantConversationsRequest{ProjectRef: stringValue(p.ProjectRef), Query: query, State: state, MatchLocalizedDefaultTitle: matchLocalizedDefaultTitle, Page: page(p.PageSize, p.PageToken)})
+	request := &controlplanev1.ListAssistantConversationsRequest{ProjectRef: stringValue(p.ProjectRef), Query: query, State: state, MatchLocalizedDefaultTitle: matchLocalizedDefaultTitle, Page: page(p.PageSize, p.PageToken), AssistantRef: stringValue(p.AssistantRef)}
+	if p.AssistantScope != nil {
+		request.AssistantScope = assistantScopeInput(*p.AssistantScope)
+	}
+	response, err := server.control.Assistant.ListAssistantConversations(r.Context(), request)
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -51,7 +122,9 @@ func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.
 	}
 	for _, conversation := range response.Conversations {
 		if conversation == nil || !opaqueHTTPReference.MatchString(conversation.Ref) || conversation.State != state ||
-			p.ProjectRef != nil && conversation.GetProjectRef() != *p.ProjectRef {
+			p.ProjectRef != nil && conversation.GetProjectRef() != *p.ProjectRef ||
+			p.AssistantScope != nil && conversation.GetAssistantScope() != request.AssistantScope ||
+			p.AssistantRef != nil && conversation.GetAssistantRef() != *p.AssistantRef {
 			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
@@ -153,8 +226,15 @@ func (server *Server) CreateAssistantConversation(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
-	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Assistant.CreateAssistantConversation(r.Context(), &controlplanev1.CreateAssistantConversationRequest{Mutation: m, ProjectRef: stringValue(body.ProjectRef), Context: assistantContextInput(body.Context)})
+	if !body.AssistantScope.Valid() || body.AssistantScope == generated.AssistantScopePROJECT && (body.ProjectRef == nil || !opaqueHTTPReference.MatchString(*body.ProjectRef)) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	m, ok := requireMutation(w, p.IdempotencyKey, "")
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.CreateAssistantConversation(r.Context(), &controlplanev1.CreateAssistantConversationRequest{Mutation: m, ProjectRef: stringValue(body.ProjectRef), Context: assistantContextInput(body.Context), AssistantScope: assistantScopeInput(body.AssistantScope)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

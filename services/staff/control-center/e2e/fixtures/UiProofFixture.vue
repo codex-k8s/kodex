@@ -4,7 +4,12 @@ import AssistantWorkspace from "../../src/features/assistant/components/Assistan
 import { useAssistantStore } from "../../src/features/assistant/store";
 import AsyncEntityPicker from "../../src/shared/ui/AsyncEntityPicker.vue";
 import RunsBoard from "../../src/features/workboard/components/RunsBoard.vue";
-import type { AssistantConversation } from "../../src/shared/api/generated/openapi/types.gen";
+import type {
+  Agent,
+  AssistantConversation,
+  AssistantPlan,
+  ProjectAssistantProfile,
+} from "../../src/shared/api/generated/openapi/types.gen";
 import DismissiblePopover from "../../src/shared/ui/DismissiblePopover.vue";
 import IntegrationsPage from "../../src/pages/IntegrationsPage.vue";
 import { usePlatformStore } from "../../src/features/platform/store";
@@ -29,7 +34,9 @@ const assistantImportFixture = [
   "assistant-openapi-import",
   "assistant-openapi-create",
 ].includes(new URLSearchParams(location.search).get("fixture") ?? "");
-if (integrationFixture || assistantImportFixture) {
+const projectAssistantFixture =
+  new URLSearchParams(location.search).get("fixture") === "project-assistant";
+if (integrationFixture || assistantImportFixture || projectAssistantFixture) {
   const platform = usePlatformStore();
   platform.loadIntegrations = () => Promise.resolve();
   platform.loadProjects = () => Promise.resolve();
@@ -49,6 +56,8 @@ const selected = ref<string | null>(null);
 function conversation(index: number): AssistantConversation {
   return {
     ref: `conversation_${String(index)}`,
+    assistantScope: "SYSTEM",
+    assistantRef: "assistant_fixture",
     state: "ACTIVE",
     projectRef: "project_fixture",
     version: 1,
@@ -96,6 +105,111 @@ assistant.conversations = Array.from({ length: 30 }, (_, index) =>
 assistant.selectedRef = "conversation_0";
 assistant.nextPageToken = "second";
 assistant.load = () => Promise.resolve();
+if (projectAssistantFixture) {
+  const profile: ProjectAssistantProfile = {
+    ref: "asstp_fixture",
+    projectRef: "project_fixture",
+    agentRef: "agent_helper_fixture",
+    name: "Помощник проекта разработки платформы",
+    state: "ACTIVE",
+    version: 1,
+    createdAt: "2026-10-04T00:00:00Z",
+    updatedAt: "2026-10-04T00:00:00Z",
+  };
+  const agent: Agent = {
+    ref: profile.agentRef,
+    projectRef: profile.projectRef,
+    name: profile.name,
+    version: 1,
+    purpose: "Помощь проекту",
+    roleDescription: "Помощник",
+    state: "DRAFT",
+    enabled: true,
+    system: false,
+    runtimeRef: "runtime_fixture",
+    runtimeName: "Базовый",
+    runtimeReady: false,
+    capabilities: [],
+    integrations: [],
+    knowledgeArtifactRefs: [],
+    nextActions: ["EDIT"],
+    updatedAt: profile.updatedAt,
+  };
+  const plan: AssistantPlan = {
+    ref: "plan_helper_fixture",
+    version: 2,
+    revision: 1,
+    state: "APPLIED",
+    conversationRef: "conversation_0",
+    projectRef: profile.projectRef,
+    auditSummary: "Создать помощника",
+    applied: true,
+    contentDigest: "a".repeat(64),
+    validationProblems: [],
+    nextActions: [],
+    operations: [
+      {
+        ref: "operation_helper_fixture",
+        type: "CREATE_PROJECT_ASSISTANT",
+        action: "CREATE",
+        title: "Помощник проекта",
+        summary: "Создать отдельную конфигурацию помощника",
+        target: { kind: "PROJECT_ASSISTANT", name: profile.name },
+        parameters: {
+          name: profile.name,
+          purpose: agent.purpose,
+          instructions: "Работай в текущем проекте.",
+        },
+        before: {},
+        after: {},
+        selected: true,
+        permitted: true,
+        validationProblems: [],
+      },
+    ],
+    receipt: {
+      ref: "receipt_helper_fixture",
+      planRef: "plan_helper_fixture",
+      planRevision: 1,
+      outcome: "APPLIED",
+      operationReceipts: [
+        {
+          operationRef: "operation_helper_fixture",
+          resourceRef: profile.ref,
+          outcome: "APPLIED",
+          auditRef: "audit_helper_fixture",
+        },
+      ],
+      conflicts: [],
+      auditRefs: ["audit_helper_fixture"],
+      createdResourceRefs: [profile.ref],
+      createdAt: profile.createdAt,
+    },
+  };
+  assistant.setContext(context, profile.projectRef);
+  assistant.assistantScope = "PROJECT";
+  assistant.projectAssistant = profile;
+  assistant.projectAssistantAgent = agent;
+  assistant.conversations = [
+    {
+      ...conversation(0),
+      assistantScope: "PROJECT",
+      assistantRef: agent.ref,
+      assistantProfileRef: profile.ref,
+      turns: [
+        {
+          ref: "turn_helper_fixture",
+          sequence: 1,
+          role: "ASSISTANT",
+          content: "Помощник создан. Настройте его перед запуском.",
+          state: "COMPLETED",
+          plan,
+          createdAt: profile.createdAt,
+        },
+      ],
+    },
+  ];
+}
 assistant.loadMoreHistory = async () => {
   if (!assistant.nextPageToken || assistant.loadingMore) return;
   assistant.loadingMore = true;
@@ -150,6 +264,10 @@ async function loadPage(_query: string, cursor: string | undefined) {
       "
     />
     <RunsBoard :runs="[]" />
-    <AssistantWorkspace :context="context" project-ref="project_fixture" />
+    <AssistantWorkspace
+      :context="context"
+      project-ref="project_fixture"
+      :live="projectAssistantFixture"
+    />
   </main>
 </template>

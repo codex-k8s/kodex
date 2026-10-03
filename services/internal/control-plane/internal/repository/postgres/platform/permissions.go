@@ -21,6 +21,10 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.RetryRun:
+		if handled, err := repository.authorizeAssistantRetry(ctx, tx, current, input); handled {
+			return err
+		}
 	case command.SetProviderAccountConcurrency:
 		permission, target, err := repository.commandAccessTarget(ctx, tx, current, input)
 		if err != nil {
@@ -124,6 +128,13 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 		return errs.ErrNotFound
 	}
+	if input.Kind == command.ArchiveAgent {
+		payload, ok := input.Payload.(command.AgentInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		return repository.rejectAssistantAgentArchive(ctx, tx, current, payload.Ref)
+	}
 	if input.Kind == command.CreateAgent {
 		payload, ok := input.Payload.(command.AgentInput)
 		if !ok {
@@ -222,6 +233,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.Ref, payload.ProjectRef)
+	case command.ProjectAssistantInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 	case command.AgentAvatarInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.AgentBindingInput:
@@ -426,8 +439,17 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "organization.view", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", payload.ProjectRef, payload.ProjectRef)
-	case command.AssistantTurnInput, command.AssistantTurnCancellationInput, command.AssistantConversationTitleInput,
-		command.AssistantPlanInput, command.AssistantPlanDraftInput, command.AssistantInstructionsInput:
+	case command.AssistantTurnInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "agent.launch")
+	case command.AssistantTurnCancellationInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "agent.launch")
+	case command.AssistantConversationTitleInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "project.view")
+	case command.AssistantPlanInput:
+		return repository.assistantCommandTarget(ctx, tx, current, "", payload.PlanRef, "project.manage")
+	case command.AssistantPlanDraftInput:
+		return repository.assistantCommandTarget(ctx, tx, current, "", payload.PlanRef, "project.manage")
+	case command.AssistantInstructionsInput:
 		return "organization.manage", organization, nil
 	case command.ManagedConfigurationInput:
 		if input.Kind == command.CreateSystemSTTDraft {

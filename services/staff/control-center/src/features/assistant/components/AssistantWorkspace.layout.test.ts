@@ -45,6 +45,17 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("явно разделяет system/project настройки, черновики и отправку", () => {
+    expect(template).toContain('value="SYSTEM"');
+    expect(template).toContain('value="PROJECT"');
+    expect(source).toContain("store.assistantScope");
+    expect(source).toContain("projectAssistantCanRun");
+    expect(template).toContain("<AssistantProjectProfileSetup");
+    expect(source).toContain('if (store.assistantScope !== "SYSTEM") return;');
+    expect(source).toContain(
+      "params: { projectRef: profile.projectRef, agentRef: profile.agentRef }",
+    );
+  });
   it("сохраняет controls диалога в постоянном header", () => {
     const header = template.indexOf(
       '<header class="assistant-drawer__header">',

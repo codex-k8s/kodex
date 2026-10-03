@@ -33,7 +33,7 @@ func assistantResourceSearchTool() map[string]any {
 const maximumAssistantSearchResults = 10
 
 func (server *Server) findPlatformResources(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.SystemAssistant || !onlyKeys(arguments, "query") || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
+	if !input.IsAssistant() || !onlyKeys(arguments, "query") || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
 		return nil, errors.New("assistant resource search is not available")
 	}
 	query, ok := arguments["query"].(string)

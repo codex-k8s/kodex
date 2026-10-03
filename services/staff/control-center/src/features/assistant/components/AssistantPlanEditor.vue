@@ -32,6 +32,7 @@ import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import AgentFormFields from "@/features/platform/AgentFormFields.vue";
 import AgentProfileFields from "@/features/agents/detail/AgentProfileFields.vue";
 import TemplateSourceField from "@/features/agents/detail/TemplateSourceField.vue";
+import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import type { AgentProfileDraft } from "@/features/agents/detail/model";
 import {
   parseAssistantSecretSuggestions,
@@ -613,6 +614,13 @@ const friendlyInputsReady = computed(() =>
           projectFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_AGENT" ||
           agentFormValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "CREATE_PROJECT_ASSISTANT" ||
+          Boolean(
+            props.plan.projectRef &&
+            fieldValue(operation, "name").trim() &&
+            fieldValue(operation, "purpose").trim() &&
+            fieldValue(operation, "instructions").trim(),
+          )) &&
         (operation.value.type !== "UPDATE_AGENT" ||
           agentProfileValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_INSTRUCTION_DRAFT" ||
@@ -1694,6 +1702,39 @@ function validationProblemLabel(problem: string): string {
                     updateOperationParameter(operation, 'language', $event)
                   "
                 />
+              </template>
+              <template
+                v-else-if="operation.value.type === 'CREATE_PROJECT_ASSISTANT'"
+              >
+                <p class="assistant-plan-friendly__hint">
+                  {{ $t("assistant.projectProfile.createHelp") }}
+                </p>
+                <label class="field">
+                  <span>{{ $t("assistant.projectMove.destination") }}</span>
+                  <input
+                    :value="
+                      platform.projects[plan.projectRef ?? '']?.name ??
+                      plan.projectRef
+                    "
+                    readonly
+                  />
+                </label>
+                <label class="field">
+                  <span>{{ $t("assistant.settings.instructions") }}</span>
+                  <CodeEditorSurface
+                    language="markdown"
+                    :label="$t('assistant.settings.instructions')"
+                    :model-value="fieldValue(operation, 'instructions')"
+                    :readonly="!editable"
+                    @update:model-value="
+                      updateOperationParameter(
+                        operation,
+                        'instructions',
+                        $event,
+                      )
+                    "
+                  />
+                </label>
               </template>
               <template
                 v-else-if="

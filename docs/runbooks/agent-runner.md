@@ -4,8 +4,8 @@ title: Диагностика agent-runner
 type: runbook
 status: approved
 owner: sre
-version: 2.2.0
-updated: 2026-09-04
+version: 2.3.0
+updated: 2026-10-04
 ---
 
 # Диагностика agent-runner
@@ -18,7 +18,9 @@ terminal state.
 
 Проверить:
 
-1. input schema `kodex.agent-runner-input.v7` и bounded file mode/size;
+1. input schema `kodex.agent-runner-input.v8`, явная область
+   `NONE|SYSTEM|PROJECT` и bounded file mode/size; PROJECT дополнительно закрепляет
+   exact assistant profile ref, SYSTEM не наследует область секретов из контекста;
 2. exact execution/revision/turn/attempt/fence;
 3. trusted runtime ABI digest;
 4. runtime-controller callback TLS/SPIFFE/ticket;

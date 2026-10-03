@@ -31,7 +31,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 		t.Fatalf("create destination: %v", err)
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-move-conversation"}, Payload: command.AssistantConversationInput{}})
+		Mutation: value.Mutation{IdempotencyKey: "assistant-move-conversation"}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM"}})
 	if err != nil || created.Conversation == nil || created.Conversation.ProjectRef != "" {
 		t.Fatalf("create global conversation: %v", err)
 	}
@@ -54,7 +54,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.complete",
 	}, "runtime-controller")
 	claimAndCompleteRun(t, ctx, service, worker, runRef, "assistant-move-global-run", false)
-	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Page: query.Page{Size: 100}}})
 	if err != nil {
 		t.Fatalf("refresh terminal assistant conversation: %v", err)
 	}
@@ -91,7 +91,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if replay, err := service.Execute(ctx, move); err != nil || replay.Conversation == nil || replay.Conversation.Version != moved.Conversation.Version {
 		t.Fatalf("move replay: conversation=%#v err=%v", replay.Conversation, err)
 	}
-	global, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	global, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Page: query.Page{Size: 100}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if !inOrganizationHistory {
 		t.Fatal("moved conversation lost its project in organization history")
 	}
-	inProject, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 10}})
+	inProject, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 10}}})
 	if err != nil {
 		t.Fatal(err)
 	}

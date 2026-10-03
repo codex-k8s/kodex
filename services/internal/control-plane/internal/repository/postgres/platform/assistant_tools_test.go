@@ -377,17 +377,63 @@ func TestAssistantSelfConfigurationOperationRequiresPinnedAssistant(t *testing.T
 		operation := entity.AssistantPlanOperation{Type: operationType, Parameters: map[string]any{
 			"systemAssistantRef": "agt_system123",
 		}}
-		if !assistantSelfConfigurationOperation("agt_system123", "system-assistant", operation) ||
-			!assistantSelfConfigurationOperation("agt_system123", "system-assistant", entity.AssistantPlanOperation{
+		if !assistantSelfConfigurationOperation("agt_system123", "SYSTEM", operation) ||
+			assistantSelfConfigurationOperation("agt_system123", "SYSTEM", entity.AssistantPlanOperation{
 				Type: operationType, Parameters: map[string]any{"systemAssistantRef": "system-assistant"},
-			}) || assistantSelfConfigurationOperation("agt_other", "other-assistant", operation) {
+			}) || assistantSelfConfigurationOperation("agt_other", "SYSTEM", operation) {
 			t.Fatalf("self-configuration boundary changed for %s", operationType)
 		}
 	}
-	if assistantSelfConfigurationOperation("agt_system123", "system-assistant", entity.AssistantPlanOperation{
+	if assistantSelfConfigurationOperation("agt_system123", "SYSTEM", entity.AssistantPlanOperation{
 		Type: "UPDATE_PROJECT", Parameters: map[string]any{"systemAssistantRef": "agt_system123"},
 	}) {
 		t.Fatal("ordinary operation escaped the context allowlist")
+	}
+	for _, operationType := range []string{"CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_AGENT"} {
+		operation := entity.AssistantPlanOperation{Type: operationType, Parameters: map[string]any{"agentRef": "agt_project123"}}
+		if !assistantSelfConfigurationOperation("agt_project123", "PROJECT", operation) ||
+			assistantSelfConfigurationOperation("agt_other", "PROJECT", operation) ||
+			assistantSelfConfigurationOperation("agt_project123", "SYSTEM", operation) {
+			t.Fatalf("project self-configuration escaped its pinned profile: %s", operationType)
+		}
+	}
+}
+
+func TestProjectAssistantOperationScopeIsClosed(t *testing.T) {
+	t.Parallel()
+	for _, operationType := range []string{"CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UNKNOWN"} {
+		if projectAssistantOperation(operationType) {
+			t.Fatalf("project assistant accepted organization operation: %s", operationType)
+		}
+	}
+	for _, operationType := range []string{"CREATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "CHANGE_INTEGRATION_GRANT"} {
+		if !projectAssistantOperation(operationType) {
+			t.Fatalf("project assistant rejected project operation: %s", operationType)
+		}
+	}
+}
+
+func TestAssistantOperationCreatesProjectProfileThroughSpecializedCommand(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{Key: "create-project-assistant", Type: "CREATE_PROJECT_ASSISTANT",
+		Title: "Create project assistant", Summary: "Prepare isolated project assistant",
+		Parameters: map[string]any{"projectRef": "prj_target123", "name": "Assistant", "purpose": "Configure project", "instructions": "Use this project only."},
+		Before:     map[string]any{}, After: map[string]any{"projectRef": "prj_target123", "name": "Assistant", "purpose": "Configure project", "instructions": "Use this project only."},
+		Target: entity.AssistantPlanTarget{Kind: "PROJECT_ASSISTANT", Name: "Assistant"}}
+	normalized, err := normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := bindAssistantOperationProject(normalized, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(bound)
+	if err != nil || mapped.Kind != command.CreateProjectAssistant || mapped.Payload.(command.ProjectAssistantInput).ProjectRef != "prj_target123" {
+		t.Fatalf("project assistant draft did not use its specialized command: %#v %v", mapped, err)
+	}
+	if _, err := bindAssistantOperationProject(normalized, "prj_foreign123"); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("profile draft escaped selected project context: %v", err)
 	}
 }
 

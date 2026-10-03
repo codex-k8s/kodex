@@ -32,6 +32,120 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 
 describe("assistant reply indicator", () => {
+  it("распознаёт создание проектного помощника отдельно от обычного сотрудника", () => {
+    const [value] = editableOperations([
+      {
+        ref: "op_assistant",
+        type: "CREATE_PROJECT_ASSISTANT",
+        action: "CREATE",
+        title: "Помощник",
+        summary: "Отдельная конфигурация",
+        target: { kind: "PROJECT_ASSISTANT", name: "Помощник" },
+        parameters: {
+          name: "Помощник",
+          purpose: "Помощь",
+          instructions: "Инструкции",
+        },
+        before: {},
+        after: {},
+        selected: true,
+        permitted: true,
+        validationProblems: [],
+      },
+    ]);
+    expect(value && friendlyPlanOperationType(value)).toBe(
+      "CREATE_PROJECT_ASSISTANT",
+    );
+    if (value) value.value.target.kind = "AGENT";
+    expect(value && friendlyPlanOperationType(value)).toBeUndefined();
+  });
+  it("результат создания помощника хранит ссылку профиля, а не ссылку сотрудника", () => {
+    const create: AssistantPlanOperation = {
+      ...operation(),
+      type: "CREATE_PROJECT_ASSISTANT",
+      target: { kind: "PROJECT_ASSISTANT", name: "Помощник" },
+    };
+    const applied: AssistantPlan = {
+      ref: "plan_profile",
+      version: 2,
+      revision: 1,
+      state: "APPLIED",
+      conversationRef: "cnv_profile",
+      projectRef: "project_fixture",
+      operations: [create],
+      applied: true,
+      auditSummary: "Создать помощника",
+      contentDigest: "a".repeat(64),
+      validationProblems: [],
+      nextActions: [],
+      receipt: {
+        ref: "receipt_profile",
+        planRef: "plan_profile",
+        planRevision: 1,
+        outcome: "APPLIED",
+        operationReceipts: [
+          {
+            operationRef: create.ref,
+            resourceRef: "asstp_fixture",
+            outcome: "APPLIED",
+            auditRef: "audit_profile",
+          },
+        ],
+        conflicts: [],
+        auditRefs: [],
+        createdResourceRefs: [],
+        createdAt: "2026-10-04T00:00:00Z",
+      },
+    };
+    expect(assistantCreatedEntityTarget(applied, create.ref)).toEqual({
+      kind: "PROJECT_ASSISTANT",
+      projectRef: "project_fixture",
+      resourceRef: "asstp_fixture",
+    });
+    expect(
+      assistantCreatedEntityTarget({ ...applied, state: "VALID" }, create.ref),
+    ).toBeUndefined();
+    expect(
+      assistantCreatedEntityTarget(
+        { ...applied, projectRef: undefined },
+        create.ref,
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantCreatedEntityTarget(
+        {
+          ...applied,
+          operations: [
+            { ...create, target: { kind: "AGENT", name: "Помощник" } },
+          ],
+        },
+        create.ref,
+      ),
+    ).toBeUndefined();
+    const confirmedReceipt = applied.receipt;
+    if (!confirmedReceipt) throw new Error("Missing fixture receipt");
+    expect(
+      assistantCreatedEntityTarget(
+        { ...applied, receipt: { ...confirmedReceipt, planRevision: 2 } },
+        create.ref,
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantCreatedEntityTarget(
+        {
+          ...applied,
+          receipt: {
+            ...confirmedReceipt,
+            operationReceipts: [
+              ...confirmedReceipt.operationReceipts,
+              ...confirmedReceipt.operationReceipts,
+            ],
+          },
+        },
+        create.ref,
+      ),
+    ).toBeUndefined();
+  });
   const conversation = (
     role: "USER" | "ASSISTANT",
     state: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED",

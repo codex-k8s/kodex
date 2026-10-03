@@ -11442,6 +11442,8 @@ var RuntimeSecretWorkService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	SystemAssistantService_GetSystemAssistant_FullMethodName                 = "/controlplane.v1.SystemAssistantService/GetSystemAssistant"
+	SystemAssistantService_CreateProjectAssistant_FullMethodName             = "/controlplane.v1.SystemAssistantService/CreateProjectAssistant"
+	SystemAssistantService_GetProjectAssistant_FullMethodName                = "/controlplane.v1.SystemAssistantService/GetProjectAssistant"
 	SystemAssistantService_ListAssistantConversations_FullMethodName         = "/controlplane.v1.SystemAssistantService/ListAssistantConversations"
 	SystemAssistantService_CreateAssistantConversation_FullMethodName        = "/controlplane.v1.SystemAssistantService/CreateAssistantConversation"
 	SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName   = "/controlplane.v1.SystemAssistantService/UpdateAssistantConversationTitle"
@@ -11464,6 +11466,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SystemAssistantServiceClient interface {
 	GetSystemAssistant(ctx context.Context, in *GetSystemAssistantRequest, opts ...grpc.CallOption) (*GetSystemAssistantResponse, error)
+	CreateProjectAssistant(ctx context.Context, in *CreateProjectAssistantRequest, opts ...grpc.CallOption) (*CreateProjectAssistantResponse, error)
+	GetProjectAssistant(ctx context.Context, in *GetProjectAssistantRequest, opts ...grpc.CallOption) (*GetProjectAssistantResponse, error)
 	ListAssistantConversations(ctx context.Context, in *ListAssistantConversationsRequest, opts ...grpc.CallOption) (*ListAssistantConversationsResponse, error)
 	CreateAssistantConversation(ctx context.Context, in *CreateAssistantConversationRequest, opts ...grpc.CallOption) (*CreateAssistantConversationResponse, error)
 	UpdateAssistantConversationTitle(ctx context.Context, in *UpdateAssistantConversationTitleRequest, opts ...grpc.CallOption) (*UpdateAssistantConversationTitleResponse, error)
@@ -11493,6 +11497,26 @@ func (c *systemAssistantServiceClient) GetSystemAssistant(ctx context.Context, i
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSystemAssistantResponse)
 	err := c.cc.Invoke(ctx, SystemAssistantService_GetSystemAssistant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) CreateProjectAssistant(ctx context.Context, in *CreateProjectAssistantRequest, opts ...grpc.CallOption) (*CreateProjectAssistantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateProjectAssistantResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_CreateProjectAssistant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) GetProjectAssistant(ctx context.Context, in *GetProjectAssistantRequest, opts ...grpc.CallOption) (*GetProjectAssistantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetProjectAssistantResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_GetProjectAssistant_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -11654,6 +11678,8 @@ func (c *systemAssistantServiceClient) RecoverSystemAssistant(ctx context.Contex
 // for forward compatibility.
 type SystemAssistantServiceServer interface {
 	GetSystemAssistant(context.Context, *GetSystemAssistantRequest) (*GetSystemAssistantResponse, error)
+	CreateProjectAssistant(context.Context, *CreateProjectAssistantRequest) (*CreateProjectAssistantResponse, error)
+	GetProjectAssistant(context.Context, *GetProjectAssistantRequest) (*GetProjectAssistantResponse, error)
 	ListAssistantConversations(context.Context, *ListAssistantConversationsRequest) (*ListAssistantConversationsResponse, error)
 	CreateAssistantConversation(context.Context, *CreateAssistantConversationRequest) (*CreateAssistantConversationResponse, error)
 	UpdateAssistantConversationTitle(context.Context, *UpdateAssistantConversationTitleRequest) (*UpdateAssistantConversationTitleResponse, error)
@@ -11681,6 +11707,12 @@ type UnimplementedSystemAssistantServiceServer struct{}
 
 func (UnimplementedSystemAssistantServiceServer) GetSystemAssistant(context.Context, *GetSystemAssistantRequest) (*GetSystemAssistantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSystemAssistant not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) CreateProjectAssistant(context.Context, *CreateProjectAssistantRequest) (*CreateProjectAssistantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateProjectAssistant not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) GetProjectAssistant(context.Context, *GetProjectAssistantRequest) (*GetProjectAssistantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProjectAssistant not implemented")
 }
 func (UnimplementedSystemAssistantServiceServer) ListAssistantConversations(context.Context, *ListAssistantConversationsRequest) (*ListAssistantConversationsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAssistantConversations not implemented")
@@ -11763,6 +11795,42 @@ func _SystemAssistantService_GetSystemAssistant_Handler(srv interface{}, ctx con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SystemAssistantServiceServer).GetSystemAssistant(ctx, req.(*GetSystemAssistantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_CreateProjectAssistant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateProjectAssistantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).CreateProjectAssistant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_CreateProjectAssistant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).CreateProjectAssistant(ctx, req.(*CreateProjectAssistantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_GetProjectAssistant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProjectAssistantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).GetProjectAssistant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_GetProjectAssistant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).GetProjectAssistant(ctx, req.(*GetProjectAssistantRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -12047,6 +12115,14 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSystemAssistant",
 			Handler:    _SystemAssistantService_GetSystemAssistant_Handler,
+		},
+		{
+			MethodName: "CreateProjectAssistant",
+			Handler:    _SystemAssistantService_CreateProjectAssistant_Handler,
+		},
+		{
+			MethodName: "GetProjectAssistant",
+			Handler:    _SystemAssistantService_GetProjectAssistant_Handler,
 		},
 		{
 			MethodName: "ListAssistantConversations",

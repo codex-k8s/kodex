@@ -31,7 +31,9 @@ func TestRuntimeMCPCatalogWireProducer(t *testing.T) {
 	email.IntegrationGrants = []runtimecontract.RunnerIntegrationGrant{{Ref: "igr_fixture", ConnectionRef: "int_fixture", DefinitionKey: "email", DefinitionVersion: "1.4.1", DefinitionDigest: strings.Repeat("b", 64), CapabilityKey: "email.message.send", Operation: "SEND", InputSchema: `{"type":"object","properties":{"subject":{"type":"string"}}}`, InputSchemaSHA256: strings.Repeat("c", 64)}}
 	schemaDigest := sha256.Sum256([]byte(email.IntegrationGrants[0].InputSchema))
 	email.IntegrationGrants[0].InputSchemaSHA256 = hex.EncodeToString(schemaDigest[:])
-	inputs := []fixture{{Name: "ordinary"}, {Name: "system-assistant", Input: runtimecontract.RunnerInput{SystemAssistant: true}}, {Name: "files", Input: files}, {Name: "email-and-files", Input: email}, {Name: "delegation", Input: runtimecontract.RunnerInput{DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_fixture"}}}}}
+	inputs := []fixture{{Name: "ordinary", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeNone}}, {Name: "system-assistant", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem}},
+		{Name: "project-assistant", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeProject, AssistantProfileRef: "asstprof_fixture123", ProjectRef: "prj_fixture123", AgentRef: "agt_fixture123"}},
+		{Name: "files", Input: files}, {Name: "email-and-files", Input: email}, {Name: "delegation", Input: runtimecontract.RunnerInput{DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_fixture"}}}}}
 	for i := range inputs {
 		request := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":"agent-runner-tools","method":"tools/list","params":{}}`))
 		response := httptest.NewRecorder()

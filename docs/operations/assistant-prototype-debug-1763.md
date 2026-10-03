@@ -4,8 +4,8 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.324
-updated: 2026-10-03
+version: 1.0.326
+updated: 2026-10-04
 ---
 
 # Совместная отладка прототипа
@@ -7276,3 +7276,68 @@ checklist выше. Затем основной агент, без субаге�
 10–15 вызовов инструментов или каждые 5–10 минут (по раннему порогу) получает
 список вкладок Chrome через MCP. Чужие вкладки не закрывает; будущий QA-файл
 в текущем этапе заранее не читает.
+
+### Этап 3.2 — системный и проектный профили, checkpoint рабочего дерева
+
+Состояние после `7097c4a3`: большой интеграционный diff ещё не опубликован.
+Общий checklist намеренно не закрыт; перечисленное ниже — адресные доказательства,
+а не полный owner acceptance.
+
+- PASS: новые project profile/create/read и обязательная область диалога
+  `SYSTEM|PROJECT`; профиль, actor, agent, session и project закрепляются CP.
+  UI выбирает профиль явно, хранит отдельные history/draft/selection и открывает
+  штатный редактор сотрудника для проектного окружения/инструкций.
+- PASS: новый runner input V8 с единственным `AssistantScope` и exact profile ref.
+  Старый bool и decoder отсутствуют; старые схемы V4/V6/V7 удалены из активного
+  реестра/исходников и остаются доступными только через Git. Полные runtimecontract,
+  runtime-controller, agent-runner и публичный runner-test — локальный PASS.
+- PASS: CP полный Go unit, gateway HTTP/app/WebSocket, Proto lint/build/codegen,
+  authority policy/codegen и SQL boundary. Snapshot owner/caster/controller
+  проверяют один digest; область и profile pin входят в digest.
+- PASS: отдельные disposable component сценарии project profiles и parallel
+  lifecycle: QUEUE/INTERRUPT, late callback, retry, restart repository,
+  archive/purge одного диалога и lease expiry не затрагивают соседний.
+  Системный помощник может подготовить создание проектного профиля; эффект
+  появляется только после validation и отдельного подтверждения плана.
+- PASS: frontend typecheck, scoped lint и полный Vitest — 318 suites / 2117 тестов;
+  provider lifecycle и runtime detail — 9 synthetic browser сценариев. Найденные
+  отдельным визуальным ревью PROJECT header на 390 px и карточка результата
+  создания профиля исправлены отдельным пакетом: 85 targeted unit и 8 synthetic
+  browser сценариев — PASS. Скриншоты 1440/390 px RU/EN проверены; Console и
+  page errors — 0. Переход выполняется только после exact GET profile → GET agent;
+  четыре несовпадения scope/ref блокируют ссылку. Итоговый общий frontend набор
+  после этого пакета повторяется на checkpoint.
+- PASS после исправлений: четыре suites в одном публичном disposable запуске
+  на Go 1.26.6: credentials 4,03 с, parallel lifecycle 2,88 с, полный Bootstrap
+  80,79 с и project profiles 3,94 с; общий package 91,709 с. Повторное применение
+  migrations и worker grant / runner policy read-only queries — PASS.
+  Новые suites клонируют отдельную пустую мигрированную БД; старый bootstrap
+  по-прежнему проверяет точное состояние. Read-only authorization не берёт
+  `FOR SHARE`. Strict oracle списка действий дополнен новой согласованной
+  `CREATE_PROJECT_ASSISTANT`, без ослабления сравнения.
+- PASS: профиль переживает disable и исторический archived state, generic
+  archive защищён от необратимой потери assignment. Purge проекта учитывает
+  новый измеренный граф связей (97 таблиц / 248 рёбер), закрывает принадлежащий
+  ему assistant graph и не удаляет чужой профиль/диалог; активный граф блокирует
+  преждевременный purge. Общий creation gate использует текущие права из БД.
+- PASS: root actor должен быть active одновременно на materialization proof,
+  trusted credential recovery и credential consumer. Отдельный rollback fixture
+  доказывает отказ всех трёх путей при отключении точного root actor.
+- PASS отдельно: SQL secret consumer разрешает только exact ORGANIZATION/null
+  project либо exact PROJECT/project и immutable UID/RV/key/hash. Secret-broker
+  fake Kubernetes / owner unit проверяет SYSTEM-организационные дескрипторы,
+  PROJECT-дескрипторы, точное копирование, replay, recovery и изолированный отзыв.
+  Runtimecontract/controller/runner/broker full unit и vet — Go 1.26.6 PASS.
+  Это не свежая RuntimeRevision через ещё не реализованный организационный API.
+- FAIL render повторяем после freeze: сначала host Go 1.27.1 не соответствовал
+  закреплённому 1.26.6, затем устаревший default cache пересекался с serving
+  source. Оснастка теперь выбирает внешний cache. Последний запуск закрыто
+  обнаружил смену worktree provenance во время параллельных правок; проверку
+  не ослабляем, повторяем на неизменяемом checkpoint.
+- NOT RUN: организационные image/secret API и broker materialization,
+  fresh owner-reauth публикация полной системной среды, live migration 5/6,
+  rebuild/активация runner V8 и exact admission/render/Chrome acceptance.
+  Реальные ИИ, STT/device-code и staging/production не запускаются.
+  Read-only Kubernetes проверка: control-plane сейчас 1/2 и завершается на
+  materialization системного образа; новая организационная migration ещё не
+  применена live. Green остальных Pod не считается готовностью платформы.

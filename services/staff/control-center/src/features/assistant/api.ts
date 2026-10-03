@@ -5,6 +5,9 @@ import {
   applyAssistantPlan,
   cancelAssistantTurn as cancelAssistantTurnRequest,
   createAssistantConversation,
+  createProjectAssistant,
+  getProjectAssistant,
+  getAgent,
   getSystemAssistant,
   listAssistantConversations,
   moveAssistantConversationToProject,
@@ -23,6 +26,9 @@ import type {
   AssistantPlanDecisionResponse,
   AssistantPlanOperationInput,
   SystemAssistant,
+  ProjectAssistantProfile,
+  Agent,
+  AssistantScope,
   ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, mutateWithRetry } from "@/shared/api/mutation";
@@ -41,11 +47,82 @@ export async function readAssistant(
   );
 }
 
+export async function readProjectAssistant(
+  projectRef: string,
+  signal?: AbortSignal,
+): Promise<ProjectAssistantProfile> {
+  const profile = await readWithRetry(
+    async () =>
+      (
+        await unwrap(
+          getProjectAssistant({
+            path: { projectRef },
+            signal: requestSignal(signal),
+          }),
+        )
+      ).data,
+    undefined,
+    signal,
+  );
+  if (profile.projectRef !== projectRef)
+    throw new Error("Project assistant profile scope mismatch");
+  return profile;
+}
+
+export async function readProjectAssistantAgent(
+  profile: ProjectAssistantProfile,
+  signal?: AbortSignal,
+): Promise<Agent> {
+  const agent = await readWithRetry(
+    async () =>
+      (
+        await unwrap(
+          getAgent({
+            path: { agentRef: profile.agentRef },
+            signal: requestSignal(signal),
+          }),
+        )
+      ).data,
+    undefined,
+    signal,
+  );
+  if (agent.ref !== profile.agentRef || agent.projectRef !== profile.projectRef)
+    throw new Error("Project assistant agent scope mismatch");
+  return agent;
+}
+
+export async function createProjectAssistantProfile(
+  projectRef: string,
+  input: { name: string; purpose: string; instructions: string },
+): Promise<ProjectAssistantProfile> {
+  const profile = (
+    await mutate((headers) =>
+      createProjectAssistant({
+        path: { projectRef },
+        body: input,
+        headers: {
+          "Idempotency-Key": headers["Idempotency-Key"],
+          "X-CSRF-Token": headers["X-CSRF-Token"],
+        },
+        signal: requestSignal(),
+      }),
+    )
+  ).data;
+  if (profile.projectRef !== projectRef)
+    throw new Error("Created project assistant scope mismatch");
+  return profile;
+}
+
 export async function readConversations(
   projectRef?: string,
   pageToken?: string,
   signal?: AbortSignal,
-  filter: { query?: string; state?: AssistantConversation["state"] } = {},
+  filter: {
+    query?: string;
+    state?: AssistantConversation["state"];
+    assistantScope?: AssistantScope;
+    assistantRef?: string;
+  } = {},
   pageSize = 40,
 ): Promise<ListAssistantConversationsResponse> {
   return readWithRetry(
@@ -55,6 +132,10 @@ export async function readConversations(
           listAssistantConversations({
             query: {
               pageSize,
+              assistantScope: filter.assistantScope ?? "SYSTEM",
+              ...(filter.assistantRef
+                ? { assistantRef: filter.assistantRef }
+                : {}),
               ...(projectRef ? { projectRef } : {}),
               ...(pageToken ? { pageToken } : {}),
               ...(filter.query?.trim() ? { query: filter.query.trim() } : {}),
@@ -175,11 +256,16 @@ export async function moveConversationToProject(
 export async function createConversation(
   context: AssistantContextDescriptor,
   projectRef?: string,
+  assistantScope: AssistantScope = "SYSTEM",
 ): Promise<AssistantConversation> {
   return (
     await mutate((headers) =>
       createAssistantConversation({
-        body: { context, ...(projectRef ? { projectRef } : {}) },
+        body: {
+          context,
+          assistantScope,
+          ...(projectRef ? { projectRef } : {}),
+        },
         headers: {
           "Idempotency-Key": headers["Idempotency-Key"],
           "X-CSRF-Token": headers["X-CSRF-Token"],

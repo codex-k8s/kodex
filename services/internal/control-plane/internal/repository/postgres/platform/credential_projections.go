@@ -95,14 +95,17 @@ func (repository *Repository) resolveRuntimeCredentialProjection(ctx context.Con
 	if err := jsonUnmarshal(rawSecrets, &stored); err != nil || len(stored) > maximumProjectionItems {
 		return platformrepo.RuntimeCredentialProjection{}, errs.ErrConflict
 	}
-	if input.Authority.ProjectID == "" && len(stored) != 0 {
-		return platformrepo.RuntimeCredentialProjection{}, errs.ErrForbidden
+	// Область выбирается по проверенному exact RPC и owner-состоянию выполнения,
+	// а не по project-контексту открытого экрана или descriptor из payload.
+	secretScope := "PROJECT"
+	if input.Authority.CallerFullMethod == assistantProjectionMethod && input.Authority.ProjectID == "" {
+		secretScope = "ORGANIZATION"
 	}
 	for _, candidate := range stored {
 		var descriptor entity.RuntimeSecretRevisionDescriptor
 		var secretRef string
 		err := tx.QueryRow(ctx, queryCredentialProjectionResolveRuntimeSecret, pgx.StrictNamedArgs{
-			"organization_id": current.organizationID, "project_id": input.Authority.ProjectID,
+			"organization_id": current.organizationID, "project_id": nullUUID(input.Authority.ProjectID), "scope_kind": secretScope,
 			"secret_name": candidate.SecretName, "secret_key": candidate.SecretKey, "secret_uid": candidate.SecretUID,
 			"secret_resource_version": candidate.SecretResourceVersion, "content_sha256": candidate.ContentSHA256,
 		}).Scan(&secretRef, &descriptor.Revision, &descriptor.Namespace, &descriptor.SecretName, &descriptor.SecretKey,

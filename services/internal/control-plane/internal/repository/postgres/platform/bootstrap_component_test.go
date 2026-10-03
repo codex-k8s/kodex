@@ -1773,7 +1773,7 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "warm-failover-conversation-create"},
-		Payload:  command.AssistantConversationInput{}})
+		Payload:  command.AssistantConversationInput{AssistantScope: "SYSTEM"}})
 	if err != nil || created.Conversation == nil {
 		t.Fatalf("create assistant conversation after provider failover: conversation=%#v err=%v", created.Conversation, err)
 	}
@@ -6829,7 +6829,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("non-heartbeat operation reported warm runtime: %v", err)
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-conversation-1"}, Payload: command.AssistantConversationInput{}})
+		Mutation: value.Mutation{IdempotencyKey: "assistant-conversation-1"}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM"}})
 	if err != nil {
 		t.Fatalf("create assistant conversation: %v", err)
 	}
@@ -6877,6 +6877,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		turn.Conversation.Title != "Create a sales project" || turn.Conversation.TitleRevision != 2 || turn.Conversation.Context.Route != "" ||
 		!reflect.DeepEqual(turn.Conversation.Context.AllowedOperations, []string{
 			"CREATE_PROJECT", "CREATE_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION",
+			"CREATE_PROJECT_ASSISTANT",
 		}) {
 		t.Fatalf("assistant turn returned incomplete conversation: %#v", turn.Conversation)
 	}
@@ -6914,7 +6915,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("ordinary download exposed soft-deleted assistant input: %v", err)
 	}
 	rejectedConversation, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-conversation-deleted-input-1"}, Payload: command.AssistantConversationInput{}})
+		Mutation: value.Mutation{IdempotencyKey: "assistant-conversation-deleted-input-1"}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM"}})
 	if err != nil || rejectedConversation.Conversation == nil {
 		t.Fatalf("create assistant conversation for deleted input rejection: conversation=%#v err=%v", rejectedConversation.Conversation, err)
 	}
@@ -7066,7 +7067,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("assistant search accepted completed lease: %v", err)
 	}
-	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Page: query.Page{Size: 100}}})
 	if err != nil {
 		t.Fatalf("list assistant conversations after completion: %v", err)
 	}
@@ -7116,7 +7117,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil || applied.Plan == nil || applied.Plan.State != "APPLIED" || applied.PlanReceipt == nil || len(applied.CreatedRefs) != 1 {
 		t.Fatalf("apply assistant plan: result=%#v refs=%v err=%v", applied.Plan, applied.CreatedRefs, err)
 	}
-	readback, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	readback, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Page: query.Page{Size: 100}}})
 	if err != nil {
 		t.Fatalf("list assistant conversations after plan application: %v", err)
 	}

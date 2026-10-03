@@ -43,6 +43,8 @@ function conversation(
 ): AssistantConversation {
   return {
     ref: "cnv_sales",
+    assistantScope: "SYSTEM",
+    assistantRef: "ast_system_assistant",
     state: "ACTIVE",
     version: 2,
     title: "Продажи",
@@ -71,6 +73,7 @@ describe("assistant api mutation reconciliation", () => {
     });
     expect(mocks.listAssistantConversations).toHaveBeenCalledWith({
       query: {
+        assistantScope: "SYSTEM",
         projectRef: "prj_sales",
         pageToken: "cursor",
         pageSize: 40,
@@ -126,7 +129,12 @@ describe("assistant api mutation reconciliation", () => {
       data,
     );
     expect(mocks.listAssistantConversations).toHaveBeenCalledWith({
-      query: { projectRef: "prj_sales", pageToken: "before", pageSize: 40 },
+      query: {
+        assistantScope: "SYSTEM",
+        projectRef: "prj_sales",
+        pageToken: "before",
+        pageSize: 40,
+      },
       signal,
     });
   });

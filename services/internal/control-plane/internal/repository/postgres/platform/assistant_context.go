@@ -37,6 +37,9 @@ func (repository *Repository) authorizeAssistantContextCommand(ctx context.Conte
 	var conversationRef, planRef string
 	switch payload := input.Payload.(type) {
 	case command.AssistantConversationInput:
+		if _, err := repository.assistantForConversationCreation(ctx, tx, current, payload); err != nil {
+			return err
+		}
 		_, err := repository.resolveAssistantContext(ctx, tx, current, payload.Context, payload.ProjectRef)
 		return err
 	case command.AssistantConversationTitleInput:

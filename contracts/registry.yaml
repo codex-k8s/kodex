@@ -87,17 +87,10 @@ packages:
       - control-api-gateway
       - control-plane
       - secret-broker
-  - id: runtime-controller-agent-runner-input-v6
+  - id: runtime-controller-agent-runner-input-v8
     format: json-schema
     owner: runtime-controller
-    source: contracts/runtime-controller/v6/agent-runner-input.schema.json
-    consumers:
-      - runtime-controller
-      - agent-runner
-  - id: runtime-controller-agent-runner-input-v7
-    format: json-schema
-    owner: runtime-controller
-    source: contracts/runtime-controller/v7/agent-runner-input.schema.json
+    source: contracts/runtime-controller/v8/agent-runner-input.schema.json
     consumers:
       - runtime-controller
       - agent-runner

@@ -240,7 +240,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		runtime.capacity <- struct{}{}
 		done := runtime.coordinator.Register(input)
 		warmExecution := false
-		if input.SystemAssistant {
+		if input.IsSystemAssistant() {
 			runtime.warmMu.RLock()
 			warmCompatibility, warmTicket := runtime.warmCompatibility, runtime.warmTicket
 			runtime.warmMu.RUnlock()

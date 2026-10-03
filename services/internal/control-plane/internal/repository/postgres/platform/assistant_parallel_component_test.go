@@ -126,7 +126,7 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 	for index := range 11 {
 		key := fmt.Sprintf("parallel-%02d", index)
 		created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
-			Mutation: value.Mutation{IdempotencyKey: key + "-create"}, Payload: command.AssistantConversationInput{}})
+			Mutation: value.Mutation{IdempotencyKey: key + "-create"}, Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM"}})
 		if err != nil || created.Conversation == nil {
 			t.Fatalf("create independent parallel conversation: %v", err)
 		}
@@ -195,7 +195,7 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 	}
 	stoppedLease := leases[0]
 	conversationRef := sessions[stringMap(stoppedLease, "sessionRef")]
-	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Page: query.Page{Size: 100}}})
 	if err != nil {
 		t.Fatal(err)
 	}

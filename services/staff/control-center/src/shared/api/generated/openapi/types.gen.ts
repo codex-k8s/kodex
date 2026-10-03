@@ -268,7 +268,7 @@ export type SimulateAccessResult = {
     evaluatedAt: Timestamp;
 };
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'CANCEL_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE' | 'COPY';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'CANCEL_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE' | 'COPY';
 
 export type Problem = {
     type: string;
@@ -3759,7 +3759,7 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS';
+    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS';
     action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
@@ -3823,11 +3823,27 @@ export type AssistantTurn = {
 
 export type AssistantConversationState = 'ACTIVE' | 'CLOSED' | 'ARCHIVED';
 
+export type AssistantScope = 'SYSTEM' | 'PROJECT';
+
+export type ProjectAssistantProfile = {
+    ref: OpaqueRef;
+    projectRef: OpaqueRef;
+    agentRef: OpaqueRef;
+    name: string;
+    state: 'ACTIVE' | 'DISABLED' | 'ARCHIVED';
+    version: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
 export type AssistantConversation = {
     ref: OpaqueRef;
     version: number;
     title: string;
     state: AssistantConversationState;
+    assistantScope: AssistantScope;
+    assistantRef: OpaqueRef;
+    assistantProfileRef?: OpaqueRef;
     titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
     titleRevision: number;
     context: AssistantContextDescriptor;
@@ -3842,7 +3858,7 @@ export type AssistantContextDescriptor = {
     entityRef: string;
     entityName: string;
     entityVersion?: number;
-    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE'>;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE'>;
 };
 
 export type AssistantPlanReceipt = {
@@ -10625,10 +10641,74 @@ export type CommandSystemAssistantResponses = {
 
 export type CommandSystemAssistantResponse = CommandSystemAssistantResponses[keyof CommandSystemAssistantResponses];
 
+export type GetProjectAssistantData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/assistant';
+};
+
+export type GetProjectAssistantErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetProjectAssistantError = GetProjectAssistantErrors[keyof GetProjectAssistantErrors];
+
+export type GetProjectAssistantResponses = {
+    /**
+     * Собственный профиль помощника проекта
+     */
+    200: ProjectAssistantProfile;
+};
+
+export type GetProjectAssistantResponse = GetProjectAssistantResponses[keyof GetProjectAssistantResponses];
+
+export type CreateProjectAssistantData = {
+    body: {
+        name: string;
+        purpose: string;
+        instructions: string;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/assistant';
+};
+
+export type CreateProjectAssistantErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateProjectAssistantError = CreateProjectAssistantErrors[keyof CreateProjectAssistantErrors];
+
+export type CreateProjectAssistantResponses = {
+    /**
+     * Профиль создан без копирования системных секретов или прав
+     */
+    201: ProjectAssistantProfile;
+};
+
+export type CreateProjectAssistantResponse = CreateProjectAssistantResponses[keyof CreateProjectAssistantResponses];
+
 export type ListAssistantConversationsData = {
     body?: never;
     path?: never;
     query?: {
+        assistantScope?: AssistantScope;
+        assistantRef?: OpaqueRef;
         projectRef?: OpaqueRef;
         query?: string;
         pageSize?: number;
@@ -10661,6 +10741,7 @@ export type ListAssistantConversationsResponse = ListAssistantConversationsRespo
 
 export type CreateAssistantConversationData = {
     body: {
+        assistantScope: AssistantScope;
         projectRef?: OpaqueRef;
         context?: AssistantContextDescriptor;
     };

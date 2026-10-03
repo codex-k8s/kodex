@@ -338,7 +338,7 @@ func completeResultFailure(ctx context.Context, input model.Input, client *callb
 }
 
 func completionArtifacts(input model.Input, finalMessage string) ([]runtimecontract.RunnerArtifact, error) {
-	if input.SystemAssistant || !hasCapability(input, runtimecontract.ArtifactCapability) {
+	if input.IsAssistant() || !hasCapability(input, runtimecontract.ArtifactCapability) {
 		return nil, nil
 	}
 	return collectArtifacts(input, finalMessage)

@@ -54,10 +54,14 @@ import type {
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 
-const props = defineProps<{
-  agentRef: string;
-  canEdit: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    agentRef: string;
+    canEdit: boolean;
+    advancedCollapsed?: boolean;
+  }>(),
+  { advancedCollapsed: false },
+);
 const emit = defineEmits<{
   "runtime-saved": [];
   "apply-state": [
@@ -577,7 +581,11 @@ onBeforeUnmount(reset);
 
 <template>
   <AsyncState :loading="loading" :problem="problem" @retry="load">
-    <div v-if="view" class="runtime-layout">
+    <div
+      v-if="view"
+      class="runtime-layout"
+      :class="{ 'runtime-layout--compact': advancedCollapsed }"
+    >
       <article class="runtime-panel panel">
         <div class="runtime-panel__head">
           <div>
@@ -789,7 +797,11 @@ onBeforeUnmount(reset);
         </div>
       </article>
 
-      <article class="overlay-panel panel">
+      <details class="overlay-panel panel" :open="!advancedCollapsed">
+        <summary v-if="advancedCollapsed" class="overlay-panel__toggle">
+          {{ $t("common.advanced") }}
+          <span>{{ copy.runtime.overlay }}</span>
+        </summary>
         <div class="overlay-panel__head">
           <div>
             <h2>{{ copy.runtime.overlay }}</h2>
@@ -891,7 +903,7 @@ onBeforeUnmount(reset);
             :min-lines="8"
           />
         </section>
-      </article>
+      </details>
     </div>
   </AsyncState>
 </template>
@@ -903,10 +915,30 @@ onBeforeUnmount(reset);
   gap: 16px;
   align-items: start;
 }
+.runtime-layout--compact {
+  grid-template-columns: minmax(0, 1fr);
+}
 .runtime-panel,
 .overlay-panel {
   display: grid;
   gap: 16px;
+}
+.overlay-panel:not([open]) {
+  display: block;
+}
+.overlay-panel__toggle {
+  cursor: pointer;
+  font-weight: 600;
+}
+.overlay-panel__toggle span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+.overlay-panel[open] .overlay-panel__toggle {
+  margin-bottom: 16px;
 }
 .runtime-panel__head,
 .overlay-panel__head {

@@ -419,7 +419,7 @@ func TestRawProviderResponseNotificationsRemainSuppressed(t *testing.T) {
 }
 
 func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
-	input := model.Input{SystemAssistant: true}
+	input := model.Input{AssistantScope: runtimecontract.AssistantScopeSystem}
 	input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{})
 	input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{})
 	actual := RequiredMCPToolNames(input)

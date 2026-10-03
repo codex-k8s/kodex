@@ -211,9 +211,28 @@ export function assistantCreatedEntityTarget(
   plan: AssistantPlan,
   operationRef: string,
 ):
-  | { kind: "PROJECT" | "AGENT"; projectRef: string; resourceRef: string }
+  | {
+      kind: "PROJECT" | "AGENT" | "PROJECT_ASSISTANT";
+      projectRef: string;
+      resourceRef: string;
+    }
   | undefined {
   const operation = plan.operations.find((item) => item.ref === operationRef);
+  if (operation?.type === "CREATE_PROJECT_ASSISTANT") {
+    const profileRef = assistantAppliedResourceRef(
+      plan,
+      operationRef,
+      "CREATE_PROJECT_ASSISTANT",
+      "PROJECT_ASSISTANT",
+    );
+    return plan.projectRef && profileRef
+      ? {
+          kind: "PROJECT_ASSISTANT",
+          projectRef: plan.projectRef,
+          resourceRef: profileRef,
+        }
+      : undefined;
+  }
   if (
     operation?.type === "CREATE_PROJECT" ||
     operation?.type === "UPDATE_PROJECT"
@@ -279,6 +298,7 @@ export type FriendlyPlanOperationType =
   | "CREATE_PROJECT_FILE"
   | "UPDATE_PROJECT"
   | "CREATE_AGENT"
+  | "CREATE_PROJECT_ASSISTANT"
   | "UPDATE_AGENT"
   | "CREATE_INSTRUCTION_DRAFT"
   | "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
@@ -329,36 +349,38 @@ export function friendlyPlanOperationType(
     return operation.value.action === "EXECUTE" ? operationType : undefined;
   }
   const expectedKind =
-    operation.value.type === "CREATE_PROJECT_FILE"
-      ? "ARTIFACT"
-      : operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
-          operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
-        ? "ROLE_IMAGE_RECIPE"
-        : operation.value.type === "PUBLISH_INTEGRATION_DEFINITION"
-          ? "INTEGRATION_DEFINITION"
-          : operation.value.type === "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
-            ? "SYSTEM_ASSISTANT"
-            : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
-                operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
-                operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
-                operation.value.type === "CHANGE_INTEGRATION_GRANT"
-              ? "INTEGRATION_CONNECTION"
-              : operation.value.type === "CREATE_WORKFLOW" ||
-                  operation.value.type === "UPDATE_WORKFLOW" ||
-                  operation.value.type === "ARCHIVE_WORKFLOW"
-                ? "WORKFLOW"
-                : operation.value.type ===
-                    "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-                  ? "ENVIRONMENT"
-                  : operation.value.type === "CREATE_SCHEDULE" ||
-                      operation.value.type === "UPDATE_SCHEDULE"
-                    ? "SCHEDULE"
-                    : operation.value.type.endsWith("PROJECT")
-                      ? "PROJECT"
-                      : operation.value.type ===
-                          "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-                        ? "RUNTIME_ENVIRONMENT_DRAFT"
-                        : "AGENT";
+    operation.value.type === "CREATE_PROJECT_ASSISTANT"
+      ? "PROJECT_ASSISTANT"
+      : operation.value.type === "CREATE_PROJECT_FILE"
+        ? "ARTIFACT"
+        : operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
+            operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
+          ? "ROLE_IMAGE_RECIPE"
+          : operation.value.type === "PUBLISH_INTEGRATION_DEFINITION"
+            ? "INTEGRATION_DEFINITION"
+            : operation.value.type === "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+              ? "SYSTEM_ASSISTANT"
+              : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+                  operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
+                  operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
+                  operation.value.type === "CHANGE_INTEGRATION_GRANT"
+                ? "INTEGRATION_CONNECTION"
+                : operation.value.type === "CREATE_WORKFLOW" ||
+                    operation.value.type === "UPDATE_WORKFLOW" ||
+                    operation.value.type === "ARCHIVE_WORKFLOW"
+                  ? "WORKFLOW"
+                  : operation.value.type ===
+                      "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+                    ? "ENVIRONMENT"
+                    : operation.value.type === "CREATE_SCHEDULE" ||
+                        operation.value.type === "UPDATE_SCHEDULE"
+                      ? "SCHEDULE"
+                      : operation.value.type.endsWith("PROJECT")
+                        ? "PROJECT"
+                        : operation.value.type ===
+                            "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                          ? "RUNTIME_ENVIRONMENT_DRAFT"
+                          : "AGENT";
   const expectedAction =
     operation.value.type === "CREATE_INSTRUCTION_DRAFT" ||
     operation.value.type === "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"

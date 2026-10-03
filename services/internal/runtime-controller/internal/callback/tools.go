@@ -58,7 +58,7 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.SystemAssistant || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset") {
+	if !input.IsAssistant() || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset") {
 		return nil, errors.New("configuration catalog is not available")
 	}
 	agentQuery := ""
@@ -397,7 +397,14 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
-	selfInstructionsOperation := input.SystemAssistant && input.AgentRef != ""
+	if input.IsSystemAssistant() {
+		result = append(result, assistantOperationSchema("CREATE_PROJECT_ASSISTANT", objectSchema(
+			[]string{"projectRef", "name", "purpose", "instructions"}, map[string]any{
+				"projectRef": projectRef, "name": stringSchema(1, 120), "purpose": stringSchema(1, 1000),
+				"instructions": assistantAgentInstructionsSchema(),
+			})))
+	}
+	selfInstructionsOperation := input.IsSystemAssistant() && input.AgentRef != ""
 	if selfInstructionsOperation {
 		result = append(result, assistantOperationSchema("UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", objectSchema(
 			[]string{"systemAssistantRef", "instructions"}, map[string]any{
@@ -405,16 +412,32 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 				"instructions":       stringSchema(0, 20000),
 			})))
 	}
-	selfEnvironmentOperation := input.SystemAssistant && input.AgentRef != "" && input.RuntimeEnvironmentRef != "" &&
+	selfEnvironmentOperation := input.IsSystemAssistant() && input.AgentRef != "" && input.RuntimeEnvironmentRef != "" &&
 		(input.AssistantContext == nil || input.AssistantContext.EntityKind != "ENVIRONMENT")
 	if selfEnvironmentOperation {
 		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
 			environmentRevisionInputSchema(enumSchema(input.RuntimeEnvironmentRef), enumSchema(input.AgentRef))))
 	}
+	projectSelfOperation := input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != ""
+	if projectSelfOperation {
+		result = append(result,
+			assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(projectSelfTargetSchema(input, "UPDATE_AGENT", "AGENT", input.AgentRef))),
+			assistantOperationSchema("CREATE_INSTRUCTION_DRAFT", objectSchema([]string{"agentRef", "instructions"}, map[string]any{
+				"agentRef": projectSelfTargetSchema(input, "CREATE_INSTRUCTION_DRAFT", "AGENT", input.AgentRef), "instructions": assistantAgentInstructionsSchema(),
+			})),
+			assistantOperationSchema("BIND_AGENT_RUNTIME_ENVIRONMENT", objectSchema([]string{"agentRef", "environmentRef"}, map[string]any{
+				"agentRef": projectSelfTargetSchema(input, "BIND_AGENT_RUNTIME_ENVIRONMENT", "AGENT", input.AgentRef), "environmentRef": opaqueRefSchema(),
+			})))
+	}
+	projectSelfEnvironmentOperation := input.AssistantScope == runtimecontract.AssistantScopeProject && input.RuntimeEnvironmentRef != ""
+	if projectSelfEnvironmentOperation {
+		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+			environmentRevisionInputSchema(projectSelfTargetSchema(input, "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "ENVIRONMENT", input.RuntimeEnvironmentRef), nil)))
+	}
 	if input.AssistantContext == nil {
 		return result
 	}
-	if input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef != "" {
+	if input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef != "" && !projectSelfOperation {
 		result = append(result, assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(enumSchema(input.AssistantContext.EntityRef))))
 		result = append(result, assistantOperationSchema("CREATE_INSTRUCTION_DRAFT", objectSchema(
 			[]string{"agentRef", "instructions"}, map[string]any{
@@ -428,7 +451,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "WORKFLOW" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_WORKFLOW", workflowUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
-	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" {
+	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" && !projectSelfEnvironmentOperation {
 		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
 			environmentRevisionInputSchema(enumSchema(input.AssistantContext.EntityRef), nil)))
 	}
@@ -438,7 +461,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "SCHEDULE" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_SCHEDULE", scheduleUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
-	if len(input.AssistantContext.AllowedOperations) == 0 {
+	if len(input.AssistantContext.AllowedOperations) == 0 && !projectSelfOperation && !projectSelfEnvironmentOperation {
 		return nil
 	}
 	allowed := make(map[string]struct{}, len(input.AssistantContext.AllowedOperations))
@@ -450,11 +473,26 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		kind := operation["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
 		if _, ok := allowed[kind]; ok ||
 			selfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
-			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
+			projectSelfOperation && (kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT") ||
+			projectSelfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 			filtered = append(filtered, operation)
 		}
 	}
 	return filtered
+}
+
+func projectSelfTargetSchema(input runtimecontract.RunnerInput, operation, kind, ownRef string) map[string]any {
+	refs := []string{ownRef}
+	if context := input.AssistantContext; context != nil && context.EntityKind == kind && context.EntityRef != "" && context.EntityRef != ownRef {
+		for _, allowed := range context.AllowedOperations {
+			if allowed == operation {
+				refs = append(refs, context.EntityRef)
+				break
+			}
+		}
+	}
+	return enumSchema(refs...)
 }
 
 func assistantAgentCapabilitySchema() map[string]any {

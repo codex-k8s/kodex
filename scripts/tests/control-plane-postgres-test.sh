@@ -109,7 +109,14 @@ run_migration() {
   retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c "SELECT control_plane.skill_artifact_reference_count('00000000-0000-4000-8000-000000000001'::uuid,'art_component',1,'sha256:' || repeat('0',64))")
   [[ "$retention_reference_count" == "0" ]] || fail 'artifact retention trigger dependency is unavailable'
+  # Новые самостоятельные suites получают отдельную копию ещё пустой схемы,
+  # чтобы terminal fixtures одного сценария не загрязняли bootstrap другого.
+  # Эти координаты существуют только внутри disposable контейнера этой оснастки.
+  psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
+    -c 'CREATE DATABASE control_plane_component_template WITH TEMPLATE control_plane OWNER control_plane_owner' >/dev/null
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
+    KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
+    KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
     env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 \
       ./internal/repository/postgres/platform -run "$test_pattern"
   # Та же read-only диагностика, которую release использует на staging.
