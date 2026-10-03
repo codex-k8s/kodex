@@ -140,6 +140,14 @@ owner_email=$(read_single_line_secret "$temporary_directory/owner-email" 'bootst
   fail 'owner and administrator usernames must differ'
 [[ "$owner_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail 'owner email is invalid'
 
+grafana_access_groups=(
+  kodex-admins
+  kodex-owners
+  kodex-monitoring
+  kodex-developers
+)
+groups_mapper_config='{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+
 read_initial_password() {
   local key=$1 label=$2
   local path="$temporary_directory/$key"
@@ -260,6 +268,31 @@ find_scope_id() {
     '
 }
 
+find_group_id() {
+  local group_name=$1 groups_json
+  groups_json=$(keycloak_request get groups -r "$realm" -q "search=$group_name" -q exact=true -q max=2) ||
+    fail "Keycloak group list is unavailable: $group_name"
+  jq -er --arg group_name "$group_name" '
+    [.[] | select(.name == $group_name and .path == ("/" + $group_name))] |
+    if length == 1 then .[0].id else error("group identity is ambiguous") end
+  ' <<<"$groups_json"
+}
+
+reconcile_group() {
+  local group_name=$1 groups_json group_count
+  groups_json=$(keycloak_request get groups -r "$realm" -q "search=$group_name" -q exact=true -q max=2) ||
+    fail "Keycloak group list is unavailable: $group_name"
+  group_count=$(jq -er --arg group_name "$group_name" '
+    [.[] | select(.name == $group_name and .path == ("/" + $group_name))] | length
+  ' <<<"$groups_json") || fail "Keycloak group list is invalid: $group_name"
+  case "$group_count" in
+    0) keycloak_request create groups -r "$realm" -s "name=$group_name" >/dev/null ;;
+    1) ;;
+    *) fail "Keycloak group is duplicated: $group_name" ;;
+  esac
+  find_group_id "$group_name" >/dev/null || fail "Keycloak group reconciliation failed: $group_name"
+}
+
 reconcile_mapper() {
   local client_uuid=$1 mapper_name=$2 mapper_type=$3 config_json=$4 client_realm=${5:-$realm}
   local mapper_json mapper_count mapper_id
@@ -349,7 +382,7 @@ read_management_client_secret() {
 
 reconcile_confidential_client() {
   local client_id=$1 origin=$2 namespace_name=$3 secret_name=$4
-  local client_realm=${5:-$realm} client_uuid client_secret attributes
+  local client_realm=${5:-$realm} include_groups=${6:-false} client_uuid client_secret attributes
   client_secret=$(read_management_client_secret "$client_id" "$namespace_name" "$secret_name")
   if ! find_client_id "$client_id" "$client_realm" >/dev/null 2>&1; then
     keycloak_request create clients -r "$client_realm" -s "clientId=$client_id" >/dev/null
@@ -374,10 +407,14 @@ reconcile_confidential_client() {
   reconcile_mapper "$client_uuid" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}' \
     "$client_realm"
+  if [[ "$include_groups" == true ]]; then
+    reconcile_mapper "$client_uuid" kodex-groups oidc-group-membership-mapper \
+      "$groups_mapper_config" "$client_realm"
+  fi
 }
 
 readback_confidential_client() {
-  local client_id=$1 origin=$2 redirect=$3 client_realm=${4:-$realm}
+  local client_id=$1 origin=$2 redirect=$3 client_realm=${4:-$realm} include_groups=${5:-false}
   local client_uuid client_json mapper_json audience_config roles_config
   client_uuid=$(find_client_id "$client_id" "$client_realm")
   client_json=$(keycloak_request get "clients/$client_uuid" -r "$client_realm")
@@ -396,6 +433,10 @@ readback_confidential_client() {
     "$audience_config" || fail "management OIDC mapper readback failed: $client_id"
   require_mapper_exact "$mapper_json" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     "$roles_config" || fail "management OIDC mapper readback failed: $client_id"
+  if [[ "$include_groups" == true ]]; then
+    require_mapper_exact "$mapper_json" kodex-groups oidc-group-membership-mapper \
+      "$groups_mapper_config" || fail "management OIDC groups mapper readback failed: $client_id"
+  fi
 }
 
 ensure_admin_client
@@ -460,6 +501,9 @@ if [[ "$mode" == apply ]]; then
     keycloak_request create roles -r "$realm" -s name=kodex-owner \
       -s 'description=Kodex platform owner' >/dev/null
   fi
+  for group_name in "${grafana_access_groups[@]}"; do
+    reconcile_group "$group_name"
+  done
   if ! find_client_id kodex-control-api >/dev/null 2>&1; then
     keycloak_request create clients -r "$realm" -s clientId=kodex-control-api >/dev/null
   fi
@@ -520,7 +564,7 @@ if [[ "$mode" == apply ]]; then
   reconcile_mapper "$control_center_id" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
   reconcile_mapper "$control_center_id" kodex-groups oidc-group-membership-mapper \
-    '{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+    "$groups_mapper_config"
   reconcile_mapper "$control_center_id" kodex-acr oidc-acr-mapper \
     '{"access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"false"}'
   reconcile_mapper "$control_center_id" kodex-amr oidc-amr-mapper \
@@ -556,12 +600,19 @@ if [[ "$mode" == apply ]]; then
     -s "firstName=$owner_username" -s lastName=Owner -s 'requiredActions=[]' >/dev/null
   keycloak_request add-roles -r "$realm" --uusername "$owner_username" \
     --rolename kodex-owner >/dev/null
+  owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" -q exact=true -q max=2 |
+    jq -er --arg username "$owner_username" '
+      [.[] | select(.username == $username)] |
+      if length == 1 then .[0].id else error("owner identity is ambiguous") end
+    ')
+  owner_group_id=$(find_group_id kodex-owners)
+  keycloak_request update "users/$owner_id/groups/$owner_group_id" -r "$realm" -n >/dev/null
 
   reconcile_confidential_client kodex-control-center-proxy "$public_origin" \
     kodex-system oauth2-control-center
   if [[ "$management_surfaces" != control-center ]]; then
     reconcile_confidential_client kodex-grafana-proxy "$grafana_origin" \
-      observability oauth2-grafana
+      observability oauth2-grafana "$realm" true
   fi
   if [[ "$management_surfaces" == all ]]; then
     reconcile_confidential_client kodex-headlamp-proxy "$headlamp_origin" \
@@ -605,7 +656,6 @@ organization_mapper_config=$(jq -cn --arg value "$organization_id" '{
 session_mapper_config='{"claim.name":"session_revision","claim.value":"1","jsonType.label":"long","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 audience_mapper_config='{"included.client.audience":"kodex-control-api","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
 roles_mapper_config='{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
-groups_mapper_config='{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 require_mapper_exact "$mapper_json" kodex-organization-id oidc-hardcoded-claim-mapper \
   "$organization_mapper_config" || fail 'OIDC claim mapper readback failed'
 require_mapper_exact "$mapper_json" kodex-session-revision oidc-hardcoded-claim-mapper \
@@ -631,10 +681,18 @@ owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" 
   ')
 keycloak_request get "users/$owner_id/role-mappings/realm" -r "$realm" |
   jq -e 'any(.[]; .name == "kodex-owner")' >/dev/null || fail 'owner role readback failed'
+for group_name in "${grafana_access_groups[@]}"; do
+  find_group_id "$group_name" >/dev/null || fail "Keycloak group readback failed: $group_name"
+done
+owner_groups=$(keycloak_request get "users/$owner_id/groups" -r "$realm") ||
+  fail 'owner group membership readback failed'
+jq -e 'any(.[]; .name == "kodex-owners" and .path == "/kodex-owners")' \
+  <<<"$owner_groups" >/dev/null || fail 'owner Grafana access group is absent'
 
 readback_confidential_client kodex-control-center-proxy "$public_origin" "$public_origin/oauth2/callback"
 if [[ "$management_surfaces" != control-center ]]; then
-  readback_confidential_client kodex-grafana-proxy "$grafana_origin" "$grafana_origin/oauth2/callback"
+  readback_confidential_client kodex-grafana-proxy "$grafana_origin" \
+    "$grafana_origin/oauth2/callback" "$realm" true
 fi
 if [[ "$management_surfaces" == all ]]; then
   readback_confidential_client kodex-headlamp-proxy "$headlamp_origin" "$headlamp_origin/oauth2/callback" master

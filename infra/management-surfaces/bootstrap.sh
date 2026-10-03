@@ -285,6 +285,19 @@ render_oauth_values() {
       }])
     ' "$output"
   fi
+  if [[ "$surface" == grafana ]]; then
+    yq -i '
+      .extraArgs = ([.extraArgs | to_entries[] |
+        select(.key != "allowed-role") |
+        "--" + .key + "=" + (.value | tostring)] + [
+          "--oidc-groups-claim=groups",
+          "--allowed-group=kodex-admins",
+          "--allowed-group=kodex-owners",
+          "--allowed-group=kodex-monitoring",
+          "--allowed-group=kodex-developers"
+        ])
+    ' "$output"
+  fi
 }
 
 apply_oidc_ca() {
@@ -394,11 +407,26 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
   for binding in "${readback_bindings[@]}"; do
     IFS=: read -r deployment namespace role <<<"$binding"
     kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout=3m >/dev/null || fail "OAuth2 Proxy rollout failed: $deployment"
-    kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e \
-      --arg role "--allowed-role=$role" --arg oidc_host "$oidc_host" --arg oidc_ip "$oidc_connect_ip" '
-      any(.spec.template.spec.containers[]; .name == "oauth2-proxy" and (.args | index($role)) != null) and
-      .spec.template.spec.hostAliases == [{ip:$oidc_ip, hostnames:[$oidc_host]}]
-    ' >/dev/null || fail "OAuth2 Proxy role gate mismatch: $deployment"
+    if [[ "$deployment" == oauth2-grafana ]]; then
+      kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e \
+        --arg oidc_host "$oidc_host" --arg oidc_ip "$oidc_connect_ip" '
+        ["--allowed-group=kodex-admins", "--allowed-group=kodex-owners",
+          "--allowed-group=kodex-monitoring", "--allowed-group=kodex-developers"] as $groups |
+        any(.spec.template.spec.containers[];
+          . as $container |
+          .name == "oauth2-proxy" and
+          (.args | index("--oidc-groups-claim=groups")) != null and
+          all($groups[]; . as $group | ($container.args | index($group)) != null) and
+          all($container.args[]; startswith("--allowed-role=") | not)) and
+        .spec.template.spec.hostAliases == [{ip:$oidc_ip, hostnames:[$oidc_host]}]
+      ' >/dev/null || fail "OAuth2 Proxy group gate mismatch: $deployment"
+    else
+      kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e \
+        --arg role "--allowed-role=$role" --arg oidc_host "$oidc_host" --arg oidc_ip "$oidc_connect_ip" '
+        any(.spec.template.spec.containers[]; .name == "oauth2-proxy" and (.args | index($role)) != null) and
+        .spec.template.spec.hostAliases == [{ip:$oidc_ip, hostnames:[$oidc_host]}]
+      ' >/dev/null || fail "OAuth2 Proxy role gate mismatch: $deployment"
+    fi
     if [[ -n "$oidc_ca_file" ]]; then
       kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e '
         any(.spec.template.spec.containers[];

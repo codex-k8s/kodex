@@ -134,6 +134,24 @@ cat >"$temporary_directory/bin/helm" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == template ]]; then
+  release=${2:-}
+  values=""
+  while (($# > 0)); do
+    case "$1" in
+      --values) values=${2:-}; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  if [[ "$release" == oauth2-grafana ]]; then
+    [[ -n "$values" && -f "$values" ]]
+    yq -e '
+      (.extraArgs | tag) == "!!seq" and
+      ([.extraArgs[] | select(test("^--allowed-group="))] | sort | join("|")) ==
+        "--allowed-group=kodex-admins|--allowed-group=kodex-developers|--allowed-group=kodex-monitoring|--allowed-group=kodex-owners" and
+      ([.extraArgs[] | select(. == "--oidc-groups-claim=groups")] | length) == 1 and
+      ([.extraArgs[] | select(test("^--allowed-role="))] | length) == 0
+    ' "$values" >/dev/null
+  fi
   exit 0
 fi
 [[ "${1:-}" == pull ]]
@@ -193,7 +211,11 @@ fi
 if [[ "$arguments" == *' get deployment oauth2-'*' -o json '* ]]; then
   role=kodex-owner
   [[ "$arguments" != *' get deployment oauth2-headlamp '* ]] || role=admin
-  printf '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--allowed-role=%s"]}]}}}}\n' "$role"
+  if [[ "$arguments" == *' get deployment oauth2-grafana '* ]]; then
+    printf '%s\n' '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--oidc-groups-claim=groups","--allowed-group=kodex-admins","--allowed-group=kodex-owners","--allowed-group=kodex-monitoring","--allowed-group=kodex-developers"]}]}}}}'
+  else
+    printf '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--allowed-role=%s"]}]}}}}\n' "$role"
+  fi
   exit 0
 fi
 if [[ "$arguments" == *' get networkpolicy oauth2-'*'-exact-paths -o json '* ]]; then
@@ -374,6 +396,12 @@ if kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e '
 fi
 yq -e '.extraArgs."allowed-role" == "__KODEX_ALLOWED_ROLE__"' "$values" >/dev/null ||
   fail 'OAuth2 Proxy role gate is absent'
+for group in kodex-admins kodex-owners kodex-monitoring kodex-developers; do
+  rg -Fq -- "--allowed-group=$group" "$bootstrap" ||
+    fail "Grafana OAuth2 group gate is absent: $group"
+done
+rg -Fq -- '--oidc-groups-claim=groups' "$bootstrap" ||
+  fail 'Grafana OAuth2 groups claim is absent'
 rg -Fq -- '--provider-ca-file=/oidc-provider-ca/ca.crt' "$bootstrap" ||
   fail 'OAuth2 Proxy private OIDC CA is not wired'
 rg -Fq -- '--use-system-trust-store=true' "$bootstrap" ||
