@@ -5,9 +5,9 @@ package generated
 type ArtifactSource string
 
 const (
-	ArtifactSourceControlCenter ArtifactSource = "CONTROL_CENTER"
-	ArtifactSourceAgentResult ArtifactSource = "AGENT_RESULT"
-	ArtifactSourceIntegrationResult ArtifactSource = "INTEGRATION_RESULT"
-	ArtifactSourceKnowledgeSource ArtifactSource = "KNOWLEDGE_SOURCE"
+	ArtifactSourceControlCenter         ArtifactSource = "CONTROL_CENTER"
+	ArtifactSourceAgentResult           ArtifactSource = "AGENT_RESULT"
+	ArtifactSourceIntegrationResult     ArtifactSource = "INTEGRATION_RESULT"
+	ArtifactSourceKnowledgeSource       ArtifactSource = "KNOWLEDGE_SOURCE"
 	ArtifactSourceInteractionAttachment ArtifactSource = "INTERACTION_ATTACHMENT"
 )

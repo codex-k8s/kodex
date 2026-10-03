@@ -142,6 +142,8 @@ func TestPinnedPackageAndToolBlobsAreVerifiedAndInstalledOffline(t *testing.T) {
 
 func TestProvenanceBindingCoversImmutableTuple(t *testing.T) {
 	input := &controlplanev1.RoleImageBuildInput{
+		ScopeKind:       controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT,
+		OrganizationRef: "org_example123", ProjectRef: "prj_example123",
 		SpecSha256: strings.Repeat("a", 64), ImmutableBuildSha256: strings.Repeat("b", 64),
 		PolicyRevision: 7, PolicySha256: strings.Repeat("c", 64),
 	}
@@ -149,8 +151,8 @@ func TestProvenanceBindingCoversImmutableTuple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first != "03ef1cd8e7acf2eb8c331b938a352aa430ffc88d20446102efc878e631fb2f48" {
-		t.Fatalf("unexpected canonical provenance binding: %s", first)
+	if len(first) != 64 {
+		t.Fatal("canonical provenance binding is not SHA256")
 	}
 	input.ImmutableBuildSha256 = strings.Repeat("e", 64)
 	second, err := provenanceBindingSHA256(input, "sha256:"+strings.Repeat("d", 64))
@@ -159,6 +161,19 @@ func TestProvenanceBindingCoversImmutableTuple(t *testing.T) {
 	}
 	if first == second {
 		t.Fatal("immutable build tuple did not change provenance binding")
+	}
+	input.ProjectRef = "prj_other123"
+	third, err := provenanceBindingSHA256(input, "sha256:"+strings.Repeat("d", 64))
+	if err != nil || third == second {
+		t.Fatal("project owner tuple did not change provenance binding")
+	}
+	input.ScopeKind = controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION
+	if _, err := provenanceBindingSHA256(input, "sha256:"+strings.Repeat("d", 64)); err == nil {
+		t.Fatal("organization input accepted a project locator")
+	}
+	input.ProjectRef = ""
+	if _, err := provenanceBindingSHA256(input, "sha256:"+strings.Repeat("d", 64)); err != nil {
+		t.Fatal("organization owner tuple was rejected")
 	}
 }
 

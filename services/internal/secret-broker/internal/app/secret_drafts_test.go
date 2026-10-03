@@ -43,13 +43,31 @@ type composedDraftOwner struct {
 	work         *cp.RuntimeSecretDraftWork
 	recoveryErr  error
 	materialized *cp.RuntimeSecretMaterialization
+	recoveryWork *cp.RuntimeSecretDraftWork
+	recovered    int
 }
 
 func (owner *composedDraftOwner) CheckRuntimeSecretDraftWorkReadiness(context.Context, *cp.CheckRuntimeSecretDraftWorkReadinessRequest, ...grpc.CallOption) (*cp.CheckRuntimeSecretDraftWorkReadinessResponse, error) {
 	return &cp.CheckRuntimeSecretDraftWorkReadinessResponse{Ready: true}, nil
 }
 func (owner *composedDraftOwner) ListRuntimeSecretDraftRecoveryWork(context.Context, *cp.ListRuntimeSecretDraftRecoveryWorkRequest, ...grpc.CallOption) (*cp.ListRuntimeSecretDraftRecoveryWorkResponse, error) {
+	if owner.recoveryWork != nil {
+		return &cp.ListRuntimeSecretDraftRecoveryWorkResponse{Operations: []*cp.RuntimeSecretDraftWork{proto.Clone(owner.recoveryWork).(*cp.RuntimeSecretDraftWork)}}, owner.recoveryErr
+	}
 	return &cp.ListRuntimeSecretDraftRecoveryWorkResponse{}, owner.recoveryErr
+}
+
+func (owner *composedDraftOwner) RecoverRuntimeSecretDraftMaterialization(_ context.Context, request *cp.RecoverRuntimeSecretDraftMaterializationRequest, _ ...grpc.CallOption) (*cp.RecoverRuntimeSecretDraftMaterializationResponse, error) {
+	w := owner.recoveryWork
+	if w == nil || request.GetOperationRef() != w.GetOperationRef() || request.GetClaimGeneration() != w.GetClaimGeneration() || request.GetClaimantId() != w.GetClaimantId() ||
+		!proto.Equal(request.GetEncrypted(), w.GetEncrypted()) || !proto.Equal(request.GetMaterialization(), owner.materialized) {
+		owner.t.Fatal("recovery lost exact immutable scoped effects")
+	}
+	owner.recovered++
+	return &cp.RecoverRuntimeSecretDraftMaterializationResponse{Draft: proto.Clone(w.Draft).(*cp.RuntimeSecretDraft),
+		OperationState:        cp.RuntimeSecretOperationState_RUNTIME_SECRET_OPERATION_STATE_COMPLETED,
+		EncryptedAction:       cp.RuntimeSecretRecoveryAction_RUNTIME_SECRET_RECOVERY_ACTION_KEEP,
+		MaterializationAction: cp.RuntimeSecretRecoveryAction_RUNTIME_SECRET_RECOVERY_ACTION_KEEP}, nil
 }
 func (owner *composedDraftOwner) ConsumeRuntimeSecretDraftOperation(_ context.Context, request *cp.ConsumeRuntimeSecretDraftOperationRequest, _ ...grpc.CallOption) (*cp.ConsumeRuntimeSecretDraftOperationResponse, error) {
 	if request.GetClaimantId() != owner.work.ClaimantId || request.GetOperationGrant() != "synthetic-grant" {
@@ -82,7 +100,7 @@ func (owner *composedDraftOwner) CompleteRuntimeSecretDraftOperation(_ context.C
 		d.State = cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_PUBLISHED
 		d.SecretVersion++
 		d.PublishedRevision = w.TargetRevision
-		result.Secret = &cp.RuntimeSecret{Ref: d.SecretRef, ProjectRef: d.ProjectRef, Name: d.Name, ValueType: d.ValueType,
+		result.Secret = &cp.RuntimeSecret{Ref: d.SecretRef, ScopeKind: d.ScopeKind, OrganizationRef: d.OrganizationRef, ProjectRef: d.ProjectRef, Name: d.Name, ValueType: d.ValueType,
 			Version: d.SecretVersion, CurrentRevision: w.TargetRevision, State: "ACTIVE", CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}
 	case cp.RuntimeSecretDraftOperationKind_RUNTIME_SECRET_DRAFT_OPERATION_KIND_DISCARD:
 		d.State = cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_DISCARDED
@@ -126,6 +144,12 @@ func composedDraftKubernetes(t *testing.T, namespace, guardName string) *fake.Cl
 }
 
 func TestSecretDraftCompositionEncryptedLifecycleAndReadiness(t *testing.T) {
+	for _, scope := range []cp.RuntimeResourceScopeKind{cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION} {
+		t.Run(scope.String(), func(t *testing.T) { testScopedSecretDraftComposition(t, scope) })
+	}
+}
+
+func testScopedSecretDraftComposition(t *testing.T, scope cp.RuntimeResourceScopeKind) {
 	ctx := context.Background()
 	const stagedNamespace, runtimeNamespace, guardName = "kodex-secret-drafts", "kodex-runtime", "secret-broker-draft-key-guard"
 	directory := t.TempDir()
@@ -147,7 +171,7 @@ func TestSecretDraftCompositionEncryptedLifecycleAndReadiness(t *testing.T) {
 	refDigest := sha256.Sum256([]byte("draft_composition"))
 	owner := &composedDraftOwner{t: t, work: &cp.RuntimeSecretDraftWork{
 		OperationRef: "operation_save", Kind: cp.RuntimeSecretDraftOperationKind_RUNTIME_SECRET_DRAFT_OPERATION_KIND_SAVE,
-		Draft: &cp.RuntimeSecretDraft{Ref: "draft_composition", ProjectRef: "project_composition", SecretRef: "sec_fixture01", Name: "SYNTHETIC_KEY",
+		Draft: &cp.RuntimeSecretDraft{Ref: "draft_composition", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture", ProjectRef: "project_composition", SecretRef: "sec_fixture01", Name: "SYNTHETIC_KEY",
 			Version: 1, Generation: 1, SecretVersion: 1, ValueType: cp.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING,
 			State:     cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_PREPARING,
 			CreatedAt: timestamppb.New(now), UpdatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(time.Hour))},
@@ -155,6 +179,10 @@ func TestSecretDraftCompositionEncryptedLifecycleAndReadiness(t *testing.T) {
 		StagedSecretName: "runtime-secret-draft-" + hex.EncodeToString(refDigest[:16]), StagedSecretKey: "ciphertext",
 		ClaimantId: "pod_composition", ClaimGeneration: 1, LeaseDeadline: timestamppb.New(now.Add(time.Minute)), ExpiresAt: timestamppb.New(now.Add(2 * time.Minute)),
 	}}
+	owner.work.Draft.ScopeKind = scope
+	if scope == cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION {
+		owner.work.Draft.ProjectRef = ""
+	}
 	service, err := composeSecretDrafts(Config{ClaimantID: "pod_composition", MaximumSecretBytes: 1024, RuntimeNamespace: runtimeNamespace,
 		DraftNamespace: stagedNamespace, DraftKeyGuardName: guardName, DraftKeyringFile: keyring}, owner, runtimeStore, observability.NewSecretDrafts(), client)
 	if err != nil {
@@ -175,6 +203,9 @@ func TestSecretDraftCompositionEncryptedLifecycleAndReadiness(t *testing.T) {
 	saved, err := server.SaveSecretDraft(ctx, request)
 	if err != nil || saved.GetDraft().GetSecretVersion() != 1 {
 		t.Fatalf("save failed: %v", err)
+	}
+	if saved.GetDraft().GetScopeKind().String() != scope.String() || saved.GetDraft().GetOrganizationRef() != owner.work.Draft.OrganizationRef || saved.GetDraft().GetProjectRef() != owner.work.Draft.ProjectRef {
+		t.Fatal("secure form response lost canonical owner scope")
 	}
 	if !bytes.Equal(request.Value, make([]byte, len(request.Value))) {
 		t.Fatal("save retained request plaintext")
@@ -205,6 +236,45 @@ func TestSecretDraftCompositionEncryptedLifecycleAndReadiness(t *testing.T) {
 	if err != nil || !bytes.Equal(active.Data["value"], fixture) || string(active.UID) != materialized.GetSecretUid() || active.ResourceVersion != materialized.GetSecretResourceVersion() || active.Immutable == nil || !*active.Immutable {
 		t.Fatal("publish did not read back exact immutable runtime bytes")
 	}
+	if published.GetSecret().GetScopeKind().String() != scope.String() || published.GetSecret().GetOrganizationRef() != owner.work.Draft.OrganizationRef || published.GetSecret().GetProjectRef() != owner.work.Draft.ProjectRef {
+		t.Fatal("publication response lost canonical owner scope")
+	}
+	owner.recoveryWork = proto.Clone(owner.work).(*cp.RuntimeSecretDraftWork)
+	for name, mutate := range map[string]func(*cp.RuntimeSecretDraft){
+		"foreign organization": func(d *cp.RuntimeSecretDraft) { d.OrganizationRef = "org_foreign" },
+		"unknown scope":        func(d *cp.RuntimeSecretDraft) { d.ScopeKind = cp.RuntimeResourceScopeKind(99) },
+		"cross scope": func(d *cp.RuntimeSecretDraft) {
+			if d.ProjectRef == "" {
+				d.ScopeKind = cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT
+				d.ProjectRef = "project_composition"
+			} else {
+				d.ScopeKind = cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION
+				d.ProjectRef = ""
+			}
+		},
+	} {
+		t.Run("recovery_"+name, func(t *testing.T) {
+			owner.recoveryWork = proto.Clone(owner.work).(*cp.RuntimeSecretDraftWork)
+			mutate(owner.recoveryWork.Draft)
+			if err := service.ReconcileOnce(ctx); err == nil || owner.recovered != 0 {
+				t.Fatal("foreign recovery work reached owner reconciliation")
+			}
+			untouched, err := client.CoreV1().Secrets(runtimeNamespace).Get(ctx, active.Name, metav1.GetOptions{})
+			if err != nil || untouched.UID != active.UID || untouched.ResourceVersion != active.ResourceVersion {
+				t.Fatal("foreign recovery changed published source")
+			}
+		})
+	}
+	owner.recoveryWork = proto.Clone(owner.work).(*cp.RuntimeSecretDraftWork)
+	if err := service.ReconcileOnce(ctx); err != nil || owner.recovered != 1 {
+		t.Fatalf("scoped published effect recovery failed: %v", err)
+	}
+	owner.recoveryWork = nil
+	recovered, err := client.CoreV1().Secrets(runtimeNamespace).Get(ctx, active.Name, metav1.GetOptions{})
+	if err != nil || recovered.UID != active.UID || recovered.ResourceVersion != active.ResourceVersion || !bytes.Equal(recovered.Data["value"], fixture) {
+		t.Fatal("recovery rewrote published immutable effect")
+	}
+	testScopedPublishedRuntimeConsumer(t, runtimeStore, client, scope, materialized, fixture)
 	// Следующий черновик того же active Secret можно сохранить и отбросить,
 	// сохранив опубликованную immutable revision.
 	owner.work.Draft.Ref = "draft_next"

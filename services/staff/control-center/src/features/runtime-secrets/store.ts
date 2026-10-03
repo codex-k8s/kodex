@@ -17,10 +17,17 @@ import type {
   RuntimeSecretRotateInput,
 } from "./model";
 import { normalizeSecretPage } from "./model";
+import {
+  assertRuntimeResourceAddressIdentity,
+  runtimeResourceAddressKey,
+  runtimeResourceAddressScope,
+  type RuntimeResourceAddress,
+} from "@/features/runtime/resource-scope";
 
 export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   const items = ref<RuntimeSecret[]>([]);
   const projectRef = ref("");
+  const resourceScope = ref<RuntimeResourceAddress>();
   const query = ref("");
   const nextPageToken = ref("");
   const loading = ref(false);
@@ -38,7 +45,11 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   );
   const hasMore = computed(() => nextPageToken.value.length > 0);
 
-  function prepareRealtimeScope(nextProjectRef: string): void {
+  function prepareRealtimeScope(scope: RuntimeResourceAddress): void {
+    const nextProjectRef = runtimeResourceAddressKey(scope);
+    resourceScope.value = scope;
+    generation += 1;
+    controller?.abort();
     if (projectRef.value !== nextProjectRef) items.value = [];
     projectRef.value = nextProjectRef;
     query.value = "";
@@ -50,13 +61,14 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   }
 
   function applySnapshot(
-    nextProjectRef: string,
+    scope: RuntimeResourceAddress,
     values: RuntimeSecret[],
     sourceNextPageToken?: string,
   ): void {
+    const nextProjectRef = runtimeResourceAddressKey(scope);
     if (query.value || projectRef.value !== nextProjectRef) return;
-    if (values.some((item) => item.projectRef !== nextProjectRef))
-      throw new Error("Runtime secret realtime scope mismatch");
+    for (const item of values)
+      assertRuntimeResourceAddressIdentity(scope, item);
     const previous = new Map(items.value.map((item) => [item.ref, item]));
     items.value = values.map((item) => {
       const retained = previous.get(item.ref);
@@ -68,10 +80,12 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   }
 
   async function load(
-    nextProjectRef: string,
+    scope: RuntimeResourceAddress,
     nextQuery = "",
     pageSize = 20,
   ): Promise<void> {
+    const nextProjectRef = runtimeResourceAddressKey(scope);
+    resourceScope.value = scope;
     requestedPageSize = pageSize;
     const current = ++generation;
     controller?.abort();
@@ -89,7 +103,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     try {
       const page = normalizeSecretPage(
         await loadRuntimeSecretPage(
-          nextProjectRef,
+          scope,
           nextQuery,
           undefined,
           AbortSignal.any([currentController.signal, requestSignal()]),
@@ -97,8 +111,8 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
         ),
       );
       if (current !== generation) return;
-      if (page.items.some((item) => item.projectRef !== nextProjectRef))
-        throw new Error("Runtime secret catalog scope mismatch");
+      for (const item of page.items)
+        assertRuntimeResourceAddressIdentity(scope, item);
       items.value = page.items;
       nextPageToken.value = page.nextPageToken;
     } catch (error) {
@@ -110,7 +124,8 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   }
 
   async function loadMore(pageSize = 20): Promise<void> {
-    if (!hasMore.value || loading.value || loadingMore.value) return;
+    const scope = resourceScope.value;
+    if (!scope || !hasMore.value || loading.value || loadingMore.value) return;
     requestedPageSize = pageSize;
     const current = generation;
     const cursor = nextPageToken.value;
@@ -121,7 +136,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     try {
       const page = normalizeSecretPage(
         await loadRuntimeSecretPage(
-          projectRef.value,
+          scope,
           query.value,
           cursor,
           AbortSignal.any([currentController.signal, requestSignal()]),
@@ -129,8 +144,8 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
         ),
       );
       if (current !== generation) return;
-      if (page.items.some((item) => item.projectRef !== projectRef.value))
-        throw new Error("Runtime secret catalog scope mismatch");
+      for (const item of page.items)
+        assertRuntimeResourceAddressIdentity(scope, item);
       if (page.nextPageToken && page.nextPageToken === cursor)
         throw new Error("Runtime secret catalog cursor did not advance");
       const merged = new Map(items.value.map((item) => [item.ref, item]));
@@ -150,10 +165,18 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   }
 
   async function reload(): Promise<void> {
-    await load(projectRef.value, query.value, requestedPageSize);
+    if (resourceScope.value)
+      await load(resourceScope.value, query.value, requestedPageSize);
   }
 
   async function create(input: RuntimeSecretCreateInput): Promise<void> {
+    if (
+      !resourceScope.value ||
+      runtimeResourceAddressScope(resourceScope.value).kind !== "PROJECT"
+    )
+      throw new Error(
+        "Organization secrets require the protected draft workflow",
+      );
     if (busyRef.value)
       throw new Error("Runtime secret mutation is already in progress");
     const project = projectRef.value;
@@ -180,8 +203,9 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     secret: RuntimeSecret,
     input: RuntimeSecretRotateInput,
   ): Promise<void> {
-    if (secret.projectRef !== projectRef.value)
-      throw new Error("Runtime secret mutation scope mismatch");
+    const scope = resourceScope.value;
+    if (!scope) throw new Error("Runtime secret mutation scope is unavailable");
+    assertRuntimeResourceAddressIdentity(scope, secret);
     if (busyRef.value)
       throw new Error("Runtime secret mutation is already in progress");
     const current = generation;
@@ -191,7 +215,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     try {
       const receipt = checkedReceipt(
         await rotateRuntimeSecret(secret, input),
-        secret.projectRef,
+        scope,
         secret,
       );
       if (current === generation) retainReceipt(receipt);
@@ -205,8 +229,9 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   }
 
   async function revoke(secret: RuntimeSecret): Promise<void> {
-    if (secret.projectRef !== projectRef.value)
-      throw new Error("Runtime secret mutation scope mismatch");
+    const scope = resourceScope.value;
+    if (!scope) throw new Error("Runtime secret mutation scope is unavailable");
+    assertRuntimeResourceAddressIdentity(scope, secret);
     if (busyRef.value)
       throw new Error("Runtime secret mutation is already in progress");
     const current = generation;
@@ -216,7 +241,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     try {
       const receipt = checkedReceipt(
         await revokeRuntimeSecret(secret),
-        secret.projectRef,
+        scope,
         secret,
       );
       if (current === generation) retainReceipt(receipt);
@@ -231,24 +256,25 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
 
   function checkedReceipt(
     value: unknown,
-    project: string,
+    project: RuntimeResourceAddress,
     previous?: RuntimeSecret,
   ): RuntimeSecret {
     const result = normalizeSecretPage({ items: [value] }).items[0];
     if (
       !result ||
-      result.projectRef !== project ||
       (previous &&
         (result.ref !== previous.ref ||
           result.version <= previous.version ||
           result.currentRevision < previous.currentRevision))
     )
       throw new Error("Invalid runtime secret mutation receipt");
+    assertRuntimeResourceAddressIdentity(project, result);
     return result;
   }
 
   function retainReceipt(receipt: RuntimeSecret): void {
-    if (receipt.projectRef !== projectRef.value) return;
+    if (!resourceScope.value) return;
+    assertRuntimeResourceAddressIdentity(resourceScope.value, receipt);
     const previous = items.value.find((item) => item.ref === receipt.ref);
     if (previous && previous.version > receipt.version) return;
     if (query.value && !previous) return;
@@ -261,8 +287,8 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   }
 
   function acceptPublication(secret: RuntimeSecret): void {
-    if (secret.projectRef !== projectRef.value) return;
-    retainReceipt(checkedReceipt(secret, projectRef.value));
+    if (!resourceScope.value) return;
+    retainReceipt(checkedReceipt(secret, resourceScope.value));
   }
 
   function clearMutationProblem(): void {
@@ -275,6 +301,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     controller?.abort();
     controller = undefined;
     items.value = [];
+    resourceScope.value = undefined;
     nextPageToken.value = "";
     problem.value = undefined;
     mutationProblem.value = undefined;

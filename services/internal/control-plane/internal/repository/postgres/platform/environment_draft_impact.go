@@ -48,6 +48,9 @@ func (r *Repository) prepareEnvironmentDraftImpact(ctx context.Context, tx pgx.T
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := r.requireRuntimeEnvironmentOwnerAccess(ctx, tx, s, draft.ScopeKind, draft.ProjectRef); err != nil {
+		return commandOutcome{}, err
+	}
 	if input.Mutation.ExpectedVersion == nil || *input.Mutation.ExpectedVersion != draft.Version {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}

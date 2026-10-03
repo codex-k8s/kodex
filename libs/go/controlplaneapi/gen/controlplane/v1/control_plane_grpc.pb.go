@@ -100,6 +100,7 @@ const (
 	PlatformQueryService_ValidatePromptTemplate_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ValidatePromptTemplate"
 	PlatformQueryService_PreviewPromptTemplate_FullMethodName                    = "/controlplane.v1.PlatformQueryService/PreviewPromptTemplate"
 	PlatformQueryService_ListRuntimeSecrets_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets"
+	PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListOrganizationRuntimeSecrets"
 	PlatformQueryService_GetRuntimeSecret_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetRuntimeSecret"
 	PlatformQueryService_ListManagedConfigurationHistory_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationHistory"
 	PlatformQueryService_ListManagedConfigurations_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListManagedConfigurations"
@@ -202,6 +203,7 @@ type PlatformQueryServiceClient interface {
 	ValidatePromptTemplate(ctx context.Context, in *ValidatePromptTemplateRequest, opts ...grpc.CallOption) (*ValidatePromptTemplateResponse, error)
 	PreviewPromptTemplate(ctx context.Context, in *PreviewPromptTemplateRequest, opts ...grpc.CallOption) (*PreviewPromptTemplateResponse, error)
 	ListRuntimeSecrets(ctx context.Context, in *ListRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListRuntimeSecretsResponse, error)
+	ListOrganizationRuntimeSecrets(ctx context.Context, in *ListOrganizationRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListOrganizationRuntimeSecretsResponse, error)
 	GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error)
 	ListManagedConfigurationHistory(ctx context.Context, in *ListManagedConfigurationHistoryRequest, opts ...grpc.CallOption) (*ListManagedConfigurationHistoryResponse, error)
 	ListManagedConfigurations(ctx context.Context, in *ListManagedConfigurationsRequest, opts ...grpc.CallOption) (*ListManagedConfigurationsResponse, error)
@@ -1035,6 +1037,16 @@ func (c *platformQueryServiceClient) ListRuntimeSecrets(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) ListOrganizationRuntimeSecrets(ctx context.Context, in *ListOrganizationRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListOrganizationRuntimeSecretsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrganizationRuntimeSecretsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetRuntimeSecretResponse)
@@ -1252,6 +1264,7 @@ type PlatformQueryServiceServer interface {
 	ValidatePromptTemplate(context.Context, *ValidatePromptTemplateRequest) (*ValidatePromptTemplateResponse, error)
 	PreviewPromptTemplate(context.Context, *PreviewPromptTemplateRequest) (*PreviewPromptTemplateResponse, error)
 	ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error)
+	ListOrganizationRuntimeSecrets(context.Context, *ListOrganizationRuntimeSecretsRequest) (*ListOrganizationRuntimeSecretsResponse, error)
 	GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error)
 	ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error)
 	ListManagedConfigurations(context.Context, *ListManagedConfigurationsRequest) (*ListManagedConfigurationsResponse, error)
@@ -1517,6 +1530,9 @@ func (UnimplementedPlatformQueryServiceServer) PreviewPromptTemplate(context.Con
 }
 func (UnimplementedPlatformQueryServiceServer) ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSecrets not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListOrganizationRuntimeSecrets(context.Context, *ListOrganizationRuntimeSecretsRequest) (*ListOrganizationRuntimeSecretsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrganizationRuntimeSecrets not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecret not implemented")
@@ -3036,6 +3052,24 @@ func _PlatformQueryService_ListRuntimeSecrets_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_ListOrganizationRuntimeSecrets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrganizationRuntimeSecretsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListOrganizationRuntimeSecrets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListOrganizationRuntimeSecrets(ctx, req.(*ListOrganizationRuntimeSecretsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_GetRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRuntimeSecretRequest)
 	if err := dec(in); err != nil {
@@ -3602,6 +3636,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_ListRuntimeSecrets_Handler,
 		},
 		{
+			MethodName: "ListOrganizationRuntimeSecrets",
+			Handler:    _PlatformQueryService_ListOrganizationRuntimeSecrets_Handler,
+		},
+		{
 			MethodName: "GetRuntimeSecret",
 			Handler:    _PlatformQueryService_GetRuntimeSecret_Handler,
 		},
@@ -3668,6 +3706,7 @@ const (
 	PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName           = "/controlplane.v1.PlatformCommandService/UnbindEmailMailboxConfiguration"
 	PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName           = "/controlplane.v1.PlatformCommandService/PrepareRuntimeSecretDraftImpact"
 	PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/PrepareSaveRuntimeSecretDraft"
+	PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_FullMethodName     = "/controlplane.v1.PlatformCommandService/PrepareOrganizationRuntimeSecretDraft"
 	PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PrepareValidateRuntimeSecretDraft"
 	PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/PreparePublishRuntimeSecretDraft"
 	PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/PrepareDiscardRuntimeSecretDraft"
@@ -3700,6 +3739,7 @@ const (
 	PlatformCommandService_BindAgentMemoryRecord_FullMethodName                     = "/controlplane.v1.PlatformCommandService/BindAgentMemoryRecord"
 	PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UnbindAgentMemoryRecord"
 	PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentDraft"
+	PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName = "/controlplane.v1.PlatformCommandService/CreateOrganizationRuntimeEnvironmentDraft"
 	PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/SaveRuntimeEnvironmentDraft"
 	PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateRuntimeEnvironmentDraft"
 	PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentDraft"
@@ -3844,6 +3884,7 @@ type PlatformCommandServiceClient interface {
 	UnbindEmailMailboxConfiguration(ctx context.Context, in *UnbindEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*UnbindEmailMailboxConfigurationResponse, error)
 	PrepareRuntimeSecretDraftImpact(ctx context.Context, in *PrepareRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*PrepareRuntimeSecretDraftImpactResponse, error)
 	PrepareSaveRuntimeSecretDraft(ctx context.Context, in *PrepareSaveRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareSaveRuntimeSecretDraftResponse, error)
+	PrepareOrganizationRuntimeSecretDraft(ctx context.Context, in *PrepareOrganizationRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareOrganizationRuntimeSecretDraftResponse, error)
 	PrepareValidateRuntimeSecretDraft(ctx context.Context, in *PrepareValidateRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareValidateRuntimeSecretDraftResponse, error)
 	PreparePublishRuntimeSecretDraft(ctx context.Context, in *PreparePublishRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PreparePublishRuntimeSecretDraftResponse, error)
 	PrepareDiscardRuntimeSecretDraft(ctx context.Context, in *PrepareDiscardRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareDiscardRuntimeSecretDraftResponse, error)
@@ -3876,6 +3917,7 @@ type PlatformCommandServiceClient interface {
 	BindAgentMemoryRecord(ctx context.Context, in *BindAgentMemoryRecordRequest, opts ...grpc.CallOption) (*BindAgentMemoryRecordResponse, error)
 	UnbindAgentMemoryRecord(ctx context.Context, in *UnbindAgentMemoryRecordRequest, opts ...grpc.CallOption) (*UnbindAgentMemoryRecordResponse, error)
 	CreateRuntimeEnvironmentDraft(ctx context.Context, in *CreateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateRuntimeEnvironmentDraftResponse, error)
+	CreateOrganizationRuntimeEnvironmentDraft(ctx context.Context, in *CreateOrganizationRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateOrganizationRuntimeEnvironmentDraftResponse, error)
 	SaveRuntimeEnvironmentDraft(ctx context.Context, in *SaveRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*SaveRuntimeEnvironmentDraftResponse, error)
 	ValidateRuntimeEnvironmentDraft(ctx context.Context, in *ValidateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*ValidateRuntimeEnvironmentDraftResponse, error)
 	PublishRuntimeEnvironmentDraft(ctx context.Context, in *PublishRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentDraftResponse, error)
@@ -4104,6 +4146,16 @@ func (c *platformCommandServiceClient) PrepareSaveRuntimeSecretDraft(ctx context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PrepareSaveRuntimeSecretDraftResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareOrganizationRuntimeSecretDraft(ctx context.Context, in *PrepareOrganizationRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareOrganizationRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareOrganizationRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4424,6 +4476,16 @@ func (c *platformCommandServiceClient) CreateRuntimeEnvironmentDraft(ctx context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateRuntimeEnvironmentDraftResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateOrganizationRuntimeEnvironmentDraft(ctx context.Context, in *CreateOrganizationRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateOrganizationRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateOrganizationRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5751,6 +5813,7 @@ type PlatformCommandServiceServer interface {
 	UnbindEmailMailboxConfiguration(context.Context, *UnbindEmailMailboxConfigurationRequest) (*UnbindEmailMailboxConfigurationResponse, error)
 	PrepareRuntimeSecretDraftImpact(context.Context, *PrepareRuntimeSecretDraftImpactRequest) (*PrepareRuntimeSecretDraftImpactResponse, error)
 	PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error)
+	PrepareOrganizationRuntimeSecretDraft(context.Context, *PrepareOrganizationRuntimeSecretDraftRequest) (*PrepareOrganizationRuntimeSecretDraftResponse, error)
 	PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error)
 	PreparePublishRuntimeSecretDraft(context.Context, *PreparePublishRuntimeSecretDraftRequest) (*PreparePublishRuntimeSecretDraftResponse, error)
 	PrepareDiscardRuntimeSecretDraft(context.Context, *PrepareDiscardRuntimeSecretDraftRequest) (*PrepareDiscardRuntimeSecretDraftResponse, error)
@@ -5783,6 +5846,7 @@ type PlatformCommandServiceServer interface {
 	BindAgentMemoryRecord(context.Context, *BindAgentMemoryRecordRequest) (*BindAgentMemoryRecordResponse, error)
 	UnbindAgentMemoryRecord(context.Context, *UnbindAgentMemoryRecordRequest) (*UnbindAgentMemoryRecordResponse, error)
 	CreateRuntimeEnvironmentDraft(context.Context, *CreateRuntimeEnvironmentDraftRequest) (*CreateRuntimeEnvironmentDraftResponse, error)
+	CreateOrganizationRuntimeEnvironmentDraft(context.Context, *CreateOrganizationRuntimeEnvironmentDraftRequest) (*CreateOrganizationRuntimeEnvironmentDraftResponse, error)
 	SaveRuntimeEnvironmentDraft(context.Context, *SaveRuntimeEnvironmentDraftRequest) (*SaveRuntimeEnvironmentDraftResponse, error)
 	ValidateRuntimeEnvironmentDraft(context.Context, *ValidateRuntimeEnvironmentDraftRequest) (*ValidateRuntimeEnvironmentDraftResponse, error)
 	PublishRuntimeEnvironmentDraft(context.Context, *PublishRuntimeEnvironmentDraftRequest) (*PublishRuntimeEnvironmentDraftResponse, error)
@@ -5954,6 +6018,9 @@ func (UnimplementedPlatformCommandServiceServer) PrepareRuntimeSecretDraftImpact
 func (UnimplementedPlatformCommandServiceServer) PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareSaveRuntimeSecretDraft not implemented")
 }
+func (UnimplementedPlatformCommandServiceServer) PrepareOrganizationRuntimeSecretDraft(context.Context, *PrepareOrganizationRuntimeSecretDraftRequest) (*PrepareOrganizationRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareOrganizationRuntimeSecretDraft not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareValidateRuntimeSecretDraft not implemented")
 }
@@ -6049,6 +6116,9 @@ func (UnimplementedPlatformCommandServiceServer) UnbindAgentMemoryRecord(context
 }
 func (UnimplementedPlatformCommandServiceServer) CreateRuntimeEnvironmentDraft(context.Context, *CreateRuntimeEnvironmentDraftRequest) (*CreateRuntimeEnvironmentDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateOrganizationRuntimeEnvironmentDraft(context.Context, *CreateOrganizationRuntimeEnvironmentDraftRequest) (*CreateOrganizationRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateOrganizationRuntimeEnvironmentDraft not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) SaveRuntimeEnvironmentDraft(context.Context, *SaveRuntimeEnvironmentDraftRequest) (*SaveRuntimeEnvironmentDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveRuntimeEnvironmentDraft not implemented")
@@ -6617,6 +6687,24 @@ func _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler(srv interface
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).PrepareSaveRuntimeSecretDraft(ctx, req.(*PrepareSaveRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareOrganizationRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareOrganizationRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareOrganizationRuntimeSecretDraft(ctx, req.(*PrepareOrganizationRuntimeSecretDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -7193,6 +7281,24 @@ func _PlatformCommandService_CreateRuntimeEnvironmentDraft_Handler(srv interface
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).CreateRuntimeEnvironmentDraft(ctx, req.(*CreateRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOrganizationRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateOrganizationRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateOrganizationRuntimeEnvironmentDraft(ctx, req.(*CreateOrganizationRuntimeEnvironmentDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -9523,6 +9629,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler,
 		},
 		{
+			MethodName: "PrepareOrganizationRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_Handler,
+		},
+		{
 			MethodName: "PrepareValidateRuntimeSecretDraft",
 			Handler:    _PlatformCommandService_PrepareValidateRuntimeSecretDraft_Handler,
 		},
@@ -9649,6 +9759,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateRuntimeEnvironmentDraft",
 			Handler:    _PlatformCommandService_CreateRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "CreateOrganizationRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_Handler,
 		},
 		{
 			MethodName: "SaveRuntimeEnvironmentDraft",

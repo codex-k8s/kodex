@@ -6,9 +6,10 @@ SELECT build.id::text, build.ref, recipe.ref, build.spec_sha256, build.stage,
        COALESCE(build.claimant_workload, ''), build.version, build.recipe_version,
        build.recipe_generation, build.fence, build.authority_generation, build.attempt,
        build.progress_percent, build.lease_expires_at, build.created_at, build.updated_at,
-       build.recipe_id::text, build.project_id::text, build.specification,
+       build.recipe_id::text, COALESCE(build.project_id::text, ''), build.specification,
        recipe.policy_revision, recipe.policy_sha256,
-       recipe.role_runtime_contract_revision, recipe.role_runtime_contract_sha256
+       recipe.role_runtime_contract_revision, recipe.role_runtime_contract_sha256,
+       build.scope_kind, (SELECT ref FROM control_plane.organizations WHERE id = recipe.organization_id), COALESCE((SELECT ref FROM control_plane.projects WHERE id = build.project_id), '')
 FROM control_plane.image_builds build
 JOIN control_plane.role_image_recipes recipe ON recipe.id = build.recipe_id
 WHERE build.organization_id = $1::uuid

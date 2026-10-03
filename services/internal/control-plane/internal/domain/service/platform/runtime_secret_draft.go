@@ -25,6 +25,20 @@ func (service *Service) GetRuntimeSecretDraft(ctx context.Context, p value.Princ
 }
 
 func (service *Service) PrepareRuntimeSecretDraft(ctx context.Context, p value.Principal, input repository.RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error) {
+	input.ScopeKind = "PROJECT"
+	return service.prepareRuntimeSecretDraft(ctx, p, input)
+}
+
+// Специализированная команда без caller-controlled org/project locator.
+func (service *Service) PrepareOrganizationRuntimeSecretDraft(ctx context.Context, p value.Principal, input repository.RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error) {
+	if input.Kind != "SAVE" || input.SecretRef != "" || input.ProjectRef != "" || input.DraftRef != "" {
+		return entity.RuntimeSecretDraftOperationReceipt{}, errs.ErrInvalid
+	}
+	input.ScopeKind = "ORGANIZATION"
+	return service.prepareRuntimeSecretDraft(ctx, p, input)
+}
+
+func (service *Service) prepareRuntimeSecretDraft(ctx context.Context, p value.Principal, input repository.RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return entity.RuntimeSecretDraftOperationReceipt{}, err
@@ -51,7 +65,8 @@ func (service *Service) PrepareRuntimeSecretDraft(ctx context.Context, p value.P
 			return entity.RuntimeSecretDraftOperationReceipt{}, errs.ErrInvalid
 		}
 		if input.SecretRef == "" {
-			if !strings.HasPrefix(input.ProjectRef, "prj_") || !runtimeDiffReference.MatchString(input.ProjectRef) || strings.TrimSpace(input.Name) != input.Name || utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 120 || len(input.Description) > 1000 || input.Mutation.ExpectedVersion != nil {
+			validScope := input.ScopeKind == "ORGANIZATION" && input.ProjectRef == "" || input.ScopeKind == "PROJECT" && strings.HasPrefix(input.ProjectRef, "prj_") && runtimeDiffReference.MatchString(input.ProjectRef)
+			if !validScope || strings.TrimSpace(input.Name) != input.Name || utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 120 || len(input.Description) > 1000 || input.Mutation.ExpectedVersion != nil {
 				return entity.RuntimeSecretDraftOperationReceipt{}, errs.ErrInvalid
 			}
 		} else if !strings.HasPrefix(input.SecretRef, "sec_") || !runtimeDiffReference.MatchString(input.SecretRef) || input.Mutation.ExpectedVersion == nil || input.ProjectRef != "" || input.Name != "" || input.Description != "" {

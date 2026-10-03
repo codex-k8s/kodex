@@ -19,6 +19,8 @@ vi.mock("@/shared/api/client", () => ({
 import { useRuntimeSecretsStore } from "./store";
 
 const secret: RuntimeSecret = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "secret_main",
   version: 3,
   projectRef: "project_sales",

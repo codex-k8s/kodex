@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   createRuntimeSecret: vi.fn(),
   listRuntimeSecrets: vi.fn(),
+  getRuntimeSecret: vi.fn(),
+  listSystemRuntimeSecrets: vi.fn(),
   revealRuntimeSecret: vi.fn(),
   revokeRuntimeSecret: vi.fn(),
   rotateRuntimeSecret: vi.fn(),
@@ -29,6 +31,8 @@ import {
 import type { RuntimeSecret } from "./model";
 
 const secret: RuntimeSecret = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "secret_main",
   version: 3,
   projectRef: "project_sales",
@@ -57,6 +61,7 @@ function response<T>(
 describe("runtime secrets API adapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sdk.getRuntimeSecret.mockImplementation(() => response(secret));
     mutation.mutate.mockImplementation(
       async (request: (headers: Record<string, string>) => Promise<unknown>) =>
         request({
@@ -130,7 +135,9 @@ describe("runtime secrets API adapter", () => {
         { "Cache-Control": "no-store" },
       ),
     );
-    await expect(revealRuntimeSecret("secret_main")).resolves.toEqual({
+    await expect(
+      revealRuntimeSecret("secret_main", "project_sales", "org_synthetic"),
+    ).resolves.toEqual({
       value: "ephemeral-value",
       valueType: "STRING",
     });
@@ -140,6 +147,7 @@ describe("runtime secrets API adapter", () => {
         headers: {
           "Idempotency-Key": "idem_1",
           "X-CSRF-Token": "c".repeat(43),
+          "X-Kodex-Project-ID": "project_sales",
         },
       }),
     );
@@ -148,9 +156,53 @@ describe("runtime secrets API adapter", () => {
   it("закрыто отклоняет reveal без server no-store", async () => {
     const payload = { value: "must-be-cleared", valueType: "STRING" as const };
     sdk.revealRuntimeSecret.mockReturnValueOnce(response(payload));
-    await expect(revealRuntimeSecret("secret_main")).rejects.toMatchObject({
+    await expect(
+      revealRuntimeSecret("secret_main", "project_sales", "org_synthetic"),
+    ).rejects.toMatchObject({
       code: "SECRET_REVEAL_CACHE_POLICY_INVALID",
     });
     expect(payload.value).toBe("");
   });
+
+  it("не передаёт project header при точном организационном reveal", async () => {
+    sdk.getRuntimeSecret.mockReturnValueOnce(
+      response({ ...secret, scopeKind: "ORGANIZATION", projectRef: "" }),
+    );
+    sdk.revealRuntimeSecret.mockReturnValueOnce(
+      response({ value: "ephemeral-value", valueType: "STRING" }, 200, {
+        "Cache-Control": "no-store",
+      }),
+    );
+    await revealRuntimeSecret(
+      "secret_main",
+      { kind: "ORGANIZATION", organizationRef: "org_synthetic" },
+      "org_synthetic",
+    );
+    const request: unknown = sdk.revealRuntimeSecret.mock.calls[0]?.[0];
+    expect(request).not.toHaveProperty("headers.X-Kodex-Project-ID");
+    expect(sdk.getRuntimeSecret).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cache: "no-store",
+        path: { secretRef: "secret_main" },
+      }),
+    );
+  });
+
+  it.each([
+    { organizationRef: "org_foreign" },
+    { projectRef: "project_foreign" },
+    { scopeKind: "ORGANIZATION", projectRef: "" },
+    { ref: "secret_foreign" },
+  ])(
+    "не раскрывает секрет при несовпадении authoritative metadata: %j",
+    async (mismatch) => {
+      sdk.getRuntimeSecret.mockReturnValueOnce(
+        response({ ...secret, ...mismatch }),
+      );
+      await expect(
+        revealRuntimeSecret("secret_main", "project_sales", "org_synthetic"),
+      ).rejects.toThrow();
+      expect(sdk.revealRuntimeSecret).not.toHaveBeenCalled();
+    },
+  );
 });

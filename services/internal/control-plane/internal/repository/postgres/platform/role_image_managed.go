@@ -111,7 +111,7 @@ func (repository *Repository) managedRoleImageTarget(ctx context.Context, tx pgx
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	set, err := repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: ref}, revisionservice.KindRoleImage, false)
+	set, err := repository.resolveManagedSetScope(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: ref}, revisionservice.KindRoleImage, false, input.ScopeKind)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,13 @@ func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context,
 	}
 	recipe := result.Recipe
 	if set == nil {
-		created, err := repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ProjectRef: recipe.ProjectRef, Name: recipe.Name}, revisionservice.KindRoleImage, true)
+		var created managedSet
+		var err error
+		if recipe.ScopeKind == "ORGANIZATION" {
+			created, err = repository.createOrganizationRoleImageConfiguration(ctx, tx, current, recipe.Name)
+		} else {
+			created, err = repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ProjectRef: recipe.ProjectRef, Name: recipe.Name}, revisionservice.KindRoleImage, true)
+		}
 		if err != nil {
 			return err
 		}
@@ -229,7 +235,7 @@ func (repository *Repository) publishSourceRoleImage(ctx context.Context, tx pgx
 	if repository.requireAccess(ctx, tx, current, "image.build", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: set.ProjectRef, ResourceKind: "PROJECT", ResourceRef: set.ProjectRef}) != nil {
 		return errs.ErrForbidden
 	}
-	input := roleimagerepo.ManageInput{Action: "CREATE", ProjectRef: set.ProjectRef, RoleDefinitionRef: roleRef, Name: name, Recipe: resolved, Environment: selection}
+	input := roleimagerepo.ManageInput{ScopeKind: "PROJECT", Action: "CREATE", ProjectRef: set.ProjectRef, RoleDefinitionRef: roleRef, Name: name, Recipe: resolved, Environment: selection}
 	var recipeRef, currentRole string
 	var recipeVersion int64
 	err = tx.QueryRow(ctx, queryRoleImageManagedReadRecipe, set.id, current.organizationID).Scan(&recipeRef, &recipeVersion, &currentRole)

@@ -18,6 +18,8 @@ const initialPlanRef =
   new URLSearchParams(window.location.search).get("planRef") ?? undefined;
 const published = ref<RuntimeSecret>();
 const rotationSecret: RuntimeSecret = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "secret_rotation",
   projectRef: "project_rotation",
   version: 7,

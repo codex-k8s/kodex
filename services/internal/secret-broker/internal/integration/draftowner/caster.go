@@ -24,7 +24,7 @@ func castWork(v *cp.RuntimeSecretDraftWork, recovery bool) (value.DraftWork, err
 		return value.DraftWork{}, err
 	}
 	w := value.DraftWork{OperationRef: v.GetOperationRef(), Kind: value.DraftOperation(strings.TrimPrefix(v.GetKind().String(), "RUNTIME_SECRET_DRAFT_OPERATION_KIND_")), ClaimantID: v.GetClaimantId(), ClaimGeneration: v.GetClaimGeneration(), Draft: draft, StagedNamespace: v.GetStagedNamespace(), StagedName: v.GetStagedSecretName(), StagedKey: v.GetStagedSecretKey(), RuntimeNamespace: v.GetNamespace(), TargetRevision: v.GetTargetRevision(), ExpiresAt: timestamp(v.GetExpiresAt()), LeaseDeadline: timestamp(v.GetLeaseDeadline())}
-	w.Binding = value.SecretDraftBinding{ProjectRef: draft.ProjectRef, SecretRef: draft.SecretRef, DraftRef: draft.Ref, DraftGeneration: draft.Generation, ValueType: draft.ValueType, ContentSHA256: v.GetExpectedContentSha256()}
+	w.Binding = value.SecretDraftBinding{ScopeKind: draft.ScopeKind, OrganizationRef: draft.OrganizationRef, ProjectRef: draft.ProjectRef, SecretRef: draft.SecretRef, DraftRef: draft.Ref, DraftGeneration: draft.Generation, ValueType: draft.ValueType, ContentSHA256: v.GetExpectedContentSha256()}
 	if v.GetEncrypted() != nil {
 		descriptor := castEncrypted(v.GetEncrypted())
 		if !validEncrypted(w, descriptor) {
@@ -54,7 +54,7 @@ func castWork(v *cp.RuntimeSecretDraftWork, recovery bool) (value.DraftWork, err
 }
 
 func validNativeWork(w value.DraftWork, recovery bool) bool {
-	if !reference(w.OperationRef) || w.Binding.Validate() != nil || w.Draft.Ref != w.Binding.DraftRef || w.Draft.Generation != w.Binding.DraftGeneration || w.Draft.ProjectRef != w.Binding.ProjectRef || w.Draft.SecretRef != w.Binding.SecretRef || w.Draft.ValueType != w.Binding.ValueType || w.Draft.Version < 1 || w.ExpiresAt.IsZero() || len(validation.IsDNS1123Label(w.RuntimeNamespace)) != 0 || len(validation.IsDNS1123Label(w.StagedNamespace)) != 0 || w.StagedKey != "ciphertext" {
+	if !reference(w.OperationRef) || w.Binding.Validate() != nil || w.Draft.ScopeKind != w.Binding.ScopeKind || w.Draft.OrganizationRef != w.Binding.OrganizationRef || w.Draft.Ref != w.Binding.DraftRef || w.Draft.Generation != w.Binding.DraftGeneration || w.Draft.ProjectRef != w.Binding.ProjectRef || w.Draft.SecretRef != w.Binding.SecretRef || w.Draft.ValueType != w.Binding.ValueType || w.Draft.Version < 1 || w.ExpiresAt.IsZero() || len(validation.IsDNS1123Label(w.RuntimeNamespace)) != 0 || len(validation.IsDNS1123Label(w.StagedNamespace)) != 0 || w.StagedKey != "ciphertext" {
 		return false
 	}
 	digest := sha256.Sum256([]byte(w.Draft.Ref))
@@ -89,10 +89,12 @@ func castDraft(v *cp.RuntimeSecretDraft) (value.SecretDraft, error) {
 	}
 	draft := value.SecretDraft{Ref: v.GetRef(), Version: v.GetVersion(), Generation: v.GetGeneration(), ProjectRef: v.GetProjectRef(), SecretRef: v.GetSecretRef(), Name: v.GetName(), Description: v.GetDescription(), ValueType: strings.TrimPrefix(v.GetValueType().String(), "RUNTIME_SECRET_VALUE_TYPE_"), State: strings.TrimPrefix(v.GetState().String(), "RUNTIME_SECRET_DRAFT_STATE_"), PublishedRevision: v.GetPublishedRevision(), CreatedAt: timestamp(v.GetCreatedAt()), UpdatedAt: timestamp(v.GetUpdatedAt()), ExpiresAt: timestamp(v.GetExpiresAt())}
 	draft.SecretVersion = v.GetSecretVersion()
+	draft.ScopeKind = runtimesecret.ScopeKind(strings.TrimPrefix(v.GetScopeKind().String(), "RUNTIME_RESOURCE_SCOPE_KIND_"))
+	draft.OrganizationRef = v.GetOrganizationRef()
 	if draft.SecretVersion < 1 {
 		return value.SecretDraft{}, secretdrafts.ErrConflict
 	}
-	if !reference(draft.Ref) || !reference(draft.ProjectRef) || !reference(draft.SecretRef) || draft.Version < 1 || draft.Generation < 1 || draft.PublishedRevision < 0 || !boundedText(draft.Name, 128, false) || !boundedText(draft.Description, 4096, true) || draft.CreatedAt.IsZero() || draft.UpdatedAt.Before(draft.CreatedAt) || draft.ExpiresAt.IsZero() {
+	if !reference(draft.Ref) || runtimesecret.ValidateScope(draft.ScopeKind, draft.OrganizationRef, draft.ProjectRef) != nil || !reference(draft.SecretRef) || draft.Version < 1 || draft.Generation < 1 || draft.PublishedRevision < 0 || !boundedText(draft.Name, 128, false) || !boundedText(draft.Description, 4096, true) || draft.CreatedAt.IsZero() || draft.UpdatedAt.Before(draft.CreatedAt) || draft.ExpiresAt.IsZero() {
 		return value.SecretDraft{}, secretdrafts.ErrConflict
 	}
 	if _, err := runtimesecret.VersionedKubernetesName(draft.SecretRef, 1); err != nil {
@@ -116,7 +118,7 @@ func castDraft(v *cp.RuntimeSecretDraft) (value.SecretDraft, error) {
 }
 
 func sameDraft(actual, expected value.SecretDraft) bool {
-	return actual.Ref == expected.Ref && actual.ProjectRef == expected.ProjectRef && actual.SecretRef == expected.SecretRef && actual.Generation == expected.Generation && actual.ValueType == expected.ValueType && actual.Name == expected.Name && actual.Description == expected.Description && actual.Version >= expected.Version && actual.CreatedAt.Equal(expected.CreatedAt) && actual.ExpiresAt.Equal(expected.ExpiresAt)
+	return actual.ScopeKind == expected.ScopeKind && actual.OrganizationRef == expected.OrganizationRef && actual.Ref == expected.Ref && actual.ProjectRef == expected.ProjectRef && actual.SecretRef == expected.SecretRef && actual.Generation == expected.Generation && actual.ValueType == expected.ValueType && actual.Name == expected.Name && actual.Description == expected.Description && actual.Version >= expected.Version && actual.CreatedAt.Equal(expected.CreatedAt) && actual.ExpiresAt.Equal(expected.ExpiresAt)
 }
 
 func castResult(d *cp.RuntimeSecretDraft, s *cp.RuntimeSecret, work value.DraftWork) (value.DraftResult, error) {
@@ -145,10 +147,10 @@ func castResult(d *cp.RuntimeSecretDraft, s *cp.RuntimeSecret, work value.DraftW
 		}
 		return result, nil
 	}
-	if s == nil || s.GetRef() != work.Draft.SecretRef || s.GetProjectRef() != work.Draft.ProjectRef || s.GetName() != work.Draft.Name || s.GetDescription() != work.Draft.Description || s.GetCurrentRevision() != work.TargetRevision || draft.PublishedRevision != work.TargetRevision || s.GetVersion() != draft.SecretVersion || s.GetState() != "ACTIVE" || strings.TrimPrefix(s.GetValueType().String(), "RUNTIME_SECRET_VALUE_TYPE_") != work.Draft.ValueType || timestamp(s.GetCreatedAt()).IsZero() || timestamp(s.GetUpdatedAt()).Before(timestamp(s.GetCreatedAt())) {
+	if s == nil || runtimesecret.ScopeKind(strings.TrimPrefix(s.GetScopeKind().String(), "RUNTIME_RESOURCE_SCOPE_KIND_")) != work.Draft.ScopeKind || s.GetOrganizationRef() != work.Draft.OrganizationRef || s.GetRef() != work.Draft.SecretRef || s.GetProjectRef() != work.Draft.ProjectRef || s.GetName() != work.Draft.Name || s.GetDescription() != work.Draft.Description || s.GetCurrentRevision() != work.TargetRevision || draft.PublishedRevision != work.TargetRevision || s.GetVersion() != draft.SecretVersion || s.GetState() != "ACTIVE" || strings.TrimPrefix(s.GetValueType().String(), "RUNTIME_SECRET_VALUE_TYPE_") != work.Draft.ValueType || timestamp(s.GetCreatedAt()).IsZero() || timestamp(s.GetUpdatedAt()).Before(timestamp(s.GetCreatedAt())) {
 		return value.DraftResult{}, secretdrafts.ErrConflict
 	}
-	result.Secret = &value.PublishedSecret{Ref: s.GetRef(), ProjectRef: s.GetProjectRef(), Name: s.GetName(), Description: s.GetDescription(), ValueType: work.Draft.ValueType, Status: s.GetState(), Version: s.GetVersion(), Revision: s.GetCurrentRevision(), CreatedAt: timestamp(s.GetCreatedAt()), UpdatedAt: timestamp(s.GetUpdatedAt())}
+	result.Secret = &value.PublishedSecret{ScopeKind: work.Draft.ScopeKind, OrganizationRef: work.Draft.OrganizationRef, Ref: s.GetRef(), ProjectRef: s.GetProjectRef(), Name: s.GetName(), Description: s.GetDescription(), ValueType: work.Draft.ValueType, Status: s.GetState(), Version: s.GetVersion(), Revision: s.GetCurrentRevision(), CreatedAt: timestamp(s.GetCreatedAt()), UpdatedAt: timestamp(s.GetUpdatedAt())}
 	return result, nil
 }
 

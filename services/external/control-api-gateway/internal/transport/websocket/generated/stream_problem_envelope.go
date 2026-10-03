@@ -3,13 +3,13 @@
 package generated
 
 type StreamProblemEnvelope struct {
-	Type string `json:"type"`
-	RequestRef string `json:"requestRef"`
-	StreamKind StreamKind `json:"streamKind"`
-	StreamRef string `json:"streamRef"`
-	Cursor int64 `json:"cursor"`
-	Status int `json:"status"`
-	Code ProblemCode `json:"code"`
-	Title string `json:"title"`
-	Retryable bool `json:"retryable"`
+	Type       string      `json:"type"`
+	RequestRef string      `json:"requestRef"`
+	StreamKind StreamKind  `json:"streamKind"`
+	StreamRef  string      `json:"streamRef"`
+	Cursor     int64       `json:"cursor"`
+	Status     int         `json:"status"`
+	Code       ProblemCode `json:"code"`
+	Title      string      `json:"title"`
+	Retryable  bool        `json:"retryable"`
 }

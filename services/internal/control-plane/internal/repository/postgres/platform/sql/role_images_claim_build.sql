@@ -21,4 +21,5 @@ RETURNING ref, (SELECT recipe.ref FROM control_plane.role_image_recipes recipe W
           diagnostic_summary, COALESCE(lease_token_sha256, ''), COALESCE(claimant_workload, ''),
           version, recipe_version, recipe_generation, fence, authority_generation,
           attempt, progress_percent, lease_expires_at, created_at, updated_at,
-          specification
+          specification, scope_kind, (SELECT ref FROM control_plane.organizations WHERE id = organization_id),
+          COALESCE((SELECT ref FROM control_plane.projects WHERE id = project_id), '')

@@ -16,6 +16,8 @@ export async function checkSecretEditor(
   let created: RuntimeSecret | undefined;
   let creates = 0;
   let draft: RuntimeSecretDraft = {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref: "draft_synthetic",
     version: 1,
     generation: 1,
@@ -120,6 +122,8 @@ export async function checkSecretEditor(
         selectedItemRefs: ["item_synthetic"],
       });
       created = {
+        scopeKind: "PROJECT",
+        organizationRef: "org_synthetic",
         ref: "secret_synthetic",
         projectRef,
         version: 1,

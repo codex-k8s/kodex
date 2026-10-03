@@ -225,6 +225,8 @@ function environment(
   projectRef = project.ref,
 ): RuntimeEnvironmentSet {
   return {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref,
     version: 1,
     projectRef,

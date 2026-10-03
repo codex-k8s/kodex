@@ -7,6 +7,12 @@ import {
 
 import { requestSignal } from "@/shared/api/client";
 import {
+  assertRuntimeResourceIdentity,
+  organizationRuntimeResourceScope,
+  type RuntimeScopedResourceIdentity,
+} from "@/features/runtime/resource-scope";
+import { normalizeSecretPage } from "@/features/runtime-secrets/model";
+import {
   addPlatformMembership,
   addProjectMembership,
   addSessionTurn,
@@ -248,6 +254,11 @@ export const usePlatformStore = defineStore("platform", () => {
   );
   const roleEnvironments = reactive<Record<string, RoleEnvironment>>({});
   const roleImageRecipes = reactive<Record<string, RoleImageRecipe>>({});
+  const organizationRoleImageRecipes = reactive<
+    Record<string, RoleImageRecipe>
+  >({});
+  const organizationRoleImagePage = ref<RealtimeCatalogSnapshot>();
+  const organizationRoleImageRealtimeRevision = ref(0);
   const roleImageBuilds = reactive<Record<string, RoleImageBuild>>({});
   const workflows = reactive<Record<string, Workflow>>({});
   const runs = reactive<Record<string, Run>>({});
@@ -261,6 +272,11 @@ export const usePlatformStore = defineStore("platform", () => {
   const artifacts = reactive<Record<string, Artifact>>({});
   const schedules = reactive<Record<string, Schedule>>({});
   const runtimeSecrets = reactive<Record<string, RuntimeSecret>>({});
+  const organizationRuntimeSecrets = reactive<Record<string, RuntimeSecret>>(
+    {},
+  );
+  const organizationRuntimeSecretPage = ref<RealtimeCatalogSnapshot>();
+  const organizationRuntimeSecretRealtimeRevision = ref(0);
   const managedConfigurations = reactive<
     Record<string, ManagedConfigurationSummary>
   >({});
@@ -410,6 +426,11 @@ export const usePlatformStore = defineStore("platform", () => {
       async () =>
         (await unwrap(getBootstrapState({ signal: requestSignal() }))).data,
       (value) => {
+        if (
+          bootstrap.value?.organizationRef !== value.organizationRef ||
+          bootstrap.value.platformRole !== value.platformRole
+        )
+          clearOrganizationCatalogs();
         bootstrap.value = value;
         assistant.value = value.assistant;
       },
@@ -2037,7 +2058,69 @@ export const usePlatformStore = defineStore("platform", () => {
     if (!("bootstrap" in snapshot)) return;
     const response = snapshotRecord(snapshot.bootstrap, "bootstrap");
     const value = snapshotRecord(response.state, "bootstrap.state");
+    if (
+      bootstrap.value?.organizationRef !== value.organizationRef ||
+      bootstrap.value?.platformRole !== value.platformRole
+    )
+      clearOrganizationCatalogs();
     bootstrap.value = value as BootstrapState;
+  }
+
+  function clearOrganizationCatalogs(): void {
+    replace(organizationRoleImageRecipes, []);
+    replace(organizationRuntimeSecrets, []);
+    organizationRoleImagePage.value = undefined;
+    organizationRuntimeSecretPage.value = undefined;
+    organizationRoleImageRealtimeRevision.value += 1;
+    organizationRuntimeSecretRealtimeRevision.value += 1;
+  }
+
+  function scopedSnapshotItems<
+    T extends { ref: string } & RuntimeScopedResourceIdentity,
+  >(
+    catalog: Record<string, unknown>,
+    field: string,
+    scopeProjectRef?: string,
+  ): T[] {
+    if (!Array.isArray(catalog[field]))
+      throw new Error(`Missing scoped realtime catalog ${field}`);
+    const organization = organizationRuntimeResourceScope(bootstrap.value);
+    if (!organization)
+      throw new Error("Realtime organization anchor is unavailable");
+    const values = snapshotArray<T>(catalog, field);
+    const seen = new Set<string>();
+    for (const value of values) {
+      const scope = field.startsWith("organization")
+        ? organization
+        : {
+            kind: "PROJECT" as const,
+            projectRef: scopeProjectRef ?? value.projectRef ?? "",
+          };
+      assertRuntimeResourceIdentity(scope, value, organization.organizationRef);
+      if (!value.ref || seen.has(value.ref))
+        throw new Error("Duplicate scoped realtime resource");
+      seen.add(value.ref);
+    }
+    return values;
+  }
+
+  function organizationSnapshotPage(
+    catalog: Record<string, unknown>,
+    field: string,
+  ): RealtimeCatalogSnapshot {
+    const scope = organizationRuntimeResourceScope(bootstrap.value);
+    if (!scope) throw new Error("Realtime organization anchor is unavailable");
+    const page = snapshotRecord(catalog[field], field);
+    if (
+      page.nextPageToken !== undefined &&
+      (typeof page.nextPageToken !== "string" ||
+        page.nextPageToken.length > 4096)
+    )
+      throw new Error("Invalid organization realtime cursor");
+    return {
+      scopeKey: `ORGANIZATION:${scope.organizationRef}`,
+      ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}),
+    };
   }
 
   function applySpeechAvailability(
@@ -2260,36 +2343,77 @@ export const usePlatformStore = defineStore("platform", () => {
         applyBootstrapSnapshot(snapshot);
         return;
       }
-      case "ROLE_IMAGE_RECIPE":
-        if (!catalog || !scopeProjectRef)
-          throw new Error("Role image realtime catalog is missing");
-        replaceScoped(
-          roleImageRecipes,
-          snapshotArray<RoleImageRecipe>(catalog, "recipes"),
-          (recipe) => recipe.projectRef === scopeProjectRef,
+      case "ROLE_IMAGE_RECIPE": {
+        if (!catalog) throw new Error("Role image realtime catalog is missing");
+        const projectRecipes = scopedSnapshotItems<RoleImageRecipe>(
+          catalog,
+          "recipes",
+          scopeProjectRef,
         );
+        const organizationRecipes = scopedSnapshotItems<RoleImageRecipe>(
+          catalog,
+          "organizationRecipes",
+        );
+        const organizationPage = organizationSnapshotPage(
+          catalog,
+          "organizationRecipesPage",
+        );
+        const environmentValues = snapshotKeyArray<RoleEnvironment>(
+          catalog,
+          "roleEnvironments",
+        );
+        if (!scopeProjectRef && projectRecipes.length)
+          throw new Error("Project role images require exact selected project");
+        if (scopeProjectRef)
+          replaceScoped(
+            roleImageRecipes,
+            projectRecipes,
+            (recipe) => recipe.projectRef === scopeProjectRef,
+          );
+        else replace(roleImageRecipes, []);
+        replace(organizationRoleImageRecipes, organizationRecipes);
+        organizationRoleImagePage.value = organizationPage;
+        organizationRoleImageRealtimeRevision.value += 1;
         replaceByKey(
           roleEnvironments,
-          snapshotKeyArray<RoleEnvironment>(catalog, "roleEnvironments"),
+          environmentValues,
           (environment) => environment.key,
         );
         roleImageRealtimeRevision.value += 1;
         return;
-      case "RUNTIME_SECRET":
+      }
+      case "RUNTIME_SECRET": {
         if (!catalog)
           throw new Error("Runtime secret realtime catalog is missing");
+        const projectSecrets = normalizeSecretPage({
+          items: scopedSnapshotItems<RuntimeSecret>(
+            catalog,
+            "secrets",
+            scopeProjectRef,
+          ),
+        }).items;
+        const organizationSecrets = normalizeSecretPage({
+          items: scopedSnapshotItems<RuntimeSecret>(
+            catalog,
+            "organizationSecrets",
+          ),
+        }).items;
+        const organizationPage = organizationSnapshotPage(
+          catalog,
+          "organizationSecretsPage",
+        );
         if (scopeProjectRef)
           replaceScoped(
             runtimeSecrets,
-            snapshotArray<RuntimeSecret>(catalog, "secrets"),
+            projectSecrets,
             (secret) => secret.projectRef === scopeProjectRef,
           );
-        else
-          replace(
-            runtimeSecrets,
-            snapshotArray<RuntimeSecret>(catalog, "secrets"),
-          );
+        else replace(runtimeSecrets, projectSecrets);
+        replace(organizationRuntimeSecrets, organizationSecrets);
+        organizationRuntimeSecretPage.value = organizationPage;
+        organizationRuntimeSecretRealtimeRevision.value += 1;
         return;
+      }
       case "MANAGED_CONFIGURATION": {
         if (!catalog)
           throw new Error("Managed configuration realtime catalog is missing");
@@ -2445,8 +2569,18 @@ export const usePlatformStore = defineStore("platform", () => {
     if (!available.has("ARTIFACT")) clearScoped(artifacts);
     if (!available.has("SCHEDULE")) clearScoped(schedules);
     if (!available.has("RUN")) clearScoped(runs);
-    if (!available.has("ROLE_IMAGE_RECIPE")) clearScoped(roleImageRecipes);
-    if (!available.has("RUNTIME_SECRET")) clearScoped(runtimeSecrets);
+    if (!available.has("ROLE_IMAGE_RECIPE")) {
+      clearScoped(roleImageRecipes);
+      replace(organizationRoleImageRecipes, []);
+      organizationRoleImagePage.value = undefined;
+      organizationRoleImageRealtimeRevision.value += 1;
+    }
+    if (!available.has("RUNTIME_SECRET")) {
+      clearScoped(runtimeSecrets);
+      replace(organizationRuntimeSecrets, []);
+      organizationRuntimeSecretPage.value = undefined;
+      organizationRuntimeSecretRealtimeRevision.value += 1;
+    }
     if (!available.has("MANAGED_CONFIGURATION")) {
       replace(managedConfigurations, []);
       for (const kind of Object.keys(managedConfigurationPages))
@@ -2662,6 +2796,7 @@ export const usePlatformStore = defineStore("platform", () => {
       instructionVersions,
       roleEnvironments,
       roleImageRecipes,
+      organizationRoleImageRecipes,
       roleImageBuilds,
       workflows,
       runs,
@@ -2671,6 +2806,7 @@ export const usePlatformStore = defineStore("platform", () => {
       artifacts,
       schedules,
       runtimeSecrets,
+      organizationRuntimeSecrets,
       managedConfigurations,
       runtimes,
       definitions,
@@ -2714,6 +2850,7 @@ export const usePlatformStore = defineStore("platform", () => {
     pendingGateCount.value = undefined;
     gateCatalogRevision.value = 0;
     roleImageRealtimeRevision.value = 0;
+    clearOrganizationCatalogs();
     managedConfigurationRealtimeRevision.value = 0;
     assistant.value = undefined;
     assistantConversationNextPageToken.value = undefined;
@@ -2745,6 +2882,9 @@ export const usePlatformStore = defineStore("platform", () => {
     instructionVersions,
     roleEnvironments,
     roleImageRecipes,
+    organizationRoleImageRecipes,
+    organizationRoleImagePage,
+    organizationRoleImageRealtimeRevision,
     roleImageRealtimeRevision,
     roleImageBuilds,
     workflows,
@@ -2758,6 +2898,9 @@ export const usePlatformStore = defineStore("platform", () => {
     artifacts,
     schedules,
     runtimeSecrets,
+    organizationRuntimeSecrets,
+    organizationRuntimeSecretPage,
+    organizationRuntimeSecretRealtimeRevision,
     managedConfigurations,
     managedConfigurationPages,
     managedConfigurationRealtimeRevision,

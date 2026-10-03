@@ -19,6 +19,9 @@ for (const width of [1440, 390]) {
       const now = "2026-09-25T00:00:00Z";
       const digest = "a".repeat(64);
       const artifact: RoleImageArtifact = {
+        projectRef: "project_synthetic_image",
+        scopeKind: "PROJECT",
+        organizationRef: "org_synthetic",
         ref: "artifact_synthetic_image",
         version: 1,
         recipeRef: "recipe_synthetic_image",
@@ -74,6 +77,8 @@ for (const width of [1440, 390]) {
           const promoted = promotionState === "PROMOTED";
           const detail: RoleImageRecipeDetail = {
             recipe: {
+              scopeKind: "PROJECT",
+              organizationRef: "org_synthetic",
               ref: "recipe_synthetic_image",
               version: 1,
               projectRef: "project_synthetic_image",
@@ -90,6 +95,9 @@ for (const width of [1440, 390]) {
             },
             builds: [
               {
+                projectRef: "project_synthetic_image",
+                scopeKind: "PROJECT",
+                organizationRef: "org_synthetic",
                 ref: "build_synthetic_image",
                 version: 1,
                 recipeRef: "recipe_synthetic_image",

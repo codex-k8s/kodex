@@ -15,6 +15,8 @@ import {
   createEmailReconciliationIntent,
   type EmailReconciliationIntent,
   createRuntimeEnvironmentPolicyIntent,
+  createOrganizationAssistantEnvironmentIntent,
+  type OrganizationAssistantEnvironmentIntent,
   createRuntimeSecretDraftIntent,
   createRuntimeSecretRevealIntent,
   oidcReauthIntentStorageKey,
@@ -35,6 +37,7 @@ import {
   getOwnerSession,
   deleteOwnerSession,
   getBootstrapState,
+  getRuntimeSecret,
   renewOwnerSession,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -56,6 +59,13 @@ import {
   unwrap,
 } from "@/shared/api/problem";
 import { runtimeConfig } from "@/shared/config/runtime";
+import {
+  assertRuntimeResourceAddressIdentity,
+  runtimeResourceAddressScope,
+  runtimeResourceScopeKey,
+  type RuntimeResourceAddress,
+  type RuntimeResourceScope,
+} from "@/features/runtime/resource-scope";
 
 export type SessionPhase =
   | "checking"
@@ -78,13 +88,15 @@ export interface LoginCompletion {
     | "runtime-secret"
     | "runtime-secret-draft"
     | "runtime-environment-policy"
+    | "organization-assistant-environment"
     | "email-reconciliation";
   readonly returnPath?: string;
 }
 
 interface PendingRuntimeSecretReveal {
   readonly expiresAt: number;
-  readonly projectRef: string;
+  readonly resourceScope: RuntimeResourceScope;
+  readonly organizationRef: string;
   readonly secretRef: string;
 }
 
@@ -317,6 +329,9 @@ export const useSessionStore = defineStore("session", () => {
     window.sessionStorage.removeItem(authorizationStateKey);
     window.sessionStorage.removeItem(sessionRevisionKey);
     window.sessionStorage.removeItem(environmentDraftReauthKey);
+    window.sessionStorage.removeItem(
+      "kodex.organization-assistant.environment-resume",
+    );
     window.sessionStorage.removeItem(runtimeSecretReauthSuggestionStorageKey);
     window.sessionStorage.removeItem(emailAttemptStorageKey);
     window.sessionStorage.removeItem(mailboxCredentialRecoveryKey);
@@ -418,12 +433,34 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   async function beginRuntimeSecretRevealReauth(input: {
-    projectRef: string;
+    projectRef: RuntimeResourceAddress;
+    organizationRef: string;
     secretRef: string;
   }): Promise<void> {
     const intent = createRuntimeSecretRevealIntent(
       input.projectRef,
       input.secretRef,
+      input.organizationRef,
+    );
+    const [bootstrap, secret] = await Promise.all([
+      unwrap(getBootstrapState({ signal: requestSignal(), cache: "no-store" })),
+      unwrap(
+        getRuntimeSecret({
+          path: { secretRef: input.secretRef },
+          signal: requestSignal(),
+          cache: "no-store",
+        }),
+      ),
+    ]);
+    if (
+      bootstrap.data.organizationRef !== intent.organizationRef ||
+      secret.data.ref !== intent.secretRef
+    )
+      throw new Error("Secret reveal current organization mismatch");
+    assertRuntimeResourceAddressIdentity(
+      input.projectRef,
+      secret.data,
+      bootstrap.data.organizationRef,
     );
     pendingRuntimeSecretRevealState.value = undefined;
     window.sessionStorage.removeItem(
@@ -438,7 +475,11 @@ export const useSessionStore = defineStore("session", () => {
         freshAuthentication: true,
         purpose: {
           kind: "RUNTIME_SECRET_REVEAL",
-          projectRef: intent.projectRef,
+          scopeKind: intent.resourceScope.kind,
+          organizationRef: intent.organizationRef,
+          ...(intent.resourceScope.kind === "PROJECT"
+            ? { projectRef: intent.resourceScope.projectRef }
+            : {}),
           secretRef: intent.secretRef,
         },
       });
@@ -450,7 +491,7 @@ export const useSessionStore = defineStore("session", () => {
 
   async function beginRuntimeSecretDraftReauth(input: {
     assistantReturnPath?: string;
-    projectRef: string;
+    projectRef: RuntimeResourceAddress;
     target: "create" | "draft" | "secret";
     targetRef?: string;
     surface?: "assistant";
@@ -492,6 +533,29 @@ export const useSessionStore = defineStore("session", () => {
     window.sessionStorage.removeItem(
       runtimeEnvironmentPolicyReauthCompletionStorageKey,
     );
+    window.sessionStorage.setItem(
+      oidcReauthIntentStorageKey,
+      JSON.stringify(intent),
+    );
+    try {
+      await redirectAuthorization({ freshAuthentication: true });
+    } catch (error) {
+      window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+      throw error;
+    }
+  }
+
+  async function beginOrganizationAssistantEnvironmentReauth(
+    input: Pick<
+      OrganizationAssistantEnvironmentIntent,
+      | "organizationRef"
+      | "agentRef"
+      | "environmentRef"
+      | "draftRef"
+      | "draftVersion"
+    >,
+  ): Promise<void> {
+    const intent = createOrganizationAssistantEnvironmentIntent(input);
     window.sessionStorage.setItem(
       oidcReauthIntentStorageKey,
       JSON.stringify(intent),
@@ -614,12 +678,20 @@ export const useSessionStore = defineStore("session", () => {
       if (intent.kind === "runtime-secret") {
         pendingRuntimeSecretRevealState.value = {
           expiresAt: Date.now() + runtimeSecretRevealPendingLifetimeMs,
-          projectRef: intent.projectRef,
+          resourceScope: intent.resourceScope,
+          organizationRef: intent.organizationRef,
           secretRef: intent.secretRef,
         };
         return { kind: intent.kind, returnPath: intent.returnPath };
       }
       if (intent.kind === "runtime-secret-draft") {
+        return { kind: intent.kind, returnPath: intent.returnPath };
+      }
+      if (intent.kind === "organization-assistant-environment") {
+        window.sessionStorage.setItem(
+          "kodex.organization-assistant.environment-resume",
+          JSON.stringify(intent),
+        );
         return { kind: intent.kind, returnPath: intent.returnPath };
       }
       if (intent.kind === "runtime-environment-policy") {
@@ -651,28 +723,40 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
-  function pendingRuntimeSecretReveal(projectRef: string): string | undefined {
+  function pendingRuntimeSecretReveal(
+    address: RuntimeResourceAddress,
+    organizationRef: string,
+  ): string | undefined {
     const pending = pendingRuntimeSecretRevealState.value;
     if (!pending) return undefined;
     if (pending.expiresAt <= Date.now()) {
       pendingRuntimeSecretRevealState.value = undefined;
       return undefined;
     }
-    return pending.projectRef === projectRef ? pending.secretRef : undefined;
+    return pending.organizationRef === organizationRef &&
+      runtimeResourceScopeKey(pending.resourceScope) ===
+        runtimeResourceScopeKey(runtimeResourceAddressScope(address))
+      ? pending.secretRef
+      : undefined;
   }
 
   function hasPendingRuntimeSecretReveal(
-    projectRef: string,
+    projectRef: RuntimeResourceAddress,
     secretRef: string,
+    organizationRef: string,
   ): boolean {
-    return pendingRuntimeSecretReveal(projectRef) === secretRef;
+    return (
+      pendingRuntimeSecretReveal(projectRef, organizationRef) === secretRef
+    );
   }
 
   function consumePendingRuntimeSecretReveal(
-    projectRef: string,
+    projectRef: RuntimeResourceAddress,
     secretRef: string,
+    organizationRef: string,
   ): boolean {
-    if (!hasPendingRuntimeSecretReveal(projectRef, secretRef)) return false;
+    if (!hasPendingRuntimeSecretReveal(projectRef, secretRef, organizationRef))
+      return false;
     pendingRuntimeSecretRevealState.value = undefined;
     return true;
   }
@@ -869,6 +953,7 @@ export const useSessionStore = defineStore("session", () => {
     beginRuntimeSecretRevealReauth,
     beginRuntimeSecretDraftReauth,
     beginRuntimeEnvironmentPolicyReauth,
+    beginOrganizationAssistantEnvironmentReauth,
     beginEmailReconciliationReauth,
     hasPendingEmailConfirmation,
     consumePendingEmailConfirmation,

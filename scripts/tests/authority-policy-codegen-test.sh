@@ -32,7 +32,23 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 85 and .policy.authority_abi_version == 2 and
+	.policy_revision == 86 and .policy.authority_abi_version == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id | contains("organization.runtime") or contains("organization.role-images")) |
+    select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and
+      .authority_proof_producer_id == "control-plane.oidc" and .project_required == false and
+      .request_profile.mode == "UNARY_PROTO_SHA256" and .request_profile.attempt == "FORBIDDEN")] | length) == 8 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.organization.runtime-secret-drafts.create" or
+      .operation_id == "platform.command.organization.runtime-environment-drafts.create" or
+      .operation_id == "platform.organization.role-images.recipes.manage") |
+    select(.request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 3 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.organization.role-images.promote") |
+    select(.request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.organization.role-images.recipes.get" or
+      .operation_id == "platform.organization.role-images.recipe-revisions.list") |
+    select(.request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.organization.role-images.recipes.list" or
+      .operation_id == "platform.query.organization.runtime-secrets.list") |
+    select(.request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 2 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.command.role-images.copy" or .operation_id == "platform.command.integration-definitions.copy" or .operation_id == "platform.command.role-images.archive-configuration" or .operation_id == "platform.command.integration-definitions.archive") |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
       .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 4 and

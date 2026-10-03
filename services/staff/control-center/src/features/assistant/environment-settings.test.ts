@@ -6,6 +6,8 @@ import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types
 function environment(projectRef?: string): RuntimeEnvironmentSet {
   const policy = defaultRuntimeEnvironmentPolicy();
   return {
+    scopeKind: projectRef ? "PROJECT" : "ORGANIZATION",
+    organizationRef: "org_alpha",
     ref: "env_assistant",
     version: 1,
     projectRef: projectRef ?? "",
@@ -78,6 +80,7 @@ describe("Настройка окружения помощника", () => {
     const current = environment();
     const input = editableAssistantEnvironment(current, {
       kind: "ORGANIZATION",
+      organizationRef: "org_alpha",
     });
     expect(input.imageArtifactRef).toBe("imgart_exact");
     expect(input.tools).toEqual(current.currentVersion.tools);
@@ -100,8 +103,10 @@ describe("Настройка окружения помощника", () => {
     const current = environment();
     current.currentVersion.image.artifactRef = "";
     expect(
-      editableAssistantEnvironment(current, { kind: "ORGANIZATION" })
-        .imageArtifactRef,
+      editableAssistantEnvironment(current, {
+        kind: "ORGANIZATION",
+        organizationRef: "org_alpha",
+      }).imageArtifactRef,
     ).toBe("");
   });
 
@@ -109,6 +114,7 @@ describe("Настройка окружения помощника", () => {
     expect(() =>
       editableAssistantEnvironment(environment("prj_alpha"), {
         kind: "ORGANIZATION",
+        organizationRef: "org_alpha",
       }),
     ).toThrow("scope mismatch");
     expect(() =>

@@ -132,8 +132,8 @@ func projectManagedRevisionSource(revision *entity.ManagedConfigurationRevision,
 	}
 }
 
-func (repository *Repository) projectRoleImageManageSource(ctx context.Context, tx pgx.Tx, current scope, result *roleimagerepo.ManageResult) error {
-	target, err := repository.resolveRoleImageAccessTarget(ctx, tx, current, result.Recipe.Ref, result.Recipe.ProjectRef)
+func (repository *Repository) projectRoleImageManageSource(ctx context.Context, tx pgx.Tx, current scope, result *roleimagerepo.ManageResult, scopeKind string) error {
+	target, err := repository.resolveScopedRoleImageAccessTarget(ctx, tx, current, result.Recipe.Ref, result.Recipe.ProjectRef, scopeKind)
 	if err != nil {
 		return err
 	}

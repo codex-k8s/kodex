@@ -19,6 +19,8 @@ import { useI18n } from "vue-i18n";
 import { usePlatformStore } from "@/features/platform/store";
 import { useProvidersStore } from "@/features/providers/store";
 import ProjectPicker from "@/features/projects/ProjectPicker.vue";
+import RuntimeResourceManagementLinks from "@/features/runtime/RuntimeResourceManagementLinks.vue";
+import { organizationRuntimeResourceScope } from "@/features/runtime/resource-scope";
 import {
   requestAssistantSetup,
   requestAssistantSettings,
@@ -31,6 +33,9 @@ import { useOnboardingStore } from "../store";
 
 const guide = useOnboardingStore();
 const platform = usePlatformStore();
+const systemResourceScope = computed(() =>
+  organizationRuntimeResourceScope(platform.bootstrap),
+);
 const providers = useProvidersStore();
 const route = useRoute();
 const router = useRouter();
@@ -307,6 +312,15 @@ onMounted(() => {
                 $t("onboarding.configureAssistant")
               }}
             </button>
+          </div>
+          <div class="setup-detail">
+            <strong>{{ $t("assistant.resources.title") }}</strong>
+            <p>{{ $t("assistant.resources.systemHelp") }}</p>
+            <RuntimeResourceManagementLinks
+              v-if="systemResourceScope"
+              :resource-scope="systemResourceScope"
+              :return-to="router.resolve(guide.returnTo).href"
+            />
           </div>
           <div class="setup-note">
             <Check :size="19" aria-hidden="true" />

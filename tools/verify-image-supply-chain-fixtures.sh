@@ -732,7 +732,7 @@ evidence_entries_fixture() {
   cat <<'EOF'
 image-digest.subject|application/vnd.kodex.image-digest.v1+text
 image-digest.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-provenance.json|application/vnd.kodex.provenance-binding.v1+json
+provenance.json|application/vnd.kodex.provenance-binding.v2+json
 provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
@@ -796,7 +796,7 @@ expect_evidence_failure() {
   if PATH="$temporary_directory/bin:$PATH" \
     sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence \
     artifact-1 "$image_digest" "$receipt_sha" "$evidence_directory" "$evidence_manifest" \
-    "$evidence_manifest_digest" "$policy_revision" "$policy_sha256" ACCEPTED >/dev/null 2>&1; then
+    "$evidence_manifest_digest" "$policy_revision" "$policy_sha256" ACCEPTED PROJECT org_fixture123 prj_fixture123 >/dev/null 2>&1; then
     echo "$failure_name was accepted" >&2
     exit 1
   fi
@@ -815,7 +815,8 @@ printf '%s\n' "$image_digest" >"$evidence_source/image-digest.subject"
 cat >"$evidence_source/provenance.json" <<EOF
 {
   "specSHA256": "1111111111111111111111111111111111111111111111111111111111111111",
-  "schema": "kodex.dev/image-provenance-binding/v1",
+  "schema": "kodex.dev/image-provenance-binding/v2",
+  "scopeKind": "PROJECT", "organizationRef": "org_fixture123", "projectRef": "prj_fixture123",
   "policySHA256": "$policy_sha256",
   "manifestDigest": "$image_digest",
   "immutableBuildSHA256": "2222222222222222222222222222222222222222222222222222222222222222",
@@ -895,7 +896,7 @@ FIXTURE_EVIDENCE_REFERENCE="$evidence_reference" FIXTURE_EVIDENCE_MANIFEST="$evi
   FIXTURE_EVIDENCE_BLOBS="$evidence_blobs" PATH="$temporary_directory/bin:$PATH" \
   sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence-recovery \
   artifact-1 "$image_digest" "$receipt_sha" "$evidence_reference" "$evidence_manifest" \
-  "$evidence_manifest_digest" "$policy_revision" "$policy_sha256" ACCEPTED "$evidence_recovered"
+  "$evidence_manifest_digest" "$policy_revision" "$policy_sha256" ACCEPTED "$evidence_recovered" PROJECT org_fixture123 prj_fixture123
 while IFS='|' read -r evidence_name evidence_media_type; do
   cmp -s "$evidence_source/$evidence_name" "$evidence_recovered/$evidence_name" || {
     echo "OCI evidence byte round-trip changed $evidence_name" >&2

@@ -140,6 +140,8 @@ function view(model: string, version: number): AgentRuntimeConfigurationView {
       digest: "d".repeat(64),
     },
     environment: {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "environment_main",
       version,
       projectRef: "project_sales",

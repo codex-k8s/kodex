@@ -5521,6 +5521,24 @@ func (e RuntimeNetworkProtocol) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeResourceScopeKind.
+const (
+	RuntimeResourceScopeKindORGANIZATION RuntimeResourceScopeKind = "ORGANIZATION"
+	RuntimeResourceScopeKindPROJECT      RuntimeResourceScopeKind = "PROJECT"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeResourceScopeKind enum.
+func (e RuntimeResourceScopeKind) Valid() bool {
+	switch e {
+	case RuntimeResourceScopeKindORGANIZATION:
+		return true
+	case RuntimeResourceScopeKindPROJECT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeRevisionDiffChangeComponent.
 const (
 	RuntimeRevisionDiffChangeComponentCONFIGOVERLAY        RuntimeRevisionDiffChangeComponent = "CONFIG_OVERLAY"
@@ -8077,6 +8095,24 @@ func (e ListManagedConfigurationsParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for ListSystemRoleImageRecipesParamsState.
+const (
+	ListSystemRoleImageRecipesParamsStateACTIVE   ListSystemRoleImageRecipesParamsState = "ACTIVE"
+	ListSystemRoleImageRecipesParamsStateARCHIVED ListSystemRoleImageRecipesParamsState = "ARCHIVED"
+)
+
+// Valid indicates whether the value is a known member of the ListSystemRoleImageRecipesParamsState enum.
+func (e ListSystemRoleImageRecipesParamsState) Valid() bool {
+	switch e {
+	case ListSystemRoleImageRecipesParamsStateACTIVE:
+		return true
+	case ListSystemRoleImageRecipesParamsStateARCHIVED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListOwnerGatesParamsState.
 const (
 	ListOwnerGatesParamsStateAPPROVED         ListOwnerGatesParamsState = "APPROVED"
@@ -8526,16 +8562,16 @@ func (e GetProviderAccountParamsUsagePurpose) Valid() bool {
 
 // Defines values for ListRunsParamsTargetType.
 const (
-	ListRunsParamsTargetTypeAGENT    ListRunsParamsTargetType = "AGENT"
-	ListRunsParamsTargetTypeWORKFLOW ListRunsParamsTargetType = "WORKFLOW"
+	AGENT    ListRunsParamsTargetType = "AGENT"
+	WORKFLOW ListRunsParamsTargetType = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the ListRunsParamsTargetType enum.
 func (e ListRunsParamsTargetType) Valid() bool {
 	switch e {
-	case ListRunsParamsTargetTypeAGENT:
+	case AGENT:
 		return true
-	case ListRunsParamsTargetTypeWORKFLOW:
+	case WORKFLOW:
 		return true
 	default:
 		return false
@@ -8610,16 +8646,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
+	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	DELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case SearchVFSParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case SearchVFSParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
 	default:
 		return false
@@ -9405,6 +9441,7 @@ type BootstrapState struct {
 	Initialized         bool                            `json:"initialized"`
 	NextActions         []NextAction                    `json:"nextActions"`
 	OnboardingComplete  bool                            `json:"onboardingComplete"`
+	OrganizationRef     OpaqueRef                       `json:"organizationRef"`
 	PlatformRole        BootstrapStatePlatformRole      `json:"platformRole"`
 	SpeechTranscription SpeechTranscriptionAvailability `json:"speechTranscription"`
 	WebOnlyReady        bool                            `json:"webOnlyReady"`
@@ -10841,13 +10878,19 @@ type OwnerSessionMetadataRenewalMode string
 
 // OwnerSessionPurpose defines model for OwnerSessionPurpose.
 type OwnerSessionPurpose struct {
-	Kind          OwnerSessionPurposeKind `json:"kind"`
-	ProjectRef    *OpaqueRef              `json:"projectRef,omitempty"`
-	ReceiptDigest *string                 `json:"receiptDigest,omitempty"`
+	Kind OwnerSessionPurposeKind `json:"kind"`
+
+	// OrganizationRef Точная организационная привязка RUNTIME_SECRET_REVEAL; сверяется с авторитетным чтением секрета до расходования elevation.
+	OrganizationRef *OpaqueRef `json:"organizationRef,omitempty"`
+	ProjectRef      *OpaqueRef `json:"projectRef,omitempty"`
+	ReceiptDigest   *string    `json:"receiptDigest,omitempty"`
 
 	// ReceiptRef Только EMAIL_EFFECT_RECONCILIATION; обязательна точная квитанция, projectRef и secretRef запрещены
 	ReceiptRef     *OpaqueRef `json:"receiptRef,omitempty"`
 	ReceiptVersion *int64     `json:"receiptVersion,omitempty"`
+
+	// ScopeKind Обязателен для RUNTIME_SECRET_REVEAL; клиент задаёт только цель, владение проверяет CP. Запрещён для EMAIL_EFFECT_RECONCILIATION.
+	ScopeKind *RuntimeResourceScopeKind `json:"scopeKind,omitempty"`
 
 	// SecretRef Обязателен для RUNTIME_SECRET_REVEAL; отсутствует для EMAIL_EFFECT_RECONCILIATION
 	SecretRef *OpaqueRef `json:"secretRef,omitempty"`
@@ -11657,6 +11700,8 @@ type RoleImageArtifact struct {
 	AdmissionVerdict            RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
 	BuildRef                    OpaqueRef                         `json:"buildRef"`
 	ManifestDigest              string                            `json:"manifestDigest"`
+	OrganizationRef             OpaqueRef                         `json:"organizationRef"`
+	ProjectRef                  string                            `json:"projectRef"`
 	PromotedAt                  *Timestamp                        `json:"promotedAt,omitempty"`
 	PromotedReference           *string                           `json:"promotedReference,omitempty"`
 	PromotionReceiptSha256      *string                           `json:"promotionReceiptSha256,omitempty"`
@@ -11667,6 +11712,7 @@ type RoleImageArtifact struct {
 	RecipeRef                   OpaqueRef                         `json:"recipeRef"`
 	Ref                         OpaqueRef                         `json:"ref"`
 	SbomSha256                  *string                           `json:"sbomSha256,omitempty"`
+	ScopeKind                   RuntimeResourceScopeKind          `json:"scopeKind"`
 	Tools                       []RoleImageArtifactTool           `json:"tools"`
 	Version                     int64                             `json:"version"`
 	VulnerabilityEvidenceSha256 *string                           `json:"vulnerabilityEvidenceSha256,omitempty"`
@@ -11686,17 +11732,20 @@ type RoleImageArtifactTool struct {
 
 // RoleImageBuild defines model for RoleImageBuild.
 type RoleImageBuild struct {
-	Attempt                  int        `json:"attempt"`
-	ConfigurationRevisionRef *OpaqueRef `json:"configurationRevisionRef,omitempty"`
-	CreatedAt                Timestamp  `json:"createdAt"`
-	DiagnosticCode           *string    `json:"diagnosticCode,omitempty"`
-	DiagnosticSummary        *string    `json:"diagnosticSummary,omitempty"`
-	Dockerfile               *string    `json:"dockerfile,omitempty"`
-	ProgressPercent          int        `json:"progressPercent"`
-	RecipeGeneration         int64      `json:"recipeGeneration"`
-	RecipeRef                OpaqueRef  `json:"recipeRef"`
-	Ref                      OpaqueRef  `json:"ref"`
-	SafeErrorCode            *string    `json:"safeErrorCode,omitempty"`
+	Attempt                  int                      `json:"attempt"`
+	ConfigurationRevisionRef *OpaqueRef               `json:"configurationRevisionRef,omitempty"`
+	CreatedAt                Timestamp                `json:"createdAt"`
+	DiagnosticCode           *string                  `json:"diagnosticCode,omitempty"`
+	DiagnosticSummary        *string                  `json:"diagnosticSummary,omitempty"`
+	Dockerfile               *string                  `json:"dockerfile,omitempty"`
+	OrganizationRef          OpaqueRef                `json:"organizationRef"`
+	ProgressPercent          int                      `json:"progressPercent"`
+	ProjectRef               string                   `json:"projectRef"`
+	RecipeGeneration         int64                    `json:"recipeGeneration"`
+	RecipeRef                OpaqueRef                `json:"recipeRef"`
+	Ref                      OpaqueRef                `json:"ref"`
+	SafeErrorCode            *string                  `json:"safeErrorCode,omitempty"`
+	ScopeKind                RuntimeResourceScopeKind `json:"scopeKind"`
 
 	// SourceAvailable Авторитетный допуск к исходному Dockerfile этой сборки; metadata не выдаёт право чтения исходника.
 	SourceAvailable bool                `json:"sourceAvailable"`
@@ -11852,11 +11901,13 @@ type RoleImageRecipe struct {
 	ManagedLineage         *RoleImageManagedLineage `json:"managedLineage,omitempty"`
 	Name                   string                   `json:"name"`
 	NextActions            []NextAction             `json:"nextActions"`
-	ProjectRef             OpaqueRef                `json:"projectRef"`
+	OrganizationRef        OpaqueRef                `json:"organizationRef"`
+	ProjectRef             string                   `json:"projectRef"`
 	PromotedImageReady     bool                     `json:"promotedImageReady"`
 	PromotedImageReference *string                  `json:"promotedImageReference,omitempty"`
 	Ref                    OpaqueRef                `json:"ref"`
 	RoleDefinitionRef      OpaqueRef                `json:"roleDefinitionRef"`
+	ScopeKind              RuntimeResourceScopeKind `json:"scopeKind"`
 
 	// SourceAvailable Авторитетный допуск к исходному тексту; false скрывает dockerfile и installationBlock, сохраняя metadata.
 	SourceAvailable bool                 `json:"sourceAvailable"`
@@ -12228,12 +12279,14 @@ type RuntimeEnvironmentDraft struct {
 	Diagnostics                []string   `json:"diagnostics"`
 	EnvironmentRef             *OpaqueRef `json:"environmentRef,omitempty"`
 	ExpectedEnvironmentVersion int64      `json:"expectedEnvironmentVersion"`
-	ProjectRef                 OpaqueRef  `json:"projectRef"`
+	OrganizationRef            OpaqueRef  `json:"organizationRef"`
+	ProjectRef                 string     `json:"projectRef"`
 	PublishedEnvironmentRef    *OpaqueRef `json:"publishedEnvironmentRef,omitempty"`
 	Ref                        OpaqueRef  `json:"ref"`
 
 	// SavedAt Время последнего create/save; может отсутствовать в историческом idempotency receipt, для восстановления нужен GET draft
-	SavedAt *time.Time `json:"savedAt,omitempty"`
+	SavedAt   *time.Time               `json:"savedAt,omitempty"`
+	ScopeKind RuntimeResourceScopeKind `json:"scopeKind"`
 
 	// Specification Незавершённое окружение сохраняется отдельно; готовность проверяется командой validation
 	Specification    RuntimeEnvironmentDraftSpecification `json:"specification"`
@@ -12289,7 +12342,7 @@ type RuntimeEnvironmentImpact struct {
 type RuntimeEnvironmentInput struct {
 	Description string `json:"description"`
 
-	// ImageArtifactRef Для системного помощника пустая строка означает платформенный образ; Проектные окружения по-прежнему требуют точный artifact ref.
+	// ImageArtifactRef Точный admitted/promoted artifact выбранной области. Пустое значение означает незавершённый черновик и не разрешает публикацию или подстановку платформенного образа.
 	ImageArtifactRef string                        `json:"imageArtifactRef"`
 	Name             string                        `json:"name"`
 	Policy           RuntimeEnvironmentPolicyInput `json:"policy"`
@@ -12364,10 +12417,12 @@ type RuntimeEnvironmentSet struct {
 	Description       string                     `json:"description"`
 	Name              string                     `json:"name"`
 	NextActions       []NextAction               `json:"nextActions"`
-	ProjectRef        OpaqueRef                  `json:"projectRef"`
+	OrganizationRef   OpaqueRef                  `json:"organizationRef"`
+	ProjectRef        string                     `json:"projectRef"`
 	ReadinessBlockers []string                   `json:"readinessBlockers"`
 	Ready             bool                       `json:"ready"`
 	Ref               OpaqueRef                  `json:"ref"`
+	ScopeKind         RuntimeResourceScopeKind   `json:"scopeKind"`
 	State             RuntimeEnvironmentSetState `json:"state"`
 	UpdatedAt         Timestamp                  `json:"updatedAt"`
 	Version           int64                      `json:"version"`
@@ -12455,6 +12510,9 @@ type RuntimeResourcePolicy struct {
 	MemoryRequestMib           int64 `json:"memoryRequestMib"`
 }
 
+// RuntimeResourceScopeKind defines model for RuntimeResourceScopeKind.
+type RuntimeResourceScopeKind string
+
 // RuntimeRevisionDiff defines model for RuntimeRevisionDiff.
 type RuntimeRevisionDiff struct {
 	Changes  []RuntimeRevisionDiffChange    `json:"changes"`
@@ -12492,8 +12550,10 @@ type RuntimeSecret struct {
 	DisplayHint     *RuntimeSecretDisplayHint `json:"displayHint,omitempty"`
 	Name            string                    `json:"name"`
 	NextActions     []NextAction              `json:"nextActions"`
-	ProjectRef      OpaqueRef                 `json:"projectRef"`
+	OrganizationRef OpaqueRef                 `json:"organizationRef"`
+	ProjectRef      string                    `json:"projectRef"`
 	Ref             OpaqueRef                 `json:"ref"`
+	ScopeKind       RuntimeResourceScopeKind  `json:"scopeKind"`
 	State           RuntimeSecretState        `json:"state"`
 	UpdatedAt       Timestamp                 `json:"updatedAt"`
 	ValueType       RuntimeSecretValueType    `json:"valueType"`
@@ -12540,15 +12600,17 @@ type RuntimeSecretDisplayHint struct {
 
 // RuntimeSecretDraft defines model for RuntimeSecretDraft.
 type RuntimeSecretDraft struct {
-	CreatedAt         Timestamp `json:"createdAt"`
-	Description       string    `json:"description"`
-	ExpiresAt         Timestamp `json:"expiresAt"`
-	Generation        int64     `json:"generation"`
-	Name              string    `json:"name"`
-	ProjectRef        OpaqueRef `json:"projectRef"`
-	PublishedRevision int64     `json:"publishedRevision"`
-	Ref               OpaqueRef `json:"ref"`
-	SecretRef         OpaqueRef `json:"secretRef"`
+	CreatedAt         Timestamp                `json:"createdAt"`
+	Description       string                   `json:"description"`
+	ExpiresAt         Timestamp                `json:"expiresAt"`
+	Generation        int64                    `json:"generation"`
+	Name              string                   `json:"name"`
+	OrganizationRef   OpaqueRef                `json:"organizationRef"`
+	ProjectRef        string                   `json:"projectRef"`
+	PublishedRevision int64                    `json:"publishedRevision"`
+	Ref               OpaqueRef                `json:"ref"`
+	ScopeKind         RuntimeResourceScopeKind `json:"scopeKind"`
+	SecretRef         OpaqueRef                `json:"secretRef"`
 
 	// SecretVersion Версия Secret из owner readback; для новой операции после replay требуется свежий GetDraft.
 	SecretVersion int64                   `json:"secretVersion"`
@@ -14863,6 +14925,70 @@ type CompleteOnboardingParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListSystemRoleImageRecipesParams defines parameters for ListSystemRoleImageRecipes.
+type ListSystemRoleImageRecipesParams struct {
+	// Query Поиск владельца по имени рецепта; не более 128 UTF-8 bytes.
+	Query     *string                                `form:"query,omitempty" json:"query,omitempty"`
+	State     *ListSystemRoleImageRecipesParamsState `form:"state,omitempty" json:"state,omitempty"`
+	PageSize  *PageSize                              `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken                             `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListSystemRoleImageRecipesParamsState defines parameters for ListSystemRoleImageRecipes.
+type ListSystemRoleImageRecipesParamsState string
+
+// CreateSystemRoleImageRecipeParams defines parameters for CreateSystemRoleImageRecipe.
+type CreateSystemRoleImageRecipeParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// UpdateSystemRoleImageRecipeParams defines parameters for UpdateSystemRoleImageRecipe.
+type UpdateSystemRoleImageRecipeParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CommandSystemRoleImageRecipeParams defines parameters for CommandSystemRoleImageRecipe.
+type CommandSystemRoleImageRecipeParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// PromoteSystemRoleImageParams defines parameters for PromoteSystemRoleImage.
+type PromoteSystemRoleImageParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListSystemRoleImageRecipeRevisionsParams defines parameters for ListSystemRoleImageRecipeRevisions.
+type ListSystemRoleImageRecipeRevisionsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreateSystemRuntimeEnvironmentDraftParams defines parameters for CreateSystemRuntimeEnvironmentDraft.
+type CreateSystemRuntimeEnvironmentDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CreateSystemRuntimeSecretDraftParams defines parameters for CreateSystemRuntimeSecretDraft.
+type CreateSystemRuntimeSecretDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListSystemRuntimeSecretsParams defines parameters for ListSystemRuntimeSecrets.
+type ListSystemRuntimeSecretsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // GetOverviewParams defines parameters for GetOverview.
 type GetOverviewParams struct {
 	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
@@ -16243,6 +16369,24 @@ type CopyGitManagedConfigurationJSONRequestBody = ManagedConfigurationCopyInput
 // ReviseMemoryRecordJSONRequestBody defines body for ReviseMemoryRecord for application/json ContentType.
 type ReviseMemoryRecordJSONRequestBody = MemoryRecordSpecification
 
+// CreateSystemRoleImageRecipeJSONRequestBody defines body for CreateSystemRoleImageRecipe for application/json ContentType.
+type CreateSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
+
+// UpdateSystemRoleImageRecipeJSONRequestBody defines body for UpdateSystemRoleImageRecipe for application/json ContentType.
+type UpdateSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
+
+// CommandSystemRoleImageRecipeJSONRequestBody defines body for CommandSystemRoleImageRecipe for application/json ContentType.
+type CommandSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeCommand
+
+// PromoteSystemRoleImageJSONRequestBody defines body for PromoteSystemRoleImage for application/json ContentType.
+type PromoteSystemRoleImageJSONRequestBody = RoleImagePromotionInput
+
+// CreateSystemRuntimeEnvironmentDraftJSONRequestBody defines body for CreateSystemRuntimeEnvironmentDraft for application/json ContentType.
+type CreateSystemRuntimeEnvironmentDraftJSONRequestBody = RuntimeEnvironmentDraftCreateInput
+
+// CreateSystemRuntimeSecretDraftJSONRequestBody defines body for CreateSystemRuntimeSecretDraft for application/json ContentType.
+type CreateSystemRuntimeSecretDraftJSONRequestBody = RuntimeSecretCreateInput
+
 // ResolveOwnerGateJSONRequestBody defines body for ResolveOwnerGate for application/json ContentType.
 type ResolveOwnerGateJSONRequestBody = GateResolution
 
@@ -17188,6 +17332,36 @@ type ServerInterface interface {
 
 	// (POST /api/v1/onboarding/completion)
 	CompleteOnboarding(w http.ResponseWriter, r *http.Request, params CompleteOnboardingParams)
+
+	// (GET /api/v1/organization/role-image-recipes)
+	ListSystemRoleImageRecipes(w http.ResponseWriter, r *http.Request, params ListSystemRoleImageRecipesParams)
+
+	// (POST /api/v1/organization/role-image-recipes)
+	CreateSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request, params CreateSystemRoleImageRecipeParams)
+
+	// (GET /api/v1/organization/role-image-recipes/{recipeRef})
+	GetSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef)
+
+	// (PATCH /api/v1/organization/role-image-recipes/{recipeRef})
+	UpdateSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, params UpdateSystemRoleImageRecipeParams)
+
+	// (POST /api/v1/organization/role-image-recipes/{recipeRef}/commands)
+	CommandSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, params CommandSystemRoleImageRecipeParams)
+
+	// (POST /api/v1/organization/role-image-recipes/{recipeRef}/promotion)
+	PromoteSystemRoleImage(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, params PromoteSystemRoleImageParams)
+
+	// (GET /api/v1/organization/role-image-recipes/{recipeRef}/revisions)
+	ListSystemRoleImageRecipeRevisions(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, params ListSystemRoleImageRecipeRevisionsParams)
+
+	// (POST /api/v1/organization/runtime-environment-drafts)
+	CreateSystemRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, params CreateSystemRuntimeEnvironmentDraftParams)
+
+	// (POST /api/v1/organization/runtime-secret-drafts)
+	CreateSystemRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, params CreateSystemRuntimeSecretDraftParams)
+
+	// (GET /api/v1/organization/runtime-secrets)
+	ListSystemRuntimeSecrets(w http.ResponseWriter, r *http.Request, params ListSystemRuntimeSecretsParams)
 
 	// (GET /api/v1/overview)
 	GetOverview(w http.ResponseWriter, r *http.Request, params GetOverviewParams)
@@ -30177,6 +30351,782 @@ func (siw *ServerInterfaceWrapper) CompleteOnboarding(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CompleteOnboarding(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSystemRoleImageRecipes operation middleware
+func (siw *ServerInterfaceWrapper) ListSystemRoleImageRecipes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSystemRoleImageRecipesParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSystemRoleImageRecipes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSystemRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) CreateSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateSystemRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSystemRoleImageRecipe(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSystemRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemRoleImageRecipe(w, r, recipeRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSystemRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateSystemRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSystemRoleImageRecipe(w, r, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommandSystemRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) CommandSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CommandSystemRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommandSystemRoleImageRecipe(w, r, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PromoteSystemRoleImage operation middleware
+func (siw *ServerInterfaceWrapper) PromoteSystemRoleImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PromoteSystemRoleImageParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PromoteSystemRoleImage(w, r, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSystemRoleImageRecipeRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListSystemRoleImageRecipeRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSystemRoleImageRecipeRevisionsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSystemRoleImageRecipeRevisions(w, r, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSystemRuntimeEnvironmentDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateSystemRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateSystemRuntimeEnvironmentDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSystemRuntimeEnvironmentDraft(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSystemRuntimeSecretDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateSystemRuntimeSecretDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateSystemRuntimeSecretDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSystemRuntimeSecretDraft(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSystemRuntimeSecrets operation middleware
+func (siw *ServerInterfaceWrapper) ListSystemRuntimeSecrets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSystemRuntimeSecretsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSystemRuntimeSecrets(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -45714,6 +46664,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/revisions", wrapper.ReviseMemoryRecord)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/model-capabilities", wrapper.ListModelCapabilities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/onboarding/completion", wrapper.CompleteOnboarding)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes", wrapper.ListSystemRoleImageRecipes)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes", wrapper.CreateSystemRoleImageRecipe)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}", wrapper.GetSystemRoleImageRecipe)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}", wrapper.UpdateSystemRoleImageRecipe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/commands", wrapper.CommandSystemRoleImageRecipe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/promotion", wrapper.PromoteSystemRoleImage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/revisions", wrapper.ListSystemRoleImageRecipeRevisions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/runtime-environment-drafts", wrapper.CreateSystemRuntimeEnvironmentDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/runtime-secret-drafts", wrapper.CreateSystemRuntimeSecretDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/runtime-secrets", wrapper.ListSystemRuntimeSecrets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/overview", wrapper.GetOverview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates", wrapper.ListOwnerGates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}", wrapper.GetOwnerGate)

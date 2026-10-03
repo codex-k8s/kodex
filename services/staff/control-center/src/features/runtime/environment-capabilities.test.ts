@@ -79,6 +79,8 @@ describe("runtime environment capabilities", () => {
       policy: defaultRuntimeEnvironmentPolicy(),
     };
     const environment = {
+      scopeKind: "PROJECT" as const,
+      organizationRef: "org_synthetic",
       ref: "environment_docs",
       version: 3,
       projectRef: "project_main",

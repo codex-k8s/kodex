@@ -195,7 +195,7 @@ func (server *Server) CreateRuntimeEnvironmentSet(ctx context.Context, request *
 		return nil, transportError(errs.ErrInvalid)
 	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName,
-		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools, Policy: policy})
+		command.CreateRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentInput{ScopeKind: "PROJECT", ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ImageArtifactRef: request.GetImageArtifactRef(), Values: values, SecretBindings: secrets, Tools: tools, Policy: policy})
 	if err != nil {
 		return nil, err
 	}

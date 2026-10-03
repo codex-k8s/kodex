@@ -428,7 +428,7 @@ func TestIssueSessionRequiresFreshAuthenticationOnlyForTypedPurpose(t *testing.T
 		t.Fatalf("normal login issued elevation: normal=%d elevation=%d", store.issueCalls, store.elevationIssueCalls)
 	}
 
-	purpose := &SessionPurpose{Kind: session.ElevationKindRuntimeSecretReveal, ProjectRef: "project_sales", SecretRef: "secret_main"}
+	purpose := &SessionPurpose{Kind: session.ElevationKindRuntimeSecretReveal, ScopeKind: "PROJECT", OrganizationRef: "org_fixture01", ProjectRef: "project_sales", SecretRef: "secret_main"}
 	for _, test := range []struct {
 		name            string
 		authenticatedAt time.Time
@@ -468,7 +468,7 @@ func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
 	original := session.Claims{
 		Subject: uuid.NewString(), OrganizationID: uuid.NewString(), OIDCSessionID: uuid.NewString(),
 		SessionRevision: 3, SessionID: uuid.NewString(), Bearer: "bearer", ExpiresAt: now.Add(10 * time.Minute).Unix(),
-		Elevation: &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(time.Minute).Unix()},
+		Elevation: &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ScopeKind: "PROJECT", OrganizationRef: "org_fixture01", ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(time.Minute).Unix()},
 	}
 	replacement := original
 	replacement.SessionID = uuid.NewString()
@@ -482,7 +482,7 @@ func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
 	ctx = context.WithValue(ctx, authenticatedSessionContextKey{}, authenticatedSession{claims: original, bearerExpiry: now.Add(time.Hour)})
 
 	wrongResponse := httptest.NewRecorder()
-	if err := security.ConsumeRuntimeSecretReveal(ctx, wrongResponse, "project_sales", "secret_other"); !errors.Is(err, ErrElevationRequired) {
+	if err := security.ConsumeRuntimeSecretReveal(ctx, wrongResponse, "PROJECT", "org_fixture01", "project_sales", "secret_other"); !errors.Is(err, ErrElevationRequired) {
 		t.Fatalf("wrong target error = %v", err)
 	}
 	if revocations.consumed != "" || store.issueCalls != 0 {
@@ -491,7 +491,7 @@ func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
 
 	revocations.consumeErr = errors.New("NATS unavailable")
 	unavailableResponse := httptest.NewRecorder()
-	if err := security.ConsumeRuntimeSecretReveal(ctx, unavailableResponse, "project_sales", "secret_main"); !errors.Is(err, ErrElevationUnavailable) {
+	if err := security.ConsumeRuntimeSecretReveal(ctx, unavailableResponse, "PROJECT", "org_fixture01", "project_sales", "secret_main"); !errors.Is(err, ErrElevationUnavailable) {
 		t.Fatalf("unavailable store error = %v", err)
 	}
 	if store.issueCalls != 0 || len(unavailableResponse.Header().Values("Set-Cookie")) != 0 {
@@ -501,7 +501,7 @@ func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
 	revocations.consumed = ""
 
 	response := httptest.NewRecorder()
-	if err := security.ConsumeRuntimeSecretReveal(ctx, response, "project_sales", "secret_main"); err != nil {
+	if err := security.ConsumeRuntimeSecretReveal(ctx, response, "PROJECT", "org_fixture01", "project_sales", "secret_main"); err != nil {
 		t.Fatalf("consume exact elevation: %v", err)
 	}
 	if revocations.consumed != original.SessionID || store.issueCalls != 1 || len(response.Header().Values("Set-Cookie")) != 2 {
@@ -510,7 +510,7 @@ func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
 
 	revocations.consumeWon = false
 	replayResponse := httptest.NewRecorder()
-	if err := security.ConsumeRuntimeSecretReveal(ctx, replayResponse, "project_sales", "secret_main"); !errors.Is(err, ErrElevationConsumed) {
+	if err := security.ConsumeRuntimeSecretReveal(ctx, replayResponse, "PROJECT", "org_fixture01", "project_sales", "secret_main"); !errors.Is(err, ErrElevationConsumed) {
 		t.Fatalf("replay error = %v", err)
 	}
 	if store.issueCalls != 1 || len(replayResponse.Header().Values("Set-Cookie")) != 0 {
@@ -520,18 +520,18 @@ func TestRuntimeSecretRevealElevationIsExactAndOneUse(t *testing.T) {
 
 func TestExpiredRuntimeSecretRevealElevationIsRejectedBeforeStore(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
-	elevation := &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(-time.Second).Unix()}
+	elevation := &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ScopeKind: "PROJECT", OrganizationRef: "org_fixture01", ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(-time.Second).Unix()}
 	revocations := &fakeRevocationStore{consumeWon: true}
 	security := testBoundaryWithRevocations(t, &fakeOIDCVerifier{}, &fakeSessionStore{}, revocations)
 	security.now = func() time.Time { return now }
 	missingContext := context.WithValue(context.Background(), identityContextKey{}, Identity{BrowserSessionID: uuid.NewString()})
 	missingContext = context.WithValue(missingContext, authenticatedSessionContextKey{}, authenticatedSession{})
-	if err := security.ConsumeRuntimeSecretReveal(missingContext, httptest.NewRecorder(), "project_sales", "secret_main"); !errors.Is(err, ErrElevationRequired) {
+	if err := security.ConsumeRuntimeSecretReveal(missingContext, httptest.NewRecorder(), "PROJECT", "org_fixture01", "project_sales", "secret_main"); !errors.Is(err, ErrElevationRequired) {
 		t.Fatalf("missing elevation error = %v", err)
 	}
 	ctx := context.WithValue(context.Background(), identityContextKey{}, Identity{BrowserSessionID: uuid.NewString(), Elevation: elevation})
 	ctx = context.WithValue(ctx, authenticatedSessionContextKey{}, authenticatedSession{})
-	if err := security.ConsumeRuntimeSecretReveal(ctx, httptest.NewRecorder(), "project_sales", "secret_main"); !errors.Is(err, ErrElevationRequired) {
+	if err := security.ConsumeRuntimeSecretReveal(ctx, httptest.NewRecorder(), "PROJECT", "org_fixture01", "project_sales", "secret_main"); !errors.Is(err, ErrElevationRequired) {
 		t.Fatalf("expired elevation error = %v", err)
 	}
 	if revocations.consumed != "" {

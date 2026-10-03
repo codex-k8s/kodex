@@ -27,8 +27,10 @@ vi.mock("@/shared/api/mutation", () => ({
 }));
 import RuntimeSecretDraftImpact from "./RuntimeSecretDraftImpact.vue";
 const draft = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "draft",
-  projectRef: "project",
+  projectRef: "project_synthetic",
   secretRef: "secret",
   version: 2,
   secretVersion: 1,

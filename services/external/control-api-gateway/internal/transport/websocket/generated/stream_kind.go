@@ -6,5 +6,5 @@ type StreamKind string
 
 const (
 	StreamKindPlatform StreamKind = "PLATFORM"
-	StreamKindRun StreamKind = "RUN"
+	StreamKindRun      StreamKind = "RUN"
 )

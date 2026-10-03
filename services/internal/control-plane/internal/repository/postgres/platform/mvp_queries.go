@@ -616,6 +616,13 @@ func (repository *Repository) ListRoleImageRecipeRevisions(ctx context.Context, 
 		return nil, "", err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := repository.resolveScopedRoleImageAccessTarget(ctx, tx, current, filter.ResourceRef, "", "PROJECT"); err != nil {
+		return nil, "", err
+	}
+	return repository.listRoleImageRevisions(ctx, tx, current, filter)
+}
+
+func (repository *Repository) listRoleImageRevisions(ctx context.Context, tx pgx.Tx, current scope, filter query.Filter) ([]entity.RoleImageRecipeRevision, string, error) {
 	before, err := versionCursor(filter.Page.Token)
 	if err != nil || strings.TrimSpace(filter.ResourceRef) == "" {
 		return nil, "", errs.ErrInvalid

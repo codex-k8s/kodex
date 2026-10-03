@@ -3,10 +3,10 @@
 package generated
 
 type RunSnapshotEnvelope struct {
-	Type string `json:"type"`
-	RequestRef string `json:"requestRef"`
-	StreamKind string `json:"streamKind"`
-	StreamRef string `json:"streamRef"`
-	Cursor int64 `json:"cursor"`
-	Snapshot RunGraph `json:"snapshot"`
+	Type       string   `json:"type"`
+	RequestRef string   `json:"requestRef"`
+	StreamKind string   `json:"streamKind"`
+	StreamRef  string   `json:"streamRef"`
+	Cursor     int64    `json:"cursor"`
+	Snapshot   RunGraph `json:"snapshot"`
 }

@@ -10,6 +10,8 @@ import {
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
+import type { RuntimeResourceScope } from "@/features/runtime/resource-scope";
+import type { RuntimeSecretCatalog } from "@/features/runtime/secret-catalog";
 import type {
   RuntimeEnvironmentValue,
   RuntimeSecretBinding,
@@ -21,6 +23,8 @@ const props = withDefaults(
     projectRef: string;
     disabled: boolean;
     allowSecrets?: boolean;
+    resourceScope?: RuntimeResourceScope;
+    secretCatalog?: RuntimeSecretCatalog;
   }>(),
   { allowSecrets: true },
 );
@@ -168,6 +172,8 @@ function updateBindings(next: RuntimeSecretBinding[]): void {
       :values="values ?? []"
       :secret-bindings="bindings ?? []"
       :project-ref="projectRef"
+      :resource-scope="resourceScope"
+      :secret-catalog="secretCatalog"
       :disabled="disabled || !values || !bindings"
       :mode="allowSecrets ? 'BOTH' : 'VALUES'"
       @update:values="updateValues"

@@ -158,6 +158,7 @@ type RuntimeEnvironmentVersion struct {
 }
 
 type RuntimeEnvironmentSet struct {
+	ScopeKind, OrganizationRef                string
 	Ref, ProjectRef, Name, Description, State string
 	Version                                   int64
 	CurrentVersion                            RuntimeEnvironmentVersion

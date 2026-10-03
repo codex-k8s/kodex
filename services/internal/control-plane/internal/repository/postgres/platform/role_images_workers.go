@@ -66,11 +66,20 @@ func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Pr
 		return repository.buildClaimFromReceipt(replay), nil
 	}
 	var buildID, buildRef, recipeID, stage string
+	expired, err := repository.expireRoleImageBuilds(ctx, tx, current)
+	if err != nil {
+		return entity.ImageBuildClaim{}, err
+	}
 	var version, fence uint64
 	var attempt, maximumAttempts uint32
 	err = tx.QueryRow(ctx, queryRoleImagesClaimBuildCandidate, current.organizationID).Scan(
 		&buildID, &buildRef, &version, &attempt, &maximumAttempts, &fence, &recipeID, &stage)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if expired {
+			if err := committed(tx, ctx); err != nil {
+				return entity.ImageBuildClaim{}, err
+			}
+		}
 		return entity.ImageBuildClaim{}, errs.ErrNotFound
 	}
 	if err != nil {
@@ -100,7 +109,8 @@ func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Pr
 		&recipe.Ref, &projectID, &recipe.ProjectRef,
 		&recipe.Version, &recipe.Generation, &recipe.SpecSHA256,
 		&specification, &immutable, &recipe.PolicyRevision, &recipe.PolicySHA256,
-		&recipe.RoleRuntimeContractRevision, &recipe.RoleRuntimeContractSHA256)
+		&recipe.RoleRuntimeContractRevision, &recipe.RoleRuntimeContractSHA256,
+		&recipe.ScopeKind, &recipe.OrganizationRef)
 	if err != nil || decodeJSON(specification, &recipe.Input) != nil {
 		return entity.ImageBuildClaim{}, errs.ErrConflict
 	}
@@ -126,6 +136,36 @@ func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Pr
 		return entity.ImageBuildClaim{}, err
 	}
 	return repository.buildClaimFromReceipt(receipt), nil
+}
+
+// Lease expiry закрывает прежний token/generation и увеличивает fence в той же
+// owner-транзакции, что durable event и новая attempt. При исчерпании бюджета
+// terminal DEAD_LETTER фиксируется даже когда нового claim уже нет.
+func (repository *Repository) expireRoleImageBuilds(ctx context.Context, tx pgx.Tx, current scope) (bool, error) {
+	rows, err := tx.Query(ctx, queryRoleImagesExpireBuilds, current.organizationID)
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	var expired []lockedBuild
+	for rows.Next() {
+		var build lockedBuild
+		if err := rows.Scan(&build.Build.Ref, &build.Build.RecipeRef, &build.Build.Version, &build.Build.Stage, &build.ProjectID, &build.Build.ScopeKind); err != nil {
+			rows.Close()
+			return false, errs.ErrUnavailable
+		}
+		expired = append(expired, build)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	for _, build := range expired {
+		if err := repository.emitRoleImageBuildChanged(ctx, tx, current, build); err != nil {
+			return false, err
+		}
+	}
+	return len(expired) > 0, nil
 }
 
 func (repository *Repository) buildClaimFromReceipt(receipt buildClaimReceipt) entity.ImageBuildClaim {
@@ -167,6 +207,7 @@ func (repository *Repository) RenewBuild(ctx context.Context, input roleimagerep
 	locked.Build.LeaseExpiresAt, locked.Build.LeaseTokenSHA256 = &expiresAt, tokenDigest(token)
 	receipt := buildClaimReceipt{Build: locked.Build,
 		Input: newRoleImageBuildInput(entity.RoleImageRecipe{Ref: locked.Build.RecipeRef,
+			ScopeKind: locked.Build.ScopeKind, OrganizationRef: locked.Build.OrganizationRef, ProjectRef: locked.Build.ProjectRef,
 			Version: locked.Build.RecipeVersion, Generation: locked.Build.RecipeGeneration,
 			SpecSHA256: locked.Build.SpecSHA256, Input: locked.Specification,
 			PolicyRevision: locked.PolicyRevision, PolicySHA256: locked.PolicySHA256,
@@ -360,7 +401,8 @@ func (repository *Repository) beginBuildMutation(ctx context.Context, input role
 
 func (repository *Repository) emitRoleImageBuildChanged(ctx context.Context, tx pgx.Tx, current scope, locked lockedBuild) error {
 	projectRef := projectRefByID(ctx, tx, locked.ProjectID)
-	if projectRef == "" || locked.Build.RecipeRef == "" || locked.Build.Version == 0 {
+	if (locked.Build.ScopeKind != "PROJECT" && locked.Build.ScopeKind != "ORGANIZATION") ||
+		(locked.Build.ScopeKind == "PROJECT" && projectRef == "") || locked.Build.RecipeRef == "" || locked.Build.Version == 0 {
 		return errs.ErrUnavailable
 	}
 	return repository.emitPlatformEventSnapshot(ctx, tx, current, "ROLE_IMAGE_RECIPE_CHANGED",

@@ -34,7 +34,7 @@ func storageFixture(t *testing.T) (*Store, *fake.Clientset, value.DraftWork, val
 	}
 	digest := sha256.Sum256([]byte("synthetic draft value"))
 	work := value.DraftWork{StagedNamespace: "kodex-system", StagedName: "draft-fixture", StagedKey: "ciphertext",
-		Binding: value.SecretDraftBinding{ProjectRef: "prj_fixture", SecretRef: "sec_fixture", DraftRef: "drf_fixture",
+		Binding: value.SecretDraftBinding{ScopeKind: "PROJECT", OrganizationRef: "org_fixture", ProjectRef: "prj_fixture", SecretRef: "sec_fixture", DraftRef: "drf_fixture",
 			DraftGeneration: 2, ValueType: "STRING", ContentSHA256: hex.EncodeToString(digest[:])}}
 	encrypted := value.EncryptedSecretDraft{Key: value.DraftEncryptionKey{ID: strings.Repeat("a", 64), Generation: 3}, Ciphertext: bytes.Repeat([]byte{0x29}, 64)}
 	return store, client, work, encrypted

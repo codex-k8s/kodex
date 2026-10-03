@@ -10,7 +10,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -375,15 +374,15 @@ func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation
 		return command.Command{}, errs.ErrInvalid
 	}
 	if assistantString(input, "systemAssistantRef") != "" {
-		if assistantString(input, "projectRef") != "" || specification.ImageArtifactRef != "" || len(specification.SecretBindings) != 0 || len(specification.Tools) != 0 {
+		if assistantString(input, "projectRef") != "" {
 			return command.Command{}, errs.ErrInvalid
 		}
-		return command.Command{Kind: command.PublishRuntimeEnvironment, Payload: command.RuntimeEnvironmentInput{
-			Ref: assistantString(input, "environmentRef"), Name: specification.Name, Description: specification.Description,
-			Values: specification.Values, Policy: specification.Policy,
-		}, Mutation: value.Mutation{ExpectedVersion: &version}}, nil
+		return command.Command{Kind: command.CreateOrganizationRuntimeEnvironmentDraft, Payload: command.RuntimeEnvironmentDraftInput{
+			ScopeKind: "ORGANIZATION", EnvironmentRef: assistantString(input, "environmentRef"), ExpectedEnvironmentVersion: version, Specification: specification,
+		}}, nil
 	}
 	return command.Command{Kind: command.CreateRuntimeEnvironmentDraft, Payload: command.RuntimeEnvironmentDraftInput{
+		ScopeKind:  "PROJECT",
 		ProjectRef: assistantString(input, "projectRef"), EnvironmentRef: assistantString(input, "environmentRef"),
 		ExpectedEnvironmentVersion: version, Specification: specification,
 	}}, nil

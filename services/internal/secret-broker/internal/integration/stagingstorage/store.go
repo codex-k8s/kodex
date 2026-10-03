@@ -173,7 +173,7 @@ func (store *Store) describe(work value.DraftWork, actual *corev1.Secret) (value
 		return value.DraftEncryptedDescriptor{}, secretdrafts.ErrConflict
 	}
 	var binding value.SecretDraftBinding
-	if internalrpcauth.DecodeStrictJSON([]byte(actual.Annotations[bindingAnnotation]), &binding) != nil || binding != work.Binding {
+	if internalrpcauth.DecodeStrictJSON([]byte(actual.Annotations[bindingAnnotation]), &binding) != nil || binding.Validate() != nil || binding != work.Binding {
 		return value.DraftEncryptedDescriptor{}, secretdrafts.ErrConflict
 	}
 	keyGeneration, err := strconv.ParseInt(actual.Annotations[keyGenerationAnnotation], 10, 64)

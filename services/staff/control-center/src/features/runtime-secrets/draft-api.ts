@@ -1,6 +1,7 @@
 import { requestSignal } from "@/shared/api/client";
 import {
   createRuntimeSecretDraft,
+  createSystemRuntimeSecretDraft,
   saveRuntimeSecretDraft,
   getRuntimeSecretDraft,
   validateRuntimeSecretDraft,
@@ -13,6 +14,12 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { AppProblem, asProblem, unwrap } from "@/shared/api/problem";
+import {
+  assertRuntimeResourceAddressIdentity,
+  runtimeResourceAddressFromIdentity,
+  runtimeResourceAddressScope,
+  type RuntimeResourceAddress,
+} from "@/features/runtime/resource-scope";
 
 export type { RuntimeSecretDraft };
 
@@ -28,14 +35,13 @@ export function safeDraftProblem(error: unknown): AppProblem {
 
 export function checkedDraft(
   draft: RuntimeSecretDraft | null | undefined,
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   expected?: { ref?: string; secretRef?: string },
 ): RuntimeSecretDraft {
   if (
     !draft ||
     !draft.ref ||
     !draft.secretRef ||
-    draft.projectRef !== projectRef ||
     (expected?.ref && draft.ref !== expected.ref) ||
     (expected?.secretRef && draft.secretRef !== expected.secretRef) ||
     ![draft.version, draft.generation, draft.secretVersion].every(
@@ -62,12 +68,15 @@ export function checkedDraft(
     typeof draft.description !== "string"
   )
     throw new Error("Runtime secret draft receipt is invalid");
+  assertRuntimeResourceAddressIdentity(scope, draft);
   // В состояние формы попадает только закрытый набор безопасных метаданных.
   return {
     ref: draft.ref,
     version: draft.version,
     generation: draft.generation,
     projectRef: draft.projectRef,
+    scopeKind: draft.scopeKind,
+    organizationRef: draft.organizationRef,
     secretRef: draft.secretRef,
     secretVersion: draft.secretVersion,
     name: draft.name,
@@ -87,10 +96,28 @@ function versioned(headers: MutationHeaders) {
 }
 
 export async function createSecretDraft(
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   input: RuntimeSecretCreateInput,
   key: string,
 ): Promise<RuntimeSecretDraft> {
+  const resolved = runtimeResourceAddressScope(scope);
+  if (resolved.kind === "ORGANIZATION") {
+    const result = await mutate(
+      (headers) =>
+        createSystemRuntimeSecretDraft({
+          body: input,
+          headers: {
+            "Idempotency-Key": headers["Idempotency-Key"],
+            "X-CSRF-Token": headers["X-CSRF-Token"],
+          },
+          signal: requestSignal(),
+        }),
+      undefined,
+      key,
+    );
+    return checkedDraft(result.data, scope);
+  }
+  const projectRef = resolved.projectRef;
   const result = await mutate(
     (headers) =>
       createRuntimeSecretDraft({
@@ -109,7 +136,7 @@ export async function createSecretDraft(
 }
 
 export async function saveSecretDraft(
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   secret: { ref: string; version: number },
   input: RuntimeSecretRotateInput,
   key: string,
@@ -125,11 +152,11 @@ export async function saveSecretDraft(
     secret.version,
     key,
   );
-  return checkedDraft(result.data, projectRef, { secretRef: secret.ref });
+  return checkedDraft(result.data, scope, { secretRef: secret.ref });
 }
 
 export async function readSecretDraft(
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   draftRef: string,
   signal: AbortSignal,
 ): Promise<RuntimeSecretDraft> {
@@ -140,7 +167,7 @@ export async function readSecretDraft(
       cache: "no-store",
     }),
   );
-  return checkedDraft(result.data, projectRef, { ref: draftRef });
+  return checkedDraft(result.data, scope, { ref: draftRef });
 }
 
 export async function changeSecretDraft(
@@ -162,5 +189,9 @@ export async function changeSecretDraft(
     draft.version,
     key,
   );
-  return checkedDraft(result.data, draft.projectRef, draft);
+  return checkedDraft(
+    result.data,
+    runtimeResourceAddressFromIdentity(draft),
+    draft,
+  );
 }

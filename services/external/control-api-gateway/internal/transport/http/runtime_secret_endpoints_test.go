@@ -133,7 +133,7 @@ func TestRevealRuntimeSecretDisablesCaching(t *testing.T) {
 	claims := session.Claims{
 		Subject: uuid.NewString(), OrganizationID: uuid.NewString(), OIDCSessionID: uuid.NewString(), SessionRevision: 3,
 		SessionID: uuid.NewString(), Bearer: "bearer", CSRFHash: hex.EncodeToString(csrfDigest[:]), IssuedAt: now.Add(-time.Minute).Unix(), ExpiresAt: now.Add(10 * time.Minute).Unix(),
-		Elevation: &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ProjectRef: projectRef, SecretRef: "secret_main", ExpiresAt: now.Add(time.Minute).Unix()},
+		Elevation: &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ScopeKind: "PROJECT", OrganizationRef: "org_fixture01", ProjectRef: projectRef, SecretRef: "secret_main", ExpiresAt: now.Add(time.Minute).Unix()},
 	}
 	replacement := claims
 	replacement.SessionID = uuid.NewString()
@@ -152,7 +152,7 @@ func TestRevealRuntimeSecretDisablesCaching(t *testing.T) {
 		t.Fatalf("new boundary: %v", err)
 	}
 	server := &Server{
-		control:  &controlplaneclient.Client{Command: runtimeSecretCommandStub{}},
+		control:  &controlplaneclient.Client{Command: runtimeSecretCommandStub{}, Query: &runtimeSecretQueryStub{get: &controlplanev1.GetRuntimeSecretResponse{Secret: &controlplanev1.RuntimeSecret{Ref: "secret_main", ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", ProjectRef: projectRef}}}},
 		secrets:  runtimeSecretBrokerStub{},
 		boundary: security,
 	}
@@ -188,6 +188,7 @@ func TestRuntimeSecretReadEndpointsReturnPublicMetadataShape(t *testing.T) {
 	t.Parallel()
 	now := timestamppb.Now()
 	secret := &controlplanev1.RuntimeSecret{
+		ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01",
 		Ref: "sec_metadata123", ProjectRef: "prj_project_sales", Name: "CRM_TOKEN", Description: "CRM",
 		ValueType: controlplanev1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: "ACTIVE",
 		Version: 3, CurrentRevision: 2, DisplayHint: &controlplanev1.RuntimeSecretDisplayHint{Prefix: "syn", Suffix: "key"},
@@ -230,6 +231,7 @@ func TestCastRuntimeSecretMetadataKeepsNextActionsAsArray(t *testing.T) {
 	t.Parallel()
 	now := timestamppb.Now()
 	result := castRuntimeSecretMetadata(&secretbrokerv1.RuntimeSecretMetadata{
+		ScopeKind: secretbrokerv1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01",
 		SecretRef: "sec_terminal123", ProjectRef: "prj_project_sales", Name: "CRM_TOKEN",
 		ValueType: secretbrokerv1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING,
 		Status:    secretbrokerv1.RuntimeSecretStatus_RUNTIME_SECRET_STATUS_REVOKED,
@@ -254,6 +256,7 @@ func TestCreateRuntimeSecretBindsDigestAndReturnsTerminalReceipt(t *testing.T) {
 		return &controlplanev1.PrepareCreateRuntimeSecretResponse{Operation: &controlplanev1.RuntimeSecretOperationReceipt{
 			State: controlplanev1.RuntimeSecretOperationState_RUNTIME_SECRET_OPERATION_STATE_COMPLETED,
 			TerminalSecret: &controlplanev1.RuntimeSecret{
+				ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01",
 				Ref: "sec_terminal123", ProjectRef: "prj_project_sales", Name: "CRM_TOKEN", Description: "CRM",
 				ValueType: controlplanev1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: "ACTIVE",
 				Version: 1, CurrentRevision: 1, CreatedAt: now, UpdatedAt: now,
@@ -288,6 +291,7 @@ func TestListRuntimeSecretsNormalizesPublicShapeAndPagination(t *testing.T) {
 	now := timestamppb.Now()
 	query := &runtimeSecretQueryStub{list: &controlplanev1.ListRuntimeSecretsResponse{
 		Secrets: []*controlplanev1.RuntimeSecret{{
+			ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01",
 			Ref: "sec_database01", ProjectRef: "prj_project_sales", Name: "DATABASE_TOKEN", Description: "Database",
 			ValueType: controlplanev1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: "ACTIVE",
 			Version: 2, CurrentRevision: 2, CreatedAt: now, UpdatedAt: now,

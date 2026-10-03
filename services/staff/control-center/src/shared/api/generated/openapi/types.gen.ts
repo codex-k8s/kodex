@@ -36,6 +36,14 @@ export type OwnerSessionCreateInput = {
 };
 
 export type OwnerSessionPurpose = {
+    /**
+     * Обязателен для RUNTIME_SECRET_REVEAL; клиент задаёт только цель, владение проверяет CP. Запрещён для EMAIL_EFFECT_RECONCILIATION.
+     */
+    scopeKind?: RuntimeResourceScopeKind;
+    /**
+     * Точная организационная привязка RUNTIME_SECRET_REVEAL; сверяется с авторитетным чтением секрета до расходования elevation.
+     */
+    organizationRef?: OpaqueRef;
     kind: 'RUNTIME_SECRET_REVEAL' | 'EMAIL_EFFECT_RECONCILIATION';
     projectRef?: OpaqueRef;
     /**
@@ -320,6 +328,7 @@ export type SystemAssistant = {
 };
 
 export type BootstrapState = {
+    organizationRef: OpaqueRef;
     initialized: boolean;
     onboardingComplete: boolean;
     webOnlyReady: boolean;
@@ -1464,10 +1473,14 @@ export type RuntimeSecretDisplayHint = {
     suffix: string;
 };
 
+export type RuntimeResourceScopeKind = 'ORGANIZATION' | 'PROJECT';
+
 export type RuntimeSecret = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    projectRef: string;
     name: string;
     description: string;
     valueType: RuntimeSecretValueType;
@@ -1480,10 +1493,12 @@ export type RuntimeSecret = {
 };
 
 export type RuntimeSecretDraft = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     ref: OpaqueRef;
     version: number;
     generation: number;
-    projectRef: OpaqueRef;
+    projectRef: string;
     secretRef: OpaqueRef;
     /**
      * Версия Secret из owner readback; для новой операции после replay требуется свежий GetDraft.
@@ -1705,9 +1720,11 @@ export type RuntimeEnvironmentPolicy = {
 };
 
 export type RuntimeEnvironmentSet = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    projectRef: string;
     name: string;
     description: string;
     state: 'ACTIVE' | 'DISABLED' | 'DELETED';
@@ -1893,9 +1910,11 @@ export type RuntimeEnvironmentDraftSpecification = {
 };
 
 export type RuntimeEnvironmentDraft = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    projectRef: string;
     environmentRef?: OpaqueRef;
     expectedEnvironmentVersion: number;
     baseVersionRef?: OpaqueRef;
@@ -1918,7 +1937,7 @@ export type RuntimeEnvironmentInput = {
     name: string;
     description: string;
     /**
-     * Для системного помощника пустая строка означает платформенный образ; Проектные окружения по-прежнему требуют точный artifact ref.
+     * Точный admitted/promoted artifact выбранной области. Пустое значение означает незавершённый черновик и не разрешает публикацию или подстановку платформенного образа.
      */
     imageArtifactRef: string;
     tools: Array<RuntimeEnvironmentTool>;
@@ -2273,9 +2292,11 @@ export type RoleEnvironmentSelection = {
 };
 
 export type RoleImageRecipe = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    projectRef: string;
     roleDefinitionRef: OpaqueRef;
     name: string;
     state: 'ACTIVE' | 'ARCHIVED';
@@ -2316,6 +2337,9 @@ export type RoleImageManagedLineage = {
 };
 
 export type RoleImageBuild = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    projectRef: string;
     ref: OpaqueRef;
     version: number;
     recipeRef: OpaqueRef;
@@ -2371,6 +2395,9 @@ export type RoleImageArtifactTool = {
 };
 
 export type RoleImageArtifact = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    projectRef: string;
     ref: OpaqueRef;
     version: number;
     recipeRef: OpaqueRef;
@@ -7144,6 +7171,35 @@ export type RebindRuntimeEnvironmentResponses = {
 
 export type RebindRuntimeEnvironmentResponse = RebindRuntimeEnvironmentResponses[keyof RebindRuntimeEnvironmentResponses];
 
+export type CreateSystemRuntimeEnvironmentDraftData = {
+    body: RuntimeEnvironmentDraftCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/organization/runtime-environment-drafts';
+};
+
+export type CreateSystemRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateSystemRuntimeEnvironmentDraftError = CreateSystemRuntimeEnvironmentDraftErrors[keyof CreateSystemRuntimeEnvironmentDraftErrors];
+
+export type CreateSystemRuntimeEnvironmentDraftResponses = {
+    /**
+     * Серверный черновик окружения; опубликованная ревизия не изменена
+     */
+    201: RuntimeEnvironmentDraft;
+};
+
+export type CreateSystemRuntimeEnvironmentDraftResponse = CreateSystemRuntimeEnvironmentDraftResponses[keyof CreateSystemRuntimeEnvironmentDraftResponses];
+
 export type CreateRuntimeEnvironmentDraftData = {
     body: RuntimeEnvironmentDraftCreateInput;
     headers: {
@@ -8473,6 +8529,279 @@ export type ListRoleEnvironmentsResponses = {
 };
 
 export type ListRoleEnvironmentsResponse = ListRoleEnvironmentsResponses[keyof ListRoleEnvironmentsResponses];
+
+export type ListSystemRoleImageRecipesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Поиск владельца по имени рецепта; не более 128 UTF-8 bytes.
+         */
+        query?: string;
+        state?: 'ACTIVE' | 'ARCHIVED';
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/organization/role-image-recipes';
+};
+
+export type ListSystemRoleImageRecipesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListSystemRoleImageRecipesError = ListSystemRoleImageRecipesErrors[keyof ListSystemRoleImageRecipesErrors];
+
+export type ListSystemRoleImageRecipesResponses = {
+    /**
+     * Окружения ролей Проекта
+     */
+    200: RoleImageRecipePage;
+};
+
+export type ListSystemRoleImageRecipesResponse = ListSystemRoleImageRecipesResponses[keyof ListSystemRoleImageRecipesResponses];
+
+export type CreateSystemRoleImageRecipeData = {
+    body: RoleImageRecipeUpdateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/organization/role-image-recipes';
+};
+
+export type CreateSystemRoleImageRecipeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateSystemRoleImageRecipeError = CreateSystemRoleImageRecipeErrors[keyof CreateSystemRoleImageRecipeErrors];
+
+export type CreateSystemRoleImageRecipeResponses = {
+    /**
+     * Окружение роли создано
+     */
+    201: RoleImageRecipe;
+};
+
+export type CreateSystemRoleImageRecipeResponse = CreateSystemRoleImageRecipeResponses[keyof CreateSystemRoleImageRecipeResponses];
+
+export type GetSystemRoleImageRecipeData = {
+    body?: never;
+    path: {
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}';
+};
+
+export type GetSystemRoleImageRecipeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSystemRoleImageRecipeError = GetSystemRoleImageRecipeErrors[keyof GetSystemRoleImageRecipeErrors];
+
+export type GetSystemRoleImageRecipeResponses = {
+    /**
+     * Окружение роли и история сборок
+     */
+    200: RoleImageRecipeDetail;
+};
+
+export type GetSystemRoleImageRecipeResponse = GetSystemRoleImageRecipeResponses[keyof GetSystemRoleImageRecipeResponses];
+
+export type UpdateSystemRoleImageRecipeData = {
+    body: RoleImageRecipeUpdateInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}';
+};
+
+export type UpdateSystemRoleImageRecipeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UpdateSystemRoleImageRecipeError = UpdateSystemRoleImageRecipeErrors[keyof UpdateSystemRoleImageRecipeErrors];
+
+export type UpdateSystemRoleImageRecipeResponses = {
+    /**
+     * Окружение роли изменено
+     */
+    200: RoleImageRecipe;
+};
+
+export type UpdateSystemRoleImageRecipeResponse = UpdateSystemRoleImageRecipeResponses[keyof UpdateSystemRoleImageRecipeResponses];
+
+export type CommandSystemRoleImageRecipeData = {
+    body: RoleImageRecipeCommand;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}/commands';
+};
+
+export type CommandSystemRoleImageRecipeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CommandSystemRoleImageRecipeError = CommandSystemRoleImageRecipeErrors[keyof CommandSystemRoleImageRecipeErrors];
+
+export type CommandSystemRoleImageRecipeResponses = {
+    /**
+     * Команда окружения роли применена
+     */
+    200: RoleImageRecipeCommandReceipt;
+};
+
+export type CommandSystemRoleImageRecipeResponse = CommandSystemRoleImageRecipeResponses[keyof CommandSystemRoleImageRecipeResponses];
+
+export type ListSystemRoleImageRecipeRevisionsData = {
+    body?: never;
+    path: {
+        recipeRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}/revisions';
+};
+
+export type ListSystemRoleImageRecipeRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListSystemRoleImageRecipeRevisionsError = ListSystemRoleImageRecipeRevisionsErrors[keyof ListSystemRoleImageRecipeRevisionsErrors];
+
+export type ListSystemRoleImageRecipeRevisionsResponses = {
+    /**
+     * Immutable recipe/build/promotion history
+     */
+    200: RoleImageRecipeRevisionPage;
+};
+
+export type ListSystemRoleImageRecipeRevisionsResponse = ListSystemRoleImageRecipeRevisionsResponses[keyof ListSystemRoleImageRecipeRevisionsResponses];
+
+export type PromoteSystemRoleImageData = {
+    body: RoleImagePromotionInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}/promotion';
+};
+
+export type PromoteSystemRoleImageErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PromoteSystemRoleImageError = PromoteSystemRoleImageErrors[keyof PromoteSystemRoleImageErrors];
+
+export type PromoteSystemRoleImageResponses = {
+    /**
+     * Exact admitted artifact поставлен на promotion по совпавшему provenance digest
+     */
+    202: RoleImagePromotionReceipt;
+};
+
+export type PromoteSystemRoleImageResponse = PromoteSystemRoleImageResponses[keyof PromoteSystemRoleImageResponses];
+
+export type ListSystemRuntimeSecretsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/organization/runtime-secrets';
+};
+
+export type ListSystemRuntimeSecretsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListSystemRuntimeSecretsError = ListSystemRuntimeSecretsErrors[keyof ListSystemRuntimeSecretsErrors];
+
+export type ListSystemRuntimeSecretsResponses = {
+    /**
+     * Метаданные Runtime Secrets без значений
+     */
+    200: RuntimeSecretPage;
+};
+
+export type ListSystemRuntimeSecretsResponse = ListSystemRuntimeSecretsResponses[keyof ListSystemRuntimeSecretsResponses];
+
+export type CreateSystemRuntimeSecretDraftData = {
+    body: RuntimeSecretCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/organization/runtime-secret-drafts';
+};
+
+export type CreateSystemRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateSystemRuntimeSecretDraftError = CreateSystemRuntimeSecretDraftErrors[keyof CreateSystemRuntimeSecretDraftErrors];
+
+export type CreateSystemRuntimeSecretDraftResponses = {
+    /**
+     * Черновик сохранён без активации Secret
+     */
+    201: RuntimeSecretDraft;
+};
+
+export type CreateSystemRuntimeSecretDraftResponse = CreateSystemRuntimeSecretDraftResponses[keyof CreateSystemRuntimeSecretDraftResponses];
 
 export type ListRoleImageRecipesData = {
     body?: never;

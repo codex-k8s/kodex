@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createRuntimeResourceCatalogs } from "@/features/runtime/resource-catalog-api";
 import {
   Activity,
   ArrowUp,
@@ -76,6 +77,7 @@ import {
 } from "@/features/assistant/model";
 import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
+import { organizationRuntimeResourceScope } from "@/features/runtime/resource-scope";
 import {
   persistAssistantConversationRef,
   persistAssistantWorkspaceOpen,
@@ -149,6 +151,14 @@ const assistantFormActive = computed(() => route.query.assistantForm === "1");
 const store = useAssistantStore();
 const titleFieldName = `assistant-conversation-title-${useId()}`;
 const platform = usePlatformStore();
+const systemResourceScope = computed(() =>
+  organizationRuntimeResourceScope(platform.bootstrap),
+);
+const systemResourceCatalogs = computed(() =>
+  systemResourceScope.value
+    ? createRuntimeResourceCatalogs(systemResourceScope.value.organizationRef)
+    : undefined,
+);
 const open = ref(
   restoreAssistantWorkspaceOpen() || route.query.assistantForm === "1",
 );
@@ -2343,12 +2353,21 @@ onBeforeUnmount(() => {
             </button>
           </section>
           <AssistantEnvironmentSettingsPanel
-            v-else-if="settingsTab === 'ENVIRONMENT' && store.assistant"
+            v-else-if="
+              settingsTab === 'ENVIRONMENT' &&
+              store.assistant &&
+              systemResourceScope
+            "
             :agent-ref="store.assistant.ref"
             :can-edit="store.assistant.nextActions.includes('EDIT')"
-            :resource-scope="{ kind: 'ORGANIZATION' }"
-            :image-catalog="undefined"
+            :resource-scope="systemResourceScope"
+            :return-to="route.fullPath"
+            :image-catalog="systemResourceCatalogs?.images"
+            :secret-catalog="systemResourceCatalogs?.secrets"
           />
+          <section v-else-if="settingsTab === 'ENVIRONMENT'" role="status">
+            {{ $t("common.loading") }}
+          </section>
           <section v-else class="assistant-settings-dialog__instructions">
             <p>{{ $t("assistant.settings.instructionsHelp") }}</p>
             <VoiceTextarea

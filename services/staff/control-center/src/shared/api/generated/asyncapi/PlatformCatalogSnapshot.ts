@@ -31,6 +31,10 @@ import type {
 } from "../openapi/types.gen";
 
 export interface PlatformCatalogSnapshot {
+  organizationRecipes?: RoleImageRecipe[];
+  organizationRecipesPage?: PlatformPageCursor;
+  organizationSecrets?: RuntimeSecret[];
+  organizationSecretsPage?: PlatformPageCursor;
   projects?: Project[];
   trashedProjects?: Project[];
   trashPage?: PlatformPageCursor;

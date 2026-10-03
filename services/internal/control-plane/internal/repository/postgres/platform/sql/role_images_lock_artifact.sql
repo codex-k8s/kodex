@@ -19,6 +19,7 @@ SELECT artifact.id::text, artifact.ref, recipe.ref, artifact.spec_sha256, build.
        COALESCE(artifact.promotion_authorization_token_sha256, ''),
        artifact.promotion_authorization_expires_at, artifact.recipe_id::text,
        COALESCE(artifact.promotion_request_id::text, '')
+       , artifact.scope_kind, (SELECT ref FROM control_plane.organizations WHERE id = recipe.organization_id), COALESCE((SELECT ref FROM control_plane.projects WHERE id = artifact.project_id), '')
 FROM control_plane.image_artifacts artifact
 JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
 JOIN control_plane.image_builds build ON build.id = artifact.build_id

@@ -7381,3 +7381,105 @@ checklist выше. Затем основной агент, без субаге�
 - NOT RUN: свежий организационный API образа/секрета → broker → RuntimeRevision,
   подтверждаемая публикация полной среды, полный synthetic browser lifecycle
   2/10/11 чатов и owner acceptance. Общий checklist остаётся открытым.
+
+### Этап 3.4 — организационные ресурсы и точная повторная авторизация
+
+Это промежуточное доказательство рабочего дерева поверх `2c9e590a`, не полный
+результат на опубликованном SHA. После завершения интеграции проверки повторяются
+на неизменяемом checkpoint; общий checklist пока не закрывается.
+
+Карта организационных сценариев:
+
+- Проверенная browser session → специализированные
+  `/api/v1/organization/role-image-recipes` и операции точного рецепта →
+  `ListOrganizationRoleImageRecipes`, `GetOrganizationRoleImageRecipe`,
+  `ListOrganizationRoleImageRecipeRevisions`, `ManageOrganizationRoleImageRecipe`,
+  `RequestOrganizationRoleImagePromotion` → CP. Организацию назначает CP из
+  проверенного principal, не из payload. Текущие ACTIVE OWNER/ADMIN и
+  `organization.manage` обязательны; подписанная проектная область отклоняется.
+  Сборка, допуск и promotion используют существующие version-pinned leases,
+  immutable provenance и точную организационную область, без служебного проекта.
+  Generic managed configuration не является обходным путём изменения образа.
+- Browser session → `/api/v1/organization/runtime-secret-drafts` →
+  `PrepareOrganizationRuntimeSecretDraft` → owner-транзакция CP → точный
+  SAVE grant → secret-broker с AEAD → fenced owner completion. Scope, organization,
+  draft, secret, generation и content digest совпадают на каждом переходе.
+  Сам текст не попадает в CP, audit, события, browser storage или purpose.
+  Общие save/validate/impact/publish/discard разрешают persisted owner до OCC
+  и idempotency receipt; публикация остаётся отдельным подтверждением.
+- Browser session → `/api/v1/organization/runtime-environment-drafts` →
+  `CreateOrganizationRuntimeEnvironmentDraft` → CP. Shared draft lifecycle
+  разрешает область существующего draft, а не превращает пустой project в
+  разрешение. Организационный образ и секреты нельзя подменять проектными;
+  публикация требует текущей версии, validation и отдельного подтверждения.
+- Secret reveal: проверенная session → авторитетный `GetRuntimeSecret` →
+  точный `scopeKind/organizationRef/projectRef/secretRef` → одноразовая fresh
+  OIDC purpose session → `PrepareRevealRuntimeSecret` с повторной проверкой CP
+  → exact grant secret-broker. ORGANIZATION запрещает project header,
+  PROJECT требует совпадающий header. Scope не является источником полномочий.
+  Чужая область, организация, секрет, replay или неизвестный scope не достигают
+  secret effect. Ответ всегда `no-store`; purpose session заменяется обычной.
+- Platform bootstrap/signal → gateway authoritative owner RPC → разные typed
+  organization/project catalogs и курсоры → frontend cache. Организационные
+  image/secret списки доступны без selected project; они не смешиваются с
+  проектными результатами. Отзыв owner-доступа очищает организационные данные.
+
+Адресные проверки текущего дерева:
+
+- PASS: disposable PostgreSQL организационного образа — create/list/revisions,
+  build/admit/promote, cancel/archive/restore, owner/signed-project isolation,
+  expired lease/retry/dead-letter. Организационный secret component после новой
+  migration `20261003000800` — PASS. Shared/live БД не использовались.
+- PASS: полный gateway unit и vet на Go 1.26.6, включая scoped fresh reveal,
+  одноразовый replay guard и раздельный WebSocket bootstrap. HTTP 8,944 с,
+  WebSocket 0,048 с; source transport unit не выдаётся за live mTLS acceptance.
+- PASS: строгие terminal/draft snapshot guards отклоняют пропущенный scope,
+  смешанную область, другую организацию и изменённую draft generation.
+- NOT RUN: полный owner → broker materialization composition, окончательная
+  публикация системного окружения, новая live activation и Chrome acceptance
+  всей организационной волны. Старый recovery fallback удаляется с сохранением
+  отдельного fenced retirement/recovery; его готовность ещё не заявляется.
+
+Итог замороженной волны 3.4 перед новым checkpoint:
+
+- PASS: полный публичный disposable PostgreSQL прогон девяти фактических suites,
+  99,665 с. Bootstrap 84,54 с; provider credentials, секреты и staged lifecycle
+  входят в его именованные subtests. Parallel lifecycle, project profiles,
+  credential scopes, три организационные suites, worker grant instances и
+  trusted workload generation выполнены без пропусков. Повтор migrations до
+  `20261003000900` и read-only worker-grant/runner-policy диагностики — PASS.
+  Два предыдущих FAIL исправлены без ослабления oracle: lifecycle SQL возвращает
+  полный scope/org snapshot, старый тест образа выбирает область явно.
+- PASS: новая публичная `scripts/tests/secret-owner-composition-test.sh`,
+  12,141 с. Настоящий CP/domain/PostgreSQL и production casters → loopback
+  Proto/gRPC → настоящий broker/AEAD → immutable fake Kubernetes. Для PROJECT
+  и ORGANIZATION проверены SAVE/VALIDATE/impact/PUBLISH, retained KEEP,
+  отказ другого recovery route, revoke/retire, exact delete, потерянный ACK,
+  повтор после удаления объекта и cleanup receipt. Это не live mTLS/SSO evidence.
+  Первый запуск отклонён строгим key-file reader; fixture права исправлены,
+  reader не ослаблялся.
+- PASS: IMMEDIATE/DRAFT work kind назначается только серверным effect producer;
+  неизвестные annotations не интерпретируются. Старый `recoverDraftFromLegacy`
+  удалён. Три settled KEEP не меняют `updated_at`/audit; старый ciphertext ACK
+  не очищает новый retirement intent. Serving read-only preflight: managed
+  runtime Secret — 0, существующие значения не удалялись и не переписывались.
+- PASS: полный broker unit/vet, CP unit/vet, gateway unit/vet и builder unit/vet
+  на Go 1.26.6; SQL boundary, Proto lint/build, authority codegen. Организационная
+  authority policy имеет новую монотонную revision 86; проверены все восемь
+  закрытых RPC profiles и target-owned classification. Proto codegen checker
+  дополнен output secret-broker, который прежде не сравнивался.
+- PASS: frontend full Vitest 323 suites / 2162 теста, lint, forced typecheck,
+  application/document synthetic build и E2E TypeScript. Изолированный Chromium
+  — 19/19 сценариев: ORG settings, PROJECT profiles, image promotion и runtime.
+  Скриншоты RU/EN 1440/390 px проверены визуально, Console warning/error — 0,
+  горизонтального overflow нет, контролы 32 px. Network assertions проверяют
+  точные canonical requests. Исправлены scope-invalid image fixtures и Pinia
+  isolated entry; production owner guard не ослаблялся.
+- NOT RUN: публикация/допуск нового пользовательского образа в serving cluster,
+  live migration 7/8/9 и окончательный Chrome readback этой волны; полный browser
+  2/10/11/rejoin сценарий. Реальные агенты, STT/device-code и production — NOT RUN.
+- Следующий обязательный этап 3.5: организационные потребители в SecretImpact,
+  EnvironmentImpact и rebind receipts. Старый project-only DTO пока закрыто
+  отклоняет организационный secret rotation impact; нельзя считать этот путь
+  готовым или исправлять его выводом scope из пустого project. Также проверяется
+  bootstrap org anchor на проектных image pages, без расширения полномочий.

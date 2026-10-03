@@ -63,6 +63,8 @@ for (const width of [1440, 390, 2900]) {
         digest,
       },
       environment: {
+        scopeKind: "PROJECT",
+        organizationRef: "org_synthetic",
         ref: "environment_synthetic",
         version: 1,
         projectRef: "project_synthetic",

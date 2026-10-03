@@ -334,6 +334,7 @@ func castRuntimeKubernetesAccessKind(value string) controlplanev1.RuntimeKuberne
 }
 func castRuntimeEnvironment(value entity.RuntimeEnvironmentSet) *controlplanev1.RuntimeEnvironmentSet {
 	return &controlplanev1.RuntimeEnvironmentSet{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef,
+		ScopeKind: roleImageScopeKind(value.ScopeKind), OrganizationRef: value.OrganizationRef,
 		Name: value.Name, Description: value.Description, State: value.State,
 		CurrentVersion: castRuntimeEnvironmentVersion(value.CurrentVersion), UpdatedAt: timestamp(value.UpdatedAt),
 		Ready: value.Ready, ReadinessBlockers: value.ReadinessBlockers, NextActions: nextActions(value.NextActions)}
@@ -798,7 +799,7 @@ func castIncident(value entity.Incident) *controlplanev1.Incident {
 }
 
 func castBootstrap(value repository.BootstrapState) *controlplanev1.BootstrapState {
-	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions),
+	return &controlplanev1.BootstrapState{OrganizationRef: value.OrganizationRef, Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions),
 		SpeechTranscription: &controlplanev1.SpeechTranscriptionAvailability{Eligible: value.SpeechTranscription.Eligible, Available: false, Reason: value.SpeechTranscription.Reason}}
 }
 

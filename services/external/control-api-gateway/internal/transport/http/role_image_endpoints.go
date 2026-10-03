@@ -300,6 +300,7 @@ func publicRoleEnvironment(input *controlplanev1.RoleEnvironment) generated.Role
 func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.RoleImageRecipe {
 	result := generated.RoleImageRecipe{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), ProjectRef: input.GetProjectRef(),
+		ScopeKind: runtimeResourceScopeKind(input.GetScopeKind().String()), OrganizationRef: input.GetOrganizationRef(),
 		RoleDefinitionRef: input.GetRoleDefinitionRef(), Name: input.GetName(),
 		State: generated.RoleImageRecipeState(input.GetState()), Generation: int64(input.GetGeneration()),
 		PromotedImageReady: input.GetPromotedImageReference() != "",
@@ -347,8 +348,10 @@ func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.Role
 func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageBuild {
 	result := generated.RoleImageBuild{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
+		ScopeKind: runtimeResourceScopeKind(input.GetScopeKind().String()), OrganizationRef: input.GetOrganizationRef(),
 		RecipeGeneration: int64(input.GetRecipeGeneration()), Dockerfile: optionalManagedString(input.GetDockerfile()), SourceAvailable: input.GetSourceAvailable(),
-		Attempt: int(input.GetAttempt()), Stage: generated.RoleImageBuildStage(strings.TrimPrefix(input.GetStage().String(), "IMAGE_BUILD_STAGE_")),
+		ProjectRef: input.GetProjectRef(),
+		Attempt:    int(input.GetAttempt()), Stage: generated.RoleImageBuildStage(strings.TrimPrefix(input.GetStage().String(), "IMAGE_BUILD_STAGE_")),
 		ProgressPercent: int(input.GetProgressPercent()), CreatedAt: protoTime(input.GetCreatedAt()), UpdatedAt: protoTime(input.GetUpdatedAt()),
 		ConfigurationRevisionRef: optionalManagedString(input.GetConfigurationRevisionRef()),
 	}
@@ -367,7 +370,9 @@ func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageB
 func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.RoleImageArtifact {
 	result := generated.RoleImageArtifact{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
+		ScopeKind: runtimeResourceScopeKind(input.GetScopeKind().String()), OrganizationRef: input.GetOrganizationRef(),
 		RecipeGeneration: int64(input.GetRecipeGeneration()), BuildRef: input.GetBuildRef(), ManifestDigest: input.GetManifestDigest(),
+		ProjectRef:         input.GetProjectRef(),
 		ProvenanceSha256:   input.GetProvenanceSha256(),
 		AdmissionVerdict:   generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
 		PromotionState:     generated.RoleImageArtifactPromotionState(strings.TrimPrefix(input.GetPromotionState().String(), "IMAGE_PROMOTION_STATE_")),

@@ -65,7 +65,7 @@ func (r *Repository) publishSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 	if err != nil {
 		return nil, mapWriteError(err)
 	}
-	result := &entity.RuntimeSecret{Ref: secret.ref, ProjectRef: secret.projectRef, Name: secret.name, Description: secret.description, ValueType: secret.valueType, Namespace: secret.namespace, CreatedAt: secret.createdAt}
+	result := &entity.RuntimeSecret{Ref: secret.ref, ScopeKind: secret.scopeKind, OrganizationRef: secret.organizationRef, ProjectRef: secret.projectRef, Name: secret.name, Description: secret.description, ValueType: secret.valueType, Namespace: secret.namespace, CreatedAt: secret.createdAt}
 	var prefix, suffix string
 	err = tx.QueryRow(ctx, queryRuntimeSecretActivate, pgx.StrictNamedArgs{"secret_id": secret.id, "revision": o.targetRevision, "hint_prefix": "", "hint_suffix": "", "expected_version": secret.version, "expected_current_revision": secret.currentRevision, "expected_state": secret.state}).Scan(&result.Version, &result.State, &result.CurrentRevision, &prefix, &suffix, &result.UpdatedAt)
 	if err != nil {
@@ -119,6 +119,21 @@ func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Princ
 		}
 		return result, nil
 	}
+	// Повтор успешного завершения не сохраняет отозванные полномочия автора.
+	var owner scope
+	if input.Action == "COMPLETE" {
+		owner, err = r.secretDraftOwnerScope(ctx, tx, s, o.actorID)
+		if err != nil {
+			return empty, err
+		}
+		permission := "secret.rotate"
+		if d.secretState == "PROVISIONING" || o.kind == "SAVE" && d.public.SecretVersion == 1 {
+			permission = "secret.create"
+		}
+		if err = r.secretDraftAccess(ctx, tx, owner, d, permission); err != nil {
+			return empty, err
+		}
+	}
 	if o.state == "FAILED" && input.Action == "FAIL" {
 		if input.FailureCode != o.failure {
 			return empty, errs.ErrConflict
@@ -137,7 +152,7 @@ func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Princ
 			return empty, errs.ErrConflict
 		}
 		var result entity.RuntimeSecretDraftResult
-		if json.Unmarshal(o.snapshot, &result) != nil {
+		if json.Unmarshal(o.snapshot, &result) != nil || !validSecretDraftResultScope(d.public, result) {
 			return empty, errs.ErrUnavailable
 		}
 		if result.Secret == nil {
@@ -176,17 +191,6 @@ func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Princ
 		result.Draft = d.public
 		result.State = "FAILED"
 	} else {
-		owner, err := r.secretDraftOwnerScope(ctx, tx, s, o.actorID)
-		if err != nil {
-			return empty, err
-		}
-		permission := "secret.rotate"
-		if d.secretState == "PROVISIONING" {
-			permission = "secret.create"
-		}
-		if err = r.secretDraftAccess(ctx, tx, owner, d, permission); err != nil {
-			return empty, err
-		}
 		if !now.Before(d.public.ExpiresAt) && o.kind != "DISCARD" {
 			return empty, errs.ErrConflict
 		}
@@ -263,13 +267,13 @@ func (r *Repository) recoverSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 		return result, errs.ErrConflict
 	}
 	// Устойчивое намерение сохраняет точный UID/RV даже после удаления и потери ACK.
-	if o.recoveryEncrypted != nil {
+	if !o.cleanupCompleted && o.recoveryEncrypted != nil {
 		if input.Encrypted != nil && !reflect.DeepEqual(input.Encrypted, o.recoveryEncrypted) {
 			return result, errs.ErrConflict
 		}
 		input.Encrypted = o.recoveryEncrypted
 	}
-	if o.recoveryMaterialization != nil {
+	if !o.cleanupCompleted && o.recoveryMaterialization != nil {
 		if input.Materialization != nil && !reflect.DeepEqual(input.Materialization, o.recoveryMaterialization) {
 			return result, errs.ErrConflict
 		}
@@ -392,51 +396,6 @@ func secretDraftRecoverySettled(d secretDraftRow, o secretDraftOperationRow, inp
 }
 
 func errorsIsNotFound(err error) bool { return errors.Is(err, errs.ErrNotFound) }
-
-// Общий scan runtime Secret разрешает D6 через того же авторитетного владельца.
-func (r *Repository) recoverDraftFromLegacy(ctx context.Context, tx pgx.Tx, s scope, input repoport.RuntimeSecretRecoveryInput) (repoport.RuntimeSecretRecoveryResult, error) {
-	var empty repoport.RuntimeSecretRecoveryResult
-	operationRef, draftRef, err := r.lookupSecretDraftOperation(ctx, tx, s.organizationID, "", "", "", input.OperationRef, "")
-	if err != nil {
-		return empty, err
-	}
-	d, err := r.lockSecretDraft(ctx, tx, s.organizationID, draftRef)
-	if err != nil {
-		return empty, err
-	}
-	o, err := r.lockSecretDraftOperation(ctx, tx, s.organizationID, operationRef)
-	if err != nil {
-		return empty, err
-	}
-	name, err := runtimesecret.VersionedKubernetesName(d.public.SecretRef, o.targetRevision)
-	m := input.Materialization
-	if err != nil || o.kind != "PUBLISH" || m.Namespace != d.namespace || m.SecretName != name || m.SecretKey != runtimeSecretKey || m.ContentSHA256 != d.contentDigest {
-		return empty, errs.ErrConflict
-	}
-	var now time.Time
-	if tx.QueryRow(ctx, querySecretDraftClock).Scan(&now) != nil {
-		return empty, errs.ErrUnavailable
-	}
-	result := repoport.RuntimeSecretRecoveryResult{Action: "KEEP", OperationState: o.state}
-	if o.state != "CLAIMED" || o.lease == nil || !now.Before(*o.lease) {
-		recovered, err := r.recoverSecretDraft(ctx, tx, s, &d, &o, repoport.RuntimeSecretDraftWorkInput{Action: "RECOVER", OperationRef: o.ref, ClaimantID: o.claimantID, ClaimGeneration: o.claimGeneration, Materialization: &m}, now)
-		if err != nil {
-			return empty, err
-		}
-		result.Action, result.OperationState = recovered.MaterializationAction, recovered.State
-		if result.Action == "KEEP" && o.state == "COMPLETED" {
-			var snapshot entity.RuntimeSecretDraftResult
-			if json.Unmarshal(o.snapshot, &snapshot) != nil {
-				return empty, errs.ErrUnavailable
-			}
-			result.Secret = snapshot.Secret
-		}
-	}
-	if tx.Commit(ctx) != nil {
-		return empty, errs.ErrConflict
-	}
-	return result, nil
-}
 
 func (r *Repository) CheckRuntimeSecretDraftWork(ctx context.Context, p value.Principal) error {
 	if !validRuntimeSecretWorkPrincipal(p, "platform.runtime-secret-drafts.readiness.check") {

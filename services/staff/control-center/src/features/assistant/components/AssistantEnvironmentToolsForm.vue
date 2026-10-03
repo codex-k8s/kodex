@@ -6,6 +6,8 @@ import {
   type EditablePlanOperation,
 } from "@/features/assistant/model";
 import { useRuntimeStore } from "@/features/runtime/store";
+import type { RuntimeResourceScope } from "@/features/runtime/resource-scope";
+import type { RuntimeImageCatalog } from "@/features/runtime/image-tools-selection";
 import RuntimeEnvironmentToolsEditor from "@/features/runtime/RuntimeEnvironmentToolsEditor.vue";
 import {
   defaultRuntimeEnvironmentPolicy,
@@ -22,6 +24,8 @@ const props = defineProps<{
   projectRef: string;
   selectedImage?: AsyncEntityOption;
   disabled: boolean;
+  resourceScope?: RuntimeResourceScope;
+  imageCatalog?: RuntimeImageCatalog;
 }>();
 const emit = defineEmits<{
   valid: [value: boolean];
@@ -141,32 +145,43 @@ watch(
   () =>
     [
       props.projectRef,
+      props.resourceScope,
       imageRef.value,
       props.selectedImage?.ref,
       props.selectedImage && "recipeRef" in props.selectedImage
         ? props.selectedImage.recipeRef
         : "",
     ] as const,
-  async ([projectRef, ref, , chosenRecipe], _, onCleanup) => {
+  async ([projectRef, scope, ref, , chosenRecipe], _, onCleanup) => {
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     artifact.value = undefined;
     loadFailed.value = false;
     loading.value = false;
-    if (!projectRef || !ref) return;
+    if ((!projectRef && !scope) || !ref) return;
     loading.value = true;
     try {
+      if (scope?.kind === "ORGANIZATION" && !props.imageCatalog)
+        throw new Error("Organization image catalog is unavailable");
       let recipeRef = typeof chosenRecipe === "string" ? chosenRecipe : "";
       if (!recipeRef) {
         let cursor: string | undefined;
         const visited = new Set<string>();
         do {
-          const page = await runtime.searchPromotedRoleImagePage(
-            projectRef,
-            "",
-            cursor,
-            controller.signal,
-          );
+          const page =
+            scope && props.imageCatalog
+              ? await props.imageCatalog.loadPage(
+                  scope,
+                  "",
+                  cursor,
+                  controller.signal,
+                )
+              : await runtime.searchPromotedRoleImagePage(
+                  projectRef,
+                  "",
+                  cursor,
+                  controller.signal,
+                );
           const match = page.items.find((item) => item.ref === ref);
           if (
             match &&
@@ -188,12 +203,20 @@ watch(
         throw new Error(
           "Promoted image is not available in the project catalog",
         );
-      const loaded = await runtime.loadPromotedRoleImageArtifact(
-        projectRef,
-        recipeRef,
-        ref,
-        controller.signal,
-      );
+      const loaded =
+        scope && props.imageCatalog
+          ? await props.imageCatalog.loadArtifact(
+              scope,
+              recipeRef,
+              ref,
+              controller.signal,
+            )
+          : await runtime.loadPromotedRoleImageArtifact(
+              projectRef,
+              recipeRef,
+              ref,
+              controller.signal,
+            );
       if (!controller.signal.aborted) artifact.value = loaded.artifact;
     } catch {
       if (!controller.signal.aborted) loadFailed.value = true;

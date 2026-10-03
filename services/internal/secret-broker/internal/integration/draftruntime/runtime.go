@@ -92,7 +92,7 @@ func (store *Store) Delete(ctx context.Context, work value.DraftWork, descriptor
 	if err != nil {
 		return err
 	}
-	expected := secretstore.Materialization{Namespace: descriptor.Namespace, Name: descriptor.Name, Key: descriptor.DataKey, UID: descriptor.UID, ResourceVersion: descriptor.ResourceVersion, Revision: descriptor.Revision, ContentSHA256: descriptor.ContentSHA256, OperationRef: effect.OperationRef, ClaimGeneration: effect.ClaimGeneration, SecretRef: effect.SecretRef}
+	expected := secretstore.Materialization{WorkKind: secretstore.WorkKindDraft, Namespace: descriptor.Namespace, Name: descriptor.Name, Key: descriptor.DataKey, UID: descriptor.UID, ResourceVersion: descriptor.ResourceVersion, Revision: descriptor.Revision, ContentSHA256: descriptor.ContentSHA256, OperationRef: effect.OperationRef, ClaimGeneration: effect.ClaimGeneration, SecretRef: effect.SecretRef}
 	if !store.matches(expected, effect) {
 		return secretdrafts.ErrConflict
 	}
@@ -103,15 +103,15 @@ func (store *Store) Delete(ctx context.Context, work value.DraftWork, descriptor
 }
 
 func (store *Store) effect(work value.DraftWork) (secretstore.MaterializationEffect, error) {
-	if work.Kind != value.DraftPublish || work.RuntimeNamespace != store.namespace || work.ClaimGeneration < 1 || !bounded(work.OperationRef, 128) || !bounded(work.ClaimantID, 128) || work.TargetRevision < 1 || work.Binding.Validate() != nil || work.Binding.ProjectRef != work.Draft.ProjectRef || work.Binding.SecretRef != work.Draft.SecretRef || work.Binding.DraftRef != work.Draft.Ref || work.Binding.DraftGeneration != work.Draft.Generation || work.Binding.ValueType != work.Draft.ValueType {
+	if work.Kind != value.DraftPublish || work.RuntimeNamespace != store.namespace || work.ClaimGeneration < 1 || !bounded(work.OperationRef, 128) || !bounded(work.ClaimantID, 128) || work.TargetRevision < 1 || work.Binding.Validate() != nil || work.Binding.ScopeKind != work.Draft.ScopeKind || work.Binding.OrganizationRef != work.Draft.OrganizationRef || work.Binding.ProjectRef != work.Draft.ProjectRef || work.Binding.SecretRef != work.Draft.SecretRef || work.Binding.DraftRef != work.Draft.Ref || work.Binding.DraftGeneration != work.Draft.Generation || work.Binding.ValueType != work.Draft.ValueType {
 		return secretstore.MaterializationEffect{}, secretdrafts.ErrInvalid
 	}
-	return secretstore.MaterializationEffect{OperationRef: work.OperationRef, ClaimGeneration: work.ClaimGeneration, SecretRef: work.Binding.SecretRef, Key: runtimeDataKey, Revision: work.TargetRevision, ContentSHA256: work.Binding.ContentSHA256}, nil
+	return secretstore.MaterializationEffect{WorkKind: secretstore.WorkKindDraft, OperationRef: work.OperationRef, ClaimGeneration: work.ClaimGeneration, SecretRef: work.Binding.SecretRef, Key: runtimeDataKey, Revision: work.TargetRevision, ContentSHA256: work.Binding.ContentSHA256}, nil
 }
 
 func (store *Store) matches(actual secretstore.Materialization, effect secretstore.MaterializationEffect) bool {
 	name, err := runtimesecret.VersionedKubernetesName(effect.SecretRef, effect.Revision)
-	return err == nil && actual.Namespace == store.namespace && actual.Name == name && actual.OperationRef == effect.OperationRef && actual.ClaimGeneration == effect.ClaimGeneration && actual.SecretRef == effect.SecretRef && actual.Key == runtimeDataKey && actual.Revision == effect.Revision && actual.ContentSHA256 == effect.ContentSHA256 && bounded(actual.UID, 128) && bounded(actual.ResourceVersion, 128)
+	return err == nil && actual.WorkKind == effect.WorkKind && actual.Namespace == store.namespace && actual.Name == name && actual.OperationRef == effect.OperationRef && actual.ClaimGeneration == effect.ClaimGeneration && actual.SecretRef == effect.SecretRef && actual.Key == runtimeDataKey && actual.Revision == effect.Revision && actual.ContentSHA256 == effect.ContentSHA256 && bounded(actual.UID, 128) && bounded(actual.ResourceVersion, 128)
 }
 
 func cast(actual secretstore.Materialization) value.DraftMaterialization {

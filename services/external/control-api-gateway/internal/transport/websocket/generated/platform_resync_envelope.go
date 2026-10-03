@@ -3,10 +3,10 @@
 package generated
 
 type PlatformResyncEnvelope struct {
-	Type string `json:"type"`
+	Type       string `json:"type"`
 	RequestRef string `json:"requestRef"`
 	StreamKind string `json:"streamKind"`
-	StreamRef string `json:"streamRef"`
-	Cursor int64 `json:"cursor"`
-	Reason string `json:"reason"`
+	StreamRef  string `json:"streamRef"`
+	Cursor     int64  `json:"cursor"`
+	Reason     string `json:"reason"`
 }

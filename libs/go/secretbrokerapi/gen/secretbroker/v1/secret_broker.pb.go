@@ -22,6 +22,56 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Собственная transport enum брокера: caster проверяет точную область owner.
+type RuntimeResourceScopeKind int32
+
+const (
+	RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED  RuntimeResourceScopeKind = 0
+	RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION RuntimeResourceScopeKind = 1
+	RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT      RuntimeResourceScopeKind = 2
+)
+
+// Enum value maps for RuntimeResourceScopeKind.
+var (
+	RuntimeResourceScopeKind_name = map[int32]string{
+		0: "RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED",
+		1: "RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION",
+		2: "RUNTIME_RESOURCE_SCOPE_KIND_PROJECT",
+	}
+	RuntimeResourceScopeKind_value = map[string]int32{
+		"RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED":  0,
+		"RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION": 1,
+		"RUNTIME_RESOURCE_SCOPE_KIND_PROJECT":      2,
+	}
+)
+
+func (x RuntimeResourceScopeKind) Enum() *RuntimeResourceScopeKind {
+	p := new(RuntimeResourceScopeKind)
+	*p = x
+	return p
+}
+
+func (x RuntimeResourceScopeKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RuntimeResourceScopeKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_secretbroker_v1_secret_broker_proto_enumTypes[0].Descriptor()
+}
+
+func (RuntimeResourceScopeKind) Type() protoreflect.EnumType {
+	return &file_secretbroker_v1_secret_broker_proto_enumTypes[0]
+}
+
+func (x RuntimeResourceScopeKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RuntimeResourceScopeKind.Descriptor instead.
+func (RuntimeResourceScopeKind) EnumDescriptor() ([]byte, []int) {
+	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{0}
+}
+
 type RuntimeSecretDraftState int32
 
 const (
@@ -73,11 +123,11 @@ func (x RuntimeSecretDraftState) String() string {
 }
 
 func (RuntimeSecretDraftState) Descriptor() protoreflect.EnumDescriptor {
-	return file_secretbroker_v1_secret_broker_proto_enumTypes[0].Descriptor()
+	return file_secretbroker_v1_secret_broker_proto_enumTypes[1].Descriptor()
 }
 
 func (RuntimeSecretDraftState) Type() protoreflect.EnumType {
-	return &file_secretbroker_v1_secret_broker_proto_enumTypes[0]
+	return &file_secretbroker_v1_secret_broker_proto_enumTypes[1]
 }
 
 func (x RuntimeSecretDraftState) Number() protoreflect.EnumNumber {
@@ -86,7 +136,7 @@ func (x RuntimeSecretDraftState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RuntimeSecretDraftState.Descriptor instead.
 func (RuntimeSecretDraftState) EnumDescriptor() ([]byte, []int) {
-	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{0}
+	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{1}
 }
 
 type RuntimeSecretValueType int32
@@ -125,11 +175,11 @@ func (x RuntimeSecretValueType) String() string {
 }
 
 func (RuntimeSecretValueType) Descriptor() protoreflect.EnumDescriptor {
-	return file_secretbroker_v1_secret_broker_proto_enumTypes[1].Descriptor()
+	return file_secretbroker_v1_secret_broker_proto_enumTypes[2].Descriptor()
 }
 
 func (RuntimeSecretValueType) Type() protoreflect.EnumType {
-	return &file_secretbroker_v1_secret_broker_proto_enumTypes[1]
+	return &file_secretbroker_v1_secret_broker_proto_enumTypes[2]
 }
 
 func (x RuntimeSecretValueType) Number() protoreflect.EnumNumber {
@@ -138,7 +188,7 @@ func (x RuntimeSecretValueType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RuntimeSecretValueType.Descriptor instead.
 func (RuntimeSecretValueType) EnumDescriptor() ([]byte, []int) {
-	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{1}
+	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{2}
 }
 
 type RuntimeSecretStatus int32
@@ -174,11 +224,11 @@ func (x RuntimeSecretStatus) String() string {
 }
 
 func (RuntimeSecretStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_secretbroker_v1_secret_broker_proto_enumTypes[2].Descriptor()
+	return file_secretbroker_v1_secret_broker_proto_enumTypes[3].Descriptor()
 }
 
 func (RuntimeSecretStatus) Type() protoreflect.EnumType {
-	return &file_secretbroker_v1_secret_broker_proto_enumTypes[2]
+	return &file_secretbroker_v1_secret_broker_proto_enumTypes[3]
 }
 
 func (x RuntimeSecretStatus) Number() protoreflect.EnumNumber {
@@ -187,7 +237,7 @@ func (x RuntimeSecretStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RuntimeSecretStatus.Descriptor instead.
 func (RuntimeSecretStatus) EnumDescriptor() ([]byte, []int) {
-	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{2}
+	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{3}
 }
 
 // Grant назначает owner; plaintext существует только в bounded SAVE request.
@@ -642,21 +692,23 @@ func (x *CheckSecretDraftReadinessResponse) GetReady() bool {
 
 // Безопасная metadata не содержит value digest, hint, ciphertext или locators.
 type RuntimeSecretDraftMetadata struct {
-	state             protoimpl.MessageState  `protogen:"open.v1"`
-	Ref               string                  `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Version           int64                   `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	Generation        int64                   `protobuf:"varint,3,opt,name=generation,proto3" json:"generation,omitempty"`
-	ProjectRef        string                  `protobuf:"bytes,4,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
-	SecretRef         string                  `protobuf:"bytes,5,opt,name=secret_ref,json=secretRef,proto3" json:"secret_ref,omitempty"`
-	Name              string                  `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
-	Description       string                  `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
-	ValueType         RuntimeSecretValueType  `protobuf:"varint,8,opt,name=value_type,json=valueType,proto3,enum=secretbroker.v1.RuntimeSecretValueType" json:"value_type,omitempty"`
-	State             RuntimeSecretDraftState `protobuf:"varint,9,opt,name=state,proto3,enum=secretbroker.v1.RuntimeSecretDraftState" json:"state,omitempty"`
-	PublishedRevision int64                   `protobuf:"varint,10,opt,name=published_revision,json=publishedRevision,proto3" json:"published_revision,omitempty"`
-	CreatedAt         *timestamppb.Timestamp  `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt         *timestamppb.Timestamp  `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	ExpiresAt         *timestamppb.Timestamp  `protobuf:"bytes,13,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	SecretVersion     int64                   `protobuf:"varint,14,opt,name=secret_version,json=secretVersion,proto3" json:"secret_version,omitempty"`
+	state             protoimpl.MessageState   `protogen:"open.v1"`
+	Ref               string                   `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Version           int64                    `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	Generation        int64                    `protobuf:"varint,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	ProjectRef        string                   `protobuf:"bytes,4,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	SecretRef         string                   `protobuf:"bytes,5,opt,name=secret_ref,json=secretRef,proto3" json:"secret_ref,omitempty"`
+	Name              string                   `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
+	Description       string                   `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
+	ValueType         RuntimeSecretValueType   `protobuf:"varint,8,opt,name=value_type,json=valueType,proto3,enum=secretbroker.v1.RuntimeSecretValueType" json:"value_type,omitempty"`
+	State             RuntimeSecretDraftState  `protobuf:"varint,9,opt,name=state,proto3,enum=secretbroker.v1.RuntimeSecretDraftState" json:"state,omitempty"`
+	PublishedRevision int64                    `protobuf:"varint,10,opt,name=published_revision,json=publishedRevision,proto3" json:"published_revision,omitempty"`
+	CreatedAt         *timestamppb.Timestamp   `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt         *timestamppb.Timestamp   `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	ExpiresAt         *timestamppb.Timestamp   `protobuf:"bytes,13,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	SecretVersion     int64                    `protobuf:"varint,14,opt,name=secret_version,json=secretVersion,proto3" json:"secret_version,omitempty"`
+	ScopeKind         RuntimeResourceScopeKind `protobuf:"varint,15,opt,name=scope_kind,json=scopeKind,proto3,enum=secretbroker.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	OrganizationRef   string                   `protobuf:"bytes,16,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -787,6 +839,20 @@ func (x *RuntimeSecretDraftMetadata) GetSecretVersion() int64 {
 		return x.SecretVersion
 	}
 	return 0
+}
+
+func (x *RuntimeSecretDraftMetadata) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *RuntimeSecretDraftMetadata) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
 }
 
 type MaterializeRuntimeCredentialsRequest struct {
@@ -1842,20 +1908,22 @@ func (x *RuntimeSecretDisplayHint) GetSuffix() string {
 }
 
 type RuntimeSecretMetadata struct {
-	state         protoimpl.MessageState    `protogen:"open.v1"`
-	SecretRef     string                    `protobuf:"bytes,1,opt,name=secret_ref,json=secretRef,proto3" json:"secret_ref,omitempty"`
-	ProjectRef    string                    `protobuf:"bytes,2,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
-	Name          string                    `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	ValueType     RuntimeSecretValueType    `protobuf:"varint,4,opt,name=value_type,json=valueType,proto3,enum=secretbroker.v1.RuntimeSecretValueType" json:"value_type,omitempty"`
-	Status        RuntimeSecretStatus       `protobuf:"varint,5,opt,name=status,proto3,enum=secretbroker.v1.RuntimeSecretStatus" json:"status,omitempty"`
-	Revision      uint64                    `protobuf:"varint,6,opt,name=revision,proto3" json:"revision,omitempty"`
-	DisplayHint   *RuntimeSecretDisplayHint `protobuf:"bytes,7,opt,name=display_hint,json=displayHint,proto3" json:"display_hint,omitempty"`
-	CreatedAt     *timestamppb.Timestamp    `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp    `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Description   string                    `protobuf:"bytes,10,opt,name=description,proto3" json:"description,omitempty"`
-	Version       int64                     `protobuf:"varint,11,opt,name=version,proto3" json:"version,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState    `protogen:"open.v1"`
+	SecretRef       string                    `protobuf:"bytes,1,opt,name=secret_ref,json=secretRef,proto3" json:"secret_ref,omitempty"`
+	ProjectRef      string                    `protobuf:"bytes,2,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	Name            string                    `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	ValueType       RuntimeSecretValueType    `protobuf:"varint,4,opt,name=value_type,json=valueType,proto3,enum=secretbroker.v1.RuntimeSecretValueType" json:"value_type,omitempty"`
+	Status          RuntimeSecretStatus       `protobuf:"varint,5,opt,name=status,proto3,enum=secretbroker.v1.RuntimeSecretStatus" json:"status,omitempty"`
+	Revision        uint64                    `protobuf:"varint,6,opt,name=revision,proto3" json:"revision,omitempty"`
+	DisplayHint     *RuntimeSecretDisplayHint `protobuf:"bytes,7,opt,name=display_hint,json=displayHint,proto3" json:"display_hint,omitempty"`
+	CreatedAt       *timestamppb.Timestamp    `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       *timestamppb.Timestamp    `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Description     string                    `protobuf:"bytes,10,opt,name=description,proto3" json:"description,omitempty"`
+	Version         int64                     `protobuf:"varint,11,opt,name=version,proto3" json:"version,omitempty"`
+	ScopeKind       RuntimeResourceScopeKind  `protobuf:"varint,12,opt,name=scope_kind,json=scopeKind,proto3,enum=secretbroker.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	OrganizationRef string                    `protobuf:"bytes,13,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RuntimeSecretMetadata) Reset() {
@@ -1965,6 +2033,20 @@ func (x *RuntimeSecretMetadata) GetVersion() int64 {
 	return 0
 }
 
+func (x *RuntimeSecretMetadata) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *RuntimeSecretMetadata) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
+}
+
 var File_secretbroker_v1_secret_broker_proto protoreflect.FileDescriptor
 
 const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
@@ -1990,7 +2072,7 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"\x05draft\x18\x01 \x01(\v2+.secretbroker.v1.RuntimeSecretDraftMetadataR\x05draft\"\"\n" +
 	" CheckSecretDraftReadinessRequest\"9\n" +
 	"!CheckSecretDraftReadinessResponse\x12\x14\n" +
-	"\x05ready\x18\x01 \x01(\bR\x05ready\"\xed\x04\n" +
+	"\x05ready\x18\x01 \x01(\bR\x05ready\"\xe2\x05\n" +
 	"\x1aRuntimeSecretDraftMetadata\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1e\n" +
@@ -2014,7 +2096,10 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x129\n" +
 	"\n" +
 	"expires_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12%\n" +
-	"\x0esecret_version\x18\x0e \x01(\x03R\rsecretVersion\"\x89\x03\n" +
+	"\x0esecret_version\x18\x0e \x01(\x03R\rsecretVersion\x12H\n" +
+	"\n" +
+	"scope_kind\x18\x0f \x01(\x0e2).secretbroker.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18\x10 \x01(\tR\x0forganizationRef\"\x89\x03\n" +
 	"$MaterializeRuntimeCredentialsRequest\x12+\n" +
 	"\x11workload_instance\x18\x01 \x01(\tR\x10workloadInstance\x12\x1b\n" +
 	"\tlease_ref\x18\x02 \x01(\tR\bleaseRef\x12\x14\n" +
@@ -2096,7 +2181,7 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\"J\n" +
 	"\x18RuntimeSecretDisplayHint\x12\x16\n" +
 	"\x06prefix\x18\x01 \x01(\tR\x06prefix\x12\x16\n" +
-	"\x06suffix\x18\x02 \x01(\tR\x06suffix\"\x8d\x04\n" +
+	"\x06suffix\x18\x02 \x01(\tR\x06suffix\"\x82\x05\n" +
 	"\x15RuntimeSecretMetadata\x12\x1d\n" +
 	"\n" +
 	"secret_ref\x18\x01 \x01(\tR\tsecretRef\x12\x1f\n" +
@@ -2114,7 +2199,14 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12 \n" +
 	"\vdescription\x18\n" +
 	" \x01(\tR\vdescription\x12\x18\n" +
-	"\aversion\x18\v \x01(\x03R\aversion*\x89\x03\n" +
+	"\aversion\x18\v \x01(\x03R\aversion\x12H\n" +
+	"\n" +
+	"scope_kind\x18\f \x01(\x0e2).secretbroker.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18\r \x01(\tR\x0forganizationRef*\x9e\x01\n" +
+	"\x18RuntimeResourceScopeKind\x12+\n" +
+	"'RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED\x10\x00\x12,\n" +
+	"(RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION\x10\x01\x12'\n" +
+	"#RUNTIME_RESOURCE_SCOPE_KIND_PROJECT\x10\x02*\x89\x03\n" +
 	"\x17RuntimeSecretDraftState\x12*\n" +
 	"&RUNTIME_SECRET_DRAFT_STATE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$RUNTIME_SECRET_DRAFT_STATE_PREPARING\x10\x01\x12$\n" +
@@ -2162,101 +2254,104 @@ func file_secretbroker_v1_secret_broker_proto_rawDescGZIP() []byte {
 	return file_secretbroker_v1_secret_broker_proto_rawDescData
 }
 
-var file_secretbroker_v1_secret_broker_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_secretbroker_v1_secret_broker_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_secretbroker_v1_secret_broker_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_secretbroker_v1_secret_broker_proto_goTypes = []any{
-	(RuntimeSecretDraftState)(0),                              // 0: secretbroker.v1.RuntimeSecretDraftState
-	(RuntimeSecretValueType)(0),                               // 1: secretbroker.v1.RuntimeSecretValueType
-	(RuntimeSecretStatus)(0),                                  // 2: secretbroker.v1.RuntimeSecretStatus
-	(*SaveSecretDraftRequest)(nil),                            // 3: secretbroker.v1.SaveSecretDraftRequest
-	(*ValidateSecretDraftRequest)(nil),                        // 4: secretbroker.v1.ValidateSecretDraftRequest
-	(*PublishSecretDraftRequest)(nil),                         // 5: secretbroker.v1.PublishSecretDraftRequest
-	(*DiscardSecretDraftRequest)(nil),                         // 6: secretbroker.v1.DiscardSecretDraftRequest
-	(*SaveSecretDraftResponse)(nil),                           // 7: secretbroker.v1.SaveSecretDraftResponse
-	(*ValidateSecretDraftResponse)(nil),                       // 8: secretbroker.v1.ValidateSecretDraftResponse
-	(*PublishSecretDraftResponse)(nil),                        // 9: secretbroker.v1.PublishSecretDraftResponse
-	(*DiscardSecretDraftResponse)(nil),                        // 10: secretbroker.v1.DiscardSecretDraftResponse
-	(*CheckSecretDraftReadinessRequest)(nil),                  // 11: secretbroker.v1.CheckSecretDraftReadinessRequest
-	(*CheckSecretDraftReadinessResponse)(nil),                 // 12: secretbroker.v1.CheckSecretDraftReadinessResponse
-	(*RuntimeSecretDraftMetadata)(nil),                        // 13: secretbroker.v1.RuntimeSecretDraftMetadata
-	(*MaterializeRuntimeCredentialsRequest)(nil),              // 14: secretbroker.v1.MaterializeRuntimeCredentialsRequest
-	(*MaterializeSystemAssistantCredentialsRequest)(nil),      // 15: secretbroker.v1.MaterializeSystemAssistantCredentialsRequest
-	(*MaterializeSystemAssistantCredentialsResponse)(nil),     // 16: secretbroker.v1.MaterializeSystemAssistantCredentialsResponse
-	(*RuntimeCredentialProjectionDescriptor)(nil),             // 17: secretbroker.v1.RuntimeCredentialProjectionDescriptor
-	(*RuntimeCredentialProjectionKey)(nil),                    // 18: secretbroker.v1.RuntimeCredentialProjectionKey
-	(*MaterializeRuntimeCredentialsResponse)(nil),             // 19: secretbroker.v1.MaterializeRuntimeCredentialsResponse
-	(*CheckRuntimeCredentialProjectionReadinessRequest)(nil),  // 20: secretbroker.v1.CheckRuntimeCredentialProjectionReadinessRequest
-	(*CheckRuntimeCredentialProjectionReadinessResponse)(nil), // 21: secretbroker.v1.CheckRuntimeCredentialProjectionReadinessResponse
-	(*CreateSecretRequest)(nil),                               // 22: secretbroker.v1.CreateSecretRequest
-	(*RotateSecretRequest)(nil),                               // 23: secretbroker.v1.RotateSecretRequest
-	(*RevealSecretRequest)(nil),                               // 24: secretbroker.v1.RevealSecretRequest
-	(*RevokeSecretRequest)(nil),                               // 25: secretbroker.v1.RevokeSecretRequest
-	(*CreateSecretResponse)(nil),                              // 26: secretbroker.v1.CreateSecretResponse
-	(*RotateSecretResponse)(nil),                              // 27: secretbroker.v1.RotateSecretResponse
-	(*RevealSecretResponse)(nil),                              // 28: secretbroker.v1.RevealSecretResponse
-	(*RevokeSecretResponse)(nil),                              // 29: secretbroker.v1.RevokeSecretResponse
-	(*CheckReadinessRequest)(nil),                             // 30: secretbroker.v1.CheckReadinessRequest
-	(*CheckReadinessResponse)(nil),                            // 31: secretbroker.v1.CheckReadinessResponse
-	(*RuntimeSecretDisplayHint)(nil),                          // 32: secretbroker.v1.RuntimeSecretDisplayHint
-	(*RuntimeSecretMetadata)(nil),                             // 33: secretbroker.v1.RuntimeSecretMetadata
-	(*timestamppb.Timestamp)(nil),                             // 34: google.protobuf.Timestamp
+	(RuntimeResourceScopeKind)(0),                             // 0: secretbroker.v1.RuntimeResourceScopeKind
+	(RuntimeSecretDraftState)(0),                              // 1: secretbroker.v1.RuntimeSecretDraftState
+	(RuntimeSecretValueType)(0),                               // 2: secretbroker.v1.RuntimeSecretValueType
+	(RuntimeSecretStatus)(0),                                  // 3: secretbroker.v1.RuntimeSecretStatus
+	(*SaveSecretDraftRequest)(nil),                            // 4: secretbroker.v1.SaveSecretDraftRequest
+	(*ValidateSecretDraftRequest)(nil),                        // 5: secretbroker.v1.ValidateSecretDraftRequest
+	(*PublishSecretDraftRequest)(nil),                         // 6: secretbroker.v1.PublishSecretDraftRequest
+	(*DiscardSecretDraftRequest)(nil),                         // 7: secretbroker.v1.DiscardSecretDraftRequest
+	(*SaveSecretDraftResponse)(nil),                           // 8: secretbroker.v1.SaveSecretDraftResponse
+	(*ValidateSecretDraftResponse)(nil),                       // 9: secretbroker.v1.ValidateSecretDraftResponse
+	(*PublishSecretDraftResponse)(nil),                        // 10: secretbroker.v1.PublishSecretDraftResponse
+	(*DiscardSecretDraftResponse)(nil),                        // 11: secretbroker.v1.DiscardSecretDraftResponse
+	(*CheckSecretDraftReadinessRequest)(nil),                  // 12: secretbroker.v1.CheckSecretDraftReadinessRequest
+	(*CheckSecretDraftReadinessResponse)(nil),                 // 13: secretbroker.v1.CheckSecretDraftReadinessResponse
+	(*RuntimeSecretDraftMetadata)(nil),                        // 14: secretbroker.v1.RuntimeSecretDraftMetadata
+	(*MaterializeRuntimeCredentialsRequest)(nil),              // 15: secretbroker.v1.MaterializeRuntimeCredentialsRequest
+	(*MaterializeSystemAssistantCredentialsRequest)(nil),      // 16: secretbroker.v1.MaterializeSystemAssistantCredentialsRequest
+	(*MaterializeSystemAssistantCredentialsResponse)(nil),     // 17: secretbroker.v1.MaterializeSystemAssistantCredentialsResponse
+	(*RuntimeCredentialProjectionDescriptor)(nil),             // 18: secretbroker.v1.RuntimeCredentialProjectionDescriptor
+	(*RuntimeCredentialProjectionKey)(nil),                    // 19: secretbroker.v1.RuntimeCredentialProjectionKey
+	(*MaterializeRuntimeCredentialsResponse)(nil),             // 20: secretbroker.v1.MaterializeRuntimeCredentialsResponse
+	(*CheckRuntimeCredentialProjectionReadinessRequest)(nil),  // 21: secretbroker.v1.CheckRuntimeCredentialProjectionReadinessRequest
+	(*CheckRuntimeCredentialProjectionReadinessResponse)(nil), // 22: secretbroker.v1.CheckRuntimeCredentialProjectionReadinessResponse
+	(*CreateSecretRequest)(nil),                               // 23: secretbroker.v1.CreateSecretRequest
+	(*RotateSecretRequest)(nil),                               // 24: secretbroker.v1.RotateSecretRequest
+	(*RevealSecretRequest)(nil),                               // 25: secretbroker.v1.RevealSecretRequest
+	(*RevokeSecretRequest)(nil),                               // 26: secretbroker.v1.RevokeSecretRequest
+	(*CreateSecretResponse)(nil),                              // 27: secretbroker.v1.CreateSecretResponse
+	(*RotateSecretResponse)(nil),                              // 28: secretbroker.v1.RotateSecretResponse
+	(*RevealSecretResponse)(nil),                              // 29: secretbroker.v1.RevealSecretResponse
+	(*RevokeSecretResponse)(nil),                              // 30: secretbroker.v1.RevokeSecretResponse
+	(*CheckReadinessRequest)(nil),                             // 31: secretbroker.v1.CheckReadinessRequest
+	(*CheckReadinessResponse)(nil),                            // 32: secretbroker.v1.CheckReadinessResponse
+	(*RuntimeSecretDisplayHint)(nil),                          // 33: secretbroker.v1.RuntimeSecretDisplayHint
+	(*RuntimeSecretMetadata)(nil),                             // 34: secretbroker.v1.RuntimeSecretMetadata
+	(*timestamppb.Timestamp)(nil),                             // 35: google.protobuf.Timestamp
 }
 var file_secretbroker_v1_secret_broker_proto_depIdxs = []int32{
-	13, // 0: secretbroker.v1.SaveSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
-	13, // 1: secretbroker.v1.ValidateSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
-	13, // 2: secretbroker.v1.PublishSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
-	33, // 3: secretbroker.v1.PublishSecretDraftResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
-	13, // 4: secretbroker.v1.DiscardSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
-	1,  // 5: secretbroker.v1.RuntimeSecretDraftMetadata.value_type:type_name -> secretbroker.v1.RuntimeSecretValueType
-	0,  // 6: secretbroker.v1.RuntimeSecretDraftMetadata.state:type_name -> secretbroker.v1.RuntimeSecretDraftState
-	34, // 7: secretbroker.v1.RuntimeSecretDraftMetadata.created_at:type_name -> google.protobuf.Timestamp
-	34, // 8: secretbroker.v1.RuntimeSecretDraftMetadata.updated_at:type_name -> google.protobuf.Timestamp
-	34, // 9: secretbroker.v1.RuntimeSecretDraftMetadata.expires_at:type_name -> google.protobuf.Timestamp
-	14, // 10: secretbroker.v1.MaterializeSystemAssistantCredentialsRequest.execution:type_name -> secretbroker.v1.MaterializeRuntimeCredentialsRequest
-	17, // 11: secretbroker.v1.MaterializeSystemAssistantCredentialsResponse.projection:type_name -> secretbroker.v1.RuntimeCredentialProjectionDescriptor
-	18, // 12: secretbroker.v1.RuntimeCredentialProjectionDescriptor.runtime_secret_keys:type_name -> secretbroker.v1.RuntimeCredentialProjectionKey
-	34, // 13: secretbroker.v1.RuntimeCredentialProjectionDescriptor.expires_at:type_name -> google.protobuf.Timestamp
-	17, // 14: secretbroker.v1.MaterializeRuntimeCredentialsResponse.projection:type_name -> secretbroker.v1.RuntimeCredentialProjectionDescriptor
-	33, // 15: secretbroker.v1.CreateSecretResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
-	33, // 16: secretbroker.v1.RotateSecretResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
-	1,  // 17: secretbroker.v1.RevealSecretResponse.value_type:type_name -> secretbroker.v1.RuntimeSecretValueType
-	33, // 18: secretbroker.v1.RevokeSecretResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
-	1,  // 19: secretbroker.v1.RuntimeSecretMetadata.value_type:type_name -> secretbroker.v1.RuntimeSecretValueType
-	2,  // 20: secretbroker.v1.RuntimeSecretMetadata.status:type_name -> secretbroker.v1.RuntimeSecretStatus
-	32, // 21: secretbroker.v1.RuntimeSecretMetadata.display_hint:type_name -> secretbroker.v1.RuntimeSecretDisplayHint
-	34, // 22: secretbroker.v1.RuntimeSecretMetadata.created_at:type_name -> google.protobuf.Timestamp
-	34, // 23: secretbroker.v1.RuntimeSecretMetadata.updated_at:type_name -> google.protobuf.Timestamp
-	22, // 24: secretbroker.v1.SecretBrokerService.CreateSecret:input_type -> secretbroker.v1.CreateSecretRequest
-	23, // 25: secretbroker.v1.SecretBrokerService.RotateSecret:input_type -> secretbroker.v1.RotateSecretRequest
-	24, // 26: secretbroker.v1.SecretBrokerService.RevealSecret:input_type -> secretbroker.v1.RevealSecretRequest
-	25, // 27: secretbroker.v1.SecretBrokerService.RevokeSecret:input_type -> secretbroker.v1.RevokeSecretRequest
-	30, // 28: secretbroker.v1.SecretBrokerService.CheckReadiness:input_type -> secretbroker.v1.CheckReadinessRequest
-	3,  // 29: secretbroker.v1.SecretBrokerService.SaveSecretDraft:input_type -> secretbroker.v1.SaveSecretDraftRequest
-	4,  // 30: secretbroker.v1.SecretBrokerService.ValidateSecretDraft:input_type -> secretbroker.v1.ValidateSecretDraftRequest
-	5,  // 31: secretbroker.v1.SecretBrokerService.PublishSecretDraft:input_type -> secretbroker.v1.PublishSecretDraftRequest
-	6,  // 32: secretbroker.v1.SecretBrokerService.DiscardSecretDraft:input_type -> secretbroker.v1.DiscardSecretDraftRequest
-	11, // 33: secretbroker.v1.SecretBrokerService.CheckSecretDraftReadiness:input_type -> secretbroker.v1.CheckSecretDraftReadinessRequest
-	14, // 34: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeRuntimeCredentials:input_type -> secretbroker.v1.MaterializeRuntimeCredentialsRequest
-	15, // 35: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeSystemAssistantCredentials:input_type -> secretbroker.v1.MaterializeSystemAssistantCredentialsRequest
-	20, // 36: secretbroker.v1.RuntimeCredentialProjectionService.CheckRuntimeCredentialProjectionReadiness:input_type -> secretbroker.v1.CheckRuntimeCredentialProjectionReadinessRequest
-	26, // 37: secretbroker.v1.SecretBrokerService.CreateSecret:output_type -> secretbroker.v1.CreateSecretResponse
-	27, // 38: secretbroker.v1.SecretBrokerService.RotateSecret:output_type -> secretbroker.v1.RotateSecretResponse
-	28, // 39: secretbroker.v1.SecretBrokerService.RevealSecret:output_type -> secretbroker.v1.RevealSecretResponse
-	29, // 40: secretbroker.v1.SecretBrokerService.RevokeSecret:output_type -> secretbroker.v1.RevokeSecretResponse
-	31, // 41: secretbroker.v1.SecretBrokerService.CheckReadiness:output_type -> secretbroker.v1.CheckReadinessResponse
-	7,  // 42: secretbroker.v1.SecretBrokerService.SaveSecretDraft:output_type -> secretbroker.v1.SaveSecretDraftResponse
-	8,  // 43: secretbroker.v1.SecretBrokerService.ValidateSecretDraft:output_type -> secretbroker.v1.ValidateSecretDraftResponse
-	9,  // 44: secretbroker.v1.SecretBrokerService.PublishSecretDraft:output_type -> secretbroker.v1.PublishSecretDraftResponse
-	10, // 45: secretbroker.v1.SecretBrokerService.DiscardSecretDraft:output_type -> secretbroker.v1.DiscardSecretDraftResponse
-	12, // 46: secretbroker.v1.SecretBrokerService.CheckSecretDraftReadiness:output_type -> secretbroker.v1.CheckSecretDraftReadinessResponse
-	19, // 47: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeRuntimeCredentials:output_type -> secretbroker.v1.MaterializeRuntimeCredentialsResponse
-	16, // 48: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeSystemAssistantCredentials:output_type -> secretbroker.v1.MaterializeSystemAssistantCredentialsResponse
-	21, // 49: secretbroker.v1.RuntimeCredentialProjectionService.CheckRuntimeCredentialProjectionReadiness:output_type -> secretbroker.v1.CheckRuntimeCredentialProjectionReadinessResponse
-	37, // [37:50] is the sub-list for method output_type
-	24, // [24:37] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	14, // 0: secretbroker.v1.SaveSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
+	14, // 1: secretbroker.v1.ValidateSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
+	14, // 2: secretbroker.v1.PublishSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
+	34, // 3: secretbroker.v1.PublishSecretDraftResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
+	14, // 4: secretbroker.v1.DiscardSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
+	2,  // 5: secretbroker.v1.RuntimeSecretDraftMetadata.value_type:type_name -> secretbroker.v1.RuntimeSecretValueType
+	1,  // 6: secretbroker.v1.RuntimeSecretDraftMetadata.state:type_name -> secretbroker.v1.RuntimeSecretDraftState
+	35, // 7: secretbroker.v1.RuntimeSecretDraftMetadata.created_at:type_name -> google.protobuf.Timestamp
+	35, // 8: secretbroker.v1.RuntimeSecretDraftMetadata.updated_at:type_name -> google.protobuf.Timestamp
+	35, // 9: secretbroker.v1.RuntimeSecretDraftMetadata.expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 10: secretbroker.v1.RuntimeSecretDraftMetadata.scope_kind:type_name -> secretbroker.v1.RuntimeResourceScopeKind
+	15, // 11: secretbroker.v1.MaterializeSystemAssistantCredentialsRequest.execution:type_name -> secretbroker.v1.MaterializeRuntimeCredentialsRequest
+	18, // 12: secretbroker.v1.MaterializeSystemAssistantCredentialsResponse.projection:type_name -> secretbroker.v1.RuntimeCredentialProjectionDescriptor
+	19, // 13: secretbroker.v1.RuntimeCredentialProjectionDescriptor.runtime_secret_keys:type_name -> secretbroker.v1.RuntimeCredentialProjectionKey
+	35, // 14: secretbroker.v1.RuntimeCredentialProjectionDescriptor.expires_at:type_name -> google.protobuf.Timestamp
+	18, // 15: secretbroker.v1.MaterializeRuntimeCredentialsResponse.projection:type_name -> secretbroker.v1.RuntimeCredentialProjectionDescriptor
+	34, // 16: secretbroker.v1.CreateSecretResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
+	34, // 17: secretbroker.v1.RotateSecretResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
+	2,  // 18: secretbroker.v1.RevealSecretResponse.value_type:type_name -> secretbroker.v1.RuntimeSecretValueType
+	34, // 19: secretbroker.v1.RevokeSecretResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
+	2,  // 20: secretbroker.v1.RuntimeSecretMetadata.value_type:type_name -> secretbroker.v1.RuntimeSecretValueType
+	3,  // 21: secretbroker.v1.RuntimeSecretMetadata.status:type_name -> secretbroker.v1.RuntimeSecretStatus
+	33, // 22: secretbroker.v1.RuntimeSecretMetadata.display_hint:type_name -> secretbroker.v1.RuntimeSecretDisplayHint
+	35, // 23: secretbroker.v1.RuntimeSecretMetadata.created_at:type_name -> google.protobuf.Timestamp
+	35, // 24: secretbroker.v1.RuntimeSecretMetadata.updated_at:type_name -> google.protobuf.Timestamp
+	0,  // 25: secretbroker.v1.RuntimeSecretMetadata.scope_kind:type_name -> secretbroker.v1.RuntimeResourceScopeKind
+	23, // 26: secretbroker.v1.SecretBrokerService.CreateSecret:input_type -> secretbroker.v1.CreateSecretRequest
+	24, // 27: secretbroker.v1.SecretBrokerService.RotateSecret:input_type -> secretbroker.v1.RotateSecretRequest
+	25, // 28: secretbroker.v1.SecretBrokerService.RevealSecret:input_type -> secretbroker.v1.RevealSecretRequest
+	26, // 29: secretbroker.v1.SecretBrokerService.RevokeSecret:input_type -> secretbroker.v1.RevokeSecretRequest
+	31, // 30: secretbroker.v1.SecretBrokerService.CheckReadiness:input_type -> secretbroker.v1.CheckReadinessRequest
+	4,  // 31: secretbroker.v1.SecretBrokerService.SaveSecretDraft:input_type -> secretbroker.v1.SaveSecretDraftRequest
+	5,  // 32: secretbroker.v1.SecretBrokerService.ValidateSecretDraft:input_type -> secretbroker.v1.ValidateSecretDraftRequest
+	6,  // 33: secretbroker.v1.SecretBrokerService.PublishSecretDraft:input_type -> secretbroker.v1.PublishSecretDraftRequest
+	7,  // 34: secretbroker.v1.SecretBrokerService.DiscardSecretDraft:input_type -> secretbroker.v1.DiscardSecretDraftRequest
+	12, // 35: secretbroker.v1.SecretBrokerService.CheckSecretDraftReadiness:input_type -> secretbroker.v1.CheckSecretDraftReadinessRequest
+	15, // 36: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeRuntimeCredentials:input_type -> secretbroker.v1.MaterializeRuntimeCredentialsRequest
+	16, // 37: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeSystemAssistantCredentials:input_type -> secretbroker.v1.MaterializeSystemAssistantCredentialsRequest
+	21, // 38: secretbroker.v1.RuntimeCredentialProjectionService.CheckRuntimeCredentialProjectionReadiness:input_type -> secretbroker.v1.CheckRuntimeCredentialProjectionReadinessRequest
+	27, // 39: secretbroker.v1.SecretBrokerService.CreateSecret:output_type -> secretbroker.v1.CreateSecretResponse
+	28, // 40: secretbroker.v1.SecretBrokerService.RotateSecret:output_type -> secretbroker.v1.RotateSecretResponse
+	29, // 41: secretbroker.v1.SecretBrokerService.RevealSecret:output_type -> secretbroker.v1.RevealSecretResponse
+	30, // 42: secretbroker.v1.SecretBrokerService.RevokeSecret:output_type -> secretbroker.v1.RevokeSecretResponse
+	32, // 43: secretbroker.v1.SecretBrokerService.CheckReadiness:output_type -> secretbroker.v1.CheckReadinessResponse
+	8,  // 44: secretbroker.v1.SecretBrokerService.SaveSecretDraft:output_type -> secretbroker.v1.SaveSecretDraftResponse
+	9,  // 45: secretbroker.v1.SecretBrokerService.ValidateSecretDraft:output_type -> secretbroker.v1.ValidateSecretDraftResponse
+	10, // 46: secretbroker.v1.SecretBrokerService.PublishSecretDraft:output_type -> secretbroker.v1.PublishSecretDraftResponse
+	11, // 47: secretbroker.v1.SecretBrokerService.DiscardSecretDraft:output_type -> secretbroker.v1.DiscardSecretDraftResponse
+	13, // 48: secretbroker.v1.SecretBrokerService.CheckSecretDraftReadiness:output_type -> secretbroker.v1.CheckSecretDraftReadinessResponse
+	20, // 49: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeRuntimeCredentials:output_type -> secretbroker.v1.MaterializeRuntimeCredentialsResponse
+	17, // 50: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeSystemAssistantCredentials:output_type -> secretbroker.v1.MaterializeSystemAssistantCredentialsResponse
+	22, // 51: secretbroker.v1.RuntimeCredentialProjectionService.CheckRuntimeCredentialProjectionReadiness:output_type -> secretbroker.v1.CheckRuntimeCredentialProjectionReadinessResponse
+	39, // [39:52] is the sub-list for method output_type
+	26, // [26:39] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_secretbroker_v1_secret_broker_proto_init() }
@@ -2269,7 +2364,7 @@ func file_secretbroker_v1_secret_broker_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_secretbroker_v1_secret_broker_proto_rawDesc), len(file_secretbroker_v1_secret_broker_proto_rawDesc)),
-			NumEnums:      3,
+			NumEnums:      4,
 			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   2,

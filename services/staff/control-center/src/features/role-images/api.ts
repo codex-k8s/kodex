@@ -11,6 +11,15 @@ import {
   promoteRoleImage,
   queryEffectiveAccess,
   updateRoleImageRecipe,
+  listSystemRoleImageRecipes,
+  getSystemRoleImageRecipe,
+  listSystemRoleImageRecipeRevisions,
+  createSystemRoleImageRecipe,
+  updateSystemRoleImageRecipe,
+  commandSystemRoleImageRecipe,
+  promoteSystemRoleImage,
+  getSystemAssistant,
+  getAgentRuntimeConfiguration,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   RoleEnvironment,
@@ -27,6 +36,11 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { csrfToken, mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
+import {
+  roleImageRuntimeScope,
+  type RoleImageResourceScope,
+} from "./resource-scope";
+import { assertRuntimeResourceAddressIdentity } from "@/features/runtime/resource-scope";
 
 export interface RoleDefinitionOption {
   ref: string;
@@ -103,7 +117,7 @@ function versionedHeaders(headers: MutationHeaders): {
 }
 
 export async function loadRoleImagePage(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
   filter: {
@@ -115,6 +129,11 @@ export async function loadRoleImagePage(
 ): Promise<RoleImageRecipePage> {
   if (new TextEncoder().encode(filter.query ?? "").length > 128)
     throw new Error("Role image query exceeds 128 UTF-8 bytes");
+  const resolved = roleImageRuntimeScope(scope);
+  const query = { pageSize, ...(pageToken ? { pageToken } : {}), ...filter };
+  if (resolved.kind === "ORGANIZATION")
+    return (await unwrap(listSystemRoleImageRecipes({ query, signal }))).data;
+  const projectRef = resolved.projectRef;
   return (
     await unwrap(
       listRoleImageRecipes({
@@ -131,10 +150,16 @@ export async function loadRoleImagePage(
 }
 
 export async function loadRoleImageDetail(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipeRef: string,
   signal: AbortSignal = requestSignal(),
 ): Promise<RoleImageRecipeDetail> {
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return (
+      await unwrap(getSystemRoleImageRecipe({ path: { recipeRef }, signal }))
+    ).data;
+  const projectRef = resolved.projectRef;
   return (
     await unwrap(
       getRoleImageRecipe({
@@ -146,11 +171,23 @@ export async function loadRoleImageDetail(
 }
 
 export async function loadRoleImageRevisionPage(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipeRef: string,
   pageToken?: string,
   pageSize = 40,
 ): Promise<RoleImageRecipeRevisionPage> {
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return (
+      await unwrap(
+        listSystemRoleImageRecipeRevisions({
+          path: { recipeRef },
+          query: { pageSize, ...(pageToken ? { pageToken } : {}) },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+  const projectRef = resolved.projectRef;
   return (
     await unwrap(
       listRoleImageRecipeRevisions({
@@ -166,14 +203,37 @@ export async function loadRoleImageRevisionPage(
 }
 
 export async function createRoleImage(
-  projectRef: string,
-  input: RoleImageRecipeCreateInput,
+  scope: RoleImageResourceScope,
+  input: Omit<RoleImageRecipeCreateInput, "roleDefinitionRef"> & {
+    roleDefinitionRef?: string;
+  },
 ): Promise<RoleImageRecipe> {
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return (
+      await mutate((headers) =>
+        createSystemRoleImageRecipe({
+          body: { name: input.name, environment: input.environment },
+          headers: {
+            "Idempotency-Key": headers["Idempotency-Key"],
+            "X-CSRF-Token": headers["X-CSRF-Token"],
+          },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+  if (!input.roleDefinitionRef)
+    throw new Error("Project role definition is required");
+  const projectRef = resolved.projectRef;
+  const body: RoleImageRecipeCreateInput = {
+    ...input,
+    roleDefinitionRef: input.roleDefinitionRef,
+  };
   return (
     await mutate((headers) =>
       createRoleImageRecipe({
         path: { projectRef },
-        body: input,
+        body,
         headers: {
           "Idempotency-Key": headers["Idempotency-Key"],
           "X-CSRF-Token": headers["X-CSRF-Token"],
@@ -185,10 +245,25 @@ export async function createRoleImage(
 }
 
 export async function updateRoleImage(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipe: RoleImageRecipe,
   input: RoleImageRecipeUpdateInput,
 ): Promise<RoleImageRecipe> {
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return (
+      await mutate(
+        (headers) =>
+          updateSystemRoleImageRecipe({
+            path: { recipeRef: recipe.ref },
+            body: input,
+            headers: versionedHeaders(headers),
+            signal: requestSignal(),
+          }),
+        recipe.version,
+      )
+    ).data;
+  const projectRef = resolved.projectRef;
   return (
     await mutate(
       (headers) =>
@@ -204,9 +279,42 @@ export async function updateRoleImage(
 }
 
 export async function loadRoleImageDependencies(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   imageArtifactRef: string,
 ): Promise<RuntimeEnvironmentSet[]> {
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION") {
+    const assistant = (
+      await unwrap(getSystemAssistant({ signal: requestSignal() }))
+    ).data;
+    if (!assistant.ref)
+      throw new Error("System assistant locator is unavailable");
+    const configuration = (
+      await unwrap(
+        getAgentRuntimeConfiguration({
+          path: { agentRef: assistant.ref },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+    if (
+      configuration.configuration.agentRef !== assistant.ref ||
+      configuration.environmentBinding.agentRef !== assistant.ref ||
+      configuration.environmentBinding.environmentRef !==
+        configuration.environment.ref
+    )
+      throw new Error("System assistant runtime locator mismatch");
+    const environment = configuration.environment;
+    assertRuntimeResourceAddressIdentity(
+      scope,
+      environment,
+      resolved.organizationRef,
+    );
+    if (environment.currentVersion.image.artifactRef !== imageArtifactRef)
+      return [];
+    return [environment];
+  }
+  const projectRef = resolved.projectRef;
   const result: RuntimeEnvironmentSet[] = [];
   const visitedTokens = new Set<string>();
   let pageToken: string | undefined;
@@ -288,11 +396,26 @@ export async function loadRoleDefinitionOptions(
 }
 
 export async function commandRoleImage(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipe: RoleImageRecipe,
   action: RoleImageRecipeCommand["action"],
   buildRef?: string,
 ): Promise<RoleImageRecipeCommandReceipt> {
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return (
+      await mutate(
+        (headers) =>
+          commandSystemRoleImageRecipe({
+            path: { recipeRef: recipe.ref },
+            body: { action, ...(buildRef ? { buildRef } : {}) },
+            headers: versionedHeaders(headers),
+            signal: requestSignal(),
+          }),
+        recipe.version,
+      )
+    ).data;
+  const projectRef = resolved.projectRef;
   return (
     await mutate(
       (headers) =>
@@ -308,11 +431,26 @@ export async function commandRoleImage(
 }
 
 export async function promoteRoleImageArtifact(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipe: RoleImageRecipe,
   imageArtifactRef: string,
   expectedProvenanceSha256: string,
 ): Promise<RoleImagePromotionReceipt> {
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return (
+      await mutate(
+        (headers) =>
+          promoteSystemRoleImage({
+            path: { recipeRef: recipe.ref },
+            body: { imageArtifactRef, expectedProvenanceSha256 },
+            headers: versionedHeaders(headers),
+            signal: requestSignal(),
+          }),
+        recipe.version,
+      )
+    ).data;
+  const projectRef = resolved.projectRef;
   return (
     await mutate(
       (headers) =>

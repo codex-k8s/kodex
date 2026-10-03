@@ -20,6 +20,40 @@ func (server *Server) GetRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.
 	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
+func (server *Server) CreateSystemRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, p generated.CreateSystemRuntimeEnvironmentDraftParams) {
+	body, ok := decodeJSON[generated.RuntimeEnvironmentDraftCreateInput](w, r)
+	if !ok {
+		return
+	}
+	expected := int64(0)
+	if body.ExpectedEnvironmentVersion != nil {
+		expected = *body.ExpectedEnvironmentVersion
+	}
+	if (body.EnvironmentRef == nil) != (body.ExpectedEnvironmentVersion == nil) || expected < 0 || expected > maximumSafeJSONInteger || body.EnvironmentRef != nil && (stringValue(body.EnvironmentRef) == "" || expected < 1) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	specification, ok := environmentDraftSpecificationInput(w, body.Specification)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, "")
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.CreateOrganizationRuntimeEnvironmentDraft(r.Context(), &controlplanev1.CreateOrganizationRuntimeEnvironmentDraftRequest{Mutation: mutation, EnvironmentRef: stringValue(body.EnvironmentRef), ExpectedEnvironmentVersion: expected, Specification: specification})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	draft := response.GetDraft()
+	if draft.GetScopeKind() != controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION || draft.GetEnvironmentRef() != stringValue(body.EnvironmentRef) || draft.GetExpectedEnvironmentVersion() != expected {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeEnvironmentDraft(w, http.StatusCreated, draft, "", "")
+}
+
 func (server *Server) CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateRuntimeEnvironmentDraftParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -123,6 +157,10 @@ func (server *Server) PublishRuntimeEnvironmentDraft(w http.ResponseWriter, r *h
 	plan, valid := revisionImpactPlanView(response.GetPlan())
 	environment := response.GetEnvironment()
 	draft := response.GetDraft()
+	if !validRuntimeResourceScope(runtimeResourceScopeKind(environment.GetScopeKind().String()), environment.GetOrganizationRef(), environment.GetProjectRef()) || environment.GetScopeKind() != draft.GetScopeKind() || environment.GetOrganizationRef() != draft.GetOrganizationRef() {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	if !valid || plan.Ref != body.PlanRef || plan.DraftRef != ref || plan.DraftVersion != mutation.GetExpectedVersion() || draft.GetVersion() != plan.DraftVersion+1 || plan.State != "APPLIED" || plan.Version != 2 ||
 		int64(len(body.SelectedItemRefs)) > plan.Total || plan.SourceRef != nil && *plan.SourceRef != environment.GetRef() ||
 		!fileTargetRef(environment.GetRef()) || !validManagedVersion(environment.GetVersion()) || environment.GetRef() != draft.GetPublishedEnvironmentRef() || draft.GetState() != "PUBLISHED" ||
@@ -180,7 +218,7 @@ func writeEnvironmentDraft(w http.ResponseWriter, statusCode int, input *control
 }
 
 func writeEnvironmentDraftResult(w http.ResponseWriter, statusCode int, input *controlplanev1.RuntimeEnvironmentDraft, ref, project string, envelope map[string]any) {
-	if input == nil || input.GetSpecification() == nil || input.GetRef() == "" || input.GetProjectRef() == "" ||
+	if input == nil || input.GetSpecification() == nil || input.GetRef() == "" || !validRuntimeResourceScope(runtimeResourceScopeKind(input.GetScopeKind().String()), input.GetOrganizationRef(), input.GetProjectRef()) ||
 		ref != "" && input.GetRef() != ref || project != "" && input.GetProjectRef() != project ||
 		input.GetVersion() < 1 || input.GetVersion() > maximumSafeJSONInteger || input.GetExpectedEnvironmentVersion() < 0 ||
 		input.GetExpectedEnvironmentVersion() > maximumSafeJSONInteger || len(input.GetDiagnostics()) > 64 {
@@ -213,6 +251,7 @@ func writeEnvironmentDraftResult(w http.ResponseWriter, statusCode int, input *c
 		return
 	}
 	result := generated.RuntimeEnvironmentDraft{
+		ScopeKind: runtimeResourceScopeKind(input.GetScopeKind().String()), OrganizationRef: input.GetOrganizationRef(),
 		Ref: input.GetRef(), Version: input.GetVersion(), ProjectRef: input.GetProjectRef(), ExpectedEnvironmentVersion: input.GetExpectedEnvironmentVersion(),
 		State: generated.RuntimeEnvironmentDraftState(input.GetState()), Diagnostics: append([]string{}, input.GetDiagnostics()...),
 		Specification: generated.RuntimeEnvironmentDraftSpecification{Name: spec.GetName(), Description: spec.GetDescription(), ImageArtifactRef: spec.GetImageArtifactRef(),

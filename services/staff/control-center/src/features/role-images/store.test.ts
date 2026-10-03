@@ -16,6 +16,8 @@ vi.mock("./api", () => api);
 import { useRoleImagesStore } from "./store";
 
 const recipe: RoleImageRecipe = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   sourceAvailable: true,
   ref: "image_synthetic",
   projectRef: "project_synthetic",

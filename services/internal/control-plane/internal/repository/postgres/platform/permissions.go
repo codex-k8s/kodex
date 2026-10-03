@@ -252,6 +252,12 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return "", resolvedAccessTarget{}, err
 		}
+		if environment.ScopeKind == "ORGANIZATION" {
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, environment.ScopeKind, environment.ProjectRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			return "organization.manage", organization, nil
+		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
 	case command.RuntimeSecretRebindInput:
 		for _, selection := range payload.Selections {
@@ -273,6 +279,9 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, permission, "RUNTIME_ENVIRONMENT", payload.EnvironmentRef, "")
 	case command.RuntimeEnvironmentInput:
 		if input.Kind == command.CreateRuntimeEnvironment {
+			if payload.ScopeKind == "ORGANIZATION" {
+				return "", resolvedAccessTarget{}, errs.ErrInvalid
+			}
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		if payload.Ref == "" {
@@ -284,18 +293,45 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return "", resolvedAccessTarget{}, err
 		}
-		if environment.ProjectRef == "" {
+		if environment.ScopeKind == "ORGANIZATION" {
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, environment.ScopeKind, environment.ProjectRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
 			return "organization.manage", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
 	case command.RuntimeEnvironmentDraftInput:
 		projectRef := payload.ProjectRef
-		if input.Kind != command.CreateRuntimeEnvironmentDraft {
+		scopeKind := "PROJECT"
+		if input.Kind == command.CreateOrganizationRuntimeEnvironmentDraft {
+			scopeKind = "ORGANIZATION"
+			if projectRef != "" {
+				return "", resolvedAccessTarget{}, errs.ErrInvalid
+			}
+		} else if input.Kind != command.CreateRuntimeEnvironmentDraft {
 			draft, err := scanEnvironmentDraft(tx.QueryRow(ctx, queryEnvironmentDraftGet, current.organizationID, payload.DraftRef))
 			if err != nil {
 				return "", resolvedAccessTarget{}, err
 			}
 			projectRef = draft.ProjectRef
+			scopeKind = draft.ScopeKind
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, scopeKind, projectRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			if input.Kind == command.ValidateRuntimeEnvironmentDraft || input.Kind == command.PublishRuntimeEnvironmentDraft || input.Kind == command.PrepareEnvironmentDraftImpact {
+				if _, err := repository.admitRuntimeEnvironmentPolicy(ctx, tx, current, projectRef, draft.EnvironmentRef, draft.Specification.Policy); errors.Is(err, errs.ErrFreshAuthenticationRequired) || errors.Is(err, errs.ErrForbidden) || errors.Is(err, errs.ErrNotFound) {
+					return "", resolvedAccessTarget{}, err
+				}
+			}
+		}
+		if scopeKind == "ORGANIZATION" {
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, scopeKind, projectRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			return "organization.manage", organization, nil
+		}
+		if scopeKind != "PROJECT" {
+			return "", resolvedAccessTarget{}, errs.ErrNotFound
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
 	case command.MemoryRecordInput:

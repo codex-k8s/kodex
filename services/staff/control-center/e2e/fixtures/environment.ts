@@ -45,6 +45,8 @@ export async function installEnvironmentFixture(
     secretBindings: [],
   };
   let draft: RuntimeEnvironmentDraft = {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref: "draft_synthetic_environment",
     projectRef,
     version: 1,
@@ -65,6 +67,8 @@ export async function installEnvironmentFixture(
     },
   };
   const environment: RuntimeEnvironmentSet = {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref: "environment_synthetic",
     projectRef,
     version: 1,
@@ -114,6 +118,8 @@ export async function installEnvironmentFixture(
   };
   const recipe: RoleImageRecipeDetail = {
     recipe: {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       sourceAvailable: true,
       ref: "recipe_synthetic_image",
       projectRef,
@@ -133,6 +139,9 @@ export async function installEnvironmentFixture(
     },
     builds: [],
     activeArtifact: {
+      projectRef,
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "artifact_synthetic_image",
       version: 1,
       recipeRef: "recipe_synthetic_image",

@@ -18,6 +18,8 @@ for (const width of [390, 2900]) {
     let saveKey = "";
     let saveInput: unknown;
     const secret: RuntimeSecret = {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "secret_rotation",
       projectRef: "project_rotation",
       version: 8,
@@ -31,6 +33,8 @@ for (const width of [390, 2900]) {
       updatedAt: "2026-09-05T00:00:00Z",
     };
     let draft: RuntimeSecretDraft = {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "draft_rotation",
       version: 1,
       generation: 4,

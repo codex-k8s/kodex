@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  organizationRuntimeResourceScope,
+  type RuntimeResourceScope,
+} from "@/features/runtime/resource-scope";
+import { createRuntimeResourceCatalogs } from "@/features/runtime/resource-catalog-api";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
   AlertTriangle,
@@ -89,6 +94,14 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const runtime = useRuntimeStore();
 const platform = usePlatformStore();
+const systemResourceScope = computed(() =>
+  organizationRuntimeResourceScope(platform.bootstrap),
+);
+const resourceCatalogs = computed(() =>
+  platform.bootstrap
+    ? createRuntimeResourceCatalogs(platform.bootstrap.organizationRef)
+    : undefined,
+);
 const readyRuntimes = computed(() =>
   Object.values(platform.runtimes).filter((item) => item.ready),
 );
@@ -602,7 +615,6 @@ const friendlyInputsReady = computed(() =>
           environmentFieldsValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
-          isSystemAssistantEnvironment(operation) ||
           environmentToolsValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
@@ -785,6 +797,38 @@ function isSystemAssistantEnvironment(
   operation: EditablePlanOperation,
 ): boolean {
   return fieldValue(operation, "systemAssistantRef").length > 0;
+}
+function environmentResourceScope(
+  operation: EditablePlanOperation,
+): RuntimeResourceScope | undefined {
+  if (isSystemAssistantEnvironment(operation)) {
+    if (
+      fieldValue(operation, "systemAssistantRef") !==
+      (platform.assistant?.ref ?? platform.bootstrap?.assistant.ref)
+    )
+      return;
+    return systemResourceScope.value;
+  }
+  return props.plan.projectRef
+    ? { kind: "PROJECT", projectRef: props.plan.projectRef }
+    : undefined;
+}
+function loadEnvironmentImagePage(
+  operation: EditablePlanOperation,
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize = 30,
+) {
+  const scope = environmentResourceScope(operation);
+  if (!scope || !resourceCatalogs.value) return Promise.resolve({ items: [] });
+  return resourceCatalogs.value.images.loadPage(
+    scope,
+    query,
+    cursor,
+    signal,
+    pageSize,
+  );
 }
 
 function agentProfile(operation: EditablePlanOperation): AgentProfileDraft {
@@ -1365,19 +1409,25 @@ function validationProblemLabel(problem: string): string {
                     updateOperationParameter(operation, key, value)
                 "
               />
-              <label
-                v-if="!isSystemAssistantEnvironment(operation)"
-                class="field"
-              >
+              <label class="field">
                 <span>{{ $t("runtime.exactImage") }}</span>
                 <AsyncEntityPicker
                   :model-value="fieldValue(operation, 'imageArtifactRef')"
                   :selected="selectedImage(operation)"
-                  :load-page="loadImagePage"
+                  :load-page="
+                    (query, cursor, signal, pageSize) =>
+                      loadEnvironmentImagePage(
+                        operation,
+                        query,
+                        cursor,
+                        signal,
+                        pageSize,
+                      )
+                  "
                   :trigger-label="$t('runtime.exactImage')"
                   :placeholder="$t('runtime.choosePromotedImage')"
                   :search-placeholder="$t('runtime.searchPromotedImage')"
-                  :disabled="!editable || !plan.projectRef"
+                  :disabled="!editable || !environmentResourceScope(operation)"
                   @update:model-value="setImageArtifact(operation, $event)"
                   @select="rememberSelectedImage"
                 />
@@ -1386,7 +1436,8 @@ function validationProblemLabel(problem: string): string {
                 :operation="operation"
                 :project-ref="plan.projectRef || ''"
                 :disabled="!editable"
-                :allow-secrets="!isSystemAssistantEnvironment(operation)"
+                :resource-scope="environmentResourceScope(operation)"
+                :secret-catalog="resourceCatalogs?.secrets"
                 @valid="environmentFieldsValidity[operation.value.ref] = $event"
                 @dirty="environmentFieldsTouched = true"
                 @parameter="
@@ -1395,10 +1446,11 @@ function validationProblemLabel(problem: string): string {
                 "
               />
               <AssistantEnvironmentToolsForm
-                v-if="!isSystemAssistantEnvironment(operation)"
                 :operation="operation"
                 :project-ref="plan.projectRef || ''"
                 :selected-image="selectedImage(operation)"
+                :resource-scope="environmentResourceScope(operation)"
+                :image-catalog="resourceCatalogs?.images"
                 :disabled="!editable"
                 @valid="environmentToolsValidity[operation.value.ref] = $event"
                 @dirty="environmentToolsTouched = true"

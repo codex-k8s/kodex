@@ -6,5 +6,5 @@ type PlatformSnapshotMode string
 
 const (
 	PlatformSnapshotModeBootstrap PlatformSnapshotMode = "BOOTSTRAP"
-	PlatformSnapshotModeDelta PlatformSnapshotMode = "DELTA"
+	PlatformSnapshotModeDelta     PlatformSnapshotMode = "DELTA"
 )

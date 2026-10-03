@@ -15,6 +15,7 @@ const sdk = vi.hoisted(() => ({
 }));
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   createRuntimeEnvironmentDraft: sdk.create,
+  createSystemRuntimeEnvironmentDraft: sdk.create,
   getRuntimeEnvironmentDraft: sdk.read,
   saveRuntimeEnvironmentDraft: sdk.save,
   validateRuntimeEnvironmentDraft: sdk.validate,
@@ -47,6 +48,8 @@ function draft(
   version = 1,
 ): RuntimeEnvironmentDraft {
   return {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref: "draft_synthetic",
     projectRef: "project_synthetic",
     version,
@@ -155,6 +158,8 @@ describe("серверные черновики окружений", () => {
       data: {
         draft: draft("PUBLISHED", 4),
         environment: {
+          scopeKind: "PROJECT",
+          organizationRef: "org_synthetic",
           ref: "environment_synthetic",
           projectRef: valid.projectRef,
           currentVersion: { ref: "version", digest: "target" },

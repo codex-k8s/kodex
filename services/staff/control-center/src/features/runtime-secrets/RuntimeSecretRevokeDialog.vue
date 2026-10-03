@@ -12,7 +12,7 @@ defineProps<{
   problem?: AppProblem;
   secret: RuntimeSecret;
 }>();
-const emit = defineEmits<{ close: []; confirm: [] }>();
+const emit = defineEmits<{ close: []; confirm: []; reauthenticate: [] }>();
 </script>
 
 <template>
@@ -29,6 +29,15 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
         :problem="problem"
         compact
       />
+      <button
+        v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"
+        class="button"
+        type="button"
+        :disabled="busy"
+        @click="emit('reauthenticate')"
+      >
+        {{ $t("runtimeSecrets.draft.reauthenticate") }}
+      </button>
       <div class="revoke-dialog__summary">
         <ShieldX :size="28" aria-hidden="true" />
         <div class="revoke-dialog__copy">

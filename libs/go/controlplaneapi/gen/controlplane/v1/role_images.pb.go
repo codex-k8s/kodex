@@ -335,6 +335,110 @@ func (x *RoleImagePlatform) GetVariant() string {
 	return ""
 }
 
+type ListOrganizationRoleImageRecipeRevisionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RecipeRef     string                 `protobuf:"bytes,1,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	Page          *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsRequest) Reset() {
+	*x = ListOrganizationRoleImageRecipeRevisionsRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrganizationRoleImageRecipeRevisionsRequest) ProtoMessage() {}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrganizationRoleImageRecipeRevisionsRequest.ProtoReflect.Descriptor instead.
+func (*ListOrganizationRoleImageRecipeRevisionsRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsRequest) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsRequest) GetPage() *PageRequest {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+type ListOrganizationRoleImageRecipeRevisionsResponse struct {
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	Revisions     []*RoleImageRecipeRevision `protobuf:"bytes,1,rep,name=revisions,proto3" json:"revisions,omitempty"`
+	Page          *PageInfo                  `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsResponse) Reset() {
+	*x = ListOrganizationRoleImageRecipeRevisionsResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrganizationRoleImageRecipeRevisionsResponse) ProtoMessage() {}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrganizationRoleImageRecipeRevisionsResponse.ProtoReflect.Descriptor instead.
+func (*ListOrganizationRoleImageRecipeRevisionsResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsResponse) GetRevisions() []*RoleImageRecipeRevision {
+	if x != nil {
+		return x.Revisions
+	}
+	return nil
+}
+
+func (x *ListOrganizationRoleImageRecipeRevisionsResponse) GetPage() *PageInfo {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
 type RoleImagePackage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Manager       string                 `protobuf:"bytes,1,opt,name=manager,proto3" json:"manager,omitempty"`
@@ -348,7 +452,7 @@ type RoleImagePackage struct {
 
 func (x *RoleImagePackage) Reset() {
 	*x = RoleImagePackage{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[1]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +464,7 @@ func (x *RoleImagePackage) String() string {
 func (*RoleImagePackage) ProtoMessage() {}
 
 func (x *RoleImagePackage) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[1]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +477,7 @@ func (x *RoleImagePackage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleImagePackage.ProtoReflect.Descriptor instead.
 func (*RoleImagePackage) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{1}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RoleImagePackage) GetManager() string {
@@ -423,7 +527,7 @@ type RoleImageTool struct {
 
 func (x *RoleImageTool) Reset() {
 	*x = RoleImageTool{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[2]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -435,7 +539,7 @@ func (x *RoleImageTool) String() string {
 func (*RoleImageTool) ProtoMessage() {}
 
 func (x *RoleImageTool) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[2]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -448,7 +552,7 @@ func (x *RoleImageTool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleImageTool.ProtoReflect.Descriptor instead.
 func (*RoleImageTool) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{2}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RoleImageTool) GetName() string {
@@ -500,7 +604,7 @@ type RoleEnvironment struct {
 
 func (x *RoleEnvironment) Reset() {
 	*x = RoleEnvironment{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[3]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -512,7 +616,7 @@ func (x *RoleEnvironment) String() string {
 func (*RoleEnvironment) ProtoMessage() {}
 
 func (x *RoleEnvironment) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[3]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -525,7 +629,7 @@ func (x *RoleEnvironment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleEnvironment.ProtoReflect.Descriptor instead.
 func (*RoleEnvironment) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{3}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RoleEnvironment) GetKey() string {
@@ -611,7 +715,7 @@ type RoleEnvironmentSelection struct {
 
 func (x *RoleEnvironmentSelection) Reset() {
 	*x = RoleEnvironmentSelection{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[4]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -623,7 +727,7 @@ func (x *RoleEnvironmentSelection) String() string {
 func (*RoleEnvironmentSelection) ProtoMessage() {}
 
 func (x *RoleEnvironmentSelection) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[4]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -636,7 +740,7 @@ func (x *RoleEnvironmentSelection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleEnvironmentSelection.ProtoReflect.Descriptor instead.
 func (*RoleEnvironmentSelection) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{4}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RoleEnvironmentSelection) GetEnvironmentKey() string {
@@ -682,7 +786,7 @@ type ListRoleEnvironmentsRequest struct {
 
 func (x *ListRoleEnvironmentsRequest) Reset() {
 	*x = ListRoleEnvironmentsRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[5]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -694,7 +798,7 @@ func (x *ListRoleEnvironmentsRequest) String() string {
 func (*ListRoleEnvironmentsRequest) ProtoMessage() {}
 
 func (x *ListRoleEnvironmentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[5]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -707,7 +811,7 @@ func (x *ListRoleEnvironmentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoleEnvironmentsRequest.ProtoReflect.Descriptor instead.
 func (*ListRoleEnvironmentsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{5}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{7}
 }
 
 type ListRoleEnvironmentsResponse struct {
@@ -719,7 +823,7 @@ type ListRoleEnvironmentsResponse struct {
 
 func (x *ListRoleEnvironmentsResponse) Reset() {
 	*x = ListRoleEnvironmentsResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[6]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -731,7 +835,7 @@ func (x *ListRoleEnvironmentsResponse) String() string {
 func (*ListRoleEnvironmentsResponse) ProtoMessage() {}
 
 func (x *ListRoleEnvironmentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[6]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -744,7 +848,7 @@ func (x *ListRoleEnvironmentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoleEnvironmentsResponse.ProtoReflect.Descriptor instead.
 func (*ListRoleEnvironmentsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{6}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListRoleEnvironmentsResponse) GetEnvironments() []*RoleEnvironment {
@@ -780,7 +884,7 @@ type RoleImageRecipeInput struct {
 
 func (x *RoleImageRecipeInput) Reset() {
 	*x = RoleImageRecipeInput{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[7]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -792,7 +896,7 @@ func (x *RoleImageRecipeInput) String() string {
 func (*RoleImageRecipeInput) ProtoMessage() {}
 
 func (x *RoleImageRecipeInput) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[7]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -805,7 +909,7 @@ func (x *RoleImageRecipeInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleImageRecipeInput.ProtoReflect.Descriptor instead.
 func (*RoleImageRecipeInput) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{7}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RoleImageRecipeInput) GetBaseImageReference() string {
@@ -956,13 +1060,15 @@ type RoleImageRecipe struct {
 	ProjectRef                  string                    `protobuf:"bytes,19,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
 	ManagedLineage              *RoleImageManagedLineage  `protobuf:"bytes,20,opt,name=managed_lineage,json=managedLineage,proto3" json:"managed_lineage,omitempty"`
 	SourceAvailable             bool                      `protobuf:"varint,21,opt,name=source_available,json=sourceAvailable,proto3" json:"source_available,omitempty"`
+	ScopeKind                   RuntimeResourceScopeKind  `protobuf:"varint,22,opt,name=scope_kind,json=scopeKind,proto3,enum=controlplane.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	OrganizationRef             string                    `protobuf:"bytes,23,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *RoleImageRecipe) Reset() {
 	*x = RoleImageRecipe{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[8]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -974,7 +1080,7 @@ func (x *RoleImageRecipe) String() string {
 func (*RoleImageRecipe) ProtoMessage() {}
 
 func (x *RoleImageRecipe) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[8]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -987,7 +1093,7 @@ func (x *RoleImageRecipe) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleImageRecipe.ProtoReflect.Descriptor instead.
 func (*RoleImageRecipe) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{8}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RoleImageRecipe) GetRef() string {
@@ -1130,6 +1236,20 @@ func (x *RoleImageRecipe) GetSourceAvailable() bool {
 	return false
 }
 
+func (x *RoleImageRecipe) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *RoleImageRecipe) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
+}
+
 type RoleImageManagedLineage struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	ConfigurationRef string                 `protobuf:"bytes,1,opt,name=configuration_ref,json=configurationRef,proto3" json:"configuration_ref,omitempty"`
@@ -1145,7 +1265,7 @@ type RoleImageManagedLineage struct {
 
 func (x *RoleImageManagedLineage) Reset() {
 	*x = RoleImageManagedLineage{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[9]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1157,7 +1277,7 @@ func (x *RoleImageManagedLineage) String() string {
 func (*RoleImageManagedLineage) ProtoMessage() {}
 
 func (x *RoleImageManagedLineage) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[9]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1170,7 +1290,7 @@ func (x *RoleImageManagedLineage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleImageManagedLineage.ProtoReflect.Descriptor instead.
 func (*RoleImageManagedLineage) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{9}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *RoleImageManagedLineage) GetConfigurationRef() string {
@@ -1223,37 +1343,40 @@ func (x *RoleImageManagedLineage) GetOrigin() string {
 }
 
 type ImageBuild struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	Ref                      string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Version                  uint64                 `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	RecipeRef                string                 `protobuf:"bytes,3,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
-	RecipeVersion            uint64                 `protobuf:"varint,4,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
-	RecipeGeneration         uint64                 `protobuf:"varint,5,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
-	SpecSha256               string                 `protobuf:"bytes,6,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
-	Attempt                  uint32                 `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	Fence                    uint64                 `protobuf:"varint,8,opt,name=fence,proto3" json:"fence,omitempty"`
-	Stage                    ImageBuildStage        `protobuf:"varint,9,opt,name=stage,proto3,enum=controlplane.v1.ImageBuildStage" json:"stage,omitempty"`
-	ProgressPercent          uint32                 `protobuf:"varint,10,opt,name=progress_percent,json=progressPercent,proto3" json:"progress_percent,omitempty"`
-	StagingReference         string                 `protobuf:"bytes,11,opt,name=staging_reference,json=stagingReference,proto3" json:"staging_reference,omitempty"`
-	ManifestDigest           string                 `protobuf:"bytes,12,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
-	ProvenanceSha256         string                 `protobuf:"bytes,13,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
-	ImmutableBuildSha256     string                 `protobuf:"bytes,14,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
-	SafeErrorCode            string                 `protobuf:"bytes,15,opt,name=safe_error_code,json=safeErrorCode,proto3" json:"safe_error_code,omitempty"`
-	DiagnosticCode           string                 `protobuf:"bytes,16,opt,name=diagnostic_code,json=diagnosticCode,proto3" json:"diagnostic_code,omitempty"`
-	DiagnosticSummary        string                 `protobuf:"bytes,17,opt,name=diagnostic_summary,json=diagnosticSummary,proto3" json:"diagnostic_summary,omitempty"`
-	LeaseExpiresAt           *timestamppb.Timestamp `protobuf:"bytes,18,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
-	CreatedAt                *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt                *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Dockerfile               string                 `protobuf:"bytes,21,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
-	ConfigurationRevisionRef string                 `protobuf:"bytes,22,opt,name=configuration_revision_ref,json=configurationRevisionRef,proto3" json:"configuration_revision_ref,omitempty"`
-	SourceAvailable          bool                   `protobuf:"varint,23,opt,name=source_available,json=sourceAvailable,proto3" json:"source_available,omitempty"`
+	state                    protoimpl.MessageState   `protogen:"open.v1"`
+	Ref                      string                   `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Version                  uint64                   `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	RecipeRef                string                   `protobuf:"bytes,3,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	RecipeVersion            uint64                   `protobuf:"varint,4,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
+	RecipeGeneration         uint64                   `protobuf:"varint,5,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	SpecSha256               string                   `protobuf:"bytes,6,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
+	Attempt                  uint32                   `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	Fence                    uint64                   `protobuf:"varint,8,opt,name=fence,proto3" json:"fence,omitempty"`
+	Stage                    ImageBuildStage          `protobuf:"varint,9,opt,name=stage,proto3,enum=controlplane.v1.ImageBuildStage" json:"stage,omitempty"`
+	ProgressPercent          uint32                   `protobuf:"varint,10,opt,name=progress_percent,json=progressPercent,proto3" json:"progress_percent,omitempty"`
+	StagingReference         string                   `protobuf:"bytes,11,opt,name=staging_reference,json=stagingReference,proto3" json:"staging_reference,omitempty"`
+	ManifestDigest           string                   `protobuf:"bytes,12,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	ProvenanceSha256         string                   `protobuf:"bytes,13,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
+	ImmutableBuildSha256     string                   `protobuf:"bytes,14,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
+	SafeErrorCode            string                   `protobuf:"bytes,15,opt,name=safe_error_code,json=safeErrorCode,proto3" json:"safe_error_code,omitempty"`
+	DiagnosticCode           string                   `protobuf:"bytes,16,opt,name=diagnostic_code,json=diagnosticCode,proto3" json:"diagnostic_code,omitempty"`
+	DiagnosticSummary        string                   `protobuf:"bytes,17,opt,name=diagnostic_summary,json=diagnosticSummary,proto3" json:"diagnostic_summary,omitempty"`
+	LeaseExpiresAt           *timestamppb.Timestamp   `protobuf:"bytes,18,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
+	CreatedAt                *timestamppb.Timestamp   `protobuf:"bytes,19,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt                *timestamppb.Timestamp   `protobuf:"bytes,20,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Dockerfile               string                   `protobuf:"bytes,21,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
+	ConfigurationRevisionRef string                   `protobuf:"bytes,22,opt,name=configuration_revision_ref,json=configurationRevisionRef,proto3" json:"configuration_revision_ref,omitempty"`
+	SourceAvailable          bool                     `protobuf:"varint,23,opt,name=source_available,json=sourceAvailable,proto3" json:"source_available,omitempty"`
+	ScopeKind                RuntimeResourceScopeKind `protobuf:"varint,24,opt,name=scope_kind,json=scopeKind,proto3,enum=controlplane.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	OrganizationRef          string                   `protobuf:"bytes,25,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	ProjectRef               string                   `protobuf:"bytes,26,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
 
 func (x *ImageBuild) Reset() {
 	*x = ImageBuild{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[10]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1265,7 +1388,7 @@ func (x *ImageBuild) String() string {
 func (*ImageBuild) ProtoMessage() {}
 
 func (x *ImageBuild) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[10]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1278,7 +1401,7 @@ func (x *ImageBuild) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageBuild.ProtoReflect.Descriptor instead.
 func (*ImageBuild) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{10}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ImageBuild) GetRef() string {
@@ -1442,55 +1565,79 @@ func (x *ImageBuild) GetSourceAvailable() bool {
 	return false
 }
 
+func (x *ImageBuild) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *ImageBuild) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
+}
+
+func (x *ImageBuild) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
 type ImageArtifact struct {
-	state                             protoimpl.MessageState `protogen:"open.v1"`
-	Ref                               string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Version                           uint64                 `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	RecipeRef                         string                 `protobuf:"bytes,3,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
-	RecipeVersion                     uint64                 `protobuf:"varint,4,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
-	RecipeGeneration                  uint64                 `protobuf:"varint,5,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
-	SpecSha256                        string                 `protobuf:"bytes,6,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
-	BuildRef                          string                 `protobuf:"bytes,7,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
-	BuildVersion                      uint64                 `protobuf:"varint,8,opt,name=build_version,json=buildVersion,proto3" json:"build_version,omitempty"`
-	BuildAttempt                      uint32                 `protobuf:"varint,9,opt,name=build_attempt,json=buildAttempt,proto3" json:"build_attempt,omitempty"`
-	StagingReference                  string                 `protobuf:"bytes,10,opt,name=staging_reference,json=stagingReference,proto3" json:"staging_reference,omitempty"`
-	ManifestDigest                    string                 `protobuf:"bytes,11,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
-	ImmutableBuildSha256              string                 `protobuf:"bytes,12,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
-	ProvenanceSha256                  string                 `protobuf:"bytes,13,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
-	BaseImageDigest                   string                 `protobuf:"bytes,14,opt,name=base_image_digest,json=baseImageDigest,proto3" json:"base_image_digest,omitempty"`
-	SourceSha256                      string                 `protobuf:"bytes,15,opt,name=source_sha256,json=sourceSha256,proto3" json:"source_sha256,omitempty"`
-	ContextSha256                     string                 `protobuf:"bytes,16,opt,name=context_sha256,json=contextSha256,proto3" json:"context_sha256,omitempty"`
-	BuilderSha256                     string                 `protobuf:"bytes,17,opt,name=builder_sha256,json=builderSha256,proto3" json:"builder_sha256,omitempty"`
-	FrontendSha256                    string                 `protobuf:"bytes,18,opt,name=frontend_sha256,json=frontendSha256,proto3" json:"frontend_sha256,omitempty"`
-	ToolchainSha256                   string                 `protobuf:"bytes,19,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
-	Platforms                         []*RoleImagePlatform   `protobuf:"bytes,20,rep,name=platforms,proto3" json:"platforms,omitempty"`
-	PolicyRevision                    uint64                 `protobuf:"varint,21,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
-	PolicySha256                      string                 `protobuf:"bytes,22,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
-	SbomSha256                        string                 `protobuf:"bytes,23,opt,name=sbom_sha256,json=sbomSha256,proto3" json:"sbom_sha256,omitempty"`
-	VulnerabilityEvidenceSha256       string                 `protobuf:"bytes,24,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
-	AdmissionVerdict                  ImageAdmissionVerdict  `protobuf:"varint,25,opt,name=admission_verdict,json=admissionVerdict,proto3,enum=controlplane.v1.ImageAdmissionVerdict" json:"admission_verdict,omitempty"`
-	SignatureIdentity                 string                 `protobuf:"bytes,26,opt,name=signature_identity,json=signatureIdentity,proto3" json:"signature_identity,omitempty"`
-	SignatureSha256                   string                 `protobuf:"bytes,27,opt,name=signature_sha256,json=signatureSha256,proto3" json:"signature_sha256,omitempty"`
-	AdmissionRevision                 uint64                 `protobuf:"varint,28,opt,name=admission_revision,json=admissionRevision,proto3" json:"admission_revision,omitempty"`
-	AdmissionReceiptSha256            string                 `protobuf:"bytes,29,opt,name=admission_receipt_sha256,json=admissionReceiptSha256,proto3" json:"admission_receipt_sha256,omitempty"`
-	AdmissionReceiptOciManifestDigest string                 `protobuf:"bytes,30,opt,name=admission_receipt_oci_manifest_digest,json=admissionReceiptOciManifestDigest,proto3" json:"admission_receipt_oci_manifest_digest,omitempty"`
-	PromotedReference                 string                 `protobuf:"bytes,31,opt,name=promoted_reference,json=promotedReference,proto3" json:"promoted_reference,omitempty"`
-	PromotionReadbackSha256           string                 `protobuf:"bytes,32,opt,name=promotion_readback_sha256,json=promotionReadbackSha256,proto3" json:"promotion_readback_sha256,omitempty"`
-	RoleRuntimeContractRevision       uint64                 `protobuf:"varint,33,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
-	RoleRuntimeContractSha256         string                 `protobuf:"bytes,34,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
-	PromotedAt                        *timestamppb.Timestamp `protobuf:"bytes,35,opt,name=promoted_at,json=promotedAt,proto3" json:"promoted_at,omitempty"`
-	CreatedAt                         *timestamppb.Timestamp `protobuf:"bytes,36,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt                         *timestamppb.Timestamp `protobuf:"bytes,37,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Tools                             []*RoleImageTool       `protobuf:"bytes,38,rep,name=tools,proto3" json:"tools,omitempty"`
-	PromotionState                    ImagePromotionState    `protobuf:"varint,39,opt,name=promotion_state,json=promotionState,proto3,enum=controlplane.v1.ImagePromotionState" json:"promotion_state,omitempty"`
-	PromotionRequested                bool                   `protobuf:"varint,40,opt,name=promotion_requested,json=promotionRequested,proto3" json:"promotion_requested,omitempty"`
+	state                             protoimpl.MessageState   `protogen:"open.v1"`
+	Ref                               string                   `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Version                           uint64                   `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	RecipeRef                         string                   `protobuf:"bytes,3,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	RecipeVersion                     uint64                   `protobuf:"varint,4,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
+	RecipeGeneration                  uint64                   `protobuf:"varint,5,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	SpecSha256                        string                   `protobuf:"bytes,6,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
+	BuildRef                          string                   `protobuf:"bytes,7,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
+	BuildVersion                      uint64                   `protobuf:"varint,8,opt,name=build_version,json=buildVersion,proto3" json:"build_version,omitempty"`
+	BuildAttempt                      uint32                   `protobuf:"varint,9,opt,name=build_attempt,json=buildAttempt,proto3" json:"build_attempt,omitempty"`
+	StagingReference                  string                   `protobuf:"bytes,10,opt,name=staging_reference,json=stagingReference,proto3" json:"staging_reference,omitempty"`
+	ManifestDigest                    string                   `protobuf:"bytes,11,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	ImmutableBuildSha256              string                   `protobuf:"bytes,12,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
+	ProvenanceSha256                  string                   `protobuf:"bytes,13,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
+	BaseImageDigest                   string                   `protobuf:"bytes,14,opt,name=base_image_digest,json=baseImageDigest,proto3" json:"base_image_digest,omitempty"`
+	SourceSha256                      string                   `protobuf:"bytes,15,opt,name=source_sha256,json=sourceSha256,proto3" json:"source_sha256,omitempty"`
+	ContextSha256                     string                   `protobuf:"bytes,16,opt,name=context_sha256,json=contextSha256,proto3" json:"context_sha256,omitempty"`
+	BuilderSha256                     string                   `protobuf:"bytes,17,opt,name=builder_sha256,json=builderSha256,proto3" json:"builder_sha256,omitempty"`
+	FrontendSha256                    string                   `protobuf:"bytes,18,opt,name=frontend_sha256,json=frontendSha256,proto3" json:"frontend_sha256,omitempty"`
+	ToolchainSha256                   string                   `protobuf:"bytes,19,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
+	Platforms                         []*RoleImagePlatform     `protobuf:"bytes,20,rep,name=platforms,proto3" json:"platforms,omitempty"`
+	PolicyRevision                    uint64                   `protobuf:"varint,21,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	PolicySha256                      string                   `protobuf:"bytes,22,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	SbomSha256                        string                   `protobuf:"bytes,23,opt,name=sbom_sha256,json=sbomSha256,proto3" json:"sbom_sha256,omitempty"`
+	VulnerabilityEvidenceSha256       string                   `protobuf:"bytes,24,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
+	AdmissionVerdict                  ImageAdmissionVerdict    `protobuf:"varint,25,opt,name=admission_verdict,json=admissionVerdict,proto3,enum=controlplane.v1.ImageAdmissionVerdict" json:"admission_verdict,omitempty"`
+	SignatureIdentity                 string                   `protobuf:"bytes,26,opt,name=signature_identity,json=signatureIdentity,proto3" json:"signature_identity,omitempty"`
+	SignatureSha256                   string                   `protobuf:"bytes,27,opt,name=signature_sha256,json=signatureSha256,proto3" json:"signature_sha256,omitempty"`
+	AdmissionRevision                 uint64                   `protobuf:"varint,28,opt,name=admission_revision,json=admissionRevision,proto3" json:"admission_revision,omitempty"`
+	AdmissionReceiptSha256            string                   `protobuf:"bytes,29,opt,name=admission_receipt_sha256,json=admissionReceiptSha256,proto3" json:"admission_receipt_sha256,omitempty"`
+	AdmissionReceiptOciManifestDigest string                   `protobuf:"bytes,30,opt,name=admission_receipt_oci_manifest_digest,json=admissionReceiptOciManifestDigest,proto3" json:"admission_receipt_oci_manifest_digest,omitempty"`
+	PromotedReference                 string                   `protobuf:"bytes,31,opt,name=promoted_reference,json=promotedReference,proto3" json:"promoted_reference,omitempty"`
+	PromotionReadbackSha256           string                   `protobuf:"bytes,32,opt,name=promotion_readback_sha256,json=promotionReadbackSha256,proto3" json:"promotion_readback_sha256,omitempty"`
+	RoleRuntimeContractRevision       uint64                   `protobuf:"varint,33,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
+	RoleRuntimeContractSha256         string                   `protobuf:"bytes,34,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
+	PromotedAt                        *timestamppb.Timestamp   `protobuf:"bytes,35,opt,name=promoted_at,json=promotedAt,proto3" json:"promoted_at,omitempty"`
+	CreatedAt                         *timestamppb.Timestamp   `protobuf:"bytes,36,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt                         *timestamppb.Timestamp   `protobuf:"bytes,37,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Tools                             []*RoleImageTool         `protobuf:"bytes,38,rep,name=tools,proto3" json:"tools,omitempty"`
+	PromotionState                    ImagePromotionState      `protobuf:"varint,39,opt,name=promotion_state,json=promotionState,proto3,enum=controlplane.v1.ImagePromotionState" json:"promotion_state,omitempty"`
+	PromotionRequested                bool                     `protobuf:"varint,40,opt,name=promotion_requested,json=promotionRequested,proto3" json:"promotion_requested,omitempty"`
+	ScopeKind                         RuntimeResourceScopeKind `protobuf:"varint,41,opt,name=scope_kind,json=scopeKind,proto3,enum=controlplane.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	OrganizationRef                   string                   `protobuf:"bytes,42,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	ProjectRef                        string                   `protobuf:"bytes,43,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
 	unknownFields                     protoimpl.UnknownFields
 	sizeCache                         protoimpl.SizeCache
 }
 
 func (x *ImageArtifact) Reset() {
 	*x = ImageArtifact{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[11]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1502,7 +1649,7 @@ func (x *ImageArtifact) String() string {
 func (*ImageArtifact) ProtoMessage() {}
 
 func (x *ImageArtifact) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[11]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1515,7 +1662,7 @@ func (x *ImageArtifact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageArtifact.ProtoReflect.Descriptor instead.
 func (*ImageArtifact) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{11}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ImageArtifact) GetRef() string {
@@ -1798,6 +1945,27 @@ func (x *ImageArtifact) GetPromotionRequested() bool {
 	return false
 }
 
+func (x *ImageArtifact) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *ImageArtifact) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
+}
+
+func (x *ImageArtifact) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
 type ListRoleImageRecipesRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	ProjectRef        string                 `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
@@ -1811,7 +1979,7 @@ type ListRoleImageRecipesRequest struct {
 
 func (x *ListRoleImageRecipesRequest) Reset() {
 	*x = ListRoleImageRecipesRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[12]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1823,7 +1991,7 @@ func (x *ListRoleImageRecipesRequest) String() string {
 func (*ListRoleImageRecipesRequest) ProtoMessage() {}
 
 func (x *ListRoleImageRecipesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[12]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1836,7 +2004,7 @@ func (x *ListRoleImageRecipesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoleImageRecipesRequest.ProtoReflect.Descriptor instead.
 func (*ListRoleImageRecipesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{12}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListRoleImageRecipesRequest) GetProjectRef() string {
@@ -1885,7 +2053,7 @@ type ListRoleImageRecipesResponse struct {
 
 func (x *ListRoleImageRecipesResponse) Reset() {
 	*x = ListRoleImageRecipesResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[13]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1897,7 +2065,7 @@ func (x *ListRoleImageRecipesResponse) String() string {
 func (*ListRoleImageRecipesResponse) ProtoMessage() {}
 
 func (x *ListRoleImageRecipesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[13]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1910,7 +2078,7 @@ func (x *ListRoleImageRecipesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoleImageRecipesResponse.ProtoReflect.Descriptor instead.
 func (*ListRoleImageRecipesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{13}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListRoleImageRecipesResponse) GetRecipes() []*RoleImageRecipe {
@@ -1943,7 +2111,7 @@ type GetRoleImageRecipeRequest struct {
 
 func (x *GetRoleImageRecipeRequest) Reset() {
 	*x = GetRoleImageRecipeRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[14]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1955,7 +2123,7 @@ func (x *GetRoleImageRecipeRequest) String() string {
 func (*GetRoleImageRecipeRequest) ProtoMessage() {}
 
 func (x *GetRoleImageRecipeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[14]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1968,7 +2136,7 @@ func (x *GetRoleImageRecipeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleImageRecipeRequest.ProtoReflect.Descriptor instead.
 func (*GetRoleImageRecipeRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{14}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetRoleImageRecipeRequest) GetRecipeRef() string {
@@ -1990,7 +2158,7 @@ type GetRoleImageRecipeResponse struct {
 
 func (x *GetRoleImageRecipeResponse) Reset() {
 	*x = GetRoleImageRecipeResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[15]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2002,7 +2170,7 @@ func (x *GetRoleImageRecipeResponse) String() string {
 func (*GetRoleImageRecipeResponse) ProtoMessage() {}
 
 func (x *GetRoleImageRecipeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[15]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2015,7 +2183,7 @@ func (x *GetRoleImageRecipeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleImageRecipeResponse.ProtoReflect.Descriptor instead.
 func (*GetRoleImageRecipeResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{15}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetRoleImageRecipeResponse) GetRecipe() *RoleImageRecipe {
@@ -2062,7 +2230,7 @@ type ManageRoleImageRecipeRequest struct {
 
 func (x *ManageRoleImageRecipeRequest) Reset() {
 	*x = ManageRoleImageRecipeRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[16]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2074,7 +2242,7 @@ func (x *ManageRoleImageRecipeRequest) String() string {
 func (*ManageRoleImageRecipeRequest) ProtoMessage() {}
 
 func (x *ManageRoleImageRecipeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[16]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2087,7 +2255,7 @@ func (x *ManageRoleImageRecipeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageRoleImageRecipeRequest.ProtoReflect.Descriptor instead.
 func (*ManageRoleImageRecipeRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{16}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ManageRoleImageRecipeRequest) GetMutation() *MutationContext {
@@ -2158,7 +2326,7 @@ type ManageRoleImageRecipeResponse struct {
 
 func (x *ManageRoleImageRecipeResponse) Reset() {
 	*x = ManageRoleImageRecipeResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[17]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2170,7 +2338,7 @@ func (x *ManageRoleImageRecipeResponse) String() string {
 func (*ManageRoleImageRecipeResponse) ProtoMessage() {}
 
 func (x *ManageRoleImageRecipeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[17]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2183,7 +2351,7 @@ func (x *ManageRoleImageRecipeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageRoleImageRecipeResponse.ProtoReflect.Descriptor instead.
 func (*ManageRoleImageRecipeResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{17}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ManageRoleImageRecipeResponse) GetRecipe() *RoleImageRecipe {
@@ -2214,39 +2382,538 @@ func (x *ManageRoleImageRecipeResponse) GetReused() bool {
 	return false
 }
 
+type ListOrganizationRoleImageRecipesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Page          *PageRequest           `protobuf:"bytes,1,opt,name=page,proto3" json:"page,omitempty"`
+	Query         string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrganizationRoleImageRecipesRequest) Reset() {
+	*x = ListOrganizationRoleImageRecipesRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrganizationRoleImageRecipesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrganizationRoleImageRecipesRequest) ProtoMessage() {}
+
+func (x *ListOrganizationRoleImageRecipesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrganizationRoleImageRecipesRequest.ProtoReflect.Descriptor instead.
+func (*ListOrganizationRoleImageRecipesRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ListOrganizationRoleImageRecipesRequest) GetPage() *PageRequest {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+func (x *ListOrganizationRoleImageRecipesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *ListOrganizationRoleImageRecipesRequest) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+type ListOrganizationRoleImageRecipesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Recipes       []*RoleImageRecipe     `protobuf:"bytes,1,rep,name=recipes,proto3" json:"recipes,omitempty"`
+	Page          *PageInfo              `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	Total         int64                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrganizationRoleImageRecipesResponse) Reset() {
+	*x = ListOrganizationRoleImageRecipesResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrganizationRoleImageRecipesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrganizationRoleImageRecipesResponse) ProtoMessage() {}
+
+func (x *ListOrganizationRoleImageRecipesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrganizationRoleImageRecipesResponse.ProtoReflect.Descriptor instead.
+func (*ListOrganizationRoleImageRecipesResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ListOrganizationRoleImageRecipesResponse) GetRecipes() []*RoleImageRecipe {
+	if x != nil {
+		return x.Recipes
+	}
+	return nil
+}
+
+func (x *ListOrganizationRoleImageRecipesResponse) GetPage() *PageInfo {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+func (x *ListOrganizationRoleImageRecipesResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+type GetOrganizationRoleImageRecipeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RecipeRef     string                 `protobuf:"bytes,1,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOrganizationRoleImageRecipeRequest) Reset() {
+	*x = GetOrganizationRoleImageRecipeRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationRoleImageRecipeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationRoleImageRecipeRequest) ProtoMessage() {}
+
+func (x *GetOrganizationRoleImageRecipeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationRoleImageRecipeRequest.ProtoReflect.Descriptor instead.
+func (*GetOrganizationRoleImageRecipeRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetOrganizationRoleImageRecipeRequest) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+type GetOrganizationRoleImageRecipeResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Recipe             *RoleImageRecipe       `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
+	Builds             []*ImageBuild          `protobuf:"bytes,2,rep,name=builds,proto3" json:"builds,omitempty"`
+	ActiveArtifact     *ImageArtifact         `protobuf:"bytes,3,opt,name=active_artifact,json=activeArtifact,proto3" json:"active_artifact,omitempty"`
+	PromotionCandidate *ImageArtifact         `protobuf:"bytes,4,opt,name=promotion_candidate,json=promotionCandidate,proto3" json:"promotion_candidate,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GetOrganizationRoleImageRecipeResponse) Reset() {
+	*x = GetOrganizationRoleImageRecipeResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationRoleImageRecipeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationRoleImageRecipeResponse) ProtoMessage() {}
+
+func (x *GetOrganizationRoleImageRecipeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationRoleImageRecipeResponse.ProtoReflect.Descriptor instead.
+func (*GetOrganizationRoleImageRecipeResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetOrganizationRoleImageRecipeResponse) GetRecipe() *RoleImageRecipe {
+	if x != nil {
+		return x.Recipe
+	}
+	return nil
+}
+
+func (x *GetOrganizationRoleImageRecipeResponse) GetBuilds() []*ImageBuild {
+	if x != nil {
+		return x.Builds
+	}
+	return nil
+}
+
+func (x *GetOrganizationRoleImageRecipeResponse) GetActiveArtifact() *ImageArtifact {
+	if x != nil {
+		return x.ActiveArtifact
+	}
+	return nil
+}
+
+func (x *GetOrganizationRoleImageRecipeResponse) GetPromotionCandidate() *ImageArtifact {
+	if x != nil {
+		return x.PromotionCandidate
+	}
+	return nil
+}
+
+type ManageOrganizationRoleImageRecipeRequest struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Mutation      *MutationContext          `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	Action        RoleImageRecipeAction     `protobuf:"varint,2,opt,name=action,proto3,enum=controlplane.v1.RoleImageRecipeAction" json:"action,omitempty"`
+	RecipeRef     string                    `protobuf:"bytes,3,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	Name          string                    `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	Environment   *RoleEnvironmentSelection `protobuf:"bytes,5,opt,name=environment,proto3" json:"environment,omitempty"`
+	BuildRef      string                    `protobuf:"bytes,6,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) Reset() {
+	*x = ManageOrganizationRoleImageRecipeRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManageOrganizationRoleImageRecipeRequest) ProtoMessage() {}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManageOrganizationRoleImageRecipeRequest.ProtoReflect.Descriptor instead.
+func (*ManageOrganizationRoleImageRecipeRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) GetMutation() *MutationContext {
+	if x != nil {
+		return x.Mutation
+	}
+	return nil
+}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) GetAction() RoleImageRecipeAction {
+	if x != nil {
+		return x.Action
+	}
+	return RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_UNSPECIFIED
+}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) GetEnvironment() *RoleEnvironmentSelection {
+	if x != nil {
+		return x.Environment
+	}
+	return nil
+}
+
+func (x *ManageOrganizationRoleImageRecipeRequest) GetBuildRef() string {
+	if x != nil {
+		return x.BuildRef
+	}
+	return ""
+}
+
+type ManageOrganizationRoleImageRecipeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Recipe        *RoleImageRecipe       `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
+	ImageBuild    *ImageBuild            `protobuf:"bytes,2,opt,name=image_build,json=imageBuild,proto3" json:"image_build,omitempty"`
+	ImageArtifact *ImageArtifact         `protobuf:"bytes,3,opt,name=image_artifact,json=imageArtifact,proto3" json:"image_artifact,omitempty"`
+	Reused        bool                   `protobuf:"varint,4,opt,name=reused,proto3" json:"reused,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ManageOrganizationRoleImageRecipeResponse) Reset() {
+	*x = ManageOrganizationRoleImageRecipeResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManageOrganizationRoleImageRecipeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManageOrganizationRoleImageRecipeResponse) ProtoMessage() {}
+
+func (x *ManageOrganizationRoleImageRecipeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManageOrganizationRoleImageRecipeResponse.ProtoReflect.Descriptor instead.
+func (*ManageOrganizationRoleImageRecipeResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ManageOrganizationRoleImageRecipeResponse) GetRecipe() *RoleImageRecipe {
+	if x != nil {
+		return x.Recipe
+	}
+	return nil
+}
+
+func (x *ManageOrganizationRoleImageRecipeResponse) GetImageBuild() *ImageBuild {
+	if x != nil {
+		return x.ImageBuild
+	}
+	return nil
+}
+
+func (x *ManageOrganizationRoleImageRecipeResponse) GetImageArtifact() *ImageArtifact {
+	if x != nil {
+		return x.ImageArtifact
+	}
+	return nil
+}
+
+func (x *ManageOrganizationRoleImageRecipeResponse) GetReused() bool {
+	if x != nil {
+		return x.Reused
+	}
+	return false
+}
+
+type RequestOrganizationRoleImagePromotionRequest struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	Mutation                 *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	RecipeRef                string                 `protobuf:"bytes,2,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	ImageArtifactRef         string                 `protobuf:"bytes,3,opt,name=image_artifact_ref,json=imageArtifactRef,proto3" json:"image_artifact_ref,omitempty"`
+	ExpectedProvenanceSha256 string                 `protobuf:"bytes,4,opt,name=expected_provenance_sha256,json=expectedProvenanceSha256,proto3" json:"expected_provenance_sha256,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *RequestOrganizationRoleImagePromotionRequest) Reset() {
+	*x = RequestOrganizationRoleImagePromotionRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestOrganizationRoleImagePromotionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestOrganizationRoleImagePromotionRequest) ProtoMessage() {}
+
+func (x *RequestOrganizationRoleImagePromotionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestOrganizationRoleImagePromotionRequest.ProtoReflect.Descriptor instead.
+func (*RequestOrganizationRoleImagePromotionRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *RequestOrganizationRoleImagePromotionRequest) GetMutation() *MutationContext {
+	if x != nil {
+		return x.Mutation
+	}
+	return nil
+}
+
+func (x *RequestOrganizationRoleImagePromotionRequest) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *RequestOrganizationRoleImagePromotionRequest) GetImageArtifactRef() string {
+	if x != nil {
+		return x.ImageArtifactRef
+	}
+	return ""
+}
+
+func (x *RequestOrganizationRoleImagePromotionRequest) GetExpectedProvenanceSha256() string {
+	if x != nil {
+		return x.ExpectedProvenanceSha256
+	}
+	return ""
+}
+
+type RequestOrganizationRoleImagePromotionResponse struct {
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	Receipt       *RoleImagePromotionReceipt `protobuf:"bytes,1,opt,name=receipt,proto3" json:"receipt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestOrganizationRoleImagePromotionResponse) Reset() {
+	*x = RequestOrganizationRoleImagePromotionResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestOrganizationRoleImagePromotionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestOrganizationRoleImagePromotionResponse) ProtoMessage() {}
+
+func (x *RequestOrganizationRoleImagePromotionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestOrganizationRoleImagePromotionResponse.ProtoReflect.Descriptor instead.
+func (*RequestOrganizationRoleImagePromotionResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *RequestOrganizationRoleImagePromotionResponse) GetReceipt() *RoleImagePromotionReceipt {
+	if x != nil {
+		return x.Receipt
+	}
+	return nil
+}
+
 type RoleImageBuildInput struct {
-	state                       protoimpl.MessageState `protogen:"open.v1"`
-	RecipeRef                   string                 `protobuf:"bytes,1,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
-	RecipeVersion               uint64                 `protobuf:"varint,2,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
-	RecipeGeneration            uint64                 `protobuf:"varint,3,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
-	SpecSha256                  string                 `protobuf:"bytes,4,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
-	BaseImageReference          string                 `protobuf:"bytes,5,opt,name=base_image_reference,json=baseImageReference,proto3" json:"base_image_reference,omitempty"`
-	BaseImageDigest             string                 `protobuf:"bytes,6,opt,name=base_image_digest,json=baseImageDigest,proto3" json:"base_image_digest,omitempty"`
-	SourceRef                   string                 `protobuf:"bytes,7,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
-	SourceRevision              string                 `protobuf:"bytes,8,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
-	SourceSha256                string                 `protobuf:"bytes,9,opt,name=source_sha256,json=sourceSha256,proto3" json:"source_sha256,omitempty"`
-	ContextRef                  string                 `protobuf:"bytes,10,opt,name=context_ref,json=contextRef,proto3" json:"context_ref,omitempty"`
-	ContextSha256               string                 `protobuf:"bytes,11,opt,name=context_sha256,json=contextSha256,proto3" json:"context_sha256,omitempty"`
-	BuilderSha256               string                 `protobuf:"bytes,12,opt,name=builder_sha256,json=builderSha256,proto3" json:"builder_sha256,omitempty"`
-	FrontendSha256              string                 `protobuf:"bytes,13,opt,name=frontend_sha256,json=frontendSha256,proto3" json:"frontend_sha256,omitempty"`
-	Platforms                   []*RoleImagePlatform   `protobuf:"bytes,14,rep,name=platforms,proto3" json:"platforms,omitempty"`
-	Packages                    []*RoleImagePackage    `protobuf:"bytes,15,rep,name=packages,proto3" json:"packages,omitempty"`
-	Tools                       []*RoleImageTool       `protobuf:"bytes,16,rep,name=tools,proto3" json:"tools,omitempty"`
-	InstallationBlock           string                 `protobuf:"bytes,17,opt,name=installation_block,json=installationBlock,proto3" json:"installation_block,omitempty"`
-	ToolchainSha256             string                 `protobuf:"bytes,18,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
-	PolicyRevision              uint64                 `protobuf:"varint,19,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
-	PolicySha256                string                 `protobuf:"bytes,20,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
-	ImmutableBuildSha256        string                 `protobuf:"bytes,21,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
-	RoleRuntimeContractRevision uint64                 `protobuf:"varint,22,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
-	RoleRuntimeContractSha256   string                 `protobuf:"bytes,23,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
-	Dockerfile                  string                 `protobuf:"bytes,24,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
+	state                       protoimpl.MessageState   `protogen:"open.v1"`
+	RecipeRef                   string                   `protobuf:"bytes,1,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	RecipeVersion               uint64                   `protobuf:"varint,2,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
+	RecipeGeneration            uint64                   `protobuf:"varint,3,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	SpecSha256                  string                   `protobuf:"bytes,4,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
+	BaseImageReference          string                   `protobuf:"bytes,5,opt,name=base_image_reference,json=baseImageReference,proto3" json:"base_image_reference,omitempty"`
+	BaseImageDigest             string                   `protobuf:"bytes,6,opt,name=base_image_digest,json=baseImageDigest,proto3" json:"base_image_digest,omitempty"`
+	SourceRef                   string                   `protobuf:"bytes,7,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	SourceRevision              string                   `protobuf:"bytes,8,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	SourceSha256                string                   `protobuf:"bytes,9,opt,name=source_sha256,json=sourceSha256,proto3" json:"source_sha256,omitempty"`
+	ContextRef                  string                   `protobuf:"bytes,10,opt,name=context_ref,json=contextRef,proto3" json:"context_ref,omitempty"`
+	ContextSha256               string                   `protobuf:"bytes,11,opt,name=context_sha256,json=contextSha256,proto3" json:"context_sha256,omitempty"`
+	BuilderSha256               string                   `protobuf:"bytes,12,opt,name=builder_sha256,json=builderSha256,proto3" json:"builder_sha256,omitempty"`
+	FrontendSha256              string                   `protobuf:"bytes,13,opt,name=frontend_sha256,json=frontendSha256,proto3" json:"frontend_sha256,omitempty"`
+	Platforms                   []*RoleImagePlatform     `protobuf:"bytes,14,rep,name=platforms,proto3" json:"platforms,omitempty"`
+	Packages                    []*RoleImagePackage      `protobuf:"bytes,15,rep,name=packages,proto3" json:"packages,omitempty"`
+	Tools                       []*RoleImageTool         `protobuf:"bytes,16,rep,name=tools,proto3" json:"tools,omitempty"`
+	InstallationBlock           string                   `protobuf:"bytes,17,opt,name=installation_block,json=installationBlock,proto3" json:"installation_block,omitempty"`
+	ToolchainSha256             string                   `protobuf:"bytes,18,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
+	PolicyRevision              uint64                   `protobuf:"varint,19,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	PolicySha256                string                   `protobuf:"bytes,20,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	ImmutableBuildSha256        string                   `protobuf:"bytes,21,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
+	RoleRuntimeContractRevision uint64                   `protobuf:"varint,22,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
+	RoleRuntimeContractSha256   string                   `protobuf:"bytes,23,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
+	Dockerfile                  string                   `protobuf:"bytes,24,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
+	ScopeKind                   RuntimeResourceScopeKind `protobuf:"varint,25,opt,name=scope_kind,json=scopeKind,proto3,enum=controlplane.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	OrganizationRef             string                   `protobuf:"bytes,26,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	ProjectRef                  string                   `protobuf:"bytes,27,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *RoleImageBuildInput) Reset() {
 	*x = RoleImageBuildInput{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[18]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2258,7 +2925,7 @@ func (x *RoleImageBuildInput) String() string {
 func (*RoleImageBuildInput) ProtoMessage() {}
 
 func (x *RoleImageBuildInput) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[18]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2271,7 +2938,7 @@ func (x *RoleImageBuildInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleImageBuildInput.ProtoReflect.Descriptor instead.
 func (*RoleImageBuildInput) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{18}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RoleImageBuildInput) GetRecipeRef() string {
@@ -2442,6 +3109,27 @@ func (x *RoleImageBuildInput) GetDockerfile() string {
 	return ""
 }
 
+func (x *RoleImageBuildInput) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *RoleImageBuildInput) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
+}
+
+func (x *RoleImageBuildInput) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
 type ClaimImageBuildRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
@@ -2451,7 +3139,7 @@ type ClaimImageBuildRequest struct {
 
 func (x *ClaimImageBuildRequest) Reset() {
 	*x = ClaimImageBuildRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[19]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2463,7 +3151,7 @@ func (x *ClaimImageBuildRequest) String() string {
 func (*ClaimImageBuildRequest) ProtoMessage() {}
 
 func (x *ClaimImageBuildRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[19]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2476,7 +3164,7 @@ func (x *ClaimImageBuildRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimImageBuildRequest.ProtoReflect.Descriptor instead.
 func (*ClaimImageBuildRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{19}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ClaimImageBuildRequest) GetIdempotencyKey() string {
@@ -2500,7 +3188,7 @@ type ClaimImageBuildResponse struct {
 
 func (x *ClaimImageBuildResponse) Reset() {
 	*x = ClaimImageBuildResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[20]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2512,7 +3200,7 @@ func (x *ClaimImageBuildResponse) String() string {
 func (*ClaimImageBuildResponse) ProtoMessage() {}
 
 func (x *ClaimImageBuildResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[20]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2525,7 +3213,7 @@ func (x *ClaimImageBuildResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimImageBuildResponse.ProtoReflect.Descriptor instead.
 func (*ClaimImageBuildResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{20}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ClaimImageBuildResponse) GetImageBuild() *ImageBuild {
@@ -2584,7 +3272,7 @@ type RenewImageBuildRequest struct {
 
 func (x *RenewImageBuildRequest) Reset() {
 	*x = RenewImageBuildRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[21]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2596,7 +3284,7 @@ func (x *RenewImageBuildRequest) String() string {
 func (*RenewImageBuildRequest) ProtoMessage() {}
 
 func (x *RenewImageBuildRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[21]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2609,7 +3297,7 @@ func (x *RenewImageBuildRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewImageBuildRequest.ProtoReflect.Descriptor instead.
 func (*RenewImageBuildRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{21}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RenewImageBuildRequest) GetIdempotencyKey() string {
@@ -2665,7 +3353,7 @@ type RenewImageBuildResponse struct {
 
 func (x *RenewImageBuildResponse) Reset() {
 	*x = RenewImageBuildResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[22]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2677,7 +3365,7 @@ func (x *RenewImageBuildResponse) String() string {
 func (*RenewImageBuildResponse) ProtoMessage() {}
 
 func (x *RenewImageBuildResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[22]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2690,7 +3378,7 @@ func (x *RenewImageBuildResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewImageBuildResponse.ProtoReflect.Descriptor instead.
 func (*RenewImageBuildResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{22}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RenewImageBuildResponse) GetImageBuild() *ImageBuild {
@@ -2730,7 +3418,7 @@ type ReportImageBuildProgressRequest struct {
 
 func (x *ReportImageBuildProgressRequest) Reset() {
 	*x = ReportImageBuildProgressRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[23]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2742,7 +3430,7 @@ func (x *ReportImageBuildProgressRequest) String() string {
 func (*ReportImageBuildProgressRequest) ProtoMessage() {}
 
 func (x *ReportImageBuildProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[23]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2755,7 +3443,7 @@ func (x *ReportImageBuildProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportImageBuildProgressRequest.ProtoReflect.Descriptor instead.
 func (*ReportImageBuildProgressRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{23}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ReportImageBuildProgressRequest) GetIdempotencyKey() string {
@@ -2823,7 +3511,7 @@ type ReportImageBuildProgressResponse struct {
 
 func (x *ReportImageBuildProgressResponse) Reset() {
 	*x = ReportImageBuildProgressResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[24]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2835,7 +3523,7 @@ func (x *ReportImageBuildProgressResponse) String() string {
 func (*ReportImageBuildProgressResponse) ProtoMessage() {}
 
 func (x *ReportImageBuildProgressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[24]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2848,7 +3536,7 @@ func (x *ReportImageBuildProgressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportImageBuildProgressResponse.ProtoReflect.Descriptor instead.
 func (*ReportImageBuildProgressResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{24}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ReportImageBuildProgressResponse) GetImageBuild() *ImageBuild {
@@ -2876,7 +3564,7 @@ type CompleteImageBuildRequest struct {
 
 func (x *CompleteImageBuildRequest) Reset() {
 	*x = CompleteImageBuildRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[25]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2888,7 +3576,7 @@ func (x *CompleteImageBuildRequest) String() string {
 func (*CompleteImageBuildRequest) ProtoMessage() {}
 
 func (x *CompleteImageBuildRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[25]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2901,7 +3589,7 @@ func (x *CompleteImageBuildRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteImageBuildRequest.ProtoReflect.Descriptor instead.
 func (*CompleteImageBuildRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{25}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CompleteImageBuildRequest) GetIdempotencyKey() string {
@@ -2984,7 +3672,7 @@ type CompleteImageBuildResponse struct {
 
 func (x *CompleteImageBuildResponse) Reset() {
 	*x = CompleteImageBuildResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[26]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2996,7 +3684,7 @@ func (x *CompleteImageBuildResponse) String() string {
 func (*CompleteImageBuildResponse) ProtoMessage() {}
 
 func (x *CompleteImageBuildResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[26]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3009,7 +3697,7 @@ func (x *CompleteImageBuildResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteImageBuildResponse.ProtoReflect.Descriptor instead.
 func (*CompleteImageBuildResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{26}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CompleteImageBuildResponse) GetImageBuild() *ImageBuild {
@@ -3043,7 +3731,7 @@ type FailImageBuildRequest struct {
 
 func (x *FailImageBuildRequest) Reset() {
 	*x = FailImageBuildRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[27]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3055,7 +3743,7 @@ func (x *FailImageBuildRequest) String() string {
 func (*FailImageBuildRequest) ProtoMessage() {}
 
 func (x *FailImageBuildRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[27]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3068,7 +3756,7 @@ func (x *FailImageBuildRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailImageBuildRequest.ProtoReflect.Descriptor instead.
 func (*FailImageBuildRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{27}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *FailImageBuildRequest) GetIdempotencyKey() string {
@@ -3143,7 +3831,7 @@ type FailImageBuildResponse struct {
 
 func (x *FailImageBuildResponse) Reset() {
 	*x = FailImageBuildResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[28]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3155,7 +3843,7 @@ func (x *FailImageBuildResponse) String() string {
 func (*FailImageBuildResponse) ProtoMessage() {}
 
 func (x *FailImageBuildResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[28]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3168,7 +3856,7 @@ func (x *FailImageBuildResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailImageBuildResponse.ProtoReflect.Descriptor instead.
 func (*FailImageBuildResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{28}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *FailImageBuildResponse) GetImageBuild() *ImageBuild {
@@ -3188,7 +3876,7 @@ type GetImageSupplyWorkAvailabilityRequest struct {
 
 func (x *GetImageSupplyWorkAvailabilityRequest) Reset() {
 	*x = GetImageSupplyWorkAvailabilityRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[29]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3200,7 +3888,7 @@ func (x *GetImageSupplyWorkAvailabilityRequest) String() string {
 func (*GetImageSupplyWorkAvailabilityRequest) ProtoMessage() {}
 
 func (x *GetImageSupplyWorkAvailabilityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[29]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3213,7 +3901,7 @@ func (x *GetImageSupplyWorkAvailabilityRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use GetImageSupplyWorkAvailabilityRequest.ProtoReflect.Descriptor instead.
 func (*GetImageSupplyWorkAvailabilityRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{29}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{39}
 }
 
 type GetImageSupplyWorkAvailabilityResponse struct {
@@ -3226,7 +3914,7 @@ type GetImageSupplyWorkAvailabilityResponse struct {
 
 func (x *GetImageSupplyWorkAvailabilityResponse) Reset() {
 	*x = GetImageSupplyWorkAvailabilityResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[30]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3238,7 +3926,7 @@ func (x *GetImageSupplyWorkAvailabilityResponse) String() string {
 func (*GetImageSupplyWorkAvailabilityResponse) ProtoMessage() {}
 
 func (x *GetImageSupplyWorkAvailabilityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[30]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3251,7 +3939,7 @@ func (x *GetImageSupplyWorkAvailabilityResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use GetImageSupplyWorkAvailabilityResponse.ProtoReflect.Descriptor instead.
 func (*GetImageSupplyWorkAvailabilityResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{30}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetImageSupplyWorkAvailabilityResponse) GetAdmissionAvailable() bool {
@@ -3277,7 +3965,7 @@ type ClaimImageAdmissionRequest struct {
 
 func (x *ClaimImageAdmissionRequest) Reset() {
 	*x = ClaimImageAdmissionRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[31]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3289,7 +3977,7 @@ func (x *ClaimImageAdmissionRequest) String() string {
 func (*ClaimImageAdmissionRequest) ProtoMessage() {}
 
 func (x *ClaimImageAdmissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[31]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3302,7 +3990,7 @@ func (x *ClaimImageAdmissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimImageAdmissionRequest.ProtoReflect.Descriptor instead.
 func (*ClaimImageAdmissionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{31}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ClaimImageAdmissionRequest) GetIdempotencyKey() string {
@@ -3325,7 +4013,7 @@ type ClaimImageAdmissionResponse struct {
 
 func (x *ClaimImageAdmissionResponse) Reset() {
 	*x = ClaimImageAdmissionResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[32]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3337,7 +4025,7 @@ func (x *ClaimImageAdmissionResponse) String() string {
 func (*ClaimImageAdmissionResponse) ProtoMessage() {}
 
 func (x *ClaimImageAdmissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[32]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3350,7 +4038,7 @@ func (x *ClaimImageAdmissionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimImageAdmissionResponse.ProtoReflect.Descriptor instead.
 func (*ClaimImageAdmissionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{32}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ClaimImageAdmissionResponse) GetImageArtifact() *ImageArtifact {
@@ -3413,7 +4101,7 @@ type RecordImageAdmissionRequest struct {
 
 func (x *RecordImageAdmissionRequest) Reset() {
 	*x = RecordImageAdmissionRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[33]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3425,7 +4113,7 @@ func (x *RecordImageAdmissionRequest) String() string {
 func (*RecordImageAdmissionRequest) ProtoMessage() {}
 
 func (x *RecordImageAdmissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[33]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3438,7 +4126,7 @@ func (x *RecordImageAdmissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordImageAdmissionRequest.ProtoReflect.Descriptor instead.
 func (*RecordImageAdmissionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{33}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *RecordImageAdmissionRequest) GetIdempotencyKey() string {
@@ -3569,7 +4257,7 @@ type RecordImageAdmissionResponse struct {
 
 func (x *RecordImageAdmissionResponse) Reset() {
 	*x = RecordImageAdmissionResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[34]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3581,7 +4269,7 @@ func (x *RecordImageAdmissionResponse) String() string {
 func (*RecordImageAdmissionResponse) ProtoMessage() {}
 
 func (x *RecordImageAdmissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[34]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3594,7 +4282,7 @@ func (x *RecordImageAdmissionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordImageAdmissionResponse.ProtoReflect.Descriptor instead.
 func (*RecordImageAdmissionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{34}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *RecordImageAdmissionResponse) GetImageArtifact() *ImageArtifact {
@@ -3613,7 +4301,7 @@ type ClaimImagePromotionRequest struct {
 
 func (x *ClaimImagePromotionRequest) Reset() {
 	*x = ClaimImagePromotionRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[35]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3625,7 +4313,7 @@ func (x *ClaimImagePromotionRequest) String() string {
 func (*ClaimImagePromotionRequest) ProtoMessage() {}
 
 func (x *ClaimImagePromotionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[35]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3638,7 +4326,7 @@ func (x *ClaimImagePromotionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimImagePromotionRequest.ProtoReflect.Descriptor instead.
 func (*ClaimImagePromotionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{35}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ClaimImagePromotionRequest) GetIdempotencyKey() string {
@@ -3661,7 +4349,7 @@ type ClaimImagePromotionResponse struct {
 
 func (x *ClaimImagePromotionResponse) Reset() {
 	*x = ClaimImagePromotionResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[36]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3673,7 +4361,7 @@ func (x *ClaimImagePromotionResponse) String() string {
 func (*ClaimImagePromotionResponse) ProtoMessage() {}
 
 func (x *ClaimImagePromotionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[36]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3686,7 +4374,7 @@ func (x *ClaimImagePromotionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimImagePromotionResponse.ProtoReflect.Descriptor instead.
 func (*ClaimImagePromotionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{36}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ClaimImagePromotionResponse) GetImageArtifact() *ImageArtifact {
@@ -3737,7 +4425,7 @@ type AuthorizeImagePromotionRequest struct {
 
 func (x *AuthorizeImagePromotionRequest) Reset() {
 	*x = AuthorizeImagePromotionRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[37]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3749,7 +4437,7 @@ func (x *AuthorizeImagePromotionRequest) String() string {
 func (*AuthorizeImagePromotionRequest) ProtoMessage() {}
 
 func (x *AuthorizeImagePromotionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[37]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3762,7 +4450,7 @@ func (x *AuthorizeImagePromotionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeImagePromotionRequest.ProtoReflect.Descriptor instead.
 func (*AuthorizeImagePromotionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{37}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *AuthorizeImagePromotionRequest) GetIdempotencyKey() string {
@@ -3811,7 +4499,7 @@ type AuthorizeImagePromotionResponse struct {
 
 func (x *AuthorizeImagePromotionResponse) Reset() {
 	*x = AuthorizeImagePromotionResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[38]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3823,7 +4511,7 @@ func (x *AuthorizeImagePromotionResponse) String() string {
 func (*AuthorizeImagePromotionResponse) ProtoMessage() {}
 
 func (x *AuthorizeImagePromotionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[38]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3836,7 +4524,7 @@ func (x *AuthorizeImagePromotionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeImagePromotionResponse.ProtoReflect.Descriptor instead.
 func (*AuthorizeImagePromotionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{38}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *AuthorizeImagePromotionResponse) GetImageArtifact() *ImageArtifact {
@@ -3875,7 +4563,7 @@ type CompleteImagePromotionRequest struct {
 
 func (x *CompleteImagePromotionRequest) Reset() {
 	*x = CompleteImagePromotionRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[39]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3887,7 +4575,7 @@ func (x *CompleteImagePromotionRequest) String() string {
 func (*CompleteImagePromotionRequest) ProtoMessage() {}
 
 func (x *CompleteImagePromotionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[39]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3900,7 +4588,7 @@ func (x *CompleteImagePromotionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteImagePromotionRequest.ProtoReflect.Descriptor instead.
 func (*CompleteImagePromotionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{39}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *CompleteImagePromotionRequest) GetIdempotencyKey() string {
@@ -3961,7 +4649,7 @@ type CompleteImagePromotionResponse struct {
 
 func (x *CompleteImagePromotionResponse) Reset() {
 	*x = CompleteImagePromotionResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[40]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3973,7 +4661,7 @@ func (x *CompleteImagePromotionResponse) String() string {
 func (*CompleteImagePromotionResponse) ProtoMessage() {}
 
 func (x *CompleteImagePromotionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[40]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3986,7 +4674,7 @@ func (x *CompleteImagePromotionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteImagePromotionResponse.ProtoReflect.Descriptor instead.
 func (*CompleteImagePromotionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{40}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CompleteImagePromotionResponse) GetImageArtifact() *ImageArtifact {
@@ -4004,7 +4692,14 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x11RoleImagePlatform\x12\x0e\n" +
 	"\x02os\x18\x01 \x01(\tR\x02os\x12\"\n" +
 	"\farchitecture\x18\x02 \x01(\tR\farchitecture\x12\x18\n" +
-	"\avariant\x18\x03 \x01(\tR\avariant\"\x91\x01\n" +
+	"\avariant\x18\x03 \x01(\tR\avariant\"\x82\x01\n" +
+	"/ListOrganizationRoleImageRecipeRevisionsRequest\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\x120\n" +
+	"\x04page\x18\x02 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\"\xa9\x01\n" +
+	"0ListOrganizationRoleImageRecipeRevisionsResponse\x12F\n" +
+	"\trevisions\x18\x01 \x03(\v2(.controlplane.v1.RoleImageRecipeRevisionR\trevisions\x12-\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\x91\x01\n" +
 	"\x10RoleImagePackage\x12\x18\n" +
 	"\amanager\x18\x01 \x01(\tR\amanager\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -4064,7 +4759,7 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\ttool_keys\x18\x11 \x03(\tR\btoolKeys\x12\x1e\n" +
 	"\n" +
 	"dockerfile\x18\x12 \x01(\tR\n" +
-	"dockerfile\"\xb3\a\n" +
+	"dockerfile\"\xa8\b\n" +
 	"\x0fRoleImageRecipe\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x04R\aversion\x12.\n" +
@@ -4092,7 +4787,10 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\vproject_ref\x18\x13 \x01(\tR\n" +
 	"projectRef\x12Q\n" +
 	"\x0fmanaged_lineage\x18\x14 \x01(\v2(.controlplane.v1.RoleImageManagedLineageR\x0emanagedLineage\x12)\n" +
-	"\x10source_available\x18\x15 \x01(\bR\x0fsourceAvailableJ\x04\b\x06\x10\aR\x05input\"\x84\x02\n" +
+	"\x10source_available\x18\x15 \x01(\bR\x0fsourceAvailable\x12H\n" +
+	"\n" +
+	"scope_kind\x18\x16 \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18\x17 \x01(\tR\x0forganizationRefJ\x04\b\x06\x10\aR\x05input\"\x84\x02\n" +
 	"\x17RoleImageManagedLineage\x12+\n" +
 	"\x11configuration_ref\x18\x01 \x01(\tR\x10configurationRef\x12!\n" +
 	"\frevision_ref\x18\x02 \x01(\tR\vrevisionRef\x12\x1a\n" +
@@ -4102,7 +4800,7 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\n" +
 	"source_ref\x18\x05 \x01(\tR\tsourceRef\x12'\n" +
 	"\x0fsource_revision\x18\x06 \x01(\tR\x0esourceRevision\x12\x16\n" +
-	"\x06origin\x18\a \x01(\tR\x06origin\"\xdd\a\n" +
+	"\x06origin\x18\a \x01(\tR\x06origin\"\xf3\b\n" +
 	"\n" +
 	"ImageBuild\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
@@ -4134,7 +4832,12 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"dockerfile\x18\x15 \x01(\tR\n" +
 	"dockerfile\x12<\n" +
 	"\x1aconfiguration_revision_ref\x18\x16 \x01(\tR\x18configurationRevisionRef\x12)\n" +
-	"\x10source_available\x18\x17 \x01(\bR\x0fsourceAvailable\"\x9b\x0f\n" +
+	"\x10source_available\x18\x17 \x01(\bR\x0fsourceAvailable\x12H\n" +
+	"\n" +
+	"scope_kind\x18\x18 \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18\x19 \x01(\tR\x0forganizationRef\x12\x1f\n" +
+	"\vproject_ref\x18\x1a \x01(\tR\n" +
+	"projectRef\"\xb1\x10\n" +
 	"\rImageArtifact\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x04R\aversion\x12\x1d\n" +
@@ -4182,7 +4885,12 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"updated_at\x18% \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x124\n" +
 	"\x05tools\x18& \x03(\v2\x1e.controlplane.v1.RoleImageToolR\x05tools\x12M\n" +
 	"\x0fpromotion_state\x18' \x01(\x0e2$.controlplane.v1.ImagePromotionStateR\x0epromotionState\x12/\n" +
-	"\x13promotion_requested\x18( \x01(\bR\x12promotionRequested\"\xcc\x01\n" +
+	"\x13promotion_requested\x18( \x01(\bR\x12promotionRequested\x12H\n" +
+	"\n" +
+	"scope_kind\x18) \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18* \x01(\tR\x0forganizationRef\x12\x1f\n" +
+	"\vproject_ref\x18+ \x01(\tR\n" +
+	"projectRef\"\xcc\x01\n" +
 	"\x1bListRoleImageRecipesRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x12.\n" +
@@ -4218,7 +4926,45 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\vimage_build\x18\x02 \x01(\v2\x1b.controlplane.v1.ImageBuildR\n" +
 	"imageBuild\x12E\n" +
 	"\x0eimage_artifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\rimageArtifact\x12\x16\n" +
-	"\x06reused\x18\x04 \x01(\bR\x06reused\"\xc7\b\n" +
+	"\x06reused\x18\x04 \x01(\bR\x06reused\"\x87\x01\n" +
+	"'ListOrganizationRoleImageRecipesRequest\x120\n" +
+	"\x04page\x18\x01 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12\x14\n" +
+	"\x05query\x18\x02 \x01(\tR\x05query\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\"\xab\x01\n" +
+	"(ListOrganizationRoleImageRecipesResponse\x12:\n" +
+	"\arecipes\x18\x01 \x03(\v2 .controlplane.v1.RoleImageRecipeR\arecipes\x12-\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x03R\x05total\"F\n" +
+	"%GetOrganizationRoleImageRecipeRequest\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\"\xb1\x02\n" +
+	"&GetOrganizationRoleImageRecipeResponse\x128\n" +
+	"\x06recipe\x18\x01 \x01(\v2 .controlplane.v1.RoleImageRecipeR\x06recipe\x123\n" +
+	"\x06builds\x18\x02 \x03(\v2\x1b.controlplane.v1.ImageBuildR\x06builds\x12G\n" +
+	"\x0factive_artifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x0eactiveArtifact\x12O\n" +
+	"\x13promotion_candidate\x18\x04 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x12promotionCandidate\"\xc5\x02\n" +
+	"(ManageOrganizationRoleImageRecipeRequest\x12<\n" +
+	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12>\n" +
+	"\x06action\x18\x02 \x01(\x0e2&.controlplane.v1.RoleImageRecipeActionR\x06action\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x03 \x01(\tR\trecipeRef\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12K\n" +
+	"\venvironment\x18\x05 \x01(\v2).controlplane.v1.RoleEnvironmentSelectionR\venvironment\x12\x1b\n" +
+	"\tbuild_ref\x18\x06 \x01(\tR\bbuildRef\"\x82\x02\n" +
+	")ManageOrganizationRoleImageRecipeResponse\x128\n" +
+	"\x06recipe\x18\x01 \x01(\v2 .controlplane.v1.RoleImageRecipeR\x06recipe\x12<\n" +
+	"\vimage_build\x18\x02 \x01(\v2\x1b.controlplane.v1.ImageBuildR\n" +
+	"imageBuild\x12E\n" +
+	"\x0eimage_artifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\rimageArtifact\x12\x16\n" +
+	"\x06reused\x18\x04 \x01(\bR\x06reused\"\xf7\x01\n" +
+	",RequestOrganizationRoleImagePromotionRequest\x12<\n" +
+	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x02 \x01(\tR\trecipeRef\x12,\n" +
+	"\x12image_artifact_ref\x18\x03 \x01(\tR\x10imageArtifactRef\x12<\n" +
+	"\x1aexpected_provenance_sha256\x18\x04 \x01(\tR\x18expectedProvenanceSha256\"u\n" +
+	"-RequestOrganizationRoleImagePromotionResponse\x12D\n" +
+	"\areceipt\x18\x01 \x01(\v2*.controlplane.v1.RoleImagePromotionReceiptR\areceipt\"\xdd\t\n" +
 	"\x13RoleImageBuildInput\x12\x1d\n" +
 	"\n" +
 	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\x12%\n" +
@@ -4250,7 +4996,12 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x1crole_runtime_contract_sha256\x18\x17 \x01(\tR\x19roleRuntimeContractSha256\x12\x1e\n" +
 	"\n" +
 	"dockerfile\x18\x18 \x01(\tR\n" +
-	"dockerfile\"A\n" +
+	"dockerfile\x12H\n" +
+	"\n" +
+	"scope_kind\x18\x19 \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18\x1a \x01(\tR\x0forganizationRef\x12\x1f\n" +
+	"\vproject_ref\x18\x1b \x01(\tR\n" +
+	"projectRef\"A\n" +
 	"\x16ClaimImageBuildRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\xc3\x02\n" +
 	"\x17ClaimImageBuildResponse\x12<\n" +
@@ -4420,12 +5171,17 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	" ROLE_IMAGE_RECIPE_ACTION_ARCHIVE\x10\x03\x12$\n" +
 	" ROLE_IMAGE_RECIPE_ACTION_RESTORE\x10\x04\x12*\n" +
 	"&ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD\x10\x05\x12)\n" +
-	"%ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD\x10\x062\xe8\r\n" +
+	"%ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD\x10\x062\x8e\x14\n" +
 	"\x10RoleImageService\x12s\n" +
 	"\x14ListRoleEnvironments\x12,.controlplane.v1.ListRoleEnvironmentsRequest\x1a-.controlplane.v1.ListRoleEnvironmentsResponse\x12s\n" +
 	"\x14ListRoleImageRecipes\x12,.controlplane.v1.ListRoleImageRecipesRequest\x1a-.controlplane.v1.ListRoleImageRecipesResponse\x12m\n" +
 	"\x12GetRoleImageRecipe\x12*.controlplane.v1.GetRoleImageRecipeRequest\x1a+.controlplane.v1.GetRoleImageRecipeResponse\x12v\n" +
-	"\x15ManageRoleImageRecipe\x12-.controlplane.v1.ManageRoleImageRecipeRequest\x1a..controlplane.v1.ManageRoleImageRecipeResponse\x12d\n" +
+	"\x15ManageRoleImageRecipe\x12-.controlplane.v1.ManageRoleImageRecipeRequest\x1a..controlplane.v1.ManageRoleImageRecipeResponse\x12\x97\x01\n" +
+	" ListOrganizationRoleImageRecipes\x128.controlplane.v1.ListOrganizationRoleImageRecipesRequest\x1a9.controlplane.v1.ListOrganizationRoleImageRecipesResponse\x12\x91\x01\n" +
+	"\x1eGetOrganizationRoleImageRecipe\x126.controlplane.v1.GetOrganizationRoleImageRecipeRequest\x1a7.controlplane.v1.GetOrganizationRoleImageRecipeResponse\x12\xaf\x01\n" +
+	"(ListOrganizationRoleImageRecipeRevisions\x12@.controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest\x1aA.controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse\x12\x9a\x01\n" +
+	"!ManageOrganizationRoleImageRecipe\x129.controlplane.v1.ManageOrganizationRoleImageRecipeRequest\x1a:.controlplane.v1.ManageOrganizationRoleImageRecipeResponse\x12\xa6\x01\n" +
+	"%RequestOrganizationRoleImagePromotion\x12=.controlplane.v1.RequestOrganizationRoleImagePromotionRequest\x1a>.controlplane.v1.RequestOrganizationRoleImagePromotionResponse\x12d\n" +
 	"\x0fClaimImageBuild\x12'.controlplane.v1.ClaimImageBuildRequest\x1a(.controlplane.v1.ClaimImageBuildResponse\x12d\n" +
 	"\x0fRenewImageBuild\x12'.controlplane.v1.RenewImageBuildRequest\x1a(.controlplane.v1.RenewImageBuildResponse\x12\x7f\n" +
 	"\x18ReportImageBuildProgress\x120.controlplane.v1.ReportImageBuildProgressRequest\x1a1.controlplane.v1.ReportImageBuildProgressResponse\x12m\n" +
@@ -4451,149 +5207,194 @@ func file_controlplane_v1_role_images_proto_rawDescGZIP() []byte {
 }
 
 var file_controlplane_v1_role_images_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_controlplane_v1_role_images_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
+var file_controlplane_v1_role_images_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_controlplane_v1_role_images_proto_goTypes = []any{
-	(ImageBuildStage)(0),                           // 0: controlplane.v1.ImageBuildStage
-	(ImageAdmissionVerdict)(0),                     // 1: controlplane.v1.ImageAdmissionVerdict
-	(ImagePromotionState)(0),                       // 2: controlplane.v1.ImagePromotionState
-	(RoleImageRecipeAction)(0),                     // 3: controlplane.v1.RoleImageRecipeAction
-	(*RoleImagePlatform)(nil),                      // 4: controlplane.v1.RoleImagePlatform
-	(*RoleImagePackage)(nil),                       // 5: controlplane.v1.RoleImagePackage
-	(*RoleImageTool)(nil),                          // 6: controlplane.v1.RoleImageTool
-	(*RoleEnvironment)(nil),                        // 7: controlplane.v1.RoleEnvironment
-	(*RoleEnvironmentSelection)(nil),               // 8: controlplane.v1.RoleEnvironmentSelection
-	(*ListRoleEnvironmentsRequest)(nil),            // 9: controlplane.v1.ListRoleEnvironmentsRequest
-	(*ListRoleEnvironmentsResponse)(nil),           // 10: controlplane.v1.ListRoleEnvironmentsResponse
-	(*RoleImageRecipeInput)(nil),                   // 11: controlplane.v1.RoleImageRecipeInput
-	(*RoleImageRecipe)(nil),                        // 12: controlplane.v1.RoleImageRecipe
-	(*RoleImageManagedLineage)(nil),                // 13: controlplane.v1.RoleImageManagedLineage
-	(*ImageBuild)(nil),                             // 14: controlplane.v1.ImageBuild
-	(*ImageArtifact)(nil),                          // 15: controlplane.v1.ImageArtifact
-	(*ListRoleImageRecipesRequest)(nil),            // 16: controlplane.v1.ListRoleImageRecipesRequest
-	(*ListRoleImageRecipesResponse)(nil),           // 17: controlplane.v1.ListRoleImageRecipesResponse
-	(*GetRoleImageRecipeRequest)(nil),              // 18: controlplane.v1.GetRoleImageRecipeRequest
-	(*GetRoleImageRecipeResponse)(nil),             // 19: controlplane.v1.GetRoleImageRecipeResponse
-	(*ManageRoleImageRecipeRequest)(nil),           // 20: controlplane.v1.ManageRoleImageRecipeRequest
-	(*ManageRoleImageRecipeResponse)(nil),          // 21: controlplane.v1.ManageRoleImageRecipeResponse
-	(*RoleImageBuildInput)(nil),                    // 22: controlplane.v1.RoleImageBuildInput
-	(*ClaimImageBuildRequest)(nil),                 // 23: controlplane.v1.ClaimImageBuildRequest
-	(*ClaimImageBuildResponse)(nil),                // 24: controlplane.v1.ClaimImageBuildResponse
-	(*RenewImageBuildRequest)(nil),                 // 25: controlplane.v1.RenewImageBuildRequest
-	(*RenewImageBuildResponse)(nil),                // 26: controlplane.v1.RenewImageBuildResponse
-	(*ReportImageBuildProgressRequest)(nil),        // 27: controlplane.v1.ReportImageBuildProgressRequest
-	(*ReportImageBuildProgressResponse)(nil),       // 28: controlplane.v1.ReportImageBuildProgressResponse
-	(*CompleteImageBuildRequest)(nil),              // 29: controlplane.v1.CompleteImageBuildRequest
-	(*CompleteImageBuildResponse)(nil),             // 30: controlplane.v1.CompleteImageBuildResponse
-	(*FailImageBuildRequest)(nil),                  // 31: controlplane.v1.FailImageBuildRequest
-	(*FailImageBuildResponse)(nil),                 // 32: controlplane.v1.FailImageBuildResponse
-	(*GetImageSupplyWorkAvailabilityRequest)(nil),  // 33: controlplane.v1.GetImageSupplyWorkAvailabilityRequest
-	(*GetImageSupplyWorkAvailabilityResponse)(nil), // 34: controlplane.v1.GetImageSupplyWorkAvailabilityResponse
-	(*ClaimImageAdmissionRequest)(nil),             // 35: controlplane.v1.ClaimImageAdmissionRequest
-	(*ClaimImageAdmissionResponse)(nil),            // 36: controlplane.v1.ClaimImageAdmissionResponse
-	(*RecordImageAdmissionRequest)(nil),            // 37: controlplane.v1.RecordImageAdmissionRequest
-	(*RecordImageAdmissionResponse)(nil),           // 38: controlplane.v1.RecordImageAdmissionResponse
-	(*ClaimImagePromotionRequest)(nil),             // 39: controlplane.v1.ClaimImagePromotionRequest
-	(*ClaimImagePromotionResponse)(nil),            // 40: controlplane.v1.ClaimImagePromotionResponse
-	(*AuthorizeImagePromotionRequest)(nil),         // 41: controlplane.v1.AuthorizeImagePromotionRequest
-	(*AuthorizeImagePromotionResponse)(nil),        // 42: controlplane.v1.AuthorizeImagePromotionResponse
-	(*CompleteImagePromotionRequest)(nil),          // 43: controlplane.v1.CompleteImagePromotionRequest
-	(*CompleteImagePromotionResponse)(nil),         // 44: controlplane.v1.CompleteImagePromotionResponse
-	(*timestamppb.Timestamp)(nil),                  // 45: google.protobuf.Timestamp
-	(*PageRequest)(nil),                            // 46: controlplane.v1.PageRequest
-	(*PageInfo)(nil),                               // 47: controlplane.v1.PageInfo
-	(*MutationContext)(nil),                        // 48: controlplane.v1.MutationContext
+	(ImageBuildStage)(0),                                     // 0: controlplane.v1.ImageBuildStage
+	(ImageAdmissionVerdict)(0),                               // 1: controlplane.v1.ImageAdmissionVerdict
+	(ImagePromotionState)(0),                                 // 2: controlplane.v1.ImagePromotionState
+	(RoleImageRecipeAction)(0),                               // 3: controlplane.v1.RoleImageRecipeAction
+	(*RoleImagePlatform)(nil),                                // 4: controlplane.v1.RoleImagePlatform
+	(*ListOrganizationRoleImageRecipeRevisionsRequest)(nil),  // 5: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest
+	(*ListOrganizationRoleImageRecipeRevisionsResponse)(nil), // 6: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse
+	(*RoleImagePackage)(nil),                                 // 7: controlplane.v1.RoleImagePackage
+	(*RoleImageTool)(nil),                                    // 8: controlplane.v1.RoleImageTool
+	(*RoleEnvironment)(nil),                                  // 9: controlplane.v1.RoleEnvironment
+	(*RoleEnvironmentSelection)(nil),                         // 10: controlplane.v1.RoleEnvironmentSelection
+	(*ListRoleEnvironmentsRequest)(nil),                      // 11: controlplane.v1.ListRoleEnvironmentsRequest
+	(*ListRoleEnvironmentsResponse)(nil),                     // 12: controlplane.v1.ListRoleEnvironmentsResponse
+	(*RoleImageRecipeInput)(nil),                             // 13: controlplane.v1.RoleImageRecipeInput
+	(*RoleImageRecipe)(nil),                                  // 14: controlplane.v1.RoleImageRecipe
+	(*RoleImageManagedLineage)(nil),                          // 15: controlplane.v1.RoleImageManagedLineage
+	(*ImageBuild)(nil),                                       // 16: controlplane.v1.ImageBuild
+	(*ImageArtifact)(nil),                                    // 17: controlplane.v1.ImageArtifact
+	(*ListRoleImageRecipesRequest)(nil),                      // 18: controlplane.v1.ListRoleImageRecipesRequest
+	(*ListRoleImageRecipesResponse)(nil),                     // 19: controlplane.v1.ListRoleImageRecipesResponse
+	(*GetRoleImageRecipeRequest)(nil),                        // 20: controlplane.v1.GetRoleImageRecipeRequest
+	(*GetRoleImageRecipeResponse)(nil),                       // 21: controlplane.v1.GetRoleImageRecipeResponse
+	(*ManageRoleImageRecipeRequest)(nil),                     // 22: controlplane.v1.ManageRoleImageRecipeRequest
+	(*ManageRoleImageRecipeResponse)(nil),                    // 23: controlplane.v1.ManageRoleImageRecipeResponse
+	(*ListOrganizationRoleImageRecipesRequest)(nil),          // 24: controlplane.v1.ListOrganizationRoleImageRecipesRequest
+	(*ListOrganizationRoleImageRecipesResponse)(nil),         // 25: controlplane.v1.ListOrganizationRoleImageRecipesResponse
+	(*GetOrganizationRoleImageRecipeRequest)(nil),            // 26: controlplane.v1.GetOrganizationRoleImageRecipeRequest
+	(*GetOrganizationRoleImageRecipeResponse)(nil),           // 27: controlplane.v1.GetOrganizationRoleImageRecipeResponse
+	(*ManageOrganizationRoleImageRecipeRequest)(nil),         // 28: controlplane.v1.ManageOrganizationRoleImageRecipeRequest
+	(*ManageOrganizationRoleImageRecipeResponse)(nil),        // 29: controlplane.v1.ManageOrganizationRoleImageRecipeResponse
+	(*RequestOrganizationRoleImagePromotionRequest)(nil),     // 30: controlplane.v1.RequestOrganizationRoleImagePromotionRequest
+	(*RequestOrganizationRoleImagePromotionResponse)(nil),    // 31: controlplane.v1.RequestOrganizationRoleImagePromotionResponse
+	(*RoleImageBuildInput)(nil),                              // 32: controlplane.v1.RoleImageBuildInput
+	(*ClaimImageBuildRequest)(nil),                           // 33: controlplane.v1.ClaimImageBuildRequest
+	(*ClaimImageBuildResponse)(nil),                          // 34: controlplane.v1.ClaimImageBuildResponse
+	(*RenewImageBuildRequest)(nil),                           // 35: controlplane.v1.RenewImageBuildRequest
+	(*RenewImageBuildResponse)(nil),                          // 36: controlplane.v1.RenewImageBuildResponse
+	(*ReportImageBuildProgressRequest)(nil),                  // 37: controlplane.v1.ReportImageBuildProgressRequest
+	(*ReportImageBuildProgressResponse)(nil),                 // 38: controlplane.v1.ReportImageBuildProgressResponse
+	(*CompleteImageBuildRequest)(nil),                        // 39: controlplane.v1.CompleteImageBuildRequest
+	(*CompleteImageBuildResponse)(nil),                       // 40: controlplane.v1.CompleteImageBuildResponse
+	(*FailImageBuildRequest)(nil),                            // 41: controlplane.v1.FailImageBuildRequest
+	(*FailImageBuildResponse)(nil),                           // 42: controlplane.v1.FailImageBuildResponse
+	(*GetImageSupplyWorkAvailabilityRequest)(nil),            // 43: controlplane.v1.GetImageSupplyWorkAvailabilityRequest
+	(*GetImageSupplyWorkAvailabilityResponse)(nil),           // 44: controlplane.v1.GetImageSupplyWorkAvailabilityResponse
+	(*ClaimImageAdmissionRequest)(nil),                       // 45: controlplane.v1.ClaimImageAdmissionRequest
+	(*ClaimImageAdmissionResponse)(nil),                      // 46: controlplane.v1.ClaimImageAdmissionResponse
+	(*RecordImageAdmissionRequest)(nil),                      // 47: controlplane.v1.RecordImageAdmissionRequest
+	(*RecordImageAdmissionResponse)(nil),                     // 48: controlplane.v1.RecordImageAdmissionResponse
+	(*ClaimImagePromotionRequest)(nil),                       // 49: controlplane.v1.ClaimImagePromotionRequest
+	(*ClaimImagePromotionResponse)(nil),                      // 50: controlplane.v1.ClaimImagePromotionResponse
+	(*AuthorizeImagePromotionRequest)(nil),                   // 51: controlplane.v1.AuthorizeImagePromotionRequest
+	(*AuthorizeImagePromotionResponse)(nil),                  // 52: controlplane.v1.AuthorizeImagePromotionResponse
+	(*CompleteImagePromotionRequest)(nil),                    // 53: controlplane.v1.CompleteImagePromotionRequest
+	(*CompleteImagePromotionResponse)(nil),                   // 54: controlplane.v1.CompleteImagePromotionResponse
+	(*PageRequest)(nil),                                      // 55: controlplane.v1.PageRequest
+	(*RoleImageRecipeRevision)(nil),                          // 56: controlplane.v1.RoleImageRecipeRevision
+	(*PageInfo)(nil),                                         // 57: controlplane.v1.PageInfo
+	(*timestamppb.Timestamp)(nil),                            // 58: google.protobuf.Timestamp
+	(RuntimeResourceScopeKind)(0),                            // 59: controlplane.v1.RuntimeResourceScopeKind
+	(*MutationContext)(nil),                                  // 60: controlplane.v1.MutationContext
+	(*RoleImagePromotionReceipt)(nil),                        // 61: controlplane.v1.RoleImagePromotionReceipt
 }
 var file_controlplane_v1_role_images_proto_depIdxs = []int32{
-	4,  // 0: controlplane.v1.RoleEnvironment.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	7,  // 1: controlplane.v1.ListRoleEnvironmentsResponse.environments:type_name -> controlplane.v1.RoleEnvironment
-	4,  // 2: controlplane.v1.RoleImageRecipeInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	5,  // 3: controlplane.v1.RoleImageRecipeInput.packages:type_name -> controlplane.v1.RoleImagePackage
-	6,  // 4: controlplane.v1.RoleImageRecipeInput.tools:type_name -> controlplane.v1.RoleImageTool
-	45, // 5: controlplane.v1.RoleImageRecipe.created_at:type_name -> google.protobuf.Timestamp
-	45, // 6: controlplane.v1.RoleImageRecipe.updated_at:type_name -> google.protobuf.Timestamp
-	8,  // 7: controlplane.v1.RoleImageRecipe.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
-	13, // 8: controlplane.v1.RoleImageRecipe.managed_lineage:type_name -> controlplane.v1.RoleImageManagedLineage
-	0,  // 9: controlplane.v1.ImageBuild.stage:type_name -> controlplane.v1.ImageBuildStage
-	45, // 10: controlplane.v1.ImageBuild.lease_expires_at:type_name -> google.protobuf.Timestamp
-	45, // 11: controlplane.v1.ImageBuild.created_at:type_name -> google.protobuf.Timestamp
-	45, // 12: controlplane.v1.ImageBuild.updated_at:type_name -> google.protobuf.Timestamp
-	4,  // 13: controlplane.v1.ImageArtifact.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	1,  // 14: controlplane.v1.ImageArtifact.admission_verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
-	45, // 15: controlplane.v1.ImageArtifact.promoted_at:type_name -> google.protobuf.Timestamp
-	45, // 16: controlplane.v1.ImageArtifact.created_at:type_name -> google.protobuf.Timestamp
-	45, // 17: controlplane.v1.ImageArtifact.updated_at:type_name -> google.protobuf.Timestamp
-	6,  // 18: controlplane.v1.ImageArtifact.tools:type_name -> controlplane.v1.RoleImageTool
-	2,  // 19: controlplane.v1.ImageArtifact.promotion_state:type_name -> controlplane.v1.ImagePromotionState
-	46, // 20: controlplane.v1.ListRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
-	12, // 21: controlplane.v1.ListRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
-	47, // 22: controlplane.v1.ListRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
-	12, // 23: controlplane.v1.GetRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
-	14, // 24: controlplane.v1.GetRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
-	15, // 25: controlplane.v1.GetRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
-	15, // 26: controlplane.v1.GetRoleImageRecipeResponse.promotion_candidate:type_name -> controlplane.v1.ImageArtifact
-	48, // 27: controlplane.v1.ManageRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
-	3,  // 28: controlplane.v1.ManageRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
-	8,  // 29: controlplane.v1.ManageRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
-	12, // 30: controlplane.v1.ManageRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
-	14, // 31: controlplane.v1.ManageRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	15, // 32: controlplane.v1.ManageRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	4,  // 33: controlplane.v1.RoleImageBuildInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	5,  // 34: controlplane.v1.RoleImageBuildInput.packages:type_name -> controlplane.v1.RoleImagePackage
-	6,  // 35: controlplane.v1.RoleImageBuildInput.tools:type_name -> controlplane.v1.RoleImageTool
-	14, // 36: controlplane.v1.ClaimImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	22, // 37: controlplane.v1.ClaimImageBuildResponse.input:type_name -> controlplane.v1.RoleImageBuildInput
-	45, // 38: controlplane.v1.ClaimImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	14, // 39: controlplane.v1.RenewImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	45, // 40: controlplane.v1.RenewImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 41: controlplane.v1.ReportImageBuildProgressRequest.stage:type_name -> controlplane.v1.ImageBuildStage
-	14, // 42: controlplane.v1.ReportImageBuildProgressResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	14, // 43: controlplane.v1.CompleteImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	15, // 44: controlplane.v1.CompleteImageBuildResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	14, // 45: controlplane.v1.FailImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	15, // 46: controlplane.v1.ClaimImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	45, // 47: controlplane.v1.ClaimImageAdmissionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 48: controlplane.v1.RecordImageAdmissionRequest.verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
-	15, // 49: controlplane.v1.RecordImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	15, // 50: controlplane.v1.ClaimImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	45, // 51: controlplane.v1.ClaimImagePromotionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
-	15, // 52: controlplane.v1.AuthorizeImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	45, // 53: controlplane.v1.AuthorizeImagePromotionResponse.authorization_expires_at:type_name -> google.protobuf.Timestamp
-	15, // 54: controlplane.v1.CompleteImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	9,  // 55: controlplane.v1.RoleImageService.ListRoleEnvironments:input_type -> controlplane.v1.ListRoleEnvironmentsRequest
-	16, // 56: controlplane.v1.RoleImageService.ListRoleImageRecipes:input_type -> controlplane.v1.ListRoleImageRecipesRequest
-	18, // 57: controlplane.v1.RoleImageService.GetRoleImageRecipe:input_type -> controlplane.v1.GetRoleImageRecipeRequest
-	20, // 58: controlplane.v1.RoleImageService.ManageRoleImageRecipe:input_type -> controlplane.v1.ManageRoleImageRecipeRequest
-	23, // 59: controlplane.v1.RoleImageService.ClaimImageBuild:input_type -> controlplane.v1.ClaimImageBuildRequest
-	25, // 60: controlplane.v1.RoleImageService.RenewImageBuild:input_type -> controlplane.v1.RenewImageBuildRequest
-	27, // 61: controlplane.v1.RoleImageService.ReportImageBuildProgress:input_type -> controlplane.v1.ReportImageBuildProgressRequest
-	29, // 62: controlplane.v1.RoleImageService.CompleteImageBuild:input_type -> controlplane.v1.CompleteImageBuildRequest
-	31, // 63: controlplane.v1.RoleImageService.FailImageBuild:input_type -> controlplane.v1.FailImageBuildRequest
-	33, // 64: controlplane.v1.RoleImageService.GetImageSupplyWorkAvailability:input_type -> controlplane.v1.GetImageSupplyWorkAvailabilityRequest
-	35, // 65: controlplane.v1.RoleImageService.ClaimImageAdmission:input_type -> controlplane.v1.ClaimImageAdmissionRequest
-	37, // 66: controlplane.v1.RoleImageService.RecordImageAdmission:input_type -> controlplane.v1.RecordImageAdmissionRequest
-	39, // 67: controlplane.v1.RoleImageService.ClaimImagePromotion:input_type -> controlplane.v1.ClaimImagePromotionRequest
-	41, // 68: controlplane.v1.RoleImageService.AuthorizeImagePromotion:input_type -> controlplane.v1.AuthorizeImagePromotionRequest
-	43, // 69: controlplane.v1.RoleImageService.CompleteImagePromotion:input_type -> controlplane.v1.CompleteImagePromotionRequest
-	10, // 70: controlplane.v1.RoleImageService.ListRoleEnvironments:output_type -> controlplane.v1.ListRoleEnvironmentsResponse
-	17, // 71: controlplane.v1.RoleImageService.ListRoleImageRecipes:output_type -> controlplane.v1.ListRoleImageRecipesResponse
-	19, // 72: controlplane.v1.RoleImageService.GetRoleImageRecipe:output_type -> controlplane.v1.GetRoleImageRecipeResponse
-	21, // 73: controlplane.v1.RoleImageService.ManageRoleImageRecipe:output_type -> controlplane.v1.ManageRoleImageRecipeResponse
-	24, // 74: controlplane.v1.RoleImageService.ClaimImageBuild:output_type -> controlplane.v1.ClaimImageBuildResponse
-	26, // 75: controlplane.v1.RoleImageService.RenewImageBuild:output_type -> controlplane.v1.RenewImageBuildResponse
-	28, // 76: controlplane.v1.RoleImageService.ReportImageBuildProgress:output_type -> controlplane.v1.ReportImageBuildProgressResponse
-	30, // 77: controlplane.v1.RoleImageService.CompleteImageBuild:output_type -> controlplane.v1.CompleteImageBuildResponse
-	32, // 78: controlplane.v1.RoleImageService.FailImageBuild:output_type -> controlplane.v1.FailImageBuildResponse
-	34, // 79: controlplane.v1.RoleImageService.GetImageSupplyWorkAvailability:output_type -> controlplane.v1.GetImageSupplyWorkAvailabilityResponse
-	36, // 80: controlplane.v1.RoleImageService.ClaimImageAdmission:output_type -> controlplane.v1.ClaimImageAdmissionResponse
-	38, // 81: controlplane.v1.RoleImageService.RecordImageAdmission:output_type -> controlplane.v1.RecordImageAdmissionResponse
-	40, // 82: controlplane.v1.RoleImageService.ClaimImagePromotion:output_type -> controlplane.v1.ClaimImagePromotionResponse
-	42, // 83: controlplane.v1.RoleImageService.AuthorizeImagePromotion:output_type -> controlplane.v1.AuthorizeImagePromotionResponse
-	44, // 84: controlplane.v1.RoleImageService.CompleteImagePromotion:output_type -> controlplane.v1.CompleteImagePromotionResponse
-	70, // [70:85] is the sub-list for method output_type
-	55, // [55:70] is the sub-list for method input_type
-	55, // [55:55] is the sub-list for extension type_name
-	55, // [55:55] is the sub-list for extension extendee
-	0,  // [0:55] is the sub-list for field type_name
+	55, // 0: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	56, // 1: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse.revisions:type_name -> controlplane.v1.RoleImageRecipeRevision
+	57, // 2: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	4,  // 3: controlplane.v1.RoleEnvironment.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	9,  // 4: controlplane.v1.ListRoleEnvironmentsResponse.environments:type_name -> controlplane.v1.RoleEnvironment
+	4,  // 5: controlplane.v1.RoleImageRecipeInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	7,  // 6: controlplane.v1.RoleImageRecipeInput.packages:type_name -> controlplane.v1.RoleImagePackage
+	8,  // 7: controlplane.v1.RoleImageRecipeInput.tools:type_name -> controlplane.v1.RoleImageTool
+	58, // 8: controlplane.v1.RoleImageRecipe.created_at:type_name -> google.protobuf.Timestamp
+	58, // 9: controlplane.v1.RoleImageRecipe.updated_at:type_name -> google.protobuf.Timestamp
+	10, // 10: controlplane.v1.RoleImageRecipe.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
+	15, // 11: controlplane.v1.RoleImageRecipe.managed_lineage:type_name -> controlplane.v1.RoleImageManagedLineage
+	59, // 12: controlplane.v1.RoleImageRecipe.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	0,  // 13: controlplane.v1.ImageBuild.stage:type_name -> controlplane.v1.ImageBuildStage
+	58, // 14: controlplane.v1.ImageBuild.lease_expires_at:type_name -> google.protobuf.Timestamp
+	58, // 15: controlplane.v1.ImageBuild.created_at:type_name -> google.protobuf.Timestamp
+	58, // 16: controlplane.v1.ImageBuild.updated_at:type_name -> google.protobuf.Timestamp
+	59, // 17: controlplane.v1.ImageBuild.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	4,  // 18: controlplane.v1.ImageArtifact.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	1,  // 19: controlplane.v1.ImageArtifact.admission_verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
+	58, // 20: controlplane.v1.ImageArtifact.promoted_at:type_name -> google.protobuf.Timestamp
+	58, // 21: controlplane.v1.ImageArtifact.created_at:type_name -> google.protobuf.Timestamp
+	58, // 22: controlplane.v1.ImageArtifact.updated_at:type_name -> google.protobuf.Timestamp
+	8,  // 23: controlplane.v1.ImageArtifact.tools:type_name -> controlplane.v1.RoleImageTool
+	2,  // 24: controlplane.v1.ImageArtifact.promotion_state:type_name -> controlplane.v1.ImagePromotionState
+	59, // 25: controlplane.v1.ImageArtifact.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	55, // 26: controlplane.v1.ListRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
+	14, // 27: controlplane.v1.ListRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
+	57, // 28: controlplane.v1.ListRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
+	14, // 29: controlplane.v1.GetRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	16, // 30: controlplane.v1.GetRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
+	17, // 31: controlplane.v1.GetRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
+	17, // 32: controlplane.v1.GetRoleImageRecipeResponse.promotion_candidate:type_name -> controlplane.v1.ImageArtifact
+	60, // 33: controlplane.v1.ManageRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
+	3,  // 34: controlplane.v1.ManageRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
+	10, // 35: controlplane.v1.ManageRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
+	14, // 36: controlplane.v1.ManageRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	16, // 37: controlplane.v1.ManageRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	17, // 38: controlplane.v1.ManageRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	55, // 39: controlplane.v1.ListOrganizationRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
+	14, // 40: controlplane.v1.ListOrganizationRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
+	57, // 41: controlplane.v1.ListOrganizationRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
+	14, // 42: controlplane.v1.GetOrganizationRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	16, // 43: controlplane.v1.GetOrganizationRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
+	17, // 44: controlplane.v1.GetOrganizationRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
+	17, // 45: controlplane.v1.GetOrganizationRoleImageRecipeResponse.promotion_candidate:type_name -> controlplane.v1.ImageArtifact
+	60, // 46: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
+	3,  // 47: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
+	10, // 48: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
+	14, // 49: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	16, // 50: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	17, // 51: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	60, // 52: controlplane.v1.RequestOrganizationRoleImagePromotionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	61, // 53: controlplane.v1.RequestOrganizationRoleImagePromotionResponse.receipt:type_name -> controlplane.v1.RoleImagePromotionReceipt
+	4,  // 54: controlplane.v1.RoleImageBuildInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	7,  // 55: controlplane.v1.RoleImageBuildInput.packages:type_name -> controlplane.v1.RoleImagePackage
+	8,  // 56: controlplane.v1.RoleImageBuildInput.tools:type_name -> controlplane.v1.RoleImageTool
+	59, // 57: controlplane.v1.RoleImageBuildInput.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	16, // 58: controlplane.v1.ClaimImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	32, // 59: controlplane.v1.ClaimImageBuildResponse.input:type_name -> controlplane.v1.RoleImageBuildInput
+	58, // 60: controlplane.v1.ClaimImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	16, // 61: controlplane.v1.RenewImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	58, // 62: controlplane.v1.RenewImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 63: controlplane.v1.ReportImageBuildProgressRequest.stage:type_name -> controlplane.v1.ImageBuildStage
+	16, // 64: controlplane.v1.ReportImageBuildProgressResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	16, // 65: controlplane.v1.CompleteImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	17, // 66: controlplane.v1.CompleteImageBuildResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	16, // 67: controlplane.v1.FailImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	17, // 68: controlplane.v1.ClaimImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	58, // 69: controlplane.v1.ClaimImageAdmissionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
+	1,  // 70: controlplane.v1.RecordImageAdmissionRequest.verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
+	17, // 71: controlplane.v1.RecordImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	17, // 72: controlplane.v1.ClaimImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	58, // 73: controlplane.v1.ClaimImagePromotionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
+	17, // 74: controlplane.v1.AuthorizeImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	58, // 75: controlplane.v1.AuthorizeImagePromotionResponse.authorization_expires_at:type_name -> google.protobuf.Timestamp
+	17, // 76: controlplane.v1.CompleteImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	11, // 77: controlplane.v1.RoleImageService.ListRoleEnvironments:input_type -> controlplane.v1.ListRoleEnvironmentsRequest
+	18, // 78: controlplane.v1.RoleImageService.ListRoleImageRecipes:input_type -> controlplane.v1.ListRoleImageRecipesRequest
+	20, // 79: controlplane.v1.RoleImageService.GetRoleImageRecipe:input_type -> controlplane.v1.GetRoleImageRecipeRequest
+	22, // 80: controlplane.v1.RoleImageService.ManageRoleImageRecipe:input_type -> controlplane.v1.ManageRoleImageRecipeRequest
+	24, // 81: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipes:input_type -> controlplane.v1.ListOrganizationRoleImageRecipesRequest
+	26, // 82: controlplane.v1.RoleImageService.GetOrganizationRoleImageRecipe:input_type -> controlplane.v1.GetOrganizationRoleImageRecipeRequest
+	5,  // 83: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipeRevisions:input_type -> controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest
+	28, // 84: controlplane.v1.RoleImageService.ManageOrganizationRoleImageRecipe:input_type -> controlplane.v1.ManageOrganizationRoleImageRecipeRequest
+	30, // 85: controlplane.v1.RoleImageService.RequestOrganizationRoleImagePromotion:input_type -> controlplane.v1.RequestOrganizationRoleImagePromotionRequest
+	33, // 86: controlplane.v1.RoleImageService.ClaimImageBuild:input_type -> controlplane.v1.ClaimImageBuildRequest
+	35, // 87: controlplane.v1.RoleImageService.RenewImageBuild:input_type -> controlplane.v1.RenewImageBuildRequest
+	37, // 88: controlplane.v1.RoleImageService.ReportImageBuildProgress:input_type -> controlplane.v1.ReportImageBuildProgressRequest
+	39, // 89: controlplane.v1.RoleImageService.CompleteImageBuild:input_type -> controlplane.v1.CompleteImageBuildRequest
+	41, // 90: controlplane.v1.RoleImageService.FailImageBuild:input_type -> controlplane.v1.FailImageBuildRequest
+	43, // 91: controlplane.v1.RoleImageService.GetImageSupplyWorkAvailability:input_type -> controlplane.v1.GetImageSupplyWorkAvailabilityRequest
+	45, // 92: controlplane.v1.RoleImageService.ClaimImageAdmission:input_type -> controlplane.v1.ClaimImageAdmissionRequest
+	47, // 93: controlplane.v1.RoleImageService.RecordImageAdmission:input_type -> controlplane.v1.RecordImageAdmissionRequest
+	49, // 94: controlplane.v1.RoleImageService.ClaimImagePromotion:input_type -> controlplane.v1.ClaimImagePromotionRequest
+	51, // 95: controlplane.v1.RoleImageService.AuthorizeImagePromotion:input_type -> controlplane.v1.AuthorizeImagePromotionRequest
+	53, // 96: controlplane.v1.RoleImageService.CompleteImagePromotion:input_type -> controlplane.v1.CompleteImagePromotionRequest
+	12, // 97: controlplane.v1.RoleImageService.ListRoleEnvironments:output_type -> controlplane.v1.ListRoleEnvironmentsResponse
+	19, // 98: controlplane.v1.RoleImageService.ListRoleImageRecipes:output_type -> controlplane.v1.ListRoleImageRecipesResponse
+	21, // 99: controlplane.v1.RoleImageService.GetRoleImageRecipe:output_type -> controlplane.v1.GetRoleImageRecipeResponse
+	23, // 100: controlplane.v1.RoleImageService.ManageRoleImageRecipe:output_type -> controlplane.v1.ManageRoleImageRecipeResponse
+	25, // 101: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipes:output_type -> controlplane.v1.ListOrganizationRoleImageRecipesResponse
+	27, // 102: controlplane.v1.RoleImageService.GetOrganizationRoleImageRecipe:output_type -> controlplane.v1.GetOrganizationRoleImageRecipeResponse
+	6,  // 103: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipeRevisions:output_type -> controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse
+	29, // 104: controlplane.v1.RoleImageService.ManageOrganizationRoleImageRecipe:output_type -> controlplane.v1.ManageOrganizationRoleImageRecipeResponse
+	31, // 105: controlplane.v1.RoleImageService.RequestOrganizationRoleImagePromotion:output_type -> controlplane.v1.RequestOrganizationRoleImagePromotionResponse
+	34, // 106: controlplane.v1.RoleImageService.ClaimImageBuild:output_type -> controlplane.v1.ClaimImageBuildResponse
+	36, // 107: controlplane.v1.RoleImageService.RenewImageBuild:output_type -> controlplane.v1.RenewImageBuildResponse
+	38, // 108: controlplane.v1.RoleImageService.ReportImageBuildProgress:output_type -> controlplane.v1.ReportImageBuildProgressResponse
+	40, // 109: controlplane.v1.RoleImageService.CompleteImageBuild:output_type -> controlplane.v1.CompleteImageBuildResponse
+	42, // 110: controlplane.v1.RoleImageService.FailImageBuild:output_type -> controlplane.v1.FailImageBuildResponse
+	44, // 111: controlplane.v1.RoleImageService.GetImageSupplyWorkAvailability:output_type -> controlplane.v1.GetImageSupplyWorkAvailabilityResponse
+	46, // 112: controlplane.v1.RoleImageService.ClaimImageAdmission:output_type -> controlplane.v1.ClaimImageAdmissionResponse
+	48, // 113: controlplane.v1.RoleImageService.RecordImageAdmission:output_type -> controlplane.v1.RecordImageAdmissionResponse
+	50, // 114: controlplane.v1.RoleImageService.ClaimImagePromotion:output_type -> controlplane.v1.ClaimImagePromotionResponse
+	52, // 115: controlplane.v1.RoleImageService.AuthorizeImagePromotion:output_type -> controlplane.v1.AuthorizeImagePromotionResponse
+	54, // 116: controlplane.v1.RoleImageService.CompleteImagePromotion:output_type -> controlplane.v1.CompleteImagePromotionResponse
+	97, // [97:117] is the sub-list for method output_type
+	77, // [77:97] is the sub-list for method input_type
+	77, // [77:77] is the sub-list for extension type_name
+	77, // [77:77] is the sub-list for extension extendee
+	0,  // [0:77] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_role_images_proto_init() }
@@ -4608,7 +5409,7 @@ func file_controlplane_v1_role_images_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlplane_v1_role_images_proto_rawDesc), len(file_controlplane_v1_role_images_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   41,
+			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

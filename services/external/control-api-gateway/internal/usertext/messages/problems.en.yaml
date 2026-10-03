@@ -2,6 +2,10 @@ INTERNAL:
   other: Internal error
 AUTOMATION_VARIABLE_NAME:
   other: Automation name
+PROJECT_ASSISTANT_ROLE:
+  other: Project assistant
+PROJECT_ASSISTANT_CREATED:
+  other: Project assistant created
 AUTOMATION_VARIABLE_TASK:
   other: Original automation task
 AUTOMATION_VARIABLE_SCHEDULED_AT:

@@ -36,7 +36,7 @@ func scanSecretDraft(row pgx.Row) (secretDraftRow, error) {
 	var d secretDraftRow
 	var raw []byte
 	err := row.Scan(&d.id, &d.public.Ref, &d.public.Version, &d.public.Generation, &d.public.ProjectRef, &d.public.SecretRef, &d.public.Name, &d.public.Description, &d.public.ValueType,
-		&d.public.State, &d.public.PublishedRevision, &d.public.CreatedAt, &d.public.UpdatedAt, &d.public.ExpiresAt, &d.ownerID, &d.contentDigest, &raw, &d.secretID, &d.projectID, &d.namespace, &d.stagingNamespace, &d.secretState, &d.public.SecretVersion)
+		&d.public.State, &d.public.PublishedRevision, &d.public.CreatedAt, &d.public.UpdatedAt, &d.public.ExpiresAt, &d.ownerID, &d.contentDigest, &raw, &d.secretID, &d.projectID, &d.namespace, &d.stagingNamespace, &d.secretState, &d.public.SecretVersion, &d.public.ScopeKind, &d.public.OrganizationRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, errs.ErrNotFound
 	}
@@ -82,6 +82,15 @@ func (r *Repository) lookupSecretDraftOperation(ctx context.Context, tx pgx.Tx, 
 }
 func (r *Repository) secretDraftAccess(ctx context.Context, tx pgx.Tx, s scope, d secretDraftRow, permission string) error {
 	if s.actorID != d.ownerID || s.authorityProjectID != "" && s.authorityProjectID != d.projectID {
+		return errs.ErrNotFound
+	}
+	if d.public.ScopeKind == "ORGANIZATION" {
+		if d.public.OrganizationRef != s.organizationRef || d.projectID != "" || d.public.ProjectRef != "" {
+			return errs.ErrNotFound
+		}
+		return r.requireOrganizationRuntimeResourceAccess(ctx, tx, s, permission)
+	}
+	if d.public.ScopeKind != "PROJECT" || d.public.OrganizationRef != s.organizationRef || d.projectID == "" || d.public.ProjectRef == "" {
 		return errs.ErrNotFound
 	}
 	kind, ref := "SECRET", d.public.SecretRef
@@ -204,7 +213,7 @@ func (r *Repository) PrepareRuntimeSecretDraft(ctx context.Context, p value.Prin
 		if input.SecretRef == "" {
 			kind = "CREATE"
 		}
-		secret, err = r.prepareRuntimeSecretTarget(ctx, tx, s, p, repoport.RuntimeSecretPrepareInput{Kind: kind, ProjectRef: input.ProjectRef, SecretRef: input.SecretRef, Name: input.Name, Description: input.Description, ValueType: input.ValueType, Mutation: input.Mutation})
+		secret, err = r.prepareRuntimeSecretTarget(ctx, tx, s, p, repoport.RuntimeSecretPrepareInput{ScopeKind: input.ScopeKind, Kind: kind, ProjectRef: input.ProjectRef, SecretRef: input.SecretRef, Name: input.Name, Description: input.Description, ValueType: input.ValueType, Mutation: input.Mutation})
 		if err != nil {
 			return empty, err
 		}
@@ -255,7 +264,7 @@ func (r *Repository) PrepareRuntimeSecretDraft(ctx context.Context, p value.Prin
 		result := entity.RuntimeSecretDraftOperationReceipt{OperationRef: o.ref, State: o.state, FailureCode: o.failure, Draft: d.public}
 		if o.state == "COMPLETED" {
 			var saved entity.RuntimeSecretDraftResult
-			if json.Unmarshal(o.snapshot, &saved) != nil {
+			if json.Unmarshal(o.snapshot, &saved) != nil || !validSecretDraftResultScope(d.public, saved) {
 				return empty, errs.ErrUnavailable
 			}
 			result.Draft = saved.Draft
@@ -449,7 +458,9 @@ func secretDraftWork(d secretDraftRow, o secretDraftOperationRow) entity.Runtime
 	if o.lease != nil {
 		work.LeaseDeadline = *o.lease
 	}
-	work.RecoveryEncrypted = o.recoveryEncrypted
-	work.RecoveryMaterialization = o.recoveryMaterialization
+	if !o.cleanupCompleted {
+		work.RecoveryEncrypted = o.recoveryEncrypted
+		work.RecoveryMaterialization = o.recoveryMaterialization
+	}
 	return work
 }

@@ -297,6 +297,7 @@ func (service *Service) GetRuntimeSecret(ctx context.Context, p value.Principal,
 	return service.repository.GetRuntimeSecret(ctx, p, ref)
 }
 func (service *Service) PrepareRuntimeSecretOperation(ctx context.Context, p value.Principal, input repository.RuntimeSecretPrepareInput) (repository.RuntimeSecretPrepareResult, error) {
+	input.ScopeKind = "PROJECT"
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return repository.RuntimeSecretPrepareResult{}, err
@@ -1325,7 +1326,7 @@ func knownCommand(kind command.Kind) bool {
 		return true
 	case command.CreateMemoryRecord, command.ReviseMemoryRecord, command.ArchiveMemoryRecord, command.RestoreMemoryRecord, command.PurgeMemoryRecord:
 		return true
-	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
+	case command.CreateRuntimeEnvironmentDraft, command.CreateOrganizationRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
 		command.PrepareEnvironmentDraftImpact, command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft, command.RebindRuntimeEnvironment, command.RebindRuntimeSecret, command.BindInteractionIdentity, command.RevokeInteractionIdentity:
 		return true
 	case command.CompleteOnboarding, command.CreateProject, command.CreateProjectFile, command.UpdateProject, command.TrashProject, command.RestoreProject, command.PurgeProject,

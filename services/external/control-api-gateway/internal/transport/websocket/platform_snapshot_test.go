@@ -48,6 +48,32 @@ func TestTypedPlatformSnapshotAcceptsRuntimeSecretCatalog(t *testing.T) {
 	}
 }
 
+func TestTypedPlatformSnapshotAcceptsSeparateOrganizationCatalogs(t *testing.T) {
+	for _, tc := range []struct{ kind, resources, cursor string }{
+		{"ROLE_IMAGE_RECIPE", "organizationRecipes", "organizationRecipesPage"},
+		{"RUNTIME_SECRET", "organizationSecrets", "organizationSecretsPage"},
+	} {
+		snapshot, err := typedPlatformSnapshot(tc.kind, map[string]any{"catalog": map[string]any{tc.resources: []any{}, tc.cursor: map[string]any{"nextPageToken": "org-cursor"}}})
+		if err != nil || snapshot.Catalog == nil {
+			t.Fatalf("closed organizational catalog schema rejected: %s %v", tc.kind, err)
+		}
+		if tc.kind == "ROLE_IMAGE_RECIPE" && (snapshot.Catalog.OrganizationRecipesPage == nil || *snapshot.Catalog.OrganizationRecipesPage.NextPageToken != "org-cursor") || tc.kind == "RUNTIME_SECRET" && (snapshot.Catalog.OrganizationSecretsPage == nil || *snapshot.Catalog.OrganizationSecretsPage.NextPageToken != "org-cursor") {
+			t.Fatal("organizational cursor was merged with project cursor")
+		}
+	}
+}
+
+func TestTypedPlatformSnapshotRejectsPrivateFieldsInsideOrganizationCatalog(t *testing.T) {
+	for _, fields := range []map[string]any{
+		{"organizationSecrets": []any{map[string]any{"ref": "sec_fixture01", "scopeKind": "ORGANIZATION", "organizationRef": "org_fixture01", "value": "private-plaintext"}}},
+		{"organizationRecipes": []any{map[string]any{"ref": "imgrec_fixture01", "scopeKind": "ORGANIZATION", "organizationRef": "org_fixture01", "unexpectedPrivate": "private-build-input"}}},
+	} {
+		if _, err := typedPlatformSnapshot("RUNTIME_SECRET", map[string]any{"catalog": fields}); err == nil {
+			t.Fatal("undeclared/private organization payload escaped closed snapshot schema")
+		}
+	}
+}
+
 func TestTypedPlatformSnapshotAcceptsManagedConfigurationCatalog(t *testing.T) {
 	t.Parallel()
 	snapshot, err := typedPlatformSnapshot("MANAGED_CONFIGURATION", map[string]any{
@@ -106,16 +132,6 @@ func TestTypedPlatformSnapshotAcceptsRuntimeEnvironmentBootstrapCatalog(t *testi
 	})
 	if err != nil || snapshot.Catalog == nil || snapshot.Catalog.RoleEnvironments == nil {
 		t.Fatalf("decode runtime environment bootstrap snapshot: %v", err)
-	}
-}
-
-func TestPlatformKindRequiresProject(t *testing.T) {
-	t.Parallel()
-	if !platformKindRequiresProject("ROLE_IMAGE_RECIPE") {
-		t.Fatal("project-scoped catalogs were not identified")
-	}
-	if platformKindRequiresProject("MEMBERSHIP") || platformKindRequiresProject("RUNTIME_SECRET") || platformKindRequiresProject("PROJECT") {
-		t.Fatal("organization-capable catalogs unexpectedly require a project")
 	}
 }
 

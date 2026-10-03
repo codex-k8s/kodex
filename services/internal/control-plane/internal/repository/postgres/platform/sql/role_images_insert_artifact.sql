@@ -6,6 +6,6 @@ INSERT INTO control_plane.image_artifacts
      role_runtime_contract_sha256, staging_reference, manifest_digest,
      immutable_build_sha256, provenance_sha256)
 VALUES
-    ($1, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8::uuid, $9, $10, $11,
+    ($1, $2::uuid, NULLIF($3, '')::uuid, $4::uuid, $5, $6, $7, $8::uuid, $9, $10, $11,
      $12, $13, $14, $15, $16, $17, $18, $19)
 RETURNING id::text

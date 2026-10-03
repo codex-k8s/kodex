@@ -2,7 +2,12 @@
 import { computed, ref, watch } from "vue";
 
 import AssistantEnvironmentBindingDialog from "@/features/assistant/components/AssistantEnvironmentBindingDialog.vue";
-import { assistantEnvironmentDraftTarget } from "@/features/assistant/model";
+import {
+  assistantEnvironmentDraftTarget,
+  assistantSystemEnvironmentDraftTarget,
+} from "@/features/assistant/model";
+import { usePlatformStore } from "@/features/platform/store";
+import { organizationRuntimeResourceScope } from "@/features/runtime/resource-scope";
 import { readEnvironmentDraft } from "@/features/runtime/environment-drafts";
 import type {
   AssistantPlan,
@@ -12,8 +17,17 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
 const emit = defineEmits<{ navigate: [] }>();
+const platform = usePlatformStore();
+const systemTarget = computed(() =>
+  assistantSystemEnvironmentDraftTarget(props.plan, props.operationRef),
+);
+const organizationScope = computed(() =>
+  organizationRuntimeResourceScope(platform.bootstrap),
+);
 const target = computed(() =>
-  assistantEnvironmentDraftTarget(props.plan, props.operationRef),
+  systemTarget.value
+    ? undefined
+    : assistantEnvironmentDraftTarget(props.plan, props.operationRef),
 );
 const draft = ref<RuntimeEnvironmentDraft>();
 const loading = ref(false);
@@ -23,7 +37,17 @@ const boundAgentName = ref("");
 const destination = computed(() => {
   const exact = target.value;
   const current = draft.value;
-  if (!exact || !current || current.state === "DISCARDED") return;
+  if (!current || current.state === "DISCARDED") return;
+  if (
+    systemTarget.value &&
+    organizationScope.value &&
+    current.scopeKind === "ORGANIZATION"
+  )
+    return {
+      name: "system-assistant-environment",
+      query: { draftRef: current.ref },
+    };
+  if (!exact) return;
   if (current.state === "PUBLISHED") {
     if (!current.publishedEnvironmentRef) return;
     return {
@@ -54,14 +78,28 @@ const destination = computed(() => {
 let refresh: (() => Promise<void>) | undefined;
 
 watch(
-  target,
+  () => ({
+    target: target.value,
+    system: systemTarget.value,
+    scope: organizationScope.value,
+    assistantRef: platform.assistant?.ref ?? platform.bootstrap?.assistant.ref,
+  }),
   (value, _previous, onCleanup) => {
     draft.value = undefined;
     loading.value = false;
     problem.value = false;
     bindingOpen.value = false;
     boundAgentName.value = "";
-    if (!value) return;
+    const exact = value.target;
+    const system = value.system;
+    if (
+      !exact &&
+      (!system || !value.scope || system.assistantRef !== value.assistantRef)
+    )
+      return;
+    const address = system && value.scope ? value.scope : exact?.projectRef;
+    const draftRef = system ? system.draftRef : exact?.draftRef;
+    if (!address || !draftRef) return;
     const controller = new AbortController();
     onCleanup(() => {
       controller.abort();
@@ -72,12 +110,14 @@ watch(
       loading.value = true;
       try {
         const next = await readEnvironmentDraft(
-          value.projectRef,
-          value.draftRef,
+          address,
+          draftRef,
           controller.signal,
         );
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
         if (controller.signal.aborted) return;
+        if (system && next.environmentRef !== system.environmentRef)
+          throw new Error("System assistant draft environment mismatch");
         draft.value = next;
         problem.value = false;
       } catch {
@@ -95,7 +135,11 @@ watch(
 </script>
 
 <template>
-  <section v-if="target" class="assistant-environment-card" aria-live="polite">
+  <section
+    v-if="target || systemTarget"
+    class="assistant-environment-card"
+    aria-live="polite"
+  >
     <header>
       <strong>{{ $t("assistant.environmentDraft.title") }}</strong>
       <StatusBadge v-if="draft" :state="draft.state" />
@@ -141,7 +185,11 @@ watch(
         {{ $t("assistant.environmentDraft.continue") }}
       </RouterLink>
       <button
-        v-if="draft?.state === 'PUBLISHED' && draft.publishedEnvironmentRef"
+        v-if="
+          target &&
+          draft?.state === 'PUBLISHED' &&
+          draft.publishedEnvironmentRef
+        "
         class="button button--primary"
         type="button"
         @click="bindingOpen = true"

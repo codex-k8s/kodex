@@ -15,26 +15,31 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 const (
-	permissionListRecipes        = "platform.role-images.recipes.list"
-	permissionListEnvironments   = "platform.role-images.environments.list"
-	permissionGetRecipe          = "platform.role-images.recipes.get"
-	permissionManageRecipe       = "platform.role-images.recipes.manage"
-	permissionClaimBuild         = "platform.role-images.builds.claim"
-	permissionRenewBuild         = "platform.role-images.builds.renew"
-	permissionProgressBuild      = "platform.role-images.builds.progress"
-	permissionCompleteBuild      = "platform.role-images.builds.complete"
-	permissionFailBuild          = "platform.role-images.builds.fail"
-	permissionGetSupplyWork      = "platform.role-images.supply-work.get"
-	permissionClaimAdmission     = "platform.role-images.admission.claim"
-	permissionRecordAdmission    = "platform.role-images.admission.record"
-	permissionRequestPromotion   = "platform.command.role-images.promote"
-	permissionClaimPromotion     = "platform.role-images.promotion.claim"
-	permissionAuthorizePromotion = "platform.role-images.promotion.authorize"
-	permissionCompletePromotion  = "platform.role-images.promotion.complete"
+	permissionListRecipes                  = "platform.role-images.recipes.list"
+	permissionListEnvironments             = "platform.role-images.environments.list"
+	permissionGetRecipe                    = "platform.role-images.recipes.get"
+	permissionManageRecipe                 = "platform.role-images.recipes.manage"
+	permissionClaimBuild                   = "platform.role-images.builds.claim"
+	permissionRenewBuild                   = "platform.role-images.builds.renew"
+	permissionProgressBuild                = "platform.role-images.builds.progress"
+	permissionCompleteBuild                = "platform.role-images.builds.complete"
+	permissionFailBuild                    = "platform.role-images.builds.fail"
+	permissionGetSupplyWork                = "platform.role-images.supply-work.get"
+	permissionClaimAdmission               = "platform.role-images.admission.claim"
+	permissionRecordAdmission              = "platform.role-images.admission.record"
+	permissionRequestPromotion             = "platform.command.role-images.promote"
+	permissionClaimPromotion               = "platform.role-images.promotion.claim"
+	permissionAuthorizePromotion           = "platform.role-images.promotion.authorize"
+	permissionCompletePromotion            = "platform.role-images.promotion.complete"
+	permissionListOrganizationRecipes      = "platform.organization.role-images.recipes.list"
+	permissionGetOrganizationRecipe        = "platform.organization.role-images.recipes.get"
+	permissionManageOrganizationRecipe     = "platform.organization.role-images.recipes.manage"
+	permissionRequestOrganizationPromotion = "platform.command.organization.role-images.promote"
 )
 
 var (
@@ -111,15 +116,74 @@ func (service *Service) Get(ctx context.Context, principal value.Principal, ref 
 }
 
 func (service *Service) Manage(ctx context.Context, input repository.ManageInput) (repository.ManageResult, error) {
+	return service.manage(ctx, input, "PROJECT", permissionManageRecipe)
+}
+
+func (service *Service) ListOrganization(ctx context.Context, principal value.Principal, filter repository.Filter) ([]entity.RoleImageRecipe, string, int64, error) {
+	principal, err := service.resolvePrincipal(ctx, principal)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	if err := authorize(principal, permissionListOrganizationRecipes, "control-api-gateway"); err != nil {
+		return nil, "", 0, err
+	}
+	if filter.ProjectRef != "" || filter.RoleDefinitionRef != "" {
+		return nil, "", 0, errs.ErrInvalid
+	}
+	return service.repository.ListOrganization(ctx, principal, filter)
+}
+
+func (service *Service) GetOrganization(ctx context.Context, principal value.Principal, ref string) (repository.Detail, error) {
+	principal, err := service.resolvePrincipal(ctx, principal)
+	if err != nil {
+		return repository.Detail{}, err
+	}
+	if err := authorize(principal, permissionGetOrganizationRecipe, "control-api-gateway"); err != nil {
+		return repository.Detail{}, err
+	}
+	if !validRef(ref, "imgrec") {
+		return repository.Detail{}, errs.ErrInvalid
+	}
+	return service.repository.GetOrganization(ctx, principal, ref)
+}
+
+func (service *Service) ListOrganizationRevisions(ctx context.Context, principal value.Principal, ref string, page query.Page) ([]entity.RoleImageRecipeRevision, string, error) {
+	principal, err := service.resolvePrincipal(ctx, principal)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := authorize(principal, "platform.organization.role-images.recipe-revisions.list", "control-api-gateway"); err != nil {
+		return nil, "", err
+	}
+	if !validRef(ref, "imgrec") {
+		return nil, "", errs.ErrInvalid
+	}
+	return service.repository.ListOrganizationRevisions(ctx, principal, ref, page)
+}
+
+func (service *Service) ManageOrganization(ctx context.Context, input repository.ManageInput) (repository.ManageResult, error) {
+	return service.manage(ctx, input, "ORGANIZATION", permissionManageOrganizationRecipe)
+}
+
+func (service *Service) manage(ctx context.Context, input repository.ManageInput, scopeKind, permission string) (repository.ManageResult, error) {
 	principal, err := service.resolvePrincipal(ctx, input.Principal)
 	if err != nil {
 		return repository.ManageResult{}, err
 	}
 	input.Principal = principal
-	if err := authorize(input.Principal, permissionManageRecipe, "control-api-gateway"); err != nil {
+	if err := authorize(input.Principal, permission, "control-api-gateway"); err != nil {
 		return repository.ManageResult{}, err
 	}
 	input.Action = strings.ToUpper(strings.TrimSpace(input.Action))
+	input.ScopeKind = scopeKind
+	validProject := validRef(input.ProjectRef, "prj")
+	validRole := validRef(input.RoleDefinitionRef, "role")
+	if scopeKind == "ORGANIZATION" {
+		if input.ProjectRef != "" || input.RoleDefinitionRef != "" {
+			return repository.ManageResult{}, errs.ErrInvalid
+		}
+		validProject, validRole = true, true
+	}
 	if input.Action == "CREATE" || input.Action == "UPDATE" {
 		input.Recipe, err = service.catalog.Resolve(input.Environment)
 		if err != nil {
@@ -127,30 +191,33 @@ func (service *Service) Manage(ctx context.Context, input repository.ManageInput
 		}
 	}
 	input.Mutation.Operation = "role-image-recipe." + strings.ToLower(input.Action)
+	if scopeKind == "ORGANIZATION" {
+		input.Mutation.Operation = "organization-role-image-recipe." + strings.ToLower(input.Action)
+	}
 	input.Mutation.IntentDigest = roleImageManageIntentDigest(input)
 	if err := input.Mutation.Validate(); err != nil {
 		return repository.ManageResult{}, errs.ErrInvalid
 	}
 	switch input.Action {
 	case "CREATE":
-		if !validRef(input.ProjectRef, "prj") || !validRef(input.RoleDefinitionRef, "role") ||
+		if !validProject || !validRole ||
 			!validDisplayName(input.Name) || validateRecipe(input.Recipe) != nil || input.Mutation.ExpectedVersion != nil || input.RecipeRef != "" || input.BuildRef != "" {
 			return repository.ManageResult{}, errs.ErrInvalid
 		}
 	case "UPDATE":
-		if !validRef(input.ProjectRef, "prj") || !validRef(input.RecipeRef, "imgrec") || input.RoleDefinitionRef != "" ||
+		if !validProject || !validRef(input.RecipeRef, "imgrec") || input.RoleDefinitionRef != "" ||
 			!validDisplayName(input.Name) || validateRecipe(input.Recipe) != nil || input.Mutation.ExpectedVersion == nil || input.BuildRef != "" {
 			return repository.ManageResult{}, errs.ErrInvalid
 		}
 	case "ARCHIVE", "RESTORE", "REQUEST_BUILD":
-		if !validRef(input.ProjectRef, "prj") || !validRef(input.RecipeRef, "imgrec") ||
+		if !validProject || !validRef(input.RecipeRef, "imgrec") ||
 			input.Mutation.ExpectedVersion == nil || input.RoleDefinitionRef != "" || input.BuildRef != "" ||
 			input.Environment.EnvironmentKey != "" || len(input.Environment.PackageKeys) != 0 ||
 			len(input.Environment.ToolKeys) != 0 || input.Environment.InstallationBlock != "" || input.Environment.Dockerfile != "" {
 			return repository.ManageResult{}, errs.ErrInvalid
 		}
 	case "CANCEL_BUILD":
-		if !validRef(input.ProjectRef, "prj") || !validRef(input.RecipeRef, "imgrec") || !validRef(input.BuildRef, "imgbld") ||
+		if !validProject || !validRef(input.RecipeRef, "imgrec") || !validRef(input.BuildRef, "imgbld") ||
 			input.Mutation.ExpectedVersion == nil || input.RoleDefinitionRef != "" || input.Name != "" ||
 			input.Environment.EnvironmentKey != "" || len(input.Environment.PackageKeys) != 0 ||
 			len(input.Environment.ToolKeys) != 0 || input.Environment.InstallationBlock != "" || input.Environment.Dockerfile != "" {
@@ -159,21 +226,24 @@ func (service *Service) Manage(ctx context.Context, input repository.ManageInput
 	default:
 		return repository.ManageResult{}, errs.ErrInvalid
 	}
+	if scopeKind == "ORGANIZATION" {
+		return service.repository.ManageOrganization(ctx, input)
+	}
 	return service.repository.Manage(ctx, input)
 }
 
 func roleImageManageIntentDigest(input repository.ManageInput) string {
-	legacyIntent := struct {
-		Action, RecipeRef, ProjectRef, RoleDefinitionRef, Name string
-		Recipe                                                 entity.RoleImageRecipeInput
-	}{input.Action, input.RecipeRef, input.ProjectRef, input.RoleDefinitionRef, input.Name, input.Recipe}
+	intent := struct {
+		ScopeKind, Action, RecipeRef, ProjectRef, RoleDefinitionRef, Name string
+		Recipe                                                            entity.RoleImageRecipeInput
+	}{input.ScopeKind, input.Action, input.RecipeRef, input.ProjectRef, input.RoleDefinitionRef, input.Name, input.Recipe}
 	if input.Action == "CANCEL_BUILD" {
 		return digest(struct {
-			LegacyIntent any
-			BuildRef     string
-		}{legacyIntent, input.BuildRef})
+			Intent   any
+			BuildRef string
+		}{intent, input.BuildRef})
 	}
-	return digest(legacyIntent)
+	return digest(intent)
 }
 
 func (service *Service) ClaimBuild(ctx context.Context, principal value.Principal, key string) (entity.ImageBuildClaim, error) {
@@ -281,27 +351,42 @@ func (service *Service) ClaimPromotion(ctx context.Context, principal value.Prin
 }
 
 func (service *Service) Promote(ctx context.Context, input repository.PromotionRequestInput) (entity.RoleImagePromotionReceipt, error) {
+	return service.requestPromotion(ctx, input, "PROJECT", permissionRequestPromotion)
+}
+
+func (service *Service) RequestOrganizationPromotion(ctx context.Context, input repository.PromotionRequestInput) (entity.RoleImagePromotionReceipt, error) {
+	return service.requestPromotion(ctx, input, "ORGANIZATION", permissionRequestOrganizationPromotion)
+}
+
+func (service *Service) requestPromotion(ctx context.Context, input repository.PromotionRequestInput, scopeKind, permission string) (entity.RoleImagePromotionReceipt, error) {
 	principal, err := service.resolvePrincipal(ctx, input.Principal)
 	if err != nil {
 		return entity.RoleImagePromotionReceipt{}, err
 	}
 	input.Principal = principal
-	if err := authorize(input.Principal, permissionRequestPromotion, "control-api-gateway"); err != nil {
+	if err := authorize(input.Principal, permission, "control-api-gateway"); err != nil {
 		return entity.RoleImagePromotionReceipt{}, err
 	}
 	input.Mutation.Operation = "controlplane.promote_role_image"
+	input.ScopeKind = scopeKind
+	if scopeKind == "ORGANIZATION" {
+		input.Mutation.Operation = "controlplane.promote_organization_role_image"
+	}
 	var expectedVersion int64
 	if input.Mutation.ExpectedVersion != nil {
 		expectedVersion = *input.Mutation.ExpectedVersion
 	}
 	input.Mutation.IntentDigest = digest(struct {
-		RecipeRef, ArtifactRef, ExpectedProvenanceSHA256 string
-		ExpectedVersion                                  int64
-	}{input.RecipeRef, input.ArtifactRef, input.ExpectedProvenanceSHA256, expectedVersion})
+		ScopeKind, RecipeRef, ArtifactRef, ExpectedProvenanceSHA256 string
+		ExpectedVersion                                             int64
+	}{scopeKind, input.RecipeRef, input.ArtifactRef, input.ExpectedProvenanceSHA256, expectedVersion})
 	if input.Mutation.ExpectedVersion == nil || input.Mutation.Validate() != nil ||
 		!validRef(input.RecipeRef, "imgrec") || !validRef(input.ArtifactRef, "imgart") ||
 		!sha256Pattern.MatchString(input.ExpectedProvenanceSHA256) {
 		return entity.RoleImagePromotionReceipt{}, errs.ErrInvalid
+	}
+	if scopeKind == "ORGANIZATION" {
+		return service.repository.RequestOrganizationPromotion(ctx, input)
 	}
 	return service.repository.RequestPromotion(ctx, input)
 }

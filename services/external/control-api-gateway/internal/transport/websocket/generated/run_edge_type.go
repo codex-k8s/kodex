@@ -6,8 +6,8 @@ type RunEdgeType string
 
 const (
 	RunEdgeTypeDelegatedTo RunEdgeType = "DELEGATED_TO"
-	RunEdgeTypeCallbackTo RunEdgeType = "CALLBACK_TO"
-	RunEdgeTypeRetryOf RunEdgeType = "RETRY_OF"
-	RunEdgeTypeContinues RunEdgeType = "CONTINUES"
-	RunEdgeTypeWaitingFor RunEdgeType = "WAITING_FOR"
+	RunEdgeTypeCallbackTo  RunEdgeType = "CALLBACK_TO"
+	RunEdgeTypeRetryOf     RunEdgeType = "RETRY_OF"
+	RunEdgeTypeContinues   RunEdgeType = "CONTINUES"
+	RunEdgeTypeWaitingFor  RunEdgeType = "WAITING_FOR"
 )

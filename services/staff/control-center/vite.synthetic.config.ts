@@ -10,6 +10,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        assistantEnvironment: fileURLToPath(
+          new URL("./e2e/fixtures/assistant-environment.html", import.meta.url),
+        ),
         uiPopulated: fileURLToPath(
           new URL("./e2e/fixtures/ui-populated.html", import.meta.url),
         ),

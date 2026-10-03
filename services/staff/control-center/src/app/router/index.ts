@@ -169,6 +169,33 @@ export const router = createRouter({
       meta: { projectScoped: true },
     },
     {
+      path: "/organization/secrets",
+      name: "system-runtime-secrets",
+      component: lazyPage(() => import("@/pages/RuntimeSecretsPage.vue")),
+    },
+    {
+      path: "/organization/assistant/environment",
+      name: "system-assistant-environment",
+      component: lazyPage(
+        () => import("@/pages/SystemAssistantEnvironmentPage.vue"),
+      ),
+    },
+    {
+      path: "/organization/role-images",
+      name: "system-role-images",
+      component: lazyPage(() => import("@/pages/RoleImagesPage.vue")),
+    },
+    {
+      path: "/organization/role-images/new",
+      name: "system-role-image-new",
+      component: lazyPage(() => import("@/pages/RoleImageEditorPage.vue")),
+    },
+    {
+      path: "/organization/role-images/:recipeRef",
+      name: "system-role-image",
+      component: lazyPage(() => import("@/pages/RoleImageEditorPage.vue")),
+    },
+    {
       path: "/projects/:projectRef/role-images",
       name: "role-images",
       component: lazyPage(() => import("@/pages/RoleImagesPage.vue")),

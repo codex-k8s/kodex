@@ -18,7 +18,7 @@ func scanEnvironmentDraft(row rowScanner) (entity.RuntimeEnvironmentDraft, error
 	var specification, diagnostics []byte
 	err := row.Scan(&draft.Ref, &draft.ProjectRef, &draft.EnvironmentRef, &draft.ExpectedEnvironmentVersion,
 		&draft.State, &draft.Version, &specification, &draft.ValidationDigest, &diagnostics, &draft.PublishedEnvironmentRef,
-		&draft.BaseVersionRef, &draft.BaseRevision, &draft.SavedAt)
+		&draft.BaseVersionRef, &draft.BaseRevision, &draft.SavedAt, &draft.ScopeKind, &draft.OrganizationRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return draft, errs.ErrNotFound
 	}
@@ -42,14 +42,7 @@ func (repository *Repository) GetRuntimeEnvironmentDraft(ctx context.Context, pr
 	if err != nil {
 		return draft, err
 	}
-	target, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{ResourceKind: "PROJECT", ResourceRef: draft.ProjectRef})
-	if err != nil {
-		return entity.RuntimeEnvironmentDraft{}, err
-	}
-	if current.authorityProjectID != "" && current.authorityProjectID != target.projectID {
-		return entity.RuntimeEnvironmentDraft{}, errs.ErrNotFound
-	}
-	if err := repository.requireAccess(ctx, tx, current, "project.manage", target); err != nil {
+	if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, draft.ScopeKind, draft.ProjectRef); err != nil {
 		return entity.RuntimeEnvironmentDraft{}, err
 	}
 	return draft, tx.Commit(ctx)
@@ -62,18 +55,25 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 	}
 	var draft entity.RuntimeEnvironmentDraft
 	var err error
-	if input.Kind == command.CreateRuntimeEnvironmentDraft {
+	if input.Kind == command.CreateRuntimeEnvironmentDraft || input.Kind == command.CreateOrganizationRuntimeEnvironmentDraft {
+		scopeKind := "PROJECT"
+		if input.Kind == command.CreateOrganizationRuntimeEnvironmentDraft {
+			scopeKind = "ORGANIZATION"
+		}
 		var baseVersionRef string
 		var baseRevision int64
-		if len(asJSON(payload.Specification)) > 256<<10 || payload.ProjectRef == "" {
+		if len(asJSON(payload.Specification)) > 256<<10 || scopeKind == "PROJECT" && payload.ProjectRef == "" || scopeKind == "ORGANIZATION" && payload.ProjectRef != "" {
 			return commandOutcome{}, errs.ErrInvalid
+		}
+		if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, scopeKind, payload.ProjectRef); err != nil {
+			return commandOutcome{}, err
 		}
 		if payload.EnvironmentRef != "" {
 			environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, current, payload.EnvironmentRef)
 			if err != nil {
 				return commandOutcome{}, err
 			}
-			if environment.ProjectRef != payload.ProjectRef {
+			if environment.ProjectRef != payload.ProjectRef || environment.ScopeKind != scopeKind || environment.OrganizationRef != current.organizationRef {
 				return commandOutcome{}, errs.ErrNotFound
 			}
 			if environment.Version != payload.ExpectedEnvironmentVersion {
@@ -90,11 +90,11 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		draft = entity.RuntimeEnvironmentDraft{Ref: ref, Version: 1, ProjectRef: payload.ProjectRef, EnvironmentRef: payload.EnvironmentRef,
+		draft = entity.RuntimeEnvironmentDraft{ScopeKind: scopeKind, OrganizationRef: current.organizationRef, Ref: ref, Version: 1, ProjectRef: payload.ProjectRef, EnvironmentRef: payload.EnvironmentRef,
 			BaseVersionRef: baseVersionRef, BaseRevision: baseRevision,
 			ExpectedEnvironmentVersion: payload.ExpectedEnvironmentVersion, Specification: payload.Specification, State: "DRAFT", Diagnostics: []string{}}
 		err = tx.QueryRow(ctx, queryEnvironmentDraftInsert, pgx.StrictNamedArgs{"ref": ref, "organization_id": current.organizationID,
-			"project_id": mustProjectID(ctx, tx, current.organizationID, payload.ProjectRef), "environment_ref": draft.EnvironmentRef,
+			"scope_kind": scopeKind, "project_id": mustProjectID(ctx, tx, current.organizationID, payload.ProjectRef), "environment_ref": draft.EnvironmentRef,
 			"environment_version": draft.ExpectedEnvironmentVersion, "specification": asJSON(draft.Specification), "actor_id": current.actorID,
 			"base_version_ref": draft.BaseVersionRef}).Scan(&draft.SavedAt)
 		if err != nil {
@@ -103,6 +103,9 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 	} else {
 		draft, err = scanEnvironmentDraft(tx.QueryRow(ctx, queryEnvironmentDraftLock, current.organizationID, payload.DraftRef))
 		if err != nil {
+			return commandOutcome{}, err
+		}
+		if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, draft.ScopeKind, draft.ProjectRef); err != nil {
 			return commandOutcome{}, err
 		}
 		if input.Mutation.ExpectedVersion == nil || *input.Mutation.ExpectedVersion != draft.Version {
@@ -125,7 +128,7 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 		case command.ValidateRuntimeEnvironmentDraft, command.PublishRuntimeEnvironmentDraft:
 			digest, err := repository.validateEnvironmentDraft(ctx, tx, current, draft)
 			if input.Kind == command.ValidateRuntimeEnvironmentDraft {
-				if errors.Is(err, errs.ErrUnavailable) {
+				if errors.Is(err, errs.ErrUnavailable) || errors.Is(err, errs.ErrFreshAuthenticationRequired) {
 					return commandOutcome{}, err
 				}
 				draft.State, draft.ValidationDigest, draft.Diagnostics = "VALID", digest, []string{}
@@ -189,12 +192,15 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 
 func environmentDraftPayload(draft entity.RuntimeEnvironmentDraft) command.RuntimeEnvironmentInput {
 	spec := draft.Specification
-	return command.RuntimeEnvironmentInput{Ref: draft.EnvironmentRef, ProjectRef: draft.ProjectRef, Name: spec.Name, Description: spec.Description,
+	return command.RuntimeEnvironmentInput{ScopeKind: draft.ScopeKind, Ref: draft.EnvironmentRef, ProjectRef: draft.ProjectRef, Name: spec.Name, Description: spec.Description,
 		Values: spec.Values, SecretBindings: spec.SecretBindings, Tools: spec.Tools, Policy: spec.Policy, ImageArtifactRef: spec.ImageArtifactRef}
 }
 
 func (repository *Repository) validateEnvironmentDraft(ctx context.Context, tx pgx.Tx, current scope, draft entity.RuntimeEnvironmentDraft) (string, error) {
 	spec := draft.Specification
+	if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, draft.ScopeKind, draft.ProjectRef); err != nil {
+		return "", err
+	}
 	if strings.TrimSpace(spec.Name) == "" || len(spec.Name) > 120 || len(spec.Description) > 1000 {
 		return "", errs.ErrInvalid
 	}
@@ -203,11 +209,11 @@ func (repository *Repository) validateEnvironmentDraft(ctx context.Context, tx p
 	if err != nil {
 		return "", err
 	}
-	_, _, values, secrets, err := repository.resolveEnvironmentPayload(ctx, tx, current.organizationID, projectID, spec.Values, spec.SecretBindings)
+	_, _, values, secrets, err := repository.resolveScopedEnvironmentPayload(ctx, tx, current.organizationID, projectID, draft.ScopeKind, spec.Values, spec.SecretBindings)
 	if err != nil {
 		return "", err
 	}
-	_, image, tools, _, err := repository.resolveRuntimeEnvironmentImage(ctx, tx, current.organizationID, projectID, spec.ImageArtifactRef, spec.Tools)
+	_, image, tools, _, err := repository.resolveScopedRuntimeEnvironmentImage(ctx, tx, current.organizationID, projectID, draft.ScopeKind, spec.ImageArtifactRef, spec.Tools)
 	if err != nil {
 		return "", err
 	}

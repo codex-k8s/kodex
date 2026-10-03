@@ -31,8 +31,10 @@ import {
   publishSecretDraft,
 } from "./draft-impact";
 const draft: RuntimeSecretDraft = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "draft",
-  projectRef: "project",
+  projectRef: "project_synthetic",
   secretRef: "secret",
   version: 2,
   secretVersion: 1,
@@ -118,8 +120,10 @@ it("публикует explicit empty selection с точными OCC/key и п�
     data: {
       draft: { ...draft, state: "PUBLISHED", version: 3, publishedRevision: 1 },
       secret: {
+        scopeKind: "PROJECT",
+        organizationRef: "org_synthetic",
         ref: "secret",
-        projectRef: "project",
+        projectRef: "project_synthetic",
         version: 2,
         name: "TOKEN",
         description: "",

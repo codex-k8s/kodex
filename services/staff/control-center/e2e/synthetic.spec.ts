@@ -70,6 +70,7 @@ const assistant: SystemAssistant = {
   nextActions: [],
 };
 const bootstrap: BootstrapState = {
+  organizationRef: "org_synthetic",
   speechTranscription: { available: false, reason: "STT_NOT_CONFIGURED" },
   initialized: true,
   onboardingComplete: true,

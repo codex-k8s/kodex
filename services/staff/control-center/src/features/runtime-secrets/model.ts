@@ -99,7 +99,12 @@ export function normalizeSecretPage(value: unknown): RuntimeSecretPage {
       !Number.isSafeInteger(item.currentRevision) ||
       item.currentRevision < 1 ||
       typeof item.projectRef !== "string" ||
-      !item.projectRef ||
+      !["ORGANIZATION", "PROJECT"].includes(item.scopeKind) ||
+      typeof item.organizationRef !== "string" ||
+      !/^[A-Za-z0-9_-]{8,128}$/.test(item.organizationRef) ||
+      (item.scopeKind === "PROJECT"
+        ? !/^[A-Za-z0-9_-]{8,128}$/.test(item.projectRef)
+        : item.projectRef !== "") ||
       typeof item.name !== "string" ||
       typeof item.description !== "string" ||
       !["STRING", "JSON", "BINARY"].includes(item.valueType) ||
@@ -126,6 +131,8 @@ export function normalizeSecretPage(value: unknown): RuntimeSecretPage {
       ref: item.ref,
       version: item.version,
       projectRef: item.projectRef,
+      scopeKind: item.scopeKind,
+      organizationRef: item.organizationRef,
       name: item.name,
       description: item.description,
       valueType: item.valueType,

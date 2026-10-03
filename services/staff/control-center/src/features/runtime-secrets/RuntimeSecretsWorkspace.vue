@@ -18,20 +18,36 @@ import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { readRuntimeSecret } from "./api";
 
 import type { RuntimeSecret, RuntimeSecretDraftSuggestion } from "./model";
-import { canRuntimeSecretAction, maskedSecretHint } from "./model";
+import {
+  canRuntimeSecretAction as serverAllowsSecretAction,
+  maskedSecretHint,
+  type RuntimeSecretAction,
+} from "./model";
 import { consumeRuntimeSecretReauthSuggestion } from "./reauth-suggestion";
 import RuntimeSecretRevealDialog from "./RuntimeSecretRevealDialog.vue";
 import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
 import RuntimeSecretDraftDialog from "./RuntimeSecretDraftDialog.vue";
 import type { RuntimeSecretDraft } from "./draft-api";
 import { useRuntimeSecretsStore } from "./store";
+import {
+  runtimeResourceAddressKey,
+  type RuntimeResourceAddress,
+} from "@/features/runtime/resource-scope";
 
 const props = defineProps<{
-  projectRef: string;
+  projectRef?: string;
+  organizationScope?: Extract<RuntimeResourceAddress, object>;
   initialSecretRef?: string;
   initialDraftRef?: string;
   initialPlanRef?: string;
 }>();
+const resourceScope = computed<RuntimeResourceAddress>(() => {
+  if (props.organizationScope) return props.organizationScope;
+  if (!props.projectRef)
+    throw new Error("Runtime secret catalog project scope is unavailable");
+  return props.projectRef;
+});
+const scopeKey = computed(() => runtimeResourceAddressKey(resourceScope.value));
 const emit = defineEmits<{
   draftSaved: [draftRef: string];
   planPrepared: [draftRef: string, planRef: string];
@@ -50,6 +66,17 @@ const router = useRouter();
 const searchId = useId();
 const session = useSessionStore();
 const { locale } = useI18n();
+const canCreate = computed(
+  () =>
+    !props.organizationScope ||
+    ["OWNER", "ADMINISTRATOR"].includes(platform.bootstrap?.platformRole ?? ""),
+);
+function canRuntimeSecretAction(
+  secret: RuntimeSecret,
+  action: RuntimeSecretAction,
+): boolean {
+  return serverAllowsSecretAction(secret, action);
+}
 const search = ref("");
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
@@ -69,43 +96,56 @@ const pageSize = useAdaptiveCursorPageSize({
   estimatedItemHeight: 64,
 });
 const realtimeRevision = computed(() => {
-  const snapshot = platform.realtimeSnapshot(
-    "RUNTIME_SECRET",
-    props.projectRef,
-  );
+  const snapshot = props.organizationScope
+    ? platform.organizationRuntimeSecretPage
+    : platform.realtimeSnapshot("RUNTIME_SECRET", props.projectRef);
   return [
     snapshot?.scopeKey ?? "",
     snapshot?.nextPageToken ?? "",
-    ...Object.values(platform.runtimeSecrets)
-      .filter((item) => item.projectRef === props.projectRef)
+    props.organizationScope
+      ? platform.organizationRuntimeSecretRealtimeRevision
+      : "",
+    ...(props.organizationScope
+      ? Object.values(platform.organizationRuntimeSecrets)
+      : Object.values(platform.runtimeSecrets).filter(
+          (item) => item.projectRef === props.projectRef,
+        )
+    )
       .sort((left, right) => left.ref.localeCompare(right.ref))
       .map((item) => `${item.ref}:${String(item.version)}`),
   ].join("|");
 });
 
 function applyRealtimeSnapshot(): boolean {
-  if (search.value.trim()) return false;
-  const snapshot = platform.realtimeSnapshot(
-    "RUNTIME_SECRET",
-    props.projectRef,
-  );
+  const snapshot = props.organizationScope
+    ? platform.organizationRuntimeSecretPage
+    : platform.realtimeSnapshot("RUNTIME_SECRET", props.projectRef);
   if (!snapshot) {
-    store.prepareRealtimeScope(props.projectRef);
+    store.prepareRealtimeScope(resourceScope.value);
+    store.items = [];
+    store.nextPageToken = "";
     return false;
   }
-  if (store.projectRef !== props.projectRef || store.query)
-    store.prepareRealtimeScope(props.projectRef);
+  if (search.value.trim()) return false;
+  if (store.projectRef !== scopeKey.value || store.query)
+    store.prepareRealtimeScope(resourceScope.value);
   store.applySnapshot(
-    props.projectRef,
-    Object.values(platform.runtimeSecrets).filter(
-      (item) => item.projectRef === props.projectRef,
-    ),
+    resourceScope.value,
+    props.organizationScope
+      ? Object.values(platform.organizationRuntimeSecrets)
+      : Object.values(platform.runtimeSecrets).filter(
+          (item) => item.projectRef === props.projectRef,
+        ),
     snapshot.nextPageToken,
   );
   return true;
 }
 
 async function retryCatalog(): Promise<void> {
+  if (search.value.trim()) {
+    await store.load(resourceScope.value, search.value, pageSize.value);
+    return;
+  }
   if (!applyRealtimeSnapshot()) await platform.reloadPlatformState();
 }
 
@@ -130,7 +170,7 @@ function resumeCreateAfterReauthentication(): void {
   if (route.query.secretCreateAfterReauth !== "1") return;
   createSuggestion.value = consumeRuntimeSecretReauthSuggestion(
     window.sessionStorage,
-    { projectRef: props.projectRef },
+    { projectRef: resourceScope.value },
   );
   createOpen.value = true;
   void router.replace({
@@ -162,6 +202,19 @@ async function revokeSecret(): Promise<void> {
   }
 }
 
+async function reauthenticateRevoke(): Promise<void> {
+  if (!revokeTarget.value) return;
+  try {
+    await session.beginRuntimeSecretDraftReauth({
+      projectRef: resourceScope.value,
+      target: "secret",
+      targetRef: revokeTarget.value.ref,
+    });
+  } catch (error) {
+    store.mutationProblem = asProblem(error);
+  }
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(locale.value, {
     dateStyle: "medium",
@@ -170,8 +223,11 @@ function formatDate(value: string): string {
 }
 
 function restoreReauthenticatedReveal(): void {
-  if (revealTarget.value) return;
-  const secretRef = session.pendingRuntimeSecretReveal(props.projectRef);
+  if (revealTarget.value || !platform.bootstrap) return;
+  const secretRef = session.pendingRuntimeSecretReveal(
+    resourceScope.value,
+    platform.bootstrap.organizationRef,
+  );
   if (!secretRef) return;
   const secret = store.items.find((item) => item.ref === secretRef);
   if (secret && canRuntimeSecretAction(secret, "REVEAL"))
@@ -193,12 +249,12 @@ watch(search, (value) => {
     return;
   }
   searchTimer = setTimeout(
-    () => void store.load(props.projectRef, value, pageSize.value),
+    () => void store.load(resourceScope.value, value, pageSize.value),
     500,
   );
 });
 watch(
-  () => [props.projectRef, props.initialSecretRef],
+  () => [scopeKey.value, props.initialSecretRef],
   async (_value, _previous, cleanup) => {
     details.value = undefined;
     detailsProblem.value = undefined;
@@ -208,7 +264,7 @@ watch(
     try {
       const secret = await readRuntimeSecret(
         props.initialSecretRef,
-        props.projectRef,
+        resourceScope.value,
         controller.signal,
       );
       if (!controller.signal.aborted) details.value = secret;
@@ -218,20 +274,21 @@ watch(
   },
   { immediate: true },
 );
-watch(
-  () => props.projectRef,
-  (value) => {
-    createOpen.value = false;
-    rotateTarget.value = undefined;
-    revealTarget.value = undefined;
-    revokeTarget.value = undefined;
-    if (searchTimer) clearTimeout(searchTimer);
-    search.value = "";
-    store.prepareRealtimeScope(value);
-    applyRealtimeSnapshot();
-  },
-);
-watch(realtimeRevision, () => applyRealtimeSnapshot());
+watch(scopeKey, () => {
+  createOpen.value = false;
+  rotateTarget.value = undefined;
+  revealTarget.value = undefined;
+  revokeTarget.value = undefined;
+  if (searchTimer) clearTimeout(searchTimer);
+  search.value = "";
+  store.prepareRealtimeScope(resourceScope.value);
+  if (props.organizationScope)
+    void store.load(resourceScope.value, "", pageSize.value);
+  else applyRealtimeSnapshot();
+});
+watch(realtimeRevision, () => {
+  applyRealtimeSnapshot();
+});
 watch(
   () => store.items.map((item) => item.ref).join("\u0000"),
   restoreReauthenticatedReveal,
@@ -274,6 +331,7 @@ onBeforeUnmount(() => {
           {{ $t("runtimeSecrets.draft.resume") }}
         </button>
         <button
+          v-if="canCreate"
           class="button button--primary"
           type="button"
           :disabled="Boolean(store.busyRef)"
@@ -492,7 +550,7 @@ onBeforeUnmount(() => {
   />
   <RuntimeSecretDraftDialog
     v-if="createOpen"
-    :project-ref="projectRef"
+    :project-ref="resourceScope"
     :suggestion="createSuggestion"
     @close="createOpen = false"
     @saved="draftSaved"
@@ -502,7 +560,7 @@ onBeforeUnmount(() => {
   <RuntimeSecretDraftDialog
     v-if="rotateTarget"
     :secret="rotateTarget"
-    :project-ref="projectRef"
+    :project-ref="resourceScope"
     @close="rotateTarget = undefined"
     @saved="draftSaved"
     @published="store.acceptPublication"
@@ -511,7 +569,7 @@ onBeforeUnmount(() => {
   <RuntimeSecretDraftDialog
     v-if="resumeOpen && initialDraftRef"
     :key="JSON.stringify([initialDraftRef, initialPlanRef])"
-    :project-ref="projectRef"
+    :project-ref="resourceScope"
     :initial-draft-ref="initialDraftRef"
     :initial-plan-ref="initialPlanRef"
     @close="resumeOpen = false"
@@ -526,6 +584,7 @@ onBeforeUnmount(() => {
     :problem="store.mutationProblem"
     @close="revokeTarget = undefined"
     @confirm="revokeSecret"
+    @reauthenticate="reauthenticateRevoke"
   />
 </template>
 

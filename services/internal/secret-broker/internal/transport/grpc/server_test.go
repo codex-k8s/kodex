@@ -297,7 +297,7 @@ func successfulOwner(grant string, operation *controlplanev1.ConsumeRuntimeSecre
 	}
 	return &fakeOwner{
 		grants: map[string]*controlplanev1.ConsumeRuntimeSecretOperationResponse{grant: operation},
-		completion: &controlplanev1.RuntimeSecret{Ref: operation.GetSecretRef(), ProjectRef: operation.GetProjectRef(),
+		completion: &controlplanev1.RuntimeSecret{Ref: operation.GetSecretRef(), ScopeKind: operation.GetScopeKind(), OrganizationRef: operation.GetOrganizationRef(), ProjectRef: operation.GetProjectRef(),
 			Name: operation.GetName(), ValueType: operation.GetValueType(), State: state, CurrentRevision: operation.GetTargetRevision()},
 	}
 }
@@ -306,7 +306,7 @@ func mutationOperation(kind controlplanev1.RuntimeSecretOperationKind, ref strin
 	digest := sha256.Sum256(value)
 	encoded := hex.EncodeToString(digest[:])
 	return &controlplanev1.ConsumeRuntimeSecretOperationResponse{
-		OperationRef: ref, Kind: kind, ProjectRef: "prj_test123456", SecretRef: "sec_test123456",
+		OperationRef: ref, Kind: kind, ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture", ProjectRef: "prj_test123456", SecretRef: "sec_test123456",
 		Name: "TEST", ValueType: controlplanev1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING,
 		Namespace: runtimeNamespace, TargetRevision: 1, SecretKey: "value", ClaimGeneration: generation,
 		LeaseDeadline: timestamppb.Now(), ExpectedContentSha256: encoded,
@@ -319,7 +319,7 @@ func mutationOperation(kind controlplanev1.RuntimeSecretOperationKind, ref strin
 func readOperation(kind controlplanev1.RuntimeSecretOperationKind, ref string, generation int64) *controlplanev1.ConsumeRuntimeSecretOperationResponse {
 	digest := sha256.Sum256([]byte("stored-value"))
 	return &controlplanev1.ConsumeRuntimeSecretOperationResponse{
-		OperationRef: ref, Kind: kind, ProjectRef: "prj_test123456", SecretRef: "sec_test123456",
+		OperationRef: ref, Kind: kind, ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture", ProjectRef: "prj_test123456", SecretRef: "sec_test123456",
 		Name: "TEST", ValueType: controlplanev1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING,
 		Namespace: runtimeNamespace, TargetRevision: 1, SecretKey: "value", ClaimGeneration: generation,
 		LeaseDeadline: timestamppb.Now(),
@@ -337,6 +337,7 @@ func materialization(operation *controlplanev1.ConsumeRuntimeSecretOperationResp
 		uid, resourceVersion = "uid-test", "9"
 	}
 	return kubernetesstore.Materialization{
+		WorkKind:  kubernetesstore.WorkKindImmediate,
 		Namespace: runtimeNamespace, Name: descriptor.GetSecretName(), OperationRef: operation.GetOperationRef(),
 		ClaimGeneration: operation.GetClaimGeneration(), SecretRef: operation.GetSecretRef(), Key: operation.GetSecretKey(),
 		Revision: descriptor.GetRevision(), UID: uid, ResourceVersion: resourceVersion, ContentSHA256: descriptor.GetContentSha256(),

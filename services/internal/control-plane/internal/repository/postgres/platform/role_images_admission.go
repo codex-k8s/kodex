@@ -527,6 +527,8 @@ func (repository *Repository) completePromotion(ctx context.Context, input rolei
 	if promotionState != "PROMOTED" {
 		return entity.ImageArtifact{}, errs.ErrConflict
 	}
+	locked.Artifact.PromotionState = promotionState
+	locked.Artifact.PromotionRequested = true
 	revisionRef, err := newRef("imgrev")
 	if err != nil {
 		return entity.ImageArtifact{}, errs.ErrUnavailable

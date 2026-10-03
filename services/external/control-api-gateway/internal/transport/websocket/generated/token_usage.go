@@ -3,11 +3,11 @@
 package generated
 
 type TokenUsage struct {
-	TotalTokens int64 `json:"totalTokens"`
-	InputTokens int64 `json:"inputTokens"`
-	CachedInputTokens int64 `json:"cachedInputTokens"`
+	TotalTokens           int64 `json:"totalTokens"`
+	InputTokens           int64 `json:"inputTokens"`
+	CachedInputTokens     int64 `json:"cachedInputTokens"`
 	CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
-	OutputTokens int64 `json:"outputTokens"`
+	OutputTokens          int64 `json:"outputTokens"`
 	ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
-	ModelContextWindow int64 `json:"modelContextWindow"`
+	ModelContextWindow    int64 `json:"modelContextWindow"`
 }

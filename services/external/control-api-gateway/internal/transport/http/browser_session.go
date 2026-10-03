@@ -90,7 +90,12 @@ func sessionPurposeMap(source *generated.OwnerSessionPurpose) *boundary.SessionP
 	if source == nil {
 		return nil
 	}
+	scopeKind := ""
+	if source.ScopeKind != nil {
+		scopeKind = string(*source.ScopeKind)
+	}
 	purpose := &boundary.SessionPurpose{Kind: string(source.Kind), ProjectRef: stringValue(source.ProjectRef), SecretRef: stringValue(source.SecretRef),
+		ScopeKind: scopeKind, OrganizationRef: stringValue(source.OrganizationRef),
 		ReceiptRef: stringValue(source.ReceiptRef), ReceiptDigest: stringValue(source.ReceiptDigest)}
 	if source.ReceiptVersion != nil {
 		purpose.ReceiptVersion = *source.ReceiptVersion

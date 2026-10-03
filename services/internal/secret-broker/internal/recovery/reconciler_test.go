@@ -300,6 +300,7 @@ func newTestReconciler(t *testing.T, owner Owner, store Store) *Reconciler {
 
 func recoveryMaterialization(operationRef string, generation int64) kubernetesstore.Materialization {
 	return kubernetesstore.Materialization{
+		WorkKind:  kubernetesstore.WorkKindImmediate,
 		Namespace: "kodex-runtime", Name: "runtime-secret-test-r1", OperationRef: operationRef,
 		ClaimGeneration: generation, SecretRef: "sec_test123456", Key: "value", Revision: 1,
 		UID: "uid-test", ResourceVersion: "10", ContentSHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",

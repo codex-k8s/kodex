@@ -3,6 +3,46 @@
   "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
   "operations": [
     {
+      "operation_id": "platform.organization.role-images.recipe-revisions.list",
+      "source_binding_sha256": "84c5b62cff8efe2f489c7fb948d01f9e51a7bb6bfc1f137404c48eb957497efc",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.organization.runtime-environment-drafts.create",
+      "source_binding_sha256": "c5dfba878872626c206606a825e697cfcaaa48a87571d2c355617ea41f48cc37",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.organization.runtime-secret-drafts.create",
+      "source_binding_sha256": "d937f30fe36f382e125d2205cac89836d2af2361d432fc862ea12b2816579697",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.organization.runtime-secrets.list",
+      "source_binding_sha256": "5ed820041e9ec1dd09b889c23b2aeb61d386f21e3e5ec120a786cbb244aaef31",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.organization.role-images.recipes.list",
+      "source_binding_sha256": "adde41ece9d9e6e9eabc05c518b3a18ec84a3c34afc5f666024b06853c0f964e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.organization.role-images.recipes.get",
+      "source_binding_sha256": "284a73345b405ef2a1a5ea9426eb1d144fc43e279a7ad77886f581bb32874b57",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.organization.role-images.recipes.manage",
+      "source_binding_sha256": "8f70dbc181ce9e3edb6aa6307f7fca7f91cefb908ea87d9066401bfd59b3cf36",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.organization.role-images.promote",
+      "source_binding_sha256": "b26efec6eae2c0a4d5ec3c47d40dd1addfa525c3fc5dc97c9e7413f5e82c71e0",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.access.bindings.change",
       "source_binding_sha256": "9da08ab51d79609fce3312a1be1b4ad8812548e95bc9f1d49dbbecb39c730999",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"

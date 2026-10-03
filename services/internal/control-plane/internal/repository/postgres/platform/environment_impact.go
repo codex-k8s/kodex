@@ -25,9 +25,9 @@ var queryEnvironmentImpactConsumers string
 
 func (repository *Repository) environmentImpactTarget(ctx context.Context, tx pgx.Tx, current scope, ref, version string) (entity.RuntimeEnvironmentImpact, string, error) {
 	var result entity.RuntimeEnvironmentImpact
-	var projectRef, projectID string
+	var projectRef, projectID, scopeKind string
 	err := tx.QueryRow(ctx, queryEnvironmentImpactTarget, current.organizationID, ref, version).Scan(
-		&result.EnvironmentRef, &result.EnvironmentVersion, &result.TargetVersionRef, &result.TargetDigest, &projectRef, &projectID)
+		&result.EnvironmentRef, &result.EnvironmentVersion, &result.TargetVersionRef, &result.TargetDigest, &projectRef, &projectID, &scopeKind)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, "", errs.ErrNotFound
 	}
@@ -37,7 +37,7 @@ func (repository *Repository) environmentImpactTarget(ctx context.Context, tx pg
 	if current.authorityProjectID != "" && current.authorityProjectID != projectID {
 		return result, "", errs.ErrForbidden
 	}
-	if err := repository.requireAccess(ctx, tx, current, "project.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: projectRef}); err != nil {
+	if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, scopeKind, projectRef); err != nil {
 		return result, "", err
 	}
 	return result, projectRef, nil

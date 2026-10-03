@@ -1,5 +1,6 @@
 import {
   createRuntimeEnvironmentDraft,
+  createSystemRuntimeEnvironmentDraft,
   getRuntimeEnvironmentDraft,
   saveRuntimeEnvironmentDraft,
   validateRuntimeEnvironmentDraft,
@@ -22,12 +23,22 @@ import {
   publicationPlanIdentity,
   publicationSelection,
 } from "./publication-impact";
+import {
+  assertRuntimeResourceAddressIdentity,
+  runtimeResourceAddressFromIdentity,
+  runtimeResourceAddressScope,
+  type RuntimeResourceAddress,
+} from "./resource-scope";
 
 export async function prepareEnvironmentPublication(
   draft: RuntimeEnvironmentDraft,
   signal: AbortSignal,
 ): Promise<RevisionImpactPlan> {
-  const fresh = await readEnvironmentDraft(draft.projectRef, draft.ref, signal);
+  const fresh = await readEnvironmentDraft(
+    runtimeResourceAddressFromIdentity(draft),
+    draft.ref,
+    signal,
+  );
   if (
     fresh.version !== draft.version ||
     fresh.state !== "VALID" ||
@@ -87,6 +98,9 @@ export async function publishEnvironmentDraft(
     )
   ).data;
   checkedPublicationPlan(result.plan);
+  const scope = runtimeResourceAddressFromIdentity(draft);
+  assertRuntimeResourceAddressIdentity(scope, result.draft);
+  assertRuntimeResourceAddressIdentity(scope, result.environment);
   if (
     publicationPlanIdentity(result.plan) !== publicationPlanIdentity(plan) ||
     result.plan.state !== "APPLIED" ||
@@ -120,12 +134,11 @@ export function environmentDraftFingerprint(
 
 function readback(
   result: ApiReadback<RuntimeEnvironmentDraft>,
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   draftRef?: string,
 ): RuntimeEnvironmentDraft {
   const draft = result.data;
   if (
-    draft.projectRef !== projectRef ||
     (draftRef && draft.ref !== draftRef) ||
     !draft.ref ||
     result.etag !== etag(draft.version) ||
@@ -133,10 +146,11 @@ function readback(
     (draft.state === "PUBLISHED" && !draft.publishedEnvironmentRef)
   )
     throw new Error("Invalid runtime environment draft readback");
+  assertRuntimeResourceAddressIdentity(scope, draft);
   return draft;
 }
 export async function readEnvironmentDraft(
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   draftRef: string,
   signal: AbortSignal,
 ): Promise<RuntimeEnvironmentDraft> {
@@ -147,31 +161,66 @@ export async function readEnvironmentDraft(
         signal: requestSignal(signal),
       }),
     ),
-    projectRef,
+    scope,
     draftRef,
   );
 }
 export async function createEnvironmentDraft(
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   specification: RuntimeEnvironmentDraftSpecification,
   signal: AbortSignal,
   environment?: Pick<RuntimeEnvironmentSet, "ref" | "version">,
+  key?: string,
 ): Promise<RuntimeEnvironmentDraft> {
-  const result = await mutate((headers) =>
-    createRuntimeEnvironmentDraft({
-      headers: { ...headers },
-      path: { projectRef },
-      body: {
-        specification,
-        ...(environment
-          ? {
-              environmentRef: environment.ref,
-              expectedEnvironmentVersion: environment.version,
-            }
-          : {}),
-      },
-      signal: requestSignal(signal),
-    }),
+  const resolved = runtimeResourceAddressScope(scope);
+  const body = {
+    specification,
+    ...(environment
+      ? {
+          environmentRef: environment.ref,
+          expectedEnvironmentVersion: environment.version,
+        }
+      : {}),
+  };
+  if (resolved.kind === "ORGANIZATION") {
+    const result = await mutate(
+      (headers) =>
+        createSystemRuntimeEnvironmentDraft({
+          headers: { ...headers },
+          body,
+          signal: requestSignal(signal),
+        }),
+      undefined,
+      key,
+    );
+    const draft = readback(result, scope);
+    if (
+      draft.state !== "DRAFT" ||
+      (draft.environmentRef || undefined) !== environment?.ref ||
+      draft.expectedEnvironmentVersion !== (environment?.version ?? 0)
+    )
+      throw new Error("Invalid runtime environment draft origin");
+    return draft;
+  }
+  const projectRef = resolved.projectRef;
+  const result = await mutate(
+    (headers) =>
+      createRuntimeEnvironmentDraft({
+        headers: { ...headers },
+        path: { projectRef },
+        body: {
+          specification,
+          ...(environment
+            ? {
+                environmentRef: environment.ref,
+                expectedEnvironmentVersion: environment.version,
+              }
+            : {}),
+        },
+        signal: requestSignal(signal),
+      }),
+    undefined,
+    key,
   );
   const draft = readback(result, projectRef);
   if (
@@ -186,6 +235,7 @@ export async function saveEnvironmentDraft(
   draft: RuntimeEnvironmentDraft,
   specification: RuntimeEnvironmentDraftSpecification,
   signal: AbortSignal,
+  key?: string,
 ): Promise<RuntimeEnvironmentDraft> {
   const result = await mutate(
     (headers) =>
@@ -196,8 +246,13 @@ export async function saveEnvironmentDraft(
         signal: requestSignal(signal),
       }),
     draft.version,
+    key,
   );
-  const saved = readback(result, draft.projectRef, draft.ref);
+  const saved = readback(
+    result,
+    runtimeResourceAddressFromIdentity(draft),
+    draft.ref,
+  );
   if (saved.state !== "DRAFT")
     throw new Error("Invalid runtime environment save state");
   return saved;
@@ -220,7 +275,11 @@ export async function transitionEnvironmentDraft(
       }),
     draft.version,
   );
-  const saved = readback(result, draft.projectRef, draft.ref);
+  const saved = readback(
+    result,
+    runtimeResourceAddressFromIdentity(draft),
+    draft.ref,
+  );
   if (
     !(action === "validate" ? ["VALID", "INVALID"] : ["DISCARDED"]).includes(
       saved.state,

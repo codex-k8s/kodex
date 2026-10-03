@@ -2,6 +2,7 @@ import { requestSignal } from "@/shared/api/client";
 import {
   createRuntimeSecret as createRuntimeSecretRequest,
   listRuntimeSecrets,
+  listSystemRuntimeSecrets,
   getRuntimeSecret,
   revealRuntimeSecret as revealRuntimeSecretRequest,
   revokeRuntimeSecret as revokeRuntimeSecretRequest,
@@ -23,20 +24,30 @@ import type {
   RuntimeSecretRotateInput,
 } from "./model";
 import { normalizeSecretPage } from "./model";
+import {
+  assertRuntimeResourceAddressIdentity,
+  runtimeResourceAddressScope,
+  type RuntimeResourceAddress,
+} from "@/features/runtime/resource-scope";
 
 export async function readRuntimeSecret(
   secretRef: string,
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   signal: AbortSignal,
 ): Promise<RuntimeSecret> {
   const result = (
     await unwrap(
-      getRuntimeSecret({ path: { secretRef }, signal: requestSignal(signal) }),
+      getRuntimeSecret({
+        path: { secretRef },
+        signal: requestSignal(signal),
+        cache: "no-store",
+      }),
     )
   ).data;
   const secret = normalizeSecretPage({ items: [result] }).items[0];
-  if (!secret || secret.ref !== secretRef || secret.projectRef !== projectRef)
+  if (!secret || secret.ref !== secretRef)
     throw new Error("Runtime secret link scope mismatch");
+  assertRuntimeResourceAddressIdentity(scope, secret);
   return secret;
 }
 
@@ -61,12 +72,27 @@ function versionedHeaders(headers: MutationHeaders): {
 }
 
 export async function loadRuntimeSecretPage(
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   query: string,
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
   pageSize = 20,
 ): Promise<RuntimeSecretPage> {
+  const resolved = runtimeResourceAddressScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return (
+      await unwrap(
+        listSystemRuntimeSecrets({
+          query: {
+            pageSize,
+            ...(query.trim() ? { query: query.trim() } : {}),
+            ...(pageToken ? { pageToken } : {}),
+          },
+          signal,
+        }),
+      )
+    ).data;
+  const projectRef = resolved.projectRef;
   return (
     await unwrap(
       listRuntimeSecrets({
@@ -134,15 +160,24 @@ export async function revokeRuntimeSecret(
 
 export async function revealRuntimeSecret(
   secretRef: string,
+  scope: RuntimeResourceAddress,
+  organizationRef: string,
 ): Promise<RuntimeSecretReveal> {
+  const signal = requestSignal();
+  const secret = await readRuntimeSecret(secretRef, scope, signal);
+  assertRuntimeResourceAddressIdentity(scope, secret, organizationRef);
+  const resolved = runtimeResourceAddressScope(scope);
   const result = await revealRuntimeSecretRequest({
     path: { secretRef },
     cache: "no-store",
     headers: {
       "Idempotency-Key": idempotencyKey(),
       "X-CSRF-Token": csrfToken(),
+      ...(resolved.kind === "PROJECT"
+        ? { "X-Kodex-Project-ID": resolved.projectRef }
+        : {}),
     },
-    signal: requestSignal(),
+    signal,
   });
   const readback = await unwrap<RuntimeSecretReveal>(Promise.resolve(result));
   if (result.response?.headers.get("Cache-Control") !== "no-store") {

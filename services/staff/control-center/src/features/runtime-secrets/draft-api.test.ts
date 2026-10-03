@@ -36,6 +36,8 @@ import {
 } from "./draft-api";
 
 const draft: RuntimeSecretDraft = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "draft_1",
   version: 4,
   generation: 2,

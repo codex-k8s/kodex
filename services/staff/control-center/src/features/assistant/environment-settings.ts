@@ -3,7 +3,7 @@ import {
   editableSecretBindings,
 } from "@/features/runtime/environment-form";
 import {
-  assertRuntimeResourceScope,
+  assertRuntimeResourceIdentity,
   type RuntimeResourceScope,
 } from "@/features/runtime/resource-scope";
 import type {
@@ -15,7 +15,13 @@ export function editableAssistantEnvironment(
   environment: RuntimeEnvironmentSet,
   scope: RuntimeResourceScope,
 ): RuntimeEnvironmentInput {
-  assertRuntimeResourceScope(scope, environment.projectRef);
+  assertRuntimeResourceIdentity(
+    scope,
+    environment,
+    scope.kind === "ORGANIZATION"
+      ? scope.organizationRef
+      : environment.organizationRef,
+  );
   const current = environment.currentVersion;
   return {
     name: environment.name,

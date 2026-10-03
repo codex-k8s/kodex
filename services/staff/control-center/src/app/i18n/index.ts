@@ -1493,14 +1493,14 @@ const ru = {
     secretDescriptorsHelp:
       "Ссылки закрепляют точную ревизию Kubernetes Secret; значения не читаются и не сохраняются UI.",
     secretBindingsHelp:
-      "Задайте имя переменной и выберите активный секрет Проекта. Неизменяемые Kubernetes-метаданные назначит сервер при публикации.",
+      "Задайте имя переменной и выберите активный секрет из доступного каталога. Неизменяемые Kubernetes-метаданные назначит сервер при публикации.",
     addSecretDescriptor: "Добавить descriptor",
     addSecretBinding: "Добавить секрет",
     secretValuesForbidden:
-      "Не вставляйте сюда token, пароль или ключ. Выберите секрет из безопасного каталога Проекта.",
+      "Не вставляйте сюда токен, пароль или ключ. Выберите секрет из безопасного каталога.",
     secretDescriptor: "Secret descriptor {number}",
     secretBinding: "Секретная переменная {number}",
-    runtimeSecret: "Секрет Проекта",
+    runtimeSecret: "Секрет",
     chooseRuntimeSecret: "Выберите секрет",
     searchRuntimeSecret: "Поиск секретов на сервере",
     secretNotSelected: "Секрет не выбран",
@@ -3604,9 +3604,26 @@ const ru = {
     },
   },
   assistant: {
+    resources: {
+      title: "Образ, секреты и окружение помощника",
+      images: "Каталог образов",
+      createImage: "Создать образ",
+      secrets: "Секреты",
+      systemHelp:
+        "Подготовьте ресурсы общесистемного помощника. Они не принадлежат проектам. После публикации образа и секретов выберите их в настройках окружения помощника.",
+      organizationImages: "Общесистемные образы",
+      organizationSecrets: "Общесистемные секреты",
+      organizationHelp:
+        "Ресурсы системного помощника — только для владельца и администраторов.",
+      environment: "Окружение помощника",
+      publicationHelp:
+        "Сначала сохраните черновик, проверьте его, затем подтвердите влияние и публикацию. Изменения применяются к следующим ходам.",
+    },
     replaceDraftConfirm:
       "Заменить текущий неотправленный текст запросом на публикацию интеграции?",
     projectProfile: {
+      resourcesHelp:
+        "Настройте отдельный образ, секреты и окружение в этом проекте.",
       needsSetupBadge: "Требует настройки",
       title: "Помощник Проекта",
       scopeLabel: "Какой помощник ведёт диалог",
@@ -4089,7 +4106,7 @@ const ru = {
       environmentRevisionBoundary:
         "Проверьте название, описание, образ, инструменты, параметры, привязки секретов и политику. Применение создаст только черновик новой ревизии.",
       systemEnvironmentBoundary:
-        "Это окружение самого Kodex. Платформенный образ и секреты здесь не меняются; проверьте публичные переменные, ресурсы и сетевой доступ.",
+        "Это окружение общесистемного Kodex. Проверьте общесистемный образ, инструменты, переменные, привязки секретов, ресурсы и сетевой доступ. Подтверждение создаст только черновик.",
       environmentPolicyInvalid:
         "Политика окружения повреждена или содержит недопустимые поля. Попросите подготовить новый план.",
       environmentPolicyFreshAuthentication:
@@ -4103,7 +4120,7 @@ const ru = {
       environmentRevisionNextSteps:
         "После подтверждения будет создан черновик новой ревизии. Откройте его, проверьте влияние на сотрудников и опубликуйте отдельно.",
       systemEnvironmentNextSteps:
-        "После подтверждения новая ревизия будет опубликована для следующих ходов Kodex; текущий ход продолжит работать на закреплённой ревизии.",
+        "Откройте созданный черновик, проверьте его и влияние изменений, затем отдельно подтвердите публикацию для следующих ходов Kodex. Текущий ход сохраняет закреплённую ревизию.",
       bindingBoundary:
         "Назначается только готовая опубликованная среда этого проекта. Секреты и параметры окружения здесь не меняются.",
       bindingLoadFailed:
@@ -5904,14 +5921,14 @@ const en = {
     secretDescriptorsHelp:
       "References pin an exact Kubernetes Secret revision; values are not read or stored by the UI.",
     secretBindingsHelp:
-      "Set the variable name and choose an active Project secret. The server assigns immutable Kubernetes metadata when publishing.",
+      "Set the variable name and choose an active secret from the available catalog. The server assigns immutable Kubernetes metadata when publishing.",
     addSecretDescriptor: "Add descriptor",
     addSecretBinding: "Add secret",
     secretValuesForbidden:
-      "Do not paste a token, password or key. Choose a secret from the protected Project catalog.",
+      "Do not paste a token, password or key. Choose a secret from the protected catalog.",
     secretDescriptor: "Secret descriptor {number}",
     secretBinding: "Secret variable {number}",
-    runtimeSecret: "Project secret",
+    runtimeSecret: "Secret",
     chooseRuntimeSecret: "Choose a secret",
     searchRuntimeSecret: "Search secrets on the server",
     secretNotSelected: "No secret selected",
@@ -7917,7 +7934,24 @@ const en = {
   },
   assistant: {
     ...ru.assistant,
+    resources: {
+      title: "Assistant image, secrets, and environment",
+      images: "Image catalog",
+      createImage: "Create image",
+      secrets: "Secrets",
+      systemHelp:
+        "Prepare resources for the system assistant. These resources do not belong to projects. Once images and secrets are published, select them in the assistant's environment settings.",
+      organizationImages: "System images",
+      organizationSecrets: "System secrets",
+      organizationHelp:
+        "System assistant resources are restricted to owners and administrators.",
+      environment: "Assistant environment",
+      publicationHelp:
+        "Save and validate a draft, then confirm its impact and publication. Changes apply to subsequent turns.",
+    },
     projectProfile: {
+      resourcesHelp:
+        "Configure a separate image, secrets, and environment in this project.",
       needsSetupBadge: "Needs setup",
       title: "Project assistant",
       scopeLabel: "Conversation assistant",
@@ -8397,7 +8431,7 @@ const en = {
       environmentRevisionBoundary:
         "Review the name, description, image, tools, values, secret bindings, and policy. Applying this creates only a new revision draft.",
       systemEnvironmentBoundary:
-        "This is Kodex's own environment. The platform image and secrets stay fixed; review public values, resources, and network access.",
+        "This is the system Kodex environment. Review its organization image, tools, values, secret bindings, resources, and network access. Confirmation creates only a draft.",
       environmentPolicyInvalid:
         "The environment policy is damaged or contains unsupported fields. Request a new plan.",
       environmentPolicyFreshAuthentication:
@@ -8411,7 +8445,7 @@ const en = {
       environmentRevisionNextSteps:
         "Confirmation creates a revision draft. Open it, review its impact on employees, and publish separately.",
       systemEnvironmentNextSteps:
-        "Confirmation publishes a new revision for subsequent Kodex turns; the current turn keeps its pinned revision.",
+        "Open the draft, validate it and review its impact, then separately confirm publication for subsequent Kodex turns. The current turn keeps its pinned revision.",
       bindingBoundary:
         "Only a ready, published environment in this project can be assigned. Secrets and environment settings do not change here.",
       bindingLoadFailed:

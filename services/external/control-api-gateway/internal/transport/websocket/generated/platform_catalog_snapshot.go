@@ -7,6 +7,10 @@ import (
 )
 
 type PlatformCatalogSnapshot struct {
+	OrganizationRecipes       []httpgenerated.RoleImageRecipe             `json:"organizationRecipes,omitempty"`
+	OrganizationRecipesPage   *PlatformPageCursor                         `json:"organizationRecipesPage,omitempty"`
+	OrganizationSecrets       []httpgenerated.RuntimeSecret               `json:"organizationSecrets,omitempty"`
+	OrganizationSecretsPage   *PlatformPageCursor                         `json:"organizationSecretsPage,omitempty"`
 	Projects                  []httpgenerated.Project                     `json:"projects,omitempty"`
 	TrashedProjects           []httpgenerated.Project                     `json:"trashedProjects,omitempty"`
 	TrashPage                 *PlatformPageCursor                         `json:"trashPage,omitempty"`

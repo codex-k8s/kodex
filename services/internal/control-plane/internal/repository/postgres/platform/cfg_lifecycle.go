@@ -292,7 +292,7 @@ func (repository *Repository) archiveCFG(ctx context.Context, tx pgx.Tx, current
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if err == nil {
-			result, _, _, applyErr := repository.applyRoleImageManage(ctx, tx, current, roleimagerepo.ManageInput{Action: "ARCHIVE", RecipeRef: recipeRef, ProjectRef: set.ProjectRef, Mutation: value.Mutation{ExpectedVersion: &version}})
+			result, _, _, applyErr := repository.applyRoleImageManage(ctx, tx, current, roleimagerepo.ManageInput{ScopeKind: "PROJECT", Action: "ARCHIVE", RecipeRef: recipeRef, ProjectRef: set.ProjectRef, Mutation: value.Mutation{ExpectedVersion: &version}})
 			err = applyErr
 			if err != nil {
 				return commandOutcome{}, err

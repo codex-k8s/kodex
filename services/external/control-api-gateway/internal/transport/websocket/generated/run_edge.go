@@ -3,10 +3,10 @@
 package generated
 
 type RunEdge struct {
-	Ref string `json:"ref"`
-	RunRef string `json:"runRef"`
-	SourceNodeRef string `json:"sourceNodeRef"`
-	TargetNodeRef string `json:"targetNodeRef"`
-	Type RunEdgeType `json:"type"`
-	Label string `json:"label"`
+	Ref           string      `json:"ref"`
+	RunRef        string      `json:"runRef"`
+	SourceNodeRef string      `json:"sourceNodeRef"`
+	TargetNodeRef string      `json:"targetNodeRef"`
+	Type          RunEdgeType `json:"type"`
+	Label         string      `json:"label"`
 }

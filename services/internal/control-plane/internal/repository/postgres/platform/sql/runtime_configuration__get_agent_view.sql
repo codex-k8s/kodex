@@ -63,8 +63,9 @@ SELECT config.ref,
        environment_version.rbac_digest,
        environment_version.digest,
        environment_version.created_at,
-       agent.version
+       agent.version, environment.scope_kind, organization.ref
 FROM control_plane.agents agent
+JOIN control_plane.organizations organization ON organization.id = agent.organization_id
 LEFT JOIN control_plane.projects project ON project.id = agent.project_id
 JOIN control_plane.agent_runtime_config_versions config ON config.id = agent.current_runtime_config_id
 JOIN control_plane.provider_account_policy_versions policy ON policy.id = config.provider_account_policy_id

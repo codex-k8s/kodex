@@ -1,5 +1,9 @@
 AUTOMATION_VARIABLE_NAME:
   other: Название Автоматизации
+PROJECT_ASSISTANT_ROLE:
+  other: Помощник Проекта
+PROJECT_ASSISTANT_CREATED:
+  other: Помощник Проекта создан
 AUTOMATION_VARIABLE_TASK:
   other: Исходная задача Автоматизации
 AUTOMATION_VARIABLE_SCHEDULED_AT:

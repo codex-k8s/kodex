@@ -5,7 +5,7 @@ package generated
 type IncidentState string
 
 const (
-	IncidentStateOpen IncidentState = "OPEN"
+	IncidentStateOpen       IncidentState = "OPEN"
 	IncidentStateRecovering IncidentState = "RECOVERING"
-	IncidentStateResolved IncidentState = "RESOLVED"
+	IncidentStateResolved   IncidentState = "RESOLVED"
 )

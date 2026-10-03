@@ -6,6 +6,8 @@ import {
   parseEmailReconciliationIntent,
   consumeRuntimeEnvironmentPolicyReauthCompletion,
   createRuntimeEnvironmentPolicyIntent,
+  createOrganizationAssistantEnvironmentIntent,
+  parseOrganizationAssistantEnvironmentIntent,
   createRuntimeSecretRevealIntent,
   createRuntimeSecretDraftIntent,
   oidcReauthIntentStorageKey,
@@ -189,6 +191,7 @@ describe("OIDC re-auth intents", () => {
     const intent = createRuntimeSecretRevealIntent(
       "project_sales",
       "secret_main",
+      "org_synthetic",
       1_000,
     );
 
@@ -196,13 +199,68 @@ describe("OIDC re-auth intents", () => {
       action: "reveal",
       issuedAt: 1_000,
       kind: "runtime-secret",
-      projectRef: "project_sales",
+      resourceScope: { kind: "PROJECT", projectRef: "project_sales" },
+      organizationRef: "org_synthetic",
       returnPath: "/projects/project_sales/secrets",
       secretRef: "secret_main",
       version: 1,
     });
   });
 
+  it("ORG reveal не принимает проектный locator и связывает callback с exact org scope", () => {
+    const scope = {
+      kind: "ORGANIZATION",
+      organizationRef: "org_synthetic",
+    } as const;
+    const intent = createRuntimeSecretRevealIntent(
+      scope,
+      "secret_main",
+      scope.organizationRef,
+      1000,
+    );
+    expect(intent.returnPath).toBe("/organization/secrets");
+    expect(() =>
+      parseRuntimeSecretRevealIntent({ ...intent, projectRef: "" }, 1100),
+    ).toThrow();
+    expect(() =>
+      consumeOidcIntent(
+        { ...intent, organizationRef: "org_foreign" },
+        pendingStorage(intent),
+        1100,
+      ),
+    ).toThrow();
+  });
+  it("ORG environment reauth хранит только exact metadata и фиксированный return path", () => {
+    const intent = createOrganizationAssistantEnvironmentIntent(
+      {
+        organizationRef: "org_synthetic",
+        agentRef: "agent_synthetic",
+        environmentRef: "environment_synthetic",
+        draftRef: "draft_synthetic",
+        draftVersion: 7,
+      },
+      1000,
+    );
+    expect(intent.returnPath).toBe(
+      "/organization/assistant/environment?draftRef=draft_synthetic",
+    );
+    expect(() =>
+      parseOrganizationAssistantEnvironmentIntent(
+        { ...intent, input: {} },
+        1100,
+      ),
+    ).toThrow();
+    expect(() =>
+      consumeOidcIntent(
+        { ...intent, draftVersion: 8 },
+        pendingStorage(intent),
+        1100,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseOrganizationAssistantEnvironmentIntent(intent, 301001),
+    ).toThrow();
+  });
   it("формирует разные фиксированные пути create и publish окружения", () => {
     expect(
       createRuntimeEnvironmentPolicyIntent(
@@ -274,6 +332,7 @@ describe("OIDC re-auth intents", () => {
     const secretIntent = createRuntimeSecretRevealIntent(
       "project_sales",
       "secret_main",
+      "org_synthetic",
       1_000,
     );
     const environmentIntent = createRuntimeEnvironmentPolicyIntent(

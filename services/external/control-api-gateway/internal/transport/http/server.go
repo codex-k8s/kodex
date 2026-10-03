@@ -109,17 +109,7 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 	}
 	var purpose *boundary.SessionPurpose
 	if body != nil && body.Purpose != nil {
-		secretRef := ""
-		if body.Purpose.SecretRef != nil {
-			secretRef = *body.Purpose.SecretRef
-		}
-		purpose = &boundary.SessionPurpose{
-			Kind: string(body.Purpose.Kind), ProjectRef: stringValue(body.Purpose.ProjectRef), SecretRef: secretRef,
-			ReceiptRef: stringValue(body.Purpose.ReceiptRef), ReceiptDigest: stringValue(body.Purpose.ReceiptDigest),
-		}
-		if body.Purpose.ReceiptVersion != nil {
-			purpose.ReceiptVersion = *body.Purpose.ReceiptVersion
-		}
+		purpose = sessionPurposeMap(body.Purpose)
 	}
 	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer, purpose)
 	if err != nil {
@@ -625,6 +615,14 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 	switch field.Kind() {
 	case protoreflect.EnumKind:
+		if field.Enum().FullName() == "controlplane.v1.RuntimeResourceScopeKind" {
+			name, ok := value.(string)
+			kind := runtimeResourceScopeKind(name)
+			if !ok || !kind.Valid() {
+				return nil, errors.New("public runtime resource scope is invalid")
+			}
+			return string(kind), nil
+		}
 		if prefix, ok := runtimeEnvironmentEnumPrefixes[field.Enum().FullName()]; ok {
 			name, valid := value.(string)
 			item := field.Enum().Values().ByName(protoreflect.Name(name))

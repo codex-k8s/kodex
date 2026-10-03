@@ -129,6 +129,17 @@ func (reconciler *Reconciler) ReconcileOnce(ctx context.Context) error {
 		items = nil
 	}
 	for _, item := range items {
+		if item.WorkKind == kubernetesstore.WorkKindDraft {
+			// Данный маршрут не имеет draft claimant fence и не может заменять
+			// отдельный owner-controlled draft recovery/retirement worker.
+			continue
+		}
+		if item.WorkKind != kubernetesstore.WorkKindImmediate {
+			failures++
+			reconciler.metrics.ObserveError("protocol")
+			joined = errors.Join(joined, errors.New("runtime secret recovery work kind is invalid"))
+			continue
+		}
 		exact, readErr := reconciler.store.ReadbackExact(ctx, item)
 		if errors.Is(readErr, kubernetesstore.ErrMaterializationNotFound) {
 			reconciler.metrics.ObserveAction("not_found")
@@ -294,6 +305,7 @@ func (reconciler *Reconciler) reconcileExpiredClaim(
 	case controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_CREATE,
 		controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_ROTATE:
 		effect := kubernetesstore.MaterializationEffect{
+			WorkKind:     kubernetesstore.WorkKindImmediate,
 			OperationRef: item.OperationRef, ClaimGeneration: item.ClaimGeneration,
 			SecretRef: item.SecretRef, Key: item.SecretKey, Revision: item.TargetRevision,
 			ContentSHA256: item.ExpectedContentSHA256,

@@ -3,9 +3,9 @@
 package generated
 
 type RunGraph struct {
-	RunRef string `json:"runRef"`
-	Revision int64 `json:"revision"`
-	Sequence int64 `json:"sequence"`
-	Nodes []RunNode `json:"nodes"`
-	Edges []RunEdge `json:"edges"`
+	RunRef   string    `json:"runRef"`
+	Revision int64     `json:"revision"`
+	Sequence int64     `json:"sequence"`
+	Nodes    []RunNode `json:"nodes"`
+	Edges    []RunEdge `json:"edges"`
 }

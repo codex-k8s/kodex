@@ -7,6 +7,14 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
 
+// Область назначает владелец состояния из проверенного actor context.
+// Неопределённая область и несовместимый project locator закрыто отклоняются.
+enum RuntimeResourceScopeKind {
+  RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED = 0;
+  RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION = 1;
+  RUNTIME_RESOURCE_SCOPE_KIND_PROJECT = 2;
+}
+
 // Control-plane является единственным владельцем web-first предметной модели.
 // Actor, organization и permissions поступают только из проверенного transport
 // context и никогда не выбираются полями этих запросов.
@@ -95,6 +103,7 @@ service PlatformQueryService {
   rpc ValidatePromptTemplate(ValidatePromptTemplateRequest) returns (ValidatePromptTemplateResponse);
   rpc PreviewPromptTemplate(PreviewPromptTemplateRequest) returns (PreviewPromptTemplateResponse);
   rpc ListRuntimeSecrets(ListRuntimeSecretsRequest) returns (ListRuntimeSecretsResponse);
+  rpc ListOrganizationRuntimeSecrets(ListOrganizationRuntimeSecretsRequest) returns (ListOrganizationRuntimeSecretsResponse);
   rpc GetRuntimeSecret(GetRuntimeSecretRequest) returns (GetRuntimeSecretResponse);
   rpc ListManagedConfigurationHistory(ListManagedConfigurationHistoryRequest) returns (ListManagedConfigurationHistoryResponse);
   rpc ListManagedConfigurations(ListManagedConfigurationsRequest) returns (ListManagedConfigurationsResponse);
@@ -120,6 +129,7 @@ service PlatformCommandService {
   rpc UnbindEmailMailboxConfiguration(UnbindEmailMailboxConfigurationRequest) returns (UnbindEmailMailboxConfigurationResponse);
   rpc PrepareRuntimeSecretDraftImpact(PrepareRuntimeSecretDraftImpactRequest) returns (PrepareRuntimeSecretDraftImpactResponse);
   rpc PrepareSaveRuntimeSecretDraft(PrepareSaveRuntimeSecretDraftRequest) returns (PrepareSaveRuntimeSecretDraftResponse);
+  rpc PrepareOrganizationRuntimeSecretDraft(PrepareOrganizationRuntimeSecretDraftRequest) returns (PrepareOrganizationRuntimeSecretDraftResponse);
   rpc PrepareValidateRuntimeSecretDraft(PrepareValidateRuntimeSecretDraftRequest) returns (PrepareValidateRuntimeSecretDraftResponse);
   rpc PreparePublishRuntimeSecretDraft(PreparePublishRuntimeSecretDraftRequest) returns (PreparePublishRuntimeSecretDraftResponse);
   rpc PrepareDiscardRuntimeSecretDraft(PrepareDiscardRuntimeSecretDraftRequest) returns (PrepareDiscardRuntimeSecretDraftResponse);
@@ -152,6 +162,7 @@ service PlatformCommandService {
   rpc BindAgentMemoryRecord(BindAgentMemoryRecordRequest) returns (BindAgentMemoryRecordResponse);
   rpc UnbindAgentMemoryRecord(UnbindAgentMemoryRecordRequest) returns (UnbindAgentMemoryRecordResponse);
   rpc CreateRuntimeEnvironmentDraft(CreateRuntimeEnvironmentDraftRequest) returns (CreateRuntimeEnvironmentDraftResponse);
+  rpc CreateOrganizationRuntimeEnvironmentDraft(CreateOrganizationRuntimeEnvironmentDraftRequest) returns (CreateOrganizationRuntimeEnvironmentDraftResponse);
   rpc SaveRuntimeEnvironmentDraft(SaveRuntimeEnvironmentDraftRequest) returns (SaveRuntimeEnvironmentDraftResponse);
   rpc ValidateRuntimeEnvironmentDraft(ValidateRuntimeEnvironmentDraftRequest) returns (ValidateRuntimeEnvironmentDraftResponse);
   rpc PublishRuntimeEnvironmentDraft(PublishRuntimeEnvironmentDraftRequest) returns (PublishRuntimeEnvironmentDraftResponse);
@@ -1718,6 +1729,7 @@ message BootstrapState {
   repeated NextAction next_actions = 6;
   PlatformRole platform_role = 7;
   SpeechTranscriptionAvailability speech_transcription = 8;
+  string organization_ref = 9;
 }
 
 message SpeechTranscriptionAvailability {
@@ -4380,6 +4392,8 @@ message RuntimeSecretDraft {
   google.protobuf.Timestamp expires_at = 13;
   // Текущая owner version Secret из того же read/lock, включая PROVISIONING.
   int64 secret_version = 14;
+  RuntimeResourceScopeKind scope_kind = 15;
+  string organization_ref = 16;
 }
 
 // Внутренний exact readback immutable ciphertext; не выдаётся browser.
@@ -4586,6 +4600,8 @@ message RuntimeSecret {
   string namespace = 12;
   RuntimeSecretRevisionDescriptor current_revision_descriptor = 13;
   repeated NextAction next_actions = 14;
+  RuntimeResourceScopeKind scope_kind = 15;
+  string organization_ref = 16;
 }
 
 message ListRuntimeSecretsRequest {
@@ -4596,6 +4612,25 @@ message ListRuntimeSecretsRequest {
 message ListRuntimeSecretsResponse {
   repeated RuntimeSecret secrets = 1;
   PageInfo page = 2;
+}
+message ListOrganizationRuntimeSecretsRequest {
+  string query = 1;
+  PageRequest page = 2;
+}
+message ListOrganizationRuntimeSecretsResponse {
+  repeated RuntimeSecret secrets = 1;
+  PageInfo page = 2;
+}
+// Создаёт только организационный draft. Org/actor назначает сервер.
+message PrepareOrganizationRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string name = 2;
+  string description = 3;
+  RuntimeSecretValueType value_type = 4;
+  string expected_content_sha256 = 5;
+}
+message PrepareOrganizationRuntimeSecretDraftResponse {
+  RuntimeSecretDraftOperationReceipt operation = 1;
 }
 message GetRuntimeSecretRequest {
   string secret_ref = 1;
@@ -4699,6 +4734,8 @@ message ConsumeRuntimeSecretOperationResponse {
   google.protobuf.Timestamp lease_deadline = 14;
   string expected_content_sha256 = 15;
   repeated RuntimeSecretRevisionDescriptor revision_descriptors = 16;
+  RuntimeResourceScopeKind scope_kind = 17;
+  string organization_ref = 18;
 }
 
 message RuntimeSecretRevisionDescriptor {
@@ -4828,6 +4865,8 @@ message RuntimeEnvironmentDraft {
   string base_version_ref = 11;
   int64 base_revision = 12;
   google.protobuf.Timestamp saved_at = 13;
+  RuntimeResourceScopeKind scope_kind = 14;
+  string organization_ref = 15;
 }
 message GetRuntimeEnvironmentDraftRequest {
   string draft_ref = 1;
@@ -4843,6 +4882,15 @@ message CreateRuntimeEnvironmentDraftRequest {
   RuntimeEnvironmentDraftSpecification specification = 5;
 }
 message CreateRuntimeEnvironmentDraftResponse {
+  RuntimeEnvironmentDraft draft = 1;
+}
+message CreateOrganizationRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  int64 expected_environment_version = 3;
+  RuntimeEnvironmentDraftSpecification specification = 4;
+}
+message CreateOrganizationRuntimeEnvironmentDraftResponse {
   RuntimeEnvironmentDraft draft = 1;
 }
 message SaveRuntimeEnvironmentDraftRequest {
@@ -5293,6 +5341,8 @@ message RuntimeEnvironmentSet {
   bool ready = 9;
   repeated string readiness_blockers = 10;
   repeated NextAction next_actions = 11;
+  RuntimeResourceScopeKind scope_kind = 12;
+  string organization_ref = 13;
 }
 
 message RuntimeEnvironmentReadiness {

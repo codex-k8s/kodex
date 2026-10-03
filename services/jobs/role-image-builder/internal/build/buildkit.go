@@ -25,7 +25,7 @@ var (
 )
 
 const (
-	provenanceBindingSchema = "kodex.dev/image-provenance-binding/v1"
+	provenanceBindingSchema = "kodex.dev/image-provenance-binding/v2"
 	expectedBuilderID       = "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder"
 	expectedBuildType       = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
 	provenanceAttestation   = "mode=min,version=v1,builder-id=" + expectedBuilderID
@@ -167,7 +167,7 @@ func (executor *Executor) Prepare(
 	input *controlplanev1.RoleImageBuildInput,
 	beforeContextValidation func() error,
 ) (*Prepared, string, error) {
-	if input == nil || !plainSHA256(input.GetContextSha256()) || !plainSHA256(input.GetSourceSha256()) ||
+	if !validBuildOwner(input) || !plainSHA256(input.GetContextSha256()) || !plainSHA256(input.GetSourceSha256()) ||
 		!plainSHA256(input.GetSpecSha256()) || !plainSHA256(input.GetImmutableBuildSha256()) ||
 		input.GetFrontendSha256() != executor.config.ExpectedFrontendSHA256 || !digestPattern.MatchString(input.GetBaseImageDigest()) ||
 		!executor.allowedBases.Allows(input.GetBaseImageReference(), input.GetBaseImageDigest()) ||
@@ -324,7 +324,12 @@ func buildProgressPipe(command *exec.Cmd) (io.ReadCloser, error) {
 }
 
 func provenanceBindingSHA256(input *controlplanev1.RoleImageBuildInput, manifestDigest string) (string, error) {
+	if !validBuildOwner(input) {
+		return "", ErrInvalidContext
+	}
 	document, err := json.Marshal(map[string]any{
+		"scopeKind":       strings.TrimPrefix(input.GetScopeKind().String(), "RUNTIME_RESOURCE_SCOPE_KIND_"),
+		"organizationRef": input.GetOrganizationRef(), "projectRef": input.GetProjectRef(),
 		"buildType":            expectedBuildType,
 		"builderId":            expectedBuilderID,
 		"immutableBuildSHA256": input.GetImmutableBuildSha256(),
@@ -339,6 +344,32 @@ func provenanceBindingSHA256(input *controlplanev1.RoleImageBuildInput, manifest
 	}
 	digest := sha256.Sum256(document)
 	return hex.EncodeToString(digest[:]), nil
+}
+
+func validBuildOwner(input *controlplanev1.RoleImageBuildInput) bool {
+	if input == nil || !ownerReference(input.GetOrganizationRef(), "org_") {
+		return false
+	}
+	switch input.GetScopeKind() {
+	case controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION:
+		return input.GetProjectRef() == ""
+	case controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT:
+		return ownerReference(input.GetProjectRef(), "prj_")
+	default:
+		return false
+	}
+}
+
+func ownerReference(value, prefix string) bool {
+	if !strings.HasPrefix(value, prefix) || len(value) < len(prefix)+8 || len(value) > len(prefix)+88 {
+		return false
+	}
+	for _, character := range strings.TrimPrefix(value, prefix) {
+		if character != '-' && character != '_' && (character < '0' || character > '9') && (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') {
+			return false
+		}
+	}
+	return true
 }
 
 func dockerfile(

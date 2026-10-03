@@ -510,6 +510,12 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
   justify-content: space-between;
   align-items: start;
   gap: 12px;
+  flex-wrap: wrap;
+}
+.section-header .button {
+  flex-shrink: 0;
+  height: 32px;
+  white-space: nowrap;
 }
 .section-header h2 {
   margin: 0 0 4px;

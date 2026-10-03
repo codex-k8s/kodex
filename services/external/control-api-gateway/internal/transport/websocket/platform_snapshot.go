@@ -82,15 +82,6 @@ var platformBootstrapKinds = []string{
 	"RUNTIME_SELECTION",
 }
 
-func platformKindRequiresProject(kind string) bool {
-	switch kind {
-	case "ROLE_IMAGE_RECIPE":
-		return true
-	default:
-		return false
-	}
-}
-
 func platformPage() *controlplanev1.PageRequest {
 	return &controlplanev1.PageRequest{PageSize: platformSnapshotPageSize}
 }
@@ -147,12 +138,6 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 	scoped, err := scopedProjectContext(ctx, projectRef)
 	if err != nil {
 		return nil, err
-	}
-	requireProject := func() error {
-		if projectRef == "" {
-			return errors.New("platform snapshot project scope is required")
-		}
-		return nil
 	}
 	withOverview := func(snapshot map[string]any) (map[string]any, error) {
 		overview, readErr := server.query.GetOverview(scoped, &controlplanev1.GetOverviewRequest{ProjectRef: projectRef})
@@ -387,12 +372,13 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		state["speechTranscription"] = speechAvailabilityMap(server.projectSpeechAvailability(ctx, bootstrap.GetState().GetSpeechTranscription()))
 		return map[string]any{"assistant": assistantProjection, "conversations": conversationProjection, "bootstrap": bootstrapProjection}, nil
 	case "ROLE_IMAGE_RECIPE":
-		if err := requireProject(); err != nil {
-			return nil, err
-		}
-		response, readErr := server.roleImages.ListRoleImageRecipes(scoped, &controlplanev1.ListRoleImageRecipesRequest{ProjectRef: projectRef, Page: platformPage()})
-		if readErr != nil {
-			return nil, readErr
+		response := &controlplanev1.ListRoleImageRecipesResponse{Recipes: []*controlplanev1.RoleImageRecipe{}}
+		if projectRef != "" {
+			var readErr error
+			response, readErr = server.roleImages.ListRoleImageRecipes(scoped, &controlplanev1.ListRoleImageRecipesRequest{ProjectRef: projectRef, Page: platformPage()})
+			if readErr != nil {
+				return nil, readErr
+			}
 		}
 		environments, readErr := server.roleImages.ListRoleEnvironments(scoped, &controlplanev1.ListRoleEnvironmentsRequest{})
 		if readErr != nil {
@@ -407,6 +393,9 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 			return nil, projectErr
 		}
 		catalog["roleEnvironments"] = environmentCatalog["environments"]
+		if err := server.projectOrganizationRecipes(ctx, catalog, localize); err != nil {
+			return nil, err
+		}
 		return map[string]any{"catalog": catalog}, nil
 	case "RUNTIME_ENVIRONMENT":
 		response, readErr := server.query.ListRuntimeEnvironmentSets(scoped, &controlplanev1.ListRuntimeEnvironmentSetsRequest{ProjectRef: projectRef, Page: platformPage()})
@@ -470,7 +459,14 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		if readErr != nil {
 			return nil, readErr
 		}
-		return snapshotWithCatalog(response, localize)
+		snapshot, err := snapshotWithCatalog(response, localize)
+		if err != nil {
+			return nil, err
+		}
+		if err := server.projectOrganizationSecrets(ctx, snapshot["catalog"].(map[string]any), localize); err != nil {
+			return nil, err
+		}
+		return snapshot, nil
 	case "MANAGED_CONFIGURATION":
 		catalog := map[string]any{
 			"managedConfigurations":     []any{},
@@ -542,9 +538,6 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.PlatformResourceKind, error) {
 	available := make([]generated.PlatformResourceKind, 0, len(platformBootstrapKinds))
 	for _, kind := range platformBootstrapKinds {
-		if multiplexer.projectRef == "" && platformKindRequiresProject(kind) {
-			continue
-		}
 		rawSnapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, kind, multiplexer.projectRef, multiplexer.localize)
 		if err != nil {
 			if status.Code(err) == codes.PermissionDenied {

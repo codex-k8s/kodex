@@ -3,6 +3,8 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/organization_runtime_secrets_list.sql
+	queryOrganizationRuntimeSecretsList string
 	//go:embed sql/runtime_secrets_list.sql
 	queryRuntimeSecretsList string
 	//go:embed sql/runtime_secret_get.sql

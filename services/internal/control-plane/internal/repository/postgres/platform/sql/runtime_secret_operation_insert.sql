@@ -4,6 +4,6 @@ INSERT INTO control_plane.runtime_secret_operations
    expected_secret_version, expected_current_revision, expected_content_sha256,
    token_digest, idempotency_key, intent_digest, correlation_ref, state, grant_expires_at)
 VALUES
-  (@ref, @organization_id::uuid, @project_id::uuid, @actor_id::uuid, @secret_id::uuid, @kind,
+  (@ref, @organization_id::uuid, NULLIF(@project_id, '')::uuid, @actor_id::uuid, @secret_id::uuid, @kind,
    @target_revision, @expected_secret_version, @expected_current_revision, @expected_content_sha256,
    @token_digest, @idempotency_key, @intent_digest, @correlation_ref, 'PREPARED', @grant_expires_at);

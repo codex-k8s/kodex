@@ -42,12 +42,14 @@ type runtimeSecretListCursor struct {
 }
 
 type lockedRuntimeSecret struct {
+	scopeKind, organizationRef                                                     string
 	id, ref, projectID, projectRef, name, description, valueType, state, namespace string
 	version, currentRevision                                                       int64
 	createdAt, updatedAt                                                           time.Time
 }
 
 type lockedRuntimeSecretOperation struct {
+	scopeKind, organizationRef                                         string
 	id, ref, kind, state, projectID, secretID, actorID, correlationRef string
 	projectRef, secretRef, name, description, valueType, namespace     string
 	secretState                                                        string
@@ -71,6 +73,12 @@ func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal 
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, "", err
+	}
+	if filter.RuntimeResourceScopeKind == "ORGANIZATION" {
+		return repository.listOrganizationRuntimeSecrets(ctx, current, filter)
+	}
+	if filter.RuntimeResourceScopeKind != "" && filter.RuntimeResourceScopeKind != "PROJECT" {
+		return nil, "", errs.ErrInvalid
 	}
 	return authorizedCatalog(ctx, repository, current, "SECRET", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.RuntimeSecret, error) {
@@ -167,16 +175,31 @@ func (repository *Repository) GetRuntimeSecret(ctx context.Context, principal va
 		return entity.RuntimeSecret{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	item, err := scanRuntimeSecret(tx.QueryRow(ctx, queryRuntimeSecretGet, pgx.StrictNamedArgs{"organization_id": current.organizationID, "secret_ref": ref}))
+	if err != nil {
+		return entity.RuntimeSecret{}, err
+	}
+	if item.ScopeKind == "ORGANIZATION" {
+		if item.OrganizationRef != current.organizationRef || item.ProjectRef != "" || repository.requireOrganizationRuntimeResourceAccess(ctx, tx, current, "secret.view") != nil {
+			return entity.RuntimeSecret{}, errs.ErrNotFound
+		}
+		item.NextActions = runtimeSecretActions(item, func(permission string) bool {
+			return repository.requireOrganizationRuntimeResourceAccess(ctx, tx, current, permission) == nil
+		})
+		if tx.Commit(ctx) != nil {
+			return entity.RuntimeSecret{}, errs.ErrUnavailable
+		}
+		return item, nil
+	}
+	if item.ScopeKind != "PROJECT" || item.OrganizationRef != current.organizationRef || item.ProjectRef == "" {
+		return entity.RuntimeSecret{}, errs.ErrNotFound
+	}
 	target, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{ResourceKind: "SECRET", ResourceRef: ref})
 	if err != nil || principal.ProjectRef != "" && principal.ProjectRef != target.projectID {
 		return entity.RuntimeSecret{}, errs.ErrNotFound
 	}
 	if err := repository.requireAccess(ctx, tx, current, "secret.view", target); err != nil {
 		return entity.RuntimeSecret{}, errs.ErrNotFound
-	}
-	item, err := scanRuntimeSecret(tx.QueryRow(ctx, queryRuntimeSecretGet, pgx.StrictNamedArgs{"organization_id": current.organizationID, "secret_ref": ref}))
-	if err != nil {
-		return entity.RuntimeSecret{}, err
 	}
 	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
 	if err != nil {
@@ -283,6 +306,12 @@ func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx
 	var secret lockedRuntimeSecret
 	var err error
 	if input.Kind == "CREATE" {
+		if input.ScopeKind == "ORGANIZATION" {
+			return repository.prepareOrganizationRuntimeSecretTarget(ctx, tx, current, input)
+		}
+		if input.ScopeKind != "PROJECT" {
+			return lockedRuntimeSecret{}, errs.ErrInvalid
+		}
 		if err := tx.QueryRow(ctx, queryRuntimeSecretLockProject, pgx.StrictNamedArgs{"organization_id": current.organizationID, "project_ref": input.ProjectRef}).Scan(&secret.projectID, &secret.projectRef); errors.Is(err, pgx.ErrNoRows) {
 			return lockedRuntimeSecret{}, errs.ErrNotFound
 		} else if err != nil {
@@ -298,7 +327,7 @@ func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx
 		projectID, projectRef := secret.projectID, secret.projectRef
 		secret, err = repository.lockRuntimeSecretByName(ctx, tx, current.organizationID, projectID, input.Name)
 		if errors.Is(err, errs.ErrNotFound) {
-			secret = lockedRuntimeSecret{projectID: projectID, projectRef: projectRef, name: input.Name, description: input.Description, valueType: input.ValueType, state: "PROVISIONING", namespace: repository.runtimeSecretNamespace}
+			secret = lockedRuntimeSecret{scopeKind: "PROJECT", organizationRef: current.organizationRef, projectID: projectID, projectRef: projectRef, name: input.Name, description: input.Description, valueType: input.ValueType, state: "PROVISIONING", namespace: repository.runtimeSecretNamespace}
 			secret.ref, err = newRef("sec")
 			if err != nil {
 				return lockedRuntimeSecret{}, err
@@ -306,6 +335,7 @@ func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx
 			if err := tx.QueryRow(ctx, queryRuntimeSecretInsert, pgx.StrictNamedArgs{
 				"ref": secret.ref, "organization_id": current.organizationID, "project_id": secret.projectID,
 				"namespace": secret.namespace, "name": secret.name, "description": secret.description,
+				"scope_kind": secret.scopeKind,
 				"value_type": secret.valueType, "actor_id": current.actorID,
 			}).Scan(&secret.id, &secret.version, &secret.currentRevision, &secret.createdAt, &secret.updatedAt); err != nil {
 				return lockedRuntimeSecret{}, mapWriteError(err)
@@ -323,6 +353,15 @@ func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx
 		return lockedRuntimeSecret{}, errs.ErrNotFound
 	}
 	permission := map[string]string{"ROTATE": "secret.rotate", "REVEAL": "secret.reveal", "REVOKE": "secret.revoke"}[input.Kind]
+	if secret.scopeKind == "ORGANIZATION" {
+		if secret.projectRef != "" || secret.projectID != "" || secret.organizationRef != current.organizationRef || repository.requireOrganizationRuntimeResourceAccess(ctx, tx, current, permission) != nil {
+			return lockedRuntimeSecret{}, errs.ErrNotFound
+		}
+		return secret, nil
+	}
+	if secret.scopeKind != "PROJECT" || secret.organizationRef != current.organizationRef || secret.projectID == "" {
+		return lockedRuntimeSecret{}, errs.ErrNotFound
+	}
 	target, targetErr := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{ResourceKind: "SECRET", ResourceRef: secret.ref})
 	if targetErr != nil || repository.requireAccess(ctx, tx, current, permission, target) != nil {
 		return lockedRuntimeSecret{}, errs.ErrNotFound
@@ -450,6 +489,9 @@ func (repository *Repository) ConsumeRuntimeSecretOperation(ctx context.Context,
 	if locked.state != "PREPARED" || !time.Now().UTC().Before(locked.grantExpiresAt) || !repository.runtimeSecretOperationMatchesCurrent(locked) {
 		return entity.RuntimeSecretOperation{}, errs.ErrConflict
 	}
+	if err := repository.authorizeRuntimeSecretOperationOwner(ctx, tx, current, locked); err != nil {
+		return entity.RuntimeSecretOperation{}, err
+	}
 	descriptors, err := repository.runtimeSecretOperationDescriptors(ctx, tx, locked)
 	if err != nil {
 		return entity.RuntimeSecretOperation{}, err
@@ -470,6 +512,7 @@ func (repository *Repository) ConsumeRuntimeSecretOperation(ctx context.Context,
 		names = append(names, descriptor.SecretName)
 	}
 	return entity.RuntimeSecretOperation{
+		ScopeKind: locked.scopeKind, OrganizationRef: locked.organizationRef,
 		Ref: locked.ref, Kind: locked.kind, ProjectRef: locked.projectRef, SecretRef: locked.secretRef,
 		Name: locked.name, Description: locked.description, ValueType: locked.valueType,
 		Namespace: locked.namespace, SecretKey: runtimeSecretKey, TargetRevision: locked.targetRevision,
@@ -544,6 +587,9 @@ func (repository *Repository) CompleteRuntimeSecretOperation(ctx context.Context
 	defer func() { _ = tx.Rollback(ctx) }()
 	locked, err := repository.lockRuntimeSecretOperation(ctx, tx, current.organizationID, input.OperationRef)
 	if err != nil {
+		return entity.RuntimeSecret{}, err
+	}
+	if err := repository.authorizeRuntimeSecretOperationOwner(ctx, tx, current, locked); err != nil {
 		return entity.RuntimeSecret{}, err
 	}
 	if locked.state == "COMPLETED" {
@@ -628,13 +674,20 @@ func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Co
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	locked, err := repository.lockRuntimeSecretOperation(ctx, tx, current.organizationID, input.OperationRef)
-	if errors.Is(err, errs.ErrNotFound) {
-		return repository.recoverDraftFromLegacy(ctx, tx, current, input)
-	}
 	if err != nil {
 		return platformrepo.RuntimeSecretRecoveryResult{}, err
 	}
 	result := platformrepo.RuntimeSecretRecoveryResult{Action: "DELETE", OperationState: locked.state}
+	if locked.state == "CLAIMED" && repository.authorizeRuntimeSecretOperationOwner(ctx, tx, current, locked) != nil {
+		if err := repository.failLockedRuntimeSecretOperation(ctx, tx, current.organizationID, locked, "GRANT_EXPIRED"); err != nil {
+			return platformrepo.RuntimeSecretRecoveryResult{}, err
+		}
+		result.OperationState = "FAILED"
+		if tx.Commit(ctx) != nil {
+			return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrConflict
+		}
+		return result, nil
+	}
 	if locked.kind != "CREATE" && locked.kind != "ROTATE" || !repository.materializationMatchesOperation(locked, &input.Materialization) {
 		if err := tx.Commit(ctx); err != nil {
 			return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrConflict
@@ -829,7 +882,7 @@ func (repository *Repository) lockRuntimeSecret(ctx context.Context, tx pgx.Tx, 
 	err := tx.QueryRow(ctx, queryRuntimeSecretLock, pgx.StrictNamedArgs{"organization_id": organizationID, "secret_ref": ref}).Scan(
 		&result.id, &result.ref, &result.version, &result.projectID, &result.projectRef, &result.name,
 		&result.description, &result.valueType, &result.state, &result.currentRevision, &result.namespace,
-		&result.createdAt, &result.updatedAt,
+		&result.createdAt, &result.updatedAt, &result.scopeKind, &result.organizationRef,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return lockedRuntimeSecret{}, errs.ErrNotFound
@@ -846,7 +899,7 @@ func (repository *Repository) lockRuntimeSecretByName(ctx context.Context, tx pg
 		"organization_id": organizationID, "project_id": projectID, "name": name,
 	}).Scan(&result.id, &result.ref, &result.version, &result.projectID, &result.projectRef, &result.name,
 		&result.description, &result.valueType, &result.state, &result.currentRevision, &result.namespace,
-		&result.createdAt, &result.updatedAt)
+		&result.createdAt, &result.updatedAt, &result.scopeKind, &result.organizationRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return lockedRuntimeSecret{}, errs.ErrNotFound
 	}
@@ -893,7 +946,7 @@ func (repository *Repository) scanRuntimeSecretOperation(scanner rowScanner) (lo
 		&operation.terminalSnapshot, &operation.intentDigest, &operation.projectRef, &operation.secretRef,
 		&operation.secretVersion, &operation.secretState, &operation.secretCurrentRevision,
 		&operation.name, &operation.description, &operation.valueType, &operation.namespace,
-		&operation.secretCreatedAt, &operation.secretUpdatedAt,
+		&operation.secretCreatedAt, &operation.secretUpdatedAt, &operation.scopeKind, &operation.organizationRef,
 	)
 	return operation, err
 }
@@ -995,6 +1048,7 @@ func (repository *Repository) materializationMatchesOperation(operation lockedRu
 
 func (operation lockedRuntimeSecretOperation) runtimeSecret() entity.RuntimeSecret {
 	return entity.RuntimeSecret{
+		ScopeKind: operation.scopeKind, OrganizationRef: operation.organizationRef,
 		Ref: operation.secretRef, ProjectRef: operation.projectRef, Name: operation.name,
 		Description: operation.description, ValueType: operation.valueType, State: operation.secretState,
 		Namespace: operation.namespace, Version: operation.secretVersion,
@@ -1010,7 +1064,7 @@ func scanRuntimeSecret(scanner rowScanner) (entity.RuntimeSecret, error) {
 		&item.ValueType, &item.State, &item.CurrentRevision, &prefix, &suffix,
 		&item.CreatedAt, &item.UpdatedAt, &item.Namespace, &descriptor.Revision, &descriptor.Namespace,
 		&descriptor.SecretName, &descriptor.SecretKey, &descriptor.SecretUID,
-		&descriptor.SecretResourceVersion, &descriptor.ContentSHA256); errors.Is(err, pgx.ErrNoRows) {
+		&descriptor.SecretResourceVersion, &descriptor.ContentSHA256, &item.ScopeKind, &item.OrganizationRef); errors.Is(err, pgx.ErrNoRows) {
 		return entity.RuntimeSecret{}, errs.ErrNotFound
 	} else if err != nil {
 		return entity.RuntimeSecret{}, errs.ErrUnavailable
@@ -1147,7 +1201,7 @@ func runtimeSecretMaterializationMatchesDescriptor(materialization entity.Runtim
 
 func decodeRuntimeSecretSnapshot(raw []byte) (entity.RuntimeSecret, error) {
 	var result entity.RuntimeSecret
-	if len(raw) == 0 || json.Unmarshal(raw, &result) != nil || result.Ref == "" || result.Namespace == "" {
+	if len(raw) == 0 || json.Unmarshal(raw, &result) != nil || result.Ref == "" || result.Namespace == "" || runtimesecret.ValidateScope(runtimesecret.ScopeKind(result.ScopeKind), result.OrganizationRef, result.ProjectRef) != nil {
 		return entity.RuntimeSecret{}, errors.New("runtime secret terminal snapshot is invalid")
 	}
 	return result, nil

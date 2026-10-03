@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimesecret"
 )
 
 // Kubernetes ограничивает весь data payload одним MiB, включая nonce/tag.
@@ -15,16 +17,21 @@ var ErrDraftBindingInvalid = errors.New("secret draft binding is invalid")
 // SecretDraftBinding строится только из проверенного ответа владельца intent.
 // Версия содержимого не меняется при validate/publish той же immutable revision.
 type SecretDraftBinding struct {
-	ProjectRef      string `json:"project_ref"`
-	SecretRef       string `json:"secret_ref"`
-	DraftRef        string `json:"draft_ref"`
-	DraftGeneration int64  `json:"draft_generation"`
-	ValueType       string `json:"value_type"`
-	ContentSHA256   string `json:"content_sha256"`
+	ScopeKind       runtimesecret.ScopeKind `json:"scope_kind"`
+	OrganizationRef string                  `json:"organization_ref"`
+	ProjectRef      string                  `json:"project_ref"`
+	SecretRef       string                  `json:"secret_ref"`
+	DraftRef        string                  `json:"draft_ref"`
+	DraftGeneration int64                   `json:"draft_generation"`
+	ValueType       string                  `json:"value_type"`
+	ContentSHA256   string                  `json:"content_sha256"`
 }
 
 func (binding SecretDraftBinding) Validate() error {
-	for _, ref := range []string{binding.ProjectRef, binding.SecretRef, binding.DraftRef} {
+	if runtimesecret.ValidateScope(binding.ScopeKind, binding.OrganizationRef, binding.ProjectRef) != nil {
+		return ErrDraftBindingInvalid
+	}
+	for _, ref := range []string{binding.SecretRef, binding.DraftRef} {
 		if len(ref) < 1 || len(ref) > 128 || strings.TrimSpace(ref) != ref {
 			return ErrDraftBindingInvalid
 		}
@@ -58,7 +65,7 @@ func (binding SecretDraftBinding) AssociatedData() ([]byte, error) {
 	if err != nil {
 		return nil, ErrDraftBindingInvalid
 	}
-	return append([]byte("kodex.secret-draft.aead.v1\x00"), encoded...), nil
+	return append([]byte("kodex.secret-draft.aead.v2\x00"), encoded...), nil
 }
 
 type DraftEncryptionKey struct {

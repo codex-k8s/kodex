@@ -2241,6 +2241,41 @@ paths:
                 },
             }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/organization/runtime-environment-drafts:
+    post:
+      tags: [Agents]
+      operationId: createSystemRuntimeEnvironmentDraft
+      description: Организационный черновик помощника; owner/admin и область выводятся из проверенной сессии. Публикация требует validation, impact и отдельное подтверждение.
+      parameters:
+        [
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  {
+                    $ref: "#/components/schemas/RuntimeEnvironmentDraftCreateInput",
+                  },
+              },
+          }
+      responses:
+        "201":
+          description: Серверный черновик окружения; опубликованная ревизия не изменена
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/RuntimeEnvironmentDraft" },
+                },
+            }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/projects/{projectRef}/runtime-environment-drafts:
     post:
       tags: [Agents]
@@ -3185,6 +3220,210 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RoleEnvironmentPage" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/organization/role-image-recipes:
+    get:
+      tags: [RoleEnvironments]
+      operationId: listSystemRoleImageRecipes
+      parameters:
+        - name: query
+          in: query
+          description: Поиск владельца по имени рецепта; не более 128 UTF-8 bytes.
+          schema: { type: string, maxLength: 128 }
+        - name: state
+          in: query
+          schema: { type: string, enum: [ACTIVE, ARCHIVED] }
+        - { $ref: "#/components/parameters/PageSize" }
+        - { $ref: "#/components/parameters/PageToken" }
+      responses:
+        "200":
+          description: Окружения ролей Проекта
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleImageRecipePage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [RoleEnvironments]
+      operationId: createSystemRoleImageRecipe
+      parameters:
+        [
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleImageRecipeUpdateInput" }
+      responses:
+        "201":
+          description: Окружение роли создано
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleImageRecipe" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/role-image-recipes/{recipeRef}:
+    parameters:
+      - { $ref: "#/components/parameters/RecipeRef" }
+    get:
+      tags: [RoleEnvironments]
+      operationId: getSystemRoleImageRecipe
+      responses:
+        "200":
+          description: Окружение роли и история сборок
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleImageRecipeDetail" }
+        default: { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [RoleEnvironments]
+      operationId: updateSystemRoleImageRecipe
+      parameters:
+        [
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleImageRecipeUpdateInput" }
+      responses:
+        "200":
+          description: Окружение роли изменено
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleImageRecipe" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/role-image-recipes/{recipeRef}/commands:
+    post:
+      tags: [RoleEnvironments]
+      operationId: commandSystemRoleImageRecipe
+      parameters:
+        - { $ref: "#/components/parameters/RecipeRef" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleImageRecipeCommand" }
+      responses:
+        "200":
+          description: Команда окружения роли применена
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/RoleImageRecipeCommandReceipt" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/role-image-recipes/{recipeRef}/revisions:
+    get:
+      tags: [RoleEnvironments]
+      operationId: listSystemRoleImageRecipeRevisions
+      parameters:
+        [
+          { $ref: "#/components/parameters/RecipeRef" },
+          { $ref: "#/components/parameters/PageSize" },
+          { $ref: "#/components/parameters/PageToken" },
+        ]
+      responses:
+        "200":
+          description: Immutable recipe/build/promotion history
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    {
+                      $ref: "#/components/schemas/RoleImageRecipeRevisionPage",
+                    },
+                },
+            }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/role-image-recipes/{recipeRef}/promotion:
+    post:
+      tags: [RoleEnvironments]
+      operationId: promoteSystemRoleImage
+      parameters:
+        [
+          { $ref: "#/components/parameters/RecipeRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/RoleImagePromotionInput" },
+              },
+          }
+      responses:
+        "202":
+          description: Exact admitted artifact поставлен на promotion по совпавшему provenance digest
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/RoleImagePromotionReceipt" },
+                },
+            }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/runtime-secrets:
+    get:
+      tags: [RuntimeSecrets]
+      operationId: listSystemRuntimeSecrets
+      parameters:
+        [
+          { $ref: "#/components/parameters/Query" },
+          { $ref: "#/components/parameters/PageSize" },
+          { $ref: "#/components/parameters/PageToken" },
+        ]
+      responses:
+        "200":
+          description: Метаданные Runtime Secrets без значений
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeSecretPage" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/runtime-secret-drafts:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: createSystemRuntimeSecretDraft
+      description: Сохранить зашифрованный черновик нового Secret без публикации; повтор неизвестного результата использует прежние Idempotency-Key и тело.
+      parameters:
+        [
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RuntimeSecretCreateInput" }
+      responses:
+        "201":
+          description: Черновик сохранён без активации Secret
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeSecretDraft" }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/projects/{projectRef}/role-image-recipes:
     parameters: [{ $ref: "#/components/parameters/ProjectRef" }]
@@ -8265,6 +8504,12 @@ components:
       additionalProperties: false
       required: [kind]
       properties:
+        scopeKind:
+          allOf: [{ $ref: "#/components/schemas/RuntimeResourceScopeKind" }]
+          description: Обязателен для RUNTIME_SECRET_REVEAL; клиент задаёт только цель, владение проверяет CP. Запрещён для EMAIL_EFFECT_RECONCILIATION.
+        organizationRef:
+          allOf: [{ $ref: "#/components/schemas/OpaqueRef" }]
+          description: Точная организационная привязка RUNTIME_SECRET_REVEAL; сверяется с авторитетным чтением секрета до расходования elevation.
         kind:
           type: string
           enum: [RUNTIME_SECRET_REVEAL, EMAIL_EFFECT_RECONCILIATION]
@@ -8891,6 +9136,7 @@ components:
       additionalProperties: false
       required:
         [
+          organizationRef,
           initialized,
           onboardingComplete,
           webOnlyReady,
@@ -8901,6 +9147,7 @@ components:
           speechTranscription,
         ]
       properties:
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         initialized: { type: boolean }
         onboardingComplete: { type: boolean }
         webOnlyReady: { type: boolean }
@@ -11675,11 +11922,16 @@ components:
       properties:
         prefix: { type: string, maxLength: 6 }
         suffix: { type: string, maxLength: 6 }
+    RuntimeResourceScopeKind:
+      type: string
+      enum: [ORGANIZATION, PROJECT]
     RuntimeSecret:
       type: object
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           projectRef,
@@ -11693,9 +11945,11 @@ components:
           nextActions,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
         valueType: { $ref: "#/components/schemas/RuntimeSecretValueType" }
@@ -11711,6 +11965,8 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           generation,
@@ -11727,6 +11983,8 @@ components:
           expiresAt,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -11742,7 +12000,7 @@ components:
             minimum: 1,
             maximum: 9007199254740991,
           }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         secretRef: { $ref: "#/components/schemas/OpaqueRef" }
         secretVersion:
           {
@@ -12219,6 +12477,8 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           projectRef,
@@ -12232,9 +12492,11 @@ components:
           nextActions,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
         state: { type: string, enum: [ACTIVE, DISABLED, DELETED] }
@@ -12738,6 +13000,8 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           projectRef,
@@ -12747,6 +13011,8 @@ components:
           diagnostics,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -12755,7 +13021,7 @@ components:
             minimum: 1,
             maximum: 9007199254740991,
           }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         environmentRef: { $ref: "#/components/schemas/OpaqueRef" }
         expectedEnvironmentVersion:
           {
@@ -12808,7 +13074,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
         imageArtifactRef:
-          description: Для системного помощника пустая строка означает платформенный образ; Проектные окружения по-прежнему требуют точный artifact ref.
+          description: Точный admitted/promoted artifact выбранной области. Пустое значение означает незавершённый черновик и не разрешает публикацию или подстановку платформенного образа.
           type: string
           maxLength: 128
           pattern: "^$|^[A-Za-z0-9_-]{8,128}$"
@@ -13728,6 +13994,8 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           projectRef,
@@ -13743,9 +14011,11 @@ components:
           nextActions,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         roleDefinitionRef: { $ref: "#/components/schemas/OpaqueRef" }
         name: { type: string, minLength: 1, maxLength: 160 }
         state: { type: string, enum: [ACTIVE, ARCHIVED] }
@@ -13805,6 +14075,9 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
+          projectRef,
           ref,
           version,
           recipeRef,
@@ -13817,6 +14090,9 @@ components:
           updatedAt,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         recipeRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -13925,6 +14201,9 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
+          projectRef,
           ref,
           version,
           recipeRef,
@@ -13938,6 +14217,9 @@ components:
           tools,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         recipeRef: { $ref: "#/components/schemas/OpaqueRef" }

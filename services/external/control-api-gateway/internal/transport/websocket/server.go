@@ -71,6 +71,7 @@ type queryClient interface {
 	ListProviderAccounts(context.Context, *controlplanev1.ListProviderAccountsRequest, ...grpc.CallOption) (*controlplanev1.ListProviderAccountsResponse, error)
 	ListProviderDefinitions(context.Context, *controlplanev1.ListProviderDefinitionsRequest, ...grpc.CallOption) (*controlplanev1.ListProviderDefinitionsResponse, error)
 	ListRuntimeSecrets(context.Context, *controlplanev1.ListRuntimeSecretsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeSecretsResponse, error)
+	ListOrganizationRuntimeSecrets(context.Context, *controlplanev1.ListOrganizationRuntimeSecretsRequest, ...grpc.CallOption) (*controlplanev1.ListOrganizationRuntimeSecretsResponse, error)
 	ListManagedConfigurations(context.Context, *controlplanev1.ListManagedConfigurationsRequest, ...grpc.CallOption) (*controlplanev1.ListManagedConfigurationsResponse, error)
 	ListRuntimeSelections(context.Context, *controlplanev1.ListRuntimeSelectionsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeSelectionsResponse, error)
 	GetRunGraph(context.Context, *controlplanev1.GetRunGraphRequest, ...grpc.CallOption) (*controlplanev1.GetRunGraphResponse, error)
@@ -86,6 +87,7 @@ type assistantQueryClient interface {
 type roleImageQueryClient interface {
 	ListRoleEnvironments(context.Context, *controlplanev1.ListRoleEnvironmentsRequest, ...grpc.CallOption) (*controlplanev1.ListRoleEnvironmentsResponse, error)
 	ListRoleImageRecipes(context.Context, *controlplanev1.ListRoleImageRecipesRequest, ...grpc.CallOption) (*controlplanev1.ListRoleImageRecipesResponse, error)
+	ListOrganizationRoleImageRecipes(context.Context, *controlplanev1.ListOrganizationRoleImageRecipesRequest, ...grpc.CallOption) (*controlplanev1.ListOrganizationRoleImageRecipesResponse, error)
 }
 
 type accessQueryClient interface {

@@ -21,6 +21,7 @@ import {
   rememberRuntimeSecretReauthSuggestion,
 } from "./reauth-suggestion";
 import { readRuntimeSecret } from "./api";
+import type { RuntimeResourceAddress } from "@/features/runtime/resource-scope";
 import {
   createSecretDraft,
   saveSecretDraft,
@@ -31,7 +32,7 @@ import {
 } from "./draft-api";
 
 const props = defineProps<{
-  projectRef: string;
+  projectRef: RuntimeResourceAddress;
   secret?: RuntimeSecret;
   initialDraftRef?: string;
   initialPlanRef?: string;
@@ -373,6 +374,7 @@ onBeforeUnmount(() => {
         }}
       </p>
       <RuntimeSecretDraftImpact
+        :resource-scope="projectRef"
         v-if="['VALID', 'PUBLISHED'].includes(draft.state)"
         :draft="draft"
         :initial-plan-ref="initialPlanRef"

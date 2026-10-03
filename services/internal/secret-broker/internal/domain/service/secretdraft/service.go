@@ -169,11 +169,13 @@ func (service *Service) Execute(ctx context.Context, kind value.DraftOperation, 
 		return value.DraftResult{}, err
 	}
 	if result.Draft.Ref != work.Draft.Ref || result.Draft.Generation != work.Draft.Generation ||
+		result.Draft.ScopeKind != work.Draft.ScopeKind || result.Draft.OrganizationRef != work.Draft.OrganizationRef ||
 		result.Draft.ProjectRef != work.Draft.ProjectRef || result.Draft.SecretRef != work.Draft.SecretRef {
 		return value.DraftResult{}, secretdrafts.ErrConflict
 	}
 	finalState := map[value.DraftOperation]string{value.DraftSave: "DRAFT", value.DraftValidate: "VALID", value.DraftPublish: "PUBLISHED", value.DraftDiscard: "DISCARDED"}[kind]
 	if result.Draft.State != finalState || kind == value.DraftPublish && (result.Secret == nil ||
+		result.Secret.ScopeKind != work.Draft.ScopeKind || result.Secret.OrganizationRef != work.Draft.OrganizationRef ||
 		result.Secret.Ref != work.Draft.SecretRef || result.Secret.ProjectRef != work.Draft.ProjectRef || result.Secret.Revision != work.TargetRevision) {
 		return value.DraftResult{}, secretdrafts.ErrConflict
 	}
@@ -184,6 +186,7 @@ func (service *Service) validateWork(work value.DraftWork, active bool) error {
 	if work.Binding.Validate() != nil || work.OperationRef == "" || work.ClaimGeneration < 0 ||
 		(work.ClaimantID == "") != (work.ClaimGeneration == 0) || active && work.ClaimGeneration == 0 ||
 		work.Draft.Ref != work.Binding.DraftRef || work.Draft.Generation != work.Binding.DraftGeneration ||
+		work.Draft.ScopeKind != work.Binding.ScopeKind || work.Draft.OrganizationRef != work.Binding.OrganizationRef ||
 		work.Draft.SecretRef != work.Binding.SecretRef || work.Draft.ProjectRef != work.Binding.ProjectRef ||
 		work.Draft.ValueType != work.Binding.ValueType || work.StagedNamespace != service.stagedNamespace ||
 		work.RuntimeNamespace != service.runtimeNamespace || work.StagedName == "" || work.StagedKey == "" {

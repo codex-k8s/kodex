@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { Save, ServerCog } from "@lucide/vue";
+import { ServerCog } from "@lucide/vue";
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 
-import {
-  loadAgentRuntime,
-  saveRuntimeEnvironment,
-} from "@/features/agents/detail/runtime-api";
+import { loadAgentRuntime } from "@/features/agents/detail/runtime-api";
 import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
 import RuntimeEnvironmentPolicyFields from "@/features/runtime/RuntimeEnvironmentPolicyFields.vue";
 import RuntimeEnvironmentImageToolsSelector from "@/features/runtime/RuntimeEnvironmentImageToolsSelector.vue";
+import RuntimeResourceManagementLinks from "@/features/runtime/RuntimeResourceManagementLinks.vue";
+import RuntimeEnvironmentDraftActions from "@/features/runtime/RuntimeEnvironmentDraftActions.vue";
+import { useSessionStore } from "@/features/session/store";
+import { useRoute, useRouter } from "vue-router";
+import { assertRuntimeResourceIdentity } from "@/features/runtime/resource-scope";
 import type { RuntimeImageCatalog } from "@/features/runtime/image-tools-selection";
 import type { RuntimeSecretCatalog } from "@/features/runtime/secret-catalog";
 import {
@@ -23,6 +25,7 @@ import {
 import type {
   RuntimeEnvironmentInput,
   RuntimeEnvironmentSet,
+  RuntimeEnvironmentDraft,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -35,7 +38,14 @@ const props = defineProps<{
   resourceScope: RuntimeResourceScope;
   imageCatalog: RuntimeImageCatalog | undefined;
   secretCatalog?: RuntimeSecretCatalog;
+  returnTo?: string;
+  initialDraftRef?: string;
+  expectedDraftVersion?: number;
 }>();
+const emit = defineEmits<{ draftSaved: [draft: RuntimeEnvironmentDraft] }>();
+const session = useSessionStore();
+const route = useRoute();
+const router = useRouter();
 const view = ref<Awaited<ReturnType<typeof loadAgentRuntime>>>();
 const loading = ref(false);
 const busy = ref(false);
@@ -69,11 +79,7 @@ const input = reactive<RuntimeEnvironmentInput>({
 const initial = ref("");
 const environment = computed(() => view.value?.environment);
 const normalized = computed(() => normalizeRuntimeEnvironmentInput(input));
-const fingerprint = computed(() => JSON.stringify(normalized.value));
 const validation = computed(() => validateEnvironmentInput(normalized.value));
-const dirty = computed(
-  () => Boolean(initial.value) && fingerprint.value !== initial.value,
-);
 
 function sync(current: RuntimeEnvironmentSet): void {
   Object.assign(
@@ -94,6 +100,12 @@ async function load(): Promise<void> {
   try {
     const result = await loadAgentRuntime(props.agentRef, signal);
     if (signal.aborted || currentGeneration !== generation) return;
+    if (
+      result.configuration.agentRef !== props.agentRef ||
+      result.environmentBinding.agentRef !== props.agentRef ||
+      result.environmentBinding.environmentRef !== result.environment.ref
+    )
+      throw new Error("Assistant runtime configuration identity mismatch");
     sync(result.environment);
     view.value = result;
   } catch (error) {
@@ -104,30 +116,34 @@ async function load(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
-  const current = environment.value;
-  if (
-    !current ||
-    busy.value ||
-    !props.canEdit ||
-    !dirty.value ||
-    (props.imageCatalog && !imageAvailable.value) ||
-    validation.value.length
-  )
-    return;
-  busy.value = true;
-  problem.value = undefined;
-  const currentGeneration = generation;
-  try {
-    const saved = await saveRuntimeEnvironment(current, normalized.value);
-    if (!view.value || currentGeneration !== generation) return;
-    sync(saved);
-    view.value = { ...view.value, environment: saved };
-  } catch (error) {
-    if (currentGeneration === generation) problem.value = asProblem(error);
-  } finally {
-    if (currentGeneration === generation) busy.value = false;
-  }
+function loadDraft(value: RuntimeEnvironmentDraft): void {
+  Object.assign(input, structuredClone(value.specification));
+}
+function published(value: RuntimeEnvironmentSet): void {
+  if (!view.value) return;
+  sync(value);
+  view.value = { ...view.value, environment: value };
+}
+async function reauthenticate(value: RuntimeEnvironmentDraft): Promise<void> {
+  if (props.resourceScope.kind !== "ORGANIZATION" || !environment.value) return;
+  assertRuntimeResourceIdentity(
+    props.resourceScope,
+    value,
+    props.resourceScope.organizationRef,
+  );
+  await session.beginOrganizationAssistantEnvironmentReauth({
+    organizationRef: props.resourceScope.organizationRef,
+    agentRef: props.agentRef,
+    environmentRef: environment.value.ref,
+    draftRef: value.ref,
+    draftVersion: value.version,
+  });
+}
+async function draftSaved(value: RuntimeEnvironmentDraft): Promise<void> {
+  emit("draftSaved", value);
+  if (route.path === "/organization/assistant/environment")
+    await router.replace({ query: { ...route.query, draftRef: value.ref } });
+  if (value.state === "PUBLISHED") await load();
 }
 
 function reset(): void {
@@ -198,6 +214,10 @@ onBeforeUnmount(reset);
             <p>{{ $t("runtime.imageAndToolsHelp") }}</p>
           </div>
         </div>
+        <RuntimeResourceManagementLinks
+          :resource-scope="resourceScope"
+          :return-to="returnTo"
+        />
         <RuntimeEnvironmentImageToolsSelector
           v-if="imageCatalog"
           :resource-scope="resourceScope"
@@ -266,23 +286,24 @@ onBeforeUnmount(reset);
         </li>
       </ul>
       <ProblemNotice v-if="problem" :problem="problem" compact />
-      <div class="assistant-environment-settings__actions">
-        <button
-          class="button button--primary"
-          type="button"
-          :disabled="
-            busy ||
-            !canEdit ||
-            !dirty ||
-            !!validation.length ||
-            (Boolean(imageCatalog) && !imageAvailable)
-          "
-          @click="save"
-        >
-          <Save :size="16" aria-hidden="true" />
-          {{ $t("common.save") }}
-        </button>
-      </div>
+      <RuntimeEnvironmentDraftActions
+        :resource-scope="
+          resourceScope.kind === 'PROJECT'
+            ? resourceScope.projectRef
+            : resourceScope
+        "
+        :environment="environment"
+        :specification="normalized"
+        :can-edit="canEdit"
+        :valid="!validation.length && Boolean(imageCatalog) && imageAvailable"
+        :initial-draft-ref="initialDraftRef"
+        :expected-draft-version="expectedDraftVersion"
+        @busy="busy = $event"
+        @draft-loaded="loadDraft"
+        @draft-saved="draftSaved"
+        @published="published"
+        @reauthenticate="reauthenticate"
+      />
     </div>
   </AsyncState>
 </template>

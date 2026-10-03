@@ -271,6 +271,7 @@ func (server *Server) ConsumeRuntimeSecretOperation(ctx context.Context, request
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ConsumeRuntimeSecretOperationResponse{
+		ScopeKind: runtimeSecretScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef,
 		OperationRef: item.Ref, Kind: runtimeSecretOperationKind(item.Kind), ProjectRef: item.ProjectRef,
 		SecretRef: item.SecretRef, Name: item.Name, Description: item.Description,
 		ValueType: runtimeSecretValueType(item.ValueType), Namespace: item.Namespace,
@@ -341,8 +342,29 @@ func (server *Server) RecoverRuntimeSecretMaterialization(ctx context.Context, r
 	return response, nil
 }
 
+func runtimeSecretScopeKind(kind string) controlplanev1.RuntimeResourceScopeKind {
+	return controlplanev1.RuntimeResourceScopeKind(controlplanev1.RuntimeResourceScopeKind_value["RUNTIME_RESOURCE_SCOPE_KIND_"+kind])
+}
+
+func (server *Server) ListOrganizationRuntimeSecrets(ctx context.Context, request *controlplanev1.ListOrganizationRuntimeSecretsRequest) (*controlplanev1.ListOrganizationRuntimeSecretsResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, next, err := server.service.ListRuntimeSecrets(ctx, p, query.Filter{RuntimeResourceScopeKind: "ORGANIZATION", Query: request.GetQuery(), Page: page(request.GetPage())})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListOrganizationRuntimeSecretsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for _, item := range items {
+		response.Secrets = append(response.Secrets, castRuntimeSecret(item))
+	}
+	return response, nil
+}
+
 func castRuntimeSecret(value entity.RuntimeSecret) *controlplanev1.RuntimeSecret {
 	result := &controlplanev1.RuntimeSecret{
+		ScopeKind: runtimeSecretScopeKind(value.ScopeKind), OrganizationRef: value.OrganizationRef,
 		Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name,
 		Description: value.Description, ValueType: runtimeSecretValueType(value.ValueType), State: value.State,
 		CurrentRevision: value.CurrentRevision, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), Namespace: value.Namespace,

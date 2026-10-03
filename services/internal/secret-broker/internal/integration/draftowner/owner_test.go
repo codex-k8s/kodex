@@ -74,7 +74,7 @@ func workFixture() *cp.RuntimeSecretDraftWork {
 	tm := time.Date(2026, 9, 5, 1, 0, 0, 0, time.UTC)
 	ref := "draft_fixture"
 	sum := sha256.Sum256([]byte(ref))
-	return &cp.RuntimeSecretDraftWork{OperationRef: "operation_fixture", Kind: cp.RuntimeSecretDraftOperationKind_RUNTIME_SECRET_DRAFT_OPERATION_KIND_SAVE, Draft: &cp.RuntimeSecretDraft{Ref: ref, Version: 1, Generation: 1, SecretVersion: 1, ProjectRef: "project_fixture", SecretRef: "sec_fixture01", Name: "SYNTHETIC_KEY", ValueType: cp.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_PREPARING, CreatedAt: timestamppb.New(tm), UpdatedAt: timestamppb.New(tm), ExpiresAt: timestamppb.New(tm.Add(time.Hour))}, ExpectedContentSha256: strings.Repeat("a", 64), Namespace: "kodex-runtime", StagedNamespace: "kodex-system", StagedSecretName: "runtime-secret-draft-" + hex.EncodeToString(sum[:16]), StagedSecretKey: "ciphertext", ClaimantId: "pod_fixture", ClaimGeneration: 3, LeaseDeadline: timestamppb.New(tm.Add(time.Minute)), ExpiresAt: timestamppb.New(tm.Add(time.Minute))}
+	return &cp.RuntimeSecretDraftWork{OperationRef: "operation_fixture", Kind: cp.RuntimeSecretDraftOperationKind_RUNTIME_SECRET_DRAFT_OPERATION_KIND_SAVE, Draft: &cp.RuntimeSecretDraft{Ref: ref, Version: 1, Generation: 1, SecretVersion: 1, ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture", ProjectRef: "project_fixture", SecretRef: "sec_fixture01", Name: "SYNTHETIC_KEY", ValueType: cp.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_PREPARING, CreatedAt: timestamppb.New(tm), UpdatedAt: timestamppb.New(tm), ExpiresAt: timestamppb.New(tm.Add(time.Hour))}, ExpectedContentSha256: strings.Repeat("a", 64), Namespace: "kodex-runtime", StagedNamespace: "kodex-system", StagedSecretName: "runtime-secret-draft-" + hex.EncodeToString(sum[:16]), StagedSecretKey: "ciphertext", ClaimantId: "pod_fixture", ClaimGeneration: 3, LeaseDeadline: timestamppb.New(tm.Add(time.Minute)), ExpiresAt: timestamppb.New(tm.Add(time.Minute))}
 }
 func nativeFixture(t *testing.T) (value.DraftWork, *ownerStub, *Owner) {
 	t.Helper()
@@ -142,7 +142,7 @@ func TestOwnerPublishReadbackAndFencedMaterialization(t *testing.T) {
 	s.draft = draftResult(s, cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_PUBLISHED)
 	s.draft.PublishedRevision = 4
 	s.draft.SecretVersion = 2
-	s.secret = &cp.RuntimeSecret{Ref: w.Draft.SecretRef, ProjectRef: w.Draft.ProjectRef, Name: w.Draft.Name, ValueType: s.work.Draft.ValueType, State: "ACTIVE", Version: 2, CurrentRevision: 4, CreatedAt: s.work.Draft.CreatedAt, UpdatedAt: s.work.Draft.UpdatedAt, DisplayHint: &cp.RuntimeSecretDisplayHint{Prefix: "not-returned"}}
+	s.secret = &cp.RuntimeSecret{Ref: w.Draft.SecretRef, ScopeKind: s.work.Draft.ScopeKind, OrganizationRef: w.Draft.OrganizationRef, ProjectRef: w.Draft.ProjectRef, Name: w.Draft.Name, ValueType: s.work.Draft.ValueType, State: "ACTIVE", Version: 2, CurrentRevision: 4, CreatedAt: s.work.Draft.CreatedAt, UpdatedAt: s.work.Draft.UpdatedAt, DisplayHint: &cp.RuntimeSecretDisplayHint{Prefix: "not-returned"}}
 	result, err := o.Complete(context.Background(), w, &e, &m)
 	if err != nil || result.Secret == nil || result.Secret.Revision != 4 {
 		t.Fatalf("publish: %v", err)

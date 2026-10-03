@@ -43,7 +43,7 @@ func (repository *Repository) assistantRoleImageManageInput(
 	if err != nil || roleimageservice.ValidateManagedRecipe(payload.ProjectRef, roleRef, payload.Name, recipe) != nil {
 		return roleimagerepo.ManageInput{}, errs.ErrInvalid
 	}
-	return roleimagerepo.ManageInput{Action: "CREATE", ProjectRef: payload.ProjectRef,
+	return roleimagerepo.ManageInput{ScopeKind: "PROJECT", Action: "CREATE", ProjectRef: payload.ProjectRef,
 		RoleDefinitionRef: roleRef, Name: payload.Name, Environment: payload.Environment, Recipe: recipe}, nil
 }
 
@@ -92,7 +92,7 @@ func (repository *Repository) assistantRoleImageUpdateInput(
 		repository.roleImageCatalogResolver == nil {
 		return roleimagerepo.ManageInput{}, entity.RoleImageRecipe{}, errs.ErrInvalid
 	}
-	input := roleimagerepo.ManageInput{Action: "UPDATE", RecipeRef: payload.RecipeRef,
+	input := roleimagerepo.ManageInput{ScopeKind: "PROJECT", Action: "UPDATE", RecipeRef: payload.RecipeRef,
 		ProjectRef: payload.ProjectRef, Name: payload.Name, Environment: payload.Environment, Mutation: mutation}
 	if err := repository.authorizeRoleImageManage(ctx, tx, current, input); err != nil {
 		return roleimagerepo.ManageInput{}, entity.RoleImageRecipe{}, err
@@ -179,7 +179,7 @@ func (repository *Repository) hydrateAssistantRoleImageUpdate(
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	if err := repository.authorizeRoleImageManage(ctx, tx, current, roleimagerepo.ManageInput{
-		Action: "UPDATE", ProjectRef: projectRef, RecipeRef: ref,
+		ScopeKind: "PROJECT", Action: "UPDATE", ProjectRef: projectRef, RecipeRef: ref,
 	}); err != nil {
 		return entity.AssistantPlanOperation{}, err
 	}

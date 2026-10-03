@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimesecret"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
@@ -131,6 +133,7 @@ func (server *Server) mutate(ctx context.Context, grant string, value []byte, ex
 		return nil, server.failPermanent(ctx, operation, controlplanev1.RuntimeSecretFailureCode_RUNTIME_SECRET_FAILURE_CODE_MATERIALIZATION_INVALID, err)
 	}
 	materialized, err := server.store.CreateImmutableForEffect(ctx, kubernetesstore.MaterializationEffect{
+		WorkKind:     kubernetesstore.WorkKindImmediate,
 		OperationRef: operation.GetOperationRef(), ClaimGeneration: operation.GetClaimGeneration(),
 		SecretRef: operation.GetSecretRef(), Key: operation.GetSecretKey(), Revision: operation.GetTargetRevision(),
 		ContentSHA256: operation.GetExpectedContentSha256(),
@@ -150,7 +153,7 @@ func (server *Server) mutate(ctx context.Context, grant string, value []byte, ex
 	if hint := displayHint(operation.GetValueType(), value); hint != nil {
 		materialization.DisplayHint = hint
 	}
-	secret, err := server.completeEffect(ctx, operation.GetOperationRef(), operation.GetClaimGeneration(), materialization)
+	secret, err := server.completeEffect(ctx, operation, materialization)
 	if err != nil {
 		return nil, preserveOwnerError(err)
 	}
@@ -179,7 +182,7 @@ func (server *Server) RevealSecret(ctx context.Context, request *secretbrokerv1.
 		return nil, status.Error(codes.Unavailable, "secret storage is unavailable")
 	}
 	defer clear(value)
-	if _, err := server.completeEffect(ctx, operation.GetOperationRef(), operation.GetClaimGeneration(), nil); err != nil {
+	if _, err := server.completeEffect(ctx, operation, nil); err != nil {
 		return nil, preserveOwnerError(err)
 	}
 	return &secretbrokerv1.RevealSecretResponse{Value: append([]byte(nil), value...), ValueType: castValueType(operation.GetValueType())}, nil
@@ -201,7 +204,7 @@ func (server *Server) RevokeSecret(ctx context.Context, request *secretbrokerv1.
 		}
 		descriptors = append(descriptors, descriptor)
 	}
-	secret, err := server.completeEffect(ctx, operation.GetOperationRef(), operation.GetClaimGeneration(), nil)
+	secret, err := server.completeEffect(ctx, operation, nil)
 	if err != nil {
 		return nil, preserveOwnerError(err)
 	}
@@ -211,7 +214,7 @@ func (server *Server) RevokeSecret(ctx context.Context, request *secretbrokerv1.
 	return &secretbrokerv1.RevokeSecretResponse{Secret: castSecret(secret)}, nil
 }
 
-func (server *Server) completeEffect(ctx context.Context, operationRef string, claimGeneration int64, materialization *controlplanev1.RuntimeSecretMaterialization) (*controlplanev1.RuntimeSecret, error) {
+func (server *Server) completeEffect(ctx context.Context, operation *controlplanev1.ConsumeRuntimeSecretOperationResponse, materialization *controlplanev1.RuntimeSecretMaterialization) (*controlplanev1.RuntimeSecret, error) {
 	completion, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	delays := [...]time.Duration{0, 100 * time.Millisecond, 300 * time.Millisecond}
@@ -227,8 +230,17 @@ func (server *Server) completeEffect(ctx context.Context, operationRef string, c
 			}
 		}
 		var secret *controlplanev1.RuntimeSecret
-		secret, err = server.owner.Complete(completion, operationRef, claimGeneration, materialization)
+		secret, err = server.owner.Complete(completion, operation.GetOperationRef(), operation.GetClaimGeneration(), materialization)
 		if err == nil {
+			expectedState := "ACTIVE"
+			if operation.GetKind() == controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_REVOKE {
+				expectedState = "REVOKED"
+			}
+			if secret == nil || secret.GetScopeKind() != operation.GetScopeKind() || secret.GetOrganizationRef() != operation.GetOrganizationRef() ||
+				secret.GetProjectRef() != operation.GetProjectRef() || secret.GetRef() != operation.GetSecretRef() ||
+				secret.GetValueType() != operation.GetValueType() || secret.GetCurrentRevision() != operation.GetTargetRevision() || secret.GetState() != expectedState {
+				return nil, status.Error(codes.FailedPrecondition, "secret completion does not match authorized operation")
+			}
 			return secret, nil
 		}
 		switch status.Code(err) {
@@ -300,6 +312,7 @@ func (server *Server) CheckReadiness(ctx context.Context, _ *secretbrokerv1.Chec
 
 func validateOperation(operation *controlplanev1.ConsumeRuntimeSecretOperationResponse, expected controlplanev1.RuntimeSecretOperationKind, namespace string) error {
 	if operation == nil || operation.GetOperationRef() == "" || operation.GetKind() != expected ||
+		runtimesecret.ValidateScope(runtimesecret.ScopeKind(strings.TrimPrefix(operation.GetScopeKind().String(), "RUNTIME_RESOURCE_SCOPE_KIND_")), operation.GetOrganizationRef(), operation.GetProjectRef()) != nil ||
 		operation.GetNamespace() != namespace || operation.GetSecretRef() == "" || operation.GetSecretKey() == "" ||
 		operation.GetTargetRevision() < 1 || operation.GetClaimGeneration() < 1 || operation.GetLeaseDeadline() == nil {
 		return status.Error(codes.FailedPrecondition, "secret operation does not match request")
@@ -411,6 +424,7 @@ func castSecret(value *controlplanev1.RuntimeSecret) *secretbrokerv1.RuntimeSecr
 		return nil
 	}
 	result := &secretbrokerv1.RuntimeSecretMetadata{
+		ScopeKind: secretbrokerv1.RuntimeResourceScopeKind(value.GetScopeKind()), OrganizationRef: value.GetOrganizationRef(),
 		SecretRef: value.GetRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(),
 		ValueType: castValueType(value.GetValueType()), Status: castStatus(value.GetState()), Revision: uint64(value.GetCurrentRevision()),
 		CreatedAt: cloneTimestamp(value.GetCreatedAt()), UpdatedAt: cloneTimestamp(value.GetUpdatedAt()),

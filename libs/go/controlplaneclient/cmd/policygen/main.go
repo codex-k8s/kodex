@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 85, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 86, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -298,7 +298,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	if strings.HasPrefix(operationID, "platform.runtime-secret-drafts.") || strings.HasPrefix(operationID, "platform.configuration-sources.work.") || strings.HasPrefix(operationID, "platform.configuration-writebacks.work.") {
 		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	}
-	if operationID == "platform.command.runtime-secret-drafts.save" {
+	if operationID == "platform.command.runtime-secret-drafts.save" || operationID == "platform.command.organization.runtime-secret-drafts.create" || operationID == "platform.command.organization.runtime-environment-drafts.create" {
 		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	}
 	if fullMethod == sttTranscribeMethod || strings.Contains(fullMethod, "/Upload") || strings.Contains(fullMethod, "/DownloadArtifact") {
@@ -311,6 +311,14 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 		return "FORBIDDEN"
 	}
 	switch operationID {
+	case "platform.organization.role-images.recipes.list", "platform.query.organization.runtime-secrets.list":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.organization.role-images.recipes.get", "platform.organization.role-images.recipe-revisions.list":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.organization.role-images.recipes.manage":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.command.organization.role-images.promote":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.assistant.project.create":
 		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.assistant.project.get":
@@ -375,6 +383,7 @@ func permissionForOperation(operationID string) string {
 		"platform.command.organization-artifacts.upload":       "platform.command.artifacts.upload",
 		"platform.command.organization-attachment-sets.create": "platform.command.attachment-sets.create-draft",
 		"platform.query.runtime-secrets.list":                  "secret.view",
+		"platform.query.organization.runtime-secrets.list":     "secret.view",
 		"platform.query.runtime-secrets.get":                   "secret.view",
 		"platform.command.runtime-secrets.create":              "secret.create",
 		"platform.command.runtime-secrets.rotate":              "secret.rotate",

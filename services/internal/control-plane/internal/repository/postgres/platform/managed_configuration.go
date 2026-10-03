@@ -449,6 +449,10 @@ type lockedManagedRevision struct {
 }
 
 func (repository *Repository) resolveManagedSet(ctx context.Context, tx pgx.Tx, current scope, payload command.ManagedConfigurationInput, kind string, create bool) (managedSet, error) {
+	return repository.resolveManagedSetScope(ctx, tx, current, payload, kind, create, "PROJECT")
+}
+
+func (repository *Repository) resolveManagedSetScope(ctx context.Context, tx pgx.Tx, current scope, payload command.ManagedConfigurationInput, kind string, create bool, scopeKind string) (managedSet, error) {
 	if payload.ConfigurationRef != "" {
 		item, err := scanManagedSet(tx.QueryRow(ctx, queryManagedConfigurationLockSet, pgx.StrictNamedArgs{
 			"organization_id": current.organizationID, "configuration_ref": payload.ConfigurationRef,
@@ -460,6 +464,9 @@ func (repository *Repository) resolveManagedSet(ctx context.Context, tx pgx.Tx, 
 			return managedSet{}, errs.ErrUnavailable
 		}
 		if kind != "" && item.Kind != kind {
+			return managedSet{}, errs.ErrNotFound
+		}
+		if item.Kind == revisionservice.KindRoleImage && ((scopeKind == "ORGANIZATION") != (item.projectID == "")) {
 			return managedSet{}, errs.ErrNotFound
 		}
 		if err := hydrateConfigurationSource(ctx, tx, current.organizationID, &item); err != nil {

@@ -119,10 +119,10 @@ func serviceFixture(t *testing.T, kind value.DraftOperation) (*Service, *ownerFi
 	plaintext := []byte("synthetic draft value")
 	digest := sha256.Sum256(plaintext)
 	now := time.Now()
-	draft := value.SecretDraft{Ref: "drf_fixture", ProjectRef: "prj_fixture", SecretRef: "sec_fixture", Generation: 2, Version: 3,
+	draft := value.SecretDraft{Ref: "drf_fixture", ScopeKind: "PROJECT", OrganizationRef: "org_fixture", ProjectRef: "prj_fixture", SecretRef: "sec_fixture", Generation: 2, Version: 3,
 		ValueType: "STRING", State: map[value.DraftOperation]string{value.DraftSave: "PREPARING", value.DraftValidate: "DRAFT", value.DraftPublish: "PUBLISHING", value.DraftDiscard: "DISCARDED"}[kind]}
 	work := value.DraftWork{OperationRef: "op_fixture", ClaimantID: "pod_fixture", ClaimGeneration: 1, Kind: kind, Draft: draft,
-		Binding: value.SecretDraftBinding{ProjectRef: draft.ProjectRef, SecretRef: draft.SecretRef, DraftRef: draft.Ref,
+		Binding: value.SecretDraftBinding{ScopeKind: draft.ScopeKind, OrganizationRef: draft.OrganizationRef, ProjectRef: draft.ProjectRef, SecretRef: draft.SecretRef, DraftRef: draft.Ref,
 			DraftGeneration: draft.Generation, ValueType: draft.ValueType, ContentSHA256: hex.EncodeToString(digest[:])},
 		StagedNamespace: "kodex-system", StagedName: "draft-fixture", StagedKey: "ciphertext", RuntimeNamespace: "kodex-runtime",
 		TargetRevision: 8, LeaseDeadline: now.Add(time.Minute), ExpiresAt: now.Add(time.Hour)}
@@ -134,7 +134,7 @@ func serviceFixture(t *testing.T, kind value.DraftOperation) (*Service, *ownerFi
 	result := value.DraftResult{Draft: draft}
 	result.Draft.State = map[value.DraftOperation]string{value.DraftSave: "DRAFT", value.DraftValidate: "VALID", value.DraftPublish: "PUBLISHED", value.DraftDiscard: "DISCARDED"}[kind]
 	if kind == value.DraftPublish {
-		result.Secret = &value.PublishedSecret{Ref: draft.SecretRef, ProjectRef: draft.ProjectRef, Revision: 8}
+		result.Secret = &value.PublishedSecret{Ref: draft.SecretRef, ScopeKind: draft.ScopeKind, OrganizationRef: draft.OrganizationRef, ProjectRef: draft.ProjectRef, Revision: 8}
 	}
 	owner := &ownerFixture{work: work, result: result, decision: value.DraftRecoveryDecision{EncryptedAction: value.DraftRecoveryKeep, MaterializationAction: value.DraftRecoveryKeep}}
 	cipher := &cipherFixture{plaintext: plaintext}

@@ -18,6 +18,8 @@ import type {
 
 function recipe(overrides: Partial<RoleImageRecipe> = {}): RoleImageRecipe {
   return {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     sourceAvailable: true,
     ref: "image_1",
     version: 1,
@@ -40,6 +42,9 @@ function recipe(overrides: Partial<RoleImageRecipe> = {}): RoleImageRecipe {
 
 function build(overrides: Partial<RoleImageBuild> = {}): RoleImageBuild {
   return {
+    projectRef: "project_1",
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     sourceAvailable: true,
     ref: "build_1",
     version: 1,
@@ -59,6 +64,9 @@ function admittedArtifact(
   overrides: Partial<RoleImageArtifact> = {},
 ): RoleImageArtifact {
   return {
+    projectRef: "project_1",
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref: "artifact_1",
     version: 1,
     recipeRef: "image_1",
@@ -200,6 +208,9 @@ describe("role image model", () => {
 
   it("разрешает promotion только по серверному nextAction и admitted artifact", () => {
     const artifact = {
+      projectRef: "project_1",
+      scopeKind: "PROJECT" as const,
+      organizationRef: "org_synthetic",
       ref: "artifact_1",
       version: 1,
       recipeRef: "image_1",

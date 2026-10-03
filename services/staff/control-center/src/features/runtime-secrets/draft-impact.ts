@@ -13,6 +13,10 @@ import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 import { checkedDraft, type RuntimeSecretDraft } from "./draft-api";
 import { normalizeSecretPage } from "./model";
+import {
+  runtimeResourceAddressFromIdentity,
+  assertRuntimeResourceAddressIdentity,
+} from "@/features/runtime/resource-scope";
 
 export type { RuntimeSecretDraftImpactPlan, RuntimeSecretDraftImpactPage };
 const positive = (value: number) => Number.isSafeInteger(value) && value > 0;
@@ -207,7 +211,8 @@ export async function publishSecretDraft(
       key,
     )
   ).data;
-  const receipt = checkedDraft(result.draft, draft.projectRef, draft);
+  const scope = runtimeResourceAddressFromIdentity(draft);
+  const receipt = checkedDraft(result.draft, scope, draft);
   const secret = normalizeSecretPage({ items: [result.secret] }).items[0];
   if (
     receipt.state !== "PUBLISHED" ||
@@ -217,5 +222,6 @@ export async function publishSecretDraft(
     secret.currentRevision !== receipt.publishedRevision
   )
     throw new Error("Secret draft publication receipt mismatch");
+  assertRuntimeResourceAddressIdentity(scope, secret);
   return { draft: receipt, secret };
 }

@@ -84,6 +84,8 @@ const schedule: Schedule = {
 };
 
 const environment: RuntimeEnvironmentSet = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "environment_sales",
   version: 1,
   projectRef: project.ref,

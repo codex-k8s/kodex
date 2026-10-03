@@ -281,6 +281,7 @@ func testEffect(operationRef string, generation int64, secretRef string, revisio
 	content := []byte(value)
 	digest := sha256.Sum256(content)
 	return MaterializationEffect{
+		WorkKind:        WorkKindImmediate,
 		OperationRef:    operationRef,
 		ClaimGeneration: generation,
 		SecretRef:       secretRef,
@@ -292,6 +293,7 @@ func testEffect(operationRef string, generation int64, secretRef string, revisio
 
 func materializationForEffect(effect MaterializationEffect, name, uid, resourceVersion string) Materialization {
 	return Materialization{
+		WorkKind:        effect.WorkKind,
 		Namespace:       testNamespace,
 		Name:            name,
 		OperationRef:    effect.OperationRef,

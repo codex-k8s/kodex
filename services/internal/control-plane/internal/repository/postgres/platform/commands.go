@@ -291,7 +291,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.updateAssistantRoleImage(ctx, tx, scope, input)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
-	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
+	case command.CreateRuntimeEnvironmentDraft, command.CreateOrganizationRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
 		command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft:
 		return repository.changeRuntimeEnvironmentDraft(ctx, tx, scope, input)
 	case command.PrepareEnvironmentDraftImpact:

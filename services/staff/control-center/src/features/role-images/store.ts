@@ -29,6 +29,12 @@ import type {
   RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import {
+  assertRoleImageResourceIdentity,
+  roleImageScopeKey,
+  roleImageRuntimeScope,
+  type RoleImageResourceScope,
+} from "./resource-scope";
 
 export const useRoleImagesStore = defineStore("role-images", () => {
   const recipes = reactive<Record<string, RoleImageRecipe>>({});
@@ -70,22 +76,22 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     () => new Map(roleDefinitions.value.map((value) => [value.ref, value])),
   );
 
-  function catalog(projectRef: string): RoleImageRecipe[] {
+  function catalog(scope: RoleImageResourceScope): RoleImageRecipe[] {
+    const projectRef = roleImageScopeKey(scope);
     return (projectRecipeRefs[projectRef] ?? [])
       .map((ref) => recipes[ref])
       .filter((value): value is RoleImageRecipe => Boolean(value));
   }
 
   function applyCatalogSnapshot(
-    projectRef: string,
+    scope: RoleImageResourceScope,
     values: RoleImageRecipe[],
     nextPageToken?: string,
     total?: number,
   ): void {
-    if (
-      values.some((recipe) => recipe.projectRef !== projectRef) ||
-      new Set(values.map((recipe) => recipe.ref)).size !== values.length
-    )
+    const projectRef = roleImageScopeKey(scope);
+    for (const value of values) assertRoleImageResourceIdentity(scope, value);
+    if (new Set(values.map((recipe) => recipe.ref)).size !== values.length)
       throw new Error("Invalid role image realtime catalog scope");
     const refs = new Set(values.map((recipe) => recipe.ref));
     for (const ref of projectRecipeRefs[projectRef] ?? [])
@@ -103,11 +109,12 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function loadCatalog(
-    projectRef: string,
+    scope: RoleImageResourceScope,
     reset = true,
     filter?: { query?: string; state?: "ACTIVE" | "ARCHIVED" },
     pageSize = 20,
   ): Promise<void> {
+    const projectRef = roleImageScopeKey(scope);
     if (
       !reset &&
       (!projectNextPageToken[projectRef] ||
@@ -132,7 +139,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     problem.value = undefined;
     try {
       const page = await loadRoleImagePage(
-        projectRef,
+        scope,
         cursor,
         controller.signal,
         activeFilter,
@@ -144,13 +151,13 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         !Number.isSafeInteger(page.total) ||
         page.total < page.items.length ||
         page.items.some(
-          (recipe) =>
-            recipe.projectRef !== projectRef ||
-            (activeFilter.state && recipe.state !== activeFilter.state),
+          (recipe) => activeFilter.state && recipe.state !== activeFilter.state,
         ) ||
         (page.nextPageToken && page.nextPageToken === cursor)
       )
         throw new Error("Invalid role image catalog scope or cursor");
+      for (const recipe of page.items)
+        assertRoleImageResourceIdentity(scope, recipe);
       const refs = reset ? [] : [...(projectRecipeRefs[projectRef] ?? [])];
       const seen = new Set(refs);
       for (const recipe of page.items) {
@@ -191,7 +198,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function loadDetail(
-    projectRef: string,
+    scope: RoleImageResourceScope,
     recipeRef: string,
     showLoading = true,
     revisionPageSize = 20,
@@ -200,14 +207,33 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     loadingDetail.value = showLoading;
     problem.value = undefined;
     try {
-      const detail = await loadRoleImageDetail(projectRef, recipeRef);
+      const detail = await loadRoleImageDetail(scope, recipeRef);
       if (current !== detailGeneration) return;
       if (
         detail.recipe.ref !== recipeRef ||
-        detail.recipe.projectRef !== projectRef ||
         detail.builds.some((build) => build.recipeRef !== recipeRef)
       )
         throw new Error("Invalid role image detail scope");
+      assertRoleImageResourceIdentity(scope, detail.recipe);
+      for (const build of detail.builds)
+        assertRoleImageResourceIdentity(
+          scope,
+          build,
+          detail.recipe.organizationRef,
+        );
+      for (const artifact of [
+        detail.activeArtifact,
+        detail.promotionCandidate,
+      ]) {
+        if (!artifact) continue;
+        assertRoleImageResourceIdentity(
+          scope,
+          artifact,
+          detail.recipe.organizationRef,
+        );
+        if (artifact.recipeRef !== recipeRef)
+          throw new Error("Role image artifact recipe mismatch");
+      }
       if (!showLoading) {
         recipes[detail.recipe.ref] = detail.recipe;
         builds[detail.recipe.ref] = detail.builds;
@@ -217,10 +243,10 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       }
       const [dependencyItems, revisionPage] = await Promise.all([
         detail.activeArtifact
-          ? loadRoleImageDependencies(projectRef, detail.activeArtifact.ref)
+          ? loadRoleImageDependencies(scope, detail.activeArtifact.ref)
           : Promise.resolve([]),
         loadRoleImageRevisionPage(
-          projectRef,
+          scope,
           recipeRef,
           undefined,
           revisionPageSize,
@@ -246,7 +272,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function loadMoreRevisions(
-    projectRef: string,
+    scope: RoleImageResourceScope,
     recipeRef: string,
     pageSize = 20,
   ): Promise<void> {
@@ -257,7 +283,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     problem.value = undefined;
     try {
       const page = await loadRoleImageRevisionPage(
-        projectRef,
+        scope,
         recipeRef,
         pageToken,
         pageSize,
@@ -311,9 +337,11 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function loadSupportingCatalogs(
-    projectRef: string,
+    scope: RoleImageResourceScope,
     snapshot?: { agents: Agent[]; environments: RoleEnvironment[] },
   ): Promise<void> {
+    const projectRef = roleImageScopeKey(scope);
+    const resolved = roleImageRuntimeScope(scope);
     const current = ++supportingGeneration;
     supportingController?.abort();
     const controller = new AbortController();
@@ -326,11 +354,16 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       const [definitions, environmentCatalog, canCreate] = await Promise.all([
         snapshot
           ? Promise.resolve(roleDefinitions.value)
-          : loadRoleDefinitionOptions(projectRef, controller.signal),
+          : resolved.kind === "PROJECT"
+            ? loadRoleDefinitionOptions(resolved.projectRef, controller.signal)
+            : Promise.resolve([]),
         snapshot
           ? Promise.resolve(environments.value)
           : loadRoleEnvironmentCatalog(controller.signal),
-        loadRoleImageCreateAccess(projectRef, controller.signal),
+        loadRoleImageCreateAccess(
+          resolved.kind === "PROJECT" ? resolved.projectRef : undefined,
+          controller.signal,
+        ),
       ]);
       if (current !== supportingGeneration) return;
       if (!snapshot) {
@@ -345,7 +378,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function command(
-    projectRef: string,
+    projectRef: RoleImageResourceScope,
     recipe: RoleImageRecipe,
     action: RoleImageRecipeCommand["action"],
     buildRef?: string,
@@ -353,12 +386,14 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     mutating.value = true;
     problem.value = undefined;
     try {
+      assertRoleImageResourceIdentity(projectRef, recipe);
       const receipt = await commandRoleImage(
         projectRef,
         recipe,
         action,
         buildRef,
       );
+      assertRoleImageResourceIdentity(projectRef, receipt.recipe);
       recipes[receipt.recipe.ref] = receipt.recipe;
       if (action === "REQUEST_BUILD")
         Reflect.deleteProperty(promotionReceipts, receipt.recipe.ref);
@@ -379,13 +414,16 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function create(
-    projectRef: string,
-    input: RoleImageRecipeCreateInput,
+    projectRef: RoleImageResourceScope,
+    input: Omit<RoleImageRecipeCreateInput, "roleDefinitionRef"> & {
+      roleDefinitionRef?: string;
+    },
   ): Promise<RoleImageRecipe> {
     mutating.value = true;
     problem.value = undefined;
     try {
       const recipe = await createRoleImage(projectRef, input);
+      assertRoleImageResourceIdentity(projectRef, recipe);
       recipes[recipe.ref] = recipe;
       return recipe;
     } catch (error) {
@@ -397,14 +435,16 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function update(
-    projectRef: string,
+    projectRef: RoleImageResourceScope,
     recipe: RoleImageRecipe,
     input: RoleImageRecipeUpdateInput,
   ): Promise<RoleImageRecipe> {
     mutating.value = true;
     problem.value = undefined;
     try {
+      assertRoleImageResourceIdentity(projectRef, recipe);
       const saved = await updateRoleImage(projectRef, recipe, input);
+      assertRoleImageResourceIdentity(projectRef, saved);
       recipes[saved.ref] = saved;
       await loadDetail(projectRef, saved.ref);
       return saved;
@@ -417,13 +457,20 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function promote(
-    projectRef: string,
+    projectRef: RoleImageResourceScope,
     recipe: RoleImageRecipe,
     artifact: RoleImageArtifact,
   ): Promise<RoleImagePromotionReceipt> {
     mutating.value = true;
     problem.value = undefined;
     try {
+      assertRoleImageResourceIdentity(projectRef, recipe);
+      if (
+        artifact.scopeKind !== recipe.scopeKind ||
+        artifact.organizationRef !== recipe.organizationRef ||
+        artifact.recipeRef !== recipe.ref
+      )
+        throw new Error("Role image promotion artifact owner mismatch");
       const receipt = await promoteRoleImageArtifact(
         projectRef,
         recipe,

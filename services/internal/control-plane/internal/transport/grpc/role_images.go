@@ -69,6 +69,7 @@ func castRoleImageRecipe(input entity.RoleImageRecipe) *controlplanev1.RoleImage
 		lineage = &controlplanev1.RoleImageManagedLineage{ConfigurationRef: value.ConfigurationRef, RevisionRef: value.RevisionRef, Revision: value.Revision, ManagedBy: value.ManagedBy, SourceRef: value.SourceRef, SourceRevision: value.SourceRevision, Origin: value.Origin}
 	}
 	return &controlplanev1.RoleImageRecipe{
+		ScopeKind: roleImageScopeKind(input.ScopeKind), OrganizationRef: input.OrganizationRef,
 		SourceAvailable: input.SourceAvailable,
 		ManagedLineage:  lineage,
 		Ref:             input.Ref, Version: input.Version, ProjectRef: input.ProjectRef, RoleDefinitionRef: input.RoleDefinitionRef,
@@ -132,6 +133,8 @@ func imageBuildStage(stage string) controlplanev1.ImageBuildStage {
 
 func castImageBuild(input entity.ImageBuild) *controlplanev1.ImageBuild {
 	result := &controlplanev1.ImageBuild{
+		ProjectRef: input.ProjectRef,
+		ScopeKind:  roleImageScopeKind(input.ScopeKind), OrganizationRef: input.OrganizationRef,
 		SourceAvailable:          input.SourceAvailable,
 		ConfigurationRevisionRef: input.ConfigurationRevisionRef,
 		Ref:                      input.Ref, Version: input.Version, RecipeRef: input.RecipeRef,
@@ -168,6 +171,8 @@ func imagePromotionState(state string) controlplanev1.ImagePromotionState {
 
 func castImageArtifact(input entity.ImageArtifact) *controlplanev1.ImageArtifact {
 	result := &controlplanev1.ImageArtifact{
+		ProjectRef: input.ProjectRef,
+		ScopeKind:  roleImageScopeKind(input.ScopeKind), OrganizationRef: input.OrganizationRef,
 		Ref: input.Ref, Version: input.Version, RecipeRef: input.RecipeRef,
 		RecipeVersion: input.RecipeVersion, RecipeGeneration: input.RecipeGeneration,
 		SpecSha256: input.SpecSHA256, BuildRef: input.BuildRef, BuildVersion: input.BuildVersion,
@@ -208,6 +213,8 @@ func castImageArtifact(input entity.ImageArtifact) *controlplanev1.ImageArtifact
 
 func castRoleImageBuildInput(input entity.RoleImageBuildInput) *controlplanev1.RoleImageBuildInput {
 	return &controlplanev1.RoleImageBuildInput{
+		ProjectRef: input.ProjectRef,
+		ScopeKind:  roleImageScopeKind(input.ScopeKind), OrganizationRef: input.OrganizationRef,
 		RecipeRef: input.RecipeRef, RecipeVersion: input.RecipeVersion,
 		RecipeGeneration: input.RecipeGeneration, SpecSha256: input.SpecSHA256,
 		BaseImageReference: input.BaseImageReference, BaseImageDigest: input.BaseImageDigest,
@@ -509,4 +516,79 @@ func (server *RoleImageServer) CompleteImagePromotion(ctx context.Context, reque
 		return nil, transportError(err)
 	}
 	return &controlplanev1.CompleteImagePromotionResponse{ImageArtifact: castImageArtifact(artifact)}, nil
+}
+
+func roleImageScopeKind(kind string) controlplanev1.RuntimeResourceScopeKind {
+	switch kind {
+	case "ORGANIZATION":
+		return controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION
+	case "PROJECT":
+		return controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT
+	default:
+		return controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+	}
+}
+
+func (server *RoleImageServer) ListOrganizationRoleImageRecipes(ctx context.Context, request *controlplanev1.ListOrganizationRoleImageRecipesRequest) (*controlplanev1.ListOrganizationRoleImageRecipesResponse, error) {
+	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ListOrganizationRoleImageRecipes_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, nextPage, total, err := server.service.ListOrganization(ctx, p, roleimagerepository.Filter{
+		Page: page(request.GetPage()), Query: request.GetQuery(), State: request.GetState(),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListOrganizationRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}, Total: total}
+	for _, item := range items {
+		response.Recipes = append(response.Recipes, castRoleImageRecipe(item))
+	}
+	return response, nil
+}
+
+func (server *RoleImageServer) GetOrganizationRoleImageRecipe(ctx context.Context, request *controlplanev1.GetOrganizationRoleImageRecipeRequest) (*controlplanev1.GetOrganizationRoleImageRecipeResponse, error) {
+	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_GetOrganizationRoleImageRecipe_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	detail, err := server.service.GetOrganization(ctx, p, request.GetRecipeRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.GetOrganizationRoleImageRecipeResponse{Recipe: castRoleImageRecipe(detail.Recipe)}
+	for _, item := range detail.Builds {
+		response.Builds = append(response.Builds, castImageBuild(item))
+	}
+	if detail.ActiveArtifact != nil {
+		response.ActiveArtifact = castImageArtifact(*detail.ActiveArtifact)
+	}
+	if detail.PromotionCandidate != nil {
+		response.PromotionCandidate = castImageArtifact(*detail.PromotionCandidate)
+	}
+	return response, nil
+}
+
+func (server *RoleImageServer) ManageOrganizationRoleImageRecipe(ctx context.Context, request *controlplanev1.ManageOrganizationRoleImageRecipeRequest) (*controlplanev1.ManageOrganizationRoleImageRecipeResponse, error) {
+	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ManageOrganizationRoleImageRecipe_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	result, err := server.service.ManageOrganization(ctx, roleimagerepository.ManageInput{
+		Principal: p, Mutation: mutation(request.GetMutation()), Action: roleImageAction(request.GetAction()),
+		RecipeRef: request.GetRecipeRef(), BuildRef: request.GetBuildRef(),
+		Name:        request.GetName(),
+		Environment: domainRoleEnvironmentSelection(request.GetEnvironment()),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ManageOrganizationRoleImageRecipeResponse{Recipe: castRoleImageRecipe(result.Recipe), Reused: result.Reused}
+	if result.Build != nil {
+		response.ImageBuild = castImageBuild(*result.Build)
+	}
+	if result.Artifact != nil {
+		response.ImageArtifact = castImageArtifact(*result.Artifact)
+	}
+	return response, nil
 }

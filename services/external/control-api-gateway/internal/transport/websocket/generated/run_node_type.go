@@ -5,8 +5,8 @@ package generated
 type RunNodeType string
 
 const (
-	RunNodeTypeRootProcess RunNodeType = "ROOT_PROCESS"
+	RunNodeTypeRootProcess    RunNodeType = "ROOT_PROCESS"
 	RunNodeTypeAgentExecution RunNodeType = "AGENT_EXECUTION"
-	RunNodeTypeHumanGate RunNodeType = "HUMAN_GATE"
+	RunNodeTypeHumanGate      RunNodeType = "HUMAN_GATE"
 	RunNodeTypeExternalAction RunNodeType = "EXTERNAL_ACTION"
 )

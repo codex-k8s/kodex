@@ -171,14 +171,7 @@ func (r *Repository) revisionImpactAccess(ctx context.Context, tx pgx.Tx, s scop
 		if draft.EnvironmentRef != row.plan.SourceRef {
 			return errs.ErrUnavailable
 		}
-		target, err := r.resolveAccessTarget(ctx, tx, s.organizationID, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: draft.ProjectRef})
-		if err != nil {
-			return err
-		}
-		if s.authorityProjectID != "" && s.authorityProjectID != target.projectID {
-			return errs.ErrNotFound
-		}
-		return r.requireAccess(ctx, tx, s, "project.manage", target)
+		return r.requireRuntimeEnvironmentOwnerAccess(ctx, tx, s, draft.ScopeKind, draft.ProjectRef)
 	default:
 		return errs.ErrNotFound
 	}

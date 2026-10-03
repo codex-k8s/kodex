@@ -3,6 +3,6 @@
 package generated
 
 type UserSummary struct {
-	Ref string `json:"ref"`
+	Ref         string `json:"ref"`
 	DisplayName string `json:"displayName"`
 }

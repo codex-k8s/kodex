@@ -58,15 +58,15 @@ func testOrganizationRuntimeImageScope(t *testing.T, ctx context.Context, reposi
 	if scopeKind != "ORGANIZATION" || !scopeIsOrganization {
 		t.Fatalf("system image scope is not organizational: kind=%s nullProject=%t", scopeKind, scopeIsOrganization)
 	}
-	if _, _, _, _, err := repository.resolveRuntimeEnvironmentImage(ctx, tx, organizationID, "", artifactRef, nil); err != nil {
+	if _, _, _, _, err := repository.resolveScopedRuntimeEnvironmentImage(ctx, tx, organizationID, "", "ORGANIZATION", artifactRef, nil); err != nil {
 		t.Fatalf("resolve exact organization image: %v", err)
 	}
-	for _, candidate := range []struct{ name, projectID, artifactRef string }{
-		{"organization image in project", projectID, artifactRef},
-		{"project image in organization", "", projectArtifactRef},
+	for _, candidate := range []struct{ name, projectID, scopeKind, artifactRef string }{
+		{"organization image in project", projectID, "PROJECT", artifactRef},
+		{"project image in organization", "", "ORGANIZATION", projectArtifactRef},
 	} {
 		t.Run(candidate.name, func(t *testing.T) {
-			if _, _, _, _, err := repository.resolveRuntimeEnvironmentImage(ctx, tx, organizationID, candidate.projectID, candidate.artifactRef, nil); !errors.Is(err, errs.ErrNotFound) {
+			if _, _, _, _, err := repository.resolveScopedRuntimeEnvironmentImage(ctx, tx, organizationID, candidate.projectID, candidate.scopeKind, candidate.artifactRef, nil); !errors.Is(err, errs.ErrNotFound) {
 				t.Fatalf("cross-scope image resolution: %v", err)
 			}
 		})

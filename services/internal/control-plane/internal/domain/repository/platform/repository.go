@@ -110,6 +110,7 @@ type WorkerGrantInput struct {
 }
 
 type RuntimeSecretPrepareInput struct {
+	ScopeKind                                                                        string
 	Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
 	Mutation                                                                         value.Mutation
 }

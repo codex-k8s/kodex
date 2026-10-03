@@ -30,8 +30,8 @@ WITH policy AS (
     RETURNING id
 ), inserted_environment AS (
     INSERT INTO control_plane.runtime_environment_sets
-        (ref, organization_id, project_id, name, description, created_by)
-    VALUES (@environment_ref, @organization_id::uuid, NULLIF(@project_id, '')::uuid,
+        (ref, organization_id, scope_kind, project_id, name, description, created_by)
+    VALUES (@environment_ref, @organization_id::uuid, CASE WHEN @project_id = '' THEN 'ORGANIZATION' ELSE 'PROJECT' END, NULLIF(@project_id, '')::uuid,
             'i18n:DEFAULT_RUNTIME_ENVIRONMENT', 'i18n:DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION', @created_by::uuid)
     ON CONFLICT ON CONSTRAINT runtime_environment_sets_organization_id_project_id_name_key DO NOTHING
     RETURNING id, ref, current_version_id

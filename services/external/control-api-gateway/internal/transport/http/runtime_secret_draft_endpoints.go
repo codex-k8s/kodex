@@ -68,9 +68,12 @@ func (s *Server) saveSecretDraft(w http.ResponseWriter, r *http.Request, input *
 		writeRPCProblem(w, err)
 		return
 	}
-	op := prepared.GetOperation()
+	s.savePreparedSecretDraft(w, r, prepared.GetOperation(), input, value, "")
+}
+
+func (s *Server) savePreparedSecretDraft(w http.ResponseWriter, r *http.Request, op *cp.RuntimeSecretDraftOperationReceipt, input *cp.PrepareSaveRuntimeSecretDraftRequest, value []byte, scopeKind generated.RuntimeResourceScopeKind) {
 	draft, ok := runtimeSecretDraftView(op.GetDraft())
-	if !ok || draft.ValueType != generated.RuntimeSecretValueType(runtimeSecretValueTypeName(input.ValueType)) || input.SecretRef != "" && draft.SecretRef != input.SecretRef || input.ProjectRef != "" && (draft.ProjectRef != input.ProjectRef || draft.Name != input.Name || draft.Description != input.Description) {
+	if !ok || scopeKind != "" && draft.ScopeKind != scopeKind || draft.ValueType != generated.RuntimeSecretValueType(runtimeSecretValueTypeName(input.ValueType)) || input.SecretRef != "" && draft.SecretRef != input.SecretRef || input.SecretRef == "" && (draft.ProjectRef != input.ProjectRef || draft.Name != input.Name || draft.Description != input.Description) {
 		invalidSecretDraft(w)
 		return
 	}
@@ -240,8 +243,8 @@ func terminalSecretDraft(w http.ResponseWriter, status int, op *cp.RuntimeSecret
 }
 
 func (s *Server) finishSecretDraft(w http.ResponseWriter, status int, before generated.RuntimeSecretDraft, response *sb.RuntimeSecretDraftMetadata, secret *generated.RuntimeSecret, target string) {
-	draft, ok := runtimeSecretDraftView(&cp.RuntimeSecretDraft{Ref: response.GetRef(), Version: response.GetVersion(), Generation: response.GetGeneration(), ProjectRef: response.GetProjectRef(), SecretRef: response.GetSecretRef(), SecretVersion: response.GetSecretVersion(), Name: response.GetName(), Description: response.GetDescription(), ValueType: cp.RuntimeSecretValueType(response.GetValueType()), State: cp.RuntimeSecretDraftState(response.GetState()), PublishedRevision: response.GetPublishedRevision(), CreatedAt: response.GetCreatedAt(), UpdatedAt: response.GetUpdatedAt(), ExpiresAt: response.GetExpiresAt()})
-	if !ok || draft.Ref != before.Ref || draft.Generation != before.Generation || draft.ProjectRef != before.ProjectRef || draft.SecretRef != before.SecretRef || draft.ValueType != before.ValueType || draft.Name != before.Name || draft.Description != before.Description || draft.Version < before.Version || target != "DISCARDED" && draft.Version == before.Version || !draft.CreatedAt.Equal(before.CreatedAt) || !draft.ExpiresAt.Equal(before.ExpiresAt) || draft.UpdatedAt.Before(before.UpdatedAt) || string(draft.State) != target || !validDraftPublication(draft, secret, target) {
+	draft, ok := runtimeSecretDraftView(&cp.RuntimeSecretDraft{Ref: response.GetRef(), ScopeKind: cp.RuntimeResourceScopeKind(response.GetScopeKind()), OrganizationRef: response.GetOrganizationRef(), Version: response.GetVersion(), Generation: response.GetGeneration(), ProjectRef: response.GetProjectRef(), SecretRef: response.GetSecretRef(), SecretVersion: response.GetSecretVersion(), Name: response.GetName(), Description: response.GetDescription(), ValueType: cp.RuntimeSecretValueType(response.GetValueType()), State: cp.RuntimeSecretDraftState(response.GetState()), PublishedRevision: response.GetPublishedRevision(), CreatedAt: response.GetCreatedAt(), UpdatedAt: response.GetUpdatedAt(), ExpiresAt: response.GetExpiresAt()})
+	if !ok || draft.Ref != before.Ref || draft.Generation != before.Generation || draft.ScopeKind != before.ScopeKind || draft.OrganizationRef != before.OrganizationRef || draft.ProjectRef != before.ProjectRef || draft.SecretRef != before.SecretRef || draft.ValueType != before.ValueType || draft.Name != before.Name || draft.Description != before.Description || draft.Version < before.Version || target != "DISCARDED" && draft.Version == before.Version || !draft.CreatedAt.Equal(before.CreatedAt) || !draft.ExpiresAt.Equal(before.ExpiresAt) || draft.UpdatedAt.Before(before.UpdatedAt) || string(draft.State) != target || !validDraftPublication(draft, secret, target) {
 		invalidSecretDraft(w)
 		return
 	}
@@ -253,7 +256,11 @@ func runtimeSecretDraftView(v *cp.RuntimeSecretDraft) (generated.RuntimeSecretDr
 	if v == nil || !validManagedVersion(v.GetVersion()) || !validManagedVersion(v.GetGeneration()) || !validManagedVersion(v.GetSecretVersion()) || v.GetPublishedRevision() < 0 || v.GetPublishedRevision() > maximumSafeJSONInteger {
 		return result, false
 	}
-	for _, ref := range []string{v.GetRef(), v.GetProjectRef(), v.GetSecretRef()} {
+	scopeKind := runtimeResourceScopeKind(v.GetScopeKind().String())
+	if !validRuntimeResourceScope(scopeKind, v.GetOrganizationRef(), v.GetProjectRef()) {
+		return result, false
+	}
+	for _, ref := range []string{v.GetRef(), v.GetSecretRef()} {
 		if !opaqueHTTPReference.MatchString(ref) || len(ref) > 96 {
 			return result, false
 		}
@@ -269,14 +276,14 @@ func runtimeSecretDraftView(v *cp.RuntimeSecretDraft) (generated.RuntimeSecretDr
 	if v.GetUpdatedAt().AsTime().Before(v.GetCreatedAt().AsTime()) || !v.GetExpiresAt().AsTime().After(v.GetCreatedAt().AsTime()) {
 		return result, false
 	}
-	return generated.RuntimeSecretDraft{Ref: v.GetRef(), Version: v.GetVersion(), Generation: v.GetGeneration(), ProjectRef: v.GetProjectRef(), SecretRef: v.GetSecretRef(), SecretVersion: v.GetSecretVersion(), Name: v.GetName(), Description: v.GetDescription(), State: state, ValueType: valueType, PublishedRevision: v.GetPublishedRevision(), CreatedAt: v.GetCreatedAt().AsTime(), UpdatedAt: v.GetUpdatedAt().AsTime(), ExpiresAt: v.GetExpiresAt().AsTime()}, true
+	return generated.RuntimeSecretDraft{Ref: v.GetRef(), ScopeKind: scopeKind, OrganizationRef: v.GetOrganizationRef(), Version: v.GetVersion(), Generation: v.GetGeneration(), ProjectRef: v.GetProjectRef(), SecretRef: v.GetSecretRef(), SecretVersion: v.GetSecretVersion(), Name: v.GetName(), Description: v.GetDescription(), State: state, ValueType: valueType, PublishedRevision: v.GetPublishedRevision(), CreatedAt: v.GetCreatedAt().AsTime(), UpdatedAt: v.GetUpdatedAt().AsTime(), ExpiresAt: v.GetExpiresAt().AsTime()}, true
 }
 
 func validDraftPublication(draft generated.RuntimeSecretDraft, secret *generated.RuntimeSecret, target string) bool {
 	if target != "PUBLISHED" {
 		return secret == nil
 	}
-	return secret != nil && secret.Ref == draft.SecretRef && secret.ProjectRef == draft.ProjectRef && secret.State == "ACTIVE" && validManagedVersion(secret.Version) && secret.Version == draft.SecretVersion && secret.CurrentRevision == draft.PublishedRevision && secret.Name == draft.Name && secret.Description == draft.Description && secret.ValueType == draft.ValueType && !secret.CreatedAt.IsZero() && !secret.UpdatedAt.Before(secret.CreatedAt)
+	return secret != nil && secret.Ref == draft.SecretRef && secret.ScopeKind == draft.ScopeKind && secret.OrganizationRef == draft.OrganizationRef && secret.ProjectRef == draft.ProjectRef && secret.State == "ACTIVE" && validManagedVersion(secret.Version) && secret.Version == draft.SecretVersion && secret.CurrentRevision == draft.PublishedRevision && secret.Name == draft.Name && secret.Description == draft.Description && secret.ValueType == draft.ValueType && !secret.CreatedAt.IsZero() && !secret.UpdatedAt.Before(secret.CreatedAt)
 }
 
 func invalidSecretDraft(w http.ResponseWriter) {

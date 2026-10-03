@@ -82,6 +82,29 @@ export function assistantEnvironmentDraftTarget(
     ? { projectRef: plan.projectRef, draftRef }
     : undefined;
 }
+export function assistantSystemEnvironmentDraftTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+):
+  | { draftRef: string; environmentRef: string; assistantRef: string }
+  | undefined {
+  const draftRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+    "ENVIRONMENT",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const assistantRef = operation?.parameters.systemAssistantRef;
+  if (
+    !draftRef ||
+    typeof assistantRef !== "string" ||
+    !/^[A-Za-z0-9_-]{8,128}$/.test(assistantRef) ||
+    !operation?.target.ref
+  )
+    return;
+  return { draftRef, environmentRef: operation.target.ref, assistantRef };
+}
 
 export function assistantCreatedProjectFileTarget(
   plan: AssistantPlan,

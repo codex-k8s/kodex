@@ -46,6 +46,8 @@ function response<T>(data: T) {
 }
 
 const recipe: RoleImageRecipe = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   sourceAvailable: true,
   ref: "image_1",
   version: 3,

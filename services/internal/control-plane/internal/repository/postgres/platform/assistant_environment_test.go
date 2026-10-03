@@ -201,7 +201,7 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 	}
 }
 
-func TestSystemAssistantEnvironmentRevisionPublishesPinnedGlobalEnvironment(t *testing.T) {
+func TestSystemAssistantEnvironmentRevisionCreatesPinnedOrganizationDraft(t *testing.T) {
 	t.Parallel()
 	specification := entity.RuntimeEnvironmentDraftSpecification{
 		Name: "Kodex", Description: "System assistant environment",
@@ -241,14 +241,13 @@ func TestSystemAssistantEnvironmentRevisionPublishesPinnedGlobalEnvironment(t *t
 		t.Fatal(err)
 	}
 	mapped, err := assistantOperationCommand(normalized)
-	if err != nil || mapped.Kind != command.PublishRuntimeEnvironment || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 9 {
-		t.Fatalf("system assistant environment command is not an exact publication: %#v %v", mapped, err)
+	if err != nil || mapped.Kind != command.CreateOrganizationRuntimeEnvironmentDraft {
+		t.Fatalf("system assistant environment command is not an exact organization draft: %#v %v", mapped, err)
 	}
-	payload := mapped.Payload.(command.RuntimeEnvironmentInput)
-	if payload.Ref != "renv_system" || payload.ProjectRef != "" || payload.Name != "Kodex" ||
-		len(payload.Values) != 1 || payload.Values[0].Value != "updated" || payload.ImageArtifactRef != "" ||
-		len(payload.SecretBindings) != 0 || len(payload.Tools) != 0 {
-		t.Fatalf("system assistant environment publication escaped its protected boundary: %#v", payload)
+	payload := mapped.Payload.(command.RuntimeEnvironmentDraftInput)
+	if payload.ScopeKind != "ORGANIZATION" || payload.EnvironmentRef != "renv_system" || payload.ProjectRef != "" || payload.ExpectedEnvironmentVersion != 9 ||
+		payload.Specification.Name != "Kodex" || len(payload.Specification.Values) != 1 || payload.Specification.Values[0].Value != "updated" {
+		t.Fatalf("system assistant environment draft escaped its protected boundary: %#v", payload)
 	}
 }
 

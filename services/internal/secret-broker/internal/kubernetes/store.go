@@ -26,6 +26,7 @@ import (
 
 const (
 	managedLabel              = "runtime-secrets.kodex.dev/managed"
+	workKindAnnotation        = "runtime-secrets.kodex.dev/work-kind"
 	readinessSecretName       = "runtime-secret-readiness-probe"
 	operationRefAnnotation    = "runtime-secrets.kodex.dev/operation-ref"
 	claimGenerationAnnotation = "runtime-secrets.kodex.dev/claim-generation"
@@ -45,6 +46,7 @@ var (
 // MaterializationEffect связывает внешний эффект с одной fenced claim attempt.
 // ContentSHA256 является частью авторизованного intent и проверяется до записи.
 type MaterializationEffect struct {
+	WorkKind        MaterializationWorkKind
 	OperationRef    string
 	ClaimGeneration int64
 	SecretRef       string
@@ -56,6 +58,7 @@ type MaterializationEffect struct {
 // Materialization содержит только идентичность и metadata объекта. Значение
 // Secret намеренно отсутствует, поэтому этот тип безопасен для recovery worker.
 type Materialization struct {
+	WorkKind        MaterializationWorkKind
 	Namespace       string
 	Name            string
 	OperationRef    string
@@ -140,6 +143,7 @@ func (store *Store) CreateImmutableForEffect(ctx context.Context, effect Materia
 			Namespace: store.namespace,
 			Labels:    map[string]string{managedLabel: "true"},
 			Annotations: map[string]string{
+				workKindAnnotation:        string(effect.WorkKind),
 				operationRefAnnotation:    effect.OperationRef,
 				claimGenerationAnnotation: strconv.FormatInt(effect.ClaimGeneration, 10),
 				secretRefAnnotation:       effect.SecretRef,
@@ -327,7 +331,7 @@ func validateEffectValue(effect MaterializationEffect, value []byte) (string, er
 }
 
 func validateEffectMetadata(effect MaterializationEffect) (string, error) {
-	if effect.OperationRef == "" || effect.ClaimGeneration < 1 || effect.SecretRef == "" ||
+	if !effect.WorkKind.Valid() || effect.OperationRef == "" || effect.ClaimGeneration < 1 || effect.SecretRef == "" ||
 		effect.Key == "" || effect.Revision < 1 || !validDigest(effect.ContentSHA256) {
 		return "", ErrMaterializationInvalid
 	}
@@ -361,6 +365,7 @@ func materializationFromSecret(secret *corev1.Secret, verifyContent bool) (Mater
 		return Materialization{}, errors.New("runtime secret revision is invalid")
 	}
 	materialized := Materialization{
+		WorkKind:        MaterializationWorkKind(secret.Annotations[workKindAnnotation]),
 		Namespace:       secret.Namespace,
 		Name:            secret.Name,
 		OperationRef:    secret.Annotations[operationRefAnnotation],
@@ -372,7 +377,7 @@ func materializationFromSecret(secret *corev1.Secret, verifyContent bool) (Mater
 		ResourceVersion: secret.ResourceVersion,
 		ContentSHA256:   secret.Annotations[digestAnnotation],
 	}
-	if materialized.OperationRef == "" || materialized.SecretRef == "" || materialized.Key == "" || !validDigest(materialized.ContentSHA256) {
+	if !materialized.WorkKind.Valid() || materialized.OperationRef == "" || materialized.SecretRef == "" || materialized.Key == "" || !validDigest(materialized.ContentSHA256) {
 		return Materialization{}, errors.New("runtime secret materialization annotations are invalid")
 	}
 	expectedName, err := runtimesecret.VersionedKubernetesName(materialized.SecretRef, materialized.Revision)
@@ -393,7 +398,7 @@ func materializationFromSecret(secret *corev1.Secret, verifyContent bool) (Mater
 }
 
 func validateExactMaterialization(materialized Materialization, namespace string) error {
-	if materialized.Namespace != namespace || materialized.Name == "" || materialized.OperationRef == "" ||
+	if !materialized.WorkKind.Valid() || materialized.Namespace != namespace || materialized.Name == "" || materialized.OperationRef == "" ||
 		materialized.ClaimGeneration < 1 || materialized.SecretRef == "" || materialized.Key == "" ||
 		materialized.Revision < 1 || materialized.UID == "" || materialized.ResourceVersion == "" ||
 		!validDigest(materialized.ContentSHA256) {
@@ -419,7 +424,7 @@ func validateExactDescriptor(descriptor ExactDescriptor, namespace string) error
 }
 
 func materializationMatchesEffect(materialized Materialization, effect MaterializationEffect) bool {
-	return materialized.OperationRef == effect.OperationRef &&
+	return materialized.WorkKind == effect.WorkKind && materialized.OperationRef == effect.OperationRef &&
 		materialized.ClaimGeneration == effect.ClaimGeneration &&
 		materialized.SecretRef == effect.SecretRef &&
 		materialized.Key == effect.Key &&
@@ -428,7 +433,7 @@ func materializationMatchesEffect(materialized Materialization, effect Materiali
 }
 
 func sameMaterialization(actual, expected Materialization) bool {
-	return actual.Namespace == expected.Namespace && actual.Name == expected.Name &&
+	return actual.WorkKind == expected.WorkKind && actual.Namespace == expected.Namespace && actual.Name == expected.Name &&
 		actual.OperationRef == expected.OperationRef && actual.ClaimGeneration == expected.ClaimGeneration &&
 		actual.SecretRef == expected.SecretRef && actual.Key == expected.Key && actual.Revision == expected.Revision &&
 		actual.UID == expected.UID && actual.ResourceVersion == expected.ResourceVersion &&

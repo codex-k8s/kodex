@@ -12,8 +12,24 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
+import {
+  roleImageScopeKey,
+  roleImageCatalogPath,
+  type RoleImageResourceScope,
+} from "./resource-scope";
 
-const props = defineProps<{ projectRef: string }>();
+const props = defineProps<{
+  projectRef?: string;
+  organizationScope?: Extract<RoleImageResourceScope, object>;
+}>();
+const resourceScope = computed<RoleImageResourceScope>(() => {
+  if (props.organizationScope) return props.organizationScope;
+  if (!props.projectRef)
+    throw new Error("Role image catalog project scope is unavailable");
+  return props.projectRef;
+});
+const scopeKey = computed(() => roleImageScopeKey(resourceScope.value));
+const catalogPath = computed(() => roleImageCatalogPath(resourceScope.value));
 const { t } = useI18n();
 const localizeServerMessage = useServerMessage();
 const fieldId = useId();
@@ -21,7 +37,7 @@ const store = useRoleImagesStore();
 const platform = usePlatformStore();
 const query = ref("");
 const state = ref<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
-const items = computed(() => store.catalog(props.projectRef));
+const items = computed(() => store.catalog(resourceScope.value));
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
@@ -34,24 +50,29 @@ const pageSize = useAdaptiveCursorPageSize({
 useCursorInfiniteScroll({
   sentinel,
   enabled: () =>
-    Boolean(store.projectNextPageToken[props.projectRef]) &&
+    Boolean(store.projectNextPageToken[scopeKey.value]) &&
     !store.loadingCatalog &&
     !store.loadingMore,
   loadMore: () =>
-    store.loadCatalog(props.projectRef, false, undefined, pageSize.value),
+    store.loadCatalog(resourceScope.value, false, undefined, pageSize.value),
 });
 function applyRealtimeCatalog(): boolean {
+  const snapshot = props.organizationScope
+    ? platform.organizationRoleImagePage
+    : platform.realtimeSnapshot("ROLE_IMAGE_RECIPE", props.projectRef);
+  if (!snapshot) {
+    store.applyCatalogSnapshot(resourceScope.value, []);
+    if (props.organizationScope) store.createAllowed[scopeKey.value] = false;
+    return true;
+  }
   if (query.value.trim() || state.value !== "ALL") return false;
-  const snapshot = platform.realtimeSnapshot(
-    "ROLE_IMAGE_RECIPE",
-    props.projectRef,
-  );
-  if (!snapshot) return true;
   store.applyCatalogSnapshot(
-    props.projectRef,
-    Object.values(platform.roleImageRecipes).filter(
-      (recipe) => recipe.projectRef === props.projectRef,
-    ),
+    resourceScope.value,
+    props.organizationScope
+      ? Object.values(platform.organizationRoleImageRecipes)
+      : Object.values(platform.roleImageRecipes).filter(
+          (recipe) => recipe.projectRef === props.projectRef,
+        ),
     snapshot.nextPageToken,
     snapshot.total,
   );
@@ -60,7 +81,7 @@ function applyRealtimeCatalog(): boolean {
 function loadFiltered() {
   if (applyRealtimeCatalog()) return Promise.resolve();
   return store.loadCatalog(
-    props.projectRef,
+    resourceScope.value,
     true,
     {
       ...(query.value.trim() ? { query: query.value.trim() } : {}),
@@ -71,16 +92,21 @@ function loadFiltered() {
 }
 
 const realtimeVersion = computed(() => {
-  const snapshot = platform.realtimeSnapshot(
-    "ROLE_IMAGE_RECIPE",
-    props.projectRef,
-  );
+  const snapshot = props.organizationScope
+    ? platform.organizationRoleImagePage
+    : platform.realtimeSnapshot("ROLE_IMAGE_RECIPE", props.projectRef);
   return JSON.stringify([
     snapshot?.nextPageToken,
     snapshot?.total,
-    Object.values(platform.roleImageRecipes)
-      .filter((recipe) => recipe.projectRef === props.projectRef)
-      .map((recipe) => [recipe.ref, recipe.version]),
+    props.organizationScope
+      ? platform.organizationRoleImageRealtimeRevision
+      : platform.roleImageRealtimeRevision,
+    (props.organizationScope
+      ? Object.values(platform.organizationRoleImageRecipes)
+      : Object.values(platform.roleImageRecipes).filter(
+          (recipe) => recipe.projectRef === props.projectRef,
+        )
+    ).map((recipe) => [recipe.ref, recipe.version]),
   ]);
 });
 
@@ -115,24 +141,32 @@ function applyRealtimeSupportingCatalogs(): void {
 async function load(): Promise<void> {
   await Promise.all([
     loadFiltered(),
-    store.loadSupportingCatalogs(props.projectRef, {
-      agents: Object.values(platform.agents).filter(
-        (agent) => agent.projectRef === props.projectRef,
-      ),
-      environments: Object.values(platform.roleEnvironments),
-    }),
+    store.loadSupportingCatalogs(
+      resourceScope.value,
+      props.organizationScope
+        ? undefined
+        : {
+            agents: Object.values(platform.agents).filter(
+              (agent) => agent.projectRef === props.projectRef,
+            ),
+            environments: Object.values(platform.roleEnvironments),
+          },
+    ),
   ]);
 }
 
-watch(
-  () => props.projectRef,
-  () => void load(),
-);
+watch(scopeKey, () => void load());
 watch([query, state], () => void loadFiltered());
 watch(realtimeVersion, applyRealtimeCatalog);
-watch(supportingCatalogVersion, applyRealtimeSupportingCatalogs, {
-  immediate: true,
-});
+watch(
+  supportingCatalogVersion,
+  () => {
+    if (!props.organizationScope) applyRealtimeSupportingCatalogs();
+  },
+  {
+    immediate: true,
+  },
+);
 onMounted(() => void load());
 onBeforeUnmount(() => store.dispose());
 </script>
@@ -165,15 +199,15 @@ onBeforeUnmount(() => store.dispose());
         </select>
       </label>
       <span
-        v-if="store.projectTotal[projectRef] !== undefined"
+        v-if="store.projectTotal[scopeKey] !== undefined"
         class="catalog-count"
       >
-        {{ t("roleImages.total", { count: store.projectTotal[projectRef] }) }}
+        {{ t("roleImages.total", { count: store.projectTotal[scopeKey] }) }}
       </span>
       <RouterLink
-        v-if="store.createAllowed[projectRef]"
+        v-if="store.createAllowed[scopeKey]"
         class="button button--primary"
-        :to="`/projects/${encodeURIComponent(projectRef)}/role-images/new`"
+        :to="`${catalogPath}/new`"
       >
         <Plus :size="16" aria-hidden="true" />
         {{ t("roleImages.new") }}
@@ -229,13 +263,16 @@ onBeforeUnmount(() => store.dispose());
                   <EntityIcon kind="ROLE_IMAGE" />
                   <div>
                     <RouterLink
-                      :to="`/projects/${encodeURIComponent(projectRef)}/role-images/${encodeURIComponent(recipe.ref)}`"
+                      :to="`${catalogPath}/${encodeURIComponent(recipe.ref)}`"
                       :title="localizeServerMessage(recipe.name)"
                       >{{ localizeServerMessage(recipe.name) }}</RouterLink
                     >
                     <small>{{
-                      store.roleDefinitionByRef.get(recipe.roleDefinitionRef)
-                        ?.label ?? t("roleImages.unknownRole")
+                      organizationScope
+                        ? t("assistant.settings.systemScope")
+                        : (store.roleDefinitionByRef.get(
+                            recipe.roleDefinitionRef,
+                          )?.label ?? t("roleImages.unknownRole"))
                     }}</small>
                   </div>
                 </div>
@@ -275,7 +312,7 @@ onBeforeUnmount(() => store.dispose());
               <td class="role-image-catalog__open">
                 <RouterLink
                   class="icon-button"
-                  :to="`/projects/${encodeURIComponent(projectRef)}/role-images/${encodeURIComponent(recipe.ref)}`"
+                  :to="`${catalogPath}/${encodeURIComponent(recipe.ref)}`"
                   :aria-label="t('common.open')"
                   :title="t('common.open')"
                   ><ChevronRight :size="18" aria-hidden="true"
@@ -289,7 +326,7 @@ onBeforeUnmount(() => store.dispose());
         {{ t("common.loading") }}
       </p>
       <div
-        v-if="store.projectNextPageToken[projectRef]"
+        v-if="store.projectNextPageToken[scopeKey]"
         ref="sentinel"
         class="cursor-sentinel"
       />

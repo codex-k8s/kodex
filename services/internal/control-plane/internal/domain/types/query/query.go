@@ -14,6 +14,7 @@ type AssistantConversationFilter struct {
 }
 
 type Filter struct {
+	RuntimeResourceScopeKind                                                        string                              `json:",omitempty"`
 	ProviderUsage                                                                   *entity.ProviderAccountUsageContext `json:",omitempty"`
 	VFSKinds                                                                        []string                            `json:",omitempty"`
 	TargetType, TargetRef                                                           string                              `json:",omitempty"`

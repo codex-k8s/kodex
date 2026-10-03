@@ -563,24 +563,31 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	if input.Kind == command.CreateRuntimeEnvironment {
-		if payload.ProjectRef == "" || strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 120 || len(payload.Description) > 1000 {
+		scopeKind := "PROJECT"
+		if payload.ScopeKind == "ORGANIZATION" {
+			scopeKind = "ORGANIZATION"
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, scope, scopeKind, payload.ProjectRef); err != nil {
+				return commandOutcome{}, err
+			}
+		}
+		if scopeKind == "PROJECT" && payload.ProjectRef == "" || strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 120 || len(payload.Description) > 1000 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
-		if projectID == "" {
+		if scopeKind == "PROJECT" && projectID == "" {
 			return commandOutcome{}, errs.ErrNotFound
 		}
 		policy, policyErr := repository.admitRuntimeEnvironmentPolicy(ctx, tx, scope, payload.ProjectRef, "", payload.Policy)
 		if policyErr != nil {
 			return commandOutcome{}, policyErr
 		}
-		values, secrets, contractValues, contractSecrets, err := repository.resolveEnvironmentPayload(
-			ctx, tx, scope.organizationID, projectID, payload.Values, payload.SecretBindings)
+		values, secrets, contractValues, contractSecrets, err := repository.resolveScopedEnvironmentPayload(
+			ctx, tx, scope.organizationID, projectID, scopeKind, payload.Values, payload.SecretBindings)
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveRuntimeEnvironmentImage(
-			ctx, tx, scope.organizationID, projectID, payload.ImageArtifactRef, payload.Tools)
+		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveScopedRuntimeEnvironmentImage(
+			ctx, tx, scope.organizationID, projectID, scopeKind, payload.ImageArtifactRef, payload.Tools)
 		if resolveErr != nil {
 			return commandOutcome{}, resolveErr
 		}
@@ -593,7 +600,7 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		var environmentID, environmentVersionID, created string
 		createErr := tx.QueryRow(ctx, queryRuntimeConfigurationCreateEnvironment, pgx.StrictNamedArgs{
 			"environment_ref": environmentRef, "version_ref": versionRef, "organization_id": scope.organizationID,
-			"project_id": projectID, "name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
+			"scope_kind": scopeKind, "project_id": projectID, "name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 			"created_by": scope.actorID, "non_secret_values": values, "secret_descriptors": secrets, "digest": digest,
 			"image_artifact_id": imageArtifactID, "selected_tools": selectedTools,
 			"core_digest": coreDigest, "resource_policy": asJSON(policy.Resources), "volume_policy": asJSON(policy.Volumes),
@@ -632,6 +639,13 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	existing, err := repository.getRuntimeEnvironmentTx(ctx, tx, scope, payload.Ref)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, scope, existing.ScopeKind, existing.ProjectRef); err != nil {
+		return commandOutcome{}, err
+	}
 	if *input.Mutation.ExpectedVersion != environmentVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
@@ -645,13 +659,13 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 		if policyErr != nil {
 			return commandOutcome{}, policyErr
 		}
-		values, secrets, contractValues, contractSecrets, payloadErr := repository.resolveEnvironmentPayload(
-			ctx, tx, scope.organizationID, projectID, payload.Values, payload.SecretBindings)
+		values, secrets, contractValues, contractSecrets, payloadErr := repository.resolveScopedEnvironmentPayload(
+			ctx, tx, scope.organizationID, projectID, existing.ScopeKind, payload.Values, payload.SecretBindings)
 		if payloadErr != nil {
 			return commandOutcome{}, payloadErr
 		}
-		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveRuntimeEnvironmentImage(
-			ctx, tx, scope.organizationID, projectID, payload.ImageArtifactRef, payload.Tools)
+		imageArtifactID, image, normalizedTools, selectedTools, resolveErr := repository.resolveScopedRuntimeEnvironmentImage(
+			ctx, tx, scope.organizationID, projectID, existing.ScopeKind, payload.ImageArtifactRef, payload.Tools)
 		if resolveErr != nil {
 			return commandOutcome{}, resolveErr
 		}
@@ -699,6 +713,13 @@ func (repository *Repository) resolveRuntimeEnvironmentImage(
 	organizationID, projectID, artifactRef string,
 	tools []entity.RuntimeEnvironmentTool,
 ) (string, entity.RuntimeEnvironmentImage, []entity.RuntimeEnvironmentTool, []byte, error) {
+	return repository.resolveScopedRuntimeEnvironmentImage(ctx, tx, organizationID, projectID, "PROJECT", artifactRef, tools)
+}
+
+func (repository *Repository) resolveScopedRuntimeEnvironmentImage(ctx context.Context, tx pgx.Tx, organizationID, projectID, scopeKind, artifactRef string, tools []entity.RuntimeEnvironmentTool) (string, entity.RuntimeEnvironmentImage, []entity.RuntimeEnvironmentTool, []byte, error) {
+	if scopeKind != "ORGANIZATION" && scopeKind != "PROJECT" || (scopeKind == "ORGANIZATION") != (projectID == "") {
+		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
+	}
 	if !strings.HasPrefix(artifactRef, "imgart_") || len(artifactRef) > 96 || len(tools) > 128 {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrInvalid
 	}
@@ -706,7 +727,7 @@ func (repository *Repository) resolveRuntimeEnvironmentImage(
 	var recipeGeneration int64
 	var rawSpecification []byte
 	err := tx.QueryRow(ctx, queryRuntimeConfigurationResolveImageArtifact, pgx.StrictNamedArgs{
-		"organization_id": organizationID, "project_id": projectID, "artifact_ref": artifactRef,
+		"organization_id": organizationID, "project_id": projectID, "scope_kind": scopeKind, "artifact_ref": artifactRef,
 	}).Scan(&artifactID, &storedArtifactRef, &recipeRef, &recipeGeneration, &reference, &manifestDigest, &rawSpecification)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrNotFound
@@ -824,6 +845,11 @@ func (repository *Repository) getRuntimeEnvironmentTx(ctx context.Context, tx pg
 	if err != nil {
 		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
 	}
+	if item.ScopeKind == "ORGANIZATION" {
+		if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, scope, item.ScopeKind, item.ProjectRef); err != nil {
+			return entity.RuntimeEnvironmentSet{}, err
+		}
+	}
 	return item, nil
 }
 
@@ -863,6 +889,13 @@ func (repository *Repository) resolveEnvironmentPayload(
 	values []entity.RuntimeEnvironmentValue,
 	bindings []entity.RuntimeSecretBinding,
 ) ([]byte, []byte, []runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection, error) {
+	return repository.resolveScopedEnvironmentPayload(ctx, tx, organizationID, projectID, "PROJECT", values, bindings)
+}
+
+func (repository *Repository) resolveScopedEnvironmentPayload(ctx context.Context, tx pgx.Tx, organizationID, projectID, scopeKind string, values []entity.RuntimeEnvironmentValue, bindings []entity.RuntimeSecretBinding) ([]byte, []byte, []runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection, error) {
+	if scopeKind != "ORGANIZATION" && scopeKind != "PROJECT" || (scopeKind == "ORGANIZATION") != (projectID == "") {
+		return nil, nil, nil, nil, errs.ErrInvalid
+	}
 	if len(bindings) > 128 {
 		return nil, nil, nil, nil, errs.ErrInvalid
 	}
@@ -879,7 +912,7 @@ func (repository *Repository) resolveEnvironmentPayload(
 		seen[binding.Name] = struct{}{}
 		item := entity.RuntimeSecretDescriptor{Name: binding.Name}
 		if err := tx.QueryRow(ctx, queryRuntimeSecretResolveBinding, pgx.StrictNamedArgs{
-			"organization_id": organizationID, "project_id": projectID, "secret_ref": binding.SecretRef,
+			"organization_id": organizationID, "project_id": projectID, "scope_kind": scopeKind, "secret_ref": binding.SecretRef,
 			"revision": binding.Revision,
 		}).Scan(&item.SecretRef, &item.Namespace, &item.Revision, &item.SecretName, &item.SecretKey, &item.SecretUID, &item.SecretResourceVersion, &item.ContentSHA256); errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, nil, nil, errs.ErrNotFound
