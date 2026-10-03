@@ -52278,25 +52278,26 @@ func (x *ProviderAuthorization) GetSafeFailureCode() string {
 }
 
 type ProviderAccount struct {
-	state                 protoimpl.MessageState       `protogen:"open.v1"`
-	Ref                   string                       `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Version               int64                        `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	DefinitionKey         string                       `protobuf:"bytes,3,opt,name=definition_key,json=definitionKey,proto3" json:"definition_key,omitempty"`
-	Name                  string                       `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
-	ExternalAccountMasked string                       `protobuf:"bytes,5,opt,name=external_account_masked,json=externalAccountMasked,proto3" json:"external_account_masked,omitempty"`
-	State                 ProviderAccountState         `protobuf:"varint,6,opt,name=state,proto3,enum=controlplane.v1.ProviderAccountState" json:"state,omitempty"`
-	Enabled               bool                         `protobuf:"varint,7,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Ready                 bool                         `protobuf:"varint,8,opt,name=ready,proto3" json:"ready,omitempty"`
-	Authorization         *ProviderAuthorization       `protobuf:"bytes,9,opt,name=authorization,proto3" json:"authorization,omitempty"`
-	NextActions           []NextAction                 `protobuf:"varint,10,rep,packed,name=next_actions,json=nextActions,proto3,enum=controlplane.v1.NextAction" json:"next_actions,omitempty"`
-	CreatedAt             *timestamppb.Timestamp       `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt             *timestamppb.Timestamp       `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	SafeStatusReason      string                       `protobuf:"bytes,13,opt,name=safe_status_reason,json=safeStatusReason,proto3" json:"safe_status_reason,omitempty"`
-	Usage                 *ProviderAccountUsage        `protobuf:"bytes,14,opt,name=usage,proto3" json:"usage,omitempty"`
-	Deletion              *ProviderAccountDeletion     `protobuf:"bytes,15,opt,name=deletion,proto3" json:"deletion,omitempty"`
-	Verification          *ProviderAccountVerification `protobuf:"bytes,16,opt,name=verification,proto3" json:"verification,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state                       protoimpl.MessageState       `protogen:"open.v1"`
+	Ref                         string                       `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Version                     int64                        `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	DefinitionKey               string                       `protobuf:"bytes,3,opt,name=definition_key,json=definitionKey,proto3" json:"definition_key,omitempty"`
+	Name                        string                       `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	ExternalAccountMasked       string                       `protobuf:"bytes,5,opt,name=external_account_masked,json=externalAccountMasked,proto3" json:"external_account_masked,omitempty"`
+	State                       ProviderAccountState         `protobuf:"varint,6,opt,name=state,proto3,enum=controlplane.v1.ProviderAccountState" json:"state,omitempty"`
+	Enabled                     bool                         `protobuf:"varint,7,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Ready                       bool                         `protobuf:"varint,8,opt,name=ready,proto3" json:"ready,omitempty"`
+	Authorization               *ProviderAuthorization       `protobuf:"bytes,9,opt,name=authorization,proto3" json:"authorization,omitempty"`
+	NextActions                 []NextAction                 `protobuf:"varint,10,rep,packed,name=next_actions,json=nextActions,proto3,enum=controlplane.v1.NextAction" json:"next_actions,omitempty"`
+	CreatedAt                   *timestamppb.Timestamp       `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt                   *timestamppb.Timestamp       `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	SafeStatusReason            string                       `protobuf:"bytes,13,opt,name=safe_status_reason,json=safeStatusReason,proto3" json:"safe_status_reason,omitempty"`
+	Usage                       *ProviderAccountUsage        `protobuf:"bytes,14,opt,name=usage,proto3" json:"usage,omitempty"`
+	Deletion                    *ProviderAccountDeletion     `protobuf:"bytes,15,opt,name=deletion,proto3" json:"deletion,omitempty"`
+	Verification                *ProviderAccountVerification `protobuf:"bytes,16,opt,name=verification,proto3" json:"verification,omitempty"`
+	MaximumConcurrentExecutions int32                        `protobuf:"varint,17,opt,name=maximum_concurrent_executions,json=maximumConcurrentExecutions,proto3" json:"maximum_concurrent_executions,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *ProviderAccount) Reset() {
@@ -52439,6 +52440,13 @@ func (x *ProviderAccount) GetVerification() *ProviderAccountVerification {
 		return x.Verification
 	}
 	return nil
+}
+
+func (x *ProviderAccount) GetMaximumConcurrentExecutions() int32 {
+	if x != nil {
+		return x.MaximumConcurrentExecutions
+	}
+	return 0
 }
 
 type ProviderAccountBlockerCount struct {
@@ -54509,6 +54517,110 @@ func (x *CancelProviderAccountQueuedWorkResponse) GetOutcomes() []*ProviderAccou
 	return nil
 }
 
+type SetProviderAccountConcurrencyRequest struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	Mutation                    *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	AccountRef                  string                 `protobuf:"bytes,2,opt,name=account_ref,json=accountRef,proto3" json:"account_ref,omitempty"`
+	MaximumConcurrentExecutions int32                  `protobuf:"varint,3,opt,name=maximum_concurrent_executions,json=maximumConcurrentExecutions,proto3" json:"maximum_concurrent_executions,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *SetProviderAccountConcurrencyRequest) Reset() {
+	*x = SetProviderAccountConcurrencyRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[647]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetProviderAccountConcurrencyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetProviderAccountConcurrencyRequest) ProtoMessage() {}
+
+func (x *SetProviderAccountConcurrencyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[647]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetProviderAccountConcurrencyRequest.ProtoReflect.Descriptor instead.
+func (*SetProviderAccountConcurrencyRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{647}
+}
+
+func (x *SetProviderAccountConcurrencyRequest) GetMutation() *MutationContext {
+	if x != nil {
+		return x.Mutation
+	}
+	return nil
+}
+
+func (x *SetProviderAccountConcurrencyRequest) GetAccountRef() string {
+	if x != nil {
+		return x.AccountRef
+	}
+	return ""
+}
+
+func (x *SetProviderAccountConcurrencyRequest) GetMaximumConcurrentExecutions() int32 {
+	if x != nil {
+		return x.MaximumConcurrentExecutions
+	}
+	return 0
+}
+
+type SetProviderAccountConcurrencyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Account       *ProviderAccount       `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetProviderAccountConcurrencyResponse) Reset() {
+	*x = SetProviderAccountConcurrencyResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[648]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetProviderAccountConcurrencyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetProviderAccountConcurrencyResponse) ProtoMessage() {}
+
+func (x *SetProviderAccountConcurrencyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[648]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetProviderAccountConcurrencyResponse.ProtoReflect.Descriptor instead.
+func (*SetProviderAccountConcurrencyResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{648}
+}
+
+func (x *SetProviderAccountConcurrencyResponse) GetAccount() *ProviderAccount {
+	if x != nil {
+		return x.Account
+	}
+	return nil
+}
+
 type SetProviderAccountEnabledRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Mutation      *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
@@ -54520,7 +54632,7 @@ type SetProviderAccountEnabledRequest struct {
 
 func (x *SetProviderAccountEnabledRequest) Reset() {
 	*x = SetProviderAccountEnabledRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[647]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[649]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54532,7 +54644,7 @@ func (x *SetProviderAccountEnabledRequest) String() string {
 func (*SetProviderAccountEnabledRequest) ProtoMessage() {}
 
 func (x *SetProviderAccountEnabledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[647]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[649]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54545,7 +54657,7 @@ func (x *SetProviderAccountEnabledRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProviderAccountEnabledRequest.ProtoReflect.Descriptor instead.
 func (*SetProviderAccountEnabledRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{647}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{649}
 }
 
 func (x *SetProviderAccountEnabledRequest) GetMutation() *MutationContext {
@@ -54578,7 +54690,7 @@ type SetProviderAccountEnabledResponse struct {
 
 func (x *SetProviderAccountEnabledResponse) Reset() {
 	*x = SetProviderAccountEnabledResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[648]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[650]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54590,7 +54702,7 @@ func (x *SetProviderAccountEnabledResponse) String() string {
 func (*SetProviderAccountEnabledResponse) ProtoMessage() {}
 
 func (x *SetProviderAccountEnabledResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[648]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[650]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54603,7 +54715,7 @@ func (x *SetProviderAccountEnabledResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use SetProviderAccountEnabledResponse.ProtoReflect.Descriptor instead.
 func (*SetProviderAccountEnabledResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{648}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{650}
 }
 
 func (x *SetProviderAccountEnabledResponse) GetAccount() *ProviderAccount {
@@ -54623,7 +54735,7 @@ type ListScheduleRevisionsRequest struct {
 
 func (x *ListScheduleRevisionsRequest) Reset() {
 	*x = ListScheduleRevisionsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[649]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[651]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54635,7 +54747,7 @@ func (x *ListScheduleRevisionsRequest) String() string {
 func (*ListScheduleRevisionsRequest) ProtoMessage() {}
 
 func (x *ListScheduleRevisionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[649]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[651]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54648,7 +54760,7 @@ func (x *ListScheduleRevisionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListScheduleRevisionsRequest.ProtoReflect.Descriptor instead.
 func (*ListScheduleRevisionsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{649}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{651}
 }
 
 func (x *ListScheduleRevisionsRequest) GetScheduleRef() string {
@@ -54675,7 +54787,7 @@ type ListScheduleRevisionsResponse struct {
 
 func (x *ListScheduleRevisionsResponse) Reset() {
 	*x = ListScheduleRevisionsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[650]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[652]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54687,7 +54799,7 @@ func (x *ListScheduleRevisionsResponse) String() string {
 func (*ListScheduleRevisionsResponse) ProtoMessage() {}
 
 func (x *ListScheduleRevisionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[650]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[652]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54700,7 +54812,7 @@ func (x *ListScheduleRevisionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListScheduleRevisionsResponse.ProtoReflect.Descriptor instead.
 func (*ListScheduleRevisionsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{650}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{652}
 }
 
 func (x *ListScheduleRevisionsResponse) GetRevisions() []*ScheduleRevision {
@@ -54727,7 +54839,7 @@ type ListScheduleRunsRequest struct {
 
 func (x *ListScheduleRunsRequest) Reset() {
 	*x = ListScheduleRunsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[651]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[653]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54739,7 +54851,7 @@ func (x *ListScheduleRunsRequest) String() string {
 func (*ListScheduleRunsRequest) ProtoMessage() {}
 
 func (x *ListScheduleRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[651]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[653]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54752,7 +54864,7 @@ func (x *ListScheduleRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListScheduleRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListScheduleRunsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{651}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{653}
 }
 
 func (x *ListScheduleRunsRequest) GetScheduleRef() string {
@@ -54779,7 +54891,7 @@ type ListScheduleRunsResponse struct {
 
 func (x *ListScheduleRunsResponse) Reset() {
 	*x = ListScheduleRunsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[652]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[654]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54791,7 +54903,7 @@ func (x *ListScheduleRunsResponse) String() string {
 func (*ListScheduleRunsResponse) ProtoMessage() {}
 
 func (x *ListScheduleRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[652]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[654]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54804,7 +54916,7 @@ func (x *ListScheduleRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListScheduleRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListScheduleRunsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{652}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{654}
 }
 
 func (x *ListScheduleRunsResponse) GetOccurrences() []*ScheduleRunOccurrence {
@@ -54831,7 +54943,7 @@ type DeleteScheduleRequest struct {
 
 func (x *DeleteScheduleRequest) Reset() {
 	*x = DeleteScheduleRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[653]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[655]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54843,7 +54955,7 @@ func (x *DeleteScheduleRequest) String() string {
 func (*DeleteScheduleRequest) ProtoMessage() {}
 
 func (x *DeleteScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[653]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[655]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54856,7 +54968,7 @@ func (x *DeleteScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteScheduleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{653}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{655}
 }
 
 func (x *DeleteScheduleRequest) GetMutation() *MutationContext {
@@ -54882,7 +54994,7 @@ type DeleteScheduleResponse struct {
 
 func (x *DeleteScheduleResponse) Reset() {
 	*x = DeleteScheduleResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[654]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[656]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54894,7 +55006,7 @@ func (x *DeleteScheduleResponse) String() string {
 func (*DeleteScheduleResponse) ProtoMessage() {}
 
 func (x *DeleteScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[654]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[656]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54907,7 +55019,7 @@ func (x *DeleteScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteScheduleResponse.ProtoReflect.Descriptor instead.
 func (*DeleteScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{654}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{656}
 }
 
 func (x *DeleteScheduleResponse) GetSchedule() *Schedule {
@@ -54936,7 +55048,7 @@ type ArtifactImpact struct {
 
 func (x *ArtifactImpact) Reset() {
 	*x = ArtifactImpact{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[655]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[657]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54948,7 +55060,7 @@ func (x *ArtifactImpact) String() string {
 func (*ArtifactImpact) ProtoMessage() {}
 
 func (x *ArtifactImpact) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[655]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[657]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54961,7 +55073,7 @@ func (x *ArtifactImpact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArtifactImpact.ProtoReflect.Descriptor instead.
 func (*ArtifactImpact) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{655}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{657}
 }
 
 func (x *ArtifactImpact) GetArtifactRef() string {
@@ -55053,7 +55165,7 @@ type ArtifactImpactRun struct {
 
 func (x *ArtifactImpactRun) Reset() {
 	*x = ArtifactImpactRun{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[656]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[658]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55065,7 +55177,7 @@ func (x *ArtifactImpactRun) String() string {
 func (*ArtifactImpactRun) ProtoMessage() {}
 
 func (x *ArtifactImpactRun) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[656]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[658]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55078,7 +55190,7 @@ func (x *ArtifactImpactRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArtifactImpactRun.ProtoReflect.Descriptor instead.
 func (*ArtifactImpactRun) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{656}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{658}
 }
 
 func (x *ArtifactImpactRun) GetRunRef() string {
@@ -55119,7 +55231,7 @@ type GetArtifactImpactRequest struct {
 
 func (x *GetArtifactImpactRequest) Reset() {
 	*x = GetArtifactImpactRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[657]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[659]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55131,7 +55243,7 @@ func (x *GetArtifactImpactRequest) String() string {
 func (*GetArtifactImpactRequest) ProtoMessage() {}
 
 func (x *GetArtifactImpactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[657]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[659]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55144,7 +55256,7 @@ func (x *GetArtifactImpactRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetArtifactImpactRequest.ProtoReflect.Descriptor instead.
 func (*GetArtifactImpactRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{657}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{659}
 }
 
 func (x *GetArtifactImpactRequest) GetArtifactRef() string {
@@ -55170,7 +55282,7 @@ type GetArtifactImpactResponse struct {
 
 func (x *GetArtifactImpactResponse) Reset() {
 	*x = GetArtifactImpactResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[658]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[660]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55182,7 +55294,7 @@ func (x *GetArtifactImpactResponse) String() string {
 func (*GetArtifactImpactResponse) ProtoMessage() {}
 
 func (x *GetArtifactImpactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[658]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[660]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55195,7 +55307,7 @@ func (x *GetArtifactImpactResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetArtifactImpactResponse.ProtoReflect.Descriptor instead.
 func (*GetArtifactImpactResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{658}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{660}
 }
 
 func (x *GetArtifactImpactResponse) GetImpact() *ArtifactImpact {
@@ -55216,7 +55328,7 @@ type SetAgentAvatarRequest struct {
 
 func (x *SetAgentAvatarRequest) Reset() {
 	*x = SetAgentAvatarRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[659]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[661]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55228,7 +55340,7 @@ func (x *SetAgentAvatarRequest) String() string {
 func (*SetAgentAvatarRequest) ProtoMessage() {}
 
 func (x *SetAgentAvatarRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[659]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[661]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55241,7 +55353,7 @@ func (x *SetAgentAvatarRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAgentAvatarRequest.ProtoReflect.Descriptor instead.
 func (*SetAgentAvatarRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{659}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{661}
 }
 
 func (x *SetAgentAvatarRequest) GetMutation() *MutationContext {
@@ -55274,7 +55386,7 @@ type SetAgentAvatarResponse struct {
 
 func (x *SetAgentAvatarResponse) Reset() {
 	*x = SetAgentAvatarResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[660]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[662]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55286,7 +55398,7 @@ func (x *SetAgentAvatarResponse) String() string {
 func (*SetAgentAvatarResponse) ProtoMessage() {}
 
 func (x *SetAgentAvatarResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[660]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[662]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55299,7 +55411,7 @@ func (x *SetAgentAvatarResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAgentAvatarResponse.ProtoReflect.Descriptor instead.
 func (*SetAgentAvatarResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{660}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{662}
 }
 
 func (x *SetAgentAvatarResponse) GetAgent() *Agent {
@@ -55319,7 +55431,7 @@ type RemoveAgentAvatarRequest struct {
 
 func (x *RemoveAgentAvatarRequest) Reset() {
 	*x = RemoveAgentAvatarRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[661]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[663]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55331,7 +55443,7 @@ func (x *RemoveAgentAvatarRequest) String() string {
 func (*RemoveAgentAvatarRequest) ProtoMessage() {}
 
 func (x *RemoveAgentAvatarRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[661]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[663]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55344,7 +55456,7 @@ func (x *RemoveAgentAvatarRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveAgentAvatarRequest.ProtoReflect.Descriptor instead.
 func (*RemoveAgentAvatarRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{661}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{663}
 }
 
 func (x *RemoveAgentAvatarRequest) GetMutation() *MutationContext {
@@ -55370,7 +55482,7 @@ type RemoveAgentAvatarResponse struct {
 
 func (x *RemoveAgentAvatarResponse) Reset() {
 	*x = RemoveAgentAvatarResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[662]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[664]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55382,7 +55494,7 @@ func (x *RemoveAgentAvatarResponse) String() string {
 func (*RemoveAgentAvatarResponse) ProtoMessage() {}
 
 func (x *RemoveAgentAvatarResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[662]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[664]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55395,7 +55507,7 @@ func (x *RemoveAgentAvatarResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveAgentAvatarResponse.ProtoReflect.Descriptor instead.
 func (*RemoveAgentAvatarResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{662}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{664}
 }
 
 func (x *RemoveAgentAvatarResponse) GetAgent() *Agent {
@@ -55419,7 +55531,7 @@ type PromptTemplateDiagnostic struct {
 
 func (x *PromptTemplateDiagnostic) Reset() {
 	*x = PromptTemplateDiagnostic{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[663]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[665]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55431,7 +55543,7 @@ func (x *PromptTemplateDiagnostic) String() string {
 func (*PromptTemplateDiagnostic) ProtoMessage() {}
 
 func (x *PromptTemplateDiagnostic) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[663]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[665]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55444,7 +55556,7 @@ func (x *PromptTemplateDiagnostic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptTemplateDiagnostic.ProtoReflect.Descriptor instead.
 func (*PromptTemplateDiagnostic) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{663}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{665}
 }
 
 func (x *PromptTemplateDiagnostic) GetSeverity() string {
@@ -55502,7 +55614,7 @@ type ValidatePromptTemplateRequest struct {
 
 func (x *ValidatePromptTemplateRequest) Reset() {
 	*x = ValidatePromptTemplateRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[664]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[666]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55514,7 +55626,7 @@ func (x *ValidatePromptTemplateRequest) String() string {
 func (*ValidatePromptTemplateRequest) ProtoMessage() {}
 
 func (x *ValidatePromptTemplateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[664]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[666]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55527,7 +55639,7 @@ func (x *ValidatePromptTemplateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatePromptTemplateRequest.ProtoReflect.Descriptor instead.
 func (*ValidatePromptTemplateRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{664}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{666}
 }
 
 func (x *ValidatePromptTemplateRequest) GetTemplate() string {
@@ -55576,7 +55688,7 @@ type ValidatePromptTemplateResponse struct {
 
 func (x *ValidatePromptTemplateResponse) Reset() {
 	*x = ValidatePromptTemplateResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[665]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[667]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55588,7 +55700,7 @@ func (x *ValidatePromptTemplateResponse) String() string {
 func (*ValidatePromptTemplateResponse) ProtoMessage() {}
 
 func (x *ValidatePromptTemplateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[665]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[667]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55601,7 +55713,7 @@ func (x *ValidatePromptTemplateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatePromptTemplateResponse.ProtoReflect.Descriptor instead.
 func (*ValidatePromptTemplateResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{665}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{667}
 }
 
 func (x *ValidatePromptTemplateResponse) GetValid() bool {
@@ -55639,7 +55751,7 @@ type PreviewPromptTemplateRequest struct {
 
 func (x *PreviewPromptTemplateRequest) Reset() {
 	*x = PreviewPromptTemplateRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[666]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[668]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55651,7 +55763,7 @@ func (x *PreviewPromptTemplateRequest) String() string {
 func (*PreviewPromptTemplateRequest) ProtoMessage() {}
 
 func (x *PreviewPromptTemplateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[666]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[668]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55664,7 +55776,7 @@ func (x *PreviewPromptTemplateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewPromptTemplateRequest.ProtoReflect.Descriptor instead.
 func (*PreviewPromptTemplateRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{666}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{668}
 }
 
 func (x *PreviewPromptTemplateRequest) GetTemplate() string {
@@ -55726,7 +55838,7 @@ type PromptPreviewContext struct {
 
 func (x *PromptPreviewContext) Reset() {
 	*x = PromptPreviewContext{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[667]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[669]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55738,7 +55850,7 @@ func (x *PromptPreviewContext) String() string {
 func (*PromptPreviewContext) ProtoMessage() {}
 
 func (x *PromptPreviewContext) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[667]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[669]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55751,7 +55863,7 @@ func (x *PromptPreviewContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptPreviewContext.ProtoReflect.Descriptor instead.
 func (*PromptPreviewContext) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{667}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{669}
 }
 
 func (x *PromptPreviewContext) GetAgentRef() string {
@@ -55821,7 +55933,7 @@ type PromptSlotProvenance struct {
 
 func (x *PromptSlotProvenance) Reset() {
 	*x = PromptSlotProvenance{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[668]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[670]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55833,7 +55945,7 @@ func (x *PromptSlotProvenance) String() string {
 func (*PromptSlotProvenance) ProtoMessage() {}
 
 func (x *PromptSlotProvenance) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[668]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[670]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55846,7 +55958,7 @@ func (x *PromptSlotProvenance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptSlotProvenance.ProtoReflect.Descriptor instead.
 func (*PromptSlotProvenance) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{668}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{670}
 }
 
 func (x *PromptSlotProvenance) GetSlot() PromptSemanticSlot {
@@ -55884,7 +55996,7 @@ type PromptPreviewSection struct {
 
 func (x *PromptPreviewSection) Reset() {
 	*x = PromptPreviewSection{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[669]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[671]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55896,7 +56008,7 @@ func (x *PromptPreviewSection) String() string {
 func (*PromptPreviewSection) ProtoMessage() {}
 
 func (x *PromptPreviewSection) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[669]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[671]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55909,7 +56021,7 @@ func (x *PromptPreviewSection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptPreviewSection.ProtoReflect.Descriptor instead.
 func (*PromptPreviewSection) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{669}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{671}
 }
 
 func (x *PromptPreviewSection) GetSource() PromptSectionSource {
@@ -55978,7 +56090,7 @@ type PromptContextPin struct {
 
 func (x *PromptContextPin) Reset() {
 	*x = PromptContextPin{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[670]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[672]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55990,7 +56102,7 @@ func (x *PromptContextPin) String() string {
 func (*PromptContextPin) ProtoMessage() {}
 
 func (x *PromptContextPin) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[670]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[672]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56003,7 +56115,7 @@ func (x *PromptContextPin) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptContextPin.ProtoReflect.Descriptor instead.
 func (*PromptContextPin) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{670}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{672}
 }
 
 func (x *PromptContextPin) GetDigest() string {
@@ -56142,7 +56254,7 @@ type PreviewPromptTemplateResponse struct {
 
 func (x *PreviewPromptTemplateResponse) Reset() {
 	*x = PreviewPromptTemplateResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[671]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[673]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56154,7 +56266,7 @@ func (x *PreviewPromptTemplateResponse) String() string {
 func (*PreviewPromptTemplateResponse) ProtoMessage() {}
 
 func (x *PreviewPromptTemplateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[671]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[673]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56167,7 +56279,7 @@ func (x *PreviewPromptTemplateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewPromptTemplateResponse.ProtoReflect.Descriptor instead.
 func (*PreviewPromptTemplateResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{671}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{673}
 }
 
 func (x *PreviewPromptTemplateResponse) GetSafePreview() string {
@@ -56294,7 +56406,7 @@ type PromptRuntimeDescriptor struct {
 
 func (x *PromptRuntimeDescriptor) Reset() {
 	*x = PromptRuntimeDescriptor{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[672]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[674]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56306,7 +56418,7 @@ func (x *PromptRuntimeDescriptor) String() string {
 func (*PromptRuntimeDescriptor) ProtoMessage() {}
 
 func (x *PromptRuntimeDescriptor) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[672]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[674]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56319,7 +56431,7 @@ func (x *PromptRuntimeDescriptor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptRuntimeDescriptor.ProtoReflect.Descriptor instead.
 func (*PromptRuntimeDescriptor) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{672}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{674}
 }
 
 func (x *PromptRuntimeDescriptor) GetRef() string {
@@ -56362,7 +56474,7 @@ type PromptRuntimeChange struct {
 
 func (x *PromptRuntimeChange) Reset() {
 	*x = PromptRuntimeChange{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[673]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[675]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56374,7 +56486,7 @@ func (x *PromptRuntimeChange) String() string {
 func (*PromptRuntimeChange) ProtoMessage() {}
 
 func (x *PromptRuntimeChange) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[673]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[675]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56387,7 +56499,7 @@ func (x *PromptRuntimeChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptRuntimeChange.ProtoReflect.Descriptor instead.
 func (*PromptRuntimeChange) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{673}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{675}
 }
 
 func (x *PromptRuntimeChange) GetComponent() PromptRuntimeComponent {
@@ -56435,7 +56547,7 @@ type PromptRuntimeDiff struct {
 
 func (x *PromptRuntimeDiff) Reset() {
 	*x = PromptRuntimeDiff{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[674]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[676]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56447,7 +56559,7 @@ func (x *PromptRuntimeDiff) String() string {
 func (*PromptRuntimeDiff) ProtoMessage() {}
 
 func (x *PromptRuntimeDiff) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[674]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[676]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56460,7 +56572,7 @@ func (x *PromptRuntimeDiff) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptRuntimeDiff.ProtoReflect.Descriptor instead.
 func (*PromptRuntimeDiff) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{674}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{676}
 }
 
 func (x *PromptRuntimeDiff) GetPreviousRevisionRef() string {
@@ -56534,7 +56646,7 @@ type ManagedConfigurationRevision struct {
 
 func (x *ManagedConfigurationRevision) Reset() {
 	*x = ManagedConfigurationRevision{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[675]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[677]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56546,7 +56658,7 @@ func (x *ManagedConfigurationRevision) String() string {
 func (*ManagedConfigurationRevision) ProtoMessage() {}
 
 func (x *ManagedConfigurationRevision) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[675]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[677]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56559,7 +56671,7 @@ func (x *ManagedConfigurationRevision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedConfigurationRevision.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationRevision) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{675}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{677}
 }
 
 func (x *ManagedConfigurationRevision) GetRef() string {
@@ -56669,7 +56781,7 @@ type PromptTemplateScopeInput struct {
 
 func (x *PromptTemplateScopeInput) Reset() {
 	*x = PromptTemplateScopeInput{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[676]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[678]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56681,7 +56793,7 @@ func (x *PromptTemplateScopeInput) String() string {
 func (*PromptTemplateScopeInput) ProtoMessage() {}
 
 func (x *PromptTemplateScopeInput) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[676]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[678]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56694,7 +56806,7 @@ func (x *PromptTemplateScopeInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptTemplateScopeInput.ProtoReflect.Descriptor instead.
 func (*PromptTemplateScopeInput) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{676}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{678}
 }
 
 func (x *PromptTemplateScopeInput) GetTargetKind() string {
@@ -56758,7 +56870,7 @@ type PromptTemplateScope struct {
 
 func (x *PromptTemplateScope) Reset() {
 	*x = PromptTemplateScope{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[677]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[679]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56770,7 +56882,7 @@ func (x *PromptTemplateScope) String() string {
 func (*PromptTemplateScope) ProtoMessage() {}
 
 func (x *PromptTemplateScope) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[677]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[679]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56783,7 +56895,7 @@ func (x *PromptTemplateScope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptTemplateScope.ProtoReflect.Descriptor instead.
 func (*PromptTemplateScope) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{677}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{679}
 }
 
 func (x *PromptTemplateScope) GetTargetKind() string {
@@ -56838,7 +56950,7 @@ type ManagedConfigurationSet struct {
 
 func (x *ManagedConfigurationSet) Reset() {
 	*x = ManagedConfigurationSet{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[678]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[680]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56850,7 +56962,7 @@ func (x *ManagedConfigurationSet) String() string {
 func (*ManagedConfigurationSet) ProtoMessage() {}
 
 func (x *ManagedConfigurationSet) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[678]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[680]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56863,7 +56975,7 @@ func (x *ManagedConfigurationSet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedConfigurationSet.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationSet) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{678}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{680}
 }
 
 func (x *ManagedConfigurationSet) GetRef() string {
@@ -56984,7 +57096,7 @@ type ManagedConfigurationCopyProvenance struct {
 
 func (x *ManagedConfigurationCopyProvenance) Reset() {
 	*x = ManagedConfigurationCopyProvenance{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[679]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[681]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56996,7 +57108,7 @@ func (x *ManagedConfigurationCopyProvenance) String() string {
 func (*ManagedConfigurationCopyProvenance) ProtoMessage() {}
 
 func (x *ManagedConfigurationCopyProvenance) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[679]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[681]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57009,7 +57121,7 @@ func (x *ManagedConfigurationCopyProvenance) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ManagedConfigurationCopyProvenance.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationCopyProvenance) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{679}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{681}
 }
 
 func (x *ManagedConfigurationCopyProvenance) GetOrigin() ManagedConfigurationCopyOrigin {
@@ -57063,7 +57175,7 @@ type CopyRoleImageConfigurationRequest struct {
 
 func (x *CopyRoleImageConfigurationRequest) Reset() {
 	*x = CopyRoleImageConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[680]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[682]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57075,7 +57187,7 @@ func (x *CopyRoleImageConfigurationRequest) String() string {
 func (*CopyRoleImageConfigurationRequest) ProtoMessage() {}
 
 func (x *CopyRoleImageConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[680]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[682]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57088,7 +57200,7 @@ func (x *CopyRoleImageConfigurationRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use CopyRoleImageConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*CopyRoleImageConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{680}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{682}
 }
 
 func (x *CopyRoleImageConfigurationRequest) GetMutation() *MutationContext {
@@ -57164,7 +57276,7 @@ type CopyRoleImageConfigurationResponse struct {
 
 func (x *CopyRoleImageConfigurationResponse) Reset() {
 	*x = CopyRoleImageConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[681]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[683]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57176,7 +57288,7 @@ func (x *CopyRoleImageConfigurationResponse) String() string {
 func (*CopyRoleImageConfigurationResponse) ProtoMessage() {}
 
 func (x *CopyRoleImageConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[681]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[683]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57189,7 +57301,7 @@ func (x *CopyRoleImageConfigurationResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CopyRoleImageConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*CopyRoleImageConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{681}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{683}
 }
 
 func (x *CopyRoleImageConfigurationResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -57217,7 +57329,7 @@ type ShippedIntegrationDefinitionCopySource struct {
 
 func (x *ShippedIntegrationDefinitionCopySource) Reset() {
 	*x = ShippedIntegrationDefinitionCopySource{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[682]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[684]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57229,7 +57341,7 @@ func (x *ShippedIntegrationDefinitionCopySource) String() string {
 func (*ShippedIntegrationDefinitionCopySource) ProtoMessage() {}
 
 func (x *ShippedIntegrationDefinitionCopySource) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[682]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[684]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57242,7 +57354,7 @@ func (x *ShippedIntegrationDefinitionCopySource) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ShippedIntegrationDefinitionCopySource.ProtoReflect.Descriptor instead.
 func (*ShippedIntegrationDefinitionCopySource) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{682}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{684}
 }
 
 func (x *ShippedIntegrationDefinitionCopySource) GetKey() string {
@@ -57281,7 +57393,7 @@ type CopyIntegrationDefinitionConfigurationRequest struct {
 
 func (x *CopyIntegrationDefinitionConfigurationRequest) Reset() {
 	*x = CopyIntegrationDefinitionConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[683]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[685]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57293,7 +57405,7 @@ func (x *CopyIntegrationDefinitionConfigurationRequest) String() string {
 func (*CopyIntegrationDefinitionConfigurationRequest) ProtoMessage() {}
 
 func (x *CopyIntegrationDefinitionConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[683]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[685]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57306,7 +57418,7 @@ func (x *CopyIntegrationDefinitionConfigurationRequest) ProtoReflect() protorefl
 
 // Deprecated: Use CopyIntegrationDefinitionConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*CopyIntegrationDefinitionConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{683}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{685}
 }
 
 func (x *CopyIntegrationDefinitionConfigurationRequest) GetMutation() *MutationContext {
@@ -57376,7 +57488,7 @@ type CopyIntegrationDefinitionConfigurationResponse struct {
 
 func (x *CopyIntegrationDefinitionConfigurationResponse) Reset() {
 	*x = CopyIntegrationDefinitionConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[684]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[686]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57388,7 +57500,7 @@ func (x *CopyIntegrationDefinitionConfigurationResponse) String() string {
 func (*CopyIntegrationDefinitionConfigurationResponse) ProtoMessage() {}
 
 func (x *CopyIntegrationDefinitionConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[684]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[686]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57401,7 +57513,7 @@ func (x *CopyIntegrationDefinitionConfigurationResponse) ProtoReflect() protoref
 
 // Deprecated: Use CopyIntegrationDefinitionConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*CopyIntegrationDefinitionConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{684}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{686}
 }
 
 func (x *CopyIntegrationDefinitionConfigurationResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -57428,7 +57540,7 @@ type ArchiveRoleImageConfigurationRequest struct {
 
 func (x *ArchiveRoleImageConfigurationRequest) Reset() {
 	*x = ArchiveRoleImageConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[685]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[687]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57440,7 +57552,7 @@ func (x *ArchiveRoleImageConfigurationRequest) String() string {
 func (*ArchiveRoleImageConfigurationRequest) ProtoMessage() {}
 
 func (x *ArchiveRoleImageConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[685]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[687]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57453,7 +57565,7 @@ func (x *ArchiveRoleImageConfigurationRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ArchiveRoleImageConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*ArchiveRoleImageConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{685}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{687}
 }
 
 func (x *ArchiveRoleImageConfigurationRequest) GetMutation() *MutationContext {
@@ -57479,7 +57591,7 @@ type ArchiveRoleImageConfigurationResponse struct {
 
 func (x *ArchiveRoleImageConfigurationResponse) Reset() {
 	*x = ArchiveRoleImageConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[686]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[688]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57491,7 +57603,7 @@ func (x *ArchiveRoleImageConfigurationResponse) String() string {
 func (*ArchiveRoleImageConfigurationResponse) ProtoMessage() {}
 
 func (x *ArchiveRoleImageConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[686]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[688]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57504,7 +57616,7 @@ func (x *ArchiveRoleImageConfigurationResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ArchiveRoleImageConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*ArchiveRoleImageConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{686}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{688}
 }
 
 func (x *ArchiveRoleImageConfigurationResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -57524,7 +57636,7 @@ type ArchiveIntegrationDefinitionConfigurationRequest struct {
 
 func (x *ArchiveIntegrationDefinitionConfigurationRequest) Reset() {
 	*x = ArchiveIntegrationDefinitionConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[687]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[689]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57536,7 +57648,7 @@ func (x *ArchiveIntegrationDefinitionConfigurationRequest) String() string {
 func (*ArchiveIntegrationDefinitionConfigurationRequest) ProtoMessage() {}
 
 func (x *ArchiveIntegrationDefinitionConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[687]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[689]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57549,7 +57661,7 @@ func (x *ArchiveIntegrationDefinitionConfigurationRequest) ProtoReflect() protor
 
 // Deprecated: Use ArchiveIntegrationDefinitionConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*ArchiveIntegrationDefinitionConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{687}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{689}
 }
 
 func (x *ArchiveIntegrationDefinitionConfigurationRequest) GetMutation() *MutationContext {
@@ -57575,7 +57687,7 @@ type ArchiveIntegrationDefinitionConfigurationResponse struct {
 
 func (x *ArchiveIntegrationDefinitionConfigurationResponse) Reset() {
 	*x = ArchiveIntegrationDefinitionConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[688]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[690]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57587,7 +57699,7 @@ func (x *ArchiveIntegrationDefinitionConfigurationResponse) String() string {
 func (*ArchiveIntegrationDefinitionConfigurationResponse) ProtoMessage() {}
 
 func (x *ArchiveIntegrationDefinitionConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[688]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[690]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57600,7 +57712,7 @@ func (x *ArchiveIntegrationDefinitionConfigurationResponse) ProtoReflect() proto
 
 // Deprecated: Use ArchiveIntegrationDefinitionConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*ArchiveIntegrationDefinitionConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{688}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{690}
 }
 
 func (x *ArchiveIntegrationDefinitionConfigurationResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -57624,7 +57736,7 @@ type ManagedConfigurationConsumer struct {
 
 func (x *ManagedConfigurationConsumer) Reset() {
 	*x = ManagedConfigurationConsumer{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[689]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[691]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57636,7 +57748,7 @@ func (x *ManagedConfigurationConsumer) String() string {
 func (*ManagedConfigurationConsumer) ProtoMessage() {}
 
 func (x *ManagedConfigurationConsumer) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[689]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[691]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57649,7 +57761,7 @@ func (x *ManagedConfigurationConsumer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedConfigurationConsumer.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationConsumer) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{689}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{691}
 }
 
 func (x *ManagedConfigurationConsumer) GetKind() string {
@@ -57701,7 +57813,7 @@ type ManagedConfigurationImpact struct {
 
 func (x *ManagedConfigurationImpact) Reset() {
 	*x = ManagedConfigurationImpact{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[690]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[692]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57713,7 +57825,7 @@ func (x *ManagedConfigurationImpact) String() string {
 func (*ManagedConfigurationImpact) ProtoMessage() {}
 
 func (x *ManagedConfigurationImpact) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[690]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[692]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57726,7 +57838,7 @@ func (x *ManagedConfigurationImpact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedConfigurationImpact.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationImpact) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{690}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{692}
 }
 
 func (x *ManagedConfigurationImpact) GetConfigurationRef() string {
@@ -57785,7 +57897,7 @@ type ManagedConfigurationBindingSnapshot struct {
 
 func (x *ManagedConfigurationBindingSnapshot) Reset() {
 	*x = ManagedConfigurationBindingSnapshot{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[691]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[693]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57797,7 +57909,7 @@ func (x *ManagedConfigurationBindingSnapshot) String() string {
 func (*ManagedConfigurationBindingSnapshot) ProtoMessage() {}
 
 func (x *ManagedConfigurationBindingSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[691]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[693]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57810,7 +57922,7 @@ func (x *ManagedConfigurationBindingSnapshot) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ManagedConfigurationBindingSnapshot.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationBindingSnapshot) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{691}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{693}
 }
 
 func (x *ManagedConfigurationBindingSnapshot) GetBindingRef() string {
@@ -57864,7 +57976,7 @@ type GetRuntimeEnvironmentRoleImageConfigurationRequest struct {
 
 func (x *GetRuntimeEnvironmentRoleImageConfigurationRequest) Reset() {
 	*x = GetRuntimeEnvironmentRoleImageConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[692]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[694]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57876,7 +57988,7 @@ func (x *GetRuntimeEnvironmentRoleImageConfigurationRequest) String() string {
 func (*GetRuntimeEnvironmentRoleImageConfigurationRequest) ProtoMessage() {}
 
 func (x *GetRuntimeEnvironmentRoleImageConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[692]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[694]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57889,7 +58001,7 @@ func (x *GetRuntimeEnvironmentRoleImageConfigurationRequest) ProtoReflect() prot
 
 // Deprecated: Use GetRuntimeEnvironmentRoleImageConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*GetRuntimeEnvironmentRoleImageConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{692}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{694}
 }
 
 func (x *GetRuntimeEnvironmentRoleImageConfigurationRequest) GetEnvironmentRef() string {
@@ -57908,7 +58020,7 @@ type GetRuntimeEnvironmentRoleImageConfigurationResponse struct {
 
 func (x *GetRuntimeEnvironmentRoleImageConfigurationResponse) Reset() {
 	*x = GetRuntimeEnvironmentRoleImageConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[693]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[695]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57920,7 +58032,7 @@ func (x *GetRuntimeEnvironmentRoleImageConfigurationResponse) String() string {
 func (*GetRuntimeEnvironmentRoleImageConfigurationResponse) ProtoMessage() {}
 
 func (x *GetRuntimeEnvironmentRoleImageConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[693]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[695]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57933,7 +58045,7 @@ func (x *GetRuntimeEnvironmentRoleImageConfigurationResponse) ProtoReflect() pro
 
 // Deprecated: Use GetRuntimeEnvironmentRoleImageConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*GetRuntimeEnvironmentRoleImageConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{693}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{695}
 }
 
 func (x *GetRuntimeEnvironmentRoleImageConfigurationResponse) GetBinding() *ManagedConfigurationBindingSnapshot {
@@ -57952,7 +58064,7 @@ type GetIntegrationConnectionDefinitionConfigurationRequest struct {
 
 func (x *GetIntegrationConnectionDefinitionConfigurationRequest) Reset() {
 	*x = GetIntegrationConnectionDefinitionConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[694]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[696]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -57964,7 +58076,7 @@ func (x *GetIntegrationConnectionDefinitionConfigurationRequest) String() string
 func (*GetIntegrationConnectionDefinitionConfigurationRequest) ProtoMessage() {}
 
 func (x *GetIntegrationConnectionDefinitionConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[694]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[696]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57977,7 +58089,7 @@ func (x *GetIntegrationConnectionDefinitionConfigurationRequest) ProtoReflect() 
 
 // Deprecated: Use GetIntegrationConnectionDefinitionConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*GetIntegrationConnectionDefinitionConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{694}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{696}
 }
 
 func (x *GetIntegrationConnectionDefinitionConfigurationRequest) GetConnectionRef() string {
@@ -57996,7 +58108,7 @@ type GetIntegrationConnectionDefinitionConfigurationResponse struct {
 
 func (x *GetIntegrationConnectionDefinitionConfigurationResponse) Reset() {
 	*x = GetIntegrationConnectionDefinitionConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[695]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[697]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58008,7 +58120,7 @@ func (x *GetIntegrationConnectionDefinitionConfigurationResponse) String() strin
 func (*GetIntegrationConnectionDefinitionConfigurationResponse) ProtoMessage() {}
 
 func (x *GetIntegrationConnectionDefinitionConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[695]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[697]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58021,7 +58133,7 @@ func (x *GetIntegrationConnectionDefinitionConfigurationResponse) ProtoReflect()
 
 // Deprecated: Use GetIntegrationConnectionDefinitionConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*GetIntegrationConnectionDefinitionConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{695}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{697}
 }
 
 func (x *GetIntegrationConnectionDefinitionConfigurationResponse) GetBinding() *ManagedConfigurationBindingSnapshot {
@@ -58046,7 +58158,7 @@ type CreatePromptTemplateDraftRequest struct {
 
 func (x *CreatePromptTemplateDraftRequest) Reset() {
 	*x = CreatePromptTemplateDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[696]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[698]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58058,7 +58170,7 @@ func (x *CreatePromptTemplateDraftRequest) String() string {
 func (*CreatePromptTemplateDraftRequest) ProtoMessage() {}
 
 func (x *CreatePromptTemplateDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[696]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[698]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58071,7 +58183,7 @@ func (x *CreatePromptTemplateDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePromptTemplateDraftRequest.ProtoReflect.Descriptor instead.
 func (*CreatePromptTemplateDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{696}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{698}
 }
 
 func (x *CreatePromptTemplateDraftRequest) GetMutation() *MutationContext {
@@ -58133,7 +58245,7 @@ type CreatePromptTemplateDraftResponse struct {
 
 func (x *CreatePromptTemplateDraftResponse) Reset() {
 	*x = CreatePromptTemplateDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[697]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[699]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58145,7 +58257,7 @@ func (x *CreatePromptTemplateDraftResponse) String() string {
 func (*CreatePromptTemplateDraftResponse) ProtoMessage() {}
 
 func (x *CreatePromptTemplateDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[697]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[699]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58158,7 +58270,7 @@ func (x *CreatePromptTemplateDraftResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use CreatePromptTemplateDraftResponse.ProtoReflect.Descriptor instead.
 func (*CreatePromptTemplateDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{697}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{699}
 }
 
 func (x *CreatePromptTemplateDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -58186,7 +58298,7 @@ type ValidatePromptTemplateDraftRequest struct {
 
 func (x *ValidatePromptTemplateDraftRequest) Reset() {
 	*x = ValidatePromptTemplateDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[698]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[700]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58198,7 +58310,7 @@ func (x *ValidatePromptTemplateDraftRequest) String() string {
 func (*ValidatePromptTemplateDraftRequest) ProtoMessage() {}
 
 func (x *ValidatePromptTemplateDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[698]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[700]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58211,7 +58323,7 @@ func (x *ValidatePromptTemplateDraftRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ValidatePromptTemplateDraftRequest.ProtoReflect.Descriptor instead.
 func (*ValidatePromptTemplateDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{698}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{700}
 }
 
 func (x *ValidatePromptTemplateDraftRequest) GetMutation() *MutationContext {
@@ -58245,7 +58357,7 @@ type ValidatePromptTemplateDraftResponse struct {
 
 func (x *ValidatePromptTemplateDraftResponse) Reset() {
 	*x = ValidatePromptTemplateDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[699]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[701]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58257,7 +58369,7 @@ func (x *ValidatePromptTemplateDraftResponse) String() string {
 func (*ValidatePromptTemplateDraftResponse) ProtoMessage() {}
 
 func (x *ValidatePromptTemplateDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[699]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[701]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58270,7 +58382,7 @@ func (x *ValidatePromptTemplateDraftResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ValidatePromptTemplateDraftResponse.ProtoReflect.Descriptor instead.
 func (*ValidatePromptTemplateDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{699}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{701}
 }
 
 func (x *ValidatePromptTemplateDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -58300,7 +58412,7 @@ type PublishPromptTemplateDraftRequest struct {
 
 func (x *PublishPromptTemplateDraftRequest) Reset() {
 	*x = PublishPromptTemplateDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[700]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[702]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58312,7 +58424,7 @@ func (x *PublishPromptTemplateDraftRequest) String() string {
 func (*PublishPromptTemplateDraftRequest) ProtoMessage() {}
 
 func (x *PublishPromptTemplateDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[700]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[702]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58325,7 +58437,7 @@ func (x *PublishPromptTemplateDraftRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use PublishPromptTemplateDraftRequest.ProtoReflect.Descriptor instead.
 func (*PublishPromptTemplateDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{700}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{702}
 }
 
 func (x *PublishPromptTemplateDraftRequest) GetMutation() *MutationContext {
@@ -58374,7 +58486,7 @@ type PublishPromptTemplateDraftResponse struct {
 
 func (x *PublishPromptTemplateDraftResponse) Reset() {
 	*x = PublishPromptTemplateDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[701]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[703]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58386,7 +58498,7 @@ func (x *PublishPromptTemplateDraftResponse) String() string {
 func (*PublishPromptTemplateDraftResponse) ProtoMessage() {}
 
 func (x *PublishPromptTemplateDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[701]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[703]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58399,7 +58511,7 @@ func (x *PublishPromptTemplateDraftResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use PublishPromptTemplateDraftResponse.ProtoReflect.Descriptor instead.
 func (*PublishPromptTemplateDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{701}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{703}
 }
 
 func (x *PublishPromptTemplateDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -58436,7 +58548,7 @@ type RebindPromptTemplateConsumersRequest struct {
 
 func (x *RebindPromptTemplateConsumersRequest) Reset() {
 	*x = RebindPromptTemplateConsumersRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[702]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[704]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58448,7 +58560,7 @@ func (x *RebindPromptTemplateConsumersRequest) String() string {
 func (*RebindPromptTemplateConsumersRequest) ProtoMessage() {}
 
 func (x *RebindPromptTemplateConsumersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[702]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[704]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58461,7 +58573,7 @@ func (x *RebindPromptTemplateConsumersRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use RebindPromptTemplateConsumersRequest.ProtoReflect.Descriptor instead.
 func (*RebindPromptTemplateConsumersRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{702}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{704}
 }
 
 func (x *RebindPromptTemplateConsumersRequest) GetMutation() *MutationContext {
@@ -58509,7 +58621,7 @@ type RebindPromptTemplateConsumersResponse struct {
 
 func (x *RebindPromptTemplateConsumersResponse) Reset() {
 	*x = RebindPromptTemplateConsumersResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[703]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[705]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58521,7 +58633,7 @@ func (x *RebindPromptTemplateConsumersResponse) String() string {
 func (*RebindPromptTemplateConsumersResponse) ProtoMessage() {}
 
 func (x *RebindPromptTemplateConsumersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[703]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[705]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58534,7 +58646,7 @@ func (x *RebindPromptTemplateConsumersResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use RebindPromptTemplateConsumersResponse.ProtoReflect.Descriptor instead.
 func (*RebindPromptTemplateConsumersResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{703}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{705}
 }
 
 func (x *RebindPromptTemplateConsumersResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -58565,7 +58677,7 @@ type CreateRoleImageRevisionDraftRequest struct {
 
 func (x *CreateRoleImageRevisionDraftRequest) Reset() {
 	*x = CreateRoleImageRevisionDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[704]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[706]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58577,7 +58689,7 @@ func (x *CreateRoleImageRevisionDraftRequest) String() string {
 func (*CreateRoleImageRevisionDraftRequest) ProtoMessage() {}
 
 func (x *CreateRoleImageRevisionDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[704]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[706]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58590,7 +58702,7 @@ func (x *CreateRoleImageRevisionDraftRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use CreateRoleImageRevisionDraftRequest.ProtoReflect.Descriptor instead.
 func (*CreateRoleImageRevisionDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{704}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{706}
 }
 
 func (x *CreateRoleImageRevisionDraftRequest) GetMutation() *MutationContext {
@@ -58645,7 +58757,7 @@ type CreateRoleImageRevisionDraftResponse struct {
 
 func (x *CreateRoleImageRevisionDraftResponse) Reset() {
 	*x = CreateRoleImageRevisionDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[705]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[707]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58657,7 +58769,7 @@ func (x *CreateRoleImageRevisionDraftResponse) String() string {
 func (*CreateRoleImageRevisionDraftResponse) ProtoMessage() {}
 
 func (x *CreateRoleImageRevisionDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[705]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[707]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58670,7 +58782,7 @@ func (x *CreateRoleImageRevisionDraftResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use CreateRoleImageRevisionDraftResponse.ProtoReflect.Descriptor instead.
 func (*CreateRoleImageRevisionDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{705}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{707}
 }
 
 func (x *CreateRoleImageRevisionDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -58698,7 +58810,7 @@ type ValidateRoleImageRevisionDraftRequest struct {
 
 func (x *ValidateRoleImageRevisionDraftRequest) Reset() {
 	*x = ValidateRoleImageRevisionDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[706]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[708]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58710,7 +58822,7 @@ func (x *ValidateRoleImageRevisionDraftRequest) String() string {
 func (*ValidateRoleImageRevisionDraftRequest) ProtoMessage() {}
 
 func (x *ValidateRoleImageRevisionDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[706]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[708]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58723,7 +58835,7 @@ func (x *ValidateRoleImageRevisionDraftRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ValidateRoleImageRevisionDraftRequest.ProtoReflect.Descriptor instead.
 func (*ValidateRoleImageRevisionDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{706}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{708}
 }
 
 func (x *ValidateRoleImageRevisionDraftRequest) GetMutation() *MutationContext {
@@ -58757,7 +58869,7 @@ type ValidateRoleImageRevisionDraftResponse struct {
 
 func (x *ValidateRoleImageRevisionDraftResponse) Reset() {
 	*x = ValidateRoleImageRevisionDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[707]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[709]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58769,7 +58881,7 @@ func (x *ValidateRoleImageRevisionDraftResponse) String() string {
 func (*ValidateRoleImageRevisionDraftResponse) ProtoMessage() {}
 
 func (x *ValidateRoleImageRevisionDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[707]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[709]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58782,7 +58894,7 @@ func (x *ValidateRoleImageRevisionDraftResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ValidateRoleImageRevisionDraftResponse.ProtoReflect.Descriptor instead.
 func (*ValidateRoleImageRevisionDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{707}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{709}
 }
 
 func (x *ValidateRoleImageRevisionDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -58810,7 +58922,7 @@ type PublishRoleImageRevisionDraftRequest struct {
 
 func (x *PublishRoleImageRevisionDraftRequest) Reset() {
 	*x = PublishRoleImageRevisionDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[708]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[710]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58822,7 +58934,7 @@ func (x *PublishRoleImageRevisionDraftRequest) String() string {
 func (*PublishRoleImageRevisionDraftRequest) ProtoMessage() {}
 
 func (x *PublishRoleImageRevisionDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[708]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[710]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58835,7 +58947,7 @@ func (x *PublishRoleImageRevisionDraftRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use PublishRoleImageRevisionDraftRequest.ProtoReflect.Descriptor instead.
 func (*PublishRoleImageRevisionDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{708}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{710}
 }
 
 func (x *PublishRoleImageRevisionDraftRequest) GetMutation() *MutationContext {
@@ -58869,7 +58981,7 @@ type PublishRoleImageRevisionDraftResponse struct {
 
 func (x *PublishRoleImageRevisionDraftResponse) Reset() {
 	*x = PublishRoleImageRevisionDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[709]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[711]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58881,7 +58993,7 @@ func (x *PublishRoleImageRevisionDraftResponse) String() string {
 func (*PublishRoleImageRevisionDraftResponse) ProtoMessage() {}
 
 func (x *PublishRoleImageRevisionDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[709]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[711]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58894,7 +59006,7 @@ func (x *PublishRoleImageRevisionDraftResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use PublishRoleImageRevisionDraftResponse.ProtoReflect.Descriptor instead.
 func (*PublishRoleImageRevisionDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{709}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{711}
 }
 
 func (x *PublishRoleImageRevisionDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -58926,7 +59038,7 @@ type RebindRoleImageConsumersRequest struct {
 
 func (x *RebindRoleImageConsumersRequest) Reset() {
 	*x = RebindRoleImageConsumersRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[710]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[712]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58938,7 +59050,7 @@ func (x *RebindRoleImageConsumersRequest) String() string {
 func (*RebindRoleImageConsumersRequest) ProtoMessage() {}
 
 func (x *RebindRoleImageConsumersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[710]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[712]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58951,7 +59063,7 @@ func (x *RebindRoleImageConsumersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebindRoleImageConsumersRequest.ProtoReflect.Descriptor instead.
 func (*RebindRoleImageConsumersRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{710}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{712}
 }
 
 func (x *RebindRoleImageConsumersRequest) GetMutation() *MutationContext {
@@ -59014,7 +59126,7 @@ type RebindRoleImageConsumersResponse struct {
 
 func (x *RebindRoleImageConsumersResponse) Reset() {
 	*x = RebindRoleImageConsumersResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[711]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[713]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59026,7 +59138,7 @@ func (x *RebindRoleImageConsumersResponse) String() string {
 func (*RebindRoleImageConsumersResponse) ProtoMessage() {}
 
 func (x *RebindRoleImageConsumersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[711]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[713]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59039,7 +59151,7 @@ func (x *RebindRoleImageConsumersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebindRoleImageConsumersResponse.ProtoReflect.Descriptor instead.
 func (*RebindRoleImageConsumersResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{711}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{713}
 }
 
 func (x *RebindRoleImageConsumersResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -59088,7 +59200,7 @@ type RoleImageImpactPlan struct {
 
 func (x *RoleImageImpactPlan) Reset() {
 	*x = RoleImageImpactPlan{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[712]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[714]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59100,7 +59212,7 @@ func (x *RoleImageImpactPlan) String() string {
 func (*RoleImageImpactPlan) ProtoMessage() {}
 
 func (x *RoleImageImpactPlan) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[712]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[714]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59113,7 +59225,7 @@ func (x *RoleImageImpactPlan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleImageImpactPlan.ProtoReflect.Descriptor instead.
 func (*RoleImageImpactPlan) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{712}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{714}
 }
 
 func (x *RoleImageImpactPlan) GetRef() string {
@@ -59253,7 +59365,7 @@ type RoleImageImpactItem struct {
 
 func (x *RoleImageImpactItem) Reset() {
 	*x = RoleImageImpactItem{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[713]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[715]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59265,7 +59377,7 @@ func (x *RoleImageImpactItem) String() string {
 func (*RoleImageImpactItem) ProtoMessage() {}
 
 func (x *RoleImageImpactItem) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[713]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[715]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59278,7 +59390,7 @@ func (x *RoleImageImpactItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleImageImpactItem.ProtoReflect.Descriptor instead.
 func (*RoleImageImpactItem) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{713}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{715}
 }
 
 func (x *RoleImageImpactItem) GetRef() string {
@@ -59374,7 +59486,7 @@ type RevisionImpactPlan struct {
 
 func (x *RevisionImpactPlan) Reset() {
 	*x = RevisionImpactPlan{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[714]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[716]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59386,7 +59498,7 @@ func (x *RevisionImpactPlan) String() string {
 func (*RevisionImpactPlan) ProtoMessage() {}
 
 func (x *RevisionImpactPlan) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[714]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[716]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59399,7 +59511,7 @@ func (x *RevisionImpactPlan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevisionImpactPlan.ProtoReflect.Descriptor instead.
 func (*RevisionImpactPlan) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{714}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{716}
 }
 
 func (x *RevisionImpactPlan) GetRef() string {
@@ -59528,7 +59640,7 @@ type RevisionImpactItem struct {
 
 func (x *RevisionImpactItem) Reset() {
 	*x = RevisionImpactItem{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[715]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[717]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59540,7 +59652,7 @@ func (x *RevisionImpactItem) String() string {
 func (*RevisionImpactItem) ProtoMessage() {}
 
 func (x *RevisionImpactItem) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[715]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[717]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59553,7 +59665,7 @@ func (x *RevisionImpactItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevisionImpactItem.ProtoReflect.Descriptor instead.
 func (*RevisionImpactItem) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{715}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{717}
 }
 
 func (x *RevisionImpactItem) GetRef() string {
@@ -59657,7 +59769,7 @@ type PrepareEnvironmentDraftImpactRequest struct {
 
 func (x *PrepareEnvironmentDraftImpactRequest) Reset() {
 	*x = PrepareEnvironmentDraftImpactRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[716]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[718]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59669,7 +59781,7 @@ func (x *PrepareEnvironmentDraftImpactRequest) String() string {
 func (*PrepareEnvironmentDraftImpactRequest) ProtoMessage() {}
 
 func (x *PrepareEnvironmentDraftImpactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[716]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[718]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59682,7 +59794,7 @@ func (x *PrepareEnvironmentDraftImpactRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use PrepareEnvironmentDraftImpactRequest.ProtoReflect.Descriptor instead.
 func (*PrepareEnvironmentDraftImpactRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{716}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{718}
 }
 
 func (x *PrepareEnvironmentDraftImpactRequest) GetMutation() *MutationContext {
@@ -59708,7 +59820,7 @@ type PrepareEnvironmentDraftImpactResponse struct {
 
 func (x *PrepareEnvironmentDraftImpactResponse) Reset() {
 	*x = PrepareEnvironmentDraftImpactResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[717]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[719]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59720,7 +59832,7 @@ func (x *PrepareEnvironmentDraftImpactResponse) String() string {
 func (*PrepareEnvironmentDraftImpactResponse) ProtoMessage() {}
 
 func (x *PrepareEnvironmentDraftImpactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[717]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[719]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59733,7 +59845,7 @@ func (x *PrepareEnvironmentDraftImpactResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use PrepareEnvironmentDraftImpactResponse.ProtoReflect.Descriptor instead.
 func (*PrepareEnvironmentDraftImpactResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{717}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{719}
 }
 
 func (x *PrepareEnvironmentDraftImpactResponse) GetPlan() *RevisionImpactPlan {
@@ -59753,7 +59865,7 @@ type PrepareInstructionsImpactRequest struct {
 
 func (x *PrepareInstructionsImpactRequest) Reset() {
 	*x = PrepareInstructionsImpactRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[718]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[720]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59765,7 +59877,7 @@ func (x *PrepareInstructionsImpactRequest) String() string {
 func (*PrepareInstructionsImpactRequest) ProtoMessage() {}
 
 func (x *PrepareInstructionsImpactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[718]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[720]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59778,7 +59890,7 @@ func (x *PrepareInstructionsImpactRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareInstructionsImpactRequest.ProtoReflect.Descriptor instead.
 func (*PrepareInstructionsImpactRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{718}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{720}
 }
 
 func (x *PrepareInstructionsImpactRequest) GetMutation() *MutationContext {
@@ -59804,7 +59916,7 @@ type PrepareInstructionsImpactResponse struct {
 
 func (x *PrepareInstructionsImpactResponse) Reset() {
 	*x = PrepareInstructionsImpactResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[719]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[721]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59816,7 +59928,7 @@ func (x *PrepareInstructionsImpactResponse) String() string {
 func (*PrepareInstructionsImpactResponse) ProtoMessage() {}
 
 func (x *PrepareInstructionsImpactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[719]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[721]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59829,7 +59941,7 @@ func (x *PrepareInstructionsImpactResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use PrepareInstructionsImpactResponse.ProtoReflect.Descriptor instead.
 func (*PrepareInstructionsImpactResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{719}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{721}
 }
 
 func (x *PrepareInstructionsImpactResponse) GetPlan() *RevisionImpactPlan {
@@ -59850,7 +59962,7 @@ type PreparePromptTemplateImpactRequest struct {
 
 func (x *PreparePromptTemplateImpactRequest) Reset() {
 	*x = PreparePromptTemplateImpactRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[720]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[722]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59862,7 +59974,7 @@ func (x *PreparePromptTemplateImpactRequest) String() string {
 func (*PreparePromptTemplateImpactRequest) ProtoMessage() {}
 
 func (x *PreparePromptTemplateImpactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[720]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[722]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59875,7 +59987,7 @@ func (x *PreparePromptTemplateImpactRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use PreparePromptTemplateImpactRequest.ProtoReflect.Descriptor instead.
 func (*PreparePromptTemplateImpactRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{720}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{722}
 }
 
 func (x *PreparePromptTemplateImpactRequest) GetMutation() *MutationContext {
@@ -59908,7 +60020,7 @@ type PreparePromptTemplateImpactResponse struct {
 
 func (x *PreparePromptTemplateImpactResponse) Reset() {
 	*x = PreparePromptTemplateImpactResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[721]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[723]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59920,7 +60032,7 @@ func (x *PreparePromptTemplateImpactResponse) String() string {
 func (*PreparePromptTemplateImpactResponse) ProtoMessage() {}
 
 func (x *PreparePromptTemplateImpactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[721]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[723]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59933,7 +60045,7 @@ func (x *PreparePromptTemplateImpactResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use PreparePromptTemplateImpactResponse.ProtoReflect.Descriptor instead.
 func (*PreparePromptTemplateImpactResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{721}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{723}
 }
 
 func (x *PreparePromptTemplateImpactResponse) GetPlan() *RevisionImpactPlan {
@@ -59954,7 +60066,7 @@ type GetRevisionImpactPlanRequest struct {
 
 func (x *GetRevisionImpactPlanRequest) Reset() {
 	*x = GetRevisionImpactPlanRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[722]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[724]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59966,7 +60078,7 @@ func (x *GetRevisionImpactPlanRequest) String() string {
 func (*GetRevisionImpactPlanRequest) ProtoMessage() {}
 
 func (x *GetRevisionImpactPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[722]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[724]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59979,7 +60091,7 @@ func (x *GetRevisionImpactPlanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRevisionImpactPlanRequest.ProtoReflect.Descriptor instead.
 func (*GetRevisionImpactPlanRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{722}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{724}
 }
 
 func (x *GetRevisionImpactPlanRequest) GetPlanRef() string {
@@ -60015,7 +60127,7 @@ type GetRevisionImpactPlanResponse struct {
 
 func (x *GetRevisionImpactPlanResponse) Reset() {
 	*x = GetRevisionImpactPlanResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[723]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[725]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60027,7 +60139,7 @@ func (x *GetRevisionImpactPlanResponse) String() string {
 func (*GetRevisionImpactPlanResponse) ProtoMessage() {}
 
 func (x *GetRevisionImpactPlanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[723]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[725]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60040,7 +60152,7 @@ func (x *GetRevisionImpactPlanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRevisionImpactPlanResponse.ProtoReflect.Descriptor instead.
 func (*GetRevisionImpactPlanResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{723}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{725}
 }
 
 func (x *GetRevisionImpactPlanResponse) GetPlan() *RevisionImpactPlan {
@@ -60082,7 +60194,7 @@ type PrepareRoleImageImpactPlanRequest struct {
 
 func (x *PrepareRoleImageImpactPlanRequest) Reset() {
 	*x = PrepareRoleImageImpactPlanRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[724]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[726]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60094,7 +60206,7 @@ func (x *PrepareRoleImageImpactPlanRequest) String() string {
 func (*PrepareRoleImageImpactPlanRequest) ProtoMessage() {}
 
 func (x *PrepareRoleImageImpactPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[724]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[726]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60107,7 +60219,7 @@ func (x *PrepareRoleImageImpactPlanRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use PrepareRoleImageImpactPlanRequest.ProtoReflect.Descriptor instead.
 func (*PrepareRoleImageImpactPlanRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{724}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{726}
 }
 
 func (x *PrepareRoleImageImpactPlanRequest) GetMutation() *MutationContext {
@@ -60140,7 +60252,7 @@ type PrepareRoleImageImpactPlanResponse struct {
 
 func (x *PrepareRoleImageImpactPlanResponse) Reset() {
 	*x = PrepareRoleImageImpactPlanResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[725]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[727]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60152,7 +60264,7 @@ func (x *PrepareRoleImageImpactPlanResponse) String() string {
 func (*PrepareRoleImageImpactPlanResponse) ProtoMessage() {}
 
 func (x *PrepareRoleImageImpactPlanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[725]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[727]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60165,7 +60277,7 @@ func (x *PrepareRoleImageImpactPlanResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use PrepareRoleImageImpactPlanResponse.ProtoReflect.Descriptor instead.
 func (*PrepareRoleImageImpactPlanResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{725}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{727}
 }
 
 func (x *PrepareRoleImageImpactPlanResponse) GetPlan() *RoleImageImpactPlan {
@@ -60186,7 +60298,7 @@ type GetRoleImageImpactPlanRequest struct {
 
 func (x *GetRoleImageImpactPlanRequest) Reset() {
 	*x = GetRoleImageImpactPlanRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[726]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[728]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60198,7 +60310,7 @@ func (x *GetRoleImageImpactPlanRequest) String() string {
 func (*GetRoleImageImpactPlanRequest) ProtoMessage() {}
 
 func (x *GetRoleImageImpactPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[726]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[728]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60211,7 +60323,7 @@ func (x *GetRoleImageImpactPlanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleImageImpactPlanRequest.ProtoReflect.Descriptor instead.
 func (*GetRoleImageImpactPlanRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{726}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{728}
 }
 
 func (x *GetRoleImageImpactPlanRequest) GetPlanRef() string {
@@ -60247,7 +60359,7 @@ type GetRoleImageImpactPlanResponse struct {
 
 func (x *GetRoleImageImpactPlanResponse) Reset() {
 	*x = GetRoleImageImpactPlanResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[727]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[729]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60259,7 +60371,7 @@ func (x *GetRoleImageImpactPlanResponse) String() string {
 func (*GetRoleImageImpactPlanResponse) ProtoMessage() {}
 
 func (x *GetRoleImageImpactPlanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[727]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[729]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60272,7 +60384,7 @@ func (x *GetRoleImageImpactPlanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleImageImpactPlanResponse.ProtoReflect.Descriptor instead.
 func (*GetRoleImageImpactPlanResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{727}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{729}
 }
 
 func (x *GetRoleImageImpactPlanResponse) GetPlan() *RoleImageImpactPlan {
@@ -60317,7 +60429,7 @@ type CreateIntegrationDefinitionDraftRequest struct {
 
 func (x *CreateIntegrationDefinitionDraftRequest) Reset() {
 	*x = CreateIntegrationDefinitionDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[728]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[730]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60329,7 +60441,7 @@ func (x *CreateIntegrationDefinitionDraftRequest) String() string {
 func (*CreateIntegrationDefinitionDraftRequest) ProtoMessage() {}
 
 func (x *CreateIntegrationDefinitionDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[728]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[730]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60342,7 +60454,7 @@ func (x *CreateIntegrationDefinitionDraftRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use CreateIntegrationDefinitionDraftRequest.ProtoReflect.Descriptor instead.
 func (*CreateIntegrationDefinitionDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{728}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{730}
 }
 
 func (x *CreateIntegrationDefinitionDraftRequest) GetMutation() *MutationContext {
@@ -60397,7 +60509,7 @@ type CreateIntegrationDefinitionDraftResponse struct {
 
 func (x *CreateIntegrationDefinitionDraftResponse) Reset() {
 	*x = CreateIntegrationDefinitionDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[729]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[731]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60409,7 +60521,7 @@ func (x *CreateIntegrationDefinitionDraftResponse) String() string {
 func (*CreateIntegrationDefinitionDraftResponse) ProtoMessage() {}
 
 func (x *CreateIntegrationDefinitionDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[729]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[731]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60422,7 +60534,7 @@ func (x *CreateIntegrationDefinitionDraftResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use CreateIntegrationDefinitionDraftResponse.ProtoReflect.Descriptor instead.
 func (*CreateIntegrationDefinitionDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{729}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{731}
 }
 
 func (x *CreateIntegrationDefinitionDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -60450,7 +60562,7 @@ type ValidateIntegrationDefinitionDraftRequest struct {
 
 func (x *ValidateIntegrationDefinitionDraftRequest) Reset() {
 	*x = ValidateIntegrationDefinitionDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[730]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[732]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60462,7 +60574,7 @@ func (x *ValidateIntegrationDefinitionDraftRequest) String() string {
 func (*ValidateIntegrationDefinitionDraftRequest) ProtoMessage() {}
 
 func (x *ValidateIntegrationDefinitionDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[730]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[732]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60475,7 +60587,7 @@ func (x *ValidateIntegrationDefinitionDraftRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use ValidateIntegrationDefinitionDraftRequest.ProtoReflect.Descriptor instead.
 func (*ValidateIntegrationDefinitionDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{730}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{732}
 }
 
 func (x *ValidateIntegrationDefinitionDraftRequest) GetMutation() *MutationContext {
@@ -60509,7 +60621,7 @@ type ValidateIntegrationDefinitionDraftResponse struct {
 
 func (x *ValidateIntegrationDefinitionDraftResponse) Reset() {
 	*x = ValidateIntegrationDefinitionDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[731]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[733]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60521,7 +60633,7 @@ func (x *ValidateIntegrationDefinitionDraftResponse) String() string {
 func (*ValidateIntegrationDefinitionDraftResponse) ProtoMessage() {}
 
 func (x *ValidateIntegrationDefinitionDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[731]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[733]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60534,7 +60646,7 @@ func (x *ValidateIntegrationDefinitionDraftResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use ValidateIntegrationDefinitionDraftResponse.ProtoReflect.Descriptor instead.
 func (*ValidateIntegrationDefinitionDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{731}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{733}
 }
 
 func (x *ValidateIntegrationDefinitionDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -60562,7 +60674,7 @@ type PublishIntegrationDefinitionDraftRequest struct {
 
 func (x *PublishIntegrationDefinitionDraftRequest) Reset() {
 	*x = PublishIntegrationDefinitionDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[732]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[734]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60574,7 +60686,7 @@ func (x *PublishIntegrationDefinitionDraftRequest) String() string {
 func (*PublishIntegrationDefinitionDraftRequest) ProtoMessage() {}
 
 func (x *PublishIntegrationDefinitionDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[732]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[734]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60587,7 +60699,7 @@ func (x *PublishIntegrationDefinitionDraftRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use PublishIntegrationDefinitionDraftRequest.ProtoReflect.Descriptor instead.
 func (*PublishIntegrationDefinitionDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{732}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{734}
 }
 
 func (x *PublishIntegrationDefinitionDraftRequest) GetMutation() *MutationContext {
@@ -60621,7 +60733,7 @@ type PublishIntegrationDefinitionDraftResponse struct {
 
 func (x *PublishIntegrationDefinitionDraftResponse) Reset() {
 	*x = PublishIntegrationDefinitionDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[733]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[735]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60633,7 +60745,7 @@ func (x *PublishIntegrationDefinitionDraftResponse) String() string {
 func (*PublishIntegrationDefinitionDraftResponse) ProtoMessage() {}
 
 func (x *PublishIntegrationDefinitionDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[733]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[735]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60646,7 +60758,7 @@ func (x *PublishIntegrationDefinitionDraftResponse) ProtoReflect() protoreflect.
 
 // Deprecated: Use PublishIntegrationDefinitionDraftResponse.ProtoReflect.Descriptor instead.
 func (*PublishIntegrationDefinitionDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{733}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{735}
 }
 
 func (x *PublishIntegrationDefinitionDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -60676,7 +60788,7 @@ type RebindIntegrationDefinitionConsumersRequest struct {
 
 func (x *RebindIntegrationDefinitionConsumersRequest) Reset() {
 	*x = RebindIntegrationDefinitionConsumersRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[734]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[736]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60688,7 +60800,7 @@ func (x *RebindIntegrationDefinitionConsumersRequest) String() string {
 func (*RebindIntegrationDefinitionConsumersRequest) ProtoMessage() {}
 
 func (x *RebindIntegrationDefinitionConsumersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[734]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[736]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60701,7 +60813,7 @@ func (x *RebindIntegrationDefinitionConsumersRequest) ProtoReflect() protoreflec
 
 // Deprecated: Use RebindIntegrationDefinitionConsumersRequest.ProtoReflect.Descriptor instead.
 func (*RebindIntegrationDefinitionConsumersRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{734}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{736}
 }
 
 func (x *RebindIntegrationDefinitionConsumersRequest) GetMutation() *MutationContext {
@@ -60749,7 +60861,7 @@ type RebindIntegrationDefinitionConsumersResponse struct {
 
 func (x *RebindIntegrationDefinitionConsumersResponse) Reset() {
 	*x = RebindIntegrationDefinitionConsumersResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[735]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[737]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60761,7 +60873,7 @@ func (x *RebindIntegrationDefinitionConsumersResponse) String() string {
 func (*RebindIntegrationDefinitionConsumersResponse) ProtoMessage() {}
 
 func (x *RebindIntegrationDefinitionConsumersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[735]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[737]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60774,7 +60886,7 @@ func (x *RebindIntegrationDefinitionConsumersResponse) ProtoReflect() protorefle
 
 // Deprecated: Use RebindIntegrationDefinitionConsumersResponse.ProtoReflect.Descriptor instead.
 func (*RebindIntegrationDefinitionConsumersResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{735}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{737}
 }
 
 func (x *RebindIntegrationDefinitionConsumersResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -60805,7 +60917,7 @@ type CreateSystemSTTConfigurationDraftRequest struct {
 
 func (x *CreateSystemSTTConfigurationDraftRequest) Reset() {
 	*x = CreateSystemSTTConfigurationDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[736]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[738]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60817,7 +60929,7 @@ func (x *CreateSystemSTTConfigurationDraftRequest) String() string {
 func (*CreateSystemSTTConfigurationDraftRequest) ProtoMessage() {}
 
 func (x *CreateSystemSTTConfigurationDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[736]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[738]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60830,7 +60942,7 @@ func (x *CreateSystemSTTConfigurationDraftRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use CreateSystemSTTConfigurationDraftRequest.ProtoReflect.Descriptor instead.
 func (*CreateSystemSTTConfigurationDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{736}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{738}
 }
 
 func (x *CreateSystemSTTConfigurationDraftRequest) GetMutation() *MutationContext {
@@ -60885,7 +60997,7 @@ type CreateSystemSTTConfigurationDraftResponse struct {
 
 func (x *CreateSystemSTTConfigurationDraftResponse) Reset() {
 	*x = CreateSystemSTTConfigurationDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[737]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[739]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60897,7 +61009,7 @@ func (x *CreateSystemSTTConfigurationDraftResponse) String() string {
 func (*CreateSystemSTTConfigurationDraftResponse) ProtoMessage() {}
 
 func (x *CreateSystemSTTConfigurationDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[737]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[739]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60910,7 +61022,7 @@ func (x *CreateSystemSTTConfigurationDraftResponse) ProtoReflect() protoreflect.
 
 // Deprecated: Use CreateSystemSTTConfigurationDraftResponse.ProtoReflect.Descriptor instead.
 func (*CreateSystemSTTConfigurationDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{737}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{739}
 }
 
 func (x *CreateSystemSTTConfigurationDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -60938,7 +61050,7 @@ type ValidateSystemSTTConfigurationDraftRequest struct {
 
 func (x *ValidateSystemSTTConfigurationDraftRequest) Reset() {
 	*x = ValidateSystemSTTConfigurationDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[738]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[740]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60950,7 +61062,7 @@ func (x *ValidateSystemSTTConfigurationDraftRequest) String() string {
 func (*ValidateSystemSTTConfigurationDraftRequest) ProtoMessage() {}
 
 func (x *ValidateSystemSTTConfigurationDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[738]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[740]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60963,7 +61075,7 @@ func (x *ValidateSystemSTTConfigurationDraftRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use ValidateSystemSTTConfigurationDraftRequest.ProtoReflect.Descriptor instead.
 func (*ValidateSystemSTTConfigurationDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{738}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{740}
 }
 
 func (x *ValidateSystemSTTConfigurationDraftRequest) GetMutation() *MutationContext {
@@ -60997,7 +61109,7 @@ type ValidateSystemSTTConfigurationDraftResponse struct {
 
 func (x *ValidateSystemSTTConfigurationDraftResponse) Reset() {
 	*x = ValidateSystemSTTConfigurationDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[739]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[741]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61009,7 +61121,7 @@ func (x *ValidateSystemSTTConfigurationDraftResponse) String() string {
 func (*ValidateSystemSTTConfigurationDraftResponse) ProtoMessage() {}
 
 func (x *ValidateSystemSTTConfigurationDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[739]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[741]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61022,7 +61134,7 @@ func (x *ValidateSystemSTTConfigurationDraftResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use ValidateSystemSTTConfigurationDraftResponse.ProtoReflect.Descriptor instead.
 func (*ValidateSystemSTTConfigurationDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{739}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{741}
 }
 
 func (x *ValidateSystemSTTConfigurationDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -61050,7 +61162,7 @@ type PublishSystemSTTConfigurationDraftRequest struct {
 
 func (x *PublishSystemSTTConfigurationDraftRequest) Reset() {
 	*x = PublishSystemSTTConfigurationDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[740]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[742]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61062,7 +61174,7 @@ func (x *PublishSystemSTTConfigurationDraftRequest) String() string {
 func (*PublishSystemSTTConfigurationDraftRequest) ProtoMessage() {}
 
 func (x *PublishSystemSTTConfigurationDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[740]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[742]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61075,7 +61187,7 @@ func (x *PublishSystemSTTConfigurationDraftRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use PublishSystemSTTConfigurationDraftRequest.ProtoReflect.Descriptor instead.
 func (*PublishSystemSTTConfigurationDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{740}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{742}
 }
 
 func (x *PublishSystemSTTConfigurationDraftRequest) GetMutation() *MutationContext {
@@ -61109,7 +61221,7 @@ type PublishSystemSTTConfigurationDraftResponse struct {
 
 func (x *PublishSystemSTTConfigurationDraftResponse) Reset() {
 	*x = PublishSystemSTTConfigurationDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[741]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[743]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61121,7 +61233,7 @@ func (x *PublishSystemSTTConfigurationDraftResponse) String() string {
 func (*PublishSystemSTTConfigurationDraftResponse) ProtoMessage() {}
 
 func (x *PublishSystemSTTConfigurationDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[741]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[743]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61134,7 +61246,7 @@ func (x *PublishSystemSTTConfigurationDraftResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use PublishSystemSTTConfigurationDraftResponse.ProtoReflect.Descriptor instead.
 func (*PublishSystemSTTConfigurationDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{741}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{743}
 }
 
 func (x *PublishSystemSTTConfigurationDraftResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -61164,7 +61276,7 @@ type RebindSystemSTTConsumersRequest struct {
 
 func (x *RebindSystemSTTConsumersRequest) Reset() {
 	*x = RebindSystemSTTConsumersRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[742]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[744]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61176,7 +61288,7 @@ func (x *RebindSystemSTTConsumersRequest) String() string {
 func (*RebindSystemSTTConsumersRequest) ProtoMessage() {}
 
 func (x *RebindSystemSTTConsumersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[742]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[744]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61189,7 +61301,7 @@ func (x *RebindSystemSTTConsumersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebindSystemSTTConsumersRequest.ProtoReflect.Descriptor instead.
 func (*RebindSystemSTTConsumersRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{742}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{744}
 }
 
 func (x *RebindSystemSTTConsumersRequest) GetMutation() *MutationContext {
@@ -61237,7 +61349,7 @@ type RebindSystemSTTConsumersResponse struct {
 
 func (x *RebindSystemSTTConsumersResponse) Reset() {
 	*x = RebindSystemSTTConsumersResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[743]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[745]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61249,7 +61361,7 @@ func (x *RebindSystemSTTConsumersResponse) String() string {
 func (*RebindSystemSTTConsumersResponse) ProtoMessage() {}
 
 func (x *RebindSystemSTTConsumersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[743]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[745]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61262,7 +61374,7 @@ func (x *RebindSystemSTTConsumersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebindSystemSTTConsumersResponse.ProtoReflect.Descriptor instead.
 func (*RebindSystemSTTConsumersResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{743}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{745}
 }
 
 func (x *RebindSystemSTTConsumersResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -61289,7 +61401,7 @@ type DetachGitManagedConfigurationRequest struct {
 
 func (x *DetachGitManagedConfigurationRequest) Reset() {
 	*x = DetachGitManagedConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[744]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[746]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61301,7 +61413,7 @@ func (x *DetachGitManagedConfigurationRequest) String() string {
 func (*DetachGitManagedConfigurationRequest) ProtoMessage() {}
 
 func (x *DetachGitManagedConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[744]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[746]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61314,7 +61426,7 @@ func (x *DetachGitManagedConfigurationRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use DetachGitManagedConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*DetachGitManagedConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{744}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{746}
 }
 
 func (x *DetachGitManagedConfigurationRequest) GetMutation() *MutationContext {
@@ -61341,7 +61453,7 @@ type DetachGitManagedConfigurationResponse struct {
 
 func (x *DetachGitManagedConfigurationResponse) Reset() {
 	*x = DetachGitManagedConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[745]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[747]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61353,7 +61465,7 @@ func (x *DetachGitManagedConfigurationResponse) String() string {
 func (*DetachGitManagedConfigurationResponse) ProtoMessage() {}
 
 func (x *DetachGitManagedConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[745]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[747]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61366,7 +61478,7 @@ func (x *DetachGitManagedConfigurationResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use DetachGitManagedConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*DetachGitManagedConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{745}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{747}
 }
 
 func (x *DetachGitManagedConfigurationResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -61394,7 +61506,7 @@ type CopyGitManagedConfigurationRequest struct {
 
 func (x *CopyGitManagedConfigurationRequest) Reset() {
 	*x = CopyGitManagedConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[746]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[748]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61406,7 +61518,7 @@ func (x *CopyGitManagedConfigurationRequest) String() string {
 func (*CopyGitManagedConfigurationRequest) ProtoMessage() {}
 
 func (x *CopyGitManagedConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[746]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[748]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61419,7 +61531,7 @@ func (x *CopyGitManagedConfigurationRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CopyGitManagedConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*CopyGitManagedConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{746}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{748}
 }
 
 func (x *CopyGitManagedConfigurationRequest) GetMutation() *MutationContext {
@@ -61453,7 +61565,7 @@ type CopyGitManagedConfigurationResponse struct {
 
 func (x *CopyGitManagedConfigurationResponse) Reset() {
 	*x = CopyGitManagedConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[747]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[749]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61465,7 +61577,7 @@ func (x *CopyGitManagedConfigurationResponse) String() string {
 func (*CopyGitManagedConfigurationResponse) ProtoMessage() {}
 
 func (x *CopyGitManagedConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[747]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[749]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61478,7 +61590,7 @@ func (x *CopyGitManagedConfigurationResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use CopyGitManagedConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*CopyGitManagedConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{747}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{749}
 }
 
 func (x *CopyGitManagedConfigurationResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -61505,7 +61617,7 @@ type ListManagedConfigurationHistoryRequest struct {
 
 func (x *ListManagedConfigurationHistoryRequest) Reset() {
 	*x = ListManagedConfigurationHistoryRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[748]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[750]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61517,7 +61629,7 @@ func (x *ListManagedConfigurationHistoryRequest) String() string {
 func (*ListManagedConfigurationHistoryRequest) ProtoMessage() {}
 
 func (x *ListManagedConfigurationHistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[748]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[750]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61530,7 +61642,7 @@ func (x *ListManagedConfigurationHistoryRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ListManagedConfigurationHistoryRequest.ProtoReflect.Descriptor instead.
 func (*ListManagedConfigurationHistoryRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{748}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{750}
 }
 
 func (x *ListManagedConfigurationHistoryRequest) GetConfigurationRef() string {
@@ -61559,7 +61671,7 @@ type ListManagedConfigurationsRequest struct {
 
 func (x *ListManagedConfigurationsRequest) Reset() {
 	*x = ListManagedConfigurationsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[749]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[751]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61571,7 +61683,7 @@ func (x *ListManagedConfigurationsRequest) String() string {
 func (*ListManagedConfigurationsRequest) ProtoMessage() {}
 
 func (x *ListManagedConfigurationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[749]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[751]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61584,7 +61696,7 @@ func (x *ListManagedConfigurationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListManagedConfigurationsRequest.ProtoReflect.Descriptor instead.
 func (*ListManagedConfigurationsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{749}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{751}
 }
 
 func (x *ListManagedConfigurationsRequest) GetProjectRef() string {
@@ -61626,7 +61738,7 @@ type ListManagedConfigurationsResponse struct {
 
 func (x *ListManagedConfigurationsResponse) Reset() {
 	*x = ListManagedConfigurationsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[750]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[752]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61638,7 +61750,7 @@ func (x *ListManagedConfigurationsResponse) String() string {
 func (*ListManagedConfigurationsResponse) ProtoMessage() {}
 
 func (x *ListManagedConfigurationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[750]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[752]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61651,7 +61763,7 @@ func (x *ListManagedConfigurationsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListManagedConfigurationsResponse.ProtoReflect.Descriptor instead.
 func (*ListManagedConfigurationsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{750}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{752}
 }
 
 func (x *ListManagedConfigurationsResponse) GetConfigurations() []*ManagedConfigurationSet {
@@ -61687,7 +61799,7 @@ type ListManagedConfigurationHistoryResponse struct {
 
 func (x *ListManagedConfigurationHistoryResponse) Reset() {
 	*x = ListManagedConfigurationHistoryResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[751]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[753]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61699,7 +61811,7 @@ func (x *ListManagedConfigurationHistoryResponse) String() string {
 func (*ListManagedConfigurationHistoryResponse) ProtoMessage() {}
 
 func (x *ListManagedConfigurationHistoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[751]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[753]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61712,7 +61824,7 @@ func (x *ListManagedConfigurationHistoryResponse) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ListManagedConfigurationHistoryResponse.ProtoReflect.Descriptor instead.
 func (*ListManagedConfigurationHistoryResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{751}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{753}
 }
 
 func (x *ListManagedConfigurationHistoryResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -61755,7 +61867,7 @@ type GetManagedConfigurationImpactRequest struct {
 
 func (x *GetManagedConfigurationImpactRequest) Reset() {
 	*x = GetManagedConfigurationImpactRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[752]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[754]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61767,7 +61879,7 @@ func (x *GetManagedConfigurationImpactRequest) String() string {
 func (*GetManagedConfigurationImpactRequest) ProtoMessage() {}
 
 func (x *GetManagedConfigurationImpactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[752]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[754]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61780,7 +61892,7 @@ func (x *GetManagedConfigurationImpactRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use GetManagedConfigurationImpactRequest.ProtoReflect.Descriptor instead.
 func (*GetManagedConfigurationImpactRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{752}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{754}
 }
 
 func (x *GetManagedConfigurationImpactRequest) GetConfigurationRef() string {
@@ -61820,7 +61932,7 @@ type GetManagedConfigurationImpactResponse struct {
 
 func (x *GetManagedConfigurationImpactResponse) Reset() {
 	*x = GetManagedConfigurationImpactResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[753]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[755]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61832,7 +61944,7 @@ func (x *GetManagedConfigurationImpactResponse) String() string {
 func (*GetManagedConfigurationImpactResponse) ProtoMessage() {}
 
 func (x *GetManagedConfigurationImpactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[753]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[755]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61845,7 +61957,7 @@ func (x *GetManagedConfigurationImpactResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use GetManagedConfigurationImpactResponse.ProtoReflect.Descriptor instead.
 func (*GetManagedConfigurationImpactResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{753}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{755}
 }
 
 func (x *GetManagedConfigurationImpactResponse) GetImpact() *ManagedConfigurationImpact {
@@ -61870,7 +61982,7 @@ type ContextProvenance struct {
 
 func (x *ContextProvenance) Reset() {
 	*x = ContextProvenance{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[754]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[756]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61882,7 +61994,7 @@ func (x *ContextProvenance) String() string {
 func (*ContextProvenance) ProtoMessage() {}
 
 func (x *ContextProvenance) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[754]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[756]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61895,7 +62007,7 @@ func (x *ContextProvenance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContextProvenance.ProtoReflect.Descriptor instead.
 func (*ContextProvenance) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{754}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{756}
 }
 
 func (x *ContextProvenance) GetActorRef() string {
@@ -61953,7 +62065,7 @@ type SkillBundleFile struct {
 
 func (x *SkillBundleFile) Reset() {
 	*x = SkillBundleFile{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[755]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[757]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61965,7 +62077,7 @@ func (x *SkillBundleFile) String() string {
 func (*SkillBundleFile) ProtoMessage() {}
 
 func (x *SkillBundleFile) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[755]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[757]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61978,7 +62090,7 @@ func (x *SkillBundleFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillBundleFile.ProtoReflect.Descriptor instead.
 func (*SkillBundleFile) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{755}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{757}
 }
 
 func (x *SkillBundleFile) GetPath() string {
@@ -62027,7 +62139,7 @@ type SkillBundleFileInput struct {
 
 func (x *SkillBundleFileInput) Reset() {
 	*x = SkillBundleFileInput{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[756]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[758]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62039,7 +62151,7 @@ func (x *SkillBundleFileInput) String() string {
 func (*SkillBundleFileInput) ProtoMessage() {}
 
 func (x *SkillBundleFileInput) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[756]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[758]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62052,7 +62164,7 @@ func (x *SkillBundleFileInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillBundleFileInput.ProtoReflect.Descriptor instead.
 func (*SkillBundleFileInput) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{756}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{758}
 }
 
 func (x *SkillBundleFileInput) GetPath() string {
@@ -62087,7 +62199,7 @@ type SkillBundleSpecification struct {
 
 func (x *SkillBundleSpecification) Reset() {
 	*x = SkillBundleSpecification{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[757]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[759]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62099,7 +62211,7 @@ func (x *SkillBundleSpecification) String() string {
 func (*SkillBundleSpecification) ProtoMessage() {}
 
 func (x *SkillBundleSpecification) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[757]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[759]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62112,7 +62224,7 @@ func (x *SkillBundleSpecification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillBundleSpecification.ProtoReflect.Descriptor instead.
 func (*SkillBundleSpecification) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{757}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{759}
 }
 
 func (x *SkillBundleSpecification) GetName() string {
@@ -62160,7 +62272,7 @@ type SkillBundleRevision struct {
 
 func (x *SkillBundleRevision) Reset() {
 	*x = SkillBundleRevision{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[758]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[760]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62172,7 +62284,7 @@ func (x *SkillBundleRevision) String() string {
 func (*SkillBundleRevision) ProtoMessage() {}
 
 func (x *SkillBundleRevision) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[758]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[760]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62185,7 +62297,7 @@ func (x *SkillBundleRevision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillBundleRevision.ProtoReflect.Descriptor instead.
 func (*SkillBundleRevision) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{758}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{760}
 }
 
 func (x *SkillBundleRevision) GetRef() string {
@@ -62316,7 +62428,7 @@ type SkillBundle struct {
 
 func (x *SkillBundle) Reset() {
 	*x = SkillBundle{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[759]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[761]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62328,7 +62440,7 @@ func (x *SkillBundle) String() string {
 func (*SkillBundle) ProtoMessage() {}
 
 func (x *SkillBundle) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[759]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[761]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62341,7 +62453,7 @@ func (x *SkillBundle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillBundle.ProtoReflect.Descriptor instead.
 func (*SkillBundle) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{759}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{761}
 }
 
 func (x *SkillBundle) GetRef() string {
@@ -62410,7 +62522,7 @@ type EmailMailboxCredentialReference struct {
 
 func (x *EmailMailboxCredentialReference) Reset() {
 	*x = EmailMailboxCredentialReference{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[760]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[762]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62422,7 +62534,7 @@ func (x *EmailMailboxCredentialReference) String() string {
 func (*EmailMailboxCredentialReference) ProtoMessage() {}
 
 func (x *EmailMailboxCredentialReference) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[760]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[762]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62435,7 +62547,7 @@ func (x *EmailMailboxCredentialReference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxCredentialReference.ProtoReflect.Descriptor instead.
 func (*EmailMailboxCredentialReference) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{760}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{762}
 }
 
 func (x *EmailMailboxCredentialReference) GetName() string {
@@ -62468,7 +62580,7 @@ type EmailMailboxEndpoint struct {
 
 func (x *EmailMailboxEndpoint) Reset() {
 	*x = EmailMailboxEndpoint{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[761]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[763]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62480,7 +62592,7 @@ func (x *EmailMailboxEndpoint) String() string {
 func (*EmailMailboxEndpoint) ProtoMessage() {}
 
 func (x *EmailMailboxEndpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[761]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[763]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62493,7 +62605,7 @@ func (x *EmailMailboxEndpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxEndpoint.ProtoReflect.Descriptor instead.
 func (*EmailMailboxEndpoint) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{761}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{763}
 }
 
 func (x *EmailMailboxEndpoint) GetHost() string {
@@ -62567,7 +62679,7 @@ type EmailMailboxLimits struct {
 
 func (x *EmailMailboxLimits) Reset() {
 	*x = EmailMailboxLimits{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[762]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[764]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62579,7 +62691,7 @@ func (x *EmailMailboxLimits) String() string {
 func (*EmailMailboxLimits) ProtoMessage() {}
 
 func (x *EmailMailboxLimits) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[762]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[764]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62592,7 +62704,7 @@ func (x *EmailMailboxLimits) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxLimits.ProtoReflect.Descriptor instead.
 func (*EmailMailboxLimits) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{762}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{764}
 }
 
 func (x *EmailMailboxLimits) GetAttachmentBytes() int64 {
@@ -62655,7 +62767,7 @@ type EmailMailboxOperationPolicy struct {
 
 func (x *EmailMailboxOperationPolicy) Reset() {
 	*x = EmailMailboxOperationPolicy{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[763]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[765]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62667,7 +62779,7 @@ func (x *EmailMailboxOperationPolicy) String() string {
 func (*EmailMailboxOperationPolicy) ProtoMessage() {}
 
 func (x *EmailMailboxOperationPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[763]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[765]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62680,7 +62792,7 @@ func (x *EmailMailboxOperationPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxOperationPolicy.ProtoReflect.Descriptor instead.
 func (*EmailMailboxOperationPolicy) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{763}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{765}
 }
 
 func (x *EmailMailboxOperationPolicy) GetOperation() EmailOperation {
@@ -62728,7 +62840,7 @@ type EmailMailboxSpecification struct {
 
 func (x *EmailMailboxSpecification) Reset() {
 	*x = EmailMailboxSpecification{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[764]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[766]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62740,7 +62852,7 @@ func (x *EmailMailboxSpecification) String() string {
 func (*EmailMailboxSpecification) ProtoMessage() {}
 
 func (x *EmailMailboxSpecification) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[764]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[766]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62753,7 +62865,7 @@ func (x *EmailMailboxSpecification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxSpecification.ProtoReflect.Descriptor instead.
 func (*EmailMailboxSpecification) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{764}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{766}
 }
 
 func (x *EmailMailboxSpecification) GetEnabled() bool {
@@ -62874,7 +62986,7 @@ type EmailMailboxDraftContent struct {
 
 func (x *EmailMailboxDraftContent) Reset() {
 	*x = EmailMailboxDraftContent{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[765]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[767]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62886,7 +62998,7 @@ func (x *EmailMailboxDraftContent) String() string {
 func (*EmailMailboxDraftContent) ProtoMessage() {}
 
 func (x *EmailMailboxDraftContent) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[765]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[767]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62899,7 +63011,7 @@ func (x *EmailMailboxDraftContent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxDraftContent.ProtoReflect.Descriptor instead.
 func (*EmailMailboxDraftContent) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{765}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{767}
 }
 
 func (x *EmailMailboxDraftContent) GetContent() isEmailMailboxDraftContent_Content {
@@ -62956,7 +63068,7 @@ type EmailMailboxDiagnostic struct {
 
 func (x *EmailMailboxDiagnostic) Reset() {
 	*x = EmailMailboxDiagnostic{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[766]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[768]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -62968,7 +63080,7 @@ func (x *EmailMailboxDiagnostic) String() string {
 func (*EmailMailboxDiagnostic) ProtoMessage() {}
 
 func (x *EmailMailboxDiagnostic) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[766]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[768]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62981,7 +63093,7 @@ func (x *EmailMailboxDiagnostic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxDiagnostic.ProtoReflect.Descriptor instead.
 func (*EmailMailboxDiagnostic) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{766}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{768}
 }
 
 func (x *EmailMailboxDiagnostic) GetCode() string {
@@ -63035,7 +63147,7 @@ type EmailMailboxPublication struct {
 
 func (x *EmailMailboxPublication) Reset() {
 	*x = EmailMailboxPublication{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[767]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[769]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63047,7 +63159,7 @@ func (x *EmailMailboxPublication) String() string {
 func (*EmailMailboxPublication) ProtoMessage() {}
 
 func (x *EmailMailboxPublication) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[767]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[769]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63060,7 +63172,7 @@ func (x *EmailMailboxPublication) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxPublication.ProtoReflect.Descriptor instead.
 func (*EmailMailboxPublication) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{767}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{769}
 }
 
 func (x *EmailMailboxPublication) GetRef() string {
@@ -63137,7 +63249,7 @@ type EmailMailboxConfigurationView struct {
 
 func (x *EmailMailboxConfigurationView) Reset() {
 	*x = EmailMailboxConfigurationView{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[768]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[770]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63149,7 +63261,7 @@ func (x *EmailMailboxConfigurationView) String() string {
 func (*EmailMailboxConfigurationView) ProtoMessage() {}
 
 func (x *EmailMailboxConfigurationView) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[768]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[770]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63162,7 +63274,7 @@ func (x *EmailMailboxConfigurationView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxConfigurationView.ProtoReflect.Descriptor instead.
 func (*EmailMailboxConfigurationView) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{768}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{770}
 }
 
 func (x *EmailMailboxConfigurationView) GetConnectionRef() string {
@@ -63246,7 +63358,7 @@ type EmailMailboxActionAvailability struct {
 
 func (x *EmailMailboxActionAvailability) Reset() {
 	*x = EmailMailboxActionAvailability{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[769]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[771]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63258,7 +63370,7 @@ func (x *EmailMailboxActionAvailability) String() string {
 func (*EmailMailboxActionAvailability) ProtoMessage() {}
 
 func (x *EmailMailboxActionAvailability) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[769]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[771]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63271,7 +63383,7 @@ func (x *EmailMailboxActionAvailability) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxActionAvailability.ProtoReflect.Descriptor instead.
 func (*EmailMailboxActionAvailability) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{769}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{771}
 }
 
 func (x *EmailMailboxActionAvailability) GetAction() EmailMailboxAction {
@@ -63306,7 +63418,7 @@ type ListEmailMailboxConfigurationsRequest struct {
 
 func (x *ListEmailMailboxConfigurationsRequest) Reset() {
 	*x = ListEmailMailboxConfigurationsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[770]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[772]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63318,7 +63430,7 @@ func (x *ListEmailMailboxConfigurationsRequest) String() string {
 func (*ListEmailMailboxConfigurationsRequest) ProtoMessage() {}
 
 func (x *ListEmailMailboxConfigurationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[770]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[772]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63331,7 +63443,7 @@ func (x *ListEmailMailboxConfigurationsRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ListEmailMailboxConfigurationsRequest.ProtoReflect.Descriptor instead.
 func (*ListEmailMailboxConfigurationsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{770}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{772}
 }
 
 func (x *ListEmailMailboxConfigurationsRequest) GetConnectionRef() string {
@@ -63367,7 +63479,7 @@ type ListEmailMailboxConfigurationsResponse struct {
 
 func (x *ListEmailMailboxConfigurationsResponse) Reset() {
 	*x = ListEmailMailboxConfigurationsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[771]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[773]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63379,7 +63491,7 @@ func (x *ListEmailMailboxConfigurationsResponse) String() string {
 func (*ListEmailMailboxConfigurationsResponse) ProtoMessage() {}
 
 func (x *ListEmailMailboxConfigurationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[771]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[773]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63392,7 +63504,7 @@ func (x *ListEmailMailboxConfigurationsResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ListEmailMailboxConfigurationsResponse.ProtoReflect.Descriptor instead.
 func (*ListEmailMailboxConfigurationsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{771}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{773}
 }
 
 func (x *ListEmailMailboxConfigurationsResponse) GetItems() []*EmailMailboxConfigurationView {
@@ -63434,7 +63546,7 @@ type GetEmailMailboxConfigurationRequest struct {
 
 func (x *GetEmailMailboxConfigurationRequest) Reset() {
 	*x = GetEmailMailboxConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[772]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[774]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63446,7 +63558,7 @@ func (x *GetEmailMailboxConfigurationRequest) String() string {
 func (*GetEmailMailboxConfigurationRequest) ProtoMessage() {}
 
 func (x *GetEmailMailboxConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[772]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[774]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63459,7 +63571,7 @@ func (x *GetEmailMailboxConfigurationRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use GetEmailMailboxConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*GetEmailMailboxConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{772}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{774}
 }
 
 func (x *GetEmailMailboxConfigurationRequest) GetConnectionRef() string {
@@ -63492,7 +63604,7 @@ type GetEmailMailboxConfigurationResponse struct {
 
 func (x *GetEmailMailboxConfigurationResponse) Reset() {
 	*x = GetEmailMailboxConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[773]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[775]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63504,7 +63616,7 @@ func (x *GetEmailMailboxConfigurationResponse) String() string {
 func (*GetEmailMailboxConfigurationResponse) ProtoMessage() {}
 
 func (x *GetEmailMailboxConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[773]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[775]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63517,7 +63629,7 @@ func (x *GetEmailMailboxConfigurationResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use GetEmailMailboxConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*GetEmailMailboxConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{773}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{775}
 }
 
 func (x *GetEmailMailboxConfigurationResponse) GetConfiguration() *EmailMailboxConfigurationView {
@@ -63538,7 +63650,7 @@ type ListEmailMailboxCredentialsRequest struct {
 
 func (x *ListEmailMailboxCredentialsRequest) Reset() {
 	*x = ListEmailMailboxCredentialsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[774]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[776]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63550,7 +63662,7 @@ func (x *ListEmailMailboxCredentialsRequest) String() string {
 func (*ListEmailMailboxCredentialsRequest) ProtoMessage() {}
 
 func (x *ListEmailMailboxCredentialsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[774]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[776]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63563,7 +63675,7 @@ func (x *ListEmailMailboxCredentialsRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListEmailMailboxCredentialsRequest.ProtoReflect.Descriptor instead.
 func (*ListEmailMailboxCredentialsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{774}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{776}
 }
 
 func (x *ListEmailMailboxCredentialsRequest) GetConnectionRef() string {
@@ -63598,7 +63710,7 @@ type ListEmailMailboxCredentialsResponse struct {
 
 func (x *ListEmailMailboxCredentialsResponse) Reset() {
 	*x = ListEmailMailboxCredentialsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[775]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[777]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63610,7 +63722,7 @@ func (x *ListEmailMailboxCredentialsResponse) String() string {
 func (*ListEmailMailboxCredentialsResponse) ProtoMessage() {}
 
 func (x *ListEmailMailboxCredentialsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[775]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[777]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63623,7 +63735,7 @@ func (x *ListEmailMailboxCredentialsResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ListEmailMailboxCredentialsResponse.ProtoReflect.Descriptor instead.
 func (*ListEmailMailboxCredentialsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{775}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{777}
 }
 
 func (x *ListEmailMailboxCredentialsResponse) GetItems() []*EmailMailboxCredential {
@@ -63657,7 +63769,7 @@ type GetEmailMailboxCredentialReceiptRequest struct {
 
 func (x *GetEmailMailboxCredentialReceiptRequest) Reset() {
 	*x = GetEmailMailboxCredentialReceiptRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[776]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[778]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63669,7 +63781,7 @@ func (x *GetEmailMailboxCredentialReceiptRequest) String() string {
 func (*GetEmailMailboxCredentialReceiptRequest) ProtoMessage() {}
 
 func (x *GetEmailMailboxCredentialReceiptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[776]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[778]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63682,7 +63794,7 @@ func (x *GetEmailMailboxCredentialReceiptRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use GetEmailMailboxCredentialReceiptRequest.ProtoReflect.Descriptor instead.
 func (*GetEmailMailboxCredentialReceiptRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{776}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{778}
 }
 
 func (x *GetEmailMailboxCredentialReceiptRequest) GetConnectionRef() string {
@@ -63708,7 +63820,7 @@ type GetEmailMailboxCredentialReceiptResponse struct {
 
 func (x *GetEmailMailboxCredentialReceiptResponse) Reset() {
 	*x = GetEmailMailboxCredentialReceiptResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[777]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[779]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63720,7 +63832,7 @@ func (x *GetEmailMailboxCredentialReceiptResponse) String() string {
 func (*GetEmailMailboxCredentialReceiptResponse) ProtoMessage() {}
 
 func (x *GetEmailMailboxCredentialReceiptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[777]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[779]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63733,7 +63845,7 @@ func (x *GetEmailMailboxCredentialReceiptResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use GetEmailMailboxCredentialReceiptResponse.ProtoReflect.Descriptor instead.
 func (*GetEmailMailboxCredentialReceiptResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{777}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{779}
 }
 
 func (x *GetEmailMailboxCredentialReceiptResponse) GetCredential() *EmailMailboxCredential {
@@ -63753,7 +63865,7 @@ type PreviewEmailMailboxConfigurationRequest struct {
 
 func (x *PreviewEmailMailboxConfigurationRequest) Reset() {
 	*x = PreviewEmailMailboxConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[778]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[780]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63765,7 +63877,7 @@ func (x *PreviewEmailMailboxConfigurationRequest) String() string {
 func (*PreviewEmailMailboxConfigurationRequest) ProtoMessage() {}
 
 func (x *PreviewEmailMailboxConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[778]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[780]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63778,7 +63890,7 @@ func (x *PreviewEmailMailboxConfigurationRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use PreviewEmailMailboxConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*PreviewEmailMailboxConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{778}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{780}
 }
 
 func (x *PreviewEmailMailboxConfigurationRequest) GetConnectionRef() string {
@@ -63807,7 +63919,7 @@ type PreviewEmailMailboxConfigurationResponse struct {
 
 func (x *PreviewEmailMailboxConfigurationResponse) Reset() {
 	*x = PreviewEmailMailboxConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[779]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[781]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63819,7 +63931,7 @@ func (x *PreviewEmailMailboxConfigurationResponse) String() string {
 func (*PreviewEmailMailboxConfigurationResponse) ProtoMessage() {}
 
 func (x *PreviewEmailMailboxConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[779]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[781]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63832,7 +63944,7 @@ func (x *PreviewEmailMailboxConfigurationResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use PreviewEmailMailboxConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*PreviewEmailMailboxConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{779}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{781}
 }
 
 func (x *PreviewEmailMailboxConfigurationResponse) GetSpecification() *EmailMailboxSpecification {
@@ -63876,7 +63988,7 @@ type CreateEmailMailboxDraftRequest struct {
 
 func (x *CreateEmailMailboxDraftRequest) Reset() {
 	*x = CreateEmailMailboxDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[780]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[782]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63888,7 +64000,7 @@ func (x *CreateEmailMailboxDraftRequest) String() string {
 func (*CreateEmailMailboxDraftRequest) ProtoMessage() {}
 
 func (x *CreateEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[780]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[782]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63901,7 +64013,7 @@ func (x *CreateEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEmailMailboxDraftRequest.ProtoReflect.Descriptor instead.
 func (*CreateEmailMailboxDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{780}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{782}
 }
 
 func (x *CreateEmailMailboxDraftRequest) GetMutation() *MutationContext {
@@ -63948,7 +64060,7 @@ type CreateEmailMailboxDraftResponse struct {
 
 func (x *CreateEmailMailboxDraftResponse) Reset() {
 	*x = CreateEmailMailboxDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[781]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[783]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63960,7 +64072,7 @@ func (x *CreateEmailMailboxDraftResponse) String() string {
 func (*CreateEmailMailboxDraftResponse) ProtoMessage() {}
 
 func (x *CreateEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[781]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[783]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63973,7 +64085,7 @@ func (x *CreateEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEmailMailboxDraftResponse.ProtoReflect.Descriptor instead.
 func (*CreateEmailMailboxDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{781}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{783}
 }
 
 func (x *CreateEmailMailboxDraftResponse) GetConfiguration() *EmailMailboxConfigurationView {
@@ -63995,7 +64107,7 @@ type SaveEmailMailboxDraftRequest struct {
 
 func (x *SaveEmailMailboxDraftRequest) Reset() {
 	*x = SaveEmailMailboxDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[782]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[784]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64007,7 +64119,7 @@ func (x *SaveEmailMailboxDraftRequest) String() string {
 func (*SaveEmailMailboxDraftRequest) ProtoMessage() {}
 
 func (x *SaveEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[782]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[784]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64020,7 +64132,7 @@ func (x *SaveEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveEmailMailboxDraftRequest.ProtoReflect.Descriptor instead.
 func (*SaveEmailMailboxDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{782}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{784}
 }
 
 func (x *SaveEmailMailboxDraftRequest) GetMutation() *MutationContext {
@@ -64060,7 +64172,7 @@ type SaveEmailMailboxDraftResponse struct {
 
 func (x *SaveEmailMailboxDraftResponse) Reset() {
 	*x = SaveEmailMailboxDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[783]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[785]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64072,7 +64184,7 @@ func (x *SaveEmailMailboxDraftResponse) String() string {
 func (*SaveEmailMailboxDraftResponse) ProtoMessage() {}
 
 func (x *SaveEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[783]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[785]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64085,7 +64197,7 @@ func (x *SaveEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveEmailMailboxDraftResponse.ProtoReflect.Descriptor instead.
 func (*SaveEmailMailboxDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{783}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{785}
 }
 
 func (x *SaveEmailMailboxDraftResponse) GetConfiguration() *EmailMailboxConfigurationView {
@@ -64106,7 +64218,7 @@ type ValidateEmailMailboxDraftRequest struct {
 
 func (x *ValidateEmailMailboxDraftRequest) Reset() {
 	*x = ValidateEmailMailboxDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[784]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[786]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64118,7 +64230,7 @@ func (x *ValidateEmailMailboxDraftRequest) String() string {
 func (*ValidateEmailMailboxDraftRequest) ProtoMessage() {}
 
 func (x *ValidateEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[784]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[786]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64131,7 +64243,7 @@ func (x *ValidateEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateEmailMailboxDraftRequest.ProtoReflect.Descriptor instead.
 func (*ValidateEmailMailboxDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{784}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{786}
 }
 
 func (x *ValidateEmailMailboxDraftRequest) GetMutation() *MutationContext {
@@ -64164,7 +64276,7 @@ type ValidateEmailMailboxDraftResponse struct {
 
 func (x *ValidateEmailMailboxDraftResponse) Reset() {
 	*x = ValidateEmailMailboxDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[785]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[787]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64176,7 +64288,7 @@ func (x *ValidateEmailMailboxDraftResponse) String() string {
 func (*ValidateEmailMailboxDraftResponse) ProtoMessage() {}
 
 func (x *ValidateEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[785]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[787]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64189,7 +64301,7 @@ func (x *ValidateEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ValidateEmailMailboxDraftResponse.ProtoReflect.Descriptor instead.
 func (*ValidateEmailMailboxDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{785}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{787}
 }
 
 func (x *ValidateEmailMailboxDraftResponse) GetConfiguration() *EmailMailboxConfigurationView {
@@ -64210,7 +64322,7 @@ type PublishEmailMailboxDraftRequest struct {
 
 func (x *PublishEmailMailboxDraftRequest) Reset() {
 	*x = PublishEmailMailboxDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[786]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[788]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64222,7 +64334,7 @@ func (x *PublishEmailMailboxDraftRequest) String() string {
 func (*PublishEmailMailboxDraftRequest) ProtoMessage() {}
 
 func (x *PublishEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[786]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[788]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64235,7 +64347,7 @@ func (x *PublishEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishEmailMailboxDraftRequest.ProtoReflect.Descriptor instead.
 func (*PublishEmailMailboxDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{786}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{788}
 }
 
 func (x *PublishEmailMailboxDraftRequest) GetMutation() *MutationContext {
@@ -64268,7 +64380,7 @@ type PublishEmailMailboxDraftResponse struct {
 
 func (x *PublishEmailMailboxDraftResponse) Reset() {
 	*x = PublishEmailMailboxDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[787]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[789]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64280,7 +64392,7 @@ func (x *PublishEmailMailboxDraftResponse) String() string {
 func (*PublishEmailMailboxDraftResponse) ProtoMessage() {}
 
 func (x *PublishEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[787]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[789]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64293,7 +64405,7 @@ func (x *PublishEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishEmailMailboxDraftResponse.ProtoReflect.Descriptor instead.
 func (*PublishEmailMailboxDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{787}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{789}
 }
 
 func (x *PublishEmailMailboxDraftResponse) GetConfiguration() *EmailMailboxConfigurationView {
@@ -64314,7 +64426,7 @@ type DiscardEmailMailboxDraftRequest struct {
 
 func (x *DiscardEmailMailboxDraftRequest) Reset() {
 	*x = DiscardEmailMailboxDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[788]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[790]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64326,7 +64438,7 @@ func (x *DiscardEmailMailboxDraftRequest) String() string {
 func (*DiscardEmailMailboxDraftRequest) ProtoMessage() {}
 
 func (x *DiscardEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[788]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[790]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64339,7 +64451,7 @@ func (x *DiscardEmailMailboxDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardEmailMailboxDraftRequest.ProtoReflect.Descriptor instead.
 func (*DiscardEmailMailboxDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{788}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{790}
 }
 
 func (x *DiscardEmailMailboxDraftRequest) GetMutation() *MutationContext {
@@ -64372,7 +64484,7 @@ type DiscardEmailMailboxDraftResponse struct {
 
 func (x *DiscardEmailMailboxDraftResponse) Reset() {
 	*x = DiscardEmailMailboxDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[789]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[791]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64384,7 +64496,7 @@ func (x *DiscardEmailMailboxDraftResponse) String() string {
 func (*DiscardEmailMailboxDraftResponse) ProtoMessage() {}
 
 func (x *DiscardEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[789]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[791]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64397,7 +64509,7 @@ func (x *DiscardEmailMailboxDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardEmailMailboxDraftResponse.ProtoReflect.Descriptor instead.
 func (*DiscardEmailMailboxDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{789}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{791}
 }
 
 func (x *DiscardEmailMailboxDraftResponse) GetConfiguration() *EmailMailboxConfigurationView {
@@ -64420,7 +64532,7 @@ type BindEmailMailboxConfigurationRequest struct {
 
 func (x *BindEmailMailboxConfigurationRequest) Reset() {
 	*x = BindEmailMailboxConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[790]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[792]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64432,7 +64544,7 @@ func (x *BindEmailMailboxConfigurationRequest) String() string {
 func (*BindEmailMailboxConfigurationRequest) ProtoMessage() {}
 
 func (x *BindEmailMailboxConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[790]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[792]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64445,7 +64557,7 @@ func (x *BindEmailMailboxConfigurationRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use BindEmailMailboxConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*BindEmailMailboxConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{790}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{792}
 }
 
 func (x *BindEmailMailboxConfigurationRequest) GetMutation() *MutationContext {
@@ -64492,7 +64604,7 @@ type BindEmailMailboxConfigurationResponse struct {
 
 func (x *BindEmailMailboxConfigurationResponse) Reset() {
 	*x = BindEmailMailboxConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[791]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[793]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64504,7 +64616,7 @@ func (x *BindEmailMailboxConfigurationResponse) String() string {
 func (*BindEmailMailboxConfigurationResponse) ProtoMessage() {}
 
 func (x *BindEmailMailboxConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[791]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[793]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64517,7 +64629,7 @@ func (x *BindEmailMailboxConfigurationResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use BindEmailMailboxConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*BindEmailMailboxConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{791}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{793}
 }
 
 func (x *BindEmailMailboxConfigurationResponse) GetConfiguration() *EmailMailboxConfigurationView {
@@ -64537,7 +64649,7 @@ type UnbindEmailMailboxConfigurationRequest struct {
 
 func (x *UnbindEmailMailboxConfigurationRequest) Reset() {
 	*x = UnbindEmailMailboxConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[792]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[794]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64549,7 +64661,7 @@ func (x *UnbindEmailMailboxConfigurationRequest) String() string {
 func (*UnbindEmailMailboxConfigurationRequest) ProtoMessage() {}
 
 func (x *UnbindEmailMailboxConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[792]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[794]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64562,7 +64674,7 @@ func (x *UnbindEmailMailboxConfigurationRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use UnbindEmailMailboxConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*UnbindEmailMailboxConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{792}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{794}
 }
 
 func (x *UnbindEmailMailboxConfigurationRequest) GetMutation() *MutationContext {
@@ -64589,7 +64701,7 @@ type UnbindEmailMailboxConfigurationResponse struct {
 
 func (x *UnbindEmailMailboxConfigurationResponse) Reset() {
 	*x = UnbindEmailMailboxConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[793]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[795]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64601,7 +64713,7 @@ func (x *UnbindEmailMailboxConfigurationResponse) String() string {
 func (*UnbindEmailMailboxConfigurationResponse) ProtoMessage() {}
 
 func (x *UnbindEmailMailboxConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[793]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[795]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64614,7 +64726,7 @@ func (x *UnbindEmailMailboxConfigurationResponse) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use UnbindEmailMailboxConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*UnbindEmailMailboxConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{793}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{795}
 }
 
 func (x *UnbindEmailMailboxConfigurationResponse) GetPublication() *EmailMailboxPublication {
@@ -64642,7 +64754,7 @@ type ReportEmailConfigurationReadbackRequest struct {
 
 func (x *ReportEmailConfigurationReadbackRequest) Reset() {
 	*x = ReportEmailConfigurationReadbackRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[794]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[796]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64654,7 +64766,7 @@ func (x *ReportEmailConfigurationReadbackRequest) String() string {
 func (*ReportEmailConfigurationReadbackRequest) ProtoMessage() {}
 
 func (x *ReportEmailConfigurationReadbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[794]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[796]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64667,7 +64779,7 @@ func (x *ReportEmailConfigurationReadbackRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ReportEmailConfigurationReadbackRequest.ProtoReflect.Descriptor instead.
 func (*ReportEmailConfigurationReadbackRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{794}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{796}
 }
 
 func (x *ReportEmailConfigurationReadbackRequest) GetRevision() int64 {
@@ -64693,7 +64805,7 @@ type ReportEmailConfigurationReadbackResponse struct {
 
 func (x *ReportEmailConfigurationReadbackResponse) Reset() {
 	*x = ReportEmailConfigurationReadbackResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[795]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[797]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64705,7 +64817,7 @@ func (x *ReportEmailConfigurationReadbackResponse) String() string {
 func (*ReportEmailConfigurationReadbackResponse) ProtoMessage() {}
 
 func (x *ReportEmailConfigurationReadbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[795]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[797]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64718,7 +64830,7 @@ func (x *ReportEmailConfigurationReadbackResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use ReportEmailConfigurationReadbackResponse.ProtoReflect.Descriptor instead.
 func (*ReportEmailConfigurationReadbackResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{795}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{797}
 }
 
 func (x *ReportEmailConfigurationReadbackResponse) GetAccepted() bool {
@@ -64741,7 +64853,7 @@ type EmailMailboxCredential struct {
 
 func (x *EmailMailboxCredential) Reset() {
 	*x = EmailMailboxCredential{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[796]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[798]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64753,7 +64865,7 @@ func (x *EmailMailboxCredential) String() string {
 func (*EmailMailboxCredential) ProtoMessage() {}
 
 func (x *EmailMailboxCredential) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[796]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[798]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64766,7 +64878,7 @@ func (x *EmailMailboxCredential) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailMailboxCredential.ProtoReflect.Descriptor instead.
 func (*EmailMailboxCredential) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{796}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{798}
 }
 
 func (x *EmailMailboxCredential) GetName() string {
@@ -64816,7 +64928,7 @@ type ConfigureEmailMailboxCredentialRequest struct {
 
 func (x *ConfigureEmailMailboxCredentialRequest) Reset() {
 	*x = ConfigureEmailMailboxCredentialRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[797]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[799]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64828,7 +64940,7 @@ func (x *ConfigureEmailMailboxCredentialRequest) String() string {
 func (*ConfigureEmailMailboxCredentialRequest) ProtoMessage() {}
 
 func (x *ConfigureEmailMailboxCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[797]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[799]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64841,7 +64953,7 @@ func (x *ConfigureEmailMailboxCredentialRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ConfigureEmailMailboxCredentialRequest.ProtoReflect.Descriptor instead.
 func (*ConfigureEmailMailboxCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{797}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{799}
 }
 
 func (x *ConfigureEmailMailboxCredentialRequest) GetMutation() *MutationContext {
@@ -64881,7 +64993,7 @@ type ConfigureEmailMailboxCredentialResponse struct {
 
 func (x *ConfigureEmailMailboxCredentialResponse) Reset() {
 	*x = ConfigureEmailMailboxCredentialResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[798]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[800]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64893,7 +65005,7 @@ func (x *ConfigureEmailMailboxCredentialResponse) String() string {
 func (*ConfigureEmailMailboxCredentialResponse) ProtoMessage() {}
 
 func (x *ConfigureEmailMailboxCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[798]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[800]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64906,7 +65018,7 @@ func (x *ConfigureEmailMailboxCredentialResponse) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ConfigureEmailMailboxCredentialResponse.ProtoReflect.Descriptor instead.
 func (*ConfigureEmailMailboxCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{798}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{800}
 }
 
 func (x *ConfigureEmailMailboxCredentialResponse) GetCredential() *EmailMailboxCredential {
@@ -64930,7 +65042,7 @@ type EmailExecutionBinding struct {
 
 func (x *EmailExecutionBinding) Reset() {
 	*x = EmailExecutionBinding{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[799]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[801]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -64942,7 +65054,7 @@ func (x *EmailExecutionBinding) String() string {
 func (*EmailExecutionBinding) ProtoMessage() {}
 
 func (x *EmailExecutionBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[799]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[801]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64955,7 +65067,7 @@ func (x *EmailExecutionBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailExecutionBinding.ProtoReflect.Descriptor instead.
 func (*EmailExecutionBinding) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{799}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{801}
 }
 
 func (x *EmailExecutionBinding) GetSource() isEmailExecutionBinding_Source {
@@ -65019,7 +65131,7 @@ type EmailAuthorizationScope struct {
 
 func (x *EmailAuthorizationScope) Reset() {
 	*x = EmailAuthorizationScope{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[800]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[802]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65031,7 +65143,7 @@ func (x *EmailAuthorizationScope) String() string {
 func (*EmailAuthorizationScope) ProtoMessage() {}
 
 func (x *EmailAuthorizationScope) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[800]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[802]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65044,7 +65156,7 @@ func (x *EmailAuthorizationScope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailAuthorizationScope.ProtoReflect.Descriptor instead.
 func (*EmailAuthorizationScope) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{800}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{802}
 }
 
 func (x *EmailAuthorizationScope) GetMailboxRef() string {
@@ -65099,7 +65211,7 @@ type ResolveEmailAuthorizationRequest struct {
 
 func (x *ResolveEmailAuthorizationRequest) Reset() {
 	*x = ResolveEmailAuthorizationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[801]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[803]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65111,7 +65223,7 @@ func (x *ResolveEmailAuthorizationRequest) String() string {
 func (*ResolveEmailAuthorizationRequest) ProtoMessage() {}
 
 func (x *ResolveEmailAuthorizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[801]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[803]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65124,7 +65236,7 @@ func (x *ResolveEmailAuthorizationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveEmailAuthorizationRequest.ProtoReflect.Descriptor instead.
 func (*ResolveEmailAuthorizationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{801}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{803}
 }
 
 func (x *ResolveEmailAuthorizationRequest) GetBinding() *EmailExecutionBinding {
@@ -65219,7 +65331,7 @@ type ResolveEmailAuthorizationResponse struct {
 
 func (x *ResolveEmailAuthorizationResponse) Reset() {
 	*x = ResolveEmailAuthorizationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[802]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[804]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65231,7 +65343,7 @@ func (x *ResolveEmailAuthorizationResponse) String() string {
 func (*ResolveEmailAuthorizationResponse) ProtoMessage() {}
 
 func (x *ResolveEmailAuthorizationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[802]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[804]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65244,7 +65356,7 @@ func (x *ResolveEmailAuthorizationResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ResolveEmailAuthorizationResponse.ProtoReflect.Descriptor instead.
 func (*ResolveEmailAuthorizationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{802}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{804}
 }
 
 func (x *ResolveEmailAuthorizationResponse) GetAllowed() bool {
@@ -65416,7 +65528,7 @@ type EmailEffectReceipt struct {
 
 func (x *EmailEffectReceipt) Reset() {
 	*x = EmailEffectReceipt{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[803]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[805]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65428,7 +65540,7 @@ func (x *EmailEffectReceipt) String() string {
 func (*EmailEffectReceipt) ProtoMessage() {}
 
 func (x *EmailEffectReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[803]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[805]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65441,7 +65553,7 @@ func (x *EmailEffectReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailEffectReceipt.ProtoReflect.Descriptor instead.
 func (*EmailEffectReceipt) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{803}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{805}
 }
 
 func (x *EmailEffectReceipt) GetRef() string {
@@ -65556,7 +65668,7 @@ type ReportEmailEffectReceiptRequest struct {
 
 func (x *ReportEmailEffectReceiptRequest) Reset() {
 	*x = ReportEmailEffectReceiptRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[804]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[806]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65568,7 +65680,7 @@ func (x *ReportEmailEffectReceiptRequest) String() string {
 func (*ReportEmailEffectReceiptRequest) ProtoMessage() {}
 
 func (x *ReportEmailEffectReceiptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[804]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[806]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65581,7 +65693,7 @@ func (x *ReportEmailEffectReceiptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportEmailEffectReceiptRequest.ProtoReflect.Descriptor instead.
 func (*ReportEmailEffectReceiptRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{804}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{806}
 }
 
 func (x *ReportEmailEffectReceiptRequest) GetMutation() *MutationContext {
@@ -65635,7 +65747,7 @@ type ReportEmailEffectReceiptResponse struct {
 
 func (x *ReportEmailEffectReceiptResponse) Reset() {
 	*x = ReportEmailEffectReceiptResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[805]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[807]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65647,7 +65759,7 @@ func (x *ReportEmailEffectReceiptResponse) String() string {
 func (*ReportEmailEffectReceiptResponse) ProtoMessage() {}
 
 func (x *ReportEmailEffectReceiptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[805]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[807]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65660,7 +65772,7 @@ func (x *ReportEmailEffectReceiptResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportEmailEffectReceiptResponse.ProtoReflect.Descriptor instead.
 func (*ReportEmailEffectReceiptResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{805}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{807}
 }
 
 func (x *ReportEmailEffectReceiptResponse) GetReceipt() *EmailEffectReceipt {
@@ -65689,7 +65801,7 @@ type EmailReconciliationDecision struct {
 
 func (x *EmailReconciliationDecision) Reset() {
 	*x = EmailReconciliationDecision{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[806]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[808]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65701,7 +65813,7 @@ func (x *EmailReconciliationDecision) String() string {
 func (*EmailReconciliationDecision) ProtoMessage() {}
 
 func (x *EmailReconciliationDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[806]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[808]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65714,7 +65826,7 @@ func (x *EmailReconciliationDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmailReconciliationDecision.ProtoReflect.Descriptor instead.
 func (*EmailReconciliationDecision) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{806}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{808}
 }
 
 func (x *EmailReconciliationDecision) GetRef() string {
@@ -65807,7 +65919,7 @@ type ReconcileEmailEffectRequest struct {
 
 func (x *ReconcileEmailEffectRequest) Reset() {
 	*x = ReconcileEmailEffectRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[807]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[809]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65819,7 +65931,7 @@ func (x *ReconcileEmailEffectRequest) String() string {
 func (*ReconcileEmailEffectRequest) ProtoMessage() {}
 
 func (x *ReconcileEmailEffectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[807]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[809]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65832,7 +65944,7 @@ func (x *ReconcileEmailEffectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconcileEmailEffectRequest.ProtoReflect.Descriptor instead.
 func (*ReconcileEmailEffectRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{807}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{809}
 }
 
 func (x *ReconcileEmailEffectRequest) GetMutation() *MutationContext {
@@ -65879,7 +65991,7 @@ type ReconcileEmailEffectResponse struct {
 
 func (x *ReconcileEmailEffectResponse) Reset() {
 	*x = ReconcileEmailEffectResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[808]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[810]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65891,7 +66003,7 @@ func (x *ReconcileEmailEffectResponse) String() string {
 func (*ReconcileEmailEffectResponse) ProtoMessage() {}
 
 func (x *ReconcileEmailEffectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[808]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[810]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65904,7 +66016,7 @@ func (x *ReconcileEmailEffectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconcileEmailEffectResponse.ProtoReflect.Descriptor instead.
 func (*ReconcileEmailEffectResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{808}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{810}
 }
 
 func (x *ReconcileEmailEffectResponse) GetDecision() *EmailReconciliationDecision {
@@ -65926,7 +66038,7 @@ type ResolveEmailReconciliationRequest struct {
 
 func (x *ResolveEmailReconciliationRequest) Reset() {
 	*x = ResolveEmailReconciliationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[809]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[811]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65938,7 +66050,7 @@ func (x *ResolveEmailReconciliationRequest) String() string {
 func (*ResolveEmailReconciliationRequest) ProtoMessage() {}
 
 func (x *ResolveEmailReconciliationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[809]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[811]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65951,7 +66063,7 @@ func (x *ResolveEmailReconciliationRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ResolveEmailReconciliationRequest.ProtoReflect.Descriptor instead.
 func (*ResolveEmailReconciliationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{809}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{811}
 }
 
 func (x *ResolveEmailReconciliationRequest) GetReceiptRef() string {
@@ -65992,7 +66104,7 @@ type ResolveEmailReconciliationResponse struct {
 
 func (x *ResolveEmailReconciliationResponse) Reset() {
 	*x = ResolveEmailReconciliationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[810]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[812]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66004,7 +66116,7 @@ func (x *ResolveEmailReconciliationResponse) String() string {
 func (*ResolveEmailReconciliationResponse) ProtoMessage() {}
 
 func (x *ResolveEmailReconciliationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[810]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[812]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66017,7 +66129,7 @@ func (x *ResolveEmailReconciliationResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ResolveEmailReconciliationResponse.ProtoReflect.Descriptor instead.
 func (*ResolveEmailReconciliationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{810}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{812}
 }
 
 func (x *ResolveEmailReconciliationResponse) GetDecision() *EmailReconciliationDecision {
@@ -66043,7 +66155,7 @@ type GetEmailEffectReceiptRequest struct {
 
 func (x *GetEmailEffectReceiptRequest) Reset() {
 	*x = GetEmailEffectReceiptRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[811]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[813]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66055,7 +66167,7 @@ func (x *GetEmailEffectReceiptRequest) String() string {
 func (*GetEmailEffectReceiptRequest) ProtoMessage() {}
 
 func (x *GetEmailEffectReceiptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[811]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[813]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66068,7 +66180,7 @@ func (x *GetEmailEffectReceiptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEmailEffectReceiptRequest.ProtoReflect.Descriptor instead.
 func (*GetEmailEffectReceiptRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{811}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{813}
 }
 
 func (x *GetEmailEffectReceiptRequest) GetInvocationRef() string {
@@ -66088,7 +66200,7 @@ type GetEmailEffectReceiptResponse struct {
 
 func (x *GetEmailEffectReceiptResponse) Reset() {
 	*x = GetEmailEffectReceiptResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[812]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[814]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66100,7 +66212,7 @@ func (x *GetEmailEffectReceiptResponse) String() string {
 func (*GetEmailEffectReceiptResponse) ProtoMessage() {}
 
 func (x *GetEmailEffectReceiptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[812]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[814]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66113,7 +66225,7 @@ func (x *GetEmailEffectReceiptResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEmailEffectReceiptResponse.ProtoReflect.Descriptor instead.
 func (*GetEmailEffectReceiptResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{812}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{814}
 }
 
 func (x *GetEmailEffectReceiptResponse) GetReceipt() *EmailEffectReceipt {
@@ -66144,7 +66256,7 @@ type AgentContextBinding struct {
 
 func (x *AgentContextBinding) Reset() {
 	*x = AgentContextBinding{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[813]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[815]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66156,7 +66268,7 @@ func (x *AgentContextBinding) String() string {
 func (*AgentContextBinding) ProtoMessage() {}
 
 func (x *AgentContextBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[813]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[815]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66169,7 +66281,7 @@ func (x *AgentContextBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentContextBinding.ProtoReflect.Descriptor instead.
 func (*AgentContextBinding) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{813}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{815}
 }
 
 func (x *AgentContextBinding) GetRef() string {
@@ -66226,7 +66338,7 @@ type MemoryRecordSpecification struct {
 
 func (x *MemoryRecordSpecification) Reset() {
 	*x = MemoryRecordSpecification{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[814]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[816]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66238,7 +66350,7 @@ func (x *MemoryRecordSpecification) String() string {
 func (*MemoryRecordSpecification) ProtoMessage() {}
 
 func (x *MemoryRecordSpecification) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[814]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[816]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66251,7 +66363,7 @@ func (x *MemoryRecordSpecification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryRecordSpecification.ProtoReflect.Descriptor instead.
 func (*MemoryRecordSpecification) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{814}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{816}
 }
 
 func (x *MemoryRecordSpecification) GetTitle() string {
@@ -66299,7 +66411,7 @@ type MemoryRecordRevision struct {
 
 func (x *MemoryRecordRevision) Reset() {
 	*x = MemoryRecordRevision{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[815]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[817]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66311,7 +66423,7 @@ func (x *MemoryRecordRevision) String() string {
 func (*MemoryRecordRevision) ProtoMessage() {}
 
 func (x *MemoryRecordRevision) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[815]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[817]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66324,7 +66436,7 @@ func (x *MemoryRecordRevision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryRecordRevision.ProtoReflect.Descriptor instead.
 func (*MemoryRecordRevision) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{815}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{817}
 }
 
 func (x *MemoryRecordRevision) GetRef() string {
@@ -66406,7 +66518,7 @@ type KodexMemoryRecord struct {
 
 func (x *KodexMemoryRecord) Reset() {
 	*x = KodexMemoryRecord{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[816]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[818]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66418,7 +66530,7 @@ func (x *KodexMemoryRecord) String() string {
 func (*KodexMemoryRecord) ProtoMessage() {}
 
 func (x *KodexMemoryRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[816]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[818]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66431,7 +66543,7 @@ func (x *KodexMemoryRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KodexMemoryRecord.ProtoReflect.Descriptor instead.
 func (*KodexMemoryRecord) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{816}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{818}
 }
 
 func (x *KodexMemoryRecord) GetRef() string {
@@ -66503,7 +66615,7 @@ type ListSkillBundlesRequest struct {
 
 func (x *ListSkillBundlesRequest) Reset() {
 	*x = ListSkillBundlesRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[817]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[819]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66515,7 +66627,7 @@ func (x *ListSkillBundlesRequest) String() string {
 func (*ListSkillBundlesRequest) ProtoMessage() {}
 
 func (x *ListSkillBundlesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[817]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[819]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66528,7 +66640,7 @@ func (x *ListSkillBundlesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSkillBundlesRequest.ProtoReflect.Descriptor instead.
 func (*ListSkillBundlesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{817}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{819}
 }
 
 func (x *ListSkillBundlesRequest) GetProjectRef() string {
@@ -66577,7 +66689,7 @@ type ListSkillBundlesResponse struct {
 
 func (x *ListSkillBundlesResponse) Reset() {
 	*x = ListSkillBundlesResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[818]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[820]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66589,7 +66701,7 @@ func (x *ListSkillBundlesResponse) String() string {
 func (*ListSkillBundlesResponse) ProtoMessage() {}
 
 func (x *ListSkillBundlesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[818]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[820]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66602,7 +66714,7 @@ func (x *ListSkillBundlesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSkillBundlesResponse.ProtoReflect.Descriptor instead.
 func (*ListSkillBundlesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{818}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{820}
 }
 
 func (x *ListSkillBundlesResponse) GetBundles() []*SkillBundle {
@@ -66635,7 +66747,7 @@ type GetSkillBundleRequest struct {
 
 func (x *GetSkillBundleRequest) Reset() {
 	*x = GetSkillBundleRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[819]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[821]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66647,7 +66759,7 @@ func (x *GetSkillBundleRequest) String() string {
 func (*GetSkillBundleRequest) ProtoMessage() {}
 
 func (x *GetSkillBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[819]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[821]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66660,7 +66772,7 @@ func (x *GetSkillBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSkillBundleRequest.ProtoReflect.Descriptor instead.
 func (*GetSkillBundleRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{819}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{821}
 }
 
 func (x *GetSkillBundleRequest) GetBundleRef() string {
@@ -66679,7 +66791,7 @@ type GetSkillBundleResponse struct {
 
 func (x *GetSkillBundleResponse) Reset() {
 	*x = GetSkillBundleResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[820]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[822]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66691,7 +66803,7 @@ func (x *GetSkillBundleResponse) String() string {
 func (*GetSkillBundleResponse) ProtoMessage() {}
 
 func (x *GetSkillBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[820]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[822]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66704,7 +66816,7 @@ func (x *GetSkillBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSkillBundleResponse.ProtoReflect.Descriptor instead.
 func (*GetSkillBundleResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{820}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{822}
 }
 
 func (x *GetSkillBundleResponse) GetBundle() *SkillBundle {
@@ -66724,7 +66836,7 @@ type ListSkillBundleRevisionsRequest struct {
 
 func (x *ListSkillBundleRevisionsRequest) Reset() {
 	*x = ListSkillBundleRevisionsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[821]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[823]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66736,7 +66848,7 @@ func (x *ListSkillBundleRevisionsRequest) String() string {
 func (*ListSkillBundleRevisionsRequest) ProtoMessage() {}
 
 func (x *ListSkillBundleRevisionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[821]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[823]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66749,7 +66861,7 @@ func (x *ListSkillBundleRevisionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSkillBundleRevisionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSkillBundleRevisionsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{821}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{823}
 }
 
 func (x *ListSkillBundleRevisionsRequest) GetBundleRef() string {
@@ -66777,7 +66889,7 @@ type ListSkillBundleRevisionsResponse struct {
 
 func (x *ListSkillBundleRevisionsResponse) Reset() {
 	*x = ListSkillBundleRevisionsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[822]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[824]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66789,7 +66901,7 @@ func (x *ListSkillBundleRevisionsResponse) String() string {
 func (*ListSkillBundleRevisionsResponse) ProtoMessage() {}
 
 func (x *ListSkillBundleRevisionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[822]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[824]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66802,7 +66914,7 @@ func (x *ListSkillBundleRevisionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSkillBundleRevisionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSkillBundleRevisionsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{822}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{824}
 }
 
 func (x *ListSkillBundleRevisionsResponse) GetRevisions() []*SkillBundleRevision {
@@ -66839,7 +66951,7 @@ type ListMemoryRecordsRequest struct {
 
 func (x *ListMemoryRecordsRequest) Reset() {
 	*x = ListMemoryRecordsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[823]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[825]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66851,7 +66963,7 @@ func (x *ListMemoryRecordsRequest) String() string {
 func (*ListMemoryRecordsRequest) ProtoMessage() {}
 
 func (x *ListMemoryRecordsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[823]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[825]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66864,7 +66976,7 @@ func (x *ListMemoryRecordsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMemoryRecordsRequest.ProtoReflect.Descriptor instead.
 func (*ListMemoryRecordsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{823}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{825}
 }
 
 func (x *ListMemoryRecordsRequest) GetProjectRef() string {
@@ -66913,7 +67025,7 @@ type ListMemoryRecordsResponse struct {
 
 func (x *ListMemoryRecordsResponse) Reset() {
 	*x = ListMemoryRecordsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[824]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[826]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66925,7 +67037,7 @@ func (x *ListMemoryRecordsResponse) String() string {
 func (*ListMemoryRecordsResponse) ProtoMessage() {}
 
 func (x *ListMemoryRecordsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[824]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[826]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66938,7 +67050,7 @@ func (x *ListMemoryRecordsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMemoryRecordsResponse.ProtoReflect.Descriptor instead.
 func (*ListMemoryRecordsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{824}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{826}
 }
 
 func (x *ListMemoryRecordsResponse) GetRecords() []*KodexMemoryRecord {
@@ -66971,7 +67083,7 @@ type GetMemoryRecordRequest struct {
 
 func (x *GetMemoryRecordRequest) Reset() {
 	*x = GetMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[825]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[827]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66983,7 +67095,7 @@ func (x *GetMemoryRecordRequest) String() string {
 func (*GetMemoryRecordRequest) ProtoMessage() {}
 
 func (x *GetMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[825]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[827]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66996,7 +67108,7 @@ func (x *GetMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*GetMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{825}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{827}
 }
 
 func (x *GetMemoryRecordRequest) GetRecordRef() string {
@@ -67015,7 +67127,7 @@ type GetMemoryRecordResponse struct {
 
 func (x *GetMemoryRecordResponse) Reset() {
 	*x = GetMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[826]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[828]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67027,7 +67139,7 @@ func (x *GetMemoryRecordResponse) String() string {
 func (*GetMemoryRecordResponse) ProtoMessage() {}
 
 func (x *GetMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[826]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[828]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67040,7 +67152,7 @@ func (x *GetMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*GetMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{826}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{828}
 }
 
 func (x *GetMemoryRecordResponse) GetRecord() *KodexMemoryRecord {
@@ -67060,7 +67172,7 @@ type ListMemoryRecordRevisionsRequest struct {
 
 func (x *ListMemoryRecordRevisionsRequest) Reset() {
 	*x = ListMemoryRecordRevisionsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[827]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[829]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67072,7 +67184,7 @@ func (x *ListMemoryRecordRevisionsRequest) String() string {
 func (*ListMemoryRecordRevisionsRequest) ProtoMessage() {}
 
 func (x *ListMemoryRecordRevisionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[827]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[829]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67085,7 +67197,7 @@ func (x *ListMemoryRecordRevisionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMemoryRecordRevisionsRequest.ProtoReflect.Descriptor instead.
 func (*ListMemoryRecordRevisionsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{827}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{829}
 }
 
 func (x *ListMemoryRecordRevisionsRequest) GetRecordRef() string {
@@ -67113,7 +67225,7 @@ type ListMemoryRecordRevisionsResponse struct {
 
 func (x *ListMemoryRecordRevisionsResponse) Reset() {
 	*x = ListMemoryRecordRevisionsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[828]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[830]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67125,7 +67237,7 @@ func (x *ListMemoryRecordRevisionsResponse) String() string {
 func (*ListMemoryRecordRevisionsResponse) ProtoMessage() {}
 
 func (x *ListMemoryRecordRevisionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[828]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[830]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67138,7 +67250,7 @@ func (x *ListMemoryRecordRevisionsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListMemoryRecordRevisionsResponse.ProtoReflect.Descriptor instead.
 func (*ListMemoryRecordRevisionsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{828}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{830}
 }
 
 func (x *ListMemoryRecordRevisionsResponse) GetRevisions() []*MemoryRecordRevision {
@@ -67174,7 +67286,7 @@ type CreateSkillBundleDraftRequest struct {
 
 func (x *CreateSkillBundleDraftRequest) Reset() {
 	*x = CreateSkillBundleDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[829]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[831]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67186,7 +67298,7 @@ func (x *CreateSkillBundleDraftRequest) String() string {
 func (*CreateSkillBundleDraftRequest) ProtoMessage() {}
 
 func (x *CreateSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[829]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[831]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67199,7 +67311,7 @@ func (x *CreateSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSkillBundleDraftRequest.ProtoReflect.Descriptor instead.
 func (*CreateSkillBundleDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{829}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{831}
 }
 
 func (x *CreateSkillBundleDraftRequest) GetMutation() *MutationContext {
@@ -67242,7 +67354,7 @@ type SaveSkillBundleDraftRequest struct {
 
 func (x *SaveSkillBundleDraftRequest) Reset() {
 	*x = SaveSkillBundleDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[830]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[832]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67254,7 +67366,7 @@ func (x *SaveSkillBundleDraftRequest) String() string {
 func (*SaveSkillBundleDraftRequest) ProtoMessage() {}
 
 func (x *SaveSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[830]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[832]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67267,7 +67379,7 @@ func (x *SaveSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveSkillBundleDraftRequest.ProtoReflect.Descriptor instead.
 func (*SaveSkillBundleDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{830}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{832}
 }
 
 func (x *SaveSkillBundleDraftRequest) GetMutation() *MutationContext {
@@ -67312,7 +67424,7 @@ type ReviewSkillBundleDraftRequest struct {
 
 func (x *ReviewSkillBundleDraftRequest) Reset() {
 	*x = ReviewSkillBundleDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[831]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[833]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67324,7 +67436,7 @@ func (x *ReviewSkillBundleDraftRequest) String() string {
 func (*ReviewSkillBundleDraftRequest) ProtoMessage() {}
 
 func (x *ReviewSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[831]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[833]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67337,7 +67449,7 @@ func (x *ReviewSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewSkillBundleDraftRequest.ProtoReflect.Descriptor instead.
 func (*ReviewSkillBundleDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{831}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{833}
 }
 
 func (x *ReviewSkillBundleDraftRequest) GetMutation() *MutationContext {
@@ -67394,7 +67506,7 @@ type CreateMemoryRecordRequest struct {
 
 func (x *CreateMemoryRecordRequest) Reset() {
 	*x = CreateMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[832]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[834]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67406,7 +67518,7 @@ func (x *CreateMemoryRecordRequest) String() string {
 func (*CreateMemoryRecordRequest) ProtoMessage() {}
 
 func (x *CreateMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[832]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[834]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67419,7 +67531,7 @@ func (x *CreateMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*CreateMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{832}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{834}
 }
 
 func (x *CreateMemoryRecordRequest) GetMutation() *MutationContext {
@@ -67461,7 +67573,7 @@ type ReviseMemoryRecordRequest struct {
 
 func (x *ReviseMemoryRecordRequest) Reset() {
 	*x = ReviseMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[833]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[835]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67473,7 +67585,7 @@ func (x *ReviseMemoryRecordRequest) String() string {
 func (*ReviseMemoryRecordRequest) ProtoMessage() {}
 
 func (x *ReviseMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[833]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[835]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67486,7 +67598,7 @@ func (x *ReviseMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviseMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*ReviseMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{833}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{835}
 }
 
 func (x *ReviseMemoryRecordRequest) GetMutation() *MutationContext {
@@ -67522,7 +67634,7 @@ type ValidateSkillBundleDraftRequest struct {
 
 func (x *ValidateSkillBundleDraftRequest) Reset() {
 	*x = ValidateSkillBundleDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[834]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[836]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67534,7 +67646,7 @@ func (x *ValidateSkillBundleDraftRequest) String() string {
 func (*ValidateSkillBundleDraftRequest) ProtoMessage() {}
 
 func (x *ValidateSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[834]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[836]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67547,7 +67659,7 @@ func (x *ValidateSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSkillBundleDraftRequest.ProtoReflect.Descriptor instead.
 func (*ValidateSkillBundleDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{834}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{836}
 }
 
 func (x *ValidateSkillBundleDraftRequest) GetMutation() *MutationContext {
@@ -67590,7 +67702,7 @@ type PublishSkillBundleDraftRequest struct {
 
 func (x *PublishSkillBundleDraftRequest) Reset() {
 	*x = PublishSkillBundleDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[835]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[837]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67602,7 +67714,7 @@ func (x *PublishSkillBundleDraftRequest) String() string {
 func (*PublishSkillBundleDraftRequest) ProtoMessage() {}
 
 func (x *PublishSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[835]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[837]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67615,7 +67727,7 @@ func (x *PublishSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishSkillBundleDraftRequest.ProtoReflect.Descriptor instead.
 func (*PublishSkillBundleDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{835}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{837}
 }
 
 func (x *PublishSkillBundleDraftRequest) GetMutation() *MutationContext {
@@ -67658,7 +67770,7 @@ type DiscardSkillBundleDraftRequest struct {
 
 func (x *DiscardSkillBundleDraftRequest) Reset() {
 	*x = DiscardSkillBundleDraftRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[836]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[838]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67670,7 +67782,7 @@ func (x *DiscardSkillBundleDraftRequest) String() string {
 func (*DiscardSkillBundleDraftRequest) ProtoMessage() {}
 
 func (x *DiscardSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[836]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[838]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67683,7 +67795,7 @@ func (x *DiscardSkillBundleDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardSkillBundleDraftRequest.ProtoReflect.Descriptor instead.
 func (*DiscardSkillBundleDraftRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{836}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{838}
 }
 
 func (x *DiscardSkillBundleDraftRequest) GetMutation() *MutationContext {
@@ -67724,7 +67836,7 @@ type ArchiveSkillBundleRequest struct {
 
 func (x *ArchiveSkillBundleRequest) Reset() {
 	*x = ArchiveSkillBundleRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[837]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[839]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67736,7 +67848,7 @@ func (x *ArchiveSkillBundleRequest) String() string {
 func (*ArchiveSkillBundleRequest) ProtoMessage() {}
 
 func (x *ArchiveSkillBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[837]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[839]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67749,7 +67861,7 @@ func (x *ArchiveSkillBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveSkillBundleRequest.ProtoReflect.Descriptor instead.
 func (*ArchiveSkillBundleRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{837}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{839}
 }
 
 func (x *ArchiveSkillBundleRequest) GetMutation() *MutationContext {
@@ -67776,7 +67888,7 @@ type RestoreSkillBundleRequest struct {
 
 func (x *RestoreSkillBundleRequest) Reset() {
 	*x = RestoreSkillBundleRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[838]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[840]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67788,7 +67900,7 @@ func (x *RestoreSkillBundleRequest) String() string {
 func (*RestoreSkillBundleRequest) ProtoMessage() {}
 
 func (x *RestoreSkillBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[838]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[840]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67801,7 +67913,7 @@ func (x *RestoreSkillBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSkillBundleRequest.ProtoReflect.Descriptor instead.
 func (*RestoreSkillBundleRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{838}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{840}
 }
 
 func (x *RestoreSkillBundleRequest) GetMutation() *MutationContext {
@@ -67828,7 +67940,7 @@ type PurgeSkillBundleRequest struct {
 
 func (x *PurgeSkillBundleRequest) Reset() {
 	*x = PurgeSkillBundleRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[839]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[841]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67840,7 +67952,7 @@ func (x *PurgeSkillBundleRequest) String() string {
 func (*PurgeSkillBundleRequest) ProtoMessage() {}
 
 func (x *PurgeSkillBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[839]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[841]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67853,7 +67965,7 @@ func (x *PurgeSkillBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurgeSkillBundleRequest.ProtoReflect.Descriptor instead.
 func (*PurgeSkillBundleRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{839}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{841}
 }
 
 func (x *PurgeSkillBundleRequest) GetMutation() *MutationContext {
@@ -67883,7 +67995,7 @@ type BindAgentSkillBundleRequest struct {
 
 func (x *BindAgentSkillBundleRequest) Reset() {
 	*x = BindAgentSkillBundleRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[840]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[842]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67895,7 +68007,7 @@ func (x *BindAgentSkillBundleRequest) String() string {
 func (*BindAgentSkillBundleRequest) ProtoMessage() {}
 
 func (x *BindAgentSkillBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[840]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[842]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67908,7 +68020,7 @@ func (x *BindAgentSkillBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BindAgentSkillBundleRequest.ProtoReflect.Descriptor instead.
 func (*BindAgentSkillBundleRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{840}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{842}
 }
 
 func (x *BindAgentSkillBundleRequest) GetMutation() *MutationContext {
@@ -67955,7 +68067,7 @@ type BindAgentSkillBundleResponse struct {
 
 func (x *BindAgentSkillBundleResponse) Reset() {
 	*x = BindAgentSkillBundleResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[841]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[843]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -67967,7 +68079,7 @@ func (x *BindAgentSkillBundleResponse) String() string {
 func (*BindAgentSkillBundleResponse) ProtoMessage() {}
 
 func (x *BindAgentSkillBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[841]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[843]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67980,7 +68092,7 @@ func (x *BindAgentSkillBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BindAgentSkillBundleResponse.ProtoReflect.Descriptor instead.
 func (*BindAgentSkillBundleResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{841}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{843}
 }
 
 func (x *BindAgentSkillBundleResponse) GetBinding() *AgentContextBinding {
@@ -68003,7 +68115,7 @@ type UnbindAgentSkillBundleRequest struct {
 
 func (x *UnbindAgentSkillBundleRequest) Reset() {
 	*x = UnbindAgentSkillBundleRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[842]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[844]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68015,7 +68127,7 @@ func (x *UnbindAgentSkillBundleRequest) String() string {
 func (*UnbindAgentSkillBundleRequest) ProtoMessage() {}
 
 func (x *UnbindAgentSkillBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[842]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[844]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68028,7 +68140,7 @@ func (x *UnbindAgentSkillBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnbindAgentSkillBundleRequest.ProtoReflect.Descriptor instead.
 func (*UnbindAgentSkillBundleRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{842}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{844}
 }
 
 func (x *UnbindAgentSkillBundleRequest) GetMutation() *MutationContext {
@@ -68075,7 +68187,7 @@ type UnbindAgentSkillBundleResponse struct {
 
 func (x *UnbindAgentSkillBundleResponse) Reset() {
 	*x = UnbindAgentSkillBundleResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[843]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[845]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68087,7 +68199,7 @@ func (x *UnbindAgentSkillBundleResponse) String() string {
 func (*UnbindAgentSkillBundleResponse) ProtoMessage() {}
 
 func (x *UnbindAgentSkillBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[843]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[845]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68100,7 +68212,7 @@ func (x *UnbindAgentSkillBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnbindAgentSkillBundleResponse.ProtoReflect.Descriptor instead.
 func (*UnbindAgentSkillBundleResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{843}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{845}
 }
 
 func (x *UnbindAgentSkillBundleResponse) GetBinding() *AgentContextBinding {
@@ -68120,7 +68232,7 @@ type ArchiveMemoryRecordRequest struct {
 
 func (x *ArchiveMemoryRecordRequest) Reset() {
 	*x = ArchiveMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[844]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[846]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68132,7 +68244,7 @@ func (x *ArchiveMemoryRecordRequest) String() string {
 func (*ArchiveMemoryRecordRequest) ProtoMessage() {}
 
 func (x *ArchiveMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[844]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[846]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68145,7 +68257,7 @@ func (x *ArchiveMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*ArchiveMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{844}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{846}
 }
 
 func (x *ArchiveMemoryRecordRequest) GetMutation() *MutationContext {
@@ -68172,7 +68284,7 @@ type RestoreMemoryRecordRequest struct {
 
 func (x *RestoreMemoryRecordRequest) Reset() {
 	*x = RestoreMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[845]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[847]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68184,7 +68296,7 @@ func (x *RestoreMemoryRecordRequest) String() string {
 func (*RestoreMemoryRecordRequest) ProtoMessage() {}
 
 func (x *RestoreMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[845]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[847]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68197,7 +68309,7 @@ func (x *RestoreMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*RestoreMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{845}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{847}
 }
 
 func (x *RestoreMemoryRecordRequest) GetMutation() *MutationContext {
@@ -68224,7 +68336,7 @@ type PurgeMemoryRecordRequest struct {
 
 func (x *PurgeMemoryRecordRequest) Reset() {
 	*x = PurgeMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[846]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[848]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68236,7 +68348,7 @@ func (x *PurgeMemoryRecordRequest) String() string {
 func (*PurgeMemoryRecordRequest) ProtoMessage() {}
 
 func (x *PurgeMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[846]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[848]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68249,7 +68361,7 @@ func (x *PurgeMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurgeMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*PurgeMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{846}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{848}
 }
 
 func (x *PurgeMemoryRecordRequest) GetMutation() *MutationContext {
@@ -68279,7 +68391,7 @@ type BindAgentMemoryRecordRequest struct {
 
 func (x *BindAgentMemoryRecordRequest) Reset() {
 	*x = BindAgentMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[847]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[849]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68291,7 +68403,7 @@ func (x *BindAgentMemoryRecordRequest) String() string {
 func (*BindAgentMemoryRecordRequest) ProtoMessage() {}
 
 func (x *BindAgentMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[847]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[849]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68304,7 +68416,7 @@ func (x *BindAgentMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BindAgentMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*BindAgentMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{847}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{849}
 }
 
 func (x *BindAgentMemoryRecordRequest) GetMutation() *MutationContext {
@@ -68351,7 +68463,7 @@ type BindAgentMemoryRecordResponse struct {
 
 func (x *BindAgentMemoryRecordResponse) Reset() {
 	*x = BindAgentMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[848]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[850]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68363,7 +68475,7 @@ func (x *BindAgentMemoryRecordResponse) String() string {
 func (*BindAgentMemoryRecordResponse) ProtoMessage() {}
 
 func (x *BindAgentMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[848]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[850]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68376,7 +68488,7 @@ func (x *BindAgentMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BindAgentMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*BindAgentMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{848}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{850}
 }
 
 func (x *BindAgentMemoryRecordResponse) GetBinding() *AgentContextBinding {
@@ -68399,7 +68511,7 @@ type UnbindAgentMemoryRecordRequest struct {
 
 func (x *UnbindAgentMemoryRecordRequest) Reset() {
 	*x = UnbindAgentMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[849]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[851]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68411,7 +68523,7 @@ func (x *UnbindAgentMemoryRecordRequest) String() string {
 func (*UnbindAgentMemoryRecordRequest) ProtoMessage() {}
 
 func (x *UnbindAgentMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[849]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[851]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68424,7 +68536,7 @@ func (x *UnbindAgentMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnbindAgentMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*UnbindAgentMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{849}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{851}
 }
 
 func (x *UnbindAgentMemoryRecordRequest) GetMutation() *MutationContext {
@@ -68471,7 +68583,7 @@ type UnbindAgentMemoryRecordResponse struct {
 
 func (x *UnbindAgentMemoryRecordResponse) Reset() {
 	*x = UnbindAgentMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[850]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[852]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68483,7 +68595,7 @@ func (x *UnbindAgentMemoryRecordResponse) String() string {
 func (*UnbindAgentMemoryRecordResponse) ProtoMessage() {}
 
 func (x *UnbindAgentMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[850]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[852]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68496,7 +68608,7 @@ func (x *UnbindAgentMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnbindAgentMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*UnbindAgentMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{850}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{852}
 }
 
 func (x *UnbindAgentMemoryRecordResponse) GetBinding() *AgentContextBinding {
@@ -68515,7 +68627,7 @@ type CreateSkillBundleDraftResponse struct {
 
 func (x *CreateSkillBundleDraftResponse) Reset() {
 	*x = CreateSkillBundleDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[851]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[853]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68527,7 +68639,7 @@ func (x *CreateSkillBundleDraftResponse) String() string {
 func (*CreateSkillBundleDraftResponse) ProtoMessage() {}
 
 func (x *CreateSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[851]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[853]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68540,7 +68652,7 @@ func (x *CreateSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSkillBundleDraftResponse.ProtoReflect.Descriptor instead.
 func (*CreateSkillBundleDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{851}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{853}
 }
 
 func (x *CreateSkillBundleDraftResponse) GetBundle() *SkillBundle {
@@ -68559,7 +68671,7 @@ type SaveSkillBundleDraftResponse struct {
 
 func (x *SaveSkillBundleDraftResponse) Reset() {
 	*x = SaveSkillBundleDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[852]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[854]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68571,7 +68683,7 @@ func (x *SaveSkillBundleDraftResponse) String() string {
 func (*SaveSkillBundleDraftResponse) ProtoMessage() {}
 
 func (x *SaveSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[852]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[854]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68584,7 +68696,7 @@ func (x *SaveSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveSkillBundleDraftResponse.ProtoReflect.Descriptor instead.
 func (*SaveSkillBundleDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{852}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{854}
 }
 
 func (x *SaveSkillBundleDraftResponse) GetBundle() *SkillBundle {
@@ -68603,7 +68715,7 @@ type ValidateSkillBundleDraftResponse struct {
 
 func (x *ValidateSkillBundleDraftResponse) Reset() {
 	*x = ValidateSkillBundleDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[853]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[855]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68615,7 +68727,7 @@ func (x *ValidateSkillBundleDraftResponse) String() string {
 func (*ValidateSkillBundleDraftResponse) ProtoMessage() {}
 
 func (x *ValidateSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[853]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[855]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68628,7 +68740,7 @@ func (x *ValidateSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSkillBundleDraftResponse.ProtoReflect.Descriptor instead.
 func (*ValidateSkillBundleDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{853}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{855}
 }
 
 func (x *ValidateSkillBundleDraftResponse) GetBundle() *SkillBundle {
@@ -68647,7 +68759,7 @@ type ReviewSkillBundleDraftResponse struct {
 
 func (x *ReviewSkillBundleDraftResponse) Reset() {
 	*x = ReviewSkillBundleDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[854]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[856]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68659,7 +68771,7 @@ func (x *ReviewSkillBundleDraftResponse) String() string {
 func (*ReviewSkillBundleDraftResponse) ProtoMessage() {}
 
 func (x *ReviewSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[854]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[856]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68672,7 +68784,7 @@ func (x *ReviewSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewSkillBundleDraftResponse.ProtoReflect.Descriptor instead.
 func (*ReviewSkillBundleDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{854}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{856}
 }
 
 func (x *ReviewSkillBundleDraftResponse) GetBundle() *SkillBundle {
@@ -68691,7 +68803,7 @@ type PublishSkillBundleDraftResponse struct {
 
 func (x *PublishSkillBundleDraftResponse) Reset() {
 	*x = PublishSkillBundleDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[855]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[857]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68703,7 +68815,7 @@ func (x *PublishSkillBundleDraftResponse) String() string {
 func (*PublishSkillBundleDraftResponse) ProtoMessage() {}
 
 func (x *PublishSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[855]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[857]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68716,7 +68828,7 @@ func (x *PublishSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishSkillBundleDraftResponse.ProtoReflect.Descriptor instead.
 func (*PublishSkillBundleDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{855}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{857}
 }
 
 func (x *PublishSkillBundleDraftResponse) GetBundle() *SkillBundle {
@@ -68735,7 +68847,7 @@ type DiscardSkillBundleDraftResponse struct {
 
 func (x *DiscardSkillBundleDraftResponse) Reset() {
 	*x = DiscardSkillBundleDraftResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[856]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[858]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68747,7 +68859,7 @@ func (x *DiscardSkillBundleDraftResponse) String() string {
 func (*DiscardSkillBundleDraftResponse) ProtoMessage() {}
 
 func (x *DiscardSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[856]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[858]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68760,7 +68872,7 @@ func (x *DiscardSkillBundleDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardSkillBundleDraftResponse.ProtoReflect.Descriptor instead.
 func (*DiscardSkillBundleDraftResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{856}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{858}
 }
 
 func (x *DiscardSkillBundleDraftResponse) GetBundle() *SkillBundle {
@@ -68779,7 +68891,7 @@ type ArchiveSkillBundleResponse struct {
 
 func (x *ArchiveSkillBundleResponse) Reset() {
 	*x = ArchiveSkillBundleResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[857]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[859]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68791,7 +68903,7 @@ func (x *ArchiveSkillBundleResponse) String() string {
 func (*ArchiveSkillBundleResponse) ProtoMessage() {}
 
 func (x *ArchiveSkillBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[857]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[859]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68804,7 +68916,7 @@ func (x *ArchiveSkillBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveSkillBundleResponse.ProtoReflect.Descriptor instead.
 func (*ArchiveSkillBundleResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{857}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{859}
 }
 
 func (x *ArchiveSkillBundleResponse) GetBundle() *SkillBundle {
@@ -68823,7 +68935,7 @@ type RestoreSkillBundleResponse struct {
 
 func (x *RestoreSkillBundleResponse) Reset() {
 	*x = RestoreSkillBundleResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[858]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[860]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68835,7 +68947,7 @@ func (x *RestoreSkillBundleResponse) String() string {
 func (*RestoreSkillBundleResponse) ProtoMessage() {}
 
 func (x *RestoreSkillBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[858]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[860]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68848,7 +68960,7 @@ func (x *RestoreSkillBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSkillBundleResponse.ProtoReflect.Descriptor instead.
 func (*RestoreSkillBundleResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{858}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{860}
 }
 
 func (x *RestoreSkillBundleResponse) GetBundle() *SkillBundle {
@@ -68867,7 +68979,7 @@ type PurgeSkillBundleResponse struct {
 
 func (x *PurgeSkillBundleResponse) Reset() {
 	*x = PurgeSkillBundleResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[859]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[861]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68879,7 +68991,7 @@ func (x *PurgeSkillBundleResponse) String() string {
 func (*PurgeSkillBundleResponse) ProtoMessage() {}
 
 func (x *PurgeSkillBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[859]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[861]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68892,7 +69004,7 @@ func (x *PurgeSkillBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurgeSkillBundleResponse.ProtoReflect.Descriptor instead.
 func (*PurgeSkillBundleResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{859}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{861}
 }
 
 func (x *PurgeSkillBundleResponse) GetBundle() *SkillBundle {
@@ -68911,7 +69023,7 @@ type CreateMemoryRecordResponse struct {
 
 func (x *CreateMemoryRecordResponse) Reset() {
 	*x = CreateMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[860]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[862]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68923,7 +69035,7 @@ func (x *CreateMemoryRecordResponse) String() string {
 func (*CreateMemoryRecordResponse) ProtoMessage() {}
 
 func (x *CreateMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[860]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[862]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68936,7 +69048,7 @@ func (x *CreateMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*CreateMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{860}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{862}
 }
 
 func (x *CreateMemoryRecordResponse) GetRecord() *KodexMemoryRecord {
@@ -68955,7 +69067,7 @@ type ReviseMemoryRecordResponse struct {
 
 func (x *ReviseMemoryRecordResponse) Reset() {
 	*x = ReviseMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[861]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[863]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -68967,7 +69079,7 @@ func (x *ReviseMemoryRecordResponse) String() string {
 func (*ReviseMemoryRecordResponse) ProtoMessage() {}
 
 func (x *ReviseMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[861]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[863]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68980,7 +69092,7 @@ func (x *ReviseMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviseMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*ReviseMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{861}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{863}
 }
 
 func (x *ReviseMemoryRecordResponse) GetRecord() *KodexMemoryRecord {
@@ -68999,7 +69111,7 @@ type ArchiveMemoryRecordResponse struct {
 
 func (x *ArchiveMemoryRecordResponse) Reset() {
 	*x = ArchiveMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[862]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[864]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69011,7 +69123,7 @@ func (x *ArchiveMemoryRecordResponse) String() string {
 func (*ArchiveMemoryRecordResponse) ProtoMessage() {}
 
 func (x *ArchiveMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[862]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[864]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69024,7 +69136,7 @@ func (x *ArchiveMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*ArchiveMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{862}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{864}
 }
 
 func (x *ArchiveMemoryRecordResponse) GetRecord() *KodexMemoryRecord {
@@ -69043,7 +69155,7 @@ type RestoreMemoryRecordResponse struct {
 
 func (x *RestoreMemoryRecordResponse) Reset() {
 	*x = RestoreMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[863]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[865]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69055,7 +69167,7 @@ func (x *RestoreMemoryRecordResponse) String() string {
 func (*RestoreMemoryRecordResponse) ProtoMessage() {}
 
 func (x *RestoreMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[863]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[865]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69068,7 +69180,7 @@ func (x *RestoreMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*RestoreMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{863}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{865}
 }
 
 func (x *RestoreMemoryRecordResponse) GetRecord() *KodexMemoryRecord {
@@ -69087,7 +69199,7 @@ type PurgeMemoryRecordResponse struct {
 
 func (x *PurgeMemoryRecordResponse) Reset() {
 	*x = PurgeMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[864]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[866]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69099,7 +69211,7 @@ func (x *PurgeMemoryRecordResponse) String() string {
 func (*PurgeMemoryRecordResponse) ProtoMessage() {}
 
 func (x *PurgeMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[864]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[866]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69112,7 +69224,7 @@ func (x *PurgeMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurgeMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*PurgeMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{864}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{866}
 }
 
 func (x *PurgeMemoryRecordResponse) GetRecord() *KodexMemoryRecord {
@@ -69136,7 +69248,7 @@ type SystemSTTParameters struct {
 
 func (x *SystemSTTParameters) Reset() {
 	*x = SystemSTTParameters{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[865]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[867]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69148,7 +69260,7 @@ func (x *SystemSTTParameters) String() string {
 func (*SystemSTTParameters) ProtoMessage() {}
 
 func (x *SystemSTTParameters) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[865]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[867]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69161,7 +69273,7 @@ func (x *SystemSTTParameters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemSTTParameters.ProtoReflect.Descriptor instead.
 func (*SystemSTTParameters) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{865}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{867}
 }
 
 func (x *SystemSTTParameters) GetLanguages() []string {
@@ -69230,7 +69342,7 @@ type SystemSTTConfiguration struct {
 
 func (x *SystemSTTConfiguration) Reset() {
 	*x = SystemSTTConfiguration{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[866]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[868]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69242,7 +69354,7 @@ func (x *SystemSTTConfiguration) String() string {
 func (*SystemSTTConfiguration) ProtoMessage() {}
 
 func (x *SystemSTTConfiguration) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[866]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[868]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69255,7 +69367,7 @@ func (x *SystemSTTConfiguration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemSTTConfiguration.ProtoReflect.Descriptor instead.
 func (*SystemSTTConfiguration) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{866}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{868}
 }
 
 func (x *SystemSTTConfiguration) GetConfigurationRef() string {
@@ -69378,7 +69490,7 @@ type GetSystemSTTConfigurationRequest struct {
 
 func (x *GetSystemSTTConfigurationRequest) Reset() {
 	*x = GetSystemSTTConfigurationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[867]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[869]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69390,7 +69502,7 @@ func (x *GetSystemSTTConfigurationRequest) String() string {
 func (*GetSystemSTTConfigurationRequest) ProtoMessage() {}
 
 func (x *GetSystemSTTConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[867]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[869]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69403,7 +69515,7 @@ func (x *GetSystemSTTConfigurationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSystemSTTConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*GetSystemSTTConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{867}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{869}
 }
 
 type GetSystemSTTConfigurationResponse struct {
@@ -69415,7 +69527,7 @@ type GetSystemSTTConfigurationResponse struct {
 
 func (x *GetSystemSTTConfigurationResponse) Reset() {
 	*x = GetSystemSTTConfigurationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[868]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[870]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69427,7 +69539,7 @@ func (x *GetSystemSTTConfigurationResponse) String() string {
 func (*GetSystemSTTConfigurationResponse) ProtoMessage() {}
 
 func (x *GetSystemSTTConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[868]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[870]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69440,7 +69552,7 @@ func (x *GetSystemSTTConfigurationResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetSystemSTTConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*GetSystemSTTConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{868}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{870}
 }
 
 func (x *GetSystemSTTConfigurationResponse) GetConfiguration() *SystemSTTConfiguration {
@@ -69462,7 +69574,7 @@ type ProviderCredentialDescriptor struct {
 
 func (x *ProviderCredentialDescriptor) Reset() {
 	*x = ProviderCredentialDescriptor{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[869]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[871]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69474,7 +69586,7 @@ func (x *ProviderCredentialDescriptor) String() string {
 func (*ProviderCredentialDescriptor) ProtoMessage() {}
 
 func (x *ProviderCredentialDescriptor) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[869]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[871]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69487,7 +69599,7 @@ func (x *ProviderCredentialDescriptor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderCredentialDescriptor.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialDescriptor) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{869}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{871}
 }
 
 func (x *ProviderCredentialDescriptor) GetSecretName() string {
@@ -69526,7 +69638,7 @@ type CheckProviderCredentialMaterializerReadinessRequest struct {
 
 func (x *CheckProviderCredentialMaterializerReadinessRequest) Reset() {
 	*x = CheckProviderCredentialMaterializerReadinessRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[870]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[872]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69538,7 +69650,7 @@ func (x *CheckProviderCredentialMaterializerReadinessRequest) String() string {
 func (*CheckProviderCredentialMaterializerReadinessRequest) ProtoMessage() {}
 
 func (x *CheckProviderCredentialMaterializerReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[870]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[872]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69551,7 +69663,7 @@ func (x *CheckProviderCredentialMaterializerReadinessRequest) ProtoReflect() pro
 
 // Deprecated: Use CheckProviderCredentialMaterializerReadinessRequest.ProtoReflect.Descriptor instead.
 func (*CheckProviderCredentialMaterializerReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{870}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{872}
 }
 
 type ProviderModelCatalogRecord struct {
@@ -69566,7 +69678,7 @@ type ProviderModelCatalogRecord struct {
 
 func (x *ProviderModelCatalogRecord) Reset() {
 	*x = ProviderModelCatalogRecord{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[871]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[873]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69578,7 +69690,7 @@ func (x *ProviderModelCatalogRecord) String() string {
 func (*ProviderModelCatalogRecord) ProtoMessage() {}
 
 func (x *ProviderModelCatalogRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[871]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[873]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69591,7 +69703,7 @@ func (x *ProviderModelCatalogRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderModelCatalogRecord.ProtoReflect.Descriptor instead.
 func (*ProviderModelCatalogRecord) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{871}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{873}
 }
 
 func (x *ProviderModelCatalogRecord) GetId() string {
@@ -69643,7 +69755,7 @@ type ObserveProviderModelCatalogRequest struct {
 
 func (x *ObserveProviderModelCatalogRequest) Reset() {
 	*x = ObserveProviderModelCatalogRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[872]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[874]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69655,7 +69767,7 @@ func (x *ObserveProviderModelCatalogRequest) String() string {
 func (*ObserveProviderModelCatalogRequest) ProtoMessage() {}
 
 func (x *ObserveProviderModelCatalogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[872]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[874]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69668,7 +69780,7 @@ func (x *ObserveProviderModelCatalogRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ObserveProviderModelCatalogRequest.ProtoReflect.Descriptor instead.
 func (*ObserveProviderModelCatalogRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{872}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{874}
 }
 
 func (x *ObserveProviderModelCatalogRequest) GetTaskRef() string {
@@ -69762,7 +69874,7 @@ type ObserveProviderModelCatalogResponse struct {
 
 func (x *ObserveProviderModelCatalogResponse) Reset() {
 	*x = ObserveProviderModelCatalogResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[873]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[875]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69774,7 +69886,7 @@ func (x *ObserveProviderModelCatalogResponse) String() string {
 func (*ObserveProviderModelCatalogResponse) ProtoMessage() {}
 
 func (x *ObserveProviderModelCatalogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[873]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[875]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69787,7 +69899,7 @@ func (x *ObserveProviderModelCatalogResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ObserveProviderModelCatalogResponse.ProtoReflect.Descriptor instead.
 func (*ObserveProviderModelCatalogResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{873}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{875}
 }
 
 func (x *ObserveProviderModelCatalogResponse) GetAccountRef() string {
@@ -69841,7 +69953,7 @@ type CheckProviderCredentialMaterializerReadinessResponse struct {
 
 func (x *CheckProviderCredentialMaterializerReadinessResponse) Reset() {
 	*x = CheckProviderCredentialMaterializerReadinessResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[874]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[876]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69853,7 +69965,7 @@ func (x *CheckProviderCredentialMaterializerReadinessResponse) String() string {
 func (*CheckProviderCredentialMaterializerReadinessResponse) ProtoMessage() {}
 
 func (x *CheckProviderCredentialMaterializerReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[874]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[876]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69866,7 +69978,7 @@ func (x *CheckProviderCredentialMaterializerReadinessResponse) ProtoReflect() pr
 
 // Deprecated: Use CheckProviderCredentialMaterializerReadinessResponse.ProtoReflect.Descriptor instead.
 func (*CheckProviderCredentialMaterializerReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{874}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{876}
 }
 
 func (x *CheckProviderCredentialMaterializerReadinessResponse) GetReady() bool {
@@ -69886,7 +69998,7 @@ type ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest struct
 
 func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) Reset() {
 	*x = ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[875]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[877]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69898,7 +70010,7 @@ func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) S
 func (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[875]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[877]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69911,7 +70023,7 @@ func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) P
 
 // Deprecated: Use ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{875}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{877}
 }
 
 func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) GetAttemptRef() string {
@@ -69942,7 +70054,7 @@ type ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse struc
 
 func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse) Reset() {
 	*x = ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[876]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[878]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -69954,7 +70066,7 @@ func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse) 
 func (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[876]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[878]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69967,7 +70079,7 @@ func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse) 
 
 // Deprecated: Use ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{876}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{878}
 }
 
 func (x *ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse) GetMaterializerAttemptRef() string {
@@ -70025,7 +70137,7 @@ type ProviderAuthorizationAbsenceDescriptor struct {
 
 func (x *ProviderAuthorizationAbsenceDescriptor) Reset() {
 	*x = ProviderAuthorizationAbsenceDescriptor{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[877]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[879]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70037,7 +70149,7 @@ func (x *ProviderAuthorizationAbsenceDescriptor) String() string {
 func (*ProviderAuthorizationAbsenceDescriptor) ProtoMessage() {}
 
 func (x *ProviderAuthorizationAbsenceDescriptor) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[877]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[879]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70050,7 +70162,7 @@ func (x *ProviderAuthorizationAbsenceDescriptor) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ProviderAuthorizationAbsenceDescriptor.ProtoReflect.Descriptor instead.
 func (*ProviderAuthorizationAbsenceDescriptor) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{877}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{879}
 }
 
 func (x *ProviderAuthorizationAbsenceDescriptor) GetMaterializerAttemptRef() string {
@@ -70088,7 +70200,7 @@ type ProviderAuthorizationObjectDescriptor struct {
 
 func (x *ProviderAuthorizationObjectDescriptor) Reset() {
 	*x = ProviderAuthorizationObjectDescriptor{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[878]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[880]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70100,7 +70212,7 @@ func (x *ProviderAuthorizationObjectDescriptor) String() string {
 func (*ProviderAuthorizationObjectDescriptor) ProtoMessage() {}
 
 func (x *ProviderAuthorizationObjectDescriptor) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[878]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[880]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70113,7 +70225,7 @@ func (x *ProviderAuthorizationObjectDescriptor) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ProviderAuthorizationObjectDescriptor.ProtoReflect.Descriptor instead.
 func (*ProviderAuthorizationObjectDescriptor) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{878}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{880}
 }
 
 func (x *ProviderAuthorizationObjectDescriptor) GetMaterializerAttemptRef() string {
@@ -70165,7 +70277,7 @@ type ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest stru
 
 func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) Reset() {
 	*x = ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[879]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[881]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70177,7 +70289,7 @@ func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest)
 func (*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[879]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[881]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70190,7 +70302,7 @@ func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest)
 
 // Deprecated: Use ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{879}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{881}
 }
 
 func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) GetMaterializerAttemptRef() string {
@@ -70250,7 +70362,7 @@ type ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse str
 
 func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse) Reset() {
 	*x = ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[880]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[882]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70262,7 +70374,7 @@ func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
 func (*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[880]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[882]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70275,7 +70387,7 @@ func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
 
 // Deprecated: Use ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{880}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{882}
 }
 
 func (x *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse) GetState() ProviderAuthorizationState {
@@ -70338,7 +70450,7 @@ type ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest struct {
 
 func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) Reset() {
 	*x = ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[881]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[883]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70350,7 +70462,7 @@ func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) String()
 func (*ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[881]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[883]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70363,7 +70475,7 @@ func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) ProtoRef
 
 // Deprecated: Use ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{881}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{883}
 }
 
 func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest) GetAttemptRef() string {
@@ -70397,7 +70509,7 @@ type ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse struct {
 
 func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse) Reset() {
 	*x = ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[882]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[884]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70409,7 +70521,7 @@ func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse) String(
 func (*ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[882]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[884]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70422,7 +70534,7 @@ func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse) ProtoRe
 
 // Deprecated: Use ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{882}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{884}
 }
 
 func (x *ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse) GetCredential() *ProviderCredentialDescriptor {
@@ -70453,7 +70565,7 @@ type ProviderCredentialMaterializerServiceDiscardMaterializationRequest struct {
 
 func (x *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) Reset() {
 	*x = ProviderCredentialMaterializerServiceDiscardMaterializationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[883]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[885]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70465,7 +70577,7 @@ func (x *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) Str
 func (*ProviderCredentialMaterializerServiceDiscardMaterializationRequest) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[883]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[885]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70478,7 +70590,7 @@ func (x *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) Pro
 
 // Deprecated: Use ProviderCredentialMaterializerServiceDiscardMaterializationRequest.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceDiscardMaterializationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{883}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{885}
 }
 
 func (x *ProviderCredentialMaterializerServiceDiscardMaterializationRequest) GetAttemptRef() string {
@@ -70532,7 +70644,7 @@ type ProviderCredentialMaterializerServiceDiscardMaterializationResponse struct 
 
 func (x *ProviderCredentialMaterializerServiceDiscardMaterializationResponse) Reset() {
 	*x = ProviderCredentialMaterializerServiceDiscardMaterializationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[884]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[886]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70544,7 +70656,7 @@ func (x *ProviderCredentialMaterializerServiceDiscardMaterializationResponse) St
 func (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceDiscardMaterializationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[884]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[886]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70557,7 +70669,7 @@ func (x *ProviderCredentialMaterializerServiceDiscardMaterializationResponse) Pr
 
 // Deprecated: Use ProviderCredentialMaterializerServiceDiscardMaterializationResponse.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceDiscardMaterializationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{884}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{886}
 }
 
 func (x *ProviderCredentialMaterializerServiceDiscardMaterializationResponse) GetDiscarded() bool {
@@ -70585,7 +70697,7 @@ type CommitProviderCredentialRefreshRequest struct {
 
 func (x *CommitProviderCredentialRefreshRequest) Reset() {
 	*x = CommitProviderCredentialRefreshRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[885]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[887]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70597,7 +70709,7 @@ func (x *CommitProviderCredentialRefreshRequest) String() string {
 func (*CommitProviderCredentialRefreshRequest) ProtoMessage() {}
 
 func (x *CommitProviderCredentialRefreshRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[885]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[887]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70610,7 +70722,7 @@ func (x *CommitProviderCredentialRefreshRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use CommitProviderCredentialRefreshRequest.ProtoReflect.Descriptor instead.
 func (*CommitProviderCredentialRefreshRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{885}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{887}
 }
 
 func (x *CommitProviderCredentialRefreshRequest) GetMutation() *MutationContext {
@@ -70692,7 +70804,7 @@ type CommitProviderCredentialRefreshResponse struct {
 
 func (x *CommitProviderCredentialRefreshResponse) Reset() {
 	*x = CommitProviderCredentialRefreshResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[886]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[888]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70704,7 +70816,7 @@ func (x *CommitProviderCredentialRefreshResponse) String() string {
 func (*CommitProviderCredentialRefreshResponse) ProtoMessage() {}
 
 func (x *CommitProviderCredentialRefreshResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[886]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[888]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70717,7 +70829,7 @@ func (x *CommitProviderCredentialRefreshResponse) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use CommitProviderCredentialRefreshResponse.ProtoReflect.Descriptor instead.
 func (*CommitProviderCredentialRefreshResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{886}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{888}
 }
 
 func (x *CommitProviderCredentialRefreshResponse) GetProviderCredential() *ProviderCredentialBinding {
@@ -70742,7 +70854,7 @@ type ProviderCredentialCleanupRecoveryIdentity struct {
 
 func (x *ProviderCredentialCleanupRecoveryIdentity) Reset() {
 	*x = ProviderCredentialCleanupRecoveryIdentity{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[887]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[889]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70754,7 +70866,7 @@ func (x *ProviderCredentialCleanupRecoveryIdentity) String() string {
 func (*ProviderCredentialCleanupRecoveryIdentity) ProtoMessage() {}
 
 func (x *ProviderCredentialCleanupRecoveryIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[887]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[889]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70767,7 +70879,7 @@ func (x *ProviderCredentialCleanupRecoveryIdentity) ProtoReflect() protoreflect.
 
 // Deprecated: Use ProviderCredentialCleanupRecoveryIdentity.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialCleanupRecoveryIdentity) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{887}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{889}
 }
 
 func (x *ProviderCredentialCleanupRecoveryIdentity) GetTaskRef() string {
@@ -70813,7 +70925,7 @@ type ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest struc
 
 func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) Reset() {
 	*x = ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[888]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[890]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70825,7 +70937,7 @@ func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) 
 func (*ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[888]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[890]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70838,7 +70950,7 @@ func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) 
 
 // Deprecated: Use ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{888}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{890}
 }
 
 func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) GetTaskRef() string {
@@ -70912,7 +71024,7 @@ type ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse stru
 
 func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse) Reset() {
 	*x = ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[889]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[891]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70924,7 +71036,7 @@ func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse)
 func (*ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse) ProtoMessage() {}
 
 func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[889]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[891]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -70937,7 +71049,7 @@ func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse)
 
 // Deprecated: Use ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{889}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{891}
 }
 
 func (x *ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse) GetTerminalReceipt() string {
@@ -70979,7 +71091,7 @@ type CredentialProjectionAuthority struct {
 
 func (x *CredentialProjectionAuthority) Reset() {
 	*x = CredentialProjectionAuthority{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[890]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[892]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70991,7 +71103,7 @@ func (x *CredentialProjectionAuthority) String() string {
 func (*CredentialProjectionAuthority) ProtoMessage() {}
 
 func (x *CredentialProjectionAuthority) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[890]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[892]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71004,7 +71116,7 @@ func (x *CredentialProjectionAuthority) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CredentialProjectionAuthority.ProtoReflect.Descriptor instead.
 func (*CredentialProjectionAuthority) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{890}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{892}
 }
 
 func (x *CredentialProjectionAuthority) GetActorId() string {
@@ -71092,7 +71204,7 @@ type CheckCredentialProjectionWorkReadinessRequest struct {
 
 func (x *CheckCredentialProjectionWorkReadinessRequest) Reset() {
 	*x = CheckCredentialProjectionWorkReadinessRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[891]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[893]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71104,7 +71216,7 @@ func (x *CheckCredentialProjectionWorkReadinessRequest) String() string {
 func (*CheckCredentialProjectionWorkReadinessRequest) ProtoMessage() {}
 
 func (x *CheckCredentialProjectionWorkReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[891]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[893]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71117,7 +71229,7 @@ func (x *CheckCredentialProjectionWorkReadinessRequest) ProtoReflect() protorefl
 
 // Deprecated: Use CheckCredentialProjectionWorkReadinessRequest.ProtoReflect.Descriptor instead.
 func (*CheckCredentialProjectionWorkReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{891}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{893}
 }
 
 type CheckCredentialProjectionWorkReadinessResponse struct {
@@ -71129,7 +71241,7 @@ type CheckCredentialProjectionWorkReadinessResponse struct {
 
 func (x *CheckCredentialProjectionWorkReadinessResponse) Reset() {
 	*x = CheckCredentialProjectionWorkReadinessResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[892]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[894]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71141,7 +71253,7 @@ func (x *CheckCredentialProjectionWorkReadinessResponse) String() string {
 func (*CheckCredentialProjectionWorkReadinessResponse) ProtoMessage() {}
 
 func (x *CheckCredentialProjectionWorkReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[892]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[894]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71154,7 +71266,7 @@ func (x *CheckCredentialProjectionWorkReadinessResponse) ProtoReflect() protoref
 
 // Deprecated: Use CheckCredentialProjectionWorkReadinessResponse.ProtoReflect.Descriptor instead.
 func (*CheckCredentialProjectionWorkReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{892}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{894}
 }
 
 func (x *CheckCredentialProjectionWorkReadinessResponse) GetReady() bool {
@@ -71183,7 +71295,7 @@ type ResolveRuntimeCredentialProjectionRequest struct {
 
 func (x *ResolveRuntimeCredentialProjectionRequest) Reset() {
 	*x = ResolveRuntimeCredentialProjectionRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[893]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[895]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71195,7 +71307,7 @@ func (x *ResolveRuntimeCredentialProjectionRequest) String() string {
 func (*ResolveRuntimeCredentialProjectionRequest) ProtoMessage() {}
 
 func (x *ResolveRuntimeCredentialProjectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[893]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[895]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71208,7 +71320,7 @@ func (x *ResolveRuntimeCredentialProjectionRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use ResolveRuntimeCredentialProjectionRequest.ProtoReflect.Descriptor instead.
 func (*ResolveRuntimeCredentialProjectionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{893}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{895}
 }
 
 func (x *ResolveRuntimeCredentialProjectionRequest) GetAuthority() *CredentialProjectionAuthority {
@@ -71301,7 +71413,7 @@ type ResolveRuntimeCredentialProjectionResponse struct {
 
 func (x *ResolveRuntimeCredentialProjectionResponse) Reset() {
 	*x = ResolveRuntimeCredentialProjectionResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[894]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[896]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71313,7 +71425,7 @@ func (x *ResolveRuntimeCredentialProjectionResponse) String() string {
 func (*ResolveRuntimeCredentialProjectionResponse) ProtoMessage() {}
 
 func (x *ResolveRuntimeCredentialProjectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[894]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[896]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71326,7 +71438,7 @@ func (x *ResolveRuntimeCredentialProjectionResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use ResolveRuntimeCredentialProjectionResponse.ProtoReflect.Descriptor instead.
 func (*ResolveRuntimeCredentialProjectionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{894}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{896}
 }
 
 func (x *ResolveRuntimeCredentialProjectionResponse) GetProviderCredential() *ProviderCredentialBinding {
@@ -71377,7 +71489,7 @@ type ValidateRuntimeCredentialProjectionRequest struct {
 
 func (x *ValidateRuntimeCredentialProjectionRequest) Reset() {
 	*x = ValidateRuntimeCredentialProjectionRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[895]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[897]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71389,7 +71501,7 @@ func (x *ValidateRuntimeCredentialProjectionRequest) String() string {
 func (*ValidateRuntimeCredentialProjectionRequest) ProtoMessage() {}
 
 func (x *ValidateRuntimeCredentialProjectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[895]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[897]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71402,7 +71514,7 @@ func (x *ValidateRuntimeCredentialProjectionRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use ValidateRuntimeCredentialProjectionRequest.ProtoReflect.Descriptor instead.
 func (*ValidateRuntimeCredentialProjectionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{895}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{897}
 }
 
 func (x *ValidateRuntimeCredentialProjectionRequest) GetAuthority() *CredentialProjectionAuthority {
@@ -71498,7 +71610,7 @@ type ValidateRuntimeCredentialProjectionResponse struct {
 
 func (x *ValidateRuntimeCredentialProjectionResponse) Reset() {
 	*x = ValidateRuntimeCredentialProjectionResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[896]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[898]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71510,7 +71622,7 @@ func (x *ValidateRuntimeCredentialProjectionResponse) String() string {
 func (*ValidateRuntimeCredentialProjectionResponse) ProtoMessage() {}
 
 func (x *ValidateRuntimeCredentialProjectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[896]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[898]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71523,7 +71635,7 @@ func (x *ValidateRuntimeCredentialProjectionResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use ValidateRuntimeCredentialProjectionResponse.ProtoReflect.Descriptor instead.
 func (*ValidateRuntimeCredentialProjectionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{896}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{898}
 }
 
 func (x *ValidateRuntimeCredentialProjectionResponse) GetValid() bool {
@@ -71546,7 +71658,7 @@ type ResolveTranscriptionCredentialProjectionRequest struct {
 
 func (x *ResolveTranscriptionCredentialProjectionRequest) Reset() {
 	*x = ResolveTranscriptionCredentialProjectionRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[897]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[899]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71558,7 +71670,7 @@ func (x *ResolveTranscriptionCredentialProjectionRequest) String() string {
 func (*ResolveTranscriptionCredentialProjectionRequest) ProtoMessage() {}
 
 func (x *ResolveTranscriptionCredentialProjectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[897]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[899]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71571,7 +71683,7 @@ func (x *ResolveTranscriptionCredentialProjectionRequest) ProtoReflect() protore
 
 // Deprecated: Use ResolveTranscriptionCredentialProjectionRequest.ProtoReflect.Descriptor instead.
 func (*ResolveTranscriptionCredentialProjectionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{897}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{899}
 }
 
 func (x *ResolveTranscriptionCredentialProjectionRequest) GetAuthority() *CredentialProjectionAuthority {
@@ -71619,7 +71731,7 @@ type ResolveTranscriptionCredentialProjectionResponse struct {
 
 func (x *ResolveTranscriptionCredentialProjectionResponse) Reset() {
 	*x = ResolveTranscriptionCredentialProjectionResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[898]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[900]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71631,7 +71743,7 @@ func (x *ResolveTranscriptionCredentialProjectionResponse) String() string {
 func (*ResolveTranscriptionCredentialProjectionResponse) ProtoMessage() {}
 
 func (x *ResolveTranscriptionCredentialProjectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[898]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[900]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71644,7 +71756,7 @@ func (x *ResolveTranscriptionCredentialProjectionResponse) ProtoReflect() protor
 
 // Deprecated: Use ResolveTranscriptionCredentialProjectionResponse.ProtoReflect.Descriptor instead.
 func (*ResolveTranscriptionCredentialProjectionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{898}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{900}
 }
 
 func (x *ResolveTranscriptionCredentialProjectionResponse) GetProviderCredential() *ProviderCredentialBinding {
@@ -71684,7 +71796,7 @@ type ManagedConfigurationGitSource struct {
 
 func (x *ManagedConfigurationGitSource) Reset() {
 	*x = ManagedConfigurationGitSource{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[899]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[901]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71696,7 +71808,7 @@ func (x *ManagedConfigurationGitSource) String() string {
 func (*ManagedConfigurationGitSource) ProtoMessage() {}
 
 func (x *ManagedConfigurationGitSource) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[899]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[901]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71709,7 +71821,7 @@ func (x *ManagedConfigurationGitSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedConfigurationGitSource.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationGitSource) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{899}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{901}
 }
 
 func (x *ManagedConfigurationGitSource) GetRef() string {
@@ -71824,7 +71936,7 @@ type ManagedConfigurationGitSourceInput struct {
 
 func (x *ManagedConfigurationGitSourceInput) Reset() {
 	*x = ManagedConfigurationGitSourceInput{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[900]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[902]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71836,7 +71948,7 @@ func (x *ManagedConfigurationGitSourceInput) String() string {
 func (*ManagedConfigurationGitSourceInput) ProtoMessage() {}
 
 func (x *ManagedConfigurationGitSourceInput) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[900]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[902]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71849,7 +71961,7 @@ func (x *ManagedConfigurationGitSourceInput) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ManagedConfigurationGitSourceInput.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationGitSourceInput) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{900}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{902}
 }
 
 func (x *ManagedConfigurationGitSourceInput) GetConnectionRef() string {
@@ -71905,7 +72017,7 @@ type ConfigureRoleImageGitSourceRequest struct {
 
 func (x *ConfigureRoleImageGitSourceRequest) Reset() {
 	*x = ConfigureRoleImageGitSourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[901]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[903]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71917,7 +72029,7 @@ func (x *ConfigureRoleImageGitSourceRequest) String() string {
 func (*ConfigureRoleImageGitSourceRequest) ProtoMessage() {}
 
 func (x *ConfigureRoleImageGitSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[901]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[903]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71930,7 +72042,7 @@ func (x *ConfigureRoleImageGitSourceRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ConfigureRoleImageGitSourceRequest.ProtoReflect.Descriptor instead.
 func (*ConfigureRoleImageGitSourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{901}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{903}
 }
 
 func (x *ConfigureRoleImageGitSourceRequest) GetMutation() *MutationContext {
@@ -71963,7 +72075,7 @@ type ConfigureRoleImageGitSourceResponse struct {
 
 func (x *ConfigureRoleImageGitSourceResponse) Reset() {
 	*x = ConfigureRoleImageGitSourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[902]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[904]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -71975,7 +72087,7 @@ func (x *ConfigureRoleImageGitSourceResponse) String() string {
 func (*ConfigureRoleImageGitSourceResponse) ProtoMessage() {}
 
 func (x *ConfigureRoleImageGitSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[902]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[904]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71988,7 +72100,7 @@ func (x *ConfigureRoleImageGitSourceResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ConfigureRoleImageGitSourceResponse.ProtoReflect.Descriptor instead.
 func (*ConfigureRoleImageGitSourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{902}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{904}
 }
 
 func (x *ConfigureRoleImageGitSourceResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -72009,7 +72121,7 @@ type ConfigureIntegrationDefinitionGitSourceRequest struct {
 
 func (x *ConfigureIntegrationDefinitionGitSourceRequest) Reset() {
 	*x = ConfigureIntegrationDefinitionGitSourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[903]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[905]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72021,7 +72133,7 @@ func (x *ConfigureIntegrationDefinitionGitSourceRequest) String() string {
 func (*ConfigureIntegrationDefinitionGitSourceRequest) ProtoMessage() {}
 
 func (x *ConfigureIntegrationDefinitionGitSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[903]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[905]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72034,7 +72146,7 @@ func (x *ConfigureIntegrationDefinitionGitSourceRequest) ProtoReflect() protoref
 
 // Deprecated: Use ConfigureIntegrationDefinitionGitSourceRequest.ProtoReflect.Descriptor instead.
 func (*ConfigureIntegrationDefinitionGitSourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{903}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{905}
 }
 
 func (x *ConfigureIntegrationDefinitionGitSourceRequest) GetMutation() *MutationContext {
@@ -72067,7 +72179,7 @@ type ConfigureIntegrationDefinitionGitSourceResponse struct {
 
 func (x *ConfigureIntegrationDefinitionGitSourceResponse) Reset() {
 	*x = ConfigureIntegrationDefinitionGitSourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[904]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[906]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72079,7 +72191,7 @@ func (x *ConfigureIntegrationDefinitionGitSourceResponse) String() string {
 func (*ConfigureIntegrationDefinitionGitSourceResponse) ProtoMessage() {}
 
 func (x *ConfigureIntegrationDefinitionGitSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[904]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[906]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72092,7 +72204,7 @@ func (x *ConfigureIntegrationDefinitionGitSourceResponse) ProtoReflect() protore
 
 // Deprecated: Use ConfigureIntegrationDefinitionGitSourceResponse.ProtoReflect.Descriptor instead.
 func (*ConfigureIntegrationDefinitionGitSourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{904}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{906}
 }
 
 func (x *ConfigureIntegrationDefinitionGitSourceResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -72112,7 +72224,7 @@ type RefreshRoleImageGitSourceRequest struct {
 
 func (x *RefreshRoleImageGitSourceRequest) Reset() {
 	*x = RefreshRoleImageGitSourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[905]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[907]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72124,7 +72236,7 @@ func (x *RefreshRoleImageGitSourceRequest) String() string {
 func (*RefreshRoleImageGitSourceRequest) ProtoMessage() {}
 
 func (x *RefreshRoleImageGitSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[905]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[907]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72137,7 +72249,7 @@ func (x *RefreshRoleImageGitSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshRoleImageGitSourceRequest.ProtoReflect.Descriptor instead.
 func (*RefreshRoleImageGitSourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{905}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{907}
 }
 
 func (x *RefreshRoleImageGitSourceRequest) GetMutation() *MutationContext {
@@ -72163,7 +72275,7 @@ type RefreshRoleImageGitSourceResponse struct {
 
 func (x *RefreshRoleImageGitSourceResponse) Reset() {
 	*x = RefreshRoleImageGitSourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[906]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[908]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72175,7 +72287,7 @@ func (x *RefreshRoleImageGitSourceResponse) String() string {
 func (*RefreshRoleImageGitSourceResponse) ProtoMessage() {}
 
 func (x *RefreshRoleImageGitSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[906]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[908]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72188,7 +72300,7 @@ func (x *RefreshRoleImageGitSourceResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use RefreshRoleImageGitSourceResponse.ProtoReflect.Descriptor instead.
 func (*RefreshRoleImageGitSourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{906}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{908}
 }
 
 func (x *RefreshRoleImageGitSourceResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -72208,7 +72320,7 @@ type RefreshIntegrationDefinitionGitSourceRequest struct {
 
 func (x *RefreshIntegrationDefinitionGitSourceRequest) Reset() {
 	*x = RefreshIntegrationDefinitionGitSourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[907]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[909]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72220,7 +72332,7 @@ func (x *RefreshIntegrationDefinitionGitSourceRequest) String() string {
 func (*RefreshIntegrationDefinitionGitSourceRequest) ProtoMessage() {}
 
 func (x *RefreshIntegrationDefinitionGitSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[907]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[909]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72233,7 +72345,7 @@ func (x *RefreshIntegrationDefinitionGitSourceRequest) ProtoReflect() protorefle
 
 // Deprecated: Use RefreshIntegrationDefinitionGitSourceRequest.ProtoReflect.Descriptor instead.
 func (*RefreshIntegrationDefinitionGitSourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{907}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{909}
 }
 
 func (x *RefreshIntegrationDefinitionGitSourceRequest) GetMutation() *MutationContext {
@@ -72259,7 +72371,7 @@ type RefreshIntegrationDefinitionGitSourceResponse struct {
 
 func (x *RefreshIntegrationDefinitionGitSourceResponse) Reset() {
 	*x = RefreshIntegrationDefinitionGitSourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[908]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[910]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72271,7 +72383,7 @@ func (x *RefreshIntegrationDefinitionGitSourceResponse) String() string {
 func (*RefreshIntegrationDefinitionGitSourceResponse) ProtoMessage() {}
 
 func (x *RefreshIntegrationDefinitionGitSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[908]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[910]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72284,7 +72396,7 @@ func (x *RefreshIntegrationDefinitionGitSourceResponse) ProtoReflect() protorefl
 
 // Deprecated: Use RefreshIntegrationDefinitionGitSourceResponse.ProtoReflect.Descriptor instead.
 func (*RefreshIntegrationDefinitionGitSourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{908}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{910}
 }
 
 func (x *RefreshIntegrationDefinitionGitSourceResponse) GetConfiguration() *ManagedConfigurationSet {
@@ -72309,7 +72421,7 @@ type ManagedConfigurationSourceLease struct {
 
 func (x *ManagedConfigurationSourceLease) Reset() {
 	*x = ManagedConfigurationSourceLease{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[909]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[911]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72321,7 +72433,7 @@ func (x *ManagedConfigurationSourceLease) String() string {
 func (*ManagedConfigurationSourceLease) ProtoMessage() {}
 
 func (x *ManagedConfigurationSourceLease) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[909]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[911]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72334,7 +72446,7 @@ func (x *ManagedConfigurationSourceLease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedConfigurationSourceLease.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationSourceLease) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{909}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{911}
 }
 
 func (x *ManagedConfigurationSourceLease) GetWorkRef() string {
@@ -72414,7 +72526,7 @@ type ManagedConfigurationSourceWork struct {
 
 func (x *ManagedConfigurationSourceWork) Reset() {
 	*x = ManagedConfigurationSourceWork{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[910]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[912]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72426,7 +72538,7 @@ func (x *ManagedConfigurationSourceWork) String() string {
 func (*ManagedConfigurationSourceWork) ProtoMessage() {}
 
 func (x *ManagedConfigurationSourceWork) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[910]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[912]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72439,7 +72551,7 @@ func (x *ManagedConfigurationSourceWork) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedConfigurationSourceWork.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationSourceWork) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{910}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{912}
 }
 
 func (x *ManagedConfigurationSourceWork) GetLease() *ManagedConfigurationSourceLease {
@@ -72585,7 +72697,7 @@ type ClaimManagedConfigurationSourceWorkRequest struct {
 
 func (x *ClaimManagedConfigurationSourceWorkRequest) Reset() {
 	*x = ClaimManagedConfigurationSourceWorkRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[911]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[913]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72597,7 +72709,7 @@ func (x *ClaimManagedConfigurationSourceWorkRequest) String() string {
 func (*ClaimManagedConfigurationSourceWorkRequest) ProtoMessage() {}
 
 func (x *ClaimManagedConfigurationSourceWorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[911]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[913]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72610,7 +72722,7 @@ func (x *ClaimManagedConfigurationSourceWorkRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use ClaimManagedConfigurationSourceWorkRequest.ProtoReflect.Descriptor instead.
 func (*ClaimManagedConfigurationSourceWorkRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{911}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{913}
 }
 
 func (x *ClaimManagedConfigurationSourceWorkRequest) GetClaimant() string {
@@ -72636,7 +72748,7 @@ type ClaimManagedConfigurationSourceWorkResponse struct {
 
 func (x *ClaimManagedConfigurationSourceWorkResponse) Reset() {
 	*x = ClaimManagedConfigurationSourceWorkResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[912]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[914]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72648,7 +72760,7 @@ func (x *ClaimManagedConfigurationSourceWorkResponse) String() string {
 func (*ClaimManagedConfigurationSourceWorkResponse) ProtoMessage() {}
 
 func (x *ClaimManagedConfigurationSourceWorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[912]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[914]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72661,7 +72773,7 @@ func (x *ClaimManagedConfigurationSourceWorkResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use ClaimManagedConfigurationSourceWorkResponse.ProtoReflect.Descriptor instead.
 func (*ClaimManagedConfigurationSourceWorkResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{912}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{914}
 }
 
 func (x *ClaimManagedConfigurationSourceWorkResponse) GetWork() []*ManagedConfigurationSourceWork {
@@ -72680,7 +72792,7 @@ type RenewManagedConfigurationSourceWorkRequest struct {
 
 func (x *RenewManagedConfigurationSourceWorkRequest) Reset() {
 	*x = RenewManagedConfigurationSourceWorkRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[913]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[915]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72692,7 +72804,7 @@ func (x *RenewManagedConfigurationSourceWorkRequest) String() string {
 func (*RenewManagedConfigurationSourceWorkRequest) ProtoMessage() {}
 
 func (x *RenewManagedConfigurationSourceWorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[913]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[915]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72705,7 +72817,7 @@ func (x *RenewManagedConfigurationSourceWorkRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use RenewManagedConfigurationSourceWorkRequest.ProtoReflect.Descriptor instead.
 func (*RenewManagedConfigurationSourceWorkRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{913}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{915}
 }
 
 func (x *RenewManagedConfigurationSourceWorkRequest) GetLease() *ManagedConfigurationSourceLease {
@@ -72724,7 +72836,7 @@ type RenewManagedConfigurationSourceWorkResponse struct {
 
 func (x *RenewManagedConfigurationSourceWorkResponse) Reset() {
 	*x = RenewManagedConfigurationSourceWorkResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[914]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[916]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72736,7 +72848,7 @@ func (x *RenewManagedConfigurationSourceWorkResponse) String() string {
 func (*RenewManagedConfigurationSourceWorkResponse) ProtoMessage() {}
 
 func (x *RenewManagedConfigurationSourceWorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[914]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[916]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72749,7 +72861,7 @@ func (x *RenewManagedConfigurationSourceWorkResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use RenewManagedConfigurationSourceWorkResponse.ProtoReflect.Descriptor instead.
 func (*RenewManagedConfigurationSourceWorkResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{914}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{916}
 }
 
 func (x *RenewManagedConfigurationSourceWorkResponse) GetLease() *ManagedConfigurationSourceLease {
@@ -72772,7 +72884,7 @@ type CompleteManagedConfigurationSourceWorkRequest struct {
 
 func (x *CompleteManagedConfigurationSourceWorkRequest) Reset() {
 	*x = CompleteManagedConfigurationSourceWorkRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[915]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[917]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72784,7 +72896,7 @@ func (x *CompleteManagedConfigurationSourceWorkRequest) String() string {
 func (*CompleteManagedConfigurationSourceWorkRequest) ProtoMessage() {}
 
 func (x *CompleteManagedConfigurationSourceWorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[915]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[917]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72797,7 +72909,7 @@ func (x *CompleteManagedConfigurationSourceWorkRequest) ProtoReflect() protorefl
 
 // Deprecated: Use CompleteManagedConfigurationSourceWorkRequest.ProtoReflect.Descriptor instead.
 func (*CompleteManagedConfigurationSourceWorkRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{915}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{917}
 }
 
 func (x *CompleteManagedConfigurationSourceWorkRequest) GetLease() *ManagedConfigurationSourceLease {
@@ -72844,7 +72956,7 @@ type CompleteManagedConfigurationSourceWorkResponse struct {
 
 func (x *CompleteManagedConfigurationSourceWorkResponse) Reset() {
 	*x = CompleteManagedConfigurationSourceWorkResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[916]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[918]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72856,7 +72968,7 @@ func (x *CompleteManagedConfigurationSourceWorkResponse) String() string {
 func (*CompleteManagedConfigurationSourceWorkResponse) ProtoMessage() {}
 
 func (x *CompleteManagedConfigurationSourceWorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[916]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[918]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72869,7 +72981,7 @@ func (x *CompleteManagedConfigurationSourceWorkResponse) ProtoReflect() protoref
 
 // Deprecated: Use CompleteManagedConfigurationSourceWorkResponse.ProtoReflect.Descriptor instead.
 func (*CompleteManagedConfigurationSourceWorkResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{916}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{918}
 }
 
 func (x *CompleteManagedConfigurationSourceWorkResponse) GetSource() *ManagedConfigurationGitSource {
@@ -72889,7 +73001,7 @@ type FailManagedConfigurationSourceWorkRequest struct {
 
 func (x *FailManagedConfigurationSourceWorkRequest) Reset() {
 	*x = FailManagedConfigurationSourceWorkRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[917]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[919]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72901,7 +73013,7 @@ func (x *FailManagedConfigurationSourceWorkRequest) String() string {
 func (*FailManagedConfigurationSourceWorkRequest) ProtoMessage() {}
 
 func (x *FailManagedConfigurationSourceWorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[917]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[919]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72914,7 +73026,7 @@ func (x *FailManagedConfigurationSourceWorkRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use FailManagedConfigurationSourceWorkRequest.ProtoReflect.Descriptor instead.
 func (*FailManagedConfigurationSourceWorkRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{917}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{919}
 }
 
 func (x *FailManagedConfigurationSourceWorkRequest) GetLease() *ManagedConfigurationSourceLease {
@@ -72940,7 +73052,7 @@ type FailManagedConfigurationSourceWorkResponse struct {
 
 func (x *FailManagedConfigurationSourceWorkResponse) Reset() {
 	*x = FailManagedConfigurationSourceWorkResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[918]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[920]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72952,7 +73064,7 @@ func (x *FailManagedConfigurationSourceWorkResponse) String() string {
 func (*FailManagedConfigurationSourceWorkResponse) ProtoMessage() {}
 
 func (x *FailManagedConfigurationSourceWorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[918]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[920]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72965,7 +73077,7 @@ func (x *FailManagedConfigurationSourceWorkResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use FailManagedConfigurationSourceWorkResponse.ProtoReflect.Descriptor instead.
 func (*FailManagedConfigurationSourceWorkResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{918}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{920}
 }
 
 func (x *FailManagedConfigurationSourceWorkResponse) GetSource() *ManagedConfigurationGitSource {
@@ -72986,7 +73098,7 @@ type ManagedConfigurationGitWriteBackActionAvailability struct {
 
 func (x *ManagedConfigurationGitWriteBackActionAvailability) Reset() {
 	*x = ManagedConfigurationGitWriteBackActionAvailability{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[919]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[921]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72998,7 +73110,7 @@ func (x *ManagedConfigurationGitWriteBackActionAvailability) String() string {
 func (*ManagedConfigurationGitWriteBackActionAvailability) ProtoMessage() {}
 
 func (x *ManagedConfigurationGitWriteBackActionAvailability) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[919]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[921]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73011,7 +73123,7 @@ func (x *ManagedConfigurationGitWriteBackActionAvailability) ProtoReflect() prot
 
 // Deprecated: Use ManagedConfigurationGitWriteBackActionAvailability.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationGitWriteBackActionAvailability) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{919}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{921}
 }
 
 func (x *ManagedConfigurationGitWriteBackActionAvailability) GetAction() ManagedConfigurationGitWriteBackAction {
@@ -73074,7 +73186,7 @@ type ManagedConfigurationGitWriteBack struct {
 
 func (x *ManagedConfigurationGitWriteBack) Reset() {
 	*x = ManagedConfigurationGitWriteBack{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[920]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[922]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73086,7 +73198,7 @@ func (x *ManagedConfigurationGitWriteBack) String() string {
 func (*ManagedConfigurationGitWriteBack) ProtoMessage() {}
 
 func (x *ManagedConfigurationGitWriteBack) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[920]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[922]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73099,7 +73211,7 @@ func (x *ManagedConfigurationGitWriteBack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedConfigurationGitWriteBack.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationGitWriteBack) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{920}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{922}
 }
 
 func (x *ManagedConfigurationGitWriteBack) GetRef() string {
@@ -73324,7 +73436,7 @@ type PrepareRoleImageGitWriteBackRequest struct {
 
 func (x *PrepareRoleImageGitWriteBackRequest) Reset() {
 	*x = PrepareRoleImageGitWriteBackRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[921]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[923]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73336,7 +73448,7 @@ func (x *PrepareRoleImageGitWriteBackRequest) String() string {
 func (*PrepareRoleImageGitWriteBackRequest) ProtoMessage() {}
 
 func (x *PrepareRoleImageGitWriteBackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[921]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[923]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73349,7 +73461,7 @@ func (x *PrepareRoleImageGitWriteBackRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use PrepareRoleImageGitWriteBackRequest.ProtoReflect.Descriptor instead.
 func (*PrepareRoleImageGitWriteBackRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{921}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{923}
 }
 
 func (x *PrepareRoleImageGitWriteBackRequest) GetMutation() *MutationContext {
@@ -73389,7 +73501,7 @@ type PrepareRoleImageGitWriteBackResponse struct {
 
 func (x *PrepareRoleImageGitWriteBackResponse) Reset() {
 	*x = PrepareRoleImageGitWriteBackResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[922]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[924]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73401,7 +73513,7 @@ func (x *PrepareRoleImageGitWriteBackResponse) String() string {
 func (*PrepareRoleImageGitWriteBackResponse) ProtoMessage() {}
 
 func (x *PrepareRoleImageGitWriteBackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[922]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[924]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73414,7 +73526,7 @@ func (x *PrepareRoleImageGitWriteBackResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use PrepareRoleImageGitWriteBackResponse.ProtoReflect.Descriptor instead.
 func (*PrepareRoleImageGitWriteBackResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{922}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{924}
 }
 
 func (x *PrepareRoleImageGitWriteBackResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -73436,7 +73548,7 @@ type PrepareIntegrationDefinitionGitWriteBackRequest struct {
 
 func (x *PrepareIntegrationDefinitionGitWriteBackRequest) Reset() {
 	*x = PrepareIntegrationDefinitionGitWriteBackRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[923]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[925]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73448,7 +73560,7 @@ func (x *PrepareIntegrationDefinitionGitWriteBackRequest) String() string {
 func (*PrepareIntegrationDefinitionGitWriteBackRequest) ProtoMessage() {}
 
 func (x *PrepareIntegrationDefinitionGitWriteBackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[923]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[925]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73461,7 +73573,7 @@ func (x *PrepareIntegrationDefinitionGitWriteBackRequest) ProtoReflect() protore
 
 // Deprecated: Use PrepareIntegrationDefinitionGitWriteBackRequest.ProtoReflect.Descriptor instead.
 func (*PrepareIntegrationDefinitionGitWriteBackRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{923}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{925}
 }
 
 func (x *PrepareIntegrationDefinitionGitWriteBackRequest) GetMutation() *MutationContext {
@@ -73501,7 +73613,7 @@ type PrepareIntegrationDefinitionGitWriteBackResponse struct {
 
 func (x *PrepareIntegrationDefinitionGitWriteBackResponse) Reset() {
 	*x = PrepareIntegrationDefinitionGitWriteBackResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[924]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[926]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73513,7 +73625,7 @@ func (x *PrepareIntegrationDefinitionGitWriteBackResponse) String() string {
 func (*PrepareIntegrationDefinitionGitWriteBackResponse) ProtoMessage() {}
 
 func (x *PrepareIntegrationDefinitionGitWriteBackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[924]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[926]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73526,7 +73638,7 @@ func (x *PrepareIntegrationDefinitionGitWriteBackResponse) ProtoReflect() protor
 
 // Deprecated: Use PrepareIntegrationDefinitionGitWriteBackResponse.ProtoReflect.Descriptor instead.
 func (*PrepareIntegrationDefinitionGitWriteBackResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{924}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{926}
 }
 
 func (x *PrepareIntegrationDefinitionGitWriteBackResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -73547,7 +73659,7 @@ type ApproveManagedConfigurationGitWriteBackRequest struct {
 
 func (x *ApproveManagedConfigurationGitWriteBackRequest) Reset() {
 	*x = ApproveManagedConfigurationGitWriteBackRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[925]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[927]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73559,7 +73671,7 @@ func (x *ApproveManagedConfigurationGitWriteBackRequest) String() string {
 func (*ApproveManagedConfigurationGitWriteBackRequest) ProtoMessage() {}
 
 func (x *ApproveManagedConfigurationGitWriteBackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[925]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[927]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73572,7 +73684,7 @@ func (x *ApproveManagedConfigurationGitWriteBackRequest) ProtoReflect() protoref
 
 // Deprecated: Use ApproveManagedConfigurationGitWriteBackRequest.ProtoReflect.Descriptor instead.
 func (*ApproveManagedConfigurationGitWriteBackRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{925}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{927}
 }
 
 func (x *ApproveManagedConfigurationGitWriteBackRequest) GetMutation() *MutationContext {
@@ -73605,7 +73717,7 @@ type ApproveManagedConfigurationGitWriteBackResponse struct {
 
 func (x *ApproveManagedConfigurationGitWriteBackResponse) Reset() {
 	*x = ApproveManagedConfigurationGitWriteBackResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[926]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[928]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73617,7 +73729,7 @@ func (x *ApproveManagedConfigurationGitWriteBackResponse) String() string {
 func (*ApproveManagedConfigurationGitWriteBackResponse) ProtoMessage() {}
 
 func (x *ApproveManagedConfigurationGitWriteBackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[926]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[928]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73630,7 +73742,7 @@ func (x *ApproveManagedConfigurationGitWriteBackResponse) ProtoReflect() protore
 
 // Deprecated: Use ApproveManagedConfigurationGitWriteBackResponse.ProtoReflect.Descriptor instead.
 func (*ApproveManagedConfigurationGitWriteBackResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{926}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{928}
 }
 
 func (x *ApproveManagedConfigurationGitWriteBackResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -73651,7 +73763,7 @@ type RejectManagedConfigurationGitWriteBackRequest struct {
 
 func (x *RejectManagedConfigurationGitWriteBackRequest) Reset() {
 	*x = RejectManagedConfigurationGitWriteBackRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[927]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[929]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73663,7 +73775,7 @@ func (x *RejectManagedConfigurationGitWriteBackRequest) String() string {
 func (*RejectManagedConfigurationGitWriteBackRequest) ProtoMessage() {}
 
 func (x *RejectManagedConfigurationGitWriteBackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[927]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[929]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73676,7 +73788,7 @@ func (x *RejectManagedConfigurationGitWriteBackRequest) ProtoReflect() protorefl
 
 // Deprecated: Use RejectManagedConfigurationGitWriteBackRequest.ProtoReflect.Descriptor instead.
 func (*RejectManagedConfigurationGitWriteBackRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{927}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{929}
 }
 
 func (x *RejectManagedConfigurationGitWriteBackRequest) GetMutation() *MutationContext {
@@ -73709,7 +73821,7 @@ type RejectManagedConfigurationGitWriteBackResponse struct {
 
 func (x *RejectManagedConfigurationGitWriteBackResponse) Reset() {
 	*x = RejectManagedConfigurationGitWriteBackResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[928]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[930]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73721,7 +73833,7 @@ func (x *RejectManagedConfigurationGitWriteBackResponse) String() string {
 func (*RejectManagedConfigurationGitWriteBackResponse) ProtoMessage() {}
 
 func (x *RejectManagedConfigurationGitWriteBackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[928]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[930]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73734,7 +73846,7 @@ func (x *RejectManagedConfigurationGitWriteBackResponse) ProtoReflect() protoref
 
 // Deprecated: Use RejectManagedConfigurationGitWriteBackResponse.ProtoReflect.Descriptor instead.
 func (*RejectManagedConfigurationGitWriteBackResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{928}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{930}
 }
 
 func (x *RejectManagedConfigurationGitWriteBackResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -73754,7 +73866,7 @@ type CancelManagedConfigurationGitWriteBackRequest struct {
 
 func (x *CancelManagedConfigurationGitWriteBackRequest) Reset() {
 	*x = CancelManagedConfigurationGitWriteBackRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[929]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[931]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73766,7 +73878,7 @@ func (x *CancelManagedConfigurationGitWriteBackRequest) String() string {
 func (*CancelManagedConfigurationGitWriteBackRequest) ProtoMessage() {}
 
 func (x *CancelManagedConfigurationGitWriteBackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[929]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[931]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73779,7 +73891,7 @@ func (x *CancelManagedConfigurationGitWriteBackRequest) ProtoReflect() protorefl
 
 // Deprecated: Use CancelManagedConfigurationGitWriteBackRequest.ProtoReflect.Descriptor instead.
 func (*CancelManagedConfigurationGitWriteBackRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{929}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{931}
 }
 
 func (x *CancelManagedConfigurationGitWriteBackRequest) GetMutation() *MutationContext {
@@ -73805,7 +73917,7 @@ type CancelManagedConfigurationGitWriteBackResponse struct {
 
 func (x *CancelManagedConfigurationGitWriteBackResponse) Reset() {
 	*x = CancelManagedConfigurationGitWriteBackResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[930]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[932]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73817,7 +73929,7 @@ func (x *CancelManagedConfigurationGitWriteBackResponse) String() string {
 func (*CancelManagedConfigurationGitWriteBackResponse) ProtoMessage() {}
 
 func (x *CancelManagedConfigurationGitWriteBackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[930]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[932]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73830,7 +73942,7 @@ func (x *CancelManagedConfigurationGitWriteBackResponse) ProtoReflect() protoref
 
 // Deprecated: Use CancelManagedConfigurationGitWriteBackResponse.ProtoReflect.Descriptor instead.
 func (*CancelManagedConfigurationGitWriteBackResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{930}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{932}
 }
 
 func (x *CancelManagedConfigurationGitWriteBackResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -73849,7 +73961,7 @@ type GetManagedConfigurationGitWriteBackRequest struct {
 
 func (x *GetManagedConfigurationGitWriteBackRequest) Reset() {
 	*x = GetManagedConfigurationGitWriteBackRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[931]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[933]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73861,7 +73973,7 @@ func (x *GetManagedConfigurationGitWriteBackRequest) String() string {
 func (*GetManagedConfigurationGitWriteBackRequest) ProtoMessage() {}
 
 func (x *GetManagedConfigurationGitWriteBackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[931]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[933]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73874,7 +73986,7 @@ func (x *GetManagedConfigurationGitWriteBackRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use GetManagedConfigurationGitWriteBackRequest.ProtoReflect.Descriptor instead.
 func (*GetManagedConfigurationGitWriteBackRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{931}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{933}
 }
 
 func (x *GetManagedConfigurationGitWriteBackRequest) GetProposalRef() string {
@@ -73896,7 +74008,7 @@ type GetManagedConfigurationGitWriteBackResponse struct {
 
 func (x *GetManagedConfigurationGitWriteBackResponse) Reset() {
 	*x = GetManagedConfigurationGitWriteBackResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[932]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[934]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73908,7 +74020,7 @@ func (x *GetManagedConfigurationGitWriteBackResponse) String() string {
 func (*GetManagedConfigurationGitWriteBackResponse) ProtoMessage() {}
 
 func (x *GetManagedConfigurationGitWriteBackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[932]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[934]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73921,7 +74033,7 @@ func (x *GetManagedConfigurationGitWriteBackResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use GetManagedConfigurationGitWriteBackResponse.ProtoReflect.Descriptor instead.
 func (*GetManagedConfigurationGitWriteBackResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{932}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{934}
 }
 
 func (x *GetManagedConfigurationGitWriteBackResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -73955,7 +74067,7 @@ type ListManagedConfigurationGitWriteBacksRequest struct {
 
 func (x *ListManagedConfigurationGitWriteBacksRequest) Reset() {
 	*x = ListManagedConfigurationGitWriteBacksRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[933]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[935]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -73967,7 +74079,7 @@ func (x *ListManagedConfigurationGitWriteBacksRequest) String() string {
 func (*ListManagedConfigurationGitWriteBacksRequest) ProtoMessage() {}
 
 func (x *ListManagedConfigurationGitWriteBacksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[933]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[935]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73980,7 +74092,7 @@ func (x *ListManagedConfigurationGitWriteBacksRequest) ProtoReflect() protorefle
 
 // Deprecated: Use ListManagedConfigurationGitWriteBacksRequest.ProtoReflect.Descriptor instead.
 func (*ListManagedConfigurationGitWriteBacksRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{933}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{935}
 }
 
 func (x *ListManagedConfigurationGitWriteBacksRequest) GetConfigurationRef() string {
@@ -74008,7 +74120,7 @@ type ListManagedConfigurationGitWriteBacksResponse struct {
 
 func (x *ListManagedConfigurationGitWriteBacksResponse) Reset() {
 	*x = ListManagedConfigurationGitWriteBacksResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[934]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[936]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74020,7 +74132,7 @@ func (x *ListManagedConfigurationGitWriteBacksResponse) String() string {
 func (*ListManagedConfigurationGitWriteBacksResponse) ProtoMessage() {}
 
 func (x *ListManagedConfigurationGitWriteBacksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[934]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[936]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74033,7 +74145,7 @@ func (x *ListManagedConfigurationGitWriteBacksResponse) ProtoReflect() protorefl
 
 // Deprecated: Use ListManagedConfigurationGitWriteBacksResponse.ProtoReflect.Descriptor instead.
 func (*ListManagedConfigurationGitWriteBacksResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{934}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{936}
 }
 
 func (x *ListManagedConfigurationGitWriteBacksResponse) GetProposals() []*ManagedConfigurationGitWriteBack {
@@ -74071,7 +74183,7 @@ type ManagedConfigurationGitWriteBackLease struct {
 
 func (x *ManagedConfigurationGitWriteBackLease) Reset() {
 	*x = ManagedConfigurationGitWriteBackLease{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[935]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[937]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74083,7 +74195,7 @@ func (x *ManagedConfigurationGitWriteBackLease) String() string {
 func (*ManagedConfigurationGitWriteBackLease) ProtoMessage() {}
 
 func (x *ManagedConfigurationGitWriteBackLease) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[935]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[937]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74096,7 +74208,7 @@ func (x *ManagedConfigurationGitWriteBackLease) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ManagedConfigurationGitWriteBackLease.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationGitWriteBackLease) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{935}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{937}
 }
 
 func (x *ManagedConfigurationGitWriteBackLease) GetProposalRef() string {
@@ -74170,7 +74282,7 @@ type ManagedConfigurationGitWriteBackWork struct {
 
 func (x *ManagedConfigurationGitWriteBackWork) Reset() {
 	*x = ManagedConfigurationGitWriteBackWork{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[936]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[938]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74182,7 +74294,7 @@ func (x *ManagedConfigurationGitWriteBackWork) String() string {
 func (*ManagedConfigurationGitWriteBackWork) ProtoMessage() {}
 
 func (x *ManagedConfigurationGitWriteBackWork) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[936]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[938]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74195,7 +74307,7 @@ func (x *ManagedConfigurationGitWriteBackWork) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ManagedConfigurationGitWriteBackWork.ProtoReflect.Descriptor instead.
 func (*ManagedConfigurationGitWriteBackWork) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{936}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{938}
 }
 
 func (x *ManagedConfigurationGitWriteBackWork) GetLease() *ManagedConfigurationGitWriteBackLease {
@@ -74348,7 +74460,7 @@ type ClaimManagedConfigurationGitWriteBackWorkRequest struct {
 
 func (x *ClaimManagedConfigurationGitWriteBackWorkRequest) Reset() {
 	*x = ClaimManagedConfigurationGitWriteBackWorkRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[937]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[939]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74360,7 +74472,7 @@ func (x *ClaimManagedConfigurationGitWriteBackWorkRequest) String() string {
 func (*ClaimManagedConfigurationGitWriteBackWorkRequest) ProtoMessage() {}
 
 func (x *ClaimManagedConfigurationGitWriteBackWorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[937]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[939]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74373,7 +74485,7 @@ func (x *ClaimManagedConfigurationGitWriteBackWorkRequest) ProtoReflect() protor
 
 // Deprecated: Use ClaimManagedConfigurationGitWriteBackWorkRequest.ProtoReflect.Descriptor instead.
 func (*ClaimManagedConfigurationGitWriteBackWorkRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{937}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{939}
 }
 
 func (x *ClaimManagedConfigurationGitWriteBackWorkRequest) GetClaimant() string {
@@ -74399,7 +74511,7 @@ type ClaimManagedConfigurationGitWriteBackWorkResponse struct {
 
 func (x *ClaimManagedConfigurationGitWriteBackWorkResponse) Reset() {
 	*x = ClaimManagedConfigurationGitWriteBackWorkResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[938]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[940]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74411,7 +74523,7 @@ func (x *ClaimManagedConfigurationGitWriteBackWorkResponse) String() string {
 func (*ClaimManagedConfigurationGitWriteBackWorkResponse) ProtoMessage() {}
 
 func (x *ClaimManagedConfigurationGitWriteBackWorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[938]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[940]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74424,7 +74536,7 @@ func (x *ClaimManagedConfigurationGitWriteBackWorkResponse) ProtoReflect() proto
 
 // Deprecated: Use ClaimManagedConfigurationGitWriteBackWorkResponse.ProtoReflect.Descriptor instead.
 func (*ClaimManagedConfigurationGitWriteBackWorkResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{938}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{940}
 }
 
 func (x *ClaimManagedConfigurationGitWriteBackWorkResponse) GetWork() []*ManagedConfigurationGitWriteBackWork {
@@ -74443,7 +74555,7 @@ type RenewManagedConfigurationGitWriteBackWorkRequest struct {
 
 func (x *RenewManagedConfigurationGitWriteBackWorkRequest) Reset() {
 	*x = RenewManagedConfigurationGitWriteBackWorkRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[939]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[941]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74455,7 +74567,7 @@ func (x *RenewManagedConfigurationGitWriteBackWorkRequest) String() string {
 func (*RenewManagedConfigurationGitWriteBackWorkRequest) ProtoMessage() {}
 
 func (x *RenewManagedConfigurationGitWriteBackWorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[939]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[941]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74468,7 +74580,7 @@ func (x *RenewManagedConfigurationGitWriteBackWorkRequest) ProtoReflect() protor
 
 // Deprecated: Use RenewManagedConfigurationGitWriteBackWorkRequest.ProtoReflect.Descriptor instead.
 func (*RenewManagedConfigurationGitWriteBackWorkRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{939}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{941}
 }
 
 func (x *RenewManagedConfigurationGitWriteBackWorkRequest) GetLease() *ManagedConfigurationGitWriteBackLease {
@@ -74487,7 +74599,7 @@ type RenewManagedConfigurationGitWriteBackWorkResponse struct {
 
 func (x *RenewManagedConfigurationGitWriteBackWorkResponse) Reset() {
 	*x = RenewManagedConfigurationGitWriteBackWorkResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[940]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[942]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74499,7 +74611,7 @@ func (x *RenewManagedConfigurationGitWriteBackWorkResponse) String() string {
 func (*RenewManagedConfigurationGitWriteBackWorkResponse) ProtoMessage() {}
 
 func (x *RenewManagedConfigurationGitWriteBackWorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[940]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[942]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74512,7 +74624,7 @@ func (x *RenewManagedConfigurationGitWriteBackWorkResponse) ProtoReflect() proto
 
 // Deprecated: Use RenewManagedConfigurationGitWriteBackWorkResponse.ProtoReflect.Descriptor instead.
 func (*RenewManagedConfigurationGitWriteBackWorkResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{940}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{942}
 }
 
 func (x *RenewManagedConfigurationGitWriteBackWorkResponse) GetLease() *ManagedConfigurationGitWriteBackLease {
@@ -74538,7 +74650,7 @@ type BeginManagedConfigurationGitWriteBackEffectRequest struct {
 
 func (x *BeginManagedConfigurationGitWriteBackEffectRequest) Reset() {
 	*x = BeginManagedConfigurationGitWriteBackEffectRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[941]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[943]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74550,7 +74662,7 @@ func (x *BeginManagedConfigurationGitWriteBackEffectRequest) String() string {
 func (*BeginManagedConfigurationGitWriteBackEffectRequest) ProtoMessage() {}
 
 func (x *BeginManagedConfigurationGitWriteBackEffectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[941]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[943]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74563,7 +74675,7 @@ func (x *BeginManagedConfigurationGitWriteBackEffectRequest) ProtoReflect() prot
 
 // Deprecated: Use BeginManagedConfigurationGitWriteBackEffectRequest.ProtoReflect.Descriptor instead.
 func (*BeginManagedConfigurationGitWriteBackEffectRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{941}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{943}
 }
 
 func (x *BeginManagedConfigurationGitWriteBackEffectRequest) GetLease() *ManagedConfigurationGitWriteBackLease {
@@ -74633,7 +74745,7 @@ type BeginManagedConfigurationGitWriteBackEffectResponse struct {
 
 func (x *BeginManagedConfigurationGitWriteBackEffectResponse) Reset() {
 	*x = BeginManagedConfigurationGitWriteBackEffectResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[942]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[944]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74645,7 +74757,7 @@ func (x *BeginManagedConfigurationGitWriteBackEffectResponse) String() string {
 func (*BeginManagedConfigurationGitWriteBackEffectResponse) ProtoMessage() {}
 
 func (x *BeginManagedConfigurationGitWriteBackEffectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[942]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[944]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74658,7 +74770,7 @@ func (x *BeginManagedConfigurationGitWriteBackEffectResponse) ProtoReflect() pro
 
 // Deprecated: Use BeginManagedConfigurationGitWriteBackEffectResponse.ProtoReflect.Descriptor instead.
 func (*BeginManagedConfigurationGitWriteBackEffectResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{942}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{944}
 }
 
 func (x *BeginManagedConfigurationGitWriteBackEffectResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -74689,7 +74801,7 @@ type CompleteManagedConfigurationGitWriteBackEffectRequest struct {
 
 func (x *CompleteManagedConfigurationGitWriteBackEffectRequest) Reset() {
 	*x = CompleteManagedConfigurationGitWriteBackEffectRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[943]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[945]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74701,7 +74813,7 @@ func (x *CompleteManagedConfigurationGitWriteBackEffectRequest) String() string 
 func (*CompleteManagedConfigurationGitWriteBackEffectRequest) ProtoMessage() {}
 
 func (x *CompleteManagedConfigurationGitWriteBackEffectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[943]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[945]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74714,7 +74826,7 @@ func (x *CompleteManagedConfigurationGitWriteBackEffectRequest) ProtoReflect() p
 
 // Deprecated: Use CompleteManagedConfigurationGitWriteBackEffectRequest.ProtoReflect.Descriptor instead.
 func (*CompleteManagedConfigurationGitWriteBackEffectRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{943}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{945}
 }
 
 func (x *CompleteManagedConfigurationGitWriteBackEffectRequest) GetLease() *ManagedConfigurationGitWriteBackLease {
@@ -74768,7 +74880,7 @@ type CompleteManagedConfigurationGitWriteBackEffectResponse struct {
 
 func (x *CompleteManagedConfigurationGitWriteBackEffectResponse) Reset() {
 	*x = CompleteManagedConfigurationGitWriteBackEffectResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[944]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[946]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74780,7 +74892,7 @@ func (x *CompleteManagedConfigurationGitWriteBackEffectResponse) String() string
 func (*CompleteManagedConfigurationGitWriteBackEffectResponse) ProtoMessage() {}
 
 func (x *CompleteManagedConfigurationGitWriteBackEffectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[944]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[946]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74793,7 +74905,7 @@ func (x *CompleteManagedConfigurationGitWriteBackEffectResponse) ProtoReflect() 
 
 // Deprecated: Use CompleteManagedConfigurationGitWriteBackEffectResponse.ProtoReflect.Descriptor instead.
 func (*CompleteManagedConfigurationGitWriteBackEffectResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{944}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{946}
 }
 
 func (x *CompleteManagedConfigurationGitWriteBackEffectResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -74813,7 +74925,7 @@ type FailManagedConfigurationGitWriteBackWorkRequest struct {
 
 func (x *FailManagedConfigurationGitWriteBackWorkRequest) Reset() {
 	*x = FailManagedConfigurationGitWriteBackWorkRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[945]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[947]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74825,7 +74937,7 @@ func (x *FailManagedConfigurationGitWriteBackWorkRequest) String() string {
 func (*FailManagedConfigurationGitWriteBackWorkRequest) ProtoMessage() {}
 
 func (x *FailManagedConfigurationGitWriteBackWorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[945]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[947]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74838,7 +74950,7 @@ func (x *FailManagedConfigurationGitWriteBackWorkRequest) ProtoReflect() protore
 
 // Deprecated: Use FailManagedConfigurationGitWriteBackWorkRequest.ProtoReflect.Descriptor instead.
 func (*FailManagedConfigurationGitWriteBackWorkRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{945}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{947}
 }
 
 func (x *FailManagedConfigurationGitWriteBackWorkRequest) GetLease() *ManagedConfigurationGitWriteBackLease {
@@ -74864,7 +74976,7 @@ type FailManagedConfigurationGitWriteBackWorkResponse struct {
 
 func (x *FailManagedConfigurationGitWriteBackWorkResponse) Reset() {
 	*x = FailManagedConfigurationGitWriteBackWorkResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[946]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[948]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74876,7 +74988,7 @@ func (x *FailManagedConfigurationGitWriteBackWorkResponse) String() string {
 func (*FailManagedConfigurationGitWriteBackWorkResponse) ProtoMessage() {}
 
 func (x *FailManagedConfigurationGitWriteBackWorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[946]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[948]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74889,7 +75001,7 @@ func (x *FailManagedConfigurationGitWriteBackWorkResponse) ProtoReflect() protor
 
 // Deprecated: Use FailManagedConfigurationGitWriteBackWorkResponse.ProtoReflect.Descriptor instead.
 func (*FailManagedConfigurationGitWriteBackWorkResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{946}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{948}
 }
 
 func (x *FailManagedConfigurationGitWriteBackWorkResponse) GetProposal() *ManagedConfigurationGitWriteBack {
@@ -74917,7 +75029,7 @@ type AssistantIntegrationDefinition struct {
 
 func (x *AssistantIntegrationDefinition) Reset() {
 	*x = AssistantIntegrationDefinition{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[947]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[949]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -74929,7 +75041,7 @@ func (x *AssistantIntegrationDefinition) String() string {
 func (*AssistantIntegrationDefinition) ProtoMessage() {}
 
 func (x *AssistantIntegrationDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[947]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[949]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74942,7 +75054,7 @@ func (x *AssistantIntegrationDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssistantIntegrationDefinition.ProtoReflect.Descriptor instead.
 func (*AssistantIntegrationDefinition) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{947}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{949}
 }
 
 func (x *AssistantIntegrationDefinition) GetKey() string {
@@ -78969,7 +79081,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\tuser_code\x18\x05 \x01(\tR\buserCode\x129\n" +
 	"\n" +
 	"expires_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12*\n" +
-	"\x11safe_failure_code\x18\a \x01(\tR\x0fsafeFailureCode\"\xa4\x06\n" +
+	"\x11safe_failure_code\x18\a \x01(\tR\x0fsafeFailureCode\"\xe8\x06\n" +
 	"\x0fProviderAccount\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12%\n" +
@@ -78989,7 +79101,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12safe_status_reason\x18\r \x01(\tR\x10safeStatusReason\x12;\n" +
 	"\x05usage\x18\x0e \x01(\v2%.controlplane.v1.ProviderAccountUsageR\x05usage\x12D\n" +
 	"\bdeletion\x18\x0f \x01(\v2(.controlplane.v1.ProviderAccountDeletionR\bdeletion\x12P\n" +
-	"\fverification\x18\x10 \x01(\v2,.controlplane.v1.ProviderAccountVerificationR\fverification\"t\n" +
+	"\fverification\x18\x10 \x01(\v2,.controlplane.v1.ProviderAccountVerificationR\fverification\x12B\n" +
+	"\x1dmaximum_concurrent_executions\x18\x11 \x01(\x05R\x1bmaximumConcurrentExecutions\"t\n" +
 	"\x1bProviderAccountBlockerCount\x12?\n" +
 	"\x04kind\x18\x01 \x01(\x0e2+.controlplane.v1.ProviderAccountBlockerKindR\x04kind\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\"\x9c\x03\n" +
@@ -79154,7 +79267,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\aoutcome\x18\x02 \x01(\x0e21.controlplane.v1.ProviderAccountQueuedWorkOutcomeR\aoutcome\"\xb3\x01\n" +
 	"'CancelProviderAccountQueuedWorkResponse\x12:\n" +
 	"\aaccount\x18\x01 \x01(\v2 .controlplane.v1.ProviderAccountR\aaccount\x12L\n" +
-	"\boutcomes\x18\x02 \x03(\v20.controlplane.v1.ProviderAccountQueuedWorkResultR\boutcomes\"\x9b\x01\n" +
+	"\boutcomes\x18\x02 \x03(\v20.controlplane.v1.ProviderAccountQueuedWorkResultR\boutcomes\"\xc9\x01\n" +
+	"$SetProviderAccountConcurrencyRequest\x12<\n" +
+	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1f\n" +
+	"\vaccount_ref\x18\x02 \x01(\tR\n" +
+	"accountRef\x12B\n" +
+	"\x1dmaximum_concurrent_executions\x18\x03 \x01(\x05R\x1bmaximumConcurrentExecutions\"c\n" +
+	"%SetProviderAccountConcurrencyResponse\x12:\n" +
+	"\aaccount\x18\x01 \x01(\v2 .controlplane.v1.ProviderAccountR\aaccount\"\x9b\x01\n" +
 	" SetProviderAccountEnabledRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1f\n" +
 	"\vaccount_ref\x18\x02 \x01(\tR\n" +
@@ -81865,7 +81985,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1aGetRuntimeEnvironmentDraft\x122.controlplane.v1.GetRuntimeEnvironmentDraftRequest\x1a3.controlplane.v1.GetRuntimeEnvironmentDraftResponse\x12\x88\x01\n" +
 	"\x1bGetRuntimeEnvironmentImpact\x123.controlplane.v1.GetRuntimeEnvironmentImpactRequest\x1a4.controlplane.v1.GetRuntimeEnvironmentImpactResponse\x12y\n" +
 	"\x16GetRuntimeSecretImpact\x12..controlplane.v1.GetRuntimeSecretImpactRequest\x1a/.controlplane.v1.GetRuntimeSecretImpactResponse\x12\x82\x01\n" +
-	"\x19ListInteractionIdentities\x121.controlplane.v1.ListInteractionIdentitiesRequest\x1a2.controlplane.v1.ListInteractionIdentitiesResponse2\xfd\xac\x01\n" +
+	"\x19ListInteractionIdentities\x121.controlplane.v1.ListInteractionIdentitiesRequest\x1a2.controlplane.v1.ListInteractionIdentitiesResponse2\x8e\xae\x01\n" +
 	"\x16PlatformCommandService\x12|\n" +
 	"\x17CreateEmailMailboxDraft\x12/.controlplane.v1.CreateEmailMailboxDraftRequest\x1a0.controlplane.v1.CreateEmailMailboxDraftResponse\x12v\n" +
 	"\x15SaveEmailMailboxDraft\x12-.controlplane.v1.SaveEmailMailboxDraftRequest\x1a..controlplane.v1.SaveEmailMailboxDraftResponse\x12\x82\x01\n" +
@@ -81977,7 +82097,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x15RevokeProviderAccount\x12-.controlplane.v1.RevokeProviderAccountRequest\x1a..controlplane.v1.RevokeProviderAccountResponse\x12v\n" +
 	"\x15DeleteProviderAccount\x12-.controlplane.v1.DeleteProviderAccountRequest\x1a..controlplane.v1.DeleteProviderAccountResponse\x12\x94\x01\n" +
 	"\x1fCancelProviderAccountQueuedWork\x127.controlplane.v1.CancelProviderAccountQueuedWorkRequest\x1a8.controlplane.v1.CancelProviderAccountQueuedWorkResponse\x12\x82\x01\n" +
-	"\x19SetProviderAccountEnabled\x121.controlplane.v1.SetProviderAccountEnabledRequest\x1a2.controlplane.v1.SetProviderAccountEnabledResponse\x12\x88\x01\n" +
+	"\x19SetProviderAccountEnabled\x121.controlplane.v1.SetProviderAccountEnabledRequest\x1a2.controlplane.v1.SetProviderAccountEnabledResponse\x12\x8e\x01\n" +
+	"\x1dSetProviderAccountConcurrency\x125.controlplane.v1.SetProviderAccountConcurrencyRequest\x1a6.controlplane.v1.SetProviderAccountConcurrencyResponse\x12\x88\x01\n" +
 	"\x1bCreateIntegrationConnection\x123.controlplane.v1.CreateIntegrationConnectionRequest\x1a4.controlplane.v1.CreateIntegrationConnectionResponse\x12\x88\x01\n" +
 	"\x1bUpdateIntegrationConnection\x123.controlplane.v1.UpdateIntegrationConnectionRequest\x1a4.controlplane.v1.UpdateIntegrationConnectionResponse\x12\x88\x01\n" +
 	"\x1bDeleteIntegrationConnection\x123.controlplane.v1.DeleteIntegrationConnectionRequest\x1a4.controlplane.v1.DeleteIntegrationConnectionResponse\x12\xaf\x01\n" +
@@ -82155,7 +82276,7 @@ func file_controlplane_v1_control_plane_proto_rawDescGZIP() []byte {
 }
 
 var file_controlplane_v1_control_plane_proto_enumTypes = make([]protoimpl.EnumInfo, 128)
-var file_controlplane_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 950)
+var file_controlplane_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 952)
 var file_controlplane_v1_control_plane_proto_goTypes = []any{
 	(PlatformRole)(0),                                                               // 0: controlplane.v1.PlatformRole
 	(ProjectPermission)(0),                                                          // 1: controlplane.v1.ProjectPermission
@@ -82932,336 +83053,338 @@ var file_controlplane_v1_control_plane_proto_goTypes = []any{
 	(*CancelProviderAccountQueuedWorkRequest)(nil),                                  // 772: controlplane.v1.CancelProviderAccountQueuedWorkRequest
 	(*ProviderAccountQueuedWorkResult)(nil),                                         // 773: controlplane.v1.ProviderAccountQueuedWorkResult
 	(*CancelProviderAccountQueuedWorkResponse)(nil),                                 // 774: controlplane.v1.CancelProviderAccountQueuedWorkResponse
-	(*SetProviderAccountEnabledRequest)(nil),                                        // 775: controlplane.v1.SetProviderAccountEnabledRequest
-	(*SetProviderAccountEnabledResponse)(nil),                                       // 776: controlplane.v1.SetProviderAccountEnabledResponse
-	(*ListScheduleRevisionsRequest)(nil),                                            // 777: controlplane.v1.ListScheduleRevisionsRequest
-	(*ListScheduleRevisionsResponse)(nil),                                           // 778: controlplane.v1.ListScheduleRevisionsResponse
-	(*ListScheduleRunsRequest)(nil),                                                 // 779: controlplane.v1.ListScheduleRunsRequest
-	(*ListScheduleRunsResponse)(nil),                                                // 780: controlplane.v1.ListScheduleRunsResponse
-	(*DeleteScheduleRequest)(nil),                                                   // 781: controlplane.v1.DeleteScheduleRequest
-	(*DeleteScheduleResponse)(nil),                                                  // 782: controlplane.v1.DeleteScheduleResponse
-	(*ArtifactImpact)(nil),                                                          // 783: controlplane.v1.ArtifactImpact
-	(*ArtifactImpactRun)(nil),                                                       // 784: controlplane.v1.ArtifactImpactRun
-	(*GetArtifactImpactRequest)(nil),                                                // 785: controlplane.v1.GetArtifactImpactRequest
-	(*GetArtifactImpactResponse)(nil),                                               // 786: controlplane.v1.GetArtifactImpactResponse
-	(*SetAgentAvatarRequest)(nil),                                                   // 787: controlplane.v1.SetAgentAvatarRequest
-	(*SetAgentAvatarResponse)(nil),                                                  // 788: controlplane.v1.SetAgentAvatarResponse
-	(*RemoveAgentAvatarRequest)(nil),                                                // 789: controlplane.v1.RemoveAgentAvatarRequest
-	(*RemoveAgentAvatarResponse)(nil),                                               // 790: controlplane.v1.RemoveAgentAvatarResponse
-	(*PromptTemplateDiagnostic)(nil),                                                // 791: controlplane.v1.PromptTemplateDiagnostic
-	(*ValidatePromptTemplateRequest)(nil),                                           // 792: controlplane.v1.ValidatePromptTemplateRequest
-	(*ValidatePromptTemplateResponse)(nil),                                          // 793: controlplane.v1.ValidatePromptTemplateResponse
-	(*PreviewPromptTemplateRequest)(nil),                                            // 794: controlplane.v1.PreviewPromptTemplateRequest
-	(*PromptPreviewContext)(nil),                                                    // 795: controlplane.v1.PromptPreviewContext
-	(*PromptSlotProvenance)(nil),                                                    // 796: controlplane.v1.PromptSlotProvenance
-	(*PromptPreviewSection)(nil),                                                    // 797: controlplane.v1.PromptPreviewSection
-	(*PromptContextPin)(nil),                                                        // 798: controlplane.v1.PromptContextPin
-	(*PreviewPromptTemplateResponse)(nil),                                           // 799: controlplane.v1.PreviewPromptTemplateResponse
-	(*PromptRuntimeDescriptor)(nil),                                                 // 800: controlplane.v1.PromptRuntimeDescriptor
-	(*PromptRuntimeChange)(nil),                                                     // 801: controlplane.v1.PromptRuntimeChange
-	(*PromptRuntimeDiff)(nil),                                                       // 802: controlplane.v1.PromptRuntimeDiff
-	(*ManagedConfigurationRevision)(nil),                                            // 803: controlplane.v1.ManagedConfigurationRevision
-	(*PromptTemplateScopeInput)(nil),                                                // 804: controlplane.v1.PromptTemplateScopeInput
-	(*PromptTemplateScope)(nil),                                                     // 805: controlplane.v1.PromptTemplateScope
-	(*ManagedConfigurationSet)(nil),                                                 // 806: controlplane.v1.ManagedConfigurationSet
-	(*ManagedConfigurationCopyProvenance)(nil),                                      // 807: controlplane.v1.ManagedConfigurationCopyProvenance
-	(*CopyRoleImageConfigurationRequest)(nil),                                       // 808: controlplane.v1.CopyRoleImageConfigurationRequest
-	(*CopyRoleImageConfigurationResponse)(nil),                                      // 809: controlplane.v1.CopyRoleImageConfigurationResponse
-	(*ShippedIntegrationDefinitionCopySource)(nil),                                  // 810: controlplane.v1.ShippedIntegrationDefinitionCopySource
-	(*CopyIntegrationDefinitionConfigurationRequest)(nil),                           // 811: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest
-	(*CopyIntegrationDefinitionConfigurationResponse)(nil),                          // 812: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse
-	(*ArchiveRoleImageConfigurationRequest)(nil),                                    // 813: controlplane.v1.ArchiveRoleImageConfigurationRequest
-	(*ArchiveRoleImageConfigurationResponse)(nil),                                   // 814: controlplane.v1.ArchiveRoleImageConfigurationResponse
-	(*ArchiveIntegrationDefinitionConfigurationRequest)(nil),                        // 815: controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest
-	(*ArchiveIntegrationDefinitionConfigurationResponse)(nil),                       // 816: controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse
-	(*ManagedConfigurationConsumer)(nil),                                            // 817: controlplane.v1.ManagedConfigurationConsumer
-	(*ManagedConfigurationImpact)(nil),                                              // 818: controlplane.v1.ManagedConfigurationImpact
-	(*ManagedConfigurationBindingSnapshot)(nil),                                     // 819: controlplane.v1.ManagedConfigurationBindingSnapshot
-	(*GetRuntimeEnvironmentRoleImageConfigurationRequest)(nil),                      // 820: controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationRequest
-	(*GetRuntimeEnvironmentRoleImageConfigurationResponse)(nil),                     // 821: controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse
-	(*GetIntegrationConnectionDefinitionConfigurationRequest)(nil),                  // 822: controlplane.v1.GetIntegrationConnectionDefinitionConfigurationRequest
-	(*GetIntegrationConnectionDefinitionConfigurationResponse)(nil),                 // 823: controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse
-	(*CreatePromptTemplateDraftRequest)(nil),                                        // 824: controlplane.v1.CreatePromptTemplateDraftRequest
-	(*CreatePromptTemplateDraftResponse)(nil),                                       // 825: controlplane.v1.CreatePromptTemplateDraftResponse
-	(*ValidatePromptTemplateDraftRequest)(nil),                                      // 826: controlplane.v1.ValidatePromptTemplateDraftRequest
-	(*ValidatePromptTemplateDraftResponse)(nil),                                     // 827: controlplane.v1.ValidatePromptTemplateDraftResponse
-	(*PublishPromptTemplateDraftRequest)(nil),                                       // 828: controlplane.v1.PublishPromptTemplateDraftRequest
-	(*PublishPromptTemplateDraftResponse)(nil),                                      // 829: controlplane.v1.PublishPromptTemplateDraftResponse
-	(*RebindPromptTemplateConsumersRequest)(nil),                                    // 830: controlplane.v1.RebindPromptTemplateConsumersRequest
-	(*RebindPromptTemplateConsumersResponse)(nil),                                   // 831: controlplane.v1.RebindPromptTemplateConsumersResponse
-	(*CreateRoleImageRevisionDraftRequest)(nil),                                     // 832: controlplane.v1.CreateRoleImageRevisionDraftRequest
-	(*CreateRoleImageRevisionDraftResponse)(nil),                                    // 833: controlplane.v1.CreateRoleImageRevisionDraftResponse
-	(*ValidateRoleImageRevisionDraftRequest)(nil),                                   // 834: controlplane.v1.ValidateRoleImageRevisionDraftRequest
-	(*ValidateRoleImageRevisionDraftResponse)(nil),                                  // 835: controlplane.v1.ValidateRoleImageRevisionDraftResponse
-	(*PublishRoleImageRevisionDraftRequest)(nil),                                    // 836: controlplane.v1.PublishRoleImageRevisionDraftRequest
-	(*PublishRoleImageRevisionDraftResponse)(nil),                                   // 837: controlplane.v1.PublishRoleImageRevisionDraftResponse
-	(*RebindRoleImageConsumersRequest)(nil),                                         // 838: controlplane.v1.RebindRoleImageConsumersRequest
-	(*RebindRoleImageConsumersResponse)(nil),                                        // 839: controlplane.v1.RebindRoleImageConsumersResponse
-	(*RoleImageImpactPlan)(nil),                                                     // 840: controlplane.v1.RoleImageImpactPlan
-	(*RoleImageImpactItem)(nil),                                                     // 841: controlplane.v1.RoleImageImpactItem
-	(*RevisionImpactPlan)(nil),                                                      // 842: controlplane.v1.RevisionImpactPlan
-	(*RevisionImpactItem)(nil),                                                      // 843: controlplane.v1.RevisionImpactItem
-	(*PrepareEnvironmentDraftImpactRequest)(nil),                                    // 844: controlplane.v1.PrepareEnvironmentDraftImpactRequest
-	(*PrepareEnvironmentDraftImpactResponse)(nil),                                   // 845: controlplane.v1.PrepareEnvironmentDraftImpactResponse
-	(*PrepareInstructionsImpactRequest)(nil),                                        // 846: controlplane.v1.PrepareInstructionsImpactRequest
-	(*PrepareInstructionsImpactResponse)(nil),                                       // 847: controlplane.v1.PrepareInstructionsImpactResponse
-	(*PreparePromptTemplateImpactRequest)(nil),                                      // 848: controlplane.v1.PreparePromptTemplateImpactRequest
-	(*PreparePromptTemplateImpactResponse)(nil),                                     // 849: controlplane.v1.PreparePromptTemplateImpactResponse
-	(*GetRevisionImpactPlanRequest)(nil),                                            // 850: controlplane.v1.GetRevisionImpactPlanRequest
-	(*GetRevisionImpactPlanResponse)(nil),                                           // 851: controlplane.v1.GetRevisionImpactPlanResponse
-	(*PrepareRoleImageImpactPlanRequest)(nil),                                       // 852: controlplane.v1.PrepareRoleImageImpactPlanRequest
-	(*PrepareRoleImageImpactPlanResponse)(nil),                                      // 853: controlplane.v1.PrepareRoleImageImpactPlanResponse
-	(*GetRoleImageImpactPlanRequest)(nil),                                           // 854: controlplane.v1.GetRoleImageImpactPlanRequest
-	(*GetRoleImageImpactPlanResponse)(nil),                                          // 855: controlplane.v1.GetRoleImageImpactPlanResponse
-	(*CreateIntegrationDefinitionDraftRequest)(nil),                                 // 856: controlplane.v1.CreateIntegrationDefinitionDraftRequest
-	(*CreateIntegrationDefinitionDraftResponse)(nil),                                // 857: controlplane.v1.CreateIntegrationDefinitionDraftResponse
-	(*ValidateIntegrationDefinitionDraftRequest)(nil),                               // 858: controlplane.v1.ValidateIntegrationDefinitionDraftRequest
-	(*ValidateIntegrationDefinitionDraftResponse)(nil),                              // 859: controlplane.v1.ValidateIntegrationDefinitionDraftResponse
-	(*PublishIntegrationDefinitionDraftRequest)(nil),                                // 860: controlplane.v1.PublishIntegrationDefinitionDraftRequest
-	(*PublishIntegrationDefinitionDraftResponse)(nil),                               // 861: controlplane.v1.PublishIntegrationDefinitionDraftResponse
-	(*RebindIntegrationDefinitionConsumersRequest)(nil),                             // 862: controlplane.v1.RebindIntegrationDefinitionConsumersRequest
-	(*RebindIntegrationDefinitionConsumersResponse)(nil),                            // 863: controlplane.v1.RebindIntegrationDefinitionConsumersResponse
-	(*CreateSystemSTTConfigurationDraftRequest)(nil),                                // 864: controlplane.v1.CreateSystemSTTConfigurationDraftRequest
-	(*CreateSystemSTTConfigurationDraftResponse)(nil),                               // 865: controlplane.v1.CreateSystemSTTConfigurationDraftResponse
-	(*ValidateSystemSTTConfigurationDraftRequest)(nil),                              // 866: controlplane.v1.ValidateSystemSTTConfigurationDraftRequest
-	(*ValidateSystemSTTConfigurationDraftResponse)(nil),                             // 867: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse
-	(*PublishSystemSTTConfigurationDraftRequest)(nil),                               // 868: controlplane.v1.PublishSystemSTTConfigurationDraftRequest
-	(*PublishSystemSTTConfigurationDraftResponse)(nil),                              // 869: controlplane.v1.PublishSystemSTTConfigurationDraftResponse
-	(*RebindSystemSTTConsumersRequest)(nil),                                         // 870: controlplane.v1.RebindSystemSTTConsumersRequest
-	(*RebindSystemSTTConsumersResponse)(nil),                                        // 871: controlplane.v1.RebindSystemSTTConsumersResponse
-	(*DetachGitManagedConfigurationRequest)(nil),                                    // 872: controlplane.v1.DetachGitManagedConfigurationRequest
-	(*DetachGitManagedConfigurationResponse)(nil),                                   // 873: controlplane.v1.DetachGitManagedConfigurationResponse
-	(*CopyGitManagedConfigurationRequest)(nil),                                      // 874: controlplane.v1.CopyGitManagedConfigurationRequest
-	(*CopyGitManagedConfigurationResponse)(nil),                                     // 875: controlplane.v1.CopyGitManagedConfigurationResponse
-	(*ListManagedConfigurationHistoryRequest)(nil),                                  // 876: controlplane.v1.ListManagedConfigurationHistoryRequest
-	(*ListManagedConfigurationsRequest)(nil),                                        // 877: controlplane.v1.ListManagedConfigurationsRequest
-	(*ListManagedConfigurationsResponse)(nil),                                       // 878: controlplane.v1.ListManagedConfigurationsResponse
-	(*ListManagedConfigurationHistoryResponse)(nil),                                 // 879: controlplane.v1.ListManagedConfigurationHistoryResponse
-	(*GetManagedConfigurationImpactRequest)(nil),                                    // 880: controlplane.v1.GetManagedConfigurationImpactRequest
-	(*GetManagedConfigurationImpactResponse)(nil),                                   // 881: controlplane.v1.GetManagedConfigurationImpactResponse
-	(*ContextProvenance)(nil),                                                       // 882: controlplane.v1.ContextProvenance
-	(*SkillBundleFile)(nil),                                                         // 883: controlplane.v1.SkillBundleFile
-	(*SkillBundleFileInput)(nil),                                                    // 884: controlplane.v1.SkillBundleFileInput
-	(*SkillBundleSpecification)(nil),                                                // 885: controlplane.v1.SkillBundleSpecification
-	(*SkillBundleRevision)(nil),                                                     // 886: controlplane.v1.SkillBundleRevision
-	(*SkillBundle)(nil),                                                             // 887: controlplane.v1.SkillBundle
-	(*EmailMailboxCredentialReference)(nil),                                         // 888: controlplane.v1.EmailMailboxCredentialReference
-	(*EmailMailboxEndpoint)(nil),                                                    // 889: controlplane.v1.EmailMailboxEndpoint
-	(*EmailMailboxLimits)(nil),                                                      // 890: controlplane.v1.EmailMailboxLimits
-	(*EmailMailboxOperationPolicy)(nil),                                             // 891: controlplane.v1.EmailMailboxOperationPolicy
-	(*EmailMailboxSpecification)(nil),                                               // 892: controlplane.v1.EmailMailboxSpecification
-	(*EmailMailboxDraftContent)(nil),                                                // 893: controlplane.v1.EmailMailboxDraftContent
-	(*EmailMailboxDiagnostic)(nil),                                                  // 894: controlplane.v1.EmailMailboxDiagnostic
-	(*EmailMailboxPublication)(nil),                                                 // 895: controlplane.v1.EmailMailboxPublication
-	(*EmailMailboxConfigurationView)(nil),                                           // 896: controlplane.v1.EmailMailboxConfigurationView
-	(*EmailMailboxActionAvailability)(nil),                                          // 897: controlplane.v1.EmailMailboxActionAvailability
-	(*ListEmailMailboxConfigurationsRequest)(nil),                                   // 898: controlplane.v1.ListEmailMailboxConfigurationsRequest
-	(*ListEmailMailboxConfigurationsResponse)(nil),                                  // 899: controlplane.v1.ListEmailMailboxConfigurationsResponse
-	(*GetEmailMailboxConfigurationRequest)(nil),                                     // 900: controlplane.v1.GetEmailMailboxConfigurationRequest
-	(*GetEmailMailboxConfigurationResponse)(nil),                                    // 901: controlplane.v1.GetEmailMailboxConfigurationResponse
-	(*ListEmailMailboxCredentialsRequest)(nil),                                      // 902: controlplane.v1.ListEmailMailboxCredentialsRequest
-	(*ListEmailMailboxCredentialsResponse)(nil),                                     // 903: controlplane.v1.ListEmailMailboxCredentialsResponse
-	(*GetEmailMailboxCredentialReceiptRequest)(nil),                                 // 904: controlplane.v1.GetEmailMailboxCredentialReceiptRequest
-	(*GetEmailMailboxCredentialReceiptResponse)(nil),                                // 905: controlplane.v1.GetEmailMailboxCredentialReceiptResponse
-	(*PreviewEmailMailboxConfigurationRequest)(nil),                                 // 906: controlplane.v1.PreviewEmailMailboxConfigurationRequest
-	(*PreviewEmailMailboxConfigurationResponse)(nil),                                // 907: controlplane.v1.PreviewEmailMailboxConfigurationResponse
-	(*CreateEmailMailboxDraftRequest)(nil),                                          // 908: controlplane.v1.CreateEmailMailboxDraftRequest
-	(*CreateEmailMailboxDraftResponse)(nil),                                         // 909: controlplane.v1.CreateEmailMailboxDraftResponse
-	(*SaveEmailMailboxDraftRequest)(nil),                                            // 910: controlplane.v1.SaveEmailMailboxDraftRequest
-	(*SaveEmailMailboxDraftResponse)(nil),                                           // 911: controlplane.v1.SaveEmailMailboxDraftResponse
-	(*ValidateEmailMailboxDraftRequest)(nil),                                        // 912: controlplane.v1.ValidateEmailMailboxDraftRequest
-	(*ValidateEmailMailboxDraftResponse)(nil),                                       // 913: controlplane.v1.ValidateEmailMailboxDraftResponse
-	(*PublishEmailMailboxDraftRequest)(nil),                                         // 914: controlplane.v1.PublishEmailMailboxDraftRequest
-	(*PublishEmailMailboxDraftResponse)(nil),                                        // 915: controlplane.v1.PublishEmailMailboxDraftResponse
-	(*DiscardEmailMailboxDraftRequest)(nil),                                         // 916: controlplane.v1.DiscardEmailMailboxDraftRequest
-	(*DiscardEmailMailboxDraftResponse)(nil),                                        // 917: controlplane.v1.DiscardEmailMailboxDraftResponse
-	(*BindEmailMailboxConfigurationRequest)(nil),                                    // 918: controlplane.v1.BindEmailMailboxConfigurationRequest
-	(*BindEmailMailboxConfigurationResponse)(nil),                                   // 919: controlplane.v1.BindEmailMailboxConfigurationResponse
-	(*UnbindEmailMailboxConfigurationRequest)(nil),                                  // 920: controlplane.v1.UnbindEmailMailboxConfigurationRequest
-	(*UnbindEmailMailboxConfigurationResponse)(nil),                                 // 921: controlplane.v1.UnbindEmailMailboxConfigurationResponse
-	(*ReportEmailConfigurationReadbackRequest)(nil),                                 // 922: controlplane.v1.ReportEmailConfigurationReadbackRequest
-	(*ReportEmailConfigurationReadbackResponse)(nil),                                // 923: controlplane.v1.ReportEmailConfigurationReadbackResponse
-	(*EmailMailboxCredential)(nil),                                                  // 924: controlplane.v1.EmailMailboxCredential
-	(*ConfigureEmailMailboxCredentialRequest)(nil),                                  // 925: controlplane.v1.ConfigureEmailMailboxCredentialRequest
-	(*ConfigureEmailMailboxCredentialResponse)(nil),                                 // 926: controlplane.v1.ConfigureEmailMailboxCredentialResponse
-	(*EmailExecutionBinding)(nil),                                                   // 927: controlplane.v1.EmailExecutionBinding
-	(*EmailAuthorizationScope)(nil),                                                 // 928: controlplane.v1.EmailAuthorizationScope
-	(*ResolveEmailAuthorizationRequest)(nil),                                        // 929: controlplane.v1.ResolveEmailAuthorizationRequest
-	(*ResolveEmailAuthorizationResponse)(nil),                                       // 930: controlplane.v1.ResolveEmailAuthorizationResponse
-	(*EmailEffectReceipt)(nil),                                                      // 931: controlplane.v1.EmailEffectReceipt
-	(*ReportEmailEffectReceiptRequest)(nil),                                         // 932: controlplane.v1.ReportEmailEffectReceiptRequest
-	(*ReportEmailEffectReceiptResponse)(nil),                                        // 933: controlplane.v1.ReportEmailEffectReceiptResponse
-	(*EmailReconciliationDecision)(nil),                                             // 934: controlplane.v1.EmailReconciliationDecision
-	(*ReconcileEmailEffectRequest)(nil),                                             // 935: controlplane.v1.ReconcileEmailEffectRequest
-	(*ReconcileEmailEffectResponse)(nil),                                            // 936: controlplane.v1.ReconcileEmailEffectResponse
-	(*ResolveEmailReconciliationRequest)(nil),                                       // 937: controlplane.v1.ResolveEmailReconciliationRequest
-	(*ResolveEmailReconciliationResponse)(nil),                                      // 938: controlplane.v1.ResolveEmailReconciliationResponse
-	(*GetEmailEffectReceiptRequest)(nil),                                            // 939: controlplane.v1.GetEmailEffectReceiptRequest
-	(*GetEmailEffectReceiptResponse)(nil),                                           // 940: controlplane.v1.GetEmailEffectReceiptResponse
-	(*AgentContextBinding)(nil),                                                     // 941: controlplane.v1.AgentContextBinding
-	(*MemoryRecordSpecification)(nil),                                               // 942: controlplane.v1.MemoryRecordSpecification
-	(*MemoryRecordRevision)(nil),                                                    // 943: controlplane.v1.MemoryRecordRevision
-	(*KodexMemoryRecord)(nil),                                                       // 944: controlplane.v1.KodexMemoryRecord
-	(*ListSkillBundlesRequest)(nil),                                                 // 945: controlplane.v1.ListSkillBundlesRequest
-	(*ListSkillBundlesResponse)(nil),                                                // 946: controlplane.v1.ListSkillBundlesResponse
-	(*GetSkillBundleRequest)(nil),                                                   // 947: controlplane.v1.GetSkillBundleRequest
-	(*GetSkillBundleResponse)(nil),                                                  // 948: controlplane.v1.GetSkillBundleResponse
-	(*ListSkillBundleRevisionsRequest)(nil),                                         // 949: controlplane.v1.ListSkillBundleRevisionsRequest
-	(*ListSkillBundleRevisionsResponse)(nil),                                        // 950: controlplane.v1.ListSkillBundleRevisionsResponse
-	(*ListMemoryRecordsRequest)(nil),                                                // 951: controlplane.v1.ListMemoryRecordsRequest
-	(*ListMemoryRecordsResponse)(nil),                                               // 952: controlplane.v1.ListMemoryRecordsResponse
-	(*GetMemoryRecordRequest)(nil),                                                  // 953: controlplane.v1.GetMemoryRecordRequest
-	(*GetMemoryRecordResponse)(nil),                                                 // 954: controlplane.v1.GetMemoryRecordResponse
-	(*ListMemoryRecordRevisionsRequest)(nil),                                        // 955: controlplane.v1.ListMemoryRecordRevisionsRequest
-	(*ListMemoryRecordRevisionsResponse)(nil),                                       // 956: controlplane.v1.ListMemoryRecordRevisionsResponse
-	(*CreateSkillBundleDraftRequest)(nil),                                           // 957: controlplane.v1.CreateSkillBundleDraftRequest
-	(*SaveSkillBundleDraftRequest)(nil),                                             // 958: controlplane.v1.SaveSkillBundleDraftRequest
-	(*ReviewSkillBundleDraftRequest)(nil),                                           // 959: controlplane.v1.ReviewSkillBundleDraftRequest
-	(*CreateMemoryRecordRequest)(nil),                                               // 960: controlplane.v1.CreateMemoryRecordRequest
-	(*ReviseMemoryRecordRequest)(nil),                                               // 961: controlplane.v1.ReviseMemoryRecordRequest
-	(*ValidateSkillBundleDraftRequest)(nil),                                         // 962: controlplane.v1.ValidateSkillBundleDraftRequest
-	(*PublishSkillBundleDraftRequest)(nil),                                          // 963: controlplane.v1.PublishSkillBundleDraftRequest
-	(*DiscardSkillBundleDraftRequest)(nil),                                          // 964: controlplane.v1.DiscardSkillBundleDraftRequest
-	(*ArchiveSkillBundleRequest)(nil),                                               // 965: controlplane.v1.ArchiveSkillBundleRequest
-	(*RestoreSkillBundleRequest)(nil),                                               // 966: controlplane.v1.RestoreSkillBundleRequest
-	(*PurgeSkillBundleRequest)(nil),                                                 // 967: controlplane.v1.PurgeSkillBundleRequest
-	(*BindAgentSkillBundleRequest)(nil),                                             // 968: controlplane.v1.BindAgentSkillBundleRequest
-	(*BindAgentSkillBundleResponse)(nil),                                            // 969: controlplane.v1.BindAgentSkillBundleResponse
-	(*UnbindAgentSkillBundleRequest)(nil),                                           // 970: controlplane.v1.UnbindAgentSkillBundleRequest
-	(*UnbindAgentSkillBundleResponse)(nil),                                          // 971: controlplane.v1.UnbindAgentSkillBundleResponse
-	(*ArchiveMemoryRecordRequest)(nil),                                              // 972: controlplane.v1.ArchiveMemoryRecordRequest
-	(*RestoreMemoryRecordRequest)(nil),                                              // 973: controlplane.v1.RestoreMemoryRecordRequest
-	(*PurgeMemoryRecordRequest)(nil),                                                // 974: controlplane.v1.PurgeMemoryRecordRequest
-	(*BindAgentMemoryRecordRequest)(nil),                                            // 975: controlplane.v1.BindAgentMemoryRecordRequest
-	(*BindAgentMemoryRecordResponse)(nil),                                           // 976: controlplane.v1.BindAgentMemoryRecordResponse
-	(*UnbindAgentMemoryRecordRequest)(nil),                                          // 977: controlplane.v1.UnbindAgentMemoryRecordRequest
-	(*UnbindAgentMemoryRecordResponse)(nil),                                         // 978: controlplane.v1.UnbindAgentMemoryRecordResponse
-	(*CreateSkillBundleDraftResponse)(nil),                                          // 979: controlplane.v1.CreateSkillBundleDraftResponse
-	(*SaveSkillBundleDraftResponse)(nil),                                            // 980: controlplane.v1.SaveSkillBundleDraftResponse
-	(*ValidateSkillBundleDraftResponse)(nil),                                        // 981: controlplane.v1.ValidateSkillBundleDraftResponse
-	(*ReviewSkillBundleDraftResponse)(nil),                                          // 982: controlplane.v1.ReviewSkillBundleDraftResponse
-	(*PublishSkillBundleDraftResponse)(nil),                                         // 983: controlplane.v1.PublishSkillBundleDraftResponse
-	(*DiscardSkillBundleDraftResponse)(nil),                                         // 984: controlplane.v1.DiscardSkillBundleDraftResponse
-	(*ArchiveSkillBundleResponse)(nil),                                              // 985: controlplane.v1.ArchiveSkillBundleResponse
-	(*RestoreSkillBundleResponse)(nil),                                              // 986: controlplane.v1.RestoreSkillBundleResponse
-	(*PurgeSkillBundleResponse)(nil),                                                // 987: controlplane.v1.PurgeSkillBundleResponse
-	(*CreateMemoryRecordResponse)(nil),                                              // 988: controlplane.v1.CreateMemoryRecordResponse
-	(*ReviseMemoryRecordResponse)(nil),                                              // 989: controlplane.v1.ReviseMemoryRecordResponse
-	(*ArchiveMemoryRecordResponse)(nil),                                             // 990: controlplane.v1.ArchiveMemoryRecordResponse
-	(*RestoreMemoryRecordResponse)(nil),                                             // 991: controlplane.v1.RestoreMemoryRecordResponse
-	(*PurgeMemoryRecordResponse)(nil),                                               // 992: controlplane.v1.PurgeMemoryRecordResponse
-	(*SystemSTTParameters)(nil),                                                     // 993: controlplane.v1.SystemSTTParameters
-	(*SystemSTTConfiguration)(nil),                                                  // 994: controlplane.v1.SystemSTTConfiguration
-	(*GetSystemSTTConfigurationRequest)(nil),                                        // 995: controlplane.v1.GetSystemSTTConfigurationRequest
-	(*GetSystemSTTConfigurationResponse)(nil),                                       // 996: controlplane.v1.GetSystemSTTConfigurationResponse
-	(*ProviderCredentialDescriptor)(nil),                                            // 997: controlplane.v1.ProviderCredentialDescriptor
-	(*CheckProviderCredentialMaterializerReadinessRequest)(nil),                     // 998: controlplane.v1.CheckProviderCredentialMaterializerReadinessRequest
-	(*ProviderModelCatalogRecord)(nil),                                              // 999: controlplane.v1.ProviderModelCatalogRecord
-	(*ObserveProviderModelCatalogRequest)(nil),                                      // 1000: controlplane.v1.ObserveProviderModelCatalogRequest
-	(*ObserveProviderModelCatalogResponse)(nil),                                     // 1001: controlplane.v1.ObserveProviderModelCatalogResponse
-	(*CheckProviderCredentialMaterializerReadinessResponse)(nil),                    // 1002: controlplane.v1.CheckProviderCredentialMaterializerReadinessResponse
-	(*ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest)(nil),    // 1003: controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest
-	(*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse)(nil),   // 1004: controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse
-	(*ProviderAuthorizationAbsenceDescriptor)(nil),                                  // 1005: controlplane.v1.ProviderAuthorizationAbsenceDescriptor
-	(*ProviderAuthorizationObjectDescriptor)(nil),                                   // 1006: controlplane.v1.ProviderAuthorizationObjectDescriptor
-	(*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest)(nil),  // 1007: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest
-	(*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse)(nil), // 1008: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
-	(*ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest)(nil),           // 1009: controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest
-	(*ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse)(nil),          // 1010: controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse
-	(*ProviderCredentialMaterializerServiceDiscardMaterializationRequest)(nil),      // 1011: controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest
-	(*ProviderCredentialMaterializerServiceDiscardMaterializationResponse)(nil),     // 1012: controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse
-	(*CommitProviderCredentialRefreshRequest)(nil),                                  // 1013: controlplane.v1.CommitProviderCredentialRefreshRequest
-	(*CommitProviderCredentialRefreshResponse)(nil),                                 // 1014: controlplane.v1.CommitProviderCredentialRefreshResponse
-	(*ProviderCredentialCleanupRecoveryIdentity)(nil),                               // 1015: controlplane.v1.ProviderCredentialCleanupRecoveryIdentity
-	(*ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest)(nil),   // 1016: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest
-	(*ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse)(nil),  // 1017: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
-	(*CredentialProjectionAuthority)(nil),                                           // 1018: controlplane.v1.CredentialProjectionAuthority
-	(*CheckCredentialProjectionWorkReadinessRequest)(nil),                           // 1019: controlplane.v1.CheckCredentialProjectionWorkReadinessRequest
-	(*CheckCredentialProjectionWorkReadinessResponse)(nil),                          // 1020: controlplane.v1.CheckCredentialProjectionWorkReadinessResponse
-	(*ResolveRuntimeCredentialProjectionRequest)(nil),                               // 1021: controlplane.v1.ResolveRuntimeCredentialProjectionRequest
-	(*ResolveRuntimeCredentialProjectionResponse)(nil),                              // 1022: controlplane.v1.ResolveRuntimeCredentialProjectionResponse
-	(*ValidateRuntimeCredentialProjectionRequest)(nil),                              // 1023: controlplane.v1.ValidateRuntimeCredentialProjectionRequest
-	(*ValidateRuntimeCredentialProjectionResponse)(nil),                             // 1024: controlplane.v1.ValidateRuntimeCredentialProjectionResponse
-	(*ResolveTranscriptionCredentialProjectionRequest)(nil),                         // 1025: controlplane.v1.ResolveTranscriptionCredentialProjectionRequest
-	(*ResolveTranscriptionCredentialProjectionResponse)(nil),                        // 1026: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse
-	(*ManagedConfigurationGitSource)(nil),                                           // 1027: controlplane.v1.ManagedConfigurationGitSource
-	(*ManagedConfigurationGitSourceInput)(nil),                                      // 1028: controlplane.v1.ManagedConfigurationGitSourceInput
-	(*ConfigureRoleImageGitSourceRequest)(nil),                                      // 1029: controlplane.v1.ConfigureRoleImageGitSourceRequest
-	(*ConfigureRoleImageGitSourceResponse)(nil),                                     // 1030: controlplane.v1.ConfigureRoleImageGitSourceResponse
-	(*ConfigureIntegrationDefinitionGitSourceRequest)(nil),                          // 1031: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest
-	(*ConfigureIntegrationDefinitionGitSourceResponse)(nil),                         // 1032: controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse
-	(*RefreshRoleImageGitSourceRequest)(nil),                                        // 1033: controlplane.v1.RefreshRoleImageGitSourceRequest
-	(*RefreshRoleImageGitSourceResponse)(nil),                                       // 1034: controlplane.v1.RefreshRoleImageGitSourceResponse
-	(*RefreshIntegrationDefinitionGitSourceRequest)(nil),                            // 1035: controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest
-	(*RefreshIntegrationDefinitionGitSourceResponse)(nil),                           // 1036: controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse
-	(*ManagedConfigurationSourceLease)(nil),                                         // 1037: controlplane.v1.ManagedConfigurationSourceLease
-	(*ManagedConfigurationSourceWork)(nil),                                          // 1038: controlplane.v1.ManagedConfigurationSourceWork
-	(*ClaimManagedConfigurationSourceWorkRequest)(nil),                              // 1039: controlplane.v1.ClaimManagedConfigurationSourceWorkRequest
-	(*ClaimManagedConfigurationSourceWorkResponse)(nil),                             // 1040: controlplane.v1.ClaimManagedConfigurationSourceWorkResponse
-	(*RenewManagedConfigurationSourceWorkRequest)(nil),                              // 1041: controlplane.v1.RenewManagedConfigurationSourceWorkRequest
-	(*RenewManagedConfigurationSourceWorkResponse)(nil),                             // 1042: controlplane.v1.RenewManagedConfigurationSourceWorkResponse
-	(*CompleteManagedConfigurationSourceWorkRequest)(nil),                           // 1043: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest
-	(*CompleteManagedConfigurationSourceWorkResponse)(nil),                          // 1044: controlplane.v1.CompleteManagedConfigurationSourceWorkResponse
-	(*FailManagedConfigurationSourceWorkRequest)(nil),                               // 1045: controlplane.v1.FailManagedConfigurationSourceWorkRequest
-	(*FailManagedConfigurationSourceWorkResponse)(nil),                              // 1046: controlplane.v1.FailManagedConfigurationSourceWorkResponse
-	(*ManagedConfigurationGitWriteBackActionAvailability)(nil),                      // 1047: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability
-	(*ManagedConfigurationGitWriteBack)(nil),                                        // 1048: controlplane.v1.ManagedConfigurationGitWriteBack
-	(*PrepareRoleImageGitWriteBackRequest)(nil),                                     // 1049: controlplane.v1.PrepareRoleImageGitWriteBackRequest
-	(*PrepareRoleImageGitWriteBackResponse)(nil),                                    // 1050: controlplane.v1.PrepareRoleImageGitWriteBackResponse
-	(*PrepareIntegrationDefinitionGitWriteBackRequest)(nil),                         // 1051: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest
-	(*PrepareIntegrationDefinitionGitWriteBackResponse)(nil),                        // 1052: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse
-	(*ApproveManagedConfigurationGitWriteBackRequest)(nil),                          // 1053: controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest
-	(*ApproveManagedConfigurationGitWriteBackResponse)(nil),                         // 1054: controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse
-	(*RejectManagedConfigurationGitWriteBackRequest)(nil),                           // 1055: controlplane.v1.RejectManagedConfigurationGitWriteBackRequest
-	(*RejectManagedConfigurationGitWriteBackResponse)(nil),                          // 1056: controlplane.v1.RejectManagedConfigurationGitWriteBackResponse
-	(*CancelManagedConfigurationGitWriteBackRequest)(nil),                           // 1057: controlplane.v1.CancelManagedConfigurationGitWriteBackRequest
-	(*CancelManagedConfigurationGitWriteBackResponse)(nil),                          // 1058: controlplane.v1.CancelManagedConfigurationGitWriteBackResponse
-	(*GetManagedConfigurationGitWriteBackRequest)(nil),                              // 1059: controlplane.v1.GetManagedConfigurationGitWriteBackRequest
-	(*GetManagedConfigurationGitWriteBackResponse)(nil),                             // 1060: controlplane.v1.GetManagedConfigurationGitWriteBackResponse
-	(*ListManagedConfigurationGitWriteBacksRequest)(nil),                            // 1061: controlplane.v1.ListManagedConfigurationGitWriteBacksRequest
-	(*ListManagedConfigurationGitWriteBacksResponse)(nil),                           // 1062: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse
-	(*ManagedConfigurationGitWriteBackLease)(nil),                                   // 1063: controlplane.v1.ManagedConfigurationGitWriteBackLease
-	(*ManagedConfigurationGitWriteBackWork)(nil),                                    // 1064: controlplane.v1.ManagedConfigurationGitWriteBackWork
-	(*ClaimManagedConfigurationGitWriteBackWorkRequest)(nil),                        // 1065: controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkRequest
-	(*ClaimManagedConfigurationGitWriteBackWorkResponse)(nil),                       // 1066: controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse
-	(*RenewManagedConfigurationGitWriteBackWorkRequest)(nil),                        // 1067: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest
-	(*RenewManagedConfigurationGitWriteBackWorkResponse)(nil),                       // 1068: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse
-	(*BeginManagedConfigurationGitWriteBackEffectRequest)(nil),                      // 1069: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest
-	(*BeginManagedConfigurationGitWriteBackEffectResponse)(nil),                     // 1070: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse
-	(*CompleteManagedConfigurationGitWriteBackEffectRequest)(nil),                   // 1071: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest
-	(*CompleteManagedConfigurationGitWriteBackEffectResponse)(nil),                  // 1072: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse
-	(*FailManagedConfigurationGitWriteBackWorkRequest)(nil),                         // 1073: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest
-	(*FailManagedConfigurationGitWriteBackWorkResponse)(nil),                        // 1074: controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse
-	(*AssistantIntegrationDefinition)(nil),                                          // 1075: controlplane.v1.AssistantIntegrationDefinition
-	nil,                                                                             // 1076: controlplane.v1.IntegrationResourceScope.ValuesEntry
-	nil,                                                                             // 1077: controlplane.v1.IntegrationGrantConnectionCandidate.ResourceScopeEntry
-	(*timestamppb.Timestamp)(nil),                                                   // 1078: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),                                                         // 1079: google.protobuf.Struct
-	(*structpb.Value)(nil),                                                          // 1080: google.protobuf.Value
+	(*SetProviderAccountConcurrencyRequest)(nil),                                    // 775: controlplane.v1.SetProviderAccountConcurrencyRequest
+	(*SetProviderAccountConcurrencyResponse)(nil),                                   // 776: controlplane.v1.SetProviderAccountConcurrencyResponse
+	(*SetProviderAccountEnabledRequest)(nil),                                        // 777: controlplane.v1.SetProviderAccountEnabledRequest
+	(*SetProviderAccountEnabledResponse)(nil),                                       // 778: controlplane.v1.SetProviderAccountEnabledResponse
+	(*ListScheduleRevisionsRequest)(nil),                                            // 779: controlplane.v1.ListScheduleRevisionsRequest
+	(*ListScheduleRevisionsResponse)(nil),                                           // 780: controlplane.v1.ListScheduleRevisionsResponse
+	(*ListScheduleRunsRequest)(nil),                                                 // 781: controlplane.v1.ListScheduleRunsRequest
+	(*ListScheduleRunsResponse)(nil),                                                // 782: controlplane.v1.ListScheduleRunsResponse
+	(*DeleteScheduleRequest)(nil),                                                   // 783: controlplane.v1.DeleteScheduleRequest
+	(*DeleteScheduleResponse)(nil),                                                  // 784: controlplane.v1.DeleteScheduleResponse
+	(*ArtifactImpact)(nil),                                                          // 785: controlplane.v1.ArtifactImpact
+	(*ArtifactImpactRun)(nil),                                                       // 786: controlplane.v1.ArtifactImpactRun
+	(*GetArtifactImpactRequest)(nil),                                                // 787: controlplane.v1.GetArtifactImpactRequest
+	(*GetArtifactImpactResponse)(nil),                                               // 788: controlplane.v1.GetArtifactImpactResponse
+	(*SetAgentAvatarRequest)(nil),                                                   // 789: controlplane.v1.SetAgentAvatarRequest
+	(*SetAgentAvatarResponse)(nil),                                                  // 790: controlplane.v1.SetAgentAvatarResponse
+	(*RemoveAgentAvatarRequest)(nil),                                                // 791: controlplane.v1.RemoveAgentAvatarRequest
+	(*RemoveAgentAvatarResponse)(nil),                                               // 792: controlplane.v1.RemoveAgentAvatarResponse
+	(*PromptTemplateDiagnostic)(nil),                                                // 793: controlplane.v1.PromptTemplateDiagnostic
+	(*ValidatePromptTemplateRequest)(nil),                                           // 794: controlplane.v1.ValidatePromptTemplateRequest
+	(*ValidatePromptTemplateResponse)(nil),                                          // 795: controlplane.v1.ValidatePromptTemplateResponse
+	(*PreviewPromptTemplateRequest)(nil),                                            // 796: controlplane.v1.PreviewPromptTemplateRequest
+	(*PromptPreviewContext)(nil),                                                    // 797: controlplane.v1.PromptPreviewContext
+	(*PromptSlotProvenance)(nil),                                                    // 798: controlplane.v1.PromptSlotProvenance
+	(*PromptPreviewSection)(nil),                                                    // 799: controlplane.v1.PromptPreviewSection
+	(*PromptContextPin)(nil),                                                        // 800: controlplane.v1.PromptContextPin
+	(*PreviewPromptTemplateResponse)(nil),                                           // 801: controlplane.v1.PreviewPromptTemplateResponse
+	(*PromptRuntimeDescriptor)(nil),                                                 // 802: controlplane.v1.PromptRuntimeDescriptor
+	(*PromptRuntimeChange)(nil),                                                     // 803: controlplane.v1.PromptRuntimeChange
+	(*PromptRuntimeDiff)(nil),                                                       // 804: controlplane.v1.PromptRuntimeDiff
+	(*ManagedConfigurationRevision)(nil),                                            // 805: controlplane.v1.ManagedConfigurationRevision
+	(*PromptTemplateScopeInput)(nil),                                                // 806: controlplane.v1.PromptTemplateScopeInput
+	(*PromptTemplateScope)(nil),                                                     // 807: controlplane.v1.PromptTemplateScope
+	(*ManagedConfigurationSet)(nil),                                                 // 808: controlplane.v1.ManagedConfigurationSet
+	(*ManagedConfigurationCopyProvenance)(nil),                                      // 809: controlplane.v1.ManagedConfigurationCopyProvenance
+	(*CopyRoleImageConfigurationRequest)(nil),                                       // 810: controlplane.v1.CopyRoleImageConfigurationRequest
+	(*CopyRoleImageConfigurationResponse)(nil),                                      // 811: controlplane.v1.CopyRoleImageConfigurationResponse
+	(*ShippedIntegrationDefinitionCopySource)(nil),                                  // 812: controlplane.v1.ShippedIntegrationDefinitionCopySource
+	(*CopyIntegrationDefinitionConfigurationRequest)(nil),                           // 813: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest
+	(*CopyIntegrationDefinitionConfigurationResponse)(nil),                          // 814: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse
+	(*ArchiveRoleImageConfigurationRequest)(nil),                                    // 815: controlplane.v1.ArchiveRoleImageConfigurationRequest
+	(*ArchiveRoleImageConfigurationResponse)(nil),                                   // 816: controlplane.v1.ArchiveRoleImageConfigurationResponse
+	(*ArchiveIntegrationDefinitionConfigurationRequest)(nil),                        // 817: controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest
+	(*ArchiveIntegrationDefinitionConfigurationResponse)(nil),                       // 818: controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse
+	(*ManagedConfigurationConsumer)(nil),                                            // 819: controlplane.v1.ManagedConfigurationConsumer
+	(*ManagedConfigurationImpact)(nil),                                              // 820: controlplane.v1.ManagedConfigurationImpact
+	(*ManagedConfigurationBindingSnapshot)(nil),                                     // 821: controlplane.v1.ManagedConfigurationBindingSnapshot
+	(*GetRuntimeEnvironmentRoleImageConfigurationRequest)(nil),                      // 822: controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationRequest
+	(*GetRuntimeEnvironmentRoleImageConfigurationResponse)(nil),                     // 823: controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse
+	(*GetIntegrationConnectionDefinitionConfigurationRequest)(nil),                  // 824: controlplane.v1.GetIntegrationConnectionDefinitionConfigurationRequest
+	(*GetIntegrationConnectionDefinitionConfigurationResponse)(nil),                 // 825: controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse
+	(*CreatePromptTemplateDraftRequest)(nil),                                        // 826: controlplane.v1.CreatePromptTemplateDraftRequest
+	(*CreatePromptTemplateDraftResponse)(nil),                                       // 827: controlplane.v1.CreatePromptTemplateDraftResponse
+	(*ValidatePromptTemplateDraftRequest)(nil),                                      // 828: controlplane.v1.ValidatePromptTemplateDraftRequest
+	(*ValidatePromptTemplateDraftResponse)(nil),                                     // 829: controlplane.v1.ValidatePromptTemplateDraftResponse
+	(*PublishPromptTemplateDraftRequest)(nil),                                       // 830: controlplane.v1.PublishPromptTemplateDraftRequest
+	(*PublishPromptTemplateDraftResponse)(nil),                                      // 831: controlplane.v1.PublishPromptTemplateDraftResponse
+	(*RebindPromptTemplateConsumersRequest)(nil),                                    // 832: controlplane.v1.RebindPromptTemplateConsumersRequest
+	(*RebindPromptTemplateConsumersResponse)(nil),                                   // 833: controlplane.v1.RebindPromptTemplateConsumersResponse
+	(*CreateRoleImageRevisionDraftRequest)(nil),                                     // 834: controlplane.v1.CreateRoleImageRevisionDraftRequest
+	(*CreateRoleImageRevisionDraftResponse)(nil),                                    // 835: controlplane.v1.CreateRoleImageRevisionDraftResponse
+	(*ValidateRoleImageRevisionDraftRequest)(nil),                                   // 836: controlplane.v1.ValidateRoleImageRevisionDraftRequest
+	(*ValidateRoleImageRevisionDraftResponse)(nil),                                  // 837: controlplane.v1.ValidateRoleImageRevisionDraftResponse
+	(*PublishRoleImageRevisionDraftRequest)(nil),                                    // 838: controlplane.v1.PublishRoleImageRevisionDraftRequest
+	(*PublishRoleImageRevisionDraftResponse)(nil),                                   // 839: controlplane.v1.PublishRoleImageRevisionDraftResponse
+	(*RebindRoleImageConsumersRequest)(nil),                                         // 840: controlplane.v1.RebindRoleImageConsumersRequest
+	(*RebindRoleImageConsumersResponse)(nil),                                        // 841: controlplane.v1.RebindRoleImageConsumersResponse
+	(*RoleImageImpactPlan)(nil),                                                     // 842: controlplane.v1.RoleImageImpactPlan
+	(*RoleImageImpactItem)(nil),                                                     // 843: controlplane.v1.RoleImageImpactItem
+	(*RevisionImpactPlan)(nil),                                                      // 844: controlplane.v1.RevisionImpactPlan
+	(*RevisionImpactItem)(nil),                                                      // 845: controlplane.v1.RevisionImpactItem
+	(*PrepareEnvironmentDraftImpactRequest)(nil),                                    // 846: controlplane.v1.PrepareEnvironmentDraftImpactRequest
+	(*PrepareEnvironmentDraftImpactResponse)(nil),                                   // 847: controlplane.v1.PrepareEnvironmentDraftImpactResponse
+	(*PrepareInstructionsImpactRequest)(nil),                                        // 848: controlplane.v1.PrepareInstructionsImpactRequest
+	(*PrepareInstructionsImpactResponse)(nil),                                       // 849: controlplane.v1.PrepareInstructionsImpactResponse
+	(*PreparePromptTemplateImpactRequest)(nil),                                      // 850: controlplane.v1.PreparePromptTemplateImpactRequest
+	(*PreparePromptTemplateImpactResponse)(nil),                                     // 851: controlplane.v1.PreparePromptTemplateImpactResponse
+	(*GetRevisionImpactPlanRequest)(nil),                                            // 852: controlplane.v1.GetRevisionImpactPlanRequest
+	(*GetRevisionImpactPlanResponse)(nil),                                           // 853: controlplane.v1.GetRevisionImpactPlanResponse
+	(*PrepareRoleImageImpactPlanRequest)(nil),                                       // 854: controlplane.v1.PrepareRoleImageImpactPlanRequest
+	(*PrepareRoleImageImpactPlanResponse)(nil),                                      // 855: controlplane.v1.PrepareRoleImageImpactPlanResponse
+	(*GetRoleImageImpactPlanRequest)(nil),                                           // 856: controlplane.v1.GetRoleImageImpactPlanRequest
+	(*GetRoleImageImpactPlanResponse)(nil),                                          // 857: controlplane.v1.GetRoleImageImpactPlanResponse
+	(*CreateIntegrationDefinitionDraftRequest)(nil),                                 // 858: controlplane.v1.CreateIntegrationDefinitionDraftRequest
+	(*CreateIntegrationDefinitionDraftResponse)(nil),                                // 859: controlplane.v1.CreateIntegrationDefinitionDraftResponse
+	(*ValidateIntegrationDefinitionDraftRequest)(nil),                               // 860: controlplane.v1.ValidateIntegrationDefinitionDraftRequest
+	(*ValidateIntegrationDefinitionDraftResponse)(nil),                              // 861: controlplane.v1.ValidateIntegrationDefinitionDraftResponse
+	(*PublishIntegrationDefinitionDraftRequest)(nil),                                // 862: controlplane.v1.PublishIntegrationDefinitionDraftRequest
+	(*PublishIntegrationDefinitionDraftResponse)(nil),                               // 863: controlplane.v1.PublishIntegrationDefinitionDraftResponse
+	(*RebindIntegrationDefinitionConsumersRequest)(nil),                             // 864: controlplane.v1.RebindIntegrationDefinitionConsumersRequest
+	(*RebindIntegrationDefinitionConsumersResponse)(nil),                            // 865: controlplane.v1.RebindIntegrationDefinitionConsumersResponse
+	(*CreateSystemSTTConfigurationDraftRequest)(nil),                                // 866: controlplane.v1.CreateSystemSTTConfigurationDraftRequest
+	(*CreateSystemSTTConfigurationDraftResponse)(nil),                               // 867: controlplane.v1.CreateSystemSTTConfigurationDraftResponse
+	(*ValidateSystemSTTConfigurationDraftRequest)(nil),                              // 868: controlplane.v1.ValidateSystemSTTConfigurationDraftRequest
+	(*ValidateSystemSTTConfigurationDraftResponse)(nil),                             // 869: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse
+	(*PublishSystemSTTConfigurationDraftRequest)(nil),                               // 870: controlplane.v1.PublishSystemSTTConfigurationDraftRequest
+	(*PublishSystemSTTConfigurationDraftResponse)(nil),                              // 871: controlplane.v1.PublishSystemSTTConfigurationDraftResponse
+	(*RebindSystemSTTConsumersRequest)(nil),                                         // 872: controlplane.v1.RebindSystemSTTConsumersRequest
+	(*RebindSystemSTTConsumersResponse)(nil),                                        // 873: controlplane.v1.RebindSystemSTTConsumersResponse
+	(*DetachGitManagedConfigurationRequest)(nil),                                    // 874: controlplane.v1.DetachGitManagedConfigurationRequest
+	(*DetachGitManagedConfigurationResponse)(nil),                                   // 875: controlplane.v1.DetachGitManagedConfigurationResponse
+	(*CopyGitManagedConfigurationRequest)(nil),                                      // 876: controlplane.v1.CopyGitManagedConfigurationRequest
+	(*CopyGitManagedConfigurationResponse)(nil),                                     // 877: controlplane.v1.CopyGitManagedConfigurationResponse
+	(*ListManagedConfigurationHistoryRequest)(nil),                                  // 878: controlplane.v1.ListManagedConfigurationHistoryRequest
+	(*ListManagedConfigurationsRequest)(nil),                                        // 879: controlplane.v1.ListManagedConfigurationsRequest
+	(*ListManagedConfigurationsResponse)(nil),                                       // 880: controlplane.v1.ListManagedConfigurationsResponse
+	(*ListManagedConfigurationHistoryResponse)(nil),                                 // 881: controlplane.v1.ListManagedConfigurationHistoryResponse
+	(*GetManagedConfigurationImpactRequest)(nil),                                    // 882: controlplane.v1.GetManagedConfigurationImpactRequest
+	(*GetManagedConfigurationImpactResponse)(nil),                                   // 883: controlplane.v1.GetManagedConfigurationImpactResponse
+	(*ContextProvenance)(nil),                                                       // 884: controlplane.v1.ContextProvenance
+	(*SkillBundleFile)(nil),                                                         // 885: controlplane.v1.SkillBundleFile
+	(*SkillBundleFileInput)(nil),                                                    // 886: controlplane.v1.SkillBundleFileInput
+	(*SkillBundleSpecification)(nil),                                                // 887: controlplane.v1.SkillBundleSpecification
+	(*SkillBundleRevision)(nil),                                                     // 888: controlplane.v1.SkillBundleRevision
+	(*SkillBundle)(nil),                                                             // 889: controlplane.v1.SkillBundle
+	(*EmailMailboxCredentialReference)(nil),                                         // 890: controlplane.v1.EmailMailboxCredentialReference
+	(*EmailMailboxEndpoint)(nil),                                                    // 891: controlplane.v1.EmailMailboxEndpoint
+	(*EmailMailboxLimits)(nil),                                                      // 892: controlplane.v1.EmailMailboxLimits
+	(*EmailMailboxOperationPolicy)(nil),                                             // 893: controlplane.v1.EmailMailboxOperationPolicy
+	(*EmailMailboxSpecification)(nil),                                               // 894: controlplane.v1.EmailMailboxSpecification
+	(*EmailMailboxDraftContent)(nil),                                                // 895: controlplane.v1.EmailMailboxDraftContent
+	(*EmailMailboxDiagnostic)(nil),                                                  // 896: controlplane.v1.EmailMailboxDiagnostic
+	(*EmailMailboxPublication)(nil),                                                 // 897: controlplane.v1.EmailMailboxPublication
+	(*EmailMailboxConfigurationView)(nil),                                           // 898: controlplane.v1.EmailMailboxConfigurationView
+	(*EmailMailboxActionAvailability)(nil),                                          // 899: controlplane.v1.EmailMailboxActionAvailability
+	(*ListEmailMailboxConfigurationsRequest)(nil),                                   // 900: controlplane.v1.ListEmailMailboxConfigurationsRequest
+	(*ListEmailMailboxConfigurationsResponse)(nil),                                  // 901: controlplane.v1.ListEmailMailboxConfigurationsResponse
+	(*GetEmailMailboxConfigurationRequest)(nil),                                     // 902: controlplane.v1.GetEmailMailboxConfigurationRequest
+	(*GetEmailMailboxConfigurationResponse)(nil),                                    // 903: controlplane.v1.GetEmailMailboxConfigurationResponse
+	(*ListEmailMailboxCredentialsRequest)(nil),                                      // 904: controlplane.v1.ListEmailMailboxCredentialsRequest
+	(*ListEmailMailboxCredentialsResponse)(nil),                                     // 905: controlplane.v1.ListEmailMailboxCredentialsResponse
+	(*GetEmailMailboxCredentialReceiptRequest)(nil),                                 // 906: controlplane.v1.GetEmailMailboxCredentialReceiptRequest
+	(*GetEmailMailboxCredentialReceiptResponse)(nil),                                // 907: controlplane.v1.GetEmailMailboxCredentialReceiptResponse
+	(*PreviewEmailMailboxConfigurationRequest)(nil),                                 // 908: controlplane.v1.PreviewEmailMailboxConfigurationRequest
+	(*PreviewEmailMailboxConfigurationResponse)(nil),                                // 909: controlplane.v1.PreviewEmailMailboxConfigurationResponse
+	(*CreateEmailMailboxDraftRequest)(nil),                                          // 910: controlplane.v1.CreateEmailMailboxDraftRequest
+	(*CreateEmailMailboxDraftResponse)(nil),                                         // 911: controlplane.v1.CreateEmailMailboxDraftResponse
+	(*SaveEmailMailboxDraftRequest)(nil),                                            // 912: controlplane.v1.SaveEmailMailboxDraftRequest
+	(*SaveEmailMailboxDraftResponse)(nil),                                           // 913: controlplane.v1.SaveEmailMailboxDraftResponse
+	(*ValidateEmailMailboxDraftRequest)(nil),                                        // 914: controlplane.v1.ValidateEmailMailboxDraftRequest
+	(*ValidateEmailMailboxDraftResponse)(nil),                                       // 915: controlplane.v1.ValidateEmailMailboxDraftResponse
+	(*PublishEmailMailboxDraftRequest)(nil),                                         // 916: controlplane.v1.PublishEmailMailboxDraftRequest
+	(*PublishEmailMailboxDraftResponse)(nil),                                        // 917: controlplane.v1.PublishEmailMailboxDraftResponse
+	(*DiscardEmailMailboxDraftRequest)(nil),                                         // 918: controlplane.v1.DiscardEmailMailboxDraftRequest
+	(*DiscardEmailMailboxDraftResponse)(nil),                                        // 919: controlplane.v1.DiscardEmailMailboxDraftResponse
+	(*BindEmailMailboxConfigurationRequest)(nil),                                    // 920: controlplane.v1.BindEmailMailboxConfigurationRequest
+	(*BindEmailMailboxConfigurationResponse)(nil),                                   // 921: controlplane.v1.BindEmailMailboxConfigurationResponse
+	(*UnbindEmailMailboxConfigurationRequest)(nil),                                  // 922: controlplane.v1.UnbindEmailMailboxConfigurationRequest
+	(*UnbindEmailMailboxConfigurationResponse)(nil),                                 // 923: controlplane.v1.UnbindEmailMailboxConfigurationResponse
+	(*ReportEmailConfigurationReadbackRequest)(nil),                                 // 924: controlplane.v1.ReportEmailConfigurationReadbackRequest
+	(*ReportEmailConfigurationReadbackResponse)(nil),                                // 925: controlplane.v1.ReportEmailConfigurationReadbackResponse
+	(*EmailMailboxCredential)(nil),                                                  // 926: controlplane.v1.EmailMailboxCredential
+	(*ConfigureEmailMailboxCredentialRequest)(nil),                                  // 927: controlplane.v1.ConfigureEmailMailboxCredentialRequest
+	(*ConfigureEmailMailboxCredentialResponse)(nil),                                 // 928: controlplane.v1.ConfigureEmailMailboxCredentialResponse
+	(*EmailExecutionBinding)(nil),                                                   // 929: controlplane.v1.EmailExecutionBinding
+	(*EmailAuthorizationScope)(nil),                                                 // 930: controlplane.v1.EmailAuthorizationScope
+	(*ResolveEmailAuthorizationRequest)(nil),                                        // 931: controlplane.v1.ResolveEmailAuthorizationRequest
+	(*ResolveEmailAuthorizationResponse)(nil),                                       // 932: controlplane.v1.ResolveEmailAuthorizationResponse
+	(*EmailEffectReceipt)(nil),                                                      // 933: controlplane.v1.EmailEffectReceipt
+	(*ReportEmailEffectReceiptRequest)(nil),                                         // 934: controlplane.v1.ReportEmailEffectReceiptRequest
+	(*ReportEmailEffectReceiptResponse)(nil),                                        // 935: controlplane.v1.ReportEmailEffectReceiptResponse
+	(*EmailReconciliationDecision)(nil),                                             // 936: controlplane.v1.EmailReconciliationDecision
+	(*ReconcileEmailEffectRequest)(nil),                                             // 937: controlplane.v1.ReconcileEmailEffectRequest
+	(*ReconcileEmailEffectResponse)(nil),                                            // 938: controlplane.v1.ReconcileEmailEffectResponse
+	(*ResolveEmailReconciliationRequest)(nil),                                       // 939: controlplane.v1.ResolveEmailReconciliationRequest
+	(*ResolveEmailReconciliationResponse)(nil),                                      // 940: controlplane.v1.ResolveEmailReconciliationResponse
+	(*GetEmailEffectReceiptRequest)(nil),                                            // 941: controlplane.v1.GetEmailEffectReceiptRequest
+	(*GetEmailEffectReceiptResponse)(nil),                                           // 942: controlplane.v1.GetEmailEffectReceiptResponse
+	(*AgentContextBinding)(nil),                                                     // 943: controlplane.v1.AgentContextBinding
+	(*MemoryRecordSpecification)(nil),                                               // 944: controlplane.v1.MemoryRecordSpecification
+	(*MemoryRecordRevision)(nil),                                                    // 945: controlplane.v1.MemoryRecordRevision
+	(*KodexMemoryRecord)(nil),                                                       // 946: controlplane.v1.KodexMemoryRecord
+	(*ListSkillBundlesRequest)(nil),                                                 // 947: controlplane.v1.ListSkillBundlesRequest
+	(*ListSkillBundlesResponse)(nil),                                                // 948: controlplane.v1.ListSkillBundlesResponse
+	(*GetSkillBundleRequest)(nil),                                                   // 949: controlplane.v1.GetSkillBundleRequest
+	(*GetSkillBundleResponse)(nil),                                                  // 950: controlplane.v1.GetSkillBundleResponse
+	(*ListSkillBundleRevisionsRequest)(nil),                                         // 951: controlplane.v1.ListSkillBundleRevisionsRequest
+	(*ListSkillBundleRevisionsResponse)(nil),                                        // 952: controlplane.v1.ListSkillBundleRevisionsResponse
+	(*ListMemoryRecordsRequest)(nil),                                                // 953: controlplane.v1.ListMemoryRecordsRequest
+	(*ListMemoryRecordsResponse)(nil),                                               // 954: controlplane.v1.ListMemoryRecordsResponse
+	(*GetMemoryRecordRequest)(nil),                                                  // 955: controlplane.v1.GetMemoryRecordRequest
+	(*GetMemoryRecordResponse)(nil),                                                 // 956: controlplane.v1.GetMemoryRecordResponse
+	(*ListMemoryRecordRevisionsRequest)(nil),                                        // 957: controlplane.v1.ListMemoryRecordRevisionsRequest
+	(*ListMemoryRecordRevisionsResponse)(nil),                                       // 958: controlplane.v1.ListMemoryRecordRevisionsResponse
+	(*CreateSkillBundleDraftRequest)(nil),                                           // 959: controlplane.v1.CreateSkillBundleDraftRequest
+	(*SaveSkillBundleDraftRequest)(nil),                                             // 960: controlplane.v1.SaveSkillBundleDraftRequest
+	(*ReviewSkillBundleDraftRequest)(nil),                                           // 961: controlplane.v1.ReviewSkillBundleDraftRequest
+	(*CreateMemoryRecordRequest)(nil),                                               // 962: controlplane.v1.CreateMemoryRecordRequest
+	(*ReviseMemoryRecordRequest)(nil),                                               // 963: controlplane.v1.ReviseMemoryRecordRequest
+	(*ValidateSkillBundleDraftRequest)(nil),                                         // 964: controlplane.v1.ValidateSkillBundleDraftRequest
+	(*PublishSkillBundleDraftRequest)(nil),                                          // 965: controlplane.v1.PublishSkillBundleDraftRequest
+	(*DiscardSkillBundleDraftRequest)(nil),                                          // 966: controlplane.v1.DiscardSkillBundleDraftRequest
+	(*ArchiveSkillBundleRequest)(nil),                                               // 967: controlplane.v1.ArchiveSkillBundleRequest
+	(*RestoreSkillBundleRequest)(nil),                                               // 968: controlplane.v1.RestoreSkillBundleRequest
+	(*PurgeSkillBundleRequest)(nil),                                                 // 969: controlplane.v1.PurgeSkillBundleRequest
+	(*BindAgentSkillBundleRequest)(nil),                                             // 970: controlplane.v1.BindAgentSkillBundleRequest
+	(*BindAgentSkillBundleResponse)(nil),                                            // 971: controlplane.v1.BindAgentSkillBundleResponse
+	(*UnbindAgentSkillBundleRequest)(nil),                                           // 972: controlplane.v1.UnbindAgentSkillBundleRequest
+	(*UnbindAgentSkillBundleResponse)(nil),                                          // 973: controlplane.v1.UnbindAgentSkillBundleResponse
+	(*ArchiveMemoryRecordRequest)(nil),                                              // 974: controlplane.v1.ArchiveMemoryRecordRequest
+	(*RestoreMemoryRecordRequest)(nil),                                              // 975: controlplane.v1.RestoreMemoryRecordRequest
+	(*PurgeMemoryRecordRequest)(nil),                                                // 976: controlplane.v1.PurgeMemoryRecordRequest
+	(*BindAgentMemoryRecordRequest)(nil),                                            // 977: controlplane.v1.BindAgentMemoryRecordRequest
+	(*BindAgentMemoryRecordResponse)(nil),                                           // 978: controlplane.v1.BindAgentMemoryRecordResponse
+	(*UnbindAgentMemoryRecordRequest)(nil),                                          // 979: controlplane.v1.UnbindAgentMemoryRecordRequest
+	(*UnbindAgentMemoryRecordResponse)(nil),                                         // 980: controlplane.v1.UnbindAgentMemoryRecordResponse
+	(*CreateSkillBundleDraftResponse)(nil),                                          // 981: controlplane.v1.CreateSkillBundleDraftResponse
+	(*SaveSkillBundleDraftResponse)(nil),                                            // 982: controlplane.v1.SaveSkillBundleDraftResponse
+	(*ValidateSkillBundleDraftResponse)(nil),                                        // 983: controlplane.v1.ValidateSkillBundleDraftResponse
+	(*ReviewSkillBundleDraftResponse)(nil),                                          // 984: controlplane.v1.ReviewSkillBundleDraftResponse
+	(*PublishSkillBundleDraftResponse)(nil),                                         // 985: controlplane.v1.PublishSkillBundleDraftResponse
+	(*DiscardSkillBundleDraftResponse)(nil),                                         // 986: controlplane.v1.DiscardSkillBundleDraftResponse
+	(*ArchiveSkillBundleResponse)(nil),                                              // 987: controlplane.v1.ArchiveSkillBundleResponse
+	(*RestoreSkillBundleResponse)(nil),                                              // 988: controlplane.v1.RestoreSkillBundleResponse
+	(*PurgeSkillBundleResponse)(nil),                                                // 989: controlplane.v1.PurgeSkillBundleResponse
+	(*CreateMemoryRecordResponse)(nil),                                              // 990: controlplane.v1.CreateMemoryRecordResponse
+	(*ReviseMemoryRecordResponse)(nil),                                              // 991: controlplane.v1.ReviseMemoryRecordResponse
+	(*ArchiveMemoryRecordResponse)(nil),                                             // 992: controlplane.v1.ArchiveMemoryRecordResponse
+	(*RestoreMemoryRecordResponse)(nil),                                             // 993: controlplane.v1.RestoreMemoryRecordResponse
+	(*PurgeMemoryRecordResponse)(nil),                                               // 994: controlplane.v1.PurgeMemoryRecordResponse
+	(*SystemSTTParameters)(nil),                                                     // 995: controlplane.v1.SystemSTTParameters
+	(*SystemSTTConfiguration)(nil),                                                  // 996: controlplane.v1.SystemSTTConfiguration
+	(*GetSystemSTTConfigurationRequest)(nil),                                        // 997: controlplane.v1.GetSystemSTTConfigurationRequest
+	(*GetSystemSTTConfigurationResponse)(nil),                                       // 998: controlplane.v1.GetSystemSTTConfigurationResponse
+	(*ProviderCredentialDescriptor)(nil),                                            // 999: controlplane.v1.ProviderCredentialDescriptor
+	(*CheckProviderCredentialMaterializerReadinessRequest)(nil),                     // 1000: controlplane.v1.CheckProviderCredentialMaterializerReadinessRequest
+	(*ProviderModelCatalogRecord)(nil),                                              // 1001: controlplane.v1.ProviderModelCatalogRecord
+	(*ObserveProviderModelCatalogRequest)(nil),                                      // 1002: controlplane.v1.ObserveProviderModelCatalogRequest
+	(*ObserveProviderModelCatalogResponse)(nil),                                     // 1003: controlplane.v1.ObserveProviderModelCatalogResponse
+	(*CheckProviderCredentialMaterializerReadinessResponse)(nil),                    // 1004: controlplane.v1.CheckProviderCredentialMaterializerReadinessResponse
+	(*ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest)(nil),    // 1005: controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest
+	(*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse)(nil),   // 1006: controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse
+	(*ProviderAuthorizationAbsenceDescriptor)(nil),                                  // 1007: controlplane.v1.ProviderAuthorizationAbsenceDescriptor
+	(*ProviderAuthorizationObjectDescriptor)(nil),                                   // 1008: controlplane.v1.ProviderAuthorizationObjectDescriptor
+	(*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest)(nil),  // 1009: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest
+	(*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse)(nil), // 1010: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
+	(*ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest)(nil),           // 1011: controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest
+	(*ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse)(nil),          // 1012: controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse
+	(*ProviderCredentialMaterializerServiceDiscardMaterializationRequest)(nil),      // 1013: controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest
+	(*ProviderCredentialMaterializerServiceDiscardMaterializationResponse)(nil),     // 1014: controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse
+	(*CommitProviderCredentialRefreshRequest)(nil),                                  // 1015: controlplane.v1.CommitProviderCredentialRefreshRequest
+	(*CommitProviderCredentialRefreshResponse)(nil),                                 // 1016: controlplane.v1.CommitProviderCredentialRefreshResponse
+	(*ProviderCredentialCleanupRecoveryIdentity)(nil),                               // 1017: controlplane.v1.ProviderCredentialCleanupRecoveryIdentity
+	(*ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest)(nil),   // 1018: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest
+	(*ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse)(nil),  // 1019: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
+	(*CredentialProjectionAuthority)(nil),                                           // 1020: controlplane.v1.CredentialProjectionAuthority
+	(*CheckCredentialProjectionWorkReadinessRequest)(nil),                           // 1021: controlplane.v1.CheckCredentialProjectionWorkReadinessRequest
+	(*CheckCredentialProjectionWorkReadinessResponse)(nil),                          // 1022: controlplane.v1.CheckCredentialProjectionWorkReadinessResponse
+	(*ResolveRuntimeCredentialProjectionRequest)(nil),                               // 1023: controlplane.v1.ResolveRuntimeCredentialProjectionRequest
+	(*ResolveRuntimeCredentialProjectionResponse)(nil),                              // 1024: controlplane.v1.ResolveRuntimeCredentialProjectionResponse
+	(*ValidateRuntimeCredentialProjectionRequest)(nil),                              // 1025: controlplane.v1.ValidateRuntimeCredentialProjectionRequest
+	(*ValidateRuntimeCredentialProjectionResponse)(nil),                             // 1026: controlplane.v1.ValidateRuntimeCredentialProjectionResponse
+	(*ResolveTranscriptionCredentialProjectionRequest)(nil),                         // 1027: controlplane.v1.ResolveTranscriptionCredentialProjectionRequest
+	(*ResolveTranscriptionCredentialProjectionResponse)(nil),                        // 1028: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse
+	(*ManagedConfigurationGitSource)(nil),                                           // 1029: controlplane.v1.ManagedConfigurationGitSource
+	(*ManagedConfigurationGitSourceInput)(nil),                                      // 1030: controlplane.v1.ManagedConfigurationGitSourceInput
+	(*ConfigureRoleImageGitSourceRequest)(nil),                                      // 1031: controlplane.v1.ConfigureRoleImageGitSourceRequest
+	(*ConfigureRoleImageGitSourceResponse)(nil),                                     // 1032: controlplane.v1.ConfigureRoleImageGitSourceResponse
+	(*ConfigureIntegrationDefinitionGitSourceRequest)(nil),                          // 1033: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest
+	(*ConfigureIntegrationDefinitionGitSourceResponse)(nil),                         // 1034: controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse
+	(*RefreshRoleImageGitSourceRequest)(nil),                                        // 1035: controlplane.v1.RefreshRoleImageGitSourceRequest
+	(*RefreshRoleImageGitSourceResponse)(nil),                                       // 1036: controlplane.v1.RefreshRoleImageGitSourceResponse
+	(*RefreshIntegrationDefinitionGitSourceRequest)(nil),                            // 1037: controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest
+	(*RefreshIntegrationDefinitionGitSourceResponse)(nil),                           // 1038: controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse
+	(*ManagedConfigurationSourceLease)(nil),                                         // 1039: controlplane.v1.ManagedConfigurationSourceLease
+	(*ManagedConfigurationSourceWork)(nil),                                          // 1040: controlplane.v1.ManagedConfigurationSourceWork
+	(*ClaimManagedConfigurationSourceWorkRequest)(nil),                              // 1041: controlplane.v1.ClaimManagedConfigurationSourceWorkRequest
+	(*ClaimManagedConfigurationSourceWorkResponse)(nil),                             // 1042: controlplane.v1.ClaimManagedConfigurationSourceWorkResponse
+	(*RenewManagedConfigurationSourceWorkRequest)(nil),                              // 1043: controlplane.v1.RenewManagedConfigurationSourceWorkRequest
+	(*RenewManagedConfigurationSourceWorkResponse)(nil),                             // 1044: controlplane.v1.RenewManagedConfigurationSourceWorkResponse
+	(*CompleteManagedConfigurationSourceWorkRequest)(nil),                           // 1045: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest
+	(*CompleteManagedConfigurationSourceWorkResponse)(nil),                          // 1046: controlplane.v1.CompleteManagedConfigurationSourceWorkResponse
+	(*FailManagedConfigurationSourceWorkRequest)(nil),                               // 1047: controlplane.v1.FailManagedConfigurationSourceWorkRequest
+	(*FailManagedConfigurationSourceWorkResponse)(nil),                              // 1048: controlplane.v1.FailManagedConfigurationSourceWorkResponse
+	(*ManagedConfigurationGitWriteBackActionAvailability)(nil),                      // 1049: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability
+	(*ManagedConfigurationGitWriteBack)(nil),                                        // 1050: controlplane.v1.ManagedConfigurationGitWriteBack
+	(*PrepareRoleImageGitWriteBackRequest)(nil),                                     // 1051: controlplane.v1.PrepareRoleImageGitWriteBackRequest
+	(*PrepareRoleImageGitWriteBackResponse)(nil),                                    // 1052: controlplane.v1.PrepareRoleImageGitWriteBackResponse
+	(*PrepareIntegrationDefinitionGitWriteBackRequest)(nil),                         // 1053: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest
+	(*PrepareIntegrationDefinitionGitWriteBackResponse)(nil),                        // 1054: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse
+	(*ApproveManagedConfigurationGitWriteBackRequest)(nil),                          // 1055: controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest
+	(*ApproveManagedConfigurationGitWriteBackResponse)(nil),                         // 1056: controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse
+	(*RejectManagedConfigurationGitWriteBackRequest)(nil),                           // 1057: controlplane.v1.RejectManagedConfigurationGitWriteBackRequest
+	(*RejectManagedConfigurationGitWriteBackResponse)(nil),                          // 1058: controlplane.v1.RejectManagedConfigurationGitWriteBackResponse
+	(*CancelManagedConfigurationGitWriteBackRequest)(nil),                           // 1059: controlplane.v1.CancelManagedConfigurationGitWriteBackRequest
+	(*CancelManagedConfigurationGitWriteBackResponse)(nil),                          // 1060: controlplane.v1.CancelManagedConfigurationGitWriteBackResponse
+	(*GetManagedConfigurationGitWriteBackRequest)(nil),                              // 1061: controlplane.v1.GetManagedConfigurationGitWriteBackRequest
+	(*GetManagedConfigurationGitWriteBackResponse)(nil),                             // 1062: controlplane.v1.GetManagedConfigurationGitWriteBackResponse
+	(*ListManagedConfigurationGitWriteBacksRequest)(nil),                            // 1063: controlplane.v1.ListManagedConfigurationGitWriteBacksRequest
+	(*ListManagedConfigurationGitWriteBacksResponse)(nil),                           // 1064: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse
+	(*ManagedConfigurationGitWriteBackLease)(nil),                                   // 1065: controlplane.v1.ManagedConfigurationGitWriteBackLease
+	(*ManagedConfigurationGitWriteBackWork)(nil),                                    // 1066: controlplane.v1.ManagedConfigurationGitWriteBackWork
+	(*ClaimManagedConfigurationGitWriteBackWorkRequest)(nil),                        // 1067: controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkRequest
+	(*ClaimManagedConfigurationGitWriteBackWorkResponse)(nil),                       // 1068: controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse
+	(*RenewManagedConfigurationGitWriteBackWorkRequest)(nil),                        // 1069: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest
+	(*RenewManagedConfigurationGitWriteBackWorkResponse)(nil),                       // 1070: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse
+	(*BeginManagedConfigurationGitWriteBackEffectRequest)(nil),                      // 1071: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest
+	(*BeginManagedConfigurationGitWriteBackEffectResponse)(nil),                     // 1072: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse
+	(*CompleteManagedConfigurationGitWriteBackEffectRequest)(nil),                   // 1073: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest
+	(*CompleteManagedConfigurationGitWriteBackEffectResponse)(nil),                  // 1074: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse
+	(*FailManagedConfigurationGitWriteBackWorkRequest)(nil),                         // 1075: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest
+	(*FailManagedConfigurationGitWriteBackWorkResponse)(nil),                        // 1076: controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse
+	(*AssistantIntegrationDefinition)(nil),                                          // 1077: controlplane.v1.AssistantIntegrationDefinition
+	nil,                                                                             // 1078: controlplane.v1.IntegrationResourceScope.ValuesEntry
+	nil,                                                                             // 1079: controlplane.v1.IntegrationGrantConnectionCandidate.ResourceScopeEntry
+	(*timestamppb.Timestamp)(nil),                                                   // 1080: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),                                                         // 1081: google.protobuf.Struct
+	(*structpb.Value)(nil),                                                          // 1082: google.protobuf.Value
 }
 var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	131,  // 0: controlplane.v1.Membership.user:type_name -> controlplane.v1.UserSummary
 	0,    // 1: controlplane.v1.Membership.platform_role:type_name -> controlplane.v1.PlatformRole
 	1,    // 2: controlplane.v1.Membership.project_permissions:type_name -> controlplane.v1.ProjectPermission
-	1078, // 3: controlplane.v1.Membership.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 3: controlplane.v1.Membership.updated_at:type_name -> google.protobuf.Timestamp
 	2,    // 4: controlplane.v1.Membership.next_actions:type_name -> controlplane.v1.NextAction
 	3,    // 5: controlplane.v1.Project.lifecycle:type_name -> controlplane.v1.EntityLifecycle
-	1078, // 6: controlplane.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 7: controlplane.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 6: controlplane.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 7: controlplane.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
 	2,    // 8: controlplane.v1.Project.next_actions:type_name -> controlplane.v1.NextAction
-	1078, // 9: controlplane.v1.Project.last_activity_at:type_name -> google.protobuf.Timestamp
-	1078, // 10: controlplane.v1.Project.deleted_at:type_name -> google.protobuf.Timestamp
-	1078, // 11: controlplane.v1.Project.purge_after:type_name -> google.protobuf.Timestamp
+	1080, // 9: controlplane.v1.Project.last_activity_at:type_name -> google.protobuf.Timestamp
+	1080, // 10: controlplane.v1.Project.deleted_at:type_name -> google.protobuf.Timestamp
+	1080, // 11: controlplane.v1.Project.purge_after:type_name -> google.protobuf.Timestamp
 	5,    // 12: controlplane.v1.InstructionVersion.state:type_name -> controlplane.v1.InstructionState
 	131,  // 13: controlplane.v1.InstructionVersion.changed_by:type_name -> controlplane.v1.UserSummary
-	1078, // 14: controlplane.v1.InstructionVersion.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 15: controlplane.v1.InstructionVersion.published_at:type_name -> google.protobuf.Timestamp
+	1080, // 14: controlplane.v1.InstructionVersion.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 15: controlplane.v1.InstructionVersion.published_at:type_name -> google.protobuf.Timestamp
 	4,    // 16: controlplane.v1.Agent.state:type_name -> controlplane.v1.AgentState
 	135,  // 17: controlplane.v1.Agent.runtime:type_name -> controlplane.v1.RuntimeSelection
 	136,  // 18: controlplane.v1.Agent.published_instructions:type_name -> controlplane.v1.InstructionVersion
 	136,  // 19: controlplane.v1.Agent.draft_instructions:type_name -> controlplane.v1.InstructionVersion
 	134,  // 20: controlplane.v1.Agent.capabilities:type_name -> controlplane.v1.PlatformCapability
-	1078, // 21: controlplane.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 21: controlplane.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
 	2,    // 22: controlplane.v1.Agent.next_actions:type_name -> controlplane.v1.NextAction
 	139,  // 23: controlplane.v1.Agent.avatar:type_name -> controlplane.v1.AgentAvatar
 	138,  // 24: controlplane.v1.Agent.instruction_binding:type_name -> controlplane.v1.AgentInstructionsBinding
@@ -83270,42 +83393,42 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	6,    // 27: controlplane.v1.WorkflowVersion.state:type_name -> controlplane.v1.WorkflowState
 	140,  // 28: controlplane.v1.WorkflowVersion.input_fields:type_name -> controlplane.v1.WorkflowInputField
 	141,  // 29: controlplane.v1.WorkflowVersion.steps:type_name -> controlplane.v1.WorkflowStep
-	1078, // 30: controlplane.v1.WorkflowVersion.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 31: controlplane.v1.WorkflowVersion.published_at:type_name -> google.protobuf.Timestamp
+	1080, // 30: controlplane.v1.WorkflowVersion.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 31: controlplane.v1.WorkflowVersion.published_at:type_name -> google.protobuf.Timestamp
 	6,    // 32: controlplane.v1.Workflow.state:type_name -> controlplane.v1.WorkflowState
 	142,  // 33: controlplane.v1.Workflow.published_version:type_name -> controlplane.v1.WorkflowVersion
 	142,  // 34: controlplane.v1.Workflow.draft_version:type_name -> controlplane.v1.WorkflowVersion
-	1078, // 35: controlplane.v1.Workflow.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 35: controlplane.v1.Workflow.updated_at:type_name -> google.protobuf.Timestamp
 	2,    // 36: controlplane.v1.Workflow.next_actions:type_name -> controlplane.v1.NextAction
 	145,  // 37: controlplane.v1.Workflow.launch_readiness:type_name -> controlplane.v1.WorkflowLaunchReadiness
 	144,  // 38: controlplane.v1.Workflow.card_summary:type_name -> controlplane.v1.WorkflowCardSummary
-	1078, // 39: controlplane.v1.WorkflowCardSummary.last_activity_at:type_name -> google.protobuf.Timestamp
+	1080, // 39: controlplane.v1.WorkflowCardSummary.last_activity_at:type_name -> google.protobuf.Timestamp
 	146,  // 40: controlplane.v1.Run.target:type_name -> controlplane.v1.RunTarget
 	7,    // 41: controlplane.v1.Run.state:type_name -> controlplane.v1.RunState
 	8,    // 42: controlplane.v1.Run.source:type_name -> controlplane.v1.RunSource
 	131,  // 43: controlplane.v1.Run.initiator:type_name -> controlplane.v1.UserSummary
-	1078, // 44: controlplane.v1.Run.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 45: controlplane.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	1078, // 46: controlplane.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	1080, // 44: controlplane.v1.Run.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 45: controlplane.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	1080, // 46: controlplane.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
 	2,    // 47: controlplane.v1.Run.next_actions:type_name -> controlplane.v1.NextAction
 	182,  // 48: controlplane.v1.Run.incidents:type_name -> controlplane.v1.Incident
 	147,  // 49: controlplane.v1.Run.usage:type_name -> controlplane.v1.TokenUsage
 	9,    // 50: controlplane.v1.RunNode.type:type_name -> controlplane.v1.RunNodeType
 	10,   // 51: controlplane.v1.RunNode.state:type_name -> controlplane.v1.RunNodeState
-	1078, // 52: controlplane.v1.RunNode.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 53: controlplane.v1.RunNode.started_at:type_name -> google.protobuf.Timestamp
-	1078, // 54: controlplane.v1.RunNode.finished_at:type_name -> google.protobuf.Timestamp
+	1080, // 52: controlplane.v1.RunNode.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 53: controlplane.v1.RunNode.started_at:type_name -> google.protobuf.Timestamp
+	1080, // 54: controlplane.v1.RunNode.finished_at:type_name -> google.protobuf.Timestamp
 	2,    // 55: controlplane.v1.RunNode.next_actions:type_name -> controlplane.v1.NextAction
 	11,   // 56: controlplane.v1.RunEdge.type:type_name -> controlplane.v1.RunEdgeType
 	7,    // 57: controlplane.v1.RunDelta.state:type_name -> controlplane.v1.RunState
-	1078, // 58: controlplane.v1.RunDelta.started_at:type_name -> google.protobuf.Timestamp
-	1078, // 59: controlplane.v1.RunDelta.finished_at:type_name -> google.protobuf.Timestamp
+	1080, // 58: controlplane.v1.RunDelta.started_at:type_name -> google.protobuf.Timestamp
+	1080, // 59: controlplane.v1.RunDelta.finished_at:type_name -> google.protobuf.Timestamp
 	2,    // 60: controlplane.v1.RunDelta.next_actions:type_name -> controlplane.v1.NextAction
 	147,  // 61: controlplane.v1.RunDelta.usage:type_name -> controlplane.v1.TokenUsage
 	12,   // 62: controlplane.v1.RunEvent.type:type_name -> controlplane.v1.RunEventType
 	7,    // 63: controlplane.v1.RunEvent.run_state:type_name -> controlplane.v1.RunState
 	10,   // 64: controlplane.v1.RunEvent.node_state:type_name -> controlplane.v1.RunNodeState
-	1078, // 65: controlplane.v1.RunEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	1080, // 65: controlplane.v1.RunEvent.occurred_at:type_name -> google.protobuf.Timestamp
 	151,  // 66: controlplane.v1.RunEvent.run:type_name -> controlplane.v1.RunDelta
 	149,  // 67: controlplane.v1.RunEvent.node:type_name -> controlplane.v1.RunNode
 	150,  // 68: controlplane.v1.RunEvent.edge:type_name -> controlplane.v1.RunEdge
@@ -83316,7 +83439,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	14,   // 73: controlplane.v1.RunEvent.message_kind:type_name -> controlplane.v1.RunEventMessageKind
 	154,  // 74: controlplane.v1.RunEvent.tool_call:type_name -> controlplane.v1.RunToolCall
 	13,   // 75: controlplane.v1.RunEventActor.kind:type_name -> controlplane.v1.RunEventActorKind
-	1079, // 76: controlplane.v1.RunToolCall.safe_parameters:type_name -> google.protobuf.Struct
+	1081, // 76: controlplane.v1.RunToolCall.safe_parameters:type_name -> google.protobuf.Struct
 	15,   // 77: controlplane.v1.RunToolCall.state:type_name -> controlplane.v1.RunToolCallState
 	149,  // 78: controlplane.v1.RunGraph.nodes:type_name -> controlplane.v1.RunNode
 	150,  // 79: controlplane.v1.RunGraph.edges:type_name -> controlplane.v1.RunEdge
@@ -83325,39 +83448,39 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	17,   // 82: controlplane.v1.OwnerGate.allowed_decisions:type_name -> controlplane.v1.OwnerGateDecision
 	17,   // 83: controlplane.v1.OwnerGate.decision:type_name -> controlplane.v1.OwnerGateDecision
 	131,  // 84: controlplane.v1.OwnerGate.decided_by:type_name -> controlplane.v1.UserSummary
-	1078, // 85: controlplane.v1.OwnerGate.opened_at:type_name -> google.protobuf.Timestamp
-	1078, // 86: controlplane.v1.OwnerGate.expires_at:type_name -> google.protobuf.Timestamp
-	1078, // 87: controlplane.v1.OwnerGate.decided_at:type_name -> google.protobuf.Timestamp
+	1080, // 85: controlplane.v1.OwnerGate.opened_at:type_name -> google.protobuf.Timestamp
+	1080, // 86: controlplane.v1.OwnerGate.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 87: controlplane.v1.OwnerGate.decided_at:type_name -> google.protobuf.Timestamp
 	2,    // 88: controlplane.v1.OwnerGate.next_actions:type_name -> controlplane.v1.NextAction
 	157,  // 89: controlplane.v1.OwnerGate.decision_consequences:type_name -> controlplane.v1.OwnerGateDecisionConsequence
 	158,  // 90: controlplane.v1.OwnerGate.integration_intent:type_name -> controlplane.v1.IntegrationIntent
 	17,   // 91: controlplane.v1.OwnerGateDecisionConsequence.decision:type_name -> controlplane.v1.OwnerGateDecision
 	168,  // 92: controlplane.v1.IntegrationIntent.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
-	1079, // 93: controlplane.v1.IntegrationIntent.effect_preview:type_name -> google.protobuf.Struct
+	1081, // 93: controlplane.v1.IntegrationIntent.effect_preview:type_name -> google.protobuf.Struct
 	18,   // 94: controlplane.v1.Artifact.scan_state:type_name -> controlplane.v1.ArtifactScanState
 	19,   // 95: controlplane.v1.Artifact.source:type_name -> controlplane.v1.ArtifactSource
-	1078, // 96: controlplane.v1.Artifact.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 96: controlplane.v1.Artifact.created_at:type_name -> google.protobuf.Timestamp
 	2,    // 97: controlplane.v1.Artifact.next_actions:type_name -> controlplane.v1.NextAction
 	20,   // 98: controlplane.v1.Artifact.lifecycle_state:type_name -> controlplane.v1.ArtifactLifecycleState
-	1078, // 99: controlplane.v1.Artifact.deleted_at:type_name -> google.protobuf.Timestamp
-	1078, // 100: controlplane.v1.Artifact.purge_after:type_name -> google.protobuf.Timestamp
+	1080, // 99: controlplane.v1.Artifact.deleted_at:type_name -> google.protobuf.Timestamp
+	1080, // 100: controlplane.v1.Artifact.purge_after:type_name -> google.protobuf.Timestamp
 	19,   // 101: controlplane.v1.AttachmentSetItem.source:type_name -> controlplane.v1.ArtifactSource
 	22,   // 102: controlplane.v1.AttachmentSet.state:type_name -> controlplane.v1.AttachmentSetState
 	23,   // 103: controlplane.v1.AttachmentSet.purpose:type_name -> controlplane.v1.AttachmentSetPurpose
 	160,  // 104: controlplane.v1.AttachmentSet.items:type_name -> controlplane.v1.AttachmentSetItem
-	1078, // 105: controlplane.v1.AttachmentSet.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 106: controlplane.v1.AttachmentSet.finalized_at:type_name -> google.protobuf.Timestamp
+	1080, // 105: controlplane.v1.AttachmentSet.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 106: controlplane.v1.AttachmentSet.finalized_at:type_name -> google.protobuf.Timestamp
 	146,  // 107: controlplane.v1.Schedule.target:type_name -> controlplane.v1.RunTarget
 	24,   // 108: controlplane.v1.Schedule.state:type_name -> controlplane.v1.ScheduleState
-	1079, // 109: controlplane.v1.Schedule.input:type_name -> google.protobuf.Struct
-	1078, // 110: controlplane.v1.Schedule.next_run_at:type_name -> google.protobuf.Timestamp
+	1081, // 109: controlplane.v1.Schedule.input:type_name -> google.protobuf.Struct
+	1080, // 110: controlplane.v1.Schedule.next_run_at:type_name -> google.protobuf.Timestamp
 	2,    // 111: controlplane.v1.Schedule.next_actions:type_name -> controlplane.v1.NextAction
 	163,  // 112: controlplane.v1.Schedule.current_revision:type_name -> controlplane.v1.ScheduleRevision
-	1079, // 113: controlplane.v1.Schedule.prompt_inputs:type_name -> google.protobuf.Struct
+	1081, // 113: controlplane.v1.Schedule.prompt_inputs:type_name -> google.protobuf.Struct
 	146,  // 114: controlplane.v1.ScheduleRevision.target:type_name -> controlplane.v1.RunTarget
-	1079, // 115: controlplane.v1.ScheduleRevision.input:type_name -> google.protobuf.Struct
-	1078, // 116: controlplane.v1.ScheduleRevision.created_at:type_name -> google.protobuf.Timestamp
-	1079, // 117: controlplane.v1.ScheduleRevision.prompt_inputs:type_name -> google.protobuf.Struct
+	1081, // 115: controlplane.v1.ScheduleRevision.input:type_name -> google.protobuf.Struct
+	1080, // 116: controlplane.v1.ScheduleRevision.created_at:type_name -> google.protobuf.Timestamp
+	1081, // 117: controlplane.v1.ScheduleRevision.prompt_inputs:type_name -> google.protobuf.Struct
 	148,  // 118: controlplane.v1.ScheduleRunOccurrence.run:type_name -> controlplane.v1.Run
 	26,   // 119: controlplane.v1.IntegrationCapability.typed_risk:type_name -> controlplane.v1.IntegrationRisk
 	27,   // 120: controlplane.v1.IntegrationCapability.approval_policy:type_name -> controlplane.v1.IntegrationApprovalPolicy
@@ -83367,51 +83490,51 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	166,  // 124: controlplane.v1.IntegrationDefinition.configuration_fields:type_name -> controlplane.v1.IntegrationConfigurationField
 	29,   // 125: controlplane.v1.IntegrationDefinition.origin:type_name -> controlplane.v1.IntegrationDefinitionOrigin
 	28,   // 126: controlplane.v1.IntegrationResourceScope.kind:type_name -> controlplane.v1.IntegrationResourceKind
-	1076, // 127: controlplane.v1.IntegrationResourceScope.values:type_name -> controlplane.v1.IntegrationResourceScope.ValuesEntry
-	1078, // 128: controlplane.v1.IntegrationCredentialRevision.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 129: controlplane.v1.IntegrationGrant.created_at:type_name -> google.protobuf.Timestamp
+	1078, // 127: controlplane.v1.IntegrationResourceScope.values:type_name -> controlplane.v1.IntegrationResourceScope.ValuesEntry
+	1080, // 128: controlplane.v1.IntegrationCredentialRevision.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 129: controlplane.v1.IntegrationGrant.created_at:type_name -> google.protobuf.Timestamp
 	26,   // 130: controlplane.v1.IntegrationGrant.typed_risk:type_name -> controlplane.v1.IntegrationRisk
 	27,   // 131: controlplane.v1.IntegrationGrant.approval_policy:type_name -> controlplane.v1.IntegrationApprovalPolicy
 	168,  // 132: controlplane.v1.IntegrationGrant.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
 	25,   // 133: controlplane.v1.IntegrationConnection.state:type_name -> controlplane.v1.ConnectionState
-	1078, // 134: controlplane.v1.IntegrationConnection.last_tested_at:type_name -> google.protobuf.Timestamp
+	1080, // 134: controlplane.v1.IntegrationConnection.last_tested_at:type_name -> google.protobuf.Timestamp
 	165,  // 135: controlplane.v1.IntegrationConnection.capabilities:type_name -> controlplane.v1.IntegrationCapability
 	170,  // 136: controlplane.v1.IntegrationConnection.grants:type_name -> controlplane.v1.IntegrationGrant
 	2,    // 137: controlplane.v1.IntegrationConnection.next_actions:type_name -> controlplane.v1.NextAction
-	1079, // 138: controlplane.v1.IntegrationConnection.public_configuration:type_name -> google.protobuf.Struct
+	1081, // 138: controlplane.v1.IntegrationConnection.public_configuration:type_name -> google.protobuf.Struct
 	169,  // 139: controlplane.v1.IntegrationConnection.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	1078, // 140: controlplane.v1.IntegrationConnection.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 141: controlplane.v1.IntegrationConnection.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 140: controlplane.v1.IntegrationConnection.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 141: controlplane.v1.IntegrationConnection.updated_at:type_name -> google.protobuf.Timestamp
 	126,  // 142: controlplane.v1.AssistantPlanOperation.type:type_name -> controlplane.v1.AssistantPlanOperation.Type
-	1079, // 143: controlplane.v1.AssistantPlanOperation.bounded_input:type_name -> google.protobuf.Struct
+	1081, // 143: controlplane.v1.AssistantPlanOperation.bounded_input:type_name -> google.protobuf.Struct
 	127,  // 144: controlplane.v1.AssistantPlanOperation.action:type_name -> controlplane.v1.AssistantPlanOperation.Action
-	1079, // 145: controlplane.v1.AssistantPlanOperation.parameters:type_name -> google.protobuf.Struct
-	1079, // 146: controlplane.v1.AssistantPlanOperation.before:type_name -> google.protobuf.Struct
-	1079, // 147: controlplane.v1.AssistantPlanOperation.after:type_name -> google.protobuf.Struct
+	1081, // 145: controlplane.v1.AssistantPlanOperation.parameters:type_name -> google.protobuf.Struct
+	1081, // 146: controlplane.v1.AssistantPlanOperation.before:type_name -> google.protobuf.Struct
+	1081, // 147: controlplane.v1.AssistantPlanOperation.after:type_name -> google.protobuf.Struct
 	172,  // 148: controlplane.v1.AssistantPlan.operations:type_name -> controlplane.v1.AssistantPlanOperation
 	2,    // 149: controlplane.v1.AssistantPlan.next_actions:type_name -> controlplane.v1.NextAction
 	31,   // 150: controlplane.v1.AssistantPlan.state:type_name -> controlplane.v1.AssistantPlanState
-	1078, // 151: controlplane.v1.AssistantPlan.validated_at:type_name -> google.protobuf.Timestamp
-	1078, // 152: controlplane.v1.AssistantPlan.applied_at:type_name -> google.protobuf.Timestamp
+	1080, // 151: controlplane.v1.AssistantPlan.validated_at:type_name -> google.protobuf.Timestamp
+	1080, // 152: controlplane.v1.AssistantPlan.applied_at:type_name -> google.protobuf.Timestamp
 	177,  // 153: controlplane.v1.AssistantPlan.receipt:type_name -> controlplane.v1.AssistantPlanReceipt
 	126,  // 154: controlplane.v1.AssistantContextDescriptor.allowed_operations:type_name -> controlplane.v1.AssistantPlanOperation.Type
-	1080, // 155: controlplane.v1.AssistantPlanConflict.expected:type_name -> google.protobuf.Value
-	1080, // 156: controlplane.v1.AssistantPlanConflict.actual:type_name -> google.protobuf.Value
+	1082, // 155: controlplane.v1.AssistantPlanConflict.expected:type_name -> google.protobuf.Value
+	1082, // 156: controlplane.v1.AssistantPlanConflict.actual:type_name -> google.protobuf.Value
 	175,  // 157: controlplane.v1.AssistantPlanReceipt.operations:type_name -> controlplane.v1.AssistantPlanOperationReceipt
 	176,  // 158: controlplane.v1.AssistantPlanReceipt.conflicts:type_name -> controlplane.v1.AssistantPlanConflict
-	1078, // 159: controlplane.v1.AssistantPlanReceipt.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 159: controlplane.v1.AssistantPlanReceipt.created_at:type_name -> google.protobuf.Timestamp
 	173,  // 160: controlplane.v1.AssistantTurn.plan:type_name -> controlplane.v1.AssistantPlan
-	1078, // 161: controlplane.v1.AssistantTurn.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 161: controlplane.v1.AssistantTurn.created_at:type_name -> google.protobuf.Timestamp
 	178,  // 162: controlplane.v1.AssistantConversation.turns:type_name -> controlplane.v1.AssistantTurn
-	1078, // 163: controlplane.v1.AssistantConversation.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 163: controlplane.v1.AssistantConversation.updated_at:type_name -> google.protobuf.Timestamp
 	174,  // 164: controlplane.v1.AssistantConversation.context:type_name -> controlplane.v1.AssistantContextDescriptor
 	33,   // 165: controlplane.v1.AssistantConversation.state:type_name -> controlplane.v1.AssistantConversationState
 	30,   // 166: controlplane.v1.SystemAssistant.runtime_state:type_name -> controlplane.v1.AssistantRuntimeState
-	1078, // 167: controlplane.v1.SystemAssistant.last_heartbeat_at:type_name -> google.protobuf.Timestamp
+	1080, // 167: controlplane.v1.SystemAssistant.last_heartbeat_at:type_name -> google.protobuf.Timestamp
 	2,    // 168: controlplane.v1.SystemAssistant.next_actions:type_name -> controlplane.v1.NextAction
 	131,  // 169: controlplane.v1.AuditEvent.initiator:type_name -> controlplane.v1.UserSummary
-	1078, // 170: controlplane.v1.AuditEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	1078, // 171: controlplane.v1.Incident.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 170: controlplane.v1.AuditEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	1080, // 171: controlplane.v1.Incident.created_at:type_name -> google.protobuf.Timestamp
 	180,  // 172: controlplane.v1.BootstrapState.assistant:type_name -> controlplane.v1.SystemAssistant
 	131,  // 173: controlplane.v1.BootstrapState.current_user:type_name -> controlplane.v1.UserSummary
 	2,    // 174: controlplane.v1.BootstrapState.next_actions:type_name -> controlplane.v1.NextAction
@@ -83424,20 +83547,20 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	135,  // 181: controlplane.v1.AdministrationState.runtimes:type_name -> controlplane.v1.RuntimeSelection
 	167,  // 182: controlplane.v1.AdministrationState.optional_adapters:type_name -> controlplane.v1.IntegrationDefinition
 	182,  // 183: controlplane.v1.AdministrationState.incidents:type_name -> controlplane.v1.Incident
-	1078, // 184: controlplane.v1.AdministrationState.observed_at:type_name -> google.protobuf.Timestamp
+	1080, // 184: controlplane.v1.AdministrationState.observed_at:type_name -> google.protobuf.Timestamp
 	183,  // 185: controlplane.v1.GetBootstrapStateResponse.state:type_name -> controlplane.v1.BootstrapState
 	185,  // 186: controlplane.v1.GetOverviewResponse.overview:type_name -> controlplane.v1.Overview
 	134,  // 187: controlplane.v1.ListPlatformCapabilitiesResponse.capabilities:type_name -> controlplane.v1.PlatformCapability
 	135,  // 188: controlplane.v1.ListRuntimeSelectionsResponse.runtimes:type_name -> controlplane.v1.RuntimeSelection
 	34,   // 189: controlplane.v1.SearchResult.kind:type_name -> controlplane.v1.SearchResultKind
-	1078, // 190: controlplane.v1.SearchResult.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 190: controlplane.v1.SearchResult.updated_at:type_name -> google.protobuf.Timestamp
 	129,  // 191: controlplane.v1.SearchPlatformRequest.page:type_name -> controlplane.v1.PageRequest
 	197,  // 192: controlplane.v1.SearchPlatformResponse.results:type_name -> controlplane.v1.SearchResult
 	130,  // 193: controlplane.v1.SearchPlatformResponse.page:type_name -> controlplane.v1.PageInfo
 	197,  // 194: controlplane.v1.SearchAssistantResourcesResponse.results:type_name -> controlplane.v1.SearchResult
-	1075, // 195: controlplane.v1.SearchAssistantResourcesResponse.definitions:type_name -> controlplane.v1.AssistantIntegrationDefinition
+	1077, // 195: controlplane.v1.SearchAssistantResourcesResponse.definitions:type_name -> controlplane.v1.AssistantIntegrationDefinition
 	35,   // 196: controlplane.v1.VFSNode.kind:type_name -> controlplane.v1.VFSNodeKind
-	1078, // 197: controlplane.v1.VFSNode.modified_at:type_name -> google.protobuf.Timestamp
+	1080, // 197: controlplane.v1.VFSNode.modified_at:type_name -> google.protobuf.Timestamp
 	129,  // 198: controlplane.v1.ListVFSNodesRequest.page:type_name -> controlplane.v1.PageRequest
 	35,   // 199: controlplane.v1.ListVFSNodesRequest.kinds:type_name -> controlplane.v1.VFSNodeKind
 	202,  // 200: controlplane.v1.ListVFSNodesResponse.nodes:type_name -> controlplane.v1.VFSNode
@@ -83513,7 +83636,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	137,  // 270: controlplane.v1.ValidateInstructionDraftResponse.agent:type_name -> controlplane.v1.Agent
 	128,  // 271: controlplane.v1.PublishInstructionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
 	137,  // 272: controlplane.v1.PublishInstructionDraftResponse.agent:type_name -> controlplane.v1.Agent
-	842,  // 273: controlplane.v1.PublishInstructionDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	844,  // 273: controlplane.v1.PublishInstructionDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
 	128,  // 274: controlplane.v1.RollbackInstructionsRequest.mutation:type_name -> controlplane.v1.MutationContext
 	137,  // 275: controlplane.v1.RollbackInstructionsResponse.agent:type_name -> controlplane.v1.Agent
 	128,  // 276: controlplane.v1.ChangeAgentCapabilityRequest.mutation:type_name -> controlplane.v1.MutationContext
@@ -83547,7 +83670,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	152,  // 304: controlplane.v1.ListRunEventsResponse.events:type_name -> controlplane.v1.RunEvent
 	128,  // 305: controlplane.v1.LaunchRunRequest.mutation:type_name -> controlplane.v1.MutationContext
 	146,  // 306: controlplane.v1.LaunchRunRequest.target:type_name -> controlplane.v1.RunTarget
-	1079, // 307: controlplane.v1.LaunchRunRequest.input:type_name -> google.protobuf.Struct
+	1081, // 307: controlplane.v1.LaunchRunRequest.input:type_name -> google.protobuf.Struct
 	8,    // 308: controlplane.v1.LaunchRunRequest.source:type_name -> controlplane.v1.RunSource
 	148,  // 309: controlplane.v1.LaunchRunResponse.run:type_name -> controlplane.v1.Run
 	155,  // 310: controlplane.v1.LaunchRunResponse.graph:type_name -> controlplane.v1.RunGraph
@@ -83620,13 +83743,13 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	130,  // 377: controlplane.v1.ListSchedulesResponse.page:type_name -> controlplane.v1.PageInfo
 	128,  // 378: controlplane.v1.CreateScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
 	146,  // 379: controlplane.v1.CreateScheduleRequest.target:type_name -> controlplane.v1.RunTarget
-	1079, // 380: controlplane.v1.CreateScheduleRequest.input:type_name -> google.protobuf.Struct
-	1079, // 381: controlplane.v1.CreateScheduleRequest.prompt_inputs:type_name -> google.protobuf.Struct
+	1081, // 380: controlplane.v1.CreateScheduleRequest.input:type_name -> google.protobuf.Struct
+	1081, // 381: controlplane.v1.CreateScheduleRequest.prompt_inputs:type_name -> google.protobuf.Struct
 	162,  // 382: controlplane.v1.CreateScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
 	128,  // 383: controlplane.v1.UpdateScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
 	146,  // 384: controlplane.v1.UpdateScheduleRequest.target:type_name -> controlplane.v1.RunTarget
-	1079, // 385: controlplane.v1.UpdateScheduleRequest.input:type_name -> google.protobuf.Struct
-	1079, // 386: controlplane.v1.UpdateScheduleRequest.prompt_inputs:type_name -> google.protobuf.Struct
+	1081, // 385: controlplane.v1.UpdateScheduleRequest.input:type_name -> google.protobuf.Struct
+	1081, // 386: controlplane.v1.UpdateScheduleRequest.prompt_inputs:type_name -> google.protobuf.Struct
 	162,  // 387: controlplane.v1.UpdateScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
 	128,  // 388: controlplane.v1.SetScheduleEnabledRequest.mutation:type_name -> controlplane.v1.MutationContext
 	162,  // 389: controlplane.v1.SetScheduleEnabledResponse.schedule:type_name -> controlplane.v1.Schedule
@@ -83638,7 +83761,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	171,  // 395: controlplane.v1.ListIntegrationConnectionsResponse.connections:type_name -> controlplane.v1.IntegrationConnection
 	130,  // 396: controlplane.v1.ListIntegrationConnectionsResponse.page:type_name -> controlplane.v1.PageInfo
 	38,   // 397: controlplane.v1.IntegrationGrantCandidateContext.recipient_kind:type_name -> controlplane.v1.IntegrationGrantRecipientKind
-	1077, // 398: controlplane.v1.IntegrationGrantConnectionCandidate.resource_scope:type_name -> controlplane.v1.IntegrationGrantConnectionCandidate.ResourceScopeEntry
+	1079, // 398: controlplane.v1.IntegrationGrantConnectionCandidate.resource_scope:type_name -> controlplane.v1.IntegrationGrantConnectionCandidate.ResourceScopeEntry
 	39,   // 399: controlplane.v1.IntegrationGrantConnectionCandidate.reason:type_name -> controlplane.v1.IntegrationCandidateReason
 	351,  // 400: controlplane.v1.IntegrationGrantConnectionCandidate.pins:type_name -> controlplane.v1.IntegrationGrantCandidatePins
 	39,   // 401: controlplane.v1.IntegrationGrantProjectCandidate.reason:type_name -> controlplane.v1.IntegrationCandidateReason
@@ -83676,10 +83799,10 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	351,  // 433: controlplane.v1.ListIntegrationGrantCapabilityCandidatesResponse.pins:type_name -> controlplane.v1.IntegrationGrantCandidatePins
 	171,  // 434: controlplane.v1.GetIntegrationConnectionResponse.connection:type_name -> controlplane.v1.IntegrationConnection
 	128,  // 435: controlplane.v1.CreateIntegrationConnectionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1079, // 436: controlplane.v1.CreateIntegrationConnectionRequest.public_configuration:type_name -> google.protobuf.Struct
+	1081, // 436: controlplane.v1.CreateIntegrationConnectionRequest.public_configuration:type_name -> google.protobuf.Struct
 	171,  // 437: controlplane.v1.CreateIntegrationConnectionResponse.connection:type_name -> controlplane.v1.IntegrationConnection
 	128,  // 438: controlplane.v1.UpdateIntegrationConnectionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1079, // 439: controlplane.v1.UpdateIntegrationConnectionRequest.public_configuration:type_name -> google.protobuf.Struct
+	1081, // 439: controlplane.v1.UpdateIntegrationConnectionRequest.public_configuration:type_name -> google.protobuf.Struct
 	171,  // 440: controlplane.v1.UpdateIntegrationConnectionResponse.connection:type_name -> controlplane.v1.IntegrationConnection
 	128,  // 441: controlplane.v1.DeleteIntegrationConnectionRequest.mutation:type_name -> controlplane.v1.MutationContext
 	171,  // 442: controlplane.v1.DeleteIntegrationConnectionResponse.connection:type_name -> controlplane.v1.IntegrationConnection
@@ -83736,7 +83859,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	129,  // 493: controlplane.v1.ListAuditEventsRequest.page:type_name -> controlplane.v1.PageRequest
 	181,  // 494: controlplane.v1.ListAuditEventsResponse.events:type_name -> controlplane.v1.AuditEvent
 	130,  // 495: controlplane.v1.ListAuditEventsResponse.page:type_name -> controlplane.v1.PageInfo
-	1078, // 496: controlplane.v1.PublicRuntimeRevisionIdentity.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 496: controlplane.v1.PublicRuntimeRevisionIdentity.created_at:type_name -> google.protobuf.Timestamp
 	40,   // 497: controlplane.v1.RuntimeRevisionDiffChange.component:type_name -> controlplane.v1.RuntimeRevisionDiffComponent
 	419,  // 498: controlplane.v1.RuntimeRevisionDiffChange.previous:type_name -> controlplane.v1.RuntimeRevisionDiffValue
 	419,  // 499: controlplane.v1.RuntimeRevisionDiffChange.current:type_name -> controlplane.v1.RuntimeRevisionDiffValue
@@ -83749,7 +83872,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	159,  // 506: controlplane.v1.RuntimeRevisionSnapshot.artifacts:type_name -> controlplane.v1.Artifact
 	459,  // 507: controlplane.v1.RuntimeRevisionSnapshot.delegation_targets:type_name -> controlplane.v1.DelegationTarget
 	460,  // 508: controlplane.v1.RuntimeRevisionSnapshot.session_context:type_name -> controlplane.v1.SessionContextMessage
-	1079, // 509: controlplane.v1.RuntimeRevisionSnapshot.bounded_input:type_name -> google.protobuf.Struct
+	1081, // 509: controlplane.v1.RuntimeRevisionSnapshot.bounded_input:type_name -> google.protobuf.Struct
 	458,  // 510: controlplane.v1.RuntimeRevisionSnapshot.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
 	684,  // 511: controlplane.v1.RuntimeRevisionSnapshot.environment_values:type_name -> controlplane.v1.RuntimeEnvironmentValue
 	698,  // 512: controlplane.v1.RuntimeRevisionSnapshot.secret_projections:type_name -> controlplane.v1.RuntimeSecretDescriptor
@@ -83786,40 +83909,40 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	427,  // 543: controlplane.v1.GetExecutionFileManifestResponse.items:type_name -> controlplane.v1.ExecutionFileDescriptor
 	130,  // 544: controlplane.v1.GetExecutionFileManifestResponse.page:type_name -> controlplane.v1.PageInfo
 	128,  // 545: controlplane.v1.SavePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	804,  // 546: controlplane.v1.SavePromptTemplateDraftRequest.prompt_scope:type_name -> controlplane.v1.PromptTemplateScopeInput
-	806,  // 547: controlplane.v1.SavePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 548: controlplane.v1.SavePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	806,  // 546: controlplane.v1.SavePromptTemplateDraftRequest.prompt_scope:type_name -> controlplane.v1.PromptTemplateScopeInput
+	808,  // 547: controlplane.v1.SavePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 548: controlplane.v1.SavePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
 	128,  // 549: controlplane.v1.DiscardPromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 550: controlplane.v1.DiscardPromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 551: controlplane.v1.DiscardPromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	808,  // 550: controlplane.v1.DiscardPromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 551: controlplane.v1.DiscardPromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
 	128,  // 552: controlplane.v1.SaveRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 553: controlplane.v1.SaveRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 554: controlplane.v1.SaveRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	808,  // 553: controlplane.v1.SaveRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 554: controlplane.v1.SaveRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
 	128,  // 555: controlplane.v1.DiscardRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 556: controlplane.v1.DiscardRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 557: controlplane.v1.DiscardRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	808,  // 556: controlplane.v1.DiscardRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 557: controlplane.v1.DiscardRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
 	128,  // 558: controlplane.v1.SaveIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 559: controlplane.v1.SaveIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 560: controlplane.v1.SaveIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	808,  // 559: controlplane.v1.SaveIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 560: controlplane.v1.SaveIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
 	128,  // 561: controlplane.v1.DiscardIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 562: controlplane.v1.DiscardIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 563: controlplane.v1.DiscardIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	808,  // 562: controlplane.v1.DiscardIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 563: controlplane.v1.DiscardIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
 	128,  // 564: controlplane.v1.SaveSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 565: controlplane.v1.SaveSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 566: controlplane.v1.SaveSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	808,  // 565: controlplane.v1.SaveSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 566: controlplane.v1.SaveSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
 	128,  // 567: controlplane.v1.DiscardSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 568: controlplane.v1.DiscardSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 569: controlplane.v1.DiscardSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	1078, // 570: controlplane.v1.RuntimeSkillBundleSnapshot.scanned_at:type_name -> google.protobuf.Timestamp
-	883,  // 571: controlplane.v1.RuntimeSkillBundleSnapshot.files:type_name -> controlplane.v1.SkillBundleFile
-	882,  // 572: controlplane.v1.RuntimeSkillBundleSnapshot.provenance:type_name -> controlplane.v1.ContextProvenance
-	1078, // 573: controlplane.v1.RuntimeMemoryRecordSnapshot.retention_until:type_name -> google.protobuf.Timestamp
-	882,  // 574: controlplane.v1.RuntimeMemoryRecordSnapshot.provenance:type_name -> controlplane.v1.ContextProvenance
+	808,  // 568: controlplane.v1.DiscardSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 569: controlplane.v1.DiscardSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	1080, // 570: controlplane.v1.RuntimeSkillBundleSnapshot.scanned_at:type_name -> google.protobuf.Timestamp
+	885,  // 571: controlplane.v1.RuntimeSkillBundleSnapshot.files:type_name -> controlplane.v1.SkillBundleFile
+	884,  // 572: controlplane.v1.RuntimeSkillBundleSnapshot.provenance:type_name -> controlplane.v1.ContextProvenance
+	1080, // 573: controlplane.v1.RuntimeMemoryRecordSnapshot.retention_until:type_name -> google.protobuf.Timestamp
+	884,  // 574: controlplane.v1.RuntimeMemoryRecordSnapshot.provenance:type_name -> controlplane.v1.ContextProvenance
 	43,   // 575: controlplane.v1.RuntimeWorkspacePathRule.access:type_name -> controlplane.v1.RuntimeWorkspaceAccess
 	454,  // 576: controlplane.v1.RuntimeWorkspacePolicy.rules:type_name -> controlplane.v1.RuntimeWorkspacePathRule
 	44,   // 577: controlplane.v1.RuntimeWorkspacePolicy.denial_reasons:type_name -> controlplane.v1.RuntimeWorkspaceDenialReason
 	159,  // 578: controlplane.v1.RuntimeInputArtifact.artifact:type_name -> controlplane.v1.Artifact
-	1078, // 579: controlplane.v1.WorkLease.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 579: controlplane.v1.WorkLease.expires_at:type_name -> google.protobuf.Timestamp
 	148,  // 580: controlplane.v1.ClaimedExecution.run:type_name -> controlplane.v1.Run
 	149,  // 581: controlplane.v1.ClaimedExecution.node:type_name -> controlplane.v1.RunNode
 	423,  // 582: controlplane.v1.ClaimedExecution.revision:type_name -> controlplane.v1.RuntimeRevisionSnapshot
@@ -83848,7 +83971,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	128,  // 605: controlplane.v1.CompleteSessionObjectDeletionRequest.mutation:type_name -> controlplane.v1.MutationContext
 	128,  // 606: controlplane.v1.FailSessionArchiveTaskRequest.mutation:type_name -> controlplane.v1.MutationContext
 	128,  // 607: controlplane.v1.DelegateExecutionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1079, // 608: controlplane.v1.DelegateExecutionRequest.input:type_name -> google.protobuf.Struct
+	1081, // 608: controlplane.v1.DelegateExecutionRequest.input:type_name -> google.protobuf.Struct
 	148,  // 609: controlplane.v1.DelegateExecutionResponse.child_run:type_name -> controlplane.v1.Run
 	155,  // 610: controlplane.v1.DelegateExecutionResponse.root_graph:type_name -> controlplane.v1.RunGraph
 	128,  // 611: controlplane.v1.ProposeAssistantPlanRequest.mutation:type_name -> controlplane.v1.MutationContext
@@ -83861,7 +83984,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	148,  // 618: controlplane.v1.ProposeRunMetadataResponse.run:type_name -> controlplane.v1.Run
 	152,  // 619: controlplane.v1.ProposeRunMetadataResponse.event:type_name -> controlplane.v1.RunEvent
 	128,  // 620: controlplane.v1.RecordRunToolCallRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1079, // 621: controlplane.v1.RecordRunToolCallRequest.safe_parameters:type_name -> google.protobuf.Struct
+	1081, // 621: controlplane.v1.RecordRunToolCallRequest.safe_parameters:type_name -> google.protobuf.Struct
 	15,   // 622: controlplane.v1.RecordRunToolCallRequest.state:type_name -> controlplane.v1.RunToolCallState
 	152,  // 623: controlplane.v1.RecordRunToolCallResponse.event:type_name -> controlplane.v1.RunEvent
 	180,  // 624: controlplane.v1.ReconcileWarmRuntimeResponse.assistant:type_name -> controlplane.v1.SystemAssistant
@@ -83870,36 +83993,36 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	180,  // 627: controlplane.v1.ReportWarmRuntimeResponse.assistant:type_name -> controlplane.v1.SystemAssistant
 	162,  // 628: controlplane.v1.ScheduleClaim.schedule:type_name -> controlplane.v1.Schedule
 	461,  // 629: controlplane.v1.ScheduleClaim.lease:type_name -> controlplane.v1.WorkLease
-	1078, // 630: controlplane.v1.ScheduleClaim.scheduled_for:type_name -> google.protobuf.Timestamp
+	1080, // 630: controlplane.v1.ScheduleClaim.scheduled_for:type_name -> google.protobuf.Timestamp
 	507,  // 631: controlplane.v1.ClaimDueSchedulesResponse.claims:type_name -> controlplane.v1.ScheduleClaim
 	128,  // 632: controlplane.v1.MaterializeScheduleOccurrenceRequest.mutation:type_name -> controlplane.v1.MutationContext
 	148,  // 633: controlplane.v1.MaterializeScheduleOccurrenceResponse.run:type_name -> controlplane.v1.Run
 	162,  // 634: controlplane.v1.MaterializeScheduleOccurrenceResponse.schedule:type_name -> controlplane.v1.Schedule
 	461,  // 635: controlplane.v1.RenewScheduleOccurrenceResponse.lease:type_name -> controlplane.v1.WorkLease
 	128,  // 636: controlplane.v1.FailScheduleOccurrenceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1078, // 637: controlplane.v1.PreviewScheduleRequest.after:type_name -> google.protobuf.Timestamp
+	1080, // 637: controlplane.v1.PreviewScheduleRequest.after:type_name -> google.protobuf.Timestamp
 	517,  // 638: controlplane.v1.PreviewScheduleRequest.materialization:type_name -> controlplane.v1.SchedulePromptPreviewContext
 	146,  // 639: controlplane.v1.SchedulePromptPreviewContext.target:type_name -> controlplane.v1.RunTarget
-	1079, // 640: controlplane.v1.SchedulePromptPreviewContext.input:type_name -> google.protobuf.Struct
-	1079, // 641: controlplane.v1.SchedulePromptPreviewContext.prompt_inputs:type_name -> google.protobuf.Struct
+	1081, // 640: controlplane.v1.SchedulePromptPreviewContext.input:type_name -> google.protobuf.Struct
+	1081, // 641: controlplane.v1.SchedulePromptPreviewContext.prompt_inputs:type_name -> google.protobuf.Struct
 	46,   // 642: controlplane.v1.SchedulePromptPreviewContext.mode:type_name -> controlplane.v1.SchedulePromptPreviewMode
-	1078, // 643: controlplane.v1.SchedulePromptPreviewPin.scheduled_for:type_name -> google.protobuf.Timestamp
+	1080, // 643: controlplane.v1.SchedulePromptPreviewPin.scheduled_for:type_name -> google.protobuf.Timestamp
 	46,   // 644: controlplane.v1.SchedulePromptPreviewPin.mode:type_name -> controlplane.v1.SchedulePromptPreviewMode
-	1078, // 645: controlplane.v1.PreviewScheduleResponse.occurrences:type_name -> google.protobuf.Timestamp
-	799,  // 646: controlplane.v1.PreviewScheduleResponse.materialized_prompt:type_name -> controlplane.v1.PreviewPromptTemplateResponse
+	1080, // 645: controlplane.v1.PreviewScheduleResponse.occurrences:type_name -> google.protobuf.Timestamp
+	801,  // 646: controlplane.v1.PreviewScheduleResponse.materialized_prompt:type_name -> controlplane.v1.PreviewPromptTemplateResponse
 	726,  // 647: controlplane.v1.PreviewScheduleResponse.automation_variables:type_name -> controlplane.v1.TemplateVariable
 	518,  // 648: controlplane.v1.PreviewScheduleResponse.materialization_pin:type_name -> controlplane.v1.SchedulePromptPreviewPin
-	1079, // 649: controlplane.v1.IntegrationConnectionTestClaim.public_configuration:type_name -> google.protobuf.Struct
+	1081, // 649: controlplane.v1.IntegrationConnectionTestClaim.public_configuration:type_name -> google.protobuf.Struct
 	461,  // 650: controlplane.v1.IntegrationConnectionTestClaim.lease:type_name -> controlplane.v1.WorkLease
 	169,  // 651: controlplane.v1.IntegrationConnectionTestClaim.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
 	520,  // 652: controlplane.v1.ClaimIntegrationConnectionTestsResponse.claims:type_name -> controlplane.v1.IntegrationConnectionTestClaim
 	128,  // 653: controlplane.v1.CompleteIntegrationConnectionTestRequest.mutation:type_name -> controlplane.v1.MutationContext
 	171,  // 654: controlplane.v1.CompleteIntegrationConnectionTestResponse.connection:type_name -> controlplane.v1.IntegrationConnection
-	1079, // 655: controlplane.v1.ResolveIntegrationInvocationRequest.bounded_input:type_name -> google.protobuf.Struct
+	1081, // 655: controlplane.v1.ResolveIntegrationInvocationRequest.bounded_input:type_name -> google.protobuf.Struct
 	26,   // 656: controlplane.v1.ResolveIntegrationInvocationResponse.risk:type_name -> controlplane.v1.IntegrationRisk
 	168,  // 657: controlplane.v1.ResolveIntegrationInvocationResponse.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
-	1079, // 658: controlplane.v1.IntegrationInvocationClaim.public_configuration:type_name -> google.protobuf.Struct
-	1079, // 659: controlplane.v1.IntegrationInvocationClaim.bounded_input:type_name -> google.protobuf.Struct
+	1081, // 658: controlplane.v1.IntegrationInvocationClaim.public_configuration:type_name -> google.protobuf.Struct
+	1081, // 659: controlplane.v1.IntegrationInvocationClaim.bounded_input:type_name -> google.protobuf.Struct
 	461,  // 660: controlplane.v1.IntegrationInvocationClaim.lease:type_name -> controlplane.v1.WorkLease
 	169,  // 661: controlplane.v1.IntegrationInvocationClaim.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
 	26,   // 662: controlplane.v1.IntegrationInvocationClaim.risk:type_name -> controlplane.v1.IntegrationRisk
@@ -83913,7 +84036,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	155,  // 670: controlplane.v1.CompleteIntegrationInvocationResponse.graph:type_name -> controlplane.v1.RunGraph
 	169,  // 671: controlplane.v1.InteractionSource.credential_descriptor:type_name -> controlplane.v1.IntegrationCredentialRevision
 	535,  // 672: controlplane.v1.ListInteractionSourcesResponse.sources:type_name -> controlplane.v1.InteractionSource
-	1079, // 673: controlplane.v1.InteractionDeliveryClaim.template_data:type_name -> google.protobuf.Struct
+	1081, // 673: controlplane.v1.InteractionDeliveryClaim.template_data:type_name -> google.protobuf.Struct
 	461,  // 674: controlplane.v1.InteractionDeliveryClaim.lease:type_name -> controlplane.v1.WorkLease
 	169,  // 675: controlplane.v1.InteractionDeliveryClaim.credential_descriptor:type_name -> controlplane.v1.IntegrationCredentialRevision
 	538,  // 676: controlplane.v1.ClaimInteractionDeliveriesResponse.claims:type_name -> controlplane.v1.InteractionDeliveryClaim
@@ -83942,12 +84065,12 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	129,  // 699: controlplane.v1.ListArtifactBindingTargetsRequest.page:type_name -> controlplane.v1.PageRequest
 	561,  // 700: controlplane.v1.ListArtifactBindingTargetsResponse.items:type_name -> controlplane.v1.ArtifactBindingTarget
 	130,  // 701: controlplane.v1.ListArtifactBindingTargetsResponse.page:type_name -> controlplane.v1.PageInfo
-	1078, // 702: controlplane.v1.ListArtifactBindingTargetsResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	1080, // 702: controlplane.v1.ListArtifactBindingTargetsResponse.evaluated_at:type_name -> google.protobuf.Timestamp
 	146,  // 703: controlplane.v1.GetRunAttachmentEligibilityRequest.target:type_name -> controlplane.v1.RunTarget
 	146,  // 704: controlplane.v1.GetRunAttachmentEligibilityResponse.target:type_name -> controlplane.v1.RunTarget
 	50,   // 705: controlplane.v1.GetRunAttachmentEligibilityResponse.reason:type_name -> controlplane.v1.RunAttachmentEligibilityReason
-	1078, // 706: controlplane.v1.GetRunAttachmentEligibilityResponse.evaluated_at:type_name -> google.protobuf.Timestamp
-	1078, // 707: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	1080, // 706: controlplane.v1.GetRunAttachmentEligibilityResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	1080, // 707: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.evaluated_at:type_name -> google.protobuf.Timestamp
 	566,  // 708: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.capabilities:type_name -> controlplane.v1.EffectiveCapability
 	130,  // 709: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.page:type_name -> controlplane.v1.PageInfo
 	129,  // 710: controlplane.v1.ListConfigOverlayRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
@@ -83965,15 +84088,15 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	699,  // 722: controlplane.v1.ListRuntimeEnvironmentVersionsResponse.versions:type_name -> controlplane.v1.RuntimeEnvironmentVersion
 	130,  // 723: controlplane.v1.ListRuntimeEnvironmentVersionsResponse.page:type_name -> controlplane.v1.PageInfo
 	129,  // 724: controlplane.v1.ListTemplateVariablesRequest.page:type_name -> controlplane.v1.PageRequest
-	795,  // 725: controlplane.v1.ListTemplateVariablesRequest.context:type_name -> controlplane.v1.PromptPreviewContext
+	797,  // 725: controlplane.v1.ListTemplateVariablesRequest.context:type_name -> controlplane.v1.PromptPreviewContext
 	726,  // 726: controlplane.v1.ListTemplateVariablesResponse.variables:type_name -> controlplane.v1.TemplateVariable
 	130,  // 727: controlplane.v1.ListTemplateVariablesResponse.page:type_name -> controlplane.v1.PageInfo
-	798,  // 728: controlplane.v1.ListTemplateVariablesResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
+	800,  // 728: controlplane.v1.ListTemplateVariablesResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
 	51,   // 729: controlplane.v1.RuntimeSecretDraft.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
 	52,   // 730: controlplane.v1.RuntimeSecretDraft.state:type_name -> controlplane.v1.RuntimeSecretDraftState
-	1078, // 731: controlplane.v1.RuntimeSecretDraft.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 732: controlplane.v1.RuntimeSecretDraft.updated_at:type_name -> google.protobuf.Timestamp
-	1078, // 733: controlplane.v1.RuntimeSecretDraft.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 731: controlplane.v1.RuntimeSecretDraft.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 732: controlplane.v1.RuntimeSecretDraft.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 733: controlplane.v1.RuntimeSecretDraft.expires_at:type_name -> google.protobuf.Timestamp
 	582,  // 734: controlplane.v1.GetRuntimeSecretDraftResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
 	128,  // 735: controlplane.v1.PrepareSaveRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
 	51,   // 736: controlplane.v1.PrepareSaveRuntimeSecretDraftRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
@@ -83985,15 +84108,15 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	128,  // 742: controlplane.v1.PrepareDiscardRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
 	594,  // 743: controlplane.v1.PrepareDiscardRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
 	55,   // 744: controlplane.v1.RuntimeSecretDraftOperationReceipt.state:type_name -> controlplane.v1.RuntimeSecretOperationState
-	1078, // 745: controlplane.v1.RuntimeSecretDraftOperationReceipt.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 745: controlplane.v1.RuntimeSecretDraftOperationReceipt.expires_at:type_name -> google.protobuf.Timestamp
 	582,  // 746: controlplane.v1.RuntimeSecretDraftOperationReceipt.draft:type_name -> controlplane.v1.RuntimeSecretDraft
 	611,  // 747: controlplane.v1.RuntimeSecretDraftOperationReceipt.terminal_secret:type_name -> controlplane.v1.RuntimeSecret
 	56,   // 748: controlplane.v1.RuntimeSecretDraftOperationReceipt.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
 	53,   // 749: controlplane.v1.RuntimeSecretDraftWork.kind:type_name -> controlplane.v1.RuntimeSecretDraftOperationKind
 	582,  // 750: controlplane.v1.RuntimeSecretDraftWork.draft:type_name -> controlplane.v1.RuntimeSecretDraft
 	583,  // 751: controlplane.v1.RuntimeSecretDraftWork.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
-	1078, // 752: controlplane.v1.RuntimeSecretDraftWork.lease_deadline:type_name -> google.protobuf.Timestamp
-	1078, // 753: controlplane.v1.RuntimeSecretDraftWork.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 752: controlplane.v1.RuntimeSecretDraftWork.lease_deadline:type_name -> google.protobuf.Timestamp
+	1080, // 753: controlplane.v1.RuntimeSecretDraftWork.expires_at:type_name -> google.protobuf.Timestamp
 	633,  // 754: controlplane.v1.RuntimeSecretDraftWork.recovery_materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
 	583,  // 755: controlplane.v1.RuntimeSecretDraftWork.recovery_encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
 	595,  // 756: controlplane.v1.ConsumeRuntimeSecretDraftOperationResponse.work:type_name -> controlplane.v1.RuntimeSecretDraftWork
@@ -84017,8 +84140,8 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	633,  // 774: controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
 	51,   // 775: controlplane.v1.RuntimeSecret.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
 	610,  // 776: controlplane.v1.RuntimeSecret.display_hint:type_name -> controlplane.v1.RuntimeSecretDisplayHint
-	1078, // 777: controlplane.v1.RuntimeSecret.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 778: controlplane.v1.RuntimeSecret.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 777: controlplane.v1.RuntimeSecret.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 778: controlplane.v1.RuntimeSecret.updated_at:type_name -> google.protobuf.Timestamp
 	632,  // 779: controlplane.v1.RuntimeSecret.current_revision_descriptor:type_name -> controlplane.v1.RuntimeSecretRevisionDescriptor
 	2,    // 780: controlplane.v1.RuntimeSecret.next_actions:type_name -> controlplane.v1.NextAction
 	129,  // 781: controlplane.v1.ListRuntimeSecretsRequest.page:type_name -> controlplane.v1.PageRequest
@@ -84035,7 +84158,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	624,  // 792: controlplane.v1.PrepareRevealRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
 	128,  // 793: controlplane.v1.PrepareRevokeRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
 	624,  // 794: controlplane.v1.PrepareRevokeRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
-	1078, // 795: controlplane.v1.RuntimeSecretOperationReceipt.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 795: controlplane.v1.RuntimeSecretOperationReceipt.expires_at:type_name -> google.protobuf.Timestamp
 	51,   // 796: controlplane.v1.RuntimeSecretOperationReceipt.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
 	55,   // 797: controlplane.v1.RuntimeSecretOperationReceipt.state:type_name -> controlplane.v1.RuntimeSecretOperationState
 	611,  // 798: controlplane.v1.RuntimeSecretOperationReceipt.terminal_secret:type_name -> controlplane.v1.RuntimeSecret
@@ -84046,8 +84169,8 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	130,  // 803: controlplane.v1.ListRuntimeSecretRecoveryWorkResponse.page:type_name -> controlplane.v1.PageInfo
 	54,   // 804: controlplane.v1.ConsumeRuntimeSecretOperationResponse.kind:type_name -> controlplane.v1.RuntimeSecretOperationKind
 	51,   // 805: controlplane.v1.ConsumeRuntimeSecretOperationResponse.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	1078, // 806: controlplane.v1.ConsumeRuntimeSecretOperationResponse.expires_at:type_name -> google.protobuf.Timestamp
-	1078, // 807: controlplane.v1.ConsumeRuntimeSecretOperationResponse.lease_deadline:type_name -> google.protobuf.Timestamp
+	1080, // 806: controlplane.v1.ConsumeRuntimeSecretOperationResponse.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 807: controlplane.v1.ConsumeRuntimeSecretOperationResponse.lease_deadline:type_name -> google.protobuf.Timestamp
 	632,  // 808: controlplane.v1.ConsumeRuntimeSecretOperationResponse.revision_descriptors:type_name -> controlplane.v1.RuntimeSecretRevisionDescriptor
 	610,  // 809: controlplane.v1.RuntimeSecretMaterialization.display_hint:type_name -> controlplane.v1.RuntimeSecretDisplayHint
 	633,  // 810: controlplane.v1.CompleteRuntimeSecretOperationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
@@ -84080,7 +84203,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	713,  // 837: controlplane.v1.RuntimeEnvironmentDraftSpecification.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
 	703,  // 838: controlplane.v1.RuntimeEnvironmentDraftSpecification.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicyInput
 	651,  // 839: controlplane.v1.RuntimeEnvironmentDraft.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
-	1078, // 840: controlplane.v1.RuntimeEnvironmentDraft.saved_at:type_name -> google.protobuf.Timestamp
+	1080, // 840: controlplane.v1.RuntimeEnvironmentDraft.saved_at:type_name -> google.protobuf.Timestamp
 	652,  // 841: controlplane.v1.GetRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
 	128,  // 842: controlplane.v1.CreateRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
 	651,  // 843: controlplane.v1.CreateRuntimeEnvironmentDraftRequest.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
@@ -84093,7 +84216,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	128,  // 850: controlplane.v1.PublishRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
 	652,  // 851: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
 	714,  // 852: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	842,  // 853: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	844,  // 853: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
 	128,  // 854: controlplane.v1.DiscardRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
 	652,  // 855: controlplane.v1.DiscardRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
 	714,  // 856: controlplane.v1.CreateRuntimeEnvironmentSetResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
@@ -84114,14 +84237,14 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	672,  // 871: controlplane.v1.RebindRuntimeEnvironmentRequest.consumers:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
 	724,  // 872: controlplane.v1.RebindRuntimeEnvironmentResponse.bindings:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
 	677,  // 873: controlplane.v1.ProviderAccountPolicyVersion.account_candidates:type_name -> controlplane.v1.ProviderAccountCandidate
-	1078, // 874: controlplane.v1.ProviderAccountPolicyVersion.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 874: controlplane.v1.ProviderAccountPolicyVersion.created_at:type_name -> google.protobuf.Timestamp
 	678,  // 875: controlplane.v1.AgentRuntimeConfiguration.provider_policy:type_name -> controlplane.v1.ProviderAccountPolicyVersion
-	1078, // 876: controlplane.v1.AgentRuntimeConfiguration.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 877: controlplane.v1.ConfigOverlayVersion.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 878: controlplane.v1.ConfigOverlayVersion.published_at:type_name -> google.protobuf.Timestamp
+	1080, // 876: controlplane.v1.AgentRuntimeConfiguration.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 877: controlplane.v1.ConfigOverlayVersion.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 878: controlplane.v1.ConfigOverlayVersion.published_at:type_name -> google.protobuf.Timestamp
 	681,  // 879: controlplane.v1.ConfigOverlayVersion.diagnostics:type_name -> controlplane.v1.ConfigOverlayDiagnostic
 	682,  // 880: controlplane.v1.ConfigOverlaySchema.fields:type_name -> controlplane.v1.ConfigOverlayField
-	1078, // 881: controlplane.v1.RuntimeSecretDraftImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 881: controlplane.v1.RuntimeSecretDraftImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
 	58,   // 882: controlplane.v1.RuntimeSecretDraftImpactPlan.state:type_name -> controlplane.v1.RuntimeSecretDraftImpactState
 	691,  // 883: controlplane.v1.RuntimeSecretDraftImpactItem.consumer:type_name -> controlplane.v1.RuntimeSecretImpactConsumer
 	59,   // 884: controlplane.v1.RuntimeSecretDraftImpactItem.outcome:type_name -> controlplane.v1.RuntimeSecretDraftImpactOutcome
@@ -84142,7 +84265,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	724,  // 899: controlplane.v1.RebindRuntimeSecretResponse.bindings:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
 	684,  // 900: controlplane.v1.RuntimeEnvironmentVersion.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
 	698,  // 901: controlplane.v1.RuntimeEnvironmentVersion.secret_descriptors:type_name -> controlplane.v1.RuntimeSecretDescriptor
-	1078, // 902: controlplane.v1.RuntimeEnvironmentVersion.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 902: controlplane.v1.RuntimeEnvironmentVersion.created_at:type_name -> google.protobuf.Timestamp
 	712,  // 903: controlplane.v1.RuntimeEnvironmentVersion.image:type_name -> controlplane.v1.RuntimeEnvironmentImage
 	713,  // 904: controlplane.v1.RuntimeEnvironmentVersion.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
 	711,  // 905: controlplane.v1.RuntimeEnvironmentVersion.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicy
@@ -84167,9 +84290,9 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	705,  // 924: controlplane.v1.RuntimeEnvironmentPolicy.network:type_name -> controlplane.v1.RuntimeNetworkPolicy
 	708,  // 925: controlplane.v1.RuntimeEnvironmentPolicy.kubernetes_access:type_name -> controlplane.v1.RuntimeKubernetesAccessProfile
 	699,  // 926: controlplane.v1.RuntimeEnvironmentSet.current_version:type_name -> controlplane.v1.RuntimeEnvironmentVersion
-	1078, // 927: controlplane.v1.RuntimeEnvironmentSet.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 927: controlplane.v1.RuntimeEnvironmentSet.updated_at:type_name -> google.protobuf.Timestamp
 	2,    // 928: controlplane.v1.RuntimeEnvironmentSet.next_actions:type_name -> controlplane.v1.NextAction
-	1078, // 929: controlplane.v1.RuntimeEnvironmentReadiness.observed_at:type_name -> google.protobuf.Timestamp
+	1080, // 929: controlplane.v1.RuntimeEnvironmentReadiness.observed_at:type_name -> google.protobuf.Timestamp
 	715,  // 930: controlplane.v1.GetRuntimeEnvironmentReadinessResponse.readiness:type_name -> controlplane.v1.RuntimeEnvironmentReadiness
 	129,  // 931: controlplane.v1.ListRuntimeEnvironmentAgentsRequest.page:type_name -> controlplane.v1.PageRequest
 	137,  // 932: controlplane.v1.ListRuntimeEnvironmentAgentsResponse.agents:type_name -> controlplane.v1.Agent
@@ -84183,8 +84306,8 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	680,  // 940: controlplane.v1.AgentRuntimeConfigurationView.draft_overlay:type_name -> controlplane.v1.ConfigOverlayVersion
 	724,  // 941: controlplane.v1.AgentRuntimeConfigurationView.environment_binding:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
 	714,  // 942: controlplane.v1.AgentRuntimeConfigurationView.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	941,  // 943: controlplane.v1.AgentRuntimeConfigurationView.skill_bindings:type_name -> controlplane.v1.AgentContextBinding
-	941,  // 944: controlplane.v1.AgentRuntimeConfigurationView.memory_bindings:type_name -> controlplane.v1.AgentContextBinding
+	943,  // 943: controlplane.v1.AgentRuntimeConfigurationView.skill_bindings:type_name -> controlplane.v1.AgentContextBinding
+	943,  // 944: controlplane.v1.AgentRuntimeConfigurationView.memory_bindings:type_name -> controlplane.v1.AgentContextBinding
 	683,  // 945: controlplane.v1.AgentRuntimeConfigurationView.overlay_schema:type_name -> controlplane.v1.ConfigOverlaySchema
 	727,  // 946: controlplane.v1.TemplateVariable.item_fields:type_name -> controlplane.v1.TemplateVariableField
 	65,   // 947: controlplane.v1.TemplateVariable.reason:type_name -> controlplane.v1.TemplateVariableAvailabilityReason
@@ -84198,37 +84321,37 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	130,  // 955: controlplane.v1.ListModelCapabilitiesResponse.page:type_name -> controlplane.v1.PageInfo
 	734,  // 956: controlplane.v1.ListModelCapabilitiesResponse.catalog_status:type_name -> controlplane.v1.ProviderModelCatalogStatus
 	66,   // 957: controlplane.v1.ProviderModelCatalogStatus.state:type_name -> controlplane.v1.ProviderModelCatalogState
-	1078, // 958: controlplane.v1.ProviderModelCatalogStatus.observed_at:type_name -> google.protobuf.Timestamp
-	1078, // 959: controlplane.v1.ProviderModelCatalogStatus.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 958: controlplane.v1.ProviderModelCatalogStatus.observed_at:type_name -> google.protobuf.Timestamp
+	1080, // 959: controlplane.v1.ProviderModelCatalogStatus.expires_at:type_name -> google.protobuf.Timestamp
 	111,  // 960: controlplane.v1.ProviderModelCatalogStatus.source:type_name -> controlplane.v1.ProviderModelCatalogSource
 	112,  // 961: controlplane.v1.ProviderModelCatalogStatus.failure:type_name -> controlplane.v1.ProviderModelCatalogFailure
-	1078, // 962: controlplane.v1.RoleImageRecipeRevision.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 962: controlplane.v1.RoleImageRecipeRevision.created_at:type_name -> google.protobuf.Timestamp
 	129,  // 963: controlplane.v1.ListRoleImageRecipeRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
 	735,  // 964: controlplane.v1.ListRoleImageRecipeRevisionsResponse.revisions:type_name -> controlplane.v1.RoleImageRecipeRevision
 	130,  // 965: controlplane.v1.ListRoleImageRecipeRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
 	128,  // 966: controlplane.v1.PromoteRoleImageRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1078, // 967: controlplane.v1.RoleImagePromotionReceipt.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 967: controlplane.v1.RoleImagePromotionReceipt.created_at:type_name -> google.protobuf.Timestamp
 	739,  // 968: controlplane.v1.PromoteRoleImageResponse.receipt:type_name -> controlplane.v1.RoleImagePromotionReceipt
 	68,   // 969: controlplane.v1.ProviderAuthorization.method:type_name -> controlplane.v1.ProviderAuthorizationMethod
 	69,   // 970: controlplane.v1.ProviderAuthorization.state:type_name -> controlplane.v1.ProviderAuthorizationState
-	1078, // 971: controlplane.v1.ProviderAuthorization.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 971: controlplane.v1.ProviderAuthorization.expires_at:type_name -> google.protobuf.Timestamp
 	67,   // 972: controlplane.v1.ProviderAccount.state:type_name -> controlplane.v1.ProviderAccountState
 	741,  // 973: controlplane.v1.ProviderAccount.authorization:type_name -> controlplane.v1.ProviderAuthorization
 	2,    // 974: controlplane.v1.ProviderAccount.next_actions:type_name -> controlplane.v1.NextAction
-	1078, // 975: controlplane.v1.ProviderAccount.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 976: controlplane.v1.ProviderAccount.updated_at:type_name -> google.protobuf.Timestamp
+	1080, // 975: controlplane.v1.ProviderAccount.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 976: controlplane.v1.ProviderAccount.updated_at:type_name -> google.protobuf.Timestamp
 	751,  // 977: controlplane.v1.ProviderAccount.usage:type_name -> controlplane.v1.ProviderAccountUsage
 	744,  // 978: controlplane.v1.ProviderAccount.deletion:type_name -> controlplane.v1.ProviderAccountDeletion
 	745,  // 979: controlplane.v1.ProviderAccount.verification:type_name -> controlplane.v1.ProviderAccountVerification
 	70,   // 980: controlplane.v1.ProviderAccountBlockerCount.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
 	71,   // 981: controlplane.v1.ProviderAccountDeletion.state:type_name -> controlplane.v1.ProviderAccountDeletionState
 	743,  // 982: controlplane.v1.ProviderAccountDeletion.blockers:type_name -> controlplane.v1.ProviderAccountBlockerCount
-	1078, // 983: controlplane.v1.ProviderAccountDeletion.requested_at:type_name -> google.protobuf.Timestamp
-	1078, // 984: controlplane.v1.ProviderAccountDeletion.completed_at:type_name -> google.protobuf.Timestamp
+	1080, // 983: controlplane.v1.ProviderAccountDeletion.requested_at:type_name -> google.protobuf.Timestamp
+	1080, // 984: controlplane.v1.ProviderAccountDeletion.completed_at:type_name -> google.protobuf.Timestamp
 	72,   // 985: controlplane.v1.ProviderAccountVerification.state:type_name -> controlplane.v1.ProviderAccountVerificationState
 	73,   // 986: controlplane.v1.ProviderAccountVerification.scope:type_name -> controlplane.v1.ProviderAccountVerificationScope
-	1078, // 987: controlplane.v1.ProviderAccountVerification.requested_at:type_name -> google.protobuf.Timestamp
-	1078, // 988: controlplane.v1.ProviderAccountVerification.completed_at:type_name -> google.protobuf.Timestamp
+	1080, // 987: controlplane.v1.ProviderAccountVerification.requested_at:type_name -> google.protobuf.Timestamp
+	1080, // 988: controlplane.v1.ProviderAccountVerification.completed_at:type_name -> google.protobuf.Timestamp
 	70,   // 989: controlplane.v1.ProviderAccountBlocker.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
 	70,   // 990: controlplane.v1.ListProviderAccountBlockersRequest.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
 	129,  // 991: controlplane.v1.ListProviderAccountBlockersRequest.page:type_name -> controlplane.v1.PageRequest
@@ -84247,11 +84370,11 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	750,  // 1004: controlplane.v1.ProviderAccountUsage.actor_eligibility:type_name -> controlplane.v1.ProviderUsageDimension
 	75,   // 1005: controlplane.v1.ProviderAccountUsage.operational_state:type_name -> controlplane.v1.ProviderUsageState
 	734,  // 1006: controlplane.v1.ProviderAccountUsage.catalog_status:type_name -> controlplane.v1.ProviderModelCatalogStatus
-	1078, // 1007: controlplane.v1.ProviderAccountUsage.observed_at:type_name -> google.protobuf.Timestamp
-	1078, // 1008: controlplane.v1.ProviderAccountUsage.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 1007: controlplane.v1.ProviderAccountUsage.observed_at:type_name -> google.protobuf.Timestamp
+	1080, // 1008: controlplane.v1.ProviderAccountUsage.expires_at:type_name -> google.protobuf.Timestamp
 	77,   // 1009: controlplane.v1.ProviderAccountUsage.provider_health_scope:type_name -> controlplane.v1.ProviderHealthScope
-	1078, // 1010: controlplane.v1.ProviderAccountUsage.provider_health_observed_at:type_name -> google.protobuf.Timestamp
-	1078, // 1011: controlplane.v1.ProviderAccountUsage.provider_health_expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 1010: controlplane.v1.ProviderAccountUsage.provider_health_observed_at:type_name -> google.protobuf.Timestamp
+	1080, // 1011: controlplane.v1.ProviderAccountUsage.provider_health_expires_at:type_name -> google.protobuf.Timestamp
 	129,  // 1012: controlplane.v1.ListProviderAccountsRequest.page:type_name -> controlplane.v1.PageRequest
 	67,   // 1013: controlplane.v1.ListProviderAccountsRequest.state:type_name -> controlplane.v1.ProviderAccountState
 	749,  // 1014: controlplane.v1.ListProviderAccountsRequest.usage_context:type_name -> controlplane.v1.ProviderAccountUsageContext
@@ -84280,1175 +84403,1179 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	79,   // 1037: controlplane.v1.ProviderAccountQueuedWorkResult.outcome:type_name -> controlplane.v1.ProviderAccountQueuedWorkOutcome
 	742,  // 1038: controlplane.v1.CancelProviderAccountQueuedWorkResponse.account:type_name -> controlplane.v1.ProviderAccount
 	773,  // 1039: controlplane.v1.CancelProviderAccountQueuedWorkResponse.outcomes:type_name -> controlplane.v1.ProviderAccountQueuedWorkResult
-	128,  // 1040: controlplane.v1.SetProviderAccountEnabledRequest.mutation:type_name -> controlplane.v1.MutationContext
-	742,  // 1041: controlplane.v1.SetProviderAccountEnabledResponse.account:type_name -> controlplane.v1.ProviderAccount
-	129,  // 1042: controlplane.v1.ListScheduleRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	163,  // 1043: controlplane.v1.ListScheduleRevisionsResponse.revisions:type_name -> controlplane.v1.ScheduleRevision
-	130,  // 1044: controlplane.v1.ListScheduleRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	129,  // 1045: controlplane.v1.ListScheduleRunsRequest.page:type_name -> controlplane.v1.PageRequest
-	164,  // 1046: controlplane.v1.ListScheduleRunsResponse.occurrences:type_name -> controlplane.v1.ScheduleRunOccurrence
-	130,  // 1047: controlplane.v1.ListScheduleRunsResponse.page:type_name -> controlplane.v1.PageInfo
-	128,  // 1048: controlplane.v1.DeleteScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	162,  // 1049: controlplane.v1.DeleteScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
-	80,   // 1050: controlplane.v1.ArtifactImpact.action:type_name -> controlplane.v1.ArtifactImpactAction
-	784,  // 1051: controlplane.v1.ArtifactImpact.active_runs:type_name -> controlplane.v1.ArtifactImpactRun
-	7,    // 1052: controlplane.v1.ArtifactImpactRun.state:type_name -> controlplane.v1.RunState
-	80,   // 1053: controlplane.v1.GetArtifactImpactRequest.action:type_name -> controlplane.v1.ArtifactImpactAction
-	783,  // 1054: controlplane.v1.GetArtifactImpactResponse.impact:type_name -> controlplane.v1.ArtifactImpact
-	128,  // 1055: controlplane.v1.SetAgentAvatarRequest.mutation:type_name -> controlplane.v1.MutationContext
-	137,  // 1056: controlplane.v1.SetAgentAvatarResponse.agent:type_name -> controlplane.v1.Agent
-	128,  // 1057: controlplane.v1.RemoveAgentAvatarRequest.mutation:type_name -> controlplane.v1.MutationContext
-	137,  // 1058: controlplane.v1.RemoveAgentAvatarResponse.agent:type_name -> controlplane.v1.Agent
-	795,  // 1059: controlplane.v1.ValidatePromptTemplateRequest.context:type_name -> controlplane.v1.PromptPreviewContext
-	791,  // 1060: controlplane.v1.ValidatePromptTemplateResponse.diagnostics:type_name -> controlplane.v1.PromptTemplateDiagnostic
-	798,  // 1061: controlplane.v1.ValidatePromptTemplateResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
-	795,  // 1062: controlplane.v1.PreviewPromptTemplateRequest.context:type_name -> controlplane.v1.PromptPreviewContext
-	1079, // 1063: controlplane.v1.PromptPreviewContext.input:type_name -> google.protobuf.Struct
-	81,   // 1064: controlplane.v1.PromptSlotProvenance.slot:type_name -> controlplane.v1.PromptSemanticSlot
-	82,   // 1065: controlplane.v1.PromptSlotProvenance.source:type_name -> controlplane.v1.PromptSectionSource
-	82,   // 1066: controlplane.v1.PromptPreviewSection.source:type_name -> controlplane.v1.PromptSectionSource
-	81,   // 1067: controlplane.v1.PromptPreviewSection.slot:type_name -> controlplane.v1.PromptSemanticSlot
-	83,   // 1068: controlplane.v1.PromptPreviewSection.user_kind:type_name -> controlplane.v1.PromptUserSectionKind
-	791,  // 1069: controlplane.v1.PreviewPromptTemplateResponse.diagnostics:type_name -> controlplane.v1.PromptTemplateDiagnostic
-	796,  // 1070: controlplane.v1.PreviewPromptTemplateResponse.slots:type_name -> controlplane.v1.PromptSlotProvenance
-	797,  // 1071: controlplane.v1.PreviewPromptTemplateResponse.sections:type_name -> controlplane.v1.PromptPreviewSection
-	798,  // 1072: controlplane.v1.PreviewPromptTemplateResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
-	802,  // 1073: controlplane.v1.PreviewPromptTemplateResponse.runtime_diff:type_name -> controlplane.v1.PromptRuntimeDiff
-	84,   // 1074: controlplane.v1.PromptRuntimeChange.component:type_name -> controlplane.v1.PromptRuntimeComponent
-	800,  // 1075: controlplane.v1.PromptRuntimeChange.previous:type_name -> controlplane.v1.PromptRuntimeDescriptor
-	800,  // 1076: controlplane.v1.PromptRuntimeChange.current:type_name -> controlplane.v1.PromptRuntimeDescriptor
-	85,   // 1077: controlplane.v1.PromptRuntimeChange.action:type_name -> controlplane.v1.PromptRuntimeAction
-	801,  // 1078: controlplane.v1.PromptRuntimeDiff.changes:type_name -> controlplane.v1.PromptRuntimeChange
-	87,   // 1079: controlplane.v1.ManagedConfigurationRevision.state:type_name -> controlplane.v1.ManagedConfigurationState
-	1078, // 1080: controlplane.v1.ManagedConfigurationRevision.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1081: controlplane.v1.ManagedConfigurationRevision.validated_at:type_name -> google.protobuf.Timestamp
-	1078, // 1082: controlplane.v1.ManagedConfigurationRevision.published_at:type_name -> google.protobuf.Timestamp
-	805,  // 1083: controlplane.v1.ManagedConfigurationRevision.prompt_scope:type_name -> controlplane.v1.PromptTemplateScope
-	89,   // 1084: controlplane.v1.PromptTemplateScopeInput.template_kind:type_name -> controlplane.v1.PromptTemplateKind
-	798,  // 1085: controlplane.v1.PromptTemplateScope.context_pin:type_name -> controlplane.v1.PromptContextPin
-	89,   // 1086: controlplane.v1.PromptTemplateScope.template_kind:type_name -> controlplane.v1.PromptTemplateKind
-	86,   // 1087: controlplane.v1.ManagedConfigurationSet.kind:type_name -> controlplane.v1.ManagedConfigurationKind
-	88,   // 1088: controlplane.v1.ManagedConfigurationSet.managed_by:type_name -> controlplane.v1.ManagedConfigurationOwner
-	803,  // 1089: controlplane.v1.ManagedConfigurationSet.current_revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	1078, // 1090: controlplane.v1.ManagedConfigurationSet.updated_at:type_name -> google.protobuf.Timestamp
-	1027, // 1091: controlplane.v1.ManagedConfigurationSet.git_source:type_name -> controlplane.v1.ManagedConfigurationGitSource
-	807,  // 1092: controlplane.v1.ManagedConfigurationSet.copy_provenance:type_name -> controlplane.v1.ManagedConfigurationCopyProvenance
-	90,   // 1093: controlplane.v1.ManagedConfigurationCopyProvenance.origin:type_name -> controlplane.v1.ManagedConfigurationCopyOrigin
-	128,  // 1094: controlplane.v1.CopyRoleImageConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1095: controlplane.v1.CopyRoleImageConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1096: controlplane.v1.CopyRoleImageConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1097: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	810,  // 1098: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest.shipped:type_name -> controlplane.v1.ShippedIntegrationDefinitionCopySource
-	806,  // 1099: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1100: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1101: controlplane.v1.ArchiveRoleImageConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1102: controlplane.v1.ArchiveRoleImageConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	128,  // 1103: controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1104: controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	817,  // 1105: controlplane.v1.ManagedConfigurationImpact.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	130,  // 1106: controlplane.v1.ManagedConfigurationImpact.page:type_name -> controlplane.v1.PageInfo
-	806,  // 1107: controlplane.v1.ManagedConfigurationBindingSnapshot.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1108: controlplane.v1.ManagedConfigurationBindingSnapshot.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	819,  // 1109: controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse.binding:type_name -> controlplane.v1.ManagedConfigurationBindingSnapshot
-	819,  // 1110: controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse.binding:type_name -> controlplane.v1.ManagedConfigurationBindingSnapshot
-	128,  // 1111: controlplane.v1.CreatePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	804,  // 1112: controlplane.v1.CreatePromptTemplateDraftRequest.prompt_scope:type_name -> controlplane.v1.PromptTemplateScopeInput
-	806,  // 1113: controlplane.v1.CreatePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1114: controlplane.v1.CreatePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1115: controlplane.v1.ValidatePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1116: controlplane.v1.ValidatePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1117: controlplane.v1.ValidatePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1118: controlplane.v1.PublishPromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1119: controlplane.v1.PublishPromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1120: controlplane.v1.PublishPromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	842,  // 1121: controlplane.v1.PublishPromptTemplateDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	128,  // 1122: controlplane.v1.RebindPromptTemplateConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
-	817,  // 1123: controlplane.v1.RebindPromptTemplateConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	806,  // 1124: controlplane.v1.RebindPromptTemplateConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1125: controlplane.v1.RebindPromptTemplateConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1126: controlplane.v1.CreateRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1127: controlplane.v1.CreateRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1128: controlplane.v1.CreateRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1129: controlplane.v1.ValidateRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1130: controlplane.v1.ValidateRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1131: controlplane.v1.ValidateRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1132: controlplane.v1.PublishRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1133: controlplane.v1.PublishRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1134: controlplane.v1.PublishRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1135: controlplane.v1.RebindRoleImageConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
-	817,  // 1136: controlplane.v1.RebindRoleImageConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	806,  // 1137: controlplane.v1.RebindRoleImageConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1138: controlplane.v1.RebindRoleImageConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	840,  // 1139: controlplane.v1.RebindRoleImageConsumersResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
-	91,   // 1140: controlplane.v1.RoleImageImpactPlan.state:type_name -> controlplane.v1.RoleImageImpactPlanState
-	1078, // 1141: controlplane.v1.RoleImageImpactPlan.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1142: controlplane.v1.RoleImageImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
-	672,  // 1143: controlplane.v1.RoleImageImpactItem.consumer:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
-	92,   // 1144: controlplane.v1.RoleImageImpactItem.outcome:type_name -> controlplane.v1.RoleImageImpactOutcome
-	93,   // 1145: controlplane.v1.RevisionImpactPlan.kind:type_name -> controlplane.v1.RevisionImpactKind
-	94,   // 1146: controlplane.v1.RevisionImpactPlan.state:type_name -> controlplane.v1.RevisionImpactState
-	1078, // 1147: controlplane.v1.RevisionImpactPlan.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1148: controlplane.v1.RevisionImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
-	96,   // 1149: controlplane.v1.RevisionImpactItem.consumer_kind:type_name -> controlplane.v1.RevisionImpactConsumerKind
-	95,   // 1150: controlplane.v1.RevisionImpactItem.outcome:type_name -> controlplane.v1.RevisionImpactOutcome
-	128,  // 1151: controlplane.v1.PrepareEnvironmentDraftImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
-	842,  // 1152: controlplane.v1.PrepareEnvironmentDraftImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	128,  // 1153: controlplane.v1.PrepareInstructionsImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
-	842,  // 1154: controlplane.v1.PrepareInstructionsImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	128,  // 1155: controlplane.v1.PreparePromptTemplateImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
-	842,  // 1156: controlplane.v1.PreparePromptTemplateImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	129,  // 1157: controlplane.v1.GetRevisionImpactPlanRequest.page:type_name -> controlplane.v1.PageRequest
-	842,  // 1158: controlplane.v1.GetRevisionImpactPlanResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	843,  // 1159: controlplane.v1.GetRevisionImpactPlanResponse.items:type_name -> controlplane.v1.RevisionImpactItem
-	130,  // 1160: controlplane.v1.GetRevisionImpactPlanResponse.page:type_name -> controlplane.v1.PageInfo
-	128,  // 1161: controlplane.v1.PrepareRoleImageImpactPlanRequest.mutation:type_name -> controlplane.v1.MutationContext
-	840,  // 1162: controlplane.v1.PrepareRoleImageImpactPlanResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
-	129,  // 1163: controlplane.v1.GetRoleImageImpactPlanRequest.page:type_name -> controlplane.v1.PageRequest
-	840,  // 1164: controlplane.v1.GetRoleImageImpactPlanResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
-	841,  // 1165: controlplane.v1.GetRoleImageImpactPlanResponse.items:type_name -> controlplane.v1.RoleImageImpactItem
-	130,  // 1166: controlplane.v1.GetRoleImageImpactPlanResponse.page:type_name -> controlplane.v1.PageInfo
-	128,  // 1167: controlplane.v1.CreateIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1168: controlplane.v1.CreateIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1169: controlplane.v1.CreateIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1170: controlplane.v1.ValidateIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1171: controlplane.v1.ValidateIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1172: controlplane.v1.ValidateIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1173: controlplane.v1.PublishIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1174: controlplane.v1.PublishIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1175: controlplane.v1.PublishIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1176: controlplane.v1.RebindIntegrationDefinitionConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
-	817,  // 1177: controlplane.v1.RebindIntegrationDefinitionConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	806,  // 1178: controlplane.v1.RebindIntegrationDefinitionConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1179: controlplane.v1.RebindIntegrationDefinitionConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1180: controlplane.v1.CreateSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1181: controlplane.v1.CreateSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1182: controlplane.v1.CreateSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1183: controlplane.v1.ValidateSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1184: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1185: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1186: controlplane.v1.PublishSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1187: controlplane.v1.PublishSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1188: controlplane.v1.PublishSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1189: controlplane.v1.RebindSystemSTTConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
-	817,  // 1190: controlplane.v1.RebindSystemSTTConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	806,  // 1191: controlplane.v1.RebindSystemSTTConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1192: controlplane.v1.RebindSystemSTTConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1193: controlplane.v1.DetachGitManagedConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1194: controlplane.v1.DetachGitManagedConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1195: controlplane.v1.DetachGitManagedConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	128,  // 1196: controlplane.v1.CopyGitManagedConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1197: controlplane.v1.CopyGitManagedConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1198: controlplane.v1.CopyGitManagedConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	129,  // 1199: controlplane.v1.ListManagedConfigurationHistoryRequest.page:type_name -> controlplane.v1.PageRequest
-	86,   // 1200: controlplane.v1.ListManagedConfigurationsRequest.kind:type_name -> controlplane.v1.ManagedConfigurationKind
-	129,  // 1201: controlplane.v1.ListManagedConfigurationsRequest.page:type_name -> controlplane.v1.PageRequest
-	806,  // 1202: controlplane.v1.ListManagedConfigurationsResponse.configurations:type_name -> controlplane.v1.ManagedConfigurationSet
-	130,  // 1203: controlplane.v1.ListManagedConfigurationsResponse.page:type_name -> controlplane.v1.PageInfo
-	806,  // 1204: controlplane.v1.ListManagedConfigurationHistoryResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1205: controlplane.v1.ListManagedConfigurationHistoryResponse.revisions:type_name -> controlplane.v1.ManagedConfigurationRevision
-	130,  // 1206: controlplane.v1.ListManagedConfigurationHistoryResponse.page:type_name -> controlplane.v1.PageInfo
-	129,  // 1207: controlplane.v1.GetManagedConfigurationImpactRequest.page:type_name -> controlplane.v1.PageRequest
-	818,  // 1208: controlplane.v1.GetManagedConfigurationImpactResponse.impact:type_name -> controlplane.v1.ManagedConfigurationImpact
-	1078, // 1209: controlplane.v1.ContextProvenance.created_at:type_name -> google.protobuf.Timestamp
-	884,  // 1210: controlplane.v1.SkillBundleSpecification.files:type_name -> controlplane.v1.SkillBundleFileInput
-	98,   // 1211: controlplane.v1.SkillBundleRevision.state:type_name -> controlplane.v1.SkillRevisionState
-	883,  // 1212: controlplane.v1.SkillBundleRevision.files:type_name -> controlplane.v1.SkillBundleFile
-	882,  // 1213: controlplane.v1.SkillBundleRevision.provenance:type_name -> controlplane.v1.ContextProvenance
-	99,   // 1214: controlplane.v1.SkillBundleRevision.scan_state:type_name -> controlplane.v1.SkillScanState
-	1078, // 1215: controlplane.v1.SkillBundleRevision.scanned_at:type_name -> google.protobuf.Timestamp
-	1078, // 1216: controlplane.v1.SkillBundleRevision.reviewed_at:type_name -> google.protobuf.Timestamp
-	97,   // 1217: controlplane.v1.SkillBundle.state:type_name -> controlplane.v1.ContextResourceState
-	886,  // 1218: controlplane.v1.SkillBundle.current_revision:type_name -> controlplane.v1.SkillBundleRevision
-	886,  // 1219: controlplane.v1.SkillBundle.draft_revision:type_name -> controlplane.v1.SkillBundleRevision
-	1078, // 1220: controlplane.v1.SkillBundle.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1221: controlplane.v1.SkillBundle.updated_at:type_name -> google.protobuf.Timestamp
-	103,  // 1222: controlplane.v1.EmailMailboxEndpoint.tls_mode:type_name -> controlplane.v1.EmailMailboxTLSMode
-	104,  // 1223: controlplane.v1.EmailMailboxEndpoint.auth_method:type_name -> controlplane.v1.EmailMailboxAuthMethod
-	888,  // 1224: controlplane.v1.EmailMailboxEndpoint.ca:type_name -> controlplane.v1.EmailMailboxCredentialReference
-	888,  // 1225: controlplane.v1.EmailMailboxEndpoint.username:type_name -> controlplane.v1.EmailMailboxCredentialReference
-	888,  // 1226: controlplane.v1.EmailMailboxEndpoint.secret:type_name -> controlplane.v1.EmailMailboxCredentialReference
-	101,  // 1227: controlplane.v1.EmailMailboxOperationPolicy.operation:type_name -> controlplane.v1.EmailOperation
-	109,  // 1228: controlplane.v1.EmailMailboxOperationPolicy.policy:type_name -> controlplane.v1.EmailApprovalPolicy
-	102,  // 1229: controlplane.v1.EmailMailboxSpecification.receive_protocol:type_name -> controlplane.v1.EmailMailboxReceiveProtocol
-	889,  // 1230: controlplane.v1.EmailMailboxSpecification.smtp:type_name -> controlplane.v1.EmailMailboxEndpoint
-	889,  // 1231: controlplane.v1.EmailMailboxSpecification.imap:type_name -> controlplane.v1.EmailMailboxEndpoint
-	889,  // 1232: controlplane.v1.EmailMailboxSpecification.pop:type_name -> controlplane.v1.EmailMailboxEndpoint
-	890,  // 1233: controlplane.v1.EmailMailboxSpecification.limits:type_name -> controlplane.v1.EmailMailboxLimits
-	891,  // 1234: controlplane.v1.EmailMailboxSpecification.policies:type_name -> controlplane.v1.EmailMailboxOperationPolicy
-	892,  // 1235: controlplane.v1.EmailMailboxDraftContent.specification:type_name -> controlplane.v1.EmailMailboxSpecification
-	105,  // 1236: controlplane.v1.EmailMailboxPublication.state:type_name -> controlplane.v1.EmailMailboxPublicationState
-	1078, // 1237: controlplane.v1.EmailMailboxPublication.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1238: controlplane.v1.EmailMailboxPublication.ready_at:type_name -> google.protobuf.Timestamp
-	806,  // 1239: controlplane.v1.EmailMailboxConfigurationView.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	803,  // 1240: controlplane.v1.EmailMailboxConfigurationView.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	892,  // 1241: controlplane.v1.EmailMailboxConfigurationView.specification:type_name -> controlplane.v1.EmailMailboxSpecification
-	895,  // 1242: controlplane.v1.EmailMailboxConfigurationView.publication:type_name -> controlplane.v1.EmailMailboxPublication
-	894,  // 1243: controlplane.v1.EmailMailboxConfigurationView.diagnostics:type_name -> controlplane.v1.EmailMailboxDiagnostic
-	897,  // 1244: controlplane.v1.EmailMailboxConfigurationView.next_actions:type_name -> controlplane.v1.EmailMailboxActionAvailability
-	106,  // 1245: controlplane.v1.EmailMailboxActionAvailability.action:type_name -> controlplane.v1.EmailMailboxAction
-	107,  // 1246: controlplane.v1.EmailMailboxActionAvailability.reason:type_name -> controlplane.v1.EmailMailboxActionReason
-	129,  // 1247: controlplane.v1.ListEmailMailboxConfigurationsRequest.page:type_name -> controlplane.v1.PageRequest
-	896,  // 1248: controlplane.v1.ListEmailMailboxConfigurationsResponse.items:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	130,  // 1249: controlplane.v1.ListEmailMailboxConfigurationsResponse.page:type_name -> controlplane.v1.PageInfo
-	897,  // 1250: controlplane.v1.ListEmailMailboxConfigurationsResponse.next_actions:type_name -> controlplane.v1.EmailMailboxActionAvailability
-	896,  // 1251: controlplane.v1.GetEmailMailboxConfigurationResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	108,  // 1252: controlplane.v1.ListEmailMailboxCredentialsRequest.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
-	129,  // 1253: controlplane.v1.ListEmailMailboxCredentialsRequest.page:type_name -> controlplane.v1.PageRequest
-	924,  // 1254: controlplane.v1.ListEmailMailboxCredentialsResponse.items:type_name -> controlplane.v1.EmailMailboxCredential
-	130,  // 1255: controlplane.v1.ListEmailMailboxCredentialsResponse.page:type_name -> controlplane.v1.PageInfo
-	924,  // 1256: controlplane.v1.GetEmailMailboxCredentialReceiptResponse.credential:type_name -> controlplane.v1.EmailMailboxCredential
-	893,  // 1257: controlplane.v1.PreviewEmailMailboxConfigurationRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
-	892,  // 1258: controlplane.v1.PreviewEmailMailboxConfigurationResponse.specification:type_name -> controlplane.v1.EmailMailboxSpecification
-	894,  // 1259: controlplane.v1.PreviewEmailMailboxConfigurationResponse.diagnostics:type_name -> controlplane.v1.EmailMailboxDiagnostic
-	128,  // 1260: controlplane.v1.CreateEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	893,  // 1261: controlplane.v1.CreateEmailMailboxDraftRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
-	896,  // 1262: controlplane.v1.CreateEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	128,  // 1263: controlplane.v1.SaveEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	893,  // 1264: controlplane.v1.SaveEmailMailboxDraftRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
-	896,  // 1265: controlplane.v1.SaveEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	128,  // 1266: controlplane.v1.ValidateEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	896,  // 1267: controlplane.v1.ValidateEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	128,  // 1268: controlplane.v1.PublishEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	896,  // 1269: controlplane.v1.PublishEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	128,  // 1270: controlplane.v1.DiscardEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	896,  // 1271: controlplane.v1.DiscardEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	128,  // 1272: controlplane.v1.BindEmailMailboxConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	896,  // 1273: controlplane.v1.BindEmailMailboxConfigurationResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	128,  // 1274: controlplane.v1.UnbindEmailMailboxConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	895,  // 1275: controlplane.v1.UnbindEmailMailboxConfigurationResponse.publication:type_name -> controlplane.v1.EmailMailboxPublication
-	108,  // 1276: controlplane.v1.EmailMailboxCredential.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
-	128,  // 1277: controlplane.v1.ConfigureEmailMailboxCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
-	108,  // 1278: controlplane.v1.ConfigureEmailMailboxCredentialRequest.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
-	924,  // 1279: controlplane.v1.ConfigureEmailMailboxCredentialResponse.credential:type_name -> controlplane.v1.EmailMailboxCredential
-	461,  // 1280: controlplane.v1.EmailExecutionBinding.lease:type_name -> controlplane.v1.WorkLease
-	101,  // 1281: controlplane.v1.EmailAuthorizationScope.operations:type_name -> controlplane.v1.EmailOperation
-	927,  // 1282: controlplane.v1.ResolveEmailAuthorizationRequest.binding:type_name -> controlplane.v1.EmailExecutionBinding
-	101,  // 1283: controlplane.v1.ResolveEmailAuthorizationRequest.operation:type_name -> controlplane.v1.EmailOperation
-	101,  // 1284: controlplane.v1.ResolveEmailAuthorizationResponse.operation:type_name -> controlplane.v1.EmailOperation
-	109,  // 1285: controlplane.v1.ResolveEmailAuthorizationResponse.policy:type_name -> controlplane.v1.EmailApprovalPolicy
-	928,  // 1286: controlplane.v1.ResolveEmailAuthorizationResponse.user_scope:type_name -> controlplane.v1.EmailAuthorizationScope
-	928,  // 1287: controlplane.v1.ResolveEmailAuthorizationResponse.agent_scope:type_name -> controlplane.v1.EmailAuthorizationScope
-	928,  // 1288: controlplane.v1.ResolveEmailAuthorizationResponse.connection_scope:type_name -> controlplane.v1.EmailAuthorizationScope
-	928,  // 1289: controlplane.v1.ResolveEmailAuthorizationResponse.resource_scope:type_name -> controlplane.v1.EmailAuthorizationScope
-	1078, // 1290: controlplane.v1.ResolveEmailAuthorizationResponse.expires_at:type_name -> google.protobuf.Timestamp
-	927,  // 1291: controlplane.v1.ResolveEmailAuthorizationResponse.binding:type_name -> controlplane.v1.EmailExecutionBinding
-	110,  // 1292: controlplane.v1.EmailEffectReceipt.outcome:type_name -> controlplane.v1.EmailEffectOutcome
-	1078, // 1293: controlplane.v1.EmailEffectReceipt.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1294: controlplane.v1.EmailEffectReceipt.updated_at:type_name -> google.protobuf.Timestamp
-	128,  // 1295: controlplane.v1.ReportEmailEffectReceiptRequest.mutation:type_name -> controlplane.v1.MutationContext
-	927,  // 1296: controlplane.v1.ReportEmailEffectReceiptRequest.binding:type_name -> controlplane.v1.EmailExecutionBinding
-	110,  // 1297: controlplane.v1.ReportEmailEffectReceiptRequest.outcome:type_name -> controlplane.v1.EmailEffectOutcome
-	931,  // 1298: controlplane.v1.ReportEmailEffectReceiptResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
-	110,  // 1299: controlplane.v1.EmailReconciliationDecision.outcome:type_name -> controlplane.v1.EmailEffectOutcome
-	1078, // 1300: controlplane.v1.EmailReconciliationDecision.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1301: controlplane.v1.EmailReconciliationDecision.expires_at:type_name -> google.protobuf.Timestamp
-	128,  // 1302: controlplane.v1.ReconcileEmailEffectRequest.mutation:type_name -> controlplane.v1.MutationContext
-	110,  // 1303: controlplane.v1.ReconcileEmailEffectRequest.outcome:type_name -> controlplane.v1.EmailEffectOutcome
-	934,  // 1304: controlplane.v1.ReconcileEmailEffectResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
-	934,  // 1305: controlplane.v1.ResolveEmailReconciliationResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
-	931,  // 1306: controlplane.v1.ResolveEmailReconciliationResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
-	931,  // 1307: controlplane.v1.GetEmailEffectReceiptResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
-	934,  // 1308: controlplane.v1.GetEmailEffectReceiptResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
-	1078, // 1309: controlplane.v1.MemoryRecordSpecification.retention_until:type_name -> google.protobuf.Timestamp
-	882,  // 1310: controlplane.v1.MemoryRecordRevision.provenance:type_name -> controlplane.v1.ContextProvenance
-	1078, // 1311: controlplane.v1.MemoryRecordRevision.retention_until:type_name -> google.protobuf.Timestamp
-	97,   // 1312: controlplane.v1.KodexMemoryRecord.state:type_name -> controlplane.v1.ContextResourceState
-	943,  // 1313: controlplane.v1.KodexMemoryRecord.current_revision:type_name -> controlplane.v1.MemoryRecordRevision
-	1078, // 1314: controlplane.v1.KodexMemoryRecord.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1315: controlplane.v1.KodexMemoryRecord.updated_at:type_name -> google.protobuf.Timestamp
-	97,   // 1316: controlplane.v1.ListSkillBundlesRequest.state:type_name -> controlplane.v1.ContextResourceState
-	129,  // 1317: controlplane.v1.ListSkillBundlesRequest.page:type_name -> controlplane.v1.PageRequest
-	887,  // 1318: controlplane.v1.ListSkillBundlesResponse.bundles:type_name -> controlplane.v1.SkillBundle
-	130,  // 1319: controlplane.v1.ListSkillBundlesResponse.page:type_name -> controlplane.v1.PageInfo
-	887,  // 1320: controlplane.v1.GetSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	129,  // 1321: controlplane.v1.ListSkillBundleRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	886,  // 1322: controlplane.v1.ListSkillBundleRevisionsResponse.revisions:type_name -> controlplane.v1.SkillBundleRevision
-	130,  // 1323: controlplane.v1.ListSkillBundleRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	97,   // 1324: controlplane.v1.ListMemoryRecordsRequest.state:type_name -> controlplane.v1.ContextResourceState
-	129,  // 1325: controlplane.v1.ListMemoryRecordsRequest.page:type_name -> controlplane.v1.PageRequest
-	944,  // 1326: controlplane.v1.ListMemoryRecordsResponse.records:type_name -> controlplane.v1.KodexMemoryRecord
-	130,  // 1327: controlplane.v1.ListMemoryRecordsResponse.page:type_name -> controlplane.v1.PageInfo
-	944,  // 1328: controlplane.v1.GetMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	129,  // 1329: controlplane.v1.ListMemoryRecordRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	943,  // 1330: controlplane.v1.ListMemoryRecordRevisionsResponse.revisions:type_name -> controlplane.v1.MemoryRecordRevision
-	130,  // 1331: controlplane.v1.ListMemoryRecordRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	128,  // 1332: controlplane.v1.CreateSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	885,  // 1333: controlplane.v1.CreateSkillBundleDraftRequest.specification:type_name -> controlplane.v1.SkillBundleSpecification
-	128,  // 1334: controlplane.v1.SaveSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	885,  // 1335: controlplane.v1.SaveSkillBundleDraftRequest.specification:type_name -> controlplane.v1.SkillBundleSpecification
-	128,  // 1336: controlplane.v1.ReviewSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	100,  // 1337: controlplane.v1.ReviewSkillBundleDraftRequest.decision:type_name -> controlplane.v1.SkillReviewDecision
-	128,  // 1338: controlplane.v1.CreateMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	942,  // 1339: controlplane.v1.CreateMemoryRecordRequest.specification:type_name -> controlplane.v1.MemoryRecordSpecification
-	128,  // 1340: controlplane.v1.ReviseMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	942,  // 1341: controlplane.v1.ReviseMemoryRecordRequest.specification:type_name -> controlplane.v1.MemoryRecordSpecification
-	128,  // 1342: controlplane.v1.ValidateSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1343: controlplane.v1.PublishSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1344: controlplane.v1.DiscardSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1345: controlplane.v1.ArchiveSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1346: controlplane.v1.RestoreSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1347: controlplane.v1.PurgeSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1348: controlplane.v1.BindAgentSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	941,  // 1349: controlplane.v1.BindAgentSkillBundleResponse.binding:type_name -> controlplane.v1.AgentContextBinding
-	128,  // 1350: controlplane.v1.UnbindAgentSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	941,  // 1351: controlplane.v1.UnbindAgentSkillBundleResponse.binding:type_name -> controlplane.v1.AgentContextBinding
-	128,  // 1352: controlplane.v1.ArchiveMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1353: controlplane.v1.RestoreMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1354: controlplane.v1.PurgeMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	128,  // 1355: controlplane.v1.BindAgentMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	941,  // 1356: controlplane.v1.BindAgentMemoryRecordResponse.binding:type_name -> controlplane.v1.AgentContextBinding
-	128,  // 1357: controlplane.v1.UnbindAgentMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	941,  // 1358: controlplane.v1.UnbindAgentMemoryRecordResponse.binding:type_name -> controlplane.v1.AgentContextBinding
-	887,  // 1359: controlplane.v1.CreateSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	887,  // 1360: controlplane.v1.SaveSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	887,  // 1361: controlplane.v1.ValidateSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	887,  // 1362: controlplane.v1.ReviewSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	887,  // 1363: controlplane.v1.PublishSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	887,  // 1364: controlplane.v1.DiscardSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	887,  // 1365: controlplane.v1.ArchiveSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	887,  // 1366: controlplane.v1.RestoreSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	887,  // 1367: controlplane.v1.PurgeSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	944,  // 1368: controlplane.v1.CreateMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	944,  // 1369: controlplane.v1.ReviseMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	944,  // 1370: controlplane.v1.ArchiveMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	944,  // 1371: controlplane.v1.RestoreMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	944,  // 1372: controlplane.v1.PurgeMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	993,  // 1373: controlplane.v1.SystemSTTConfiguration.parameters:type_name -> controlplane.v1.SystemSTTParameters
-	994,  // 1374: controlplane.v1.GetSystemSTTConfigurationResponse.configuration:type_name -> controlplane.v1.SystemSTTConfiguration
-	997,  // 1375: controlplane.v1.ObserveProviderModelCatalogRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	68,   // 1376: controlplane.v1.ObserveProviderModelCatalogRequest.authorization_method:type_name -> controlplane.v1.ProviderAuthorizationMethod
-	1078, // 1377: controlplane.v1.ObserveProviderModelCatalogRequest.expires_at:type_name -> google.protobuf.Timestamp
-	1078, // 1378: controlplane.v1.ObserveProviderModelCatalogResponse.observed_at:type_name -> google.protobuf.Timestamp
-	111,  // 1379: controlplane.v1.ObserveProviderModelCatalogResponse.source:type_name -> controlplane.v1.ProviderModelCatalogSource
-	999,  // 1380: controlplane.v1.ObserveProviderModelCatalogResponse.models:type_name -> controlplane.v1.ProviderModelCatalogRecord
-	112,  // 1381: controlplane.v1.ObserveProviderModelCatalogResponse.failure:type_name -> controlplane.v1.ProviderModelCatalogFailure
-	1078, // 1382: controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse.expires_at:type_name -> google.protobuf.Timestamp
-	113,  // 1383: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest.mode:type_name -> controlplane.v1.ProviderAuthorizationObservationMode
-	69,   // 1384: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.state:type_name -> controlplane.v1.ProviderAuthorizationState
-	997,  // 1385: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	114,  // 1386: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.object_state:type_name -> controlplane.v1.ProviderAuthorizationObjectState
-	1006, // 1387: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.pending_object:type_name -> controlplane.v1.ProviderAuthorizationObjectDescriptor
-	1005, // 1388: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.absent_object:type_name -> controlplane.v1.ProviderAuthorizationAbsenceDescriptor
-	997,  // 1389: controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	997,  // 1390: controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	128,  // 1391: controlplane.v1.CommitProviderCredentialRefreshRequest.mutation:type_name -> controlplane.v1.MutationContext
-	458,  // 1392: controlplane.v1.CommitProviderCredentialRefreshResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
-	997,  // 1393: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	1006, // 1394: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.pending_object:type_name -> controlplane.v1.ProviderAuthorizationObjectDescriptor
-	115,  // 1395: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.target_kind:type_name -> controlplane.v1.ProviderCredentialCleanupTargetKind
-	1005, // 1396: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.absent_object:type_name -> controlplane.v1.ProviderAuthorizationAbsenceDescriptor
-	1015, // 1397: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.recovery_identity:type_name -> controlplane.v1.ProviderCredentialCleanupRecoveryIdentity
-	997,  // 1398: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse.produced_credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	1078, // 1399: controlplane.v1.CredentialProjectionAuthority.expires_at:type_name -> google.protobuf.Timestamp
-	1018, // 1400: controlplane.v1.ResolveRuntimeCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
-	458,  // 1401: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
-	698,  // 1402: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.runtime_secrets:type_name -> controlplane.v1.RuntimeSecretDescriptor
-	1078, // 1403: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
-	1018, // 1404: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
-	1018, // 1405: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
-	458,  // 1406: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
-	698,  // 1407: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.runtime_secrets:type_name -> controlplane.v1.RuntimeSecretDescriptor
-	1018, // 1408: controlplane.v1.ResolveTranscriptionCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
-	458,  // 1409: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
-	1078, // 1410: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
-	116,  // 1411: controlplane.v1.ManagedConfigurationGitSource.state:type_name -> controlplane.v1.ManagedConfigurationSourceState
-	1078, // 1412: controlplane.v1.ManagedConfigurationGitSource.synced_at:type_name -> google.protobuf.Timestamp
-	118,  // 1413: controlplane.v1.ManagedConfigurationGitSource.failure_code:type_name -> controlplane.v1.ManagedConfigurationSourceFailure
-	128,  // 1414: controlplane.v1.ConfigureRoleImageGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1028, // 1415: controlplane.v1.ConfigureRoleImageGitSourceRequest.source:type_name -> controlplane.v1.ManagedConfigurationGitSourceInput
-	806,  // 1416: controlplane.v1.ConfigureRoleImageGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	128,  // 1417: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1028, // 1418: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest.source:type_name -> controlplane.v1.ManagedConfigurationGitSourceInput
-	806,  // 1419: controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	128,  // 1420: controlplane.v1.RefreshRoleImageGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1421: controlplane.v1.RefreshRoleImageGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	128,  // 1422: controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	806,  // 1423: controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	1078, // 1424: controlplane.v1.ManagedConfigurationSourceLease.expires_at:type_name -> google.protobuf.Timestamp
-	1037, // 1425: controlplane.v1.ManagedConfigurationSourceWork.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	86,   // 1426: controlplane.v1.ManagedConfigurationSourceWork.kind:type_name -> controlplane.v1.ManagedConfigurationKind
-	1079, // 1427: controlplane.v1.ManagedConfigurationSourceWork.public_configuration:type_name -> google.protobuf.Struct
-	169,  // 1428: controlplane.v1.ManagedConfigurationSourceWork.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	1078, // 1429: controlplane.v1.ManagedConfigurationSourceWork.deadline:type_name -> google.protobuf.Timestamp
-	1038, // 1430: controlplane.v1.ClaimManagedConfigurationSourceWorkResponse.work:type_name -> controlplane.v1.ManagedConfigurationSourceWork
-	1037, // 1431: controlplane.v1.RenewManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	1037, // 1432: controlplane.v1.RenewManagedConfigurationSourceWorkResponse.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	1037, // 1433: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	117,  // 1434: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest.ancestry:type_name -> controlplane.v1.ManagedConfigurationSourceAncestry
-	1027, // 1435: controlplane.v1.CompleteManagedConfigurationSourceWorkResponse.source:type_name -> controlplane.v1.ManagedConfigurationGitSource
-	1037, // 1436: controlplane.v1.FailManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	118,  // 1437: controlplane.v1.FailManagedConfigurationSourceWorkRequest.failure_code:type_name -> controlplane.v1.ManagedConfigurationSourceFailure
-	1027, // 1438: controlplane.v1.FailManagedConfigurationSourceWorkResponse.source:type_name -> controlplane.v1.ManagedConfigurationGitSource
-	122,  // 1439: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability.action:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackAction
-	123,  // 1440: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability.reason:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackActionReason
-	86,   // 1441: controlplane.v1.ManagedConfigurationGitWriteBack.kind:type_name -> controlplane.v1.ManagedConfigurationKind
-	119,  // 1442: controlplane.v1.ManagedConfigurationGitWriteBack.state:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackState
-	121,  // 1443: controlplane.v1.ManagedConfigurationGitWriteBack.failure_code:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackFailure
-	1078, // 1444: controlplane.v1.ManagedConfigurationGitWriteBack.created_at:type_name -> google.protobuf.Timestamp
-	1078, // 1445: controlplane.v1.ManagedConfigurationGitWriteBack.expires_at:type_name -> google.protobuf.Timestamp
-	1078, // 1446: controlplane.v1.ManagedConfigurationGitWriteBack.approved_at:type_name -> google.protobuf.Timestamp
-	1078, // 1447: controlplane.v1.ManagedConfigurationGitWriteBack.completed_at:type_name -> google.protobuf.Timestamp
-	1047, // 1448: controlplane.v1.ManagedConfigurationGitWriteBack.next_actions:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability
-	1078, // 1449: controlplane.v1.ManagedConfigurationGitWriteBack.branch_confirmed_at:type_name -> google.protobuf.Timestamp
-	1078, // 1450: controlplane.v1.ManagedConfigurationGitWriteBack.pull_request_confirmed_at:type_name -> google.protobuf.Timestamp
-	128,  // 1451: controlplane.v1.PrepareRoleImageGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1048, // 1452: controlplane.v1.PrepareRoleImageGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	128,  // 1453: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1048, // 1454: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	128,  // 1455: controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1048, // 1456: controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	128,  // 1457: controlplane.v1.RejectManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1048, // 1458: controlplane.v1.RejectManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	128,  // 1459: controlplane.v1.CancelManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1048, // 1460: controlplane.v1.CancelManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	1048, // 1461: controlplane.v1.GetManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	129,  // 1462: controlplane.v1.ListManagedConfigurationGitWriteBacksRequest.page:type_name -> controlplane.v1.PageRequest
-	1048, // 1463: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse.proposals:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	130,  // 1464: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse.page:type_name -> controlplane.v1.PageInfo
-	1078, // 1465: controlplane.v1.ManagedConfigurationGitWriteBackLease.expires_at:type_name -> google.protobuf.Timestamp
-	1063, // 1466: controlplane.v1.ManagedConfigurationGitWriteBackWork.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	1048, // 1467: controlplane.v1.ManagedConfigurationGitWriteBackWork.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	124,  // 1468: controlplane.v1.ManagedConfigurationGitWriteBackWork.mode:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackWorkMode
-	120,  // 1469: controlplane.v1.ManagedConfigurationGitWriteBackWork.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
-	1079, // 1470: controlplane.v1.ManagedConfigurationGitWriteBackWork.public_configuration:type_name -> google.protobuf.Struct
-	169,  // 1471: controlplane.v1.ManagedConfigurationGitWriteBackWork.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	1078, // 1472: controlplane.v1.ManagedConfigurationGitWriteBackWork.commit_time:type_name -> google.protobuf.Timestamp
-	1078, // 1473: controlplane.v1.ManagedConfigurationGitWriteBackWork.effect_started_at:type_name -> google.protobuf.Timestamp
-	1078, // 1474: controlplane.v1.ManagedConfigurationGitWriteBackWork.deadline:type_name -> google.protobuf.Timestamp
-	1064, // 1475: controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse.work:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackWork
-	1063, // 1476: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	1063, // 1477: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	1063, // 1478: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	120,  // 1479: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
-	1048, // 1480: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	1063, // 1481: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	120,  // 1482: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
-	1048, // 1483: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	1063, // 1484: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	121,  // 1485: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest.failure_code:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackFailure
-	1048, // 1486: controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	166,  // 1487: controlplane.v1.AssistantIntegrationDefinition.configuration_fields:type_name -> controlplane.v1.IntegrationConfigurationField
-	898,  // 1488: controlplane.v1.PlatformQueryService.ListEmailMailboxConfigurations:input_type -> controlplane.v1.ListEmailMailboxConfigurationsRequest
-	900,  // 1489: controlplane.v1.PlatformQueryService.GetEmailMailboxConfiguration:input_type -> controlplane.v1.GetEmailMailboxConfigurationRequest
-	902,  // 1490: controlplane.v1.PlatformQueryService.ListEmailMailboxCredentials:input_type -> controlplane.v1.ListEmailMailboxCredentialsRequest
-	904,  // 1491: controlplane.v1.PlatformQueryService.GetEmailMailboxCredentialReceipt:input_type -> controlplane.v1.GetEmailMailboxCredentialReceiptRequest
-	906,  // 1492: controlplane.v1.PlatformQueryService.PreviewEmailMailboxConfiguration:input_type -> controlplane.v1.PreviewEmailMailboxConfigurationRequest
-	689,  // 1493: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraftImpact:input_type -> controlplane.v1.GetRuntimeSecretDraftImpactRequest
-	584,  // 1494: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraft:input_type -> controlplane.v1.GetRuntimeSecretDraftRequest
-	421,  // 1495: controlplane.v1.PlatformQueryService.GetRuntimeRevisionDiff:input_type -> controlplane.v1.GetRuntimeRevisionDiffRequest
-	939,  // 1496: controlplane.v1.PlatformQueryService.GetEmailEffectReceipt:input_type -> controlplane.v1.GetEmailEffectReceiptRequest
-	945,  // 1497: controlplane.v1.PlatformQueryService.ListSkillBundles:input_type -> controlplane.v1.ListSkillBundlesRequest
-	947,  // 1498: controlplane.v1.PlatformQueryService.GetSkillBundle:input_type -> controlplane.v1.GetSkillBundleRequest
-	949,  // 1499: controlplane.v1.PlatformQueryService.ListSkillBundleRevisions:input_type -> controlplane.v1.ListSkillBundleRevisionsRequest
-	951,  // 1500: controlplane.v1.PlatformQueryService.ListMemoryRecords:input_type -> controlplane.v1.ListMemoryRecordsRequest
-	953,  // 1501: controlplane.v1.PlatformQueryService.GetMemoryRecord:input_type -> controlplane.v1.GetMemoryRecordRequest
-	955,  // 1502: controlplane.v1.PlatformQueryService.ListMemoryRecordRevisions:input_type -> controlplane.v1.ListMemoryRecordRevisionsRequest
-	187,  // 1503: controlplane.v1.PlatformQueryService.GetBootstrapState:input_type -> controlplane.v1.GetBootstrapStateRequest
-	189,  // 1504: controlplane.v1.PlatformQueryService.GetPlatformEventCursor:input_type -> controlplane.v1.GetPlatformEventCursorRequest
-	191,  // 1505: controlplane.v1.PlatformQueryService.GetOverview:input_type -> controlplane.v1.GetOverviewRequest
-	193,  // 1506: controlplane.v1.PlatformQueryService.ListPlatformCapabilities:input_type -> controlplane.v1.ListPlatformCapabilitiesRequest
-	195,  // 1507: controlplane.v1.PlatformQueryService.ListRuntimeSelections:input_type -> controlplane.v1.ListRuntimeSelectionsRequest
-	198,  // 1508: controlplane.v1.PlatformQueryService.SearchPlatform:input_type -> controlplane.v1.SearchPlatformRequest
-	203,  // 1509: controlplane.v1.PlatformQueryService.ListVFSNodes:input_type -> controlplane.v1.ListVFSNodesRequest
-	205,  // 1510: controlplane.v1.PlatformQueryService.SearchVFS:input_type -> controlplane.v1.SearchVFSRequest
-	207,  // 1511: controlplane.v1.PlatformQueryService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
-	209,  // 1512: controlplane.v1.PlatformQueryService.ListTrashedProjects:input_type -> controlplane.v1.ListTrashedProjectsRequest
-	211,  // 1513: controlplane.v1.PlatformQueryService.GetProject:input_type -> controlplane.v1.GetProjectRequest
-	223,  // 1514: controlplane.v1.PlatformQueryService.ListPlatformMemberships:input_type -> controlplane.v1.ListPlatformMembershipsRequest
-	225,  // 1515: controlplane.v1.PlatformQueryService.ListPlatformMembershipCandidates:input_type -> controlplane.v1.ListPlatformMembershipCandidatesRequest
-	233,  // 1516: controlplane.v1.PlatformQueryService.ListProjectMemberships:input_type -> controlplane.v1.ListProjectMembershipsRequest
-	235,  // 1517: controlplane.v1.PlatformQueryService.ListProjectMembershipCandidates:input_type -> controlplane.v1.ListProjectMembershipCandidatesRequest
-	243,  // 1518: controlplane.v1.PlatformQueryService.ListAgents:input_type -> controlplane.v1.ListAgentsRequest
-	245,  // 1519: controlplane.v1.PlatformQueryService.GetAgent:input_type -> controlplane.v1.GetAgentRequest
-	552,  // 1520: controlplane.v1.PlatformQueryService.ListAgentInstructionVersions:input_type -> controlplane.v1.ListAgentInstructionVersionsRequest
-	267,  // 1521: controlplane.v1.PlatformQueryService.ListWorkflows:input_type -> controlplane.v1.ListWorkflowsRequest
-	269,  // 1522: controlplane.v1.PlatformQueryService.GetWorkflow:input_type -> controlplane.v1.GetWorkflowRequest
-	281,  // 1523: controlplane.v1.PlatformQueryService.ListRuns:input_type -> controlplane.v1.ListRunsRequest
-	283,  // 1524: controlplane.v1.PlatformQueryService.GetRun:input_type -> controlplane.v1.GetRunRequest
-	285,  // 1525: controlplane.v1.PlatformQueryService.GetRunGraph:input_type -> controlplane.v1.GetRunGraphRequest
-	287,  // 1526: controlplane.v1.PlatformQueryService.ListRunEvents:input_type -> controlplane.v1.ListRunEventsRequest
-	297,  // 1527: controlplane.v1.PlatformQueryService.ListOwnerGates:input_type -> controlplane.v1.ListOwnerGatesRequest
-	299,  // 1528: controlplane.v1.PlatformQueryService.GetOwnerGate:input_type -> controlplane.v1.GetOwnerGateRequest
-	303,  // 1529: controlplane.v1.PlatformQueryService.ListArtifacts:input_type -> controlplane.v1.ListArtifactsRequest
-	305,  // 1530: controlplane.v1.PlatformQueryService.GetArtifact:input_type -> controlplane.v1.GetArtifactRequest
-	785,  // 1531: controlplane.v1.PlatformQueryService.GetArtifactImpact:input_type -> controlplane.v1.GetArtifactImpactRequest
-	307,  // 1532: controlplane.v1.PlatformQueryService.GetAttachmentSet:input_type -> controlplane.v1.GetAttachmentSetRequest
-	338,  // 1533: controlplane.v1.PlatformQueryService.ListSchedules:input_type -> controlplane.v1.ListSchedulesRequest
-	554,  // 1534: controlplane.v1.PlatformQueryService.GetSchedule:input_type -> controlplane.v1.GetScheduleRequest
-	777,  // 1535: controlplane.v1.PlatformQueryService.ListScheduleRevisions:input_type -> controlplane.v1.ListScheduleRevisionsRequest
-	779,  // 1536: controlplane.v1.PlatformQueryService.ListScheduleRuns:input_type -> controlplane.v1.ListScheduleRunsRequest
-	516,  // 1537: controlplane.v1.PlatformQueryService.PreviewSchedule:input_type -> controlplane.v1.PreviewScheduleRequest
-	752,  // 1538: controlplane.v1.PlatformQueryService.ListProviderAccounts:input_type -> controlplane.v1.ListProviderAccountsRequest
-	754,  // 1539: controlplane.v1.PlatformQueryService.GetProviderAccount:input_type -> controlplane.v1.GetProviderAccountRequest
-	747,  // 1540: controlplane.v1.PlatformQueryService.ListProviderAccountBlockers:input_type -> controlplane.v1.ListProviderAccountBlockersRequest
-	346,  // 1541: controlplane.v1.PlatformQueryService.ListIntegrationDefinitions:input_type -> controlplane.v1.ListIntegrationDefinitionsRequest
-	348,  // 1542: controlplane.v1.PlatformQueryService.ListIntegrationConnections:input_type -> controlplane.v1.ListIntegrationConnectionsRequest
-	356,  // 1543: controlplane.v1.PlatformQueryService.ListIntegrationGrantConnectionCandidates:input_type -> controlplane.v1.ListIntegrationGrantConnectionCandidatesRequest
-	358,  // 1544: controlplane.v1.PlatformQueryService.ListIntegrationGrantProjectCandidates:input_type -> controlplane.v1.ListIntegrationGrantProjectCandidatesRequest
-	360,  // 1545: controlplane.v1.PlatformQueryService.ListIntegrationGrantRecipientCandidates:input_type -> controlplane.v1.ListIntegrationGrantRecipientCandidatesRequest
-	362,  // 1546: controlplane.v1.PlatformQueryService.ListIntegrationGrantCapabilityCandidates:input_type -> controlplane.v1.ListIntegrationGrantCapabilityCandidatesRequest
-	364,  // 1547: controlplane.v1.PlatformQueryService.GetIntegrationConnection:input_type -> controlplane.v1.GetIntegrationConnectionRequest
-	414,  // 1548: controlplane.v1.PlatformQueryService.GetAdministration:input_type -> controlplane.v1.GetAdministrationRequest
-	416,  // 1549: controlplane.v1.PlatformQueryService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
-	558,  // 1550: controlplane.v1.PlatformQueryService.GetAgentRuntimeConfiguration:input_type -> controlplane.v1.GetAgentRuntimeConfigurationRequest
-	560,  // 1551: controlplane.v1.PlatformQueryService.GetAgentEffectiveCapabilities:input_type -> controlplane.v1.GetAgentEffectiveCapabilitiesRequest
-	562,  // 1552: controlplane.v1.PlatformQueryService.ListArtifactBindingTargets:input_type -> controlplane.v1.ListArtifactBindingTargetsRequest
-	564,  // 1553: controlplane.v1.PlatformQueryService.GetRunAttachmentEligibility:input_type -> controlplane.v1.GetRunAttachmentEligibilityRequest
-	568,  // 1554: controlplane.v1.PlatformQueryService.ListConfigOverlayRevisions:input_type -> controlplane.v1.ListConfigOverlayRevisionsRequest
-	570,  // 1555: controlplane.v1.PlatformQueryService.GetConfigOverlayRevision:input_type -> controlplane.v1.GetConfigOverlayRevisionRequest
-	572,  // 1556: controlplane.v1.PlatformQueryService.ListAgentRuntimeConfigurationVersions:input_type -> controlplane.v1.ListAgentRuntimeConfigurationVersionsRequest
-	574,  // 1557: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentSets:input_type -> controlplane.v1.ListRuntimeEnvironmentSetsRequest
-	576,  // 1558: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentSet:input_type -> controlplane.v1.GetRuntimeEnvironmentSetRequest
-	578,  // 1559: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentVersions:input_type -> controlplane.v1.ListRuntimeEnvironmentVersionsRequest
-	716,  // 1560: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentReadiness:input_type -> controlplane.v1.GetRuntimeEnvironmentReadinessRequest
-	718,  // 1561: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentAgents:input_type -> controlplane.v1.ListRuntimeEnvironmentAgentsRequest
-	580,  // 1562: controlplane.v1.PlatformQueryService.ListTemplateVariables:input_type -> controlplane.v1.ListTemplateVariablesRequest
-	729,  // 1563: controlplane.v1.PlatformQueryService.ListProviderDefinitions:input_type -> controlplane.v1.ListProviderDefinitionsRequest
-	732,  // 1564: controlplane.v1.PlatformQueryService.ListModelCapabilities:input_type -> controlplane.v1.ListModelCapabilitiesRequest
-	736,  // 1565: controlplane.v1.PlatformQueryService.ListRoleImageRecipeRevisions:input_type -> controlplane.v1.ListRoleImageRecipeRevisionsRequest
-	792,  // 1566: controlplane.v1.PlatformQueryService.ValidatePromptTemplate:input_type -> controlplane.v1.ValidatePromptTemplateRequest
-	794,  // 1567: controlplane.v1.PlatformQueryService.PreviewPromptTemplate:input_type -> controlplane.v1.PreviewPromptTemplateRequest
-	612,  // 1568: controlplane.v1.PlatformQueryService.ListRuntimeSecrets:input_type -> controlplane.v1.ListRuntimeSecretsRequest
-	614,  // 1569: controlplane.v1.PlatformQueryService.GetRuntimeSecret:input_type -> controlplane.v1.GetRuntimeSecretRequest
-	876,  // 1570: controlplane.v1.PlatformQueryService.ListManagedConfigurationHistory:input_type -> controlplane.v1.ListManagedConfigurationHistoryRequest
-	877,  // 1571: controlplane.v1.PlatformQueryService.ListManagedConfigurations:input_type -> controlplane.v1.ListManagedConfigurationsRequest
-	880,  // 1572: controlplane.v1.PlatformQueryService.GetManagedConfigurationImpact:input_type -> controlplane.v1.GetManagedConfigurationImpactRequest
-	854,  // 1573: controlplane.v1.PlatformQueryService.GetRoleImageImpactPlan:input_type -> controlplane.v1.GetRoleImageImpactPlanRequest
-	850,  // 1574: controlplane.v1.PlatformQueryService.GetRevisionImpactPlan:input_type -> controlplane.v1.GetRevisionImpactPlanRequest
-	1059, // 1575: controlplane.v1.PlatformQueryService.GetManagedConfigurationGitWriteBack:input_type -> controlplane.v1.GetManagedConfigurationGitWriteBackRequest
-	1061, // 1576: controlplane.v1.PlatformQueryService.ListManagedConfigurationGitWriteBacks:input_type -> controlplane.v1.ListManagedConfigurationGitWriteBacksRequest
-	995,  // 1577: controlplane.v1.PlatformQueryService.GetSystemSTTConfiguration:input_type -> controlplane.v1.GetSystemSTTConfigurationRequest
-	653,  // 1578: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentDraft:input_type -> controlplane.v1.GetRuntimeEnvironmentDraftRequest
-	673,  // 1579: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentImpact:input_type -> controlplane.v1.GetRuntimeEnvironmentImpactRequest
-	692,  // 1580: controlplane.v1.PlatformQueryService.GetRuntimeSecretImpact:input_type -> controlplane.v1.GetRuntimeSecretImpactRequest
-	549,  // 1581: controlplane.v1.PlatformQueryService.ListInteractionIdentities:input_type -> controlplane.v1.ListInteractionIdentitiesRequest
-	908,  // 1582: controlplane.v1.PlatformCommandService.CreateEmailMailboxDraft:input_type -> controlplane.v1.CreateEmailMailboxDraftRequest
-	910,  // 1583: controlplane.v1.PlatformCommandService.SaveEmailMailboxDraft:input_type -> controlplane.v1.SaveEmailMailboxDraftRequest
-	912,  // 1584: controlplane.v1.PlatformCommandService.ValidateEmailMailboxDraft:input_type -> controlplane.v1.ValidateEmailMailboxDraftRequest
-	914,  // 1585: controlplane.v1.PlatformCommandService.PublishEmailMailboxDraft:input_type -> controlplane.v1.PublishEmailMailboxDraftRequest
-	916,  // 1586: controlplane.v1.PlatformCommandService.DiscardEmailMailboxDraft:input_type -> controlplane.v1.DiscardEmailMailboxDraftRequest
-	918,  // 1587: controlplane.v1.PlatformCommandService.BindEmailMailboxConfiguration:input_type -> controlplane.v1.BindEmailMailboxConfigurationRequest
-	920,  // 1588: controlplane.v1.PlatformCommandService.UnbindEmailMailboxConfiguration:input_type -> controlplane.v1.UnbindEmailMailboxConfigurationRequest
-	687,  // 1589: controlplane.v1.PlatformCommandService.PrepareRuntimeSecretDraftImpact:input_type -> controlplane.v1.PrepareRuntimeSecretDraftImpactRequest
-	586,  // 1590: controlplane.v1.PlatformCommandService.PrepareSaveRuntimeSecretDraft:input_type -> controlplane.v1.PrepareSaveRuntimeSecretDraftRequest
-	588,  // 1591: controlplane.v1.PlatformCommandService.PrepareValidateRuntimeSecretDraft:input_type -> controlplane.v1.PrepareValidateRuntimeSecretDraftRequest
-	590,  // 1592: controlplane.v1.PlatformCommandService.PreparePublishRuntimeSecretDraft:input_type -> controlplane.v1.PreparePublishRuntimeSecretDraftRequest
-	592,  // 1593: controlplane.v1.PlatformCommandService.PrepareDiscardRuntimeSecretDraft:input_type -> controlplane.v1.PrepareDiscardRuntimeSecretDraftRequest
-	436,  // 1594: controlplane.v1.PlatformCommandService.SavePromptTemplateDraft:input_type -> controlplane.v1.SavePromptTemplateDraftRequest
-	438,  // 1595: controlplane.v1.PlatformCommandService.DiscardPromptTemplateDraft:input_type -> controlplane.v1.DiscardPromptTemplateDraftRequest
-	440,  // 1596: controlplane.v1.PlatformCommandService.SaveRoleImageRevisionDraft:input_type -> controlplane.v1.SaveRoleImageRevisionDraftRequest
-	442,  // 1597: controlplane.v1.PlatformCommandService.DiscardRoleImageRevisionDraft:input_type -> controlplane.v1.DiscardRoleImageRevisionDraftRequest
-	444,  // 1598: controlplane.v1.PlatformCommandService.SaveIntegrationDefinitionDraft:input_type -> controlplane.v1.SaveIntegrationDefinitionDraftRequest
-	446,  // 1599: controlplane.v1.PlatformCommandService.DiscardIntegrationDefinitionDraft:input_type -> controlplane.v1.DiscardIntegrationDefinitionDraftRequest
-	448,  // 1600: controlplane.v1.PlatformCommandService.SaveSystemSTTConfigurationDraft:input_type -> controlplane.v1.SaveSystemSTTConfigurationDraftRequest
-	450,  // 1601: controlplane.v1.PlatformCommandService.DiscardSystemSTTConfigurationDraft:input_type -> controlplane.v1.DiscardSystemSTTConfigurationDraftRequest
-	935,  // 1602: controlplane.v1.PlatformCommandService.ReconcileEmailEffect:input_type -> controlplane.v1.ReconcileEmailEffectRequest
-	925,  // 1603: controlplane.v1.PlatformCommandService.ConfigureEmailMailboxCredential:input_type -> controlplane.v1.ConfigureEmailMailboxCredentialRequest
-	957,  // 1604: controlplane.v1.PlatformCommandService.CreateSkillBundleDraft:input_type -> controlplane.v1.CreateSkillBundleDraftRequest
-	958,  // 1605: controlplane.v1.PlatformCommandService.SaveSkillBundleDraft:input_type -> controlplane.v1.SaveSkillBundleDraftRequest
-	962,  // 1606: controlplane.v1.PlatformCommandService.ValidateSkillBundleDraft:input_type -> controlplane.v1.ValidateSkillBundleDraftRequest
-	959,  // 1607: controlplane.v1.PlatformCommandService.ReviewSkillBundleDraft:input_type -> controlplane.v1.ReviewSkillBundleDraftRequest
-	963,  // 1608: controlplane.v1.PlatformCommandService.PublishSkillBundleDraft:input_type -> controlplane.v1.PublishSkillBundleDraftRequest
-	964,  // 1609: controlplane.v1.PlatformCommandService.DiscardSkillBundleDraft:input_type -> controlplane.v1.DiscardSkillBundleDraftRequest
-	965,  // 1610: controlplane.v1.PlatformCommandService.ArchiveSkillBundle:input_type -> controlplane.v1.ArchiveSkillBundleRequest
-	966,  // 1611: controlplane.v1.PlatformCommandService.RestoreSkillBundle:input_type -> controlplane.v1.RestoreSkillBundleRequest
-	967,  // 1612: controlplane.v1.PlatformCommandService.PurgeSkillBundle:input_type -> controlplane.v1.PurgeSkillBundleRequest
-	968,  // 1613: controlplane.v1.PlatformCommandService.BindAgentSkillBundle:input_type -> controlplane.v1.BindAgentSkillBundleRequest
-	970,  // 1614: controlplane.v1.PlatformCommandService.UnbindAgentSkillBundle:input_type -> controlplane.v1.UnbindAgentSkillBundleRequest
-	960,  // 1615: controlplane.v1.PlatformCommandService.CreateMemoryRecord:input_type -> controlplane.v1.CreateMemoryRecordRequest
-	961,  // 1616: controlplane.v1.PlatformCommandService.ReviseMemoryRecord:input_type -> controlplane.v1.ReviseMemoryRecordRequest
-	972,  // 1617: controlplane.v1.PlatformCommandService.ArchiveMemoryRecord:input_type -> controlplane.v1.ArchiveMemoryRecordRequest
-	973,  // 1618: controlplane.v1.PlatformCommandService.RestoreMemoryRecord:input_type -> controlplane.v1.RestoreMemoryRecordRequest
-	974,  // 1619: controlplane.v1.PlatformCommandService.PurgeMemoryRecord:input_type -> controlplane.v1.PurgeMemoryRecordRequest
-	975,  // 1620: controlplane.v1.PlatformCommandService.BindAgentMemoryRecord:input_type -> controlplane.v1.BindAgentMemoryRecordRequest
-	977,  // 1621: controlplane.v1.PlatformCommandService.UnbindAgentMemoryRecord:input_type -> controlplane.v1.UnbindAgentMemoryRecordRequest
-	655,  // 1622: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentDraft:input_type -> controlplane.v1.CreateRuntimeEnvironmentDraftRequest
-	657,  // 1623: controlplane.v1.PlatformCommandService.SaveRuntimeEnvironmentDraft:input_type -> controlplane.v1.SaveRuntimeEnvironmentDraftRequest
-	659,  // 1624: controlplane.v1.PlatformCommandService.ValidateRuntimeEnvironmentDraft:input_type -> controlplane.v1.ValidateRuntimeEnvironmentDraftRequest
-	661,  // 1625: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentDraft:input_type -> controlplane.v1.PublishRuntimeEnvironmentDraftRequest
-	663,  // 1626: controlplane.v1.PlatformCommandService.DiscardRuntimeEnvironmentDraft:input_type -> controlplane.v1.DiscardRuntimeEnvironmentDraftRequest
-	675,  // 1627: controlplane.v1.PlatformCommandService.RebindRuntimeEnvironment:input_type -> controlplane.v1.RebindRuntimeEnvironmentRequest
-	695,  // 1628: controlplane.v1.PlatformCommandService.RebindRuntimeSecret:input_type -> controlplane.v1.RebindRuntimeSecretRequest
-	545,  // 1629: controlplane.v1.PlatformCommandService.BindInteractionIdentity:input_type -> controlplane.v1.BindInteractionIdentityRequest
-	547,  // 1630: controlplane.v1.PlatformCommandService.RevokeInteractionIdentity:input_type -> controlplane.v1.RevokeInteractionIdentityRequest
-	412,  // 1631: controlplane.v1.PlatformCommandService.CompleteOnboarding:input_type -> controlplane.v1.CompleteOnboardingRequest
-	213,  // 1632: controlplane.v1.PlatformCommandService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
-	215,  // 1633: controlplane.v1.PlatformCommandService.UpdateProject:input_type -> controlplane.v1.UpdateProjectRequest
-	217,  // 1634: controlplane.v1.PlatformCommandService.TrashProject:input_type -> controlplane.v1.TrashProjectRequest
-	219,  // 1635: controlplane.v1.PlatformCommandService.RestoreProject:input_type -> controlplane.v1.RestoreProjectRequest
-	221,  // 1636: controlplane.v1.PlatformCommandService.PurgeProject:input_type -> controlplane.v1.PurgeProjectRequest
-	227,  // 1637: controlplane.v1.PlatformCommandService.AddPlatformMembership:input_type -> controlplane.v1.AddPlatformMembershipRequest
-	229,  // 1638: controlplane.v1.PlatformCommandService.ChangePlatformMembership:input_type -> controlplane.v1.ChangePlatformMembershipRequest
-	231,  // 1639: controlplane.v1.PlatformCommandService.RemovePlatformMembership:input_type -> controlplane.v1.RemovePlatformMembershipRequest
-	237,  // 1640: controlplane.v1.PlatformCommandService.AddProjectMembership:input_type -> controlplane.v1.AddProjectMembershipRequest
-	239,  // 1641: controlplane.v1.PlatformCommandService.ChangeProjectMembership:input_type -> controlplane.v1.ChangeProjectMembershipRequest
-	241,  // 1642: controlplane.v1.PlatformCommandService.RemoveProjectMembership:input_type -> controlplane.v1.RemoveProjectMembershipRequest
-	247,  // 1643: controlplane.v1.PlatformCommandService.CreateAgent:input_type -> controlplane.v1.CreateAgentRequest
-	249,  // 1644: controlplane.v1.PlatformCommandService.UpdateAgent:input_type -> controlplane.v1.UpdateAgentRequest
-	251,  // 1645: controlplane.v1.PlatformCommandService.SetAgentEnabled:input_type -> controlplane.v1.SetAgentEnabledRequest
-	253,  // 1646: controlplane.v1.PlatformCommandService.ArchiveAgent:input_type -> controlplane.v1.ArchiveAgentRequest
-	787,  // 1647: controlplane.v1.PlatformCommandService.SetAgentAvatar:input_type -> controlplane.v1.SetAgentAvatarRequest
-	789,  // 1648: controlplane.v1.PlatformCommandService.RemoveAgentAvatar:input_type -> controlplane.v1.RemoveAgentAvatarRequest
-	255,  // 1649: controlplane.v1.PlatformCommandService.CreateInstructionDraft:input_type -> controlplane.v1.CreateInstructionDraftRequest
-	257,  // 1650: controlplane.v1.PlatformCommandService.ValidateInstructionDraft:input_type -> controlplane.v1.ValidateInstructionDraftRequest
-	259,  // 1651: controlplane.v1.PlatformCommandService.PublishInstructionDraft:input_type -> controlplane.v1.PublishInstructionDraftRequest
-	261,  // 1652: controlplane.v1.PlatformCommandService.RollbackInstructions:input_type -> controlplane.v1.RollbackInstructionsRequest
-	263,  // 1653: controlplane.v1.PlatformCommandService.ChangeAgentCapability:input_type -> controlplane.v1.ChangeAgentCapabilityRequest
-	265,  // 1654: controlplane.v1.PlatformCommandService.ChangeAgentIntegrationGrant:input_type -> controlplane.v1.ChangeAgentIntegrationGrantRequest
-	271,  // 1655: controlplane.v1.PlatformCommandService.CreateWorkflow:input_type -> controlplane.v1.CreateWorkflowRequest
-	273,  // 1656: controlplane.v1.PlatformCommandService.UpdateWorkflowDraft:input_type -> controlplane.v1.UpdateWorkflowDraftRequest
-	275,  // 1657: controlplane.v1.PlatformCommandService.ValidateWorkflowDraft:input_type -> controlplane.v1.ValidateWorkflowDraftRequest
-	277,  // 1658: controlplane.v1.PlatformCommandService.PublishWorkflowDraft:input_type -> controlplane.v1.PublishWorkflowDraftRequest
-	279,  // 1659: controlplane.v1.PlatformCommandService.ArchiveWorkflow:input_type -> controlplane.v1.ArchiveWorkflowRequest
-	289,  // 1660: controlplane.v1.PlatformCommandService.LaunchRun:input_type -> controlplane.v1.LaunchRunRequest
-	291,  // 1661: controlplane.v1.PlatformCommandService.AddSessionTurn:input_type -> controlplane.v1.AddSessionTurnRequest
-	293,  // 1662: controlplane.v1.PlatformCommandService.CancelRun:input_type -> controlplane.v1.CancelRunRequest
-	295,  // 1663: controlplane.v1.PlatformCommandService.RetryRun:input_type -> controlplane.v1.RetryRunRequest
-	301,  // 1664: controlplane.v1.PlatformCommandService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
-	324,  // 1665: controlplane.v1.PlatformCommandService.UploadAgentAvatar:input_type -> controlplane.v1.UploadAgentAvatarRequest
-	321,  // 1666: controlplane.v1.PlatformCommandService.UploadArtifact:input_type -> controlplane.v1.UploadArtifactRequest
-	326,  // 1667: controlplane.v1.PlatformCommandService.UploadOrganizationArtifact:input_type -> controlplane.v1.UploadOrganizationArtifactRequest
-	328,  // 1668: controlplane.v1.PlatformCommandService.DownloadArtifact:input_type -> controlplane.v1.DownloadArtifactRequest
-	330,  // 1669: controlplane.v1.PlatformCommandService.ChangeArtifactBinding:input_type -> controlplane.v1.ChangeArtifactBindingRequest
-	332,  // 1670: controlplane.v1.PlatformCommandService.DeleteArtifact:input_type -> controlplane.v1.DeleteArtifactRequest
-	334,  // 1671: controlplane.v1.PlatformCommandService.RestoreArtifact:input_type -> controlplane.v1.RestoreArtifactRequest
-	336,  // 1672: controlplane.v1.PlatformCommandService.PurgeArtifact:input_type -> controlplane.v1.PurgeArtifactRequest
-	309,  // 1673: controlplane.v1.PlatformCommandService.CreateAttachmentSetDraft:input_type -> controlplane.v1.CreateAttachmentSetDraftRequest
-	311,  // 1674: controlplane.v1.PlatformCommandService.CreateOrganizationAttachmentSetDraft:input_type -> controlplane.v1.CreateOrganizationAttachmentSetDraftRequest
-	313,  // 1675: controlplane.v1.PlatformCommandService.AddAttachmentSetItems:input_type -> controlplane.v1.AddAttachmentSetItemsRequest
-	315,  // 1676: controlplane.v1.PlatformCommandService.RemoveAttachmentSetItems:input_type -> controlplane.v1.RemoveAttachmentSetItemsRequest
-	317,  // 1677: controlplane.v1.PlatformCommandService.FinalizeAttachmentSet:input_type -> controlplane.v1.FinalizeAttachmentSetRequest
-	340,  // 1678: controlplane.v1.PlatformCommandService.CreateSchedule:input_type -> controlplane.v1.CreateScheduleRequest
-	342,  // 1679: controlplane.v1.PlatformCommandService.UpdateSchedule:input_type -> controlplane.v1.UpdateScheduleRequest
-	344,  // 1680: controlplane.v1.PlatformCommandService.SetScheduleEnabled:input_type -> controlplane.v1.SetScheduleEnabledRequest
-	556,  // 1681: controlplane.v1.PlatformCommandService.ArchiveSchedule:input_type -> controlplane.v1.ArchiveScheduleRequest
-	781,  // 1682: controlplane.v1.PlatformCommandService.DeleteSchedule:input_type -> controlplane.v1.DeleteScheduleRequest
-	756,  // 1683: controlplane.v1.PlatformCommandService.CreateProviderAccount:input_type -> controlplane.v1.CreateProviderAccountRequest
-	758,  // 1684: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:input_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationRequest
-	760,  // 1685: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:input_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyRequest
-	762,  // 1686: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:input_type -> controlplane.v1.RefreshProviderAccountAuthorizationRequest
-	764,  // 1687: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:input_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest
-	766,  // 1688: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:input_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest
-	768,  // 1689: controlplane.v1.PlatformCommandService.RevokeProviderAccount:input_type -> controlplane.v1.RevokeProviderAccountRequest
-	770,  // 1690: controlplane.v1.PlatformCommandService.DeleteProviderAccount:input_type -> controlplane.v1.DeleteProviderAccountRequest
-	772,  // 1691: controlplane.v1.PlatformCommandService.CancelProviderAccountQueuedWork:input_type -> controlplane.v1.CancelProviderAccountQueuedWorkRequest
-	775,  // 1692: controlplane.v1.PlatformCommandService.SetProviderAccountEnabled:input_type -> controlplane.v1.SetProviderAccountEnabledRequest
-	366,  // 1693: controlplane.v1.PlatformCommandService.CreateIntegrationConnection:input_type -> controlplane.v1.CreateIntegrationConnectionRequest
-	368,  // 1694: controlplane.v1.PlatformCommandService.UpdateIntegrationConnection:input_type -> controlplane.v1.UpdateIntegrationConnectionRequest
-	370,  // 1695: controlplane.v1.PlatformCommandService.DeleteIntegrationConnection:input_type -> controlplane.v1.DeleteIntegrationConnectionRequest
-	372,  // 1696: controlplane.v1.PlatformCommandService.ConfigureIntegrationConnectionCredential:input_type -> controlplane.v1.ConfigureIntegrationConnectionCredentialRequest
-	374,  // 1697: controlplane.v1.PlatformCommandService.TestIntegrationConnection:input_type -> controlplane.v1.TestIntegrationConnectionRequest
-	376,  // 1698: controlplane.v1.PlatformCommandService.SetIntegrationConnectionEnabled:input_type -> controlplane.v1.SetIntegrationConnectionEnabledRequest
-	378,  // 1699: controlplane.v1.PlatformCommandService.ChangeIntegrationGrant:input_type -> controlplane.v1.ChangeIntegrationGrantRequest
-	640,  // 1700: controlplane.v1.PlatformCommandService.PublishAgentRuntimeConfiguration:input_type -> controlplane.v1.PublishAgentRuntimeConfigurationRequest
-	642,  // 1701: controlplane.v1.PlatformCommandService.CreateConfigOverlayDraft:input_type -> controlplane.v1.CreateConfigOverlayDraftRequest
-	644,  // 1702: controlplane.v1.PlatformCommandService.ValidateConfigOverlayDraft:input_type -> controlplane.v1.ValidateConfigOverlayDraftRequest
-	646,  // 1703: controlplane.v1.PlatformCommandService.PublishConfigOverlayDraft:input_type -> controlplane.v1.PublishConfigOverlayDraftRequest
-	648,  // 1704: controlplane.v1.PlatformCommandService.RollbackConfigOverlay:input_type -> controlplane.v1.RollbackConfigOverlayRequest
-	650,  // 1705: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentSet:input_type -> controlplane.v1.CreateRuntimeEnvironmentSetRequest
-	666,  // 1706: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentVersion:input_type -> controlplane.v1.PublishRuntimeEnvironmentVersionRequest
-	668,  // 1707: controlplane.v1.PlatformCommandService.RollbackRuntimeEnvironment:input_type -> controlplane.v1.RollbackRuntimeEnvironmentRequest
-	720,  // 1708: controlplane.v1.PlatformCommandService.SetRuntimeEnvironmentEnabled:input_type -> controlplane.v1.SetRuntimeEnvironmentEnabledRequest
-	722,  // 1709: controlplane.v1.PlatformCommandService.DeleteRuntimeEnvironment:input_type -> controlplane.v1.DeleteRuntimeEnvironmentRequest
-	670,  // 1710: controlplane.v1.PlatformCommandService.BindAgentRuntimeEnvironment:input_type -> controlplane.v1.BindAgentRuntimeEnvironmentRequest
-	738,  // 1711: controlplane.v1.PlatformCommandService.PromoteRoleImage:input_type -> controlplane.v1.PromoteRoleImageRequest
-	616,  // 1712: controlplane.v1.PlatformCommandService.PrepareCreateRuntimeSecret:input_type -> controlplane.v1.PrepareCreateRuntimeSecretRequest
-	618,  // 1713: controlplane.v1.PlatformCommandService.PrepareRotateRuntimeSecret:input_type -> controlplane.v1.PrepareRotateRuntimeSecretRequest
-	620,  // 1714: controlplane.v1.PlatformCommandService.PrepareRevealRuntimeSecret:input_type -> controlplane.v1.PrepareRevealRuntimeSecretRequest
-	622,  // 1715: controlplane.v1.PlatformCommandService.PrepareRevokeRuntimeSecret:input_type -> controlplane.v1.PrepareRevokeRuntimeSecretRequest
-	824,  // 1716: controlplane.v1.PlatformCommandService.CreatePromptTemplateDraft:input_type -> controlplane.v1.CreatePromptTemplateDraftRequest
-	826,  // 1717: controlplane.v1.PlatformCommandService.ValidatePromptTemplateDraft:input_type -> controlplane.v1.ValidatePromptTemplateDraftRequest
-	828,  // 1718: controlplane.v1.PlatformCommandService.PublishPromptTemplateDraft:input_type -> controlplane.v1.PublishPromptTemplateDraftRequest
-	830,  // 1719: controlplane.v1.PlatformCommandService.RebindPromptTemplateConsumers:input_type -> controlplane.v1.RebindPromptTemplateConsumersRequest
-	832,  // 1720: controlplane.v1.PlatformCommandService.CreateRoleImageRevisionDraft:input_type -> controlplane.v1.CreateRoleImageRevisionDraftRequest
-	834,  // 1721: controlplane.v1.PlatformCommandService.ValidateRoleImageRevisionDraft:input_type -> controlplane.v1.ValidateRoleImageRevisionDraftRequest
-	836,  // 1722: controlplane.v1.PlatformCommandService.PublishRoleImageRevisionDraft:input_type -> controlplane.v1.PublishRoleImageRevisionDraftRequest
-	838,  // 1723: controlplane.v1.PlatformCommandService.RebindRoleImageConsumers:input_type -> controlplane.v1.RebindRoleImageConsumersRequest
-	852,  // 1724: controlplane.v1.PlatformCommandService.PrepareRoleImageImpactPlan:input_type -> controlplane.v1.PrepareRoleImageImpactPlanRequest
-	844,  // 1725: controlplane.v1.PlatformCommandService.PrepareEnvironmentDraftImpact:input_type -> controlplane.v1.PrepareEnvironmentDraftImpactRequest
-	846,  // 1726: controlplane.v1.PlatformCommandService.PrepareInstructionsImpact:input_type -> controlplane.v1.PrepareInstructionsImpactRequest
-	848,  // 1727: controlplane.v1.PlatformCommandService.PreparePromptTemplateImpact:input_type -> controlplane.v1.PreparePromptTemplateImpactRequest
-	856,  // 1728: controlplane.v1.PlatformCommandService.CreateIntegrationDefinitionDraft:input_type -> controlplane.v1.CreateIntegrationDefinitionDraftRequest
-	858,  // 1729: controlplane.v1.PlatformCommandService.ValidateIntegrationDefinitionDraft:input_type -> controlplane.v1.ValidateIntegrationDefinitionDraftRequest
-	860,  // 1730: controlplane.v1.PlatformCommandService.PublishIntegrationDefinitionDraft:input_type -> controlplane.v1.PublishIntegrationDefinitionDraftRequest
-	862,  // 1731: controlplane.v1.PlatformCommandService.RebindIntegrationDefinitionConsumers:input_type -> controlplane.v1.RebindIntegrationDefinitionConsumersRequest
-	864,  // 1732: controlplane.v1.PlatformCommandService.CreateSystemSTTConfigurationDraft:input_type -> controlplane.v1.CreateSystemSTTConfigurationDraftRequest
-	866,  // 1733: controlplane.v1.PlatformCommandService.ValidateSystemSTTConfigurationDraft:input_type -> controlplane.v1.ValidateSystemSTTConfigurationDraftRequest
-	868,  // 1734: controlplane.v1.PlatformCommandService.PublishSystemSTTConfigurationDraft:input_type -> controlplane.v1.PublishSystemSTTConfigurationDraftRequest
-	870,  // 1735: controlplane.v1.PlatformCommandService.RebindSystemSTTConsumers:input_type -> controlplane.v1.RebindSystemSTTConsumersRequest
-	872,  // 1736: controlplane.v1.PlatformCommandService.DetachGitManagedConfiguration:input_type -> controlplane.v1.DetachGitManagedConfigurationRequest
-	874,  // 1737: controlplane.v1.PlatformCommandService.CopyGitManagedConfiguration:input_type -> controlplane.v1.CopyGitManagedConfigurationRequest
-	808,  // 1738: controlplane.v1.PlatformCommandService.CopyRoleImageConfiguration:input_type -> controlplane.v1.CopyRoleImageConfigurationRequest
-	811,  // 1739: controlplane.v1.PlatformCommandService.CopyIntegrationDefinitionConfiguration:input_type -> controlplane.v1.CopyIntegrationDefinitionConfigurationRequest
-	813,  // 1740: controlplane.v1.PlatformCommandService.ArchiveRoleImageConfiguration:input_type -> controlplane.v1.ArchiveRoleImageConfigurationRequest
-	815,  // 1741: controlplane.v1.PlatformCommandService.ArchiveIntegrationDefinitionConfiguration:input_type -> controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest
-	1029, // 1742: controlplane.v1.PlatformCommandService.ConfigureRoleImageGitSource:input_type -> controlplane.v1.ConfigureRoleImageGitSourceRequest
-	1031, // 1743: controlplane.v1.PlatformCommandService.ConfigureIntegrationDefinitionGitSource:input_type -> controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest
-	1033, // 1744: controlplane.v1.PlatformCommandService.RefreshRoleImageGitSource:input_type -> controlplane.v1.RefreshRoleImageGitSourceRequest
-	1035, // 1745: controlplane.v1.PlatformCommandService.RefreshIntegrationDefinitionGitSource:input_type -> controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest
-	1049, // 1746: controlplane.v1.PlatformCommandService.PrepareRoleImageGitWriteBack:input_type -> controlplane.v1.PrepareRoleImageGitWriteBackRequest
-	1051, // 1747: controlplane.v1.PlatformCommandService.PrepareIntegrationDefinitionGitWriteBack:input_type -> controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest
-	1053, // 1748: controlplane.v1.PlatformCommandService.ApproveManagedConfigurationGitWriteBack:input_type -> controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest
-	1055, // 1749: controlplane.v1.PlatformCommandService.RejectManagedConfigurationGitWriteBack:input_type -> controlplane.v1.RejectManagedConfigurationGitWriteBackRequest
-	1057, // 1750: controlplane.v1.PlatformCommandService.CancelManagedConfigurationGitWriteBack:input_type -> controlplane.v1.CancelManagedConfigurationGitWriteBackRequest
-	1065, // 1751: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.ClaimManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkRequest
-	1067, // 1752: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.RenewManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest
-	1069, // 1753: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.BeginManagedConfigurationGitWriteBackEffect:input_type -> controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest
-	1071, // 1754: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.CompleteManagedConfigurationGitWriteBackEffect:input_type -> controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest
-	1073, // 1755: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.FailManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest
-	1039, // 1756: controlplane.v1.ManagedConfigurationSourceWorkService.ClaimManagedConfigurationSourceWork:input_type -> controlplane.v1.ClaimManagedConfigurationSourceWorkRequest
-	1041, // 1757: controlplane.v1.ManagedConfigurationSourceWorkService.RenewManagedConfigurationSourceWork:input_type -> controlplane.v1.RenewManagedConfigurationSourceWorkRequest
-	1043, // 1758: controlplane.v1.ManagedConfigurationSourceWorkService.CompleteManagedConfigurationSourceWork:input_type -> controlplane.v1.CompleteManagedConfigurationSourceWorkRequest
-	1045, // 1759: controlplane.v1.ManagedConfigurationSourceWorkService.FailManagedConfigurationSourceWork:input_type -> controlplane.v1.FailManagedConfigurationSourceWorkRequest
-	596,  // 1760: controlplane.v1.RuntimeSecretDraftWorkService.CheckRuntimeSecretDraftWorkReadiness:input_type -> controlplane.v1.CheckRuntimeSecretDraftWorkReadinessRequest
-	598,  // 1761: controlplane.v1.RuntimeSecretDraftWorkService.ConsumeRuntimeSecretDraftOperation:input_type -> controlplane.v1.ConsumeRuntimeSecretDraftOperationRequest
-	600,  // 1762: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftOperation:input_type -> controlplane.v1.CompleteRuntimeSecretDraftOperationRequest
-	602,  // 1763: controlplane.v1.RuntimeSecretDraftWorkService.FailRuntimeSecretDraftOperation:input_type -> controlplane.v1.FailRuntimeSecretDraftOperationRequest
-	604,  // 1764: controlplane.v1.RuntimeSecretDraftWorkService.ListRuntimeSecretDraftRecoveryWork:input_type -> controlplane.v1.ListRuntimeSecretDraftRecoveryWorkRequest
-	606,  // 1765: controlplane.v1.RuntimeSecretDraftWorkService.RecoverRuntimeSecretDraftMaterialization:input_type -> controlplane.v1.RecoverRuntimeSecretDraftMaterializationRequest
-	608,  // 1766: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftCleanup:input_type -> controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest
-	625,  // 1767: controlplane.v1.RuntimeSecretWorkService.CheckRuntimeSecretWorkReadiness:input_type -> controlplane.v1.CheckRuntimeSecretWorkReadinessRequest
-	1019, // 1768: controlplane.v1.RuntimeSecretWorkService.CheckCredentialProjectionWorkReadiness:input_type -> controlplane.v1.CheckCredentialProjectionWorkReadinessRequest
-	627,  // 1769: controlplane.v1.RuntimeSecretWorkService.ListRuntimeSecretRecoveryWork:input_type -> controlplane.v1.ListRuntimeSecretRecoveryWorkRequest
-	630,  // 1770: controlplane.v1.RuntimeSecretWorkService.ConsumeRuntimeSecretOperation:input_type -> controlplane.v1.ConsumeRuntimeSecretOperationRequest
-	634,  // 1771: controlplane.v1.RuntimeSecretWorkService.CompleteRuntimeSecretOperation:input_type -> controlplane.v1.CompleteRuntimeSecretOperationRequest
-	636,  // 1772: controlplane.v1.RuntimeSecretWorkService.FailRuntimeSecretOperation:input_type -> controlplane.v1.FailRuntimeSecretOperationRequest
-	638,  // 1773: controlplane.v1.RuntimeSecretWorkService.RecoverRuntimeSecretMaterialization:input_type -> controlplane.v1.RecoverRuntimeSecretMaterializationRequest
-	1021, // 1774: controlplane.v1.RuntimeSecretWorkService.ResolveRuntimeCredentialProjection:input_type -> controlplane.v1.ResolveRuntimeCredentialProjectionRequest
-	1023, // 1775: controlplane.v1.RuntimeSecretWorkService.ValidateRuntimeCredentialProjection:input_type -> controlplane.v1.ValidateRuntimeCredentialProjectionRequest
-	1025, // 1776: controlplane.v1.RuntimeSecretWorkService.ResolveTranscriptionCredentialProjection:input_type -> controlplane.v1.ResolveTranscriptionCredentialProjectionRequest
-	380,  // 1777: controlplane.v1.SystemAssistantService.GetSystemAssistant:input_type -> controlplane.v1.GetSystemAssistantRequest
-	382,  // 1778: controlplane.v1.SystemAssistantService.ListAssistantConversations:input_type -> controlplane.v1.ListAssistantConversationsRequest
-	384,  // 1779: controlplane.v1.SystemAssistantService.CreateAssistantConversation:input_type -> controlplane.v1.CreateAssistantConversationRequest
-	394,  // 1780: controlplane.v1.SystemAssistantService.UpdateAssistantConversationTitle:input_type -> controlplane.v1.UpdateAssistantConversationTitleRequest
-	386,  // 1781: controlplane.v1.SystemAssistantService.ArchiveAssistantConversation:input_type -> controlplane.v1.ArchiveAssistantConversationRequest
-	388,  // 1782: controlplane.v1.SystemAssistantService.RestoreAssistantConversation:input_type -> controlplane.v1.RestoreAssistantConversationRequest
-	390,  // 1783: controlplane.v1.SystemAssistantService.PurgeAssistantConversation:input_type -> controlplane.v1.PurgeAssistantConversationRequest
-	392,  // 1784: controlplane.v1.SystemAssistantService.MoveAssistantConversationToProject:input_type -> controlplane.v1.MoveAssistantConversationToProjectRequest
-	396,  // 1785: controlplane.v1.SystemAssistantService.AddAssistantTurn:input_type -> controlplane.v1.AddAssistantTurnRequest
-	398,  // 1786: controlplane.v1.SystemAssistantService.CancelAssistantTurn:input_type -> controlplane.v1.CancelAssistantTurnRequest
-	400,  // 1787: controlplane.v1.SystemAssistantService.UpdateAssistantPlanDraft:input_type -> controlplane.v1.UpdateAssistantPlanDraftRequest
-	402,  // 1788: controlplane.v1.SystemAssistantService.ValidateAssistantPlan:input_type -> controlplane.v1.ValidateAssistantPlanRequest
-	404,  // 1789: controlplane.v1.SystemAssistantService.ApplyAssistantPlan:input_type -> controlplane.v1.ApplyAssistantPlanRequest
-	406,  // 1790: controlplane.v1.SystemAssistantService.RejectAssistantPlan:input_type -> controlplane.v1.RejectAssistantPlanRequest
-	408,  // 1791: controlplane.v1.SystemAssistantService.UpdateAssistantOwnerInstructions:input_type -> controlplane.v1.UpdateAssistantOwnerInstructionsRequest
-	410,  // 1792: controlplane.v1.SystemAssistantService.RecoverSystemAssistant:input_type -> controlplane.v1.RecoverSystemAssistantRequest
-	922,  // 1793: controlplane.v1.RuntimeWorkService.ReportEmailConfigurationReadback:input_type -> controlplane.v1.ReportEmailConfigurationReadbackRequest
-	929,  // 1794: controlplane.v1.RuntimeWorkService.ResolveEmailAuthorization:input_type -> controlplane.v1.ResolveEmailAuthorizationRequest
-	932,  // 1795: controlplane.v1.RuntimeWorkService.ReportEmailEffectReceipt:input_type -> controlplane.v1.ReportEmailEffectReceiptRequest
-	937,  // 1796: controlplane.v1.RuntimeWorkService.ResolveEmailReconciliation:input_type -> controlplane.v1.ResolveEmailReconciliationRequest
-	462,  // 1797: controlplane.v1.RuntimeWorkService.ClaimExecution:input_type -> controlplane.v1.ClaimExecutionRequest
-	820,  // 1798: controlplane.v1.RuntimeWorkService.GetRuntimeEnvironmentRoleImageConfiguration:input_type -> controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationRequest
-	465,  // 1799: controlplane.v1.RuntimeWorkService.ReadExecutionArtifact:input_type -> controlplane.v1.ReadExecutionArtifactRequest
-	467,  // 1800: controlplane.v1.RuntimeWorkService.StreamExecutionArtifact:input_type -> controlplane.v1.StreamExecutionArtifactRequest
-	428,  // 1801: controlplane.v1.RuntimeWorkService.SearchExecutionFiles:input_type -> controlplane.v1.SearchExecutionFilesRequest
-	200,  // 1802: controlplane.v1.RuntimeWorkService.SearchAssistantResources:input_type -> controlplane.v1.SearchAssistantResourcesRequest
-	430,  // 1803: controlplane.v1.RuntimeWorkService.GetExecutionFileMetadata:input_type -> controlplane.v1.GetExecutionFileMetadataRequest
-	432,  // 1804: controlplane.v1.RuntimeWorkService.PreviewExecutionFile:input_type -> controlplane.v1.PreviewExecutionFileRequest
-	434,  // 1805: controlplane.v1.RuntimeWorkService.GetExecutionFileManifest:input_type -> controlplane.v1.GetExecutionFileManifestRequest
-	470,  // 1806: controlplane.v1.RuntimeWorkService.RenewExecution:input_type -> controlplane.v1.RenewExecutionRequest
-	472,  // 1807: controlplane.v1.RuntimeWorkService.ReportExecutionProgress:input_type -> controlplane.v1.ReportExecutionProgressRequest
-	1013, // 1808: controlplane.v1.RuntimeWorkService.CommitProviderCredentialRefresh:input_type -> controlplane.v1.CommitProviderCredentialRefreshRequest
-	475,  // 1809: controlplane.v1.RuntimeWorkService.CompleteExecution:input_type -> controlplane.v1.CompleteExecutionRequest
-	493,  // 1810: controlplane.v1.RuntimeWorkService.DelegateExecution:input_type -> controlplane.v1.DelegateExecutionRequest
-	495,  // 1811: controlplane.v1.RuntimeWorkService.ProposeAssistantPlan:input_type -> controlplane.v1.ProposeAssistantPlanRequest
-	497,  // 1812: controlplane.v1.RuntimeWorkService.ProposeAssistantMetadata:input_type -> controlplane.v1.ProposeAssistantMetadataRequest
-	499,  // 1813: controlplane.v1.RuntimeWorkService.ProposeRunMetadata:input_type -> controlplane.v1.ProposeRunMetadataRequest
-	501,  // 1814: controlplane.v1.RuntimeWorkService.RecordRunToolCall:input_type -> controlplane.v1.RecordRunToolCallRequest
-	503,  // 1815: controlplane.v1.RuntimeWorkService.ReconcileWarmRuntime:input_type -> controlplane.v1.ReconcileWarmRuntimeRequest
-	505,  // 1816: controlplane.v1.RuntimeWorkService.ReportWarmRuntime:input_type -> controlplane.v1.ReportWarmRuntimeRequest
-	508,  // 1817: controlplane.v1.RuntimeWorkService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
-	512,  // 1818: controlplane.v1.RuntimeWorkService.RenewScheduleOccurrence:input_type -> controlplane.v1.RenewScheduleOccurrenceRequest
-	510,  // 1819: controlplane.v1.RuntimeWorkService.MaterializeScheduleOccurrence:input_type -> controlplane.v1.MaterializeScheduleOccurrenceRequest
-	514,  // 1820: controlplane.v1.RuntimeWorkService.FailScheduleOccurrence:input_type -> controlplane.v1.FailScheduleOccurrenceRequest
-	521,  // 1821: controlplane.v1.RuntimeWorkService.ClaimIntegrationConnectionTests:input_type -> controlplane.v1.ClaimIntegrationConnectionTestsRequest
-	822,  // 1822: controlplane.v1.RuntimeWorkService.GetIntegrationConnectionDefinitionConfiguration:input_type -> controlplane.v1.GetIntegrationConnectionDefinitionConfigurationRequest
-	523,  // 1823: controlplane.v1.RuntimeWorkService.CompleteIntegrationConnectionTest:input_type -> controlplane.v1.CompleteIntegrationConnectionTestRequest
-	525,  // 1824: controlplane.v1.RuntimeWorkService.ResolveIntegrationInvocation:input_type -> controlplane.v1.ResolveIntegrationInvocationRequest
-	528,  // 1825: controlplane.v1.RuntimeWorkService.ClaimIntegrationInvocations:input_type -> controlplane.v1.ClaimIntegrationInvocationsRequest
-	530,  // 1826: controlplane.v1.RuntimeWorkService.GetIntegrationInvocation:input_type -> controlplane.v1.GetIntegrationInvocationRequest
-	533,  // 1827: controlplane.v1.RuntimeWorkService.CompleteIntegrationInvocation:input_type -> controlplane.v1.CompleteIntegrationInvocationRequest
-	479,  // 1828: controlplane.v1.SessionArchiveWorkService.ClaimSessionArchiveTasks:input_type -> controlplane.v1.ClaimSessionArchiveTasksRequest
-	481,  // 1829: controlplane.v1.SessionArchiveWorkService.RenewSessionArchiveTask:input_type -> controlplane.v1.RenewSessionArchiveTaskRequest
-	483,  // 1830: controlplane.v1.SessionArchiveWorkService.CompleteSessionSnapshot:input_type -> controlplane.v1.CompleteSessionSnapshotRequest
-	484,  // 1831: controlplane.v1.SessionArchiveWorkService.CompleteSessionRestore:input_type -> controlplane.v1.CompleteSessionRestoreRequest
-	485,  // 1832: controlplane.v1.SessionArchiveWorkService.CompleteSessionPVCDeletion:input_type -> controlplane.v1.CompleteSessionPVCDeletionRequest
-	486,  // 1833: controlplane.v1.SessionArchiveWorkService.CompleteSessionObjectDeletion:input_type -> controlplane.v1.CompleteSessionObjectDeletionRequest
-	487,  // 1834: controlplane.v1.SessionArchiveWorkService.FailSessionArchiveTask:input_type -> controlplane.v1.FailSessionArchiveTaskRequest
-	536,  // 1835: controlplane.v1.InteractionWorkService.ListInteractionSources:input_type -> controlplane.v1.ListInteractionSourcesRequest
-	539,  // 1836: controlplane.v1.InteractionWorkService.ClaimInteractionDeliveries:input_type -> controlplane.v1.ClaimInteractionDeliveriesRequest
-	541,  // 1837: controlplane.v1.InteractionWorkService.CompleteInteractionDelivery:input_type -> controlplane.v1.CompleteInteractionDeliveryRequest
-	543,  // 1838: controlplane.v1.InteractionWorkService.AcceptInteractionMessage:input_type -> controlplane.v1.AcceptInteractionMessageRequest
-	1000, // 1839: controlplane.v1.ProviderCredentialMaterializerService.ObserveProviderModelCatalog:input_type -> controlplane.v1.ObserveProviderModelCatalogRequest
-	998,  // 1840: controlplane.v1.ProviderCredentialMaterializerService.CheckProviderCredentialMaterializerReadiness:input_type -> controlplane.v1.CheckProviderCredentialMaterializerReadinessRequest
-	1003, // 1841: controlplane.v1.ProviderCredentialMaterializerService.StartDeviceAuthorization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest
-	1007, // 1842: controlplane.v1.ProviderCredentialMaterializerService.ObserveDeviceAuthorization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest
-	1009, // 1843: controlplane.v1.ProviderCredentialMaterializerService.MaterializeAPIKey:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest
-	1011, // 1844: controlplane.v1.ProviderCredentialMaterializerService.DiscardProviderCredentialMaterialization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest
-	1016, // 1845: controlplane.v1.ProviderCredentialMaterializerService.CleanupProviderCredential:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest
-	899,  // 1846: controlplane.v1.PlatformQueryService.ListEmailMailboxConfigurations:output_type -> controlplane.v1.ListEmailMailboxConfigurationsResponse
-	901,  // 1847: controlplane.v1.PlatformQueryService.GetEmailMailboxConfiguration:output_type -> controlplane.v1.GetEmailMailboxConfigurationResponse
-	903,  // 1848: controlplane.v1.PlatformQueryService.ListEmailMailboxCredentials:output_type -> controlplane.v1.ListEmailMailboxCredentialsResponse
-	905,  // 1849: controlplane.v1.PlatformQueryService.GetEmailMailboxCredentialReceipt:output_type -> controlplane.v1.GetEmailMailboxCredentialReceiptResponse
-	907,  // 1850: controlplane.v1.PlatformQueryService.PreviewEmailMailboxConfiguration:output_type -> controlplane.v1.PreviewEmailMailboxConfigurationResponse
-	690,  // 1851: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraftImpact:output_type -> controlplane.v1.GetRuntimeSecretDraftImpactResponse
-	585,  // 1852: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraft:output_type -> controlplane.v1.GetRuntimeSecretDraftResponse
-	422,  // 1853: controlplane.v1.PlatformQueryService.GetRuntimeRevisionDiff:output_type -> controlplane.v1.GetRuntimeRevisionDiffResponse
-	940,  // 1854: controlplane.v1.PlatformQueryService.GetEmailEffectReceipt:output_type -> controlplane.v1.GetEmailEffectReceiptResponse
-	946,  // 1855: controlplane.v1.PlatformQueryService.ListSkillBundles:output_type -> controlplane.v1.ListSkillBundlesResponse
-	948,  // 1856: controlplane.v1.PlatformQueryService.GetSkillBundle:output_type -> controlplane.v1.GetSkillBundleResponse
-	950,  // 1857: controlplane.v1.PlatformQueryService.ListSkillBundleRevisions:output_type -> controlplane.v1.ListSkillBundleRevisionsResponse
-	952,  // 1858: controlplane.v1.PlatformQueryService.ListMemoryRecords:output_type -> controlplane.v1.ListMemoryRecordsResponse
-	954,  // 1859: controlplane.v1.PlatformQueryService.GetMemoryRecord:output_type -> controlplane.v1.GetMemoryRecordResponse
-	956,  // 1860: controlplane.v1.PlatformQueryService.ListMemoryRecordRevisions:output_type -> controlplane.v1.ListMemoryRecordRevisionsResponse
-	188,  // 1861: controlplane.v1.PlatformQueryService.GetBootstrapState:output_type -> controlplane.v1.GetBootstrapStateResponse
-	190,  // 1862: controlplane.v1.PlatformQueryService.GetPlatformEventCursor:output_type -> controlplane.v1.GetPlatformEventCursorResponse
-	192,  // 1863: controlplane.v1.PlatformQueryService.GetOverview:output_type -> controlplane.v1.GetOverviewResponse
-	194,  // 1864: controlplane.v1.PlatformQueryService.ListPlatformCapabilities:output_type -> controlplane.v1.ListPlatformCapabilitiesResponse
-	196,  // 1865: controlplane.v1.PlatformQueryService.ListRuntimeSelections:output_type -> controlplane.v1.ListRuntimeSelectionsResponse
-	199,  // 1866: controlplane.v1.PlatformQueryService.SearchPlatform:output_type -> controlplane.v1.SearchPlatformResponse
-	204,  // 1867: controlplane.v1.PlatformQueryService.ListVFSNodes:output_type -> controlplane.v1.ListVFSNodesResponse
-	206,  // 1868: controlplane.v1.PlatformQueryService.SearchVFS:output_type -> controlplane.v1.SearchVFSResponse
-	208,  // 1869: controlplane.v1.PlatformQueryService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
-	210,  // 1870: controlplane.v1.PlatformQueryService.ListTrashedProjects:output_type -> controlplane.v1.ListTrashedProjectsResponse
-	212,  // 1871: controlplane.v1.PlatformQueryService.GetProject:output_type -> controlplane.v1.GetProjectResponse
-	224,  // 1872: controlplane.v1.PlatformQueryService.ListPlatformMemberships:output_type -> controlplane.v1.ListPlatformMembershipsResponse
-	226,  // 1873: controlplane.v1.PlatformQueryService.ListPlatformMembershipCandidates:output_type -> controlplane.v1.ListPlatformMembershipCandidatesResponse
-	234,  // 1874: controlplane.v1.PlatformQueryService.ListProjectMemberships:output_type -> controlplane.v1.ListProjectMembershipsResponse
-	236,  // 1875: controlplane.v1.PlatformQueryService.ListProjectMembershipCandidates:output_type -> controlplane.v1.ListProjectMembershipCandidatesResponse
-	244,  // 1876: controlplane.v1.PlatformQueryService.ListAgents:output_type -> controlplane.v1.ListAgentsResponse
-	246,  // 1877: controlplane.v1.PlatformQueryService.GetAgent:output_type -> controlplane.v1.GetAgentResponse
-	553,  // 1878: controlplane.v1.PlatformQueryService.ListAgentInstructionVersions:output_type -> controlplane.v1.ListAgentInstructionVersionsResponse
-	268,  // 1879: controlplane.v1.PlatformQueryService.ListWorkflows:output_type -> controlplane.v1.ListWorkflowsResponse
-	270,  // 1880: controlplane.v1.PlatformQueryService.GetWorkflow:output_type -> controlplane.v1.GetWorkflowResponse
-	282,  // 1881: controlplane.v1.PlatformQueryService.ListRuns:output_type -> controlplane.v1.ListRunsResponse
-	284,  // 1882: controlplane.v1.PlatformQueryService.GetRun:output_type -> controlplane.v1.GetRunResponse
-	286,  // 1883: controlplane.v1.PlatformQueryService.GetRunGraph:output_type -> controlplane.v1.GetRunGraphResponse
-	288,  // 1884: controlplane.v1.PlatformQueryService.ListRunEvents:output_type -> controlplane.v1.ListRunEventsResponse
-	298,  // 1885: controlplane.v1.PlatformQueryService.ListOwnerGates:output_type -> controlplane.v1.ListOwnerGatesResponse
-	300,  // 1886: controlplane.v1.PlatformQueryService.GetOwnerGate:output_type -> controlplane.v1.GetOwnerGateResponse
-	304,  // 1887: controlplane.v1.PlatformQueryService.ListArtifacts:output_type -> controlplane.v1.ListArtifactsResponse
-	306,  // 1888: controlplane.v1.PlatformQueryService.GetArtifact:output_type -> controlplane.v1.GetArtifactResponse
-	786,  // 1889: controlplane.v1.PlatformQueryService.GetArtifactImpact:output_type -> controlplane.v1.GetArtifactImpactResponse
-	308,  // 1890: controlplane.v1.PlatformQueryService.GetAttachmentSet:output_type -> controlplane.v1.GetAttachmentSetResponse
-	339,  // 1891: controlplane.v1.PlatformQueryService.ListSchedules:output_type -> controlplane.v1.ListSchedulesResponse
-	555,  // 1892: controlplane.v1.PlatformQueryService.GetSchedule:output_type -> controlplane.v1.GetScheduleResponse
-	778,  // 1893: controlplane.v1.PlatformQueryService.ListScheduleRevisions:output_type -> controlplane.v1.ListScheduleRevisionsResponse
-	780,  // 1894: controlplane.v1.PlatformQueryService.ListScheduleRuns:output_type -> controlplane.v1.ListScheduleRunsResponse
-	519,  // 1895: controlplane.v1.PlatformQueryService.PreviewSchedule:output_type -> controlplane.v1.PreviewScheduleResponse
-	753,  // 1896: controlplane.v1.PlatformQueryService.ListProviderAccounts:output_type -> controlplane.v1.ListProviderAccountsResponse
-	755,  // 1897: controlplane.v1.PlatformQueryService.GetProviderAccount:output_type -> controlplane.v1.GetProviderAccountResponse
-	748,  // 1898: controlplane.v1.PlatformQueryService.ListProviderAccountBlockers:output_type -> controlplane.v1.ListProviderAccountBlockersResponse
-	347,  // 1899: controlplane.v1.PlatformQueryService.ListIntegrationDefinitions:output_type -> controlplane.v1.ListIntegrationDefinitionsResponse
-	349,  // 1900: controlplane.v1.PlatformQueryService.ListIntegrationConnections:output_type -> controlplane.v1.ListIntegrationConnectionsResponse
-	357,  // 1901: controlplane.v1.PlatformQueryService.ListIntegrationGrantConnectionCandidates:output_type -> controlplane.v1.ListIntegrationGrantConnectionCandidatesResponse
-	359,  // 1902: controlplane.v1.PlatformQueryService.ListIntegrationGrantProjectCandidates:output_type -> controlplane.v1.ListIntegrationGrantProjectCandidatesResponse
-	361,  // 1903: controlplane.v1.PlatformQueryService.ListIntegrationGrantRecipientCandidates:output_type -> controlplane.v1.ListIntegrationGrantRecipientCandidatesResponse
-	363,  // 1904: controlplane.v1.PlatformQueryService.ListIntegrationGrantCapabilityCandidates:output_type -> controlplane.v1.ListIntegrationGrantCapabilityCandidatesResponse
-	365,  // 1905: controlplane.v1.PlatformQueryService.GetIntegrationConnection:output_type -> controlplane.v1.GetIntegrationConnectionResponse
-	415,  // 1906: controlplane.v1.PlatformQueryService.GetAdministration:output_type -> controlplane.v1.GetAdministrationResponse
-	417,  // 1907: controlplane.v1.PlatformQueryService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
-	559,  // 1908: controlplane.v1.PlatformQueryService.GetAgentRuntimeConfiguration:output_type -> controlplane.v1.GetAgentRuntimeConfigurationResponse
-	567,  // 1909: controlplane.v1.PlatformQueryService.GetAgentEffectiveCapabilities:output_type -> controlplane.v1.GetAgentEffectiveCapabilitiesResponse
-	563,  // 1910: controlplane.v1.PlatformQueryService.ListArtifactBindingTargets:output_type -> controlplane.v1.ListArtifactBindingTargetsResponse
-	565,  // 1911: controlplane.v1.PlatformQueryService.GetRunAttachmentEligibility:output_type -> controlplane.v1.GetRunAttachmentEligibilityResponse
-	569,  // 1912: controlplane.v1.PlatformQueryService.ListConfigOverlayRevisions:output_type -> controlplane.v1.ListConfigOverlayRevisionsResponse
-	571,  // 1913: controlplane.v1.PlatformQueryService.GetConfigOverlayRevision:output_type -> controlplane.v1.GetConfigOverlayRevisionResponse
-	573,  // 1914: controlplane.v1.PlatformQueryService.ListAgentRuntimeConfigurationVersions:output_type -> controlplane.v1.ListAgentRuntimeConfigurationVersionsResponse
-	575,  // 1915: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentSets:output_type -> controlplane.v1.ListRuntimeEnvironmentSetsResponse
-	577,  // 1916: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentSet:output_type -> controlplane.v1.GetRuntimeEnvironmentSetResponse
-	579,  // 1917: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentVersions:output_type -> controlplane.v1.ListRuntimeEnvironmentVersionsResponse
-	717,  // 1918: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentReadiness:output_type -> controlplane.v1.GetRuntimeEnvironmentReadinessResponse
-	719,  // 1919: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentAgents:output_type -> controlplane.v1.ListRuntimeEnvironmentAgentsResponse
-	581,  // 1920: controlplane.v1.PlatformQueryService.ListTemplateVariables:output_type -> controlplane.v1.ListTemplateVariablesResponse
-	730,  // 1921: controlplane.v1.PlatformQueryService.ListProviderDefinitions:output_type -> controlplane.v1.ListProviderDefinitionsResponse
-	733,  // 1922: controlplane.v1.PlatformQueryService.ListModelCapabilities:output_type -> controlplane.v1.ListModelCapabilitiesResponse
-	737,  // 1923: controlplane.v1.PlatformQueryService.ListRoleImageRecipeRevisions:output_type -> controlplane.v1.ListRoleImageRecipeRevisionsResponse
-	793,  // 1924: controlplane.v1.PlatformQueryService.ValidatePromptTemplate:output_type -> controlplane.v1.ValidatePromptTemplateResponse
-	799,  // 1925: controlplane.v1.PlatformQueryService.PreviewPromptTemplate:output_type -> controlplane.v1.PreviewPromptTemplateResponse
-	613,  // 1926: controlplane.v1.PlatformQueryService.ListRuntimeSecrets:output_type -> controlplane.v1.ListRuntimeSecretsResponse
-	615,  // 1927: controlplane.v1.PlatformQueryService.GetRuntimeSecret:output_type -> controlplane.v1.GetRuntimeSecretResponse
-	879,  // 1928: controlplane.v1.PlatformQueryService.ListManagedConfigurationHistory:output_type -> controlplane.v1.ListManagedConfigurationHistoryResponse
-	878,  // 1929: controlplane.v1.PlatformQueryService.ListManagedConfigurations:output_type -> controlplane.v1.ListManagedConfigurationsResponse
-	881,  // 1930: controlplane.v1.PlatformQueryService.GetManagedConfigurationImpact:output_type -> controlplane.v1.GetManagedConfigurationImpactResponse
-	855,  // 1931: controlplane.v1.PlatformQueryService.GetRoleImageImpactPlan:output_type -> controlplane.v1.GetRoleImageImpactPlanResponse
-	851,  // 1932: controlplane.v1.PlatformQueryService.GetRevisionImpactPlan:output_type -> controlplane.v1.GetRevisionImpactPlanResponse
-	1060, // 1933: controlplane.v1.PlatformQueryService.GetManagedConfigurationGitWriteBack:output_type -> controlplane.v1.GetManagedConfigurationGitWriteBackResponse
-	1062, // 1934: controlplane.v1.PlatformQueryService.ListManagedConfigurationGitWriteBacks:output_type -> controlplane.v1.ListManagedConfigurationGitWriteBacksResponse
-	996,  // 1935: controlplane.v1.PlatformQueryService.GetSystemSTTConfiguration:output_type -> controlplane.v1.GetSystemSTTConfigurationResponse
-	654,  // 1936: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentDraft:output_type -> controlplane.v1.GetRuntimeEnvironmentDraftResponse
-	674,  // 1937: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentImpact:output_type -> controlplane.v1.GetRuntimeEnvironmentImpactResponse
-	693,  // 1938: controlplane.v1.PlatformQueryService.GetRuntimeSecretImpact:output_type -> controlplane.v1.GetRuntimeSecretImpactResponse
-	550,  // 1939: controlplane.v1.PlatformQueryService.ListInteractionIdentities:output_type -> controlplane.v1.ListInteractionIdentitiesResponse
-	909,  // 1940: controlplane.v1.PlatformCommandService.CreateEmailMailboxDraft:output_type -> controlplane.v1.CreateEmailMailboxDraftResponse
-	911,  // 1941: controlplane.v1.PlatformCommandService.SaveEmailMailboxDraft:output_type -> controlplane.v1.SaveEmailMailboxDraftResponse
-	913,  // 1942: controlplane.v1.PlatformCommandService.ValidateEmailMailboxDraft:output_type -> controlplane.v1.ValidateEmailMailboxDraftResponse
-	915,  // 1943: controlplane.v1.PlatformCommandService.PublishEmailMailboxDraft:output_type -> controlplane.v1.PublishEmailMailboxDraftResponse
-	917,  // 1944: controlplane.v1.PlatformCommandService.DiscardEmailMailboxDraft:output_type -> controlplane.v1.DiscardEmailMailboxDraftResponse
-	919,  // 1945: controlplane.v1.PlatformCommandService.BindEmailMailboxConfiguration:output_type -> controlplane.v1.BindEmailMailboxConfigurationResponse
-	921,  // 1946: controlplane.v1.PlatformCommandService.UnbindEmailMailboxConfiguration:output_type -> controlplane.v1.UnbindEmailMailboxConfigurationResponse
-	688,  // 1947: controlplane.v1.PlatformCommandService.PrepareRuntimeSecretDraftImpact:output_type -> controlplane.v1.PrepareRuntimeSecretDraftImpactResponse
-	587,  // 1948: controlplane.v1.PlatformCommandService.PrepareSaveRuntimeSecretDraft:output_type -> controlplane.v1.PrepareSaveRuntimeSecretDraftResponse
-	589,  // 1949: controlplane.v1.PlatformCommandService.PrepareValidateRuntimeSecretDraft:output_type -> controlplane.v1.PrepareValidateRuntimeSecretDraftResponse
-	591,  // 1950: controlplane.v1.PlatformCommandService.PreparePublishRuntimeSecretDraft:output_type -> controlplane.v1.PreparePublishRuntimeSecretDraftResponse
-	593,  // 1951: controlplane.v1.PlatformCommandService.PrepareDiscardRuntimeSecretDraft:output_type -> controlplane.v1.PrepareDiscardRuntimeSecretDraftResponse
-	437,  // 1952: controlplane.v1.PlatformCommandService.SavePromptTemplateDraft:output_type -> controlplane.v1.SavePromptTemplateDraftResponse
-	439,  // 1953: controlplane.v1.PlatformCommandService.DiscardPromptTemplateDraft:output_type -> controlplane.v1.DiscardPromptTemplateDraftResponse
-	441,  // 1954: controlplane.v1.PlatformCommandService.SaveRoleImageRevisionDraft:output_type -> controlplane.v1.SaveRoleImageRevisionDraftResponse
-	443,  // 1955: controlplane.v1.PlatformCommandService.DiscardRoleImageRevisionDraft:output_type -> controlplane.v1.DiscardRoleImageRevisionDraftResponse
-	445,  // 1956: controlplane.v1.PlatformCommandService.SaveIntegrationDefinitionDraft:output_type -> controlplane.v1.SaveIntegrationDefinitionDraftResponse
-	447,  // 1957: controlplane.v1.PlatformCommandService.DiscardIntegrationDefinitionDraft:output_type -> controlplane.v1.DiscardIntegrationDefinitionDraftResponse
-	449,  // 1958: controlplane.v1.PlatformCommandService.SaveSystemSTTConfigurationDraft:output_type -> controlplane.v1.SaveSystemSTTConfigurationDraftResponse
-	451,  // 1959: controlplane.v1.PlatformCommandService.DiscardSystemSTTConfigurationDraft:output_type -> controlplane.v1.DiscardSystemSTTConfigurationDraftResponse
-	936,  // 1960: controlplane.v1.PlatformCommandService.ReconcileEmailEffect:output_type -> controlplane.v1.ReconcileEmailEffectResponse
-	926,  // 1961: controlplane.v1.PlatformCommandService.ConfigureEmailMailboxCredential:output_type -> controlplane.v1.ConfigureEmailMailboxCredentialResponse
-	979,  // 1962: controlplane.v1.PlatformCommandService.CreateSkillBundleDraft:output_type -> controlplane.v1.CreateSkillBundleDraftResponse
-	980,  // 1963: controlplane.v1.PlatformCommandService.SaveSkillBundleDraft:output_type -> controlplane.v1.SaveSkillBundleDraftResponse
-	981,  // 1964: controlplane.v1.PlatformCommandService.ValidateSkillBundleDraft:output_type -> controlplane.v1.ValidateSkillBundleDraftResponse
-	982,  // 1965: controlplane.v1.PlatformCommandService.ReviewSkillBundleDraft:output_type -> controlplane.v1.ReviewSkillBundleDraftResponse
-	983,  // 1966: controlplane.v1.PlatformCommandService.PublishSkillBundleDraft:output_type -> controlplane.v1.PublishSkillBundleDraftResponse
-	984,  // 1967: controlplane.v1.PlatformCommandService.DiscardSkillBundleDraft:output_type -> controlplane.v1.DiscardSkillBundleDraftResponse
-	985,  // 1968: controlplane.v1.PlatformCommandService.ArchiveSkillBundle:output_type -> controlplane.v1.ArchiveSkillBundleResponse
-	986,  // 1969: controlplane.v1.PlatformCommandService.RestoreSkillBundle:output_type -> controlplane.v1.RestoreSkillBundleResponse
-	987,  // 1970: controlplane.v1.PlatformCommandService.PurgeSkillBundle:output_type -> controlplane.v1.PurgeSkillBundleResponse
-	969,  // 1971: controlplane.v1.PlatformCommandService.BindAgentSkillBundle:output_type -> controlplane.v1.BindAgentSkillBundleResponse
-	971,  // 1972: controlplane.v1.PlatformCommandService.UnbindAgentSkillBundle:output_type -> controlplane.v1.UnbindAgentSkillBundleResponse
-	988,  // 1973: controlplane.v1.PlatformCommandService.CreateMemoryRecord:output_type -> controlplane.v1.CreateMemoryRecordResponse
-	989,  // 1974: controlplane.v1.PlatformCommandService.ReviseMemoryRecord:output_type -> controlplane.v1.ReviseMemoryRecordResponse
-	990,  // 1975: controlplane.v1.PlatformCommandService.ArchiveMemoryRecord:output_type -> controlplane.v1.ArchiveMemoryRecordResponse
-	991,  // 1976: controlplane.v1.PlatformCommandService.RestoreMemoryRecord:output_type -> controlplane.v1.RestoreMemoryRecordResponse
-	992,  // 1977: controlplane.v1.PlatformCommandService.PurgeMemoryRecord:output_type -> controlplane.v1.PurgeMemoryRecordResponse
-	976,  // 1978: controlplane.v1.PlatformCommandService.BindAgentMemoryRecord:output_type -> controlplane.v1.BindAgentMemoryRecordResponse
-	978,  // 1979: controlplane.v1.PlatformCommandService.UnbindAgentMemoryRecord:output_type -> controlplane.v1.UnbindAgentMemoryRecordResponse
-	656,  // 1980: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentDraft:output_type -> controlplane.v1.CreateRuntimeEnvironmentDraftResponse
-	658,  // 1981: controlplane.v1.PlatformCommandService.SaveRuntimeEnvironmentDraft:output_type -> controlplane.v1.SaveRuntimeEnvironmentDraftResponse
-	660,  // 1982: controlplane.v1.PlatformCommandService.ValidateRuntimeEnvironmentDraft:output_type -> controlplane.v1.ValidateRuntimeEnvironmentDraftResponse
-	662,  // 1983: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentDraft:output_type -> controlplane.v1.PublishRuntimeEnvironmentDraftResponse
-	664,  // 1984: controlplane.v1.PlatformCommandService.DiscardRuntimeEnvironmentDraft:output_type -> controlplane.v1.DiscardRuntimeEnvironmentDraftResponse
-	676,  // 1985: controlplane.v1.PlatformCommandService.RebindRuntimeEnvironment:output_type -> controlplane.v1.RebindRuntimeEnvironmentResponse
-	696,  // 1986: controlplane.v1.PlatformCommandService.RebindRuntimeSecret:output_type -> controlplane.v1.RebindRuntimeSecretResponse
-	546,  // 1987: controlplane.v1.PlatformCommandService.BindInteractionIdentity:output_type -> controlplane.v1.BindInteractionIdentityResponse
-	548,  // 1988: controlplane.v1.PlatformCommandService.RevokeInteractionIdentity:output_type -> controlplane.v1.RevokeInteractionIdentityResponse
-	413,  // 1989: controlplane.v1.PlatformCommandService.CompleteOnboarding:output_type -> controlplane.v1.CompleteOnboardingResponse
-	214,  // 1990: controlplane.v1.PlatformCommandService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
-	216,  // 1991: controlplane.v1.PlatformCommandService.UpdateProject:output_type -> controlplane.v1.UpdateProjectResponse
-	218,  // 1992: controlplane.v1.PlatformCommandService.TrashProject:output_type -> controlplane.v1.TrashProjectResponse
-	220,  // 1993: controlplane.v1.PlatformCommandService.RestoreProject:output_type -> controlplane.v1.RestoreProjectResponse
-	222,  // 1994: controlplane.v1.PlatformCommandService.PurgeProject:output_type -> controlplane.v1.PurgeProjectResponse
-	228,  // 1995: controlplane.v1.PlatformCommandService.AddPlatformMembership:output_type -> controlplane.v1.AddPlatformMembershipResponse
-	230,  // 1996: controlplane.v1.PlatformCommandService.ChangePlatformMembership:output_type -> controlplane.v1.ChangePlatformMembershipResponse
-	232,  // 1997: controlplane.v1.PlatformCommandService.RemovePlatformMembership:output_type -> controlplane.v1.RemovePlatformMembershipResponse
-	238,  // 1998: controlplane.v1.PlatformCommandService.AddProjectMembership:output_type -> controlplane.v1.AddProjectMembershipResponse
-	240,  // 1999: controlplane.v1.PlatformCommandService.ChangeProjectMembership:output_type -> controlplane.v1.ChangeProjectMembershipResponse
-	242,  // 2000: controlplane.v1.PlatformCommandService.RemoveProjectMembership:output_type -> controlplane.v1.RemoveProjectMembershipResponse
-	248,  // 2001: controlplane.v1.PlatformCommandService.CreateAgent:output_type -> controlplane.v1.CreateAgentResponse
-	250,  // 2002: controlplane.v1.PlatformCommandService.UpdateAgent:output_type -> controlplane.v1.UpdateAgentResponse
-	252,  // 2003: controlplane.v1.PlatformCommandService.SetAgentEnabled:output_type -> controlplane.v1.SetAgentEnabledResponse
-	254,  // 2004: controlplane.v1.PlatformCommandService.ArchiveAgent:output_type -> controlplane.v1.ArchiveAgentResponse
-	788,  // 2005: controlplane.v1.PlatformCommandService.SetAgentAvatar:output_type -> controlplane.v1.SetAgentAvatarResponse
-	790,  // 2006: controlplane.v1.PlatformCommandService.RemoveAgentAvatar:output_type -> controlplane.v1.RemoveAgentAvatarResponse
-	256,  // 2007: controlplane.v1.PlatformCommandService.CreateInstructionDraft:output_type -> controlplane.v1.CreateInstructionDraftResponse
-	258,  // 2008: controlplane.v1.PlatformCommandService.ValidateInstructionDraft:output_type -> controlplane.v1.ValidateInstructionDraftResponse
-	260,  // 2009: controlplane.v1.PlatformCommandService.PublishInstructionDraft:output_type -> controlplane.v1.PublishInstructionDraftResponse
-	262,  // 2010: controlplane.v1.PlatformCommandService.RollbackInstructions:output_type -> controlplane.v1.RollbackInstructionsResponse
-	264,  // 2011: controlplane.v1.PlatformCommandService.ChangeAgentCapability:output_type -> controlplane.v1.ChangeAgentCapabilityResponse
-	266,  // 2012: controlplane.v1.PlatformCommandService.ChangeAgentIntegrationGrant:output_type -> controlplane.v1.ChangeAgentIntegrationGrantResponse
-	272,  // 2013: controlplane.v1.PlatformCommandService.CreateWorkflow:output_type -> controlplane.v1.CreateWorkflowResponse
-	274,  // 2014: controlplane.v1.PlatformCommandService.UpdateWorkflowDraft:output_type -> controlplane.v1.UpdateWorkflowDraftResponse
-	276,  // 2015: controlplane.v1.PlatformCommandService.ValidateWorkflowDraft:output_type -> controlplane.v1.ValidateWorkflowDraftResponse
-	278,  // 2016: controlplane.v1.PlatformCommandService.PublishWorkflowDraft:output_type -> controlplane.v1.PublishWorkflowDraftResponse
-	280,  // 2017: controlplane.v1.PlatformCommandService.ArchiveWorkflow:output_type -> controlplane.v1.ArchiveWorkflowResponse
-	290,  // 2018: controlplane.v1.PlatformCommandService.LaunchRun:output_type -> controlplane.v1.LaunchRunResponse
-	292,  // 2019: controlplane.v1.PlatformCommandService.AddSessionTurn:output_type -> controlplane.v1.AddSessionTurnResponse
-	294,  // 2020: controlplane.v1.PlatformCommandService.CancelRun:output_type -> controlplane.v1.CancelRunResponse
-	296,  // 2021: controlplane.v1.PlatformCommandService.RetryRun:output_type -> controlplane.v1.RetryRunResponse
-	302,  // 2022: controlplane.v1.PlatformCommandService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
-	325,  // 2023: controlplane.v1.PlatformCommandService.UploadAgentAvatar:output_type -> controlplane.v1.UploadAgentAvatarResponse
-	322,  // 2024: controlplane.v1.PlatformCommandService.UploadArtifact:output_type -> controlplane.v1.UploadArtifactResponse
-	327,  // 2025: controlplane.v1.PlatformCommandService.UploadOrganizationArtifact:output_type -> controlplane.v1.UploadOrganizationArtifactResponse
-	329,  // 2026: controlplane.v1.PlatformCommandService.DownloadArtifact:output_type -> controlplane.v1.DownloadArtifactResponse
-	331,  // 2027: controlplane.v1.PlatformCommandService.ChangeArtifactBinding:output_type -> controlplane.v1.ChangeArtifactBindingResponse
-	333,  // 2028: controlplane.v1.PlatformCommandService.DeleteArtifact:output_type -> controlplane.v1.DeleteArtifactResponse
-	335,  // 2029: controlplane.v1.PlatformCommandService.RestoreArtifact:output_type -> controlplane.v1.RestoreArtifactResponse
-	337,  // 2030: controlplane.v1.PlatformCommandService.PurgeArtifact:output_type -> controlplane.v1.PurgeArtifactResponse
-	310,  // 2031: controlplane.v1.PlatformCommandService.CreateAttachmentSetDraft:output_type -> controlplane.v1.CreateAttachmentSetDraftResponse
-	312,  // 2032: controlplane.v1.PlatformCommandService.CreateOrganizationAttachmentSetDraft:output_type -> controlplane.v1.CreateOrganizationAttachmentSetDraftResponse
-	314,  // 2033: controlplane.v1.PlatformCommandService.AddAttachmentSetItems:output_type -> controlplane.v1.AddAttachmentSetItemsResponse
-	316,  // 2034: controlplane.v1.PlatformCommandService.RemoveAttachmentSetItems:output_type -> controlplane.v1.RemoveAttachmentSetItemsResponse
-	318,  // 2035: controlplane.v1.PlatformCommandService.FinalizeAttachmentSet:output_type -> controlplane.v1.FinalizeAttachmentSetResponse
-	341,  // 2036: controlplane.v1.PlatformCommandService.CreateSchedule:output_type -> controlplane.v1.CreateScheduleResponse
-	343,  // 2037: controlplane.v1.PlatformCommandService.UpdateSchedule:output_type -> controlplane.v1.UpdateScheduleResponse
-	345,  // 2038: controlplane.v1.PlatformCommandService.SetScheduleEnabled:output_type -> controlplane.v1.SetScheduleEnabledResponse
-	557,  // 2039: controlplane.v1.PlatformCommandService.ArchiveSchedule:output_type -> controlplane.v1.ArchiveScheduleResponse
-	782,  // 2040: controlplane.v1.PlatformCommandService.DeleteSchedule:output_type -> controlplane.v1.DeleteScheduleResponse
-	757,  // 2041: controlplane.v1.PlatformCommandService.CreateProviderAccount:output_type -> controlplane.v1.CreateProviderAccountResponse
-	759,  // 2042: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:output_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationResponse
-	761,  // 2043: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:output_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyResponse
-	763,  // 2044: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:output_type -> controlplane.v1.RefreshProviderAccountAuthorizationResponse
-	765,  // 2045: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:output_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse
-	767,  // 2046: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:output_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse
-	769,  // 2047: controlplane.v1.PlatformCommandService.RevokeProviderAccount:output_type -> controlplane.v1.RevokeProviderAccountResponse
-	771,  // 2048: controlplane.v1.PlatformCommandService.DeleteProviderAccount:output_type -> controlplane.v1.DeleteProviderAccountResponse
-	774,  // 2049: controlplane.v1.PlatformCommandService.CancelProviderAccountQueuedWork:output_type -> controlplane.v1.CancelProviderAccountQueuedWorkResponse
-	776,  // 2050: controlplane.v1.PlatformCommandService.SetProviderAccountEnabled:output_type -> controlplane.v1.SetProviderAccountEnabledResponse
-	367,  // 2051: controlplane.v1.PlatformCommandService.CreateIntegrationConnection:output_type -> controlplane.v1.CreateIntegrationConnectionResponse
-	369,  // 2052: controlplane.v1.PlatformCommandService.UpdateIntegrationConnection:output_type -> controlplane.v1.UpdateIntegrationConnectionResponse
-	371,  // 2053: controlplane.v1.PlatformCommandService.DeleteIntegrationConnection:output_type -> controlplane.v1.DeleteIntegrationConnectionResponse
-	373,  // 2054: controlplane.v1.PlatformCommandService.ConfigureIntegrationConnectionCredential:output_type -> controlplane.v1.ConfigureIntegrationConnectionCredentialResponse
-	375,  // 2055: controlplane.v1.PlatformCommandService.TestIntegrationConnection:output_type -> controlplane.v1.TestIntegrationConnectionResponse
-	377,  // 2056: controlplane.v1.PlatformCommandService.SetIntegrationConnectionEnabled:output_type -> controlplane.v1.SetIntegrationConnectionEnabledResponse
-	379,  // 2057: controlplane.v1.PlatformCommandService.ChangeIntegrationGrant:output_type -> controlplane.v1.ChangeIntegrationGrantResponse
-	641,  // 2058: controlplane.v1.PlatformCommandService.PublishAgentRuntimeConfiguration:output_type -> controlplane.v1.PublishAgentRuntimeConfigurationResponse
-	643,  // 2059: controlplane.v1.PlatformCommandService.CreateConfigOverlayDraft:output_type -> controlplane.v1.CreateConfigOverlayDraftResponse
-	645,  // 2060: controlplane.v1.PlatformCommandService.ValidateConfigOverlayDraft:output_type -> controlplane.v1.ValidateConfigOverlayDraftResponse
-	647,  // 2061: controlplane.v1.PlatformCommandService.PublishConfigOverlayDraft:output_type -> controlplane.v1.PublishConfigOverlayDraftResponse
-	649,  // 2062: controlplane.v1.PlatformCommandService.RollbackConfigOverlay:output_type -> controlplane.v1.RollbackConfigOverlayResponse
-	665,  // 2063: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentSet:output_type -> controlplane.v1.CreateRuntimeEnvironmentSetResponse
-	667,  // 2064: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentVersion:output_type -> controlplane.v1.PublishRuntimeEnvironmentVersionResponse
-	669,  // 2065: controlplane.v1.PlatformCommandService.RollbackRuntimeEnvironment:output_type -> controlplane.v1.RollbackRuntimeEnvironmentResponse
-	721,  // 2066: controlplane.v1.PlatformCommandService.SetRuntimeEnvironmentEnabled:output_type -> controlplane.v1.SetRuntimeEnvironmentEnabledResponse
-	723,  // 2067: controlplane.v1.PlatformCommandService.DeleteRuntimeEnvironment:output_type -> controlplane.v1.DeleteRuntimeEnvironmentResponse
-	671,  // 2068: controlplane.v1.PlatformCommandService.BindAgentRuntimeEnvironment:output_type -> controlplane.v1.BindAgentRuntimeEnvironmentResponse
-	740,  // 2069: controlplane.v1.PlatformCommandService.PromoteRoleImage:output_type -> controlplane.v1.PromoteRoleImageResponse
-	617,  // 2070: controlplane.v1.PlatformCommandService.PrepareCreateRuntimeSecret:output_type -> controlplane.v1.PrepareCreateRuntimeSecretResponse
-	619,  // 2071: controlplane.v1.PlatformCommandService.PrepareRotateRuntimeSecret:output_type -> controlplane.v1.PrepareRotateRuntimeSecretResponse
-	621,  // 2072: controlplane.v1.PlatformCommandService.PrepareRevealRuntimeSecret:output_type -> controlplane.v1.PrepareRevealRuntimeSecretResponse
-	623,  // 2073: controlplane.v1.PlatformCommandService.PrepareRevokeRuntimeSecret:output_type -> controlplane.v1.PrepareRevokeRuntimeSecretResponse
-	825,  // 2074: controlplane.v1.PlatformCommandService.CreatePromptTemplateDraft:output_type -> controlplane.v1.CreatePromptTemplateDraftResponse
-	827,  // 2075: controlplane.v1.PlatformCommandService.ValidatePromptTemplateDraft:output_type -> controlplane.v1.ValidatePromptTemplateDraftResponse
-	829,  // 2076: controlplane.v1.PlatformCommandService.PublishPromptTemplateDraft:output_type -> controlplane.v1.PublishPromptTemplateDraftResponse
-	831,  // 2077: controlplane.v1.PlatformCommandService.RebindPromptTemplateConsumers:output_type -> controlplane.v1.RebindPromptTemplateConsumersResponse
-	833,  // 2078: controlplane.v1.PlatformCommandService.CreateRoleImageRevisionDraft:output_type -> controlplane.v1.CreateRoleImageRevisionDraftResponse
-	835,  // 2079: controlplane.v1.PlatformCommandService.ValidateRoleImageRevisionDraft:output_type -> controlplane.v1.ValidateRoleImageRevisionDraftResponse
-	837,  // 2080: controlplane.v1.PlatformCommandService.PublishRoleImageRevisionDraft:output_type -> controlplane.v1.PublishRoleImageRevisionDraftResponse
-	839,  // 2081: controlplane.v1.PlatformCommandService.RebindRoleImageConsumers:output_type -> controlplane.v1.RebindRoleImageConsumersResponse
-	853,  // 2082: controlplane.v1.PlatformCommandService.PrepareRoleImageImpactPlan:output_type -> controlplane.v1.PrepareRoleImageImpactPlanResponse
-	845,  // 2083: controlplane.v1.PlatformCommandService.PrepareEnvironmentDraftImpact:output_type -> controlplane.v1.PrepareEnvironmentDraftImpactResponse
-	847,  // 2084: controlplane.v1.PlatformCommandService.PrepareInstructionsImpact:output_type -> controlplane.v1.PrepareInstructionsImpactResponse
-	849,  // 2085: controlplane.v1.PlatformCommandService.PreparePromptTemplateImpact:output_type -> controlplane.v1.PreparePromptTemplateImpactResponse
-	857,  // 2086: controlplane.v1.PlatformCommandService.CreateIntegrationDefinitionDraft:output_type -> controlplane.v1.CreateIntegrationDefinitionDraftResponse
-	859,  // 2087: controlplane.v1.PlatformCommandService.ValidateIntegrationDefinitionDraft:output_type -> controlplane.v1.ValidateIntegrationDefinitionDraftResponse
-	861,  // 2088: controlplane.v1.PlatformCommandService.PublishIntegrationDefinitionDraft:output_type -> controlplane.v1.PublishIntegrationDefinitionDraftResponse
-	863,  // 2089: controlplane.v1.PlatformCommandService.RebindIntegrationDefinitionConsumers:output_type -> controlplane.v1.RebindIntegrationDefinitionConsumersResponse
-	865,  // 2090: controlplane.v1.PlatformCommandService.CreateSystemSTTConfigurationDraft:output_type -> controlplane.v1.CreateSystemSTTConfigurationDraftResponse
-	867,  // 2091: controlplane.v1.PlatformCommandService.ValidateSystemSTTConfigurationDraft:output_type -> controlplane.v1.ValidateSystemSTTConfigurationDraftResponse
-	869,  // 2092: controlplane.v1.PlatformCommandService.PublishSystemSTTConfigurationDraft:output_type -> controlplane.v1.PublishSystemSTTConfigurationDraftResponse
-	871,  // 2093: controlplane.v1.PlatformCommandService.RebindSystemSTTConsumers:output_type -> controlplane.v1.RebindSystemSTTConsumersResponse
-	873,  // 2094: controlplane.v1.PlatformCommandService.DetachGitManagedConfiguration:output_type -> controlplane.v1.DetachGitManagedConfigurationResponse
-	875,  // 2095: controlplane.v1.PlatformCommandService.CopyGitManagedConfiguration:output_type -> controlplane.v1.CopyGitManagedConfigurationResponse
-	809,  // 2096: controlplane.v1.PlatformCommandService.CopyRoleImageConfiguration:output_type -> controlplane.v1.CopyRoleImageConfigurationResponse
-	812,  // 2097: controlplane.v1.PlatformCommandService.CopyIntegrationDefinitionConfiguration:output_type -> controlplane.v1.CopyIntegrationDefinitionConfigurationResponse
-	814,  // 2098: controlplane.v1.PlatformCommandService.ArchiveRoleImageConfiguration:output_type -> controlplane.v1.ArchiveRoleImageConfigurationResponse
-	816,  // 2099: controlplane.v1.PlatformCommandService.ArchiveIntegrationDefinitionConfiguration:output_type -> controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse
-	1030, // 2100: controlplane.v1.PlatformCommandService.ConfigureRoleImageGitSource:output_type -> controlplane.v1.ConfigureRoleImageGitSourceResponse
-	1032, // 2101: controlplane.v1.PlatformCommandService.ConfigureIntegrationDefinitionGitSource:output_type -> controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse
-	1034, // 2102: controlplane.v1.PlatformCommandService.RefreshRoleImageGitSource:output_type -> controlplane.v1.RefreshRoleImageGitSourceResponse
-	1036, // 2103: controlplane.v1.PlatformCommandService.RefreshIntegrationDefinitionGitSource:output_type -> controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse
-	1050, // 2104: controlplane.v1.PlatformCommandService.PrepareRoleImageGitWriteBack:output_type -> controlplane.v1.PrepareRoleImageGitWriteBackResponse
-	1052, // 2105: controlplane.v1.PlatformCommandService.PrepareIntegrationDefinitionGitWriteBack:output_type -> controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse
-	1054, // 2106: controlplane.v1.PlatformCommandService.ApproveManagedConfigurationGitWriteBack:output_type -> controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse
-	1056, // 2107: controlplane.v1.PlatformCommandService.RejectManagedConfigurationGitWriteBack:output_type -> controlplane.v1.RejectManagedConfigurationGitWriteBackResponse
-	1058, // 2108: controlplane.v1.PlatformCommandService.CancelManagedConfigurationGitWriteBack:output_type -> controlplane.v1.CancelManagedConfigurationGitWriteBackResponse
-	1066, // 2109: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.ClaimManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse
-	1068, // 2110: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.RenewManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse
-	1070, // 2111: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.BeginManagedConfigurationGitWriteBackEffect:output_type -> controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse
-	1072, // 2112: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.CompleteManagedConfigurationGitWriteBackEffect:output_type -> controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse
-	1074, // 2113: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.FailManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse
-	1040, // 2114: controlplane.v1.ManagedConfigurationSourceWorkService.ClaimManagedConfigurationSourceWork:output_type -> controlplane.v1.ClaimManagedConfigurationSourceWorkResponse
-	1042, // 2115: controlplane.v1.ManagedConfigurationSourceWorkService.RenewManagedConfigurationSourceWork:output_type -> controlplane.v1.RenewManagedConfigurationSourceWorkResponse
-	1044, // 2116: controlplane.v1.ManagedConfigurationSourceWorkService.CompleteManagedConfigurationSourceWork:output_type -> controlplane.v1.CompleteManagedConfigurationSourceWorkResponse
-	1046, // 2117: controlplane.v1.ManagedConfigurationSourceWorkService.FailManagedConfigurationSourceWork:output_type -> controlplane.v1.FailManagedConfigurationSourceWorkResponse
-	597,  // 2118: controlplane.v1.RuntimeSecretDraftWorkService.CheckRuntimeSecretDraftWorkReadiness:output_type -> controlplane.v1.CheckRuntimeSecretDraftWorkReadinessResponse
-	599,  // 2119: controlplane.v1.RuntimeSecretDraftWorkService.ConsumeRuntimeSecretDraftOperation:output_type -> controlplane.v1.ConsumeRuntimeSecretDraftOperationResponse
-	601,  // 2120: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftOperation:output_type -> controlplane.v1.CompleteRuntimeSecretDraftOperationResponse
-	603,  // 2121: controlplane.v1.RuntimeSecretDraftWorkService.FailRuntimeSecretDraftOperation:output_type -> controlplane.v1.FailRuntimeSecretDraftOperationResponse
-	605,  // 2122: controlplane.v1.RuntimeSecretDraftWorkService.ListRuntimeSecretDraftRecoveryWork:output_type -> controlplane.v1.ListRuntimeSecretDraftRecoveryWorkResponse
-	607,  // 2123: controlplane.v1.RuntimeSecretDraftWorkService.RecoverRuntimeSecretDraftMaterialization:output_type -> controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse
-	609,  // 2124: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftCleanup:output_type -> controlplane.v1.CompleteRuntimeSecretDraftCleanupResponse
-	626,  // 2125: controlplane.v1.RuntimeSecretWorkService.CheckRuntimeSecretWorkReadiness:output_type -> controlplane.v1.CheckRuntimeSecretWorkReadinessResponse
-	1020, // 2126: controlplane.v1.RuntimeSecretWorkService.CheckCredentialProjectionWorkReadiness:output_type -> controlplane.v1.CheckCredentialProjectionWorkReadinessResponse
-	629,  // 2127: controlplane.v1.RuntimeSecretWorkService.ListRuntimeSecretRecoveryWork:output_type -> controlplane.v1.ListRuntimeSecretRecoveryWorkResponse
-	631,  // 2128: controlplane.v1.RuntimeSecretWorkService.ConsumeRuntimeSecretOperation:output_type -> controlplane.v1.ConsumeRuntimeSecretOperationResponse
-	635,  // 2129: controlplane.v1.RuntimeSecretWorkService.CompleteRuntimeSecretOperation:output_type -> controlplane.v1.CompleteRuntimeSecretOperationResponse
-	637,  // 2130: controlplane.v1.RuntimeSecretWorkService.FailRuntimeSecretOperation:output_type -> controlplane.v1.FailRuntimeSecretOperationResponse
-	639,  // 2131: controlplane.v1.RuntimeSecretWorkService.RecoverRuntimeSecretMaterialization:output_type -> controlplane.v1.RecoverRuntimeSecretMaterializationResponse
-	1022, // 2132: controlplane.v1.RuntimeSecretWorkService.ResolveRuntimeCredentialProjection:output_type -> controlplane.v1.ResolveRuntimeCredentialProjectionResponse
-	1024, // 2133: controlplane.v1.RuntimeSecretWorkService.ValidateRuntimeCredentialProjection:output_type -> controlplane.v1.ValidateRuntimeCredentialProjectionResponse
-	1026, // 2134: controlplane.v1.RuntimeSecretWorkService.ResolveTranscriptionCredentialProjection:output_type -> controlplane.v1.ResolveTranscriptionCredentialProjectionResponse
-	381,  // 2135: controlplane.v1.SystemAssistantService.GetSystemAssistant:output_type -> controlplane.v1.GetSystemAssistantResponse
-	383,  // 2136: controlplane.v1.SystemAssistantService.ListAssistantConversations:output_type -> controlplane.v1.ListAssistantConversationsResponse
-	385,  // 2137: controlplane.v1.SystemAssistantService.CreateAssistantConversation:output_type -> controlplane.v1.CreateAssistantConversationResponse
-	395,  // 2138: controlplane.v1.SystemAssistantService.UpdateAssistantConversationTitle:output_type -> controlplane.v1.UpdateAssistantConversationTitleResponse
-	387,  // 2139: controlplane.v1.SystemAssistantService.ArchiveAssistantConversation:output_type -> controlplane.v1.ArchiveAssistantConversationResponse
-	389,  // 2140: controlplane.v1.SystemAssistantService.RestoreAssistantConversation:output_type -> controlplane.v1.RestoreAssistantConversationResponse
-	391,  // 2141: controlplane.v1.SystemAssistantService.PurgeAssistantConversation:output_type -> controlplane.v1.PurgeAssistantConversationResponse
-	393,  // 2142: controlplane.v1.SystemAssistantService.MoveAssistantConversationToProject:output_type -> controlplane.v1.MoveAssistantConversationToProjectResponse
-	397,  // 2143: controlplane.v1.SystemAssistantService.AddAssistantTurn:output_type -> controlplane.v1.AddAssistantTurnResponse
-	399,  // 2144: controlplane.v1.SystemAssistantService.CancelAssistantTurn:output_type -> controlplane.v1.CancelAssistantTurnResponse
-	401,  // 2145: controlplane.v1.SystemAssistantService.UpdateAssistantPlanDraft:output_type -> controlplane.v1.UpdateAssistantPlanDraftResponse
-	403,  // 2146: controlplane.v1.SystemAssistantService.ValidateAssistantPlan:output_type -> controlplane.v1.ValidateAssistantPlanResponse
-	405,  // 2147: controlplane.v1.SystemAssistantService.ApplyAssistantPlan:output_type -> controlplane.v1.ApplyAssistantPlanResponse
-	407,  // 2148: controlplane.v1.SystemAssistantService.RejectAssistantPlan:output_type -> controlplane.v1.RejectAssistantPlanResponse
-	409,  // 2149: controlplane.v1.SystemAssistantService.UpdateAssistantOwnerInstructions:output_type -> controlplane.v1.UpdateAssistantOwnerInstructionsResponse
-	411,  // 2150: controlplane.v1.SystemAssistantService.RecoverSystemAssistant:output_type -> controlplane.v1.RecoverSystemAssistantResponse
-	923,  // 2151: controlplane.v1.RuntimeWorkService.ReportEmailConfigurationReadback:output_type -> controlplane.v1.ReportEmailConfigurationReadbackResponse
-	930,  // 2152: controlplane.v1.RuntimeWorkService.ResolveEmailAuthorization:output_type -> controlplane.v1.ResolveEmailAuthorizationResponse
-	933,  // 2153: controlplane.v1.RuntimeWorkService.ReportEmailEffectReceipt:output_type -> controlplane.v1.ReportEmailEffectReceiptResponse
-	938,  // 2154: controlplane.v1.RuntimeWorkService.ResolveEmailReconciliation:output_type -> controlplane.v1.ResolveEmailReconciliationResponse
-	464,  // 2155: controlplane.v1.RuntimeWorkService.ClaimExecution:output_type -> controlplane.v1.ClaimExecutionResponse
-	821,  // 2156: controlplane.v1.RuntimeWorkService.GetRuntimeEnvironmentRoleImageConfiguration:output_type -> controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse
-	466,  // 2157: controlplane.v1.RuntimeWorkService.ReadExecutionArtifact:output_type -> controlplane.v1.ReadExecutionArtifactResponse
-	468,  // 2158: controlplane.v1.RuntimeWorkService.StreamExecutionArtifact:output_type -> controlplane.v1.StreamExecutionArtifactResponse
-	429,  // 2159: controlplane.v1.RuntimeWorkService.SearchExecutionFiles:output_type -> controlplane.v1.SearchExecutionFilesResponse
-	201,  // 2160: controlplane.v1.RuntimeWorkService.SearchAssistantResources:output_type -> controlplane.v1.SearchAssistantResourcesResponse
-	431,  // 2161: controlplane.v1.RuntimeWorkService.GetExecutionFileMetadata:output_type -> controlplane.v1.GetExecutionFileMetadataResponse
-	433,  // 2162: controlplane.v1.RuntimeWorkService.PreviewExecutionFile:output_type -> controlplane.v1.PreviewExecutionFileResponse
-	435,  // 2163: controlplane.v1.RuntimeWorkService.GetExecutionFileManifest:output_type -> controlplane.v1.GetExecutionFileManifestResponse
-	471,  // 2164: controlplane.v1.RuntimeWorkService.RenewExecution:output_type -> controlplane.v1.RenewExecutionResponse
-	473,  // 2165: controlplane.v1.RuntimeWorkService.ReportExecutionProgress:output_type -> controlplane.v1.ReportExecutionProgressResponse
-	1014, // 2166: controlplane.v1.RuntimeWorkService.CommitProviderCredentialRefresh:output_type -> controlplane.v1.CommitProviderCredentialRefreshResponse
-	476,  // 2167: controlplane.v1.RuntimeWorkService.CompleteExecution:output_type -> controlplane.v1.CompleteExecutionResponse
-	494,  // 2168: controlplane.v1.RuntimeWorkService.DelegateExecution:output_type -> controlplane.v1.DelegateExecutionResponse
-	496,  // 2169: controlplane.v1.RuntimeWorkService.ProposeAssistantPlan:output_type -> controlplane.v1.ProposeAssistantPlanResponse
-	498,  // 2170: controlplane.v1.RuntimeWorkService.ProposeAssistantMetadata:output_type -> controlplane.v1.ProposeAssistantMetadataResponse
-	500,  // 2171: controlplane.v1.RuntimeWorkService.ProposeRunMetadata:output_type -> controlplane.v1.ProposeRunMetadataResponse
-	502,  // 2172: controlplane.v1.RuntimeWorkService.RecordRunToolCall:output_type -> controlplane.v1.RecordRunToolCallResponse
-	504,  // 2173: controlplane.v1.RuntimeWorkService.ReconcileWarmRuntime:output_type -> controlplane.v1.ReconcileWarmRuntimeResponse
-	506,  // 2174: controlplane.v1.RuntimeWorkService.ReportWarmRuntime:output_type -> controlplane.v1.ReportWarmRuntimeResponse
-	509,  // 2175: controlplane.v1.RuntimeWorkService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
-	513,  // 2176: controlplane.v1.RuntimeWorkService.RenewScheduleOccurrence:output_type -> controlplane.v1.RenewScheduleOccurrenceResponse
-	511,  // 2177: controlplane.v1.RuntimeWorkService.MaterializeScheduleOccurrence:output_type -> controlplane.v1.MaterializeScheduleOccurrenceResponse
-	515,  // 2178: controlplane.v1.RuntimeWorkService.FailScheduleOccurrence:output_type -> controlplane.v1.FailScheduleOccurrenceResponse
-	522,  // 2179: controlplane.v1.RuntimeWorkService.ClaimIntegrationConnectionTests:output_type -> controlplane.v1.ClaimIntegrationConnectionTestsResponse
-	823,  // 2180: controlplane.v1.RuntimeWorkService.GetIntegrationConnectionDefinitionConfiguration:output_type -> controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse
-	524,  // 2181: controlplane.v1.RuntimeWorkService.CompleteIntegrationConnectionTest:output_type -> controlplane.v1.CompleteIntegrationConnectionTestResponse
-	526,  // 2182: controlplane.v1.RuntimeWorkService.ResolveIntegrationInvocation:output_type -> controlplane.v1.ResolveIntegrationInvocationResponse
-	529,  // 2183: controlplane.v1.RuntimeWorkService.ClaimIntegrationInvocations:output_type -> controlplane.v1.ClaimIntegrationInvocationsResponse
-	531,  // 2184: controlplane.v1.RuntimeWorkService.GetIntegrationInvocation:output_type -> controlplane.v1.GetIntegrationInvocationResponse
-	534,  // 2185: controlplane.v1.RuntimeWorkService.CompleteIntegrationInvocation:output_type -> controlplane.v1.CompleteIntegrationInvocationResponse
-	480,  // 2186: controlplane.v1.SessionArchiveWorkService.ClaimSessionArchiveTasks:output_type -> controlplane.v1.ClaimSessionArchiveTasksResponse
-	482,  // 2187: controlplane.v1.SessionArchiveWorkService.RenewSessionArchiveTask:output_type -> controlplane.v1.RenewSessionArchiveTaskResponse
-	488,  // 2188: controlplane.v1.SessionArchiveWorkService.CompleteSessionSnapshot:output_type -> controlplane.v1.CompleteSessionSnapshotResponse
-	489,  // 2189: controlplane.v1.SessionArchiveWorkService.CompleteSessionRestore:output_type -> controlplane.v1.CompleteSessionRestoreResponse
-	490,  // 2190: controlplane.v1.SessionArchiveWorkService.CompleteSessionPVCDeletion:output_type -> controlplane.v1.CompleteSessionPVCDeletionResponse
-	491,  // 2191: controlplane.v1.SessionArchiveWorkService.CompleteSessionObjectDeletion:output_type -> controlplane.v1.CompleteSessionObjectDeletionResponse
-	492,  // 2192: controlplane.v1.SessionArchiveWorkService.FailSessionArchiveTask:output_type -> controlplane.v1.FailSessionArchiveTaskResponse
-	537,  // 2193: controlplane.v1.InteractionWorkService.ListInteractionSources:output_type -> controlplane.v1.ListInteractionSourcesResponse
-	540,  // 2194: controlplane.v1.InteractionWorkService.ClaimInteractionDeliveries:output_type -> controlplane.v1.ClaimInteractionDeliveriesResponse
-	542,  // 2195: controlplane.v1.InteractionWorkService.CompleteInteractionDelivery:output_type -> controlplane.v1.CompleteInteractionDeliveryResponse
-	551,  // 2196: controlplane.v1.InteractionWorkService.AcceptInteractionMessage:output_type -> controlplane.v1.AcceptInteractionMessageResponse
-	1001, // 2197: controlplane.v1.ProviderCredentialMaterializerService.ObserveProviderModelCatalog:output_type -> controlplane.v1.ObserveProviderModelCatalogResponse
-	1002, // 2198: controlplane.v1.ProviderCredentialMaterializerService.CheckProviderCredentialMaterializerReadiness:output_type -> controlplane.v1.CheckProviderCredentialMaterializerReadinessResponse
-	1004, // 2199: controlplane.v1.ProviderCredentialMaterializerService.StartDeviceAuthorization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse
-	1008, // 2200: controlplane.v1.ProviderCredentialMaterializerService.ObserveDeviceAuthorization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
-	1010, // 2201: controlplane.v1.ProviderCredentialMaterializerService.MaterializeAPIKey:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse
-	1012, // 2202: controlplane.v1.ProviderCredentialMaterializerService.DiscardProviderCredentialMaterialization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse
-	1017, // 2203: controlplane.v1.ProviderCredentialMaterializerService.CleanupProviderCredential:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
-	1846, // [1846:2204] is the sub-list for method output_type
-	1488, // [1488:1846] is the sub-list for method input_type
-	1488, // [1488:1488] is the sub-list for extension type_name
-	1488, // [1488:1488] is the sub-list for extension extendee
-	0,    // [0:1488] is the sub-list for field type_name
+	128,  // 1040: controlplane.v1.SetProviderAccountConcurrencyRequest.mutation:type_name -> controlplane.v1.MutationContext
+	742,  // 1041: controlplane.v1.SetProviderAccountConcurrencyResponse.account:type_name -> controlplane.v1.ProviderAccount
+	128,  // 1042: controlplane.v1.SetProviderAccountEnabledRequest.mutation:type_name -> controlplane.v1.MutationContext
+	742,  // 1043: controlplane.v1.SetProviderAccountEnabledResponse.account:type_name -> controlplane.v1.ProviderAccount
+	129,  // 1044: controlplane.v1.ListScheduleRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	163,  // 1045: controlplane.v1.ListScheduleRevisionsResponse.revisions:type_name -> controlplane.v1.ScheduleRevision
+	130,  // 1046: controlplane.v1.ListScheduleRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	129,  // 1047: controlplane.v1.ListScheduleRunsRequest.page:type_name -> controlplane.v1.PageRequest
+	164,  // 1048: controlplane.v1.ListScheduleRunsResponse.occurrences:type_name -> controlplane.v1.ScheduleRunOccurrence
+	130,  // 1049: controlplane.v1.ListScheduleRunsResponse.page:type_name -> controlplane.v1.PageInfo
+	128,  // 1050: controlplane.v1.DeleteScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	162,  // 1051: controlplane.v1.DeleteScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
+	80,   // 1052: controlplane.v1.ArtifactImpact.action:type_name -> controlplane.v1.ArtifactImpactAction
+	786,  // 1053: controlplane.v1.ArtifactImpact.active_runs:type_name -> controlplane.v1.ArtifactImpactRun
+	7,    // 1054: controlplane.v1.ArtifactImpactRun.state:type_name -> controlplane.v1.RunState
+	80,   // 1055: controlplane.v1.GetArtifactImpactRequest.action:type_name -> controlplane.v1.ArtifactImpactAction
+	785,  // 1056: controlplane.v1.GetArtifactImpactResponse.impact:type_name -> controlplane.v1.ArtifactImpact
+	128,  // 1057: controlplane.v1.SetAgentAvatarRequest.mutation:type_name -> controlplane.v1.MutationContext
+	137,  // 1058: controlplane.v1.SetAgentAvatarResponse.agent:type_name -> controlplane.v1.Agent
+	128,  // 1059: controlplane.v1.RemoveAgentAvatarRequest.mutation:type_name -> controlplane.v1.MutationContext
+	137,  // 1060: controlplane.v1.RemoveAgentAvatarResponse.agent:type_name -> controlplane.v1.Agent
+	797,  // 1061: controlplane.v1.ValidatePromptTemplateRequest.context:type_name -> controlplane.v1.PromptPreviewContext
+	793,  // 1062: controlplane.v1.ValidatePromptTemplateResponse.diagnostics:type_name -> controlplane.v1.PromptTemplateDiagnostic
+	800,  // 1063: controlplane.v1.ValidatePromptTemplateResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
+	797,  // 1064: controlplane.v1.PreviewPromptTemplateRequest.context:type_name -> controlplane.v1.PromptPreviewContext
+	1081, // 1065: controlplane.v1.PromptPreviewContext.input:type_name -> google.protobuf.Struct
+	81,   // 1066: controlplane.v1.PromptSlotProvenance.slot:type_name -> controlplane.v1.PromptSemanticSlot
+	82,   // 1067: controlplane.v1.PromptSlotProvenance.source:type_name -> controlplane.v1.PromptSectionSource
+	82,   // 1068: controlplane.v1.PromptPreviewSection.source:type_name -> controlplane.v1.PromptSectionSource
+	81,   // 1069: controlplane.v1.PromptPreviewSection.slot:type_name -> controlplane.v1.PromptSemanticSlot
+	83,   // 1070: controlplane.v1.PromptPreviewSection.user_kind:type_name -> controlplane.v1.PromptUserSectionKind
+	793,  // 1071: controlplane.v1.PreviewPromptTemplateResponse.diagnostics:type_name -> controlplane.v1.PromptTemplateDiagnostic
+	798,  // 1072: controlplane.v1.PreviewPromptTemplateResponse.slots:type_name -> controlplane.v1.PromptSlotProvenance
+	799,  // 1073: controlplane.v1.PreviewPromptTemplateResponse.sections:type_name -> controlplane.v1.PromptPreviewSection
+	800,  // 1074: controlplane.v1.PreviewPromptTemplateResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
+	804,  // 1075: controlplane.v1.PreviewPromptTemplateResponse.runtime_diff:type_name -> controlplane.v1.PromptRuntimeDiff
+	84,   // 1076: controlplane.v1.PromptRuntimeChange.component:type_name -> controlplane.v1.PromptRuntimeComponent
+	802,  // 1077: controlplane.v1.PromptRuntimeChange.previous:type_name -> controlplane.v1.PromptRuntimeDescriptor
+	802,  // 1078: controlplane.v1.PromptRuntimeChange.current:type_name -> controlplane.v1.PromptRuntimeDescriptor
+	85,   // 1079: controlplane.v1.PromptRuntimeChange.action:type_name -> controlplane.v1.PromptRuntimeAction
+	803,  // 1080: controlplane.v1.PromptRuntimeDiff.changes:type_name -> controlplane.v1.PromptRuntimeChange
+	87,   // 1081: controlplane.v1.ManagedConfigurationRevision.state:type_name -> controlplane.v1.ManagedConfigurationState
+	1080, // 1082: controlplane.v1.ManagedConfigurationRevision.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1083: controlplane.v1.ManagedConfigurationRevision.validated_at:type_name -> google.protobuf.Timestamp
+	1080, // 1084: controlplane.v1.ManagedConfigurationRevision.published_at:type_name -> google.protobuf.Timestamp
+	807,  // 1085: controlplane.v1.ManagedConfigurationRevision.prompt_scope:type_name -> controlplane.v1.PromptTemplateScope
+	89,   // 1086: controlplane.v1.PromptTemplateScopeInput.template_kind:type_name -> controlplane.v1.PromptTemplateKind
+	800,  // 1087: controlplane.v1.PromptTemplateScope.context_pin:type_name -> controlplane.v1.PromptContextPin
+	89,   // 1088: controlplane.v1.PromptTemplateScope.template_kind:type_name -> controlplane.v1.PromptTemplateKind
+	86,   // 1089: controlplane.v1.ManagedConfigurationSet.kind:type_name -> controlplane.v1.ManagedConfigurationKind
+	88,   // 1090: controlplane.v1.ManagedConfigurationSet.managed_by:type_name -> controlplane.v1.ManagedConfigurationOwner
+	805,  // 1091: controlplane.v1.ManagedConfigurationSet.current_revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	1080, // 1092: controlplane.v1.ManagedConfigurationSet.updated_at:type_name -> google.protobuf.Timestamp
+	1029, // 1093: controlplane.v1.ManagedConfigurationSet.git_source:type_name -> controlplane.v1.ManagedConfigurationGitSource
+	809,  // 1094: controlplane.v1.ManagedConfigurationSet.copy_provenance:type_name -> controlplane.v1.ManagedConfigurationCopyProvenance
+	90,   // 1095: controlplane.v1.ManagedConfigurationCopyProvenance.origin:type_name -> controlplane.v1.ManagedConfigurationCopyOrigin
+	128,  // 1096: controlplane.v1.CopyRoleImageConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1097: controlplane.v1.CopyRoleImageConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1098: controlplane.v1.CopyRoleImageConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1099: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	812,  // 1100: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest.shipped:type_name -> controlplane.v1.ShippedIntegrationDefinitionCopySource
+	808,  // 1101: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1102: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1103: controlplane.v1.ArchiveRoleImageConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1104: controlplane.v1.ArchiveRoleImageConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	128,  // 1105: controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1106: controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	819,  // 1107: controlplane.v1.ManagedConfigurationImpact.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	130,  // 1108: controlplane.v1.ManagedConfigurationImpact.page:type_name -> controlplane.v1.PageInfo
+	808,  // 1109: controlplane.v1.ManagedConfigurationBindingSnapshot.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1110: controlplane.v1.ManagedConfigurationBindingSnapshot.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	821,  // 1111: controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse.binding:type_name -> controlplane.v1.ManagedConfigurationBindingSnapshot
+	821,  // 1112: controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse.binding:type_name -> controlplane.v1.ManagedConfigurationBindingSnapshot
+	128,  // 1113: controlplane.v1.CreatePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	806,  // 1114: controlplane.v1.CreatePromptTemplateDraftRequest.prompt_scope:type_name -> controlplane.v1.PromptTemplateScopeInput
+	808,  // 1115: controlplane.v1.CreatePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1116: controlplane.v1.CreatePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1117: controlplane.v1.ValidatePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1118: controlplane.v1.ValidatePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1119: controlplane.v1.ValidatePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1120: controlplane.v1.PublishPromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1121: controlplane.v1.PublishPromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1122: controlplane.v1.PublishPromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	844,  // 1123: controlplane.v1.PublishPromptTemplateDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	128,  // 1124: controlplane.v1.RebindPromptTemplateConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
+	819,  // 1125: controlplane.v1.RebindPromptTemplateConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	808,  // 1126: controlplane.v1.RebindPromptTemplateConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1127: controlplane.v1.RebindPromptTemplateConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1128: controlplane.v1.CreateRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1129: controlplane.v1.CreateRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1130: controlplane.v1.CreateRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1131: controlplane.v1.ValidateRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1132: controlplane.v1.ValidateRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1133: controlplane.v1.ValidateRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1134: controlplane.v1.PublishRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1135: controlplane.v1.PublishRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1136: controlplane.v1.PublishRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1137: controlplane.v1.RebindRoleImageConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
+	819,  // 1138: controlplane.v1.RebindRoleImageConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	808,  // 1139: controlplane.v1.RebindRoleImageConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1140: controlplane.v1.RebindRoleImageConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	842,  // 1141: controlplane.v1.RebindRoleImageConsumersResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
+	91,   // 1142: controlplane.v1.RoleImageImpactPlan.state:type_name -> controlplane.v1.RoleImageImpactPlanState
+	1080, // 1143: controlplane.v1.RoleImageImpactPlan.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1144: controlplane.v1.RoleImageImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
+	672,  // 1145: controlplane.v1.RoleImageImpactItem.consumer:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
+	92,   // 1146: controlplane.v1.RoleImageImpactItem.outcome:type_name -> controlplane.v1.RoleImageImpactOutcome
+	93,   // 1147: controlplane.v1.RevisionImpactPlan.kind:type_name -> controlplane.v1.RevisionImpactKind
+	94,   // 1148: controlplane.v1.RevisionImpactPlan.state:type_name -> controlplane.v1.RevisionImpactState
+	1080, // 1149: controlplane.v1.RevisionImpactPlan.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1150: controlplane.v1.RevisionImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
+	96,   // 1151: controlplane.v1.RevisionImpactItem.consumer_kind:type_name -> controlplane.v1.RevisionImpactConsumerKind
+	95,   // 1152: controlplane.v1.RevisionImpactItem.outcome:type_name -> controlplane.v1.RevisionImpactOutcome
+	128,  // 1153: controlplane.v1.PrepareEnvironmentDraftImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
+	844,  // 1154: controlplane.v1.PrepareEnvironmentDraftImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	128,  // 1155: controlplane.v1.PrepareInstructionsImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
+	844,  // 1156: controlplane.v1.PrepareInstructionsImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	128,  // 1157: controlplane.v1.PreparePromptTemplateImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
+	844,  // 1158: controlplane.v1.PreparePromptTemplateImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	129,  // 1159: controlplane.v1.GetRevisionImpactPlanRequest.page:type_name -> controlplane.v1.PageRequest
+	844,  // 1160: controlplane.v1.GetRevisionImpactPlanResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	845,  // 1161: controlplane.v1.GetRevisionImpactPlanResponse.items:type_name -> controlplane.v1.RevisionImpactItem
+	130,  // 1162: controlplane.v1.GetRevisionImpactPlanResponse.page:type_name -> controlplane.v1.PageInfo
+	128,  // 1163: controlplane.v1.PrepareRoleImageImpactPlanRequest.mutation:type_name -> controlplane.v1.MutationContext
+	842,  // 1164: controlplane.v1.PrepareRoleImageImpactPlanResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
+	129,  // 1165: controlplane.v1.GetRoleImageImpactPlanRequest.page:type_name -> controlplane.v1.PageRequest
+	842,  // 1166: controlplane.v1.GetRoleImageImpactPlanResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
+	843,  // 1167: controlplane.v1.GetRoleImageImpactPlanResponse.items:type_name -> controlplane.v1.RoleImageImpactItem
+	130,  // 1168: controlplane.v1.GetRoleImageImpactPlanResponse.page:type_name -> controlplane.v1.PageInfo
+	128,  // 1169: controlplane.v1.CreateIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1170: controlplane.v1.CreateIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1171: controlplane.v1.CreateIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1172: controlplane.v1.ValidateIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1173: controlplane.v1.ValidateIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1174: controlplane.v1.ValidateIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1175: controlplane.v1.PublishIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1176: controlplane.v1.PublishIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1177: controlplane.v1.PublishIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1178: controlplane.v1.RebindIntegrationDefinitionConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
+	819,  // 1179: controlplane.v1.RebindIntegrationDefinitionConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	808,  // 1180: controlplane.v1.RebindIntegrationDefinitionConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1181: controlplane.v1.RebindIntegrationDefinitionConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1182: controlplane.v1.CreateSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1183: controlplane.v1.CreateSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1184: controlplane.v1.CreateSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1185: controlplane.v1.ValidateSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1186: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1187: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1188: controlplane.v1.PublishSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1189: controlplane.v1.PublishSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1190: controlplane.v1.PublishSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1191: controlplane.v1.RebindSystemSTTConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
+	819,  // 1192: controlplane.v1.RebindSystemSTTConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	808,  // 1193: controlplane.v1.RebindSystemSTTConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1194: controlplane.v1.RebindSystemSTTConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1195: controlplane.v1.DetachGitManagedConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1196: controlplane.v1.DetachGitManagedConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1197: controlplane.v1.DetachGitManagedConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	128,  // 1198: controlplane.v1.CopyGitManagedConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1199: controlplane.v1.CopyGitManagedConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1200: controlplane.v1.CopyGitManagedConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	129,  // 1201: controlplane.v1.ListManagedConfigurationHistoryRequest.page:type_name -> controlplane.v1.PageRequest
+	86,   // 1202: controlplane.v1.ListManagedConfigurationsRequest.kind:type_name -> controlplane.v1.ManagedConfigurationKind
+	129,  // 1203: controlplane.v1.ListManagedConfigurationsRequest.page:type_name -> controlplane.v1.PageRequest
+	808,  // 1204: controlplane.v1.ListManagedConfigurationsResponse.configurations:type_name -> controlplane.v1.ManagedConfigurationSet
+	130,  // 1205: controlplane.v1.ListManagedConfigurationsResponse.page:type_name -> controlplane.v1.PageInfo
+	808,  // 1206: controlplane.v1.ListManagedConfigurationHistoryResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1207: controlplane.v1.ListManagedConfigurationHistoryResponse.revisions:type_name -> controlplane.v1.ManagedConfigurationRevision
+	130,  // 1208: controlplane.v1.ListManagedConfigurationHistoryResponse.page:type_name -> controlplane.v1.PageInfo
+	129,  // 1209: controlplane.v1.GetManagedConfigurationImpactRequest.page:type_name -> controlplane.v1.PageRequest
+	820,  // 1210: controlplane.v1.GetManagedConfigurationImpactResponse.impact:type_name -> controlplane.v1.ManagedConfigurationImpact
+	1080, // 1211: controlplane.v1.ContextProvenance.created_at:type_name -> google.protobuf.Timestamp
+	886,  // 1212: controlplane.v1.SkillBundleSpecification.files:type_name -> controlplane.v1.SkillBundleFileInput
+	98,   // 1213: controlplane.v1.SkillBundleRevision.state:type_name -> controlplane.v1.SkillRevisionState
+	885,  // 1214: controlplane.v1.SkillBundleRevision.files:type_name -> controlplane.v1.SkillBundleFile
+	884,  // 1215: controlplane.v1.SkillBundleRevision.provenance:type_name -> controlplane.v1.ContextProvenance
+	99,   // 1216: controlplane.v1.SkillBundleRevision.scan_state:type_name -> controlplane.v1.SkillScanState
+	1080, // 1217: controlplane.v1.SkillBundleRevision.scanned_at:type_name -> google.protobuf.Timestamp
+	1080, // 1218: controlplane.v1.SkillBundleRevision.reviewed_at:type_name -> google.protobuf.Timestamp
+	97,   // 1219: controlplane.v1.SkillBundle.state:type_name -> controlplane.v1.ContextResourceState
+	888,  // 1220: controlplane.v1.SkillBundle.current_revision:type_name -> controlplane.v1.SkillBundleRevision
+	888,  // 1221: controlplane.v1.SkillBundle.draft_revision:type_name -> controlplane.v1.SkillBundleRevision
+	1080, // 1222: controlplane.v1.SkillBundle.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1223: controlplane.v1.SkillBundle.updated_at:type_name -> google.protobuf.Timestamp
+	103,  // 1224: controlplane.v1.EmailMailboxEndpoint.tls_mode:type_name -> controlplane.v1.EmailMailboxTLSMode
+	104,  // 1225: controlplane.v1.EmailMailboxEndpoint.auth_method:type_name -> controlplane.v1.EmailMailboxAuthMethod
+	890,  // 1226: controlplane.v1.EmailMailboxEndpoint.ca:type_name -> controlplane.v1.EmailMailboxCredentialReference
+	890,  // 1227: controlplane.v1.EmailMailboxEndpoint.username:type_name -> controlplane.v1.EmailMailboxCredentialReference
+	890,  // 1228: controlplane.v1.EmailMailboxEndpoint.secret:type_name -> controlplane.v1.EmailMailboxCredentialReference
+	101,  // 1229: controlplane.v1.EmailMailboxOperationPolicy.operation:type_name -> controlplane.v1.EmailOperation
+	109,  // 1230: controlplane.v1.EmailMailboxOperationPolicy.policy:type_name -> controlplane.v1.EmailApprovalPolicy
+	102,  // 1231: controlplane.v1.EmailMailboxSpecification.receive_protocol:type_name -> controlplane.v1.EmailMailboxReceiveProtocol
+	891,  // 1232: controlplane.v1.EmailMailboxSpecification.smtp:type_name -> controlplane.v1.EmailMailboxEndpoint
+	891,  // 1233: controlplane.v1.EmailMailboxSpecification.imap:type_name -> controlplane.v1.EmailMailboxEndpoint
+	891,  // 1234: controlplane.v1.EmailMailboxSpecification.pop:type_name -> controlplane.v1.EmailMailboxEndpoint
+	892,  // 1235: controlplane.v1.EmailMailboxSpecification.limits:type_name -> controlplane.v1.EmailMailboxLimits
+	893,  // 1236: controlplane.v1.EmailMailboxSpecification.policies:type_name -> controlplane.v1.EmailMailboxOperationPolicy
+	894,  // 1237: controlplane.v1.EmailMailboxDraftContent.specification:type_name -> controlplane.v1.EmailMailboxSpecification
+	105,  // 1238: controlplane.v1.EmailMailboxPublication.state:type_name -> controlplane.v1.EmailMailboxPublicationState
+	1080, // 1239: controlplane.v1.EmailMailboxPublication.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1240: controlplane.v1.EmailMailboxPublication.ready_at:type_name -> google.protobuf.Timestamp
+	808,  // 1241: controlplane.v1.EmailMailboxConfigurationView.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	805,  // 1242: controlplane.v1.EmailMailboxConfigurationView.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	894,  // 1243: controlplane.v1.EmailMailboxConfigurationView.specification:type_name -> controlplane.v1.EmailMailboxSpecification
+	897,  // 1244: controlplane.v1.EmailMailboxConfigurationView.publication:type_name -> controlplane.v1.EmailMailboxPublication
+	896,  // 1245: controlplane.v1.EmailMailboxConfigurationView.diagnostics:type_name -> controlplane.v1.EmailMailboxDiagnostic
+	899,  // 1246: controlplane.v1.EmailMailboxConfigurationView.next_actions:type_name -> controlplane.v1.EmailMailboxActionAvailability
+	106,  // 1247: controlplane.v1.EmailMailboxActionAvailability.action:type_name -> controlplane.v1.EmailMailboxAction
+	107,  // 1248: controlplane.v1.EmailMailboxActionAvailability.reason:type_name -> controlplane.v1.EmailMailboxActionReason
+	129,  // 1249: controlplane.v1.ListEmailMailboxConfigurationsRequest.page:type_name -> controlplane.v1.PageRequest
+	898,  // 1250: controlplane.v1.ListEmailMailboxConfigurationsResponse.items:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	130,  // 1251: controlplane.v1.ListEmailMailboxConfigurationsResponse.page:type_name -> controlplane.v1.PageInfo
+	899,  // 1252: controlplane.v1.ListEmailMailboxConfigurationsResponse.next_actions:type_name -> controlplane.v1.EmailMailboxActionAvailability
+	898,  // 1253: controlplane.v1.GetEmailMailboxConfigurationResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	108,  // 1254: controlplane.v1.ListEmailMailboxCredentialsRequest.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
+	129,  // 1255: controlplane.v1.ListEmailMailboxCredentialsRequest.page:type_name -> controlplane.v1.PageRequest
+	926,  // 1256: controlplane.v1.ListEmailMailboxCredentialsResponse.items:type_name -> controlplane.v1.EmailMailboxCredential
+	130,  // 1257: controlplane.v1.ListEmailMailboxCredentialsResponse.page:type_name -> controlplane.v1.PageInfo
+	926,  // 1258: controlplane.v1.GetEmailMailboxCredentialReceiptResponse.credential:type_name -> controlplane.v1.EmailMailboxCredential
+	895,  // 1259: controlplane.v1.PreviewEmailMailboxConfigurationRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
+	894,  // 1260: controlplane.v1.PreviewEmailMailboxConfigurationResponse.specification:type_name -> controlplane.v1.EmailMailboxSpecification
+	896,  // 1261: controlplane.v1.PreviewEmailMailboxConfigurationResponse.diagnostics:type_name -> controlplane.v1.EmailMailboxDiagnostic
+	128,  // 1262: controlplane.v1.CreateEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	895,  // 1263: controlplane.v1.CreateEmailMailboxDraftRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
+	898,  // 1264: controlplane.v1.CreateEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	128,  // 1265: controlplane.v1.SaveEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	895,  // 1266: controlplane.v1.SaveEmailMailboxDraftRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
+	898,  // 1267: controlplane.v1.SaveEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	128,  // 1268: controlplane.v1.ValidateEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	898,  // 1269: controlplane.v1.ValidateEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	128,  // 1270: controlplane.v1.PublishEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	898,  // 1271: controlplane.v1.PublishEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	128,  // 1272: controlplane.v1.DiscardEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	898,  // 1273: controlplane.v1.DiscardEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	128,  // 1274: controlplane.v1.BindEmailMailboxConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	898,  // 1275: controlplane.v1.BindEmailMailboxConfigurationResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	128,  // 1276: controlplane.v1.UnbindEmailMailboxConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	897,  // 1277: controlplane.v1.UnbindEmailMailboxConfigurationResponse.publication:type_name -> controlplane.v1.EmailMailboxPublication
+	108,  // 1278: controlplane.v1.EmailMailboxCredential.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
+	128,  // 1279: controlplane.v1.ConfigureEmailMailboxCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
+	108,  // 1280: controlplane.v1.ConfigureEmailMailboxCredentialRequest.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
+	926,  // 1281: controlplane.v1.ConfigureEmailMailboxCredentialResponse.credential:type_name -> controlplane.v1.EmailMailboxCredential
+	461,  // 1282: controlplane.v1.EmailExecutionBinding.lease:type_name -> controlplane.v1.WorkLease
+	101,  // 1283: controlplane.v1.EmailAuthorizationScope.operations:type_name -> controlplane.v1.EmailOperation
+	929,  // 1284: controlplane.v1.ResolveEmailAuthorizationRequest.binding:type_name -> controlplane.v1.EmailExecutionBinding
+	101,  // 1285: controlplane.v1.ResolveEmailAuthorizationRequest.operation:type_name -> controlplane.v1.EmailOperation
+	101,  // 1286: controlplane.v1.ResolveEmailAuthorizationResponse.operation:type_name -> controlplane.v1.EmailOperation
+	109,  // 1287: controlplane.v1.ResolveEmailAuthorizationResponse.policy:type_name -> controlplane.v1.EmailApprovalPolicy
+	930,  // 1288: controlplane.v1.ResolveEmailAuthorizationResponse.user_scope:type_name -> controlplane.v1.EmailAuthorizationScope
+	930,  // 1289: controlplane.v1.ResolveEmailAuthorizationResponse.agent_scope:type_name -> controlplane.v1.EmailAuthorizationScope
+	930,  // 1290: controlplane.v1.ResolveEmailAuthorizationResponse.connection_scope:type_name -> controlplane.v1.EmailAuthorizationScope
+	930,  // 1291: controlplane.v1.ResolveEmailAuthorizationResponse.resource_scope:type_name -> controlplane.v1.EmailAuthorizationScope
+	1080, // 1292: controlplane.v1.ResolveEmailAuthorizationResponse.expires_at:type_name -> google.protobuf.Timestamp
+	929,  // 1293: controlplane.v1.ResolveEmailAuthorizationResponse.binding:type_name -> controlplane.v1.EmailExecutionBinding
+	110,  // 1294: controlplane.v1.EmailEffectReceipt.outcome:type_name -> controlplane.v1.EmailEffectOutcome
+	1080, // 1295: controlplane.v1.EmailEffectReceipt.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1296: controlplane.v1.EmailEffectReceipt.updated_at:type_name -> google.protobuf.Timestamp
+	128,  // 1297: controlplane.v1.ReportEmailEffectReceiptRequest.mutation:type_name -> controlplane.v1.MutationContext
+	929,  // 1298: controlplane.v1.ReportEmailEffectReceiptRequest.binding:type_name -> controlplane.v1.EmailExecutionBinding
+	110,  // 1299: controlplane.v1.ReportEmailEffectReceiptRequest.outcome:type_name -> controlplane.v1.EmailEffectOutcome
+	933,  // 1300: controlplane.v1.ReportEmailEffectReceiptResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
+	110,  // 1301: controlplane.v1.EmailReconciliationDecision.outcome:type_name -> controlplane.v1.EmailEffectOutcome
+	1080, // 1302: controlplane.v1.EmailReconciliationDecision.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1303: controlplane.v1.EmailReconciliationDecision.expires_at:type_name -> google.protobuf.Timestamp
+	128,  // 1304: controlplane.v1.ReconcileEmailEffectRequest.mutation:type_name -> controlplane.v1.MutationContext
+	110,  // 1305: controlplane.v1.ReconcileEmailEffectRequest.outcome:type_name -> controlplane.v1.EmailEffectOutcome
+	936,  // 1306: controlplane.v1.ReconcileEmailEffectResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
+	936,  // 1307: controlplane.v1.ResolveEmailReconciliationResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
+	933,  // 1308: controlplane.v1.ResolveEmailReconciliationResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
+	933,  // 1309: controlplane.v1.GetEmailEffectReceiptResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
+	936,  // 1310: controlplane.v1.GetEmailEffectReceiptResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
+	1080, // 1311: controlplane.v1.MemoryRecordSpecification.retention_until:type_name -> google.protobuf.Timestamp
+	884,  // 1312: controlplane.v1.MemoryRecordRevision.provenance:type_name -> controlplane.v1.ContextProvenance
+	1080, // 1313: controlplane.v1.MemoryRecordRevision.retention_until:type_name -> google.protobuf.Timestamp
+	97,   // 1314: controlplane.v1.KodexMemoryRecord.state:type_name -> controlplane.v1.ContextResourceState
+	945,  // 1315: controlplane.v1.KodexMemoryRecord.current_revision:type_name -> controlplane.v1.MemoryRecordRevision
+	1080, // 1316: controlplane.v1.KodexMemoryRecord.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1317: controlplane.v1.KodexMemoryRecord.updated_at:type_name -> google.protobuf.Timestamp
+	97,   // 1318: controlplane.v1.ListSkillBundlesRequest.state:type_name -> controlplane.v1.ContextResourceState
+	129,  // 1319: controlplane.v1.ListSkillBundlesRequest.page:type_name -> controlplane.v1.PageRequest
+	889,  // 1320: controlplane.v1.ListSkillBundlesResponse.bundles:type_name -> controlplane.v1.SkillBundle
+	130,  // 1321: controlplane.v1.ListSkillBundlesResponse.page:type_name -> controlplane.v1.PageInfo
+	889,  // 1322: controlplane.v1.GetSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	129,  // 1323: controlplane.v1.ListSkillBundleRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	888,  // 1324: controlplane.v1.ListSkillBundleRevisionsResponse.revisions:type_name -> controlplane.v1.SkillBundleRevision
+	130,  // 1325: controlplane.v1.ListSkillBundleRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	97,   // 1326: controlplane.v1.ListMemoryRecordsRequest.state:type_name -> controlplane.v1.ContextResourceState
+	129,  // 1327: controlplane.v1.ListMemoryRecordsRequest.page:type_name -> controlplane.v1.PageRequest
+	946,  // 1328: controlplane.v1.ListMemoryRecordsResponse.records:type_name -> controlplane.v1.KodexMemoryRecord
+	130,  // 1329: controlplane.v1.ListMemoryRecordsResponse.page:type_name -> controlplane.v1.PageInfo
+	946,  // 1330: controlplane.v1.GetMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	129,  // 1331: controlplane.v1.ListMemoryRecordRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	945,  // 1332: controlplane.v1.ListMemoryRecordRevisionsResponse.revisions:type_name -> controlplane.v1.MemoryRecordRevision
+	130,  // 1333: controlplane.v1.ListMemoryRecordRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	128,  // 1334: controlplane.v1.CreateSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	887,  // 1335: controlplane.v1.CreateSkillBundleDraftRequest.specification:type_name -> controlplane.v1.SkillBundleSpecification
+	128,  // 1336: controlplane.v1.SaveSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	887,  // 1337: controlplane.v1.SaveSkillBundleDraftRequest.specification:type_name -> controlplane.v1.SkillBundleSpecification
+	128,  // 1338: controlplane.v1.ReviewSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	100,  // 1339: controlplane.v1.ReviewSkillBundleDraftRequest.decision:type_name -> controlplane.v1.SkillReviewDecision
+	128,  // 1340: controlplane.v1.CreateMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	944,  // 1341: controlplane.v1.CreateMemoryRecordRequest.specification:type_name -> controlplane.v1.MemoryRecordSpecification
+	128,  // 1342: controlplane.v1.ReviseMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	944,  // 1343: controlplane.v1.ReviseMemoryRecordRequest.specification:type_name -> controlplane.v1.MemoryRecordSpecification
+	128,  // 1344: controlplane.v1.ValidateSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1345: controlplane.v1.PublishSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1346: controlplane.v1.DiscardSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1347: controlplane.v1.ArchiveSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1348: controlplane.v1.RestoreSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1349: controlplane.v1.PurgeSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1350: controlplane.v1.BindAgentSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	943,  // 1351: controlplane.v1.BindAgentSkillBundleResponse.binding:type_name -> controlplane.v1.AgentContextBinding
+	128,  // 1352: controlplane.v1.UnbindAgentSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	943,  // 1353: controlplane.v1.UnbindAgentSkillBundleResponse.binding:type_name -> controlplane.v1.AgentContextBinding
+	128,  // 1354: controlplane.v1.ArchiveMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1355: controlplane.v1.RestoreMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1356: controlplane.v1.PurgeMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	128,  // 1357: controlplane.v1.BindAgentMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	943,  // 1358: controlplane.v1.BindAgentMemoryRecordResponse.binding:type_name -> controlplane.v1.AgentContextBinding
+	128,  // 1359: controlplane.v1.UnbindAgentMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	943,  // 1360: controlplane.v1.UnbindAgentMemoryRecordResponse.binding:type_name -> controlplane.v1.AgentContextBinding
+	889,  // 1361: controlplane.v1.CreateSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	889,  // 1362: controlplane.v1.SaveSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	889,  // 1363: controlplane.v1.ValidateSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	889,  // 1364: controlplane.v1.ReviewSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	889,  // 1365: controlplane.v1.PublishSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	889,  // 1366: controlplane.v1.DiscardSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	889,  // 1367: controlplane.v1.ArchiveSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	889,  // 1368: controlplane.v1.RestoreSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	889,  // 1369: controlplane.v1.PurgeSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	946,  // 1370: controlplane.v1.CreateMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	946,  // 1371: controlplane.v1.ReviseMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	946,  // 1372: controlplane.v1.ArchiveMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	946,  // 1373: controlplane.v1.RestoreMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	946,  // 1374: controlplane.v1.PurgeMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	995,  // 1375: controlplane.v1.SystemSTTConfiguration.parameters:type_name -> controlplane.v1.SystemSTTParameters
+	996,  // 1376: controlplane.v1.GetSystemSTTConfigurationResponse.configuration:type_name -> controlplane.v1.SystemSTTConfiguration
+	999,  // 1377: controlplane.v1.ObserveProviderModelCatalogRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	68,   // 1378: controlplane.v1.ObserveProviderModelCatalogRequest.authorization_method:type_name -> controlplane.v1.ProviderAuthorizationMethod
+	1080, // 1379: controlplane.v1.ObserveProviderModelCatalogRequest.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 1380: controlplane.v1.ObserveProviderModelCatalogResponse.observed_at:type_name -> google.protobuf.Timestamp
+	111,  // 1381: controlplane.v1.ObserveProviderModelCatalogResponse.source:type_name -> controlplane.v1.ProviderModelCatalogSource
+	1001, // 1382: controlplane.v1.ObserveProviderModelCatalogResponse.models:type_name -> controlplane.v1.ProviderModelCatalogRecord
+	112,  // 1383: controlplane.v1.ObserveProviderModelCatalogResponse.failure:type_name -> controlplane.v1.ProviderModelCatalogFailure
+	1080, // 1384: controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse.expires_at:type_name -> google.protobuf.Timestamp
+	113,  // 1385: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest.mode:type_name -> controlplane.v1.ProviderAuthorizationObservationMode
+	69,   // 1386: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.state:type_name -> controlplane.v1.ProviderAuthorizationState
+	999,  // 1387: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	114,  // 1388: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.object_state:type_name -> controlplane.v1.ProviderAuthorizationObjectState
+	1008, // 1389: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.pending_object:type_name -> controlplane.v1.ProviderAuthorizationObjectDescriptor
+	1007, // 1390: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.absent_object:type_name -> controlplane.v1.ProviderAuthorizationAbsenceDescriptor
+	999,  // 1391: controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	999,  // 1392: controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	128,  // 1393: controlplane.v1.CommitProviderCredentialRefreshRequest.mutation:type_name -> controlplane.v1.MutationContext
+	458,  // 1394: controlplane.v1.CommitProviderCredentialRefreshResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
+	999,  // 1395: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	1008, // 1396: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.pending_object:type_name -> controlplane.v1.ProviderAuthorizationObjectDescriptor
+	115,  // 1397: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.target_kind:type_name -> controlplane.v1.ProviderCredentialCleanupTargetKind
+	1007, // 1398: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.absent_object:type_name -> controlplane.v1.ProviderAuthorizationAbsenceDescriptor
+	1017, // 1399: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.recovery_identity:type_name -> controlplane.v1.ProviderCredentialCleanupRecoveryIdentity
+	999,  // 1400: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse.produced_credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	1080, // 1401: controlplane.v1.CredentialProjectionAuthority.expires_at:type_name -> google.protobuf.Timestamp
+	1020, // 1402: controlplane.v1.ResolveRuntimeCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
+	458,  // 1403: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
+	698,  // 1404: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.runtime_secrets:type_name -> controlplane.v1.RuntimeSecretDescriptor
+	1080, // 1405: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
+	1020, // 1406: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
+	1020, // 1407: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
+	458,  // 1408: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
+	698,  // 1409: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.runtime_secrets:type_name -> controlplane.v1.RuntimeSecretDescriptor
+	1020, // 1410: controlplane.v1.ResolveTranscriptionCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
+	458,  // 1411: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
+	1080, // 1412: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
+	116,  // 1413: controlplane.v1.ManagedConfigurationGitSource.state:type_name -> controlplane.v1.ManagedConfigurationSourceState
+	1080, // 1414: controlplane.v1.ManagedConfigurationGitSource.synced_at:type_name -> google.protobuf.Timestamp
+	118,  // 1415: controlplane.v1.ManagedConfigurationGitSource.failure_code:type_name -> controlplane.v1.ManagedConfigurationSourceFailure
+	128,  // 1416: controlplane.v1.ConfigureRoleImageGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1030, // 1417: controlplane.v1.ConfigureRoleImageGitSourceRequest.source:type_name -> controlplane.v1.ManagedConfigurationGitSourceInput
+	808,  // 1418: controlplane.v1.ConfigureRoleImageGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	128,  // 1419: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1030, // 1420: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest.source:type_name -> controlplane.v1.ManagedConfigurationGitSourceInput
+	808,  // 1421: controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	128,  // 1422: controlplane.v1.RefreshRoleImageGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1423: controlplane.v1.RefreshRoleImageGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	128,  // 1424: controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	808,  // 1425: controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	1080, // 1426: controlplane.v1.ManagedConfigurationSourceLease.expires_at:type_name -> google.protobuf.Timestamp
+	1039, // 1427: controlplane.v1.ManagedConfigurationSourceWork.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	86,   // 1428: controlplane.v1.ManagedConfigurationSourceWork.kind:type_name -> controlplane.v1.ManagedConfigurationKind
+	1081, // 1429: controlplane.v1.ManagedConfigurationSourceWork.public_configuration:type_name -> google.protobuf.Struct
+	169,  // 1430: controlplane.v1.ManagedConfigurationSourceWork.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
+	1080, // 1431: controlplane.v1.ManagedConfigurationSourceWork.deadline:type_name -> google.protobuf.Timestamp
+	1040, // 1432: controlplane.v1.ClaimManagedConfigurationSourceWorkResponse.work:type_name -> controlplane.v1.ManagedConfigurationSourceWork
+	1039, // 1433: controlplane.v1.RenewManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	1039, // 1434: controlplane.v1.RenewManagedConfigurationSourceWorkResponse.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	1039, // 1435: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	117,  // 1436: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest.ancestry:type_name -> controlplane.v1.ManagedConfigurationSourceAncestry
+	1029, // 1437: controlplane.v1.CompleteManagedConfigurationSourceWorkResponse.source:type_name -> controlplane.v1.ManagedConfigurationGitSource
+	1039, // 1438: controlplane.v1.FailManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	118,  // 1439: controlplane.v1.FailManagedConfigurationSourceWorkRequest.failure_code:type_name -> controlplane.v1.ManagedConfigurationSourceFailure
+	1029, // 1440: controlplane.v1.FailManagedConfigurationSourceWorkResponse.source:type_name -> controlplane.v1.ManagedConfigurationGitSource
+	122,  // 1441: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability.action:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackAction
+	123,  // 1442: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability.reason:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackActionReason
+	86,   // 1443: controlplane.v1.ManagedConfigurationGitWriteBack.kind:type_name -> controlplane.v1.ManagedConfigurationKind
+	119,  // 1444: controlplane.v1.ManagedConfigurationGitWriteBack.state:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackState
+	121,  // 1445: controlplane.v1.ManagedConfigurationGitWriteBack.failure_code:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackFailure
+	1080, // 1446: controlplane.v1.ManagedConfigurationGitWriteBack.created_at:type_name -> google.protobuf.Timestamp
+	1080, // 1447: controlplane.v1.ManagedConfigurationGitWriteBack.expires_at:type_name -> google.protobuf.Timestamp
+	1080, // 1448: controlplane.v1.ManagedConfigurationGitWriteBack.approved_at:type_name -> google.protobuf.Timestamp
+	1080, // 1449: controlplane.v1.ManagedConfigurationGitWriteBack.completed_at:type_name -> google.protobuf.Timestamp
+	1049, // 1450: controlplane.v1.ManagedConfigurationGitWriteBack.next_actions:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability
+	1080, // 1451: controlplane.v1.ManagedConfigurationGitWriteBack.branch_confirmed_at:type_name -> google.protobuf.Timestamp
+	1080, // 1452: controlplane.v1.ManagedConfigurationGitWriteBack.pull_request_confirmed_at:type_name -> google.protobuf.Timestamp
+	128,  // 1453: controlplane.v1.PrepareRoleImageGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1050, // 1454: controlplane.v1.PrepareRoleImageGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	128,  // 1455: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1050, // 1456: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	128,  // 1457: controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1050, // 1458: controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	128,  // 1459: controlplane.v1.RejectManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1050, // 1460: controlplane.v1.RejectManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	128,  // 1461: controlplane.v1.CancelManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1050, // 1462: controlplane.v1.CancelManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	1050, // 1463: controlplane.v1.GetManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	129,  // 1464: controlplane.v1.ListManagedConfigurationGitWriteBacksRequest.page:type_name -> controlplane.v1.PageRequest
+	1050, // 1465: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse.proposals:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	130,  // 1466: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse.page:type_name -> controlplane.v1.PageInfo
+	1080, // 1467: controlplane.v1.ManagedConfigurationGitWriteBackLease.expires_at:type_name -> google.protobuf.Timestamp
+	1065, // 1468: controlplane.v1.ManagedConfigurationGitWriteBackWork.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	1050, // 1469: controlplane.v1.ManagedConfigurationGitWriteBackWork.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	124,  // 1470: controlplane.v1.ManagedConfigurationGitWriteBackWork.mode:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackWorkMode
+	120,  // 1471: controlplane.v1.ManagedConfigurationGitWriteBackWork.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
+	1081, // 1472: controlplane.v1.ManagedConfigurationGitWriteBackWork.public_configuration:type_name -> google.protobuf.Struct
+	169,  // 1473: controlplane.v1.ManagedConfigurationGitWriteBackWork.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
+	1080, // 1474: controlplane.v1.ManagedConfigurationGitWriteBackWork.commit_time:type_name -> google.protobuf.Timestamp
+	1080, // 1475: controlplane.v1.ManagedConfigurationGitWriteBackWork.effect_started_at:type_name -> google.protobuf.Timestamp
+	1080, // 1476: controlplane.v1.ManagedConfigurationGitWriteBackWork.deadline:type_name -> google.protobuf.Timestamp
+	1066, // 1477: controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse.work:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackWork
+	1065, // 1478: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	1065, // 1479: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	1065, // 1480: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	120,  // 1481: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
+	1050, // 1482: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	1065, // 1483: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	120,  // 1484: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
+	1050, // 1485: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	1065, // 1486: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	121,  // 1487: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest.failure_code:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackFailure
+	1050, // 1488: controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	166,  // 1489: controlplane.v1.AssistantIntegrationDefinition.configuration_fields:type_name -> controlplane.v1.IntegrationConfigurationField
+	900,  // 1490: controlplane.v1.PlatformQueryService.ListEmailMailboxConfigurations:input_type -> controlplane.v1.ListEmailMailboxConfigurationsRequest
+	902,  // 1491: controlplane.v1.PlatformQueryService.GetEmailMailboxConfiguration:input_type -> controlplane.v1.GetEmailMailboxConfigurationRequest
+	904,  // 1492: controlplane.v1.PlatformQueryService.ListEmailMailboxCredentials:input_type -> controlplane.v1.ListEmailMailboxCredentialsRequest
+	906,  // 1493: controlplane.v1.PlatformQueryService.GetEmailMailboxCredentialReceipt:input_type -> controlplane.v1.GetEmailMailboxCredentialReceiptRequest
+	908,  // 1494: controlplane.v1.PlatformQueryService.PreviewEmailMailboxConfiguration:input_type -> controlplane.v1.PreviewEmailMailboxConfigurationRequest
+	689,  // 1495: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraftImpact:input_type -> controlplane.v1.GetRuntimeSecretDraftImpactRequest
+	584,  // 1496: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraft:input_type -> controlplane.v1.GetRuntimeSecretDraftRequest
+	421,  // 1497: controlplane.v1.PlatformQueryService.GetRuntimeRevisionDiff:input_type -> controlplane.v1.GetRuntimeRevisionDiffRequest
+	941,  // 1498: controlplane.v1.PlatformQueryService.GetEmailEffectReceipt:input_type -> controlplane.v1.GetEmailEffectReceiptRequest
+	947,  // 1499: controlplane.v1.PlatformQueryService.ListSkillBundles:input_type -> controlplane.v1.ListSkillBundlesRequest
+	949,  // 1500: controlplane.v1.PlatformQueryService.GetSkillBundle:input_type -> controlplane.v1.GetSkillBundleRequest
+	951,  // 1501: controlplane.v1.PlatformQueryService.ListSkillBundleRevisions:input_type -> controlplane.v1.ListSkillBundleRevisionsRequest
+	953,  // 1502: controlplane.v1.PlatformQueryService.ListMemoryRecords:input_type -> controlplane.v1.ListMemoryRecordsRequest
+	955,  // 1503: controlplane.v1.PlatformQueryService.GetMemoryRecord:input_type -> controlplane.v1.GetMemoryRecordRequest
+	957,  // 1504: controlplane.v1.PlatformQueryService.ListMemoryRecordRevisions:input_type -> controlplane.v1.ListMemoryRecordRevisionsRequest
+	187,  // 1505: controlplane.v1.PlatformQueryService.GetBootstrapState:input_type -> controlplane.v1.GetBootstrapStateRequest
+	189,  // 1506: controlplane.v1.PlatformQueryService.GetPlatformEventCursor:input_type -> controlplane.v1.GetPlatformEventCursorRequest
+	191,  // 1507: controlplane.v1.PlatformQueryService.GetOverview:input_type -> controlplane.v1.GetOverviewRequest
+	193,  // 1508: controlplane.v1.PlatformQueryService.ListPlatformCapabilities:input_type -> controlplane.v1.ListPlatformCapabilitiesRequest
+	195,  // 1509: controlplane.v1.PlatformQueryService.ListRuntimeSelections:input_type -> controlplane.v1.ListRuntimeSelectionsRequest
+	198,  // 1510: controlplane.v1.PlatformQueryService.SearchPlatform:input_type -> controlplane.v1.SearchPlatformRequest
+	203,  // 1511: controlplane.v1.PlatformQueryService.ListVFSNodes:input_type -> controlplane.v1.ListVFSNodesRequest
+	205,  // 1512: controlplane.v1.PlatformQueryService.SearchVFS:input_type -> controlplane.v1.SearchVFSRequest
+	207,  // 1513: controlplane.v1.PlatformQueryService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
+	209,  // 1514: controlplane.v1.PlatformQueryService.ListTrashedProjects:input_type -> controlplane.v1.ListTrashedProjectsRequest
+	211,  // 1515: controlplane.v1.PlatformQueryService.GetProject:input_type -> controlplane.v1.GetProjectRequest
+	223,  // 1516: controlplane.v1.PlatformQueryService.ListPlatformMemberships:input_type -> controlplane.v1.ListPlatformMembershipsRequest
+	225,  // 1517: controlplane.v1.PlatformQueryService.ListPlatformMembershipCandidates:input_type -> controlplane.v1.ListPlatformMembershipCandidatesRequest
+	233,  // 1518: controlplane.v1.PlatformQueryService.ListProjectMemberships:input_type -> controlplane.v1.ListProjectMembershipsRequest
+	235,  // 1519: controlplane.v1.PlatformQueryService.ListProjectMembershipCandidates:input_type -> controlplane.v1.ListProjectMembershipCandidatesRequest
+	243,  // 1520: controlplane.v1.PlatformQueryService.ListAgents:input_type -> controlplane.v1.ListAgentsRequest
+	245,  // 1521: controlplane.v1.PlatformQueryService.GetAgent:input_type -> controlplane.v1.GetAgentRequest
+	552,  // 1522: controlplane.v1.PlatformQueryService.ListAgentInstructionVersions:input_type -> controlplane.v1.ListAgentInstructionVersionsRequest
+	267,  // 1523: controlplane.v1.PlatformQueryService.ListWorkflows:input_type -> controlplane.v1.ListWorkflowsRequest
+	269,  // 1524: controlplane.v1.PlatformQueryService.GetWorkflow:input_type -> controlplane.v1.GetWorkflowRequest
+	281,  // 1525: controlplane.v1.PlatformQueryService.ListRuns:input_type -> controlplane.v1.ListRunsRequest
+	283,  // 1526: controlplane.v1.PlatformQueryService.GetRun:input_type -> controlplane.v1.GetRunRequest
+	285,  // 1527: controlplane.v1.PlatformQueryService.GetRunGraph:input_type -> controlplane.v1.GetRunGraphRequest
+	287,  // 1528: controlplane.v1.PlatformQueryService.ListRunEvents:input_type -> controlplane.v1.ListRunEventsRequest
+	297,  // 1529: controlplane.v1.PlatformQueryService.ListOwnerGates:input_type -> controlplane.v1.ListOwnerGatesRequest
+	299,  // 1530: controlplane.v1.PlatformQueryService.GetOwnerGate:input_type -> controlplane.v1.GetOwnerGateRequest
+	303,  // 1531: controlplane.v1.PlatformQueryService.ListArtifacts:input_type -> controlplane.v1.ListArtifactsRequest
+	305,  // 1532: controlplane.v1.PlatformQueryService.GetArtifact:input_type -> controlplane.v1.GetArtifactRequest
+	787,  // 1533: controlplane.v1.PlatformQueryService.GetArtifactImpact:input_type -> controlplane.v1.GetArtifactImpactRequest
+	307,  // 1534: controlplane.v1.PlatformQueryService.GetAttachmentSet:input_type -> controlplane.v1.GetAttachmentSetRequest
+	338,  // 1535: controlplane.v1.PlatformQueryService.ListSchedules:input_type -> controlplane.v1.ListSchedulesRequest
+	554,  // 1536: controlplane.v1.PlatformQueryService.GetSchedule:input_type -> controlplane.v1.GetScheduleRequest
+	779,  // 1537: controlplane.v1.PlatformQueryService.ListScheduleRevisions:input_type -> controlplane.v1.ListScheduleRevisionsRequest
+	781,  // 1538: controlplane.v1.PlatformQueryService.ListScheduleRuns:input_type -> controlplane.v1.ListScheduleRunsRequest
+	516,  // 1539: controlplane.v1.PlatformQueryService.PreviewSchedule:input_type -> controlplane.v1.PreviewScheduleRequest
+	752,  // 1540: controlplane.v1.PlatformQueryService.ListProviderAccounts:input_type -> controlplane.v1.ListProviderAccountsRequest
+	754,  // 1541: controlplane.v1.PlatformQueryService.GetProviderAccount:input_type -> controlplane.v1.GetProviderAccountRequest
+	747,  // 1542: controlplane.v1.PlatformQueryService.ListProviderAccountBlockers:input_type -> controlplane.v1.ListProviderAccountBlockersRequest
+	346,  // 1543: controlplane.v1.PlatformQueryService.ListIntegrationDefinitions:input_type -> controlplane.v1.ListIntegrationDefinitionsRequest
+	348,  // 1544: controlplane.v1.PlatformQueryService.ListIntegrationConnections:input_type -> controlplane.v1.ListIntegrationConnectionsRequest
+	356,  // 1545: controlplane.v1.PlatformQueryService.ListIntegrationGrantConnectionCandidates:input_type -> controlplane.v1.ListIntegrationGrantConnectionCandidatesRequest
+	358,  // 1546: controlplane.v1.PlatformQueryService.ListIntegrationGrantProjectCandidates:input_type -> controlplane.v1.ListIntegrationGrantProjectCandidatesRequest
+	360,  // 1547: controlplane.v1.PlatformQueryService.ListIntegrationGrantRecipientCandidates:input_type -> controlplane.v1.ListIntegrationGrantRecipientCandidatesRequest
+	362,  // 1548: controlplane.v1.PlatformQueryService.ListIntegrationGrantCapabilityCandidates:input_type -> controlplane.v1.ListIntegrationGrantCapabilityCandidatesRequest
+	364,  // 1549: controlplane.v1.PlatformQueryService.GetIntegrationConnection:input_type -> controlplane.v1.GetIntegrationConnectionRequest
+	414,  // 1550: controlplane.v1.PlatformQueryService.GetAdministration:input_type -> controlplane.v1.GetAdministrationRequest
+	416,  // 1551: controlplane.v1.PlatformQueryService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
+	558,  // 1552: controlplane.v1.PlatformQueryService.GetAgentRuntimeConfiguration:input_type -> controlplane.v1.GetAgentRuntimeConfigurationRequest
+	560,  // 1553: controlplane.v1.PlatformQueryService.GetAgentEffectiveCapabilities:input_type -> controlplane.v1.GetAgentEffectiveCapabilitiesRequest
+	562,  // 1554: controlplane.v1.PlatformQueryService.ListArtifactBindingTargets:input_type -> controlplane.v1.ListArtifactBindingTargetsRequest
+	564,  // 1555: controlplane.v1.PlatformQueryService.GetRunAttachmentEligibility:input_type -> controlplane.v1.GetRunAttachmentEligibilityRequest
+	568,  // 1556: controlplane.v1.PlatformQueryService.ListConfigOverlayRevisions:input_type -> controlplane.v1.ListConfigOverlayRevisionsRequest
+	570,  // 1557: controlplane.v1.PlatformQueryService.GetConfigOverlayRevision:input_type -> controlplane.v1.GetConfigOverlayRevisionRequest
+	572,  // 1558: controlplane.v1.PlatformQueryService.ListAgentRuntimeConfigurationVersions:input_type -> controlplane.v1.ListAgentRuntimeConfigurationVersionsRequest
+	574,  // 1559: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentSets:input_type -> controlplane.v1.ListRuntimeEnvironmentSetsRequest
+	576,  // 1560: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentSet:input_type -> controlplane.v1.GetRuntimeEnvironmentSetRequest
+	578,  // 1561: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentVersions:input_type -> controlplane.v1.ListRuntimeEnvironmentVersionsRequest
+	716,  // 1562: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentReadiness:input_type -> controlplane.v1.GetRuntimeEnvironmentReadinessRequest
+	718,  // 1563: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentAgents:input_type -> controlplane.v1.ListRuntimeEnvironmentAgentsRequest
+	580,  // 1564: controlplane.v1.PlatformQueryService.ListTemplateVariables:input_type -> controlplane.v1.ListTemplateVariablesRequest
+	729,  // 1565: controlplane.v1.PlatformQueryService.ListProviderDefinitions:input_type -> controlplane.v1.ListProviderDefinitionsRequest
+	732,  // 1566: controlplane.v1.PlatformQueryService.ListModelCapabilities:input_type -> controlplane.v1.ListModelCapabilitiesRequest
+	736,  // 1567: controlplane.v1.PlatformQueryService.ListRoleImageRecipeRevisions:input_type -> controlplane.v1.ListRoleImageRecipeRevisionsRequest
+	794,  // 1568: controlplane.v1.PlatformQueryService.ValidatePromptTemplate:input_type -> controlplane.v1.ValidatePromptTemplateRequest
+	796,  // 1569: controlplane.v1.PlatformQueryService.PreviewPromptTemplate:input_type -> controlplane.v1.PreviewPromptTemplateRequest
+	612,  // 1570: controlplane.v1.PlatformQueryService.ListRuntimeSecrets:input_type -> controlplane.v1.ListRuntimeSecretsRequest
+	614,  // 1571: controlplane.v1.PlatformQueryService.GetRuntimeSecret:input_type -> controlplane.v1.GetRuntimeSecretRequest
+	878,  // 1572: controlplane.v1.PlatformQueryService.ListManagedConfigurationHistory:input_type -> controlplane.v1.ListManagedConfigurationHistoryRequest
+	879,  // 1573: controlplane.v1.PlatformQueryService.ListManagedConfigurations:input_type -> controlplane.v1.ListManagedConfigurationsRequest
+	882,  // 1574: controlplane.v1.PlatformQueryService.GetManagedConfigurationImpact:input_type -> controlplane.v1.GetManagedConfigurationImpactRequest
+	856,  // 1575: controlplane.v1.PlatformQueryService.GetRoleImageImpactPlan:input_type -> controlplane.v1.GetRoleImageImpactPlanRequest
+	852,  // 1576: controlplane.v1.PlatformQueryService.GetRevisionImpactPlan:input_type -> controlplane.v1.GetRevisionImpactPlanRequest
+	1061, // 1577: controlplane.v1.PlatformQueryService.GetManagedConfigurationGitWriteBack:input_type -> controlplane.v1.GetManagedConfigurationGitWriteBackRequest
+	1063, // 1578: controlplane.v1.PlatformQueryService.ListManagedConfigurationGitWriteBacks:input_type -> controlplane.v1.ListManagedConfigurationGitWriteBacksRequest
+	997,  // 1579: controlplane.v1.PlatformQueryService.GetSystemSTTConfiguration:input_type -> controlplane.v1.GetSystemSTTConfigurationRequest
+	653,  // 1580: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentDraft:input_type -> controlplane.v1.GetRuntimeEnvironmentDraftRequest
+	673,  // 1581: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentImpact:input_type -> controlplane.v1.GetRuntimeEnvironmentImpactRequest
+	692,  // 1582: controlplane.v1.PlatformQueryService.GetRuntimeSecretImpact:input_type -> controlplane.v1.GetRuntimeSecretImpactRequest
+	549,  // 1583: controlplane.v1.PlatformQueryService.ListInteractionIdentities:input_type -> controlplane.v1.ListInteractionIdentitiesRequest
+	910,  // 1584: controlplane.v1.PlatformCommandService.CreateEmailMailboxDraft:input_type -> controlplane.v1.CreateEmailMailboxDraftRequest
+	912,  // 1585: controlplane.v1.PlatformCommandService.SaveEmailMailboxDraft:input_type -> controlplane.v1.SaveEmailMailboxDraftRequest
+	914,  // 1586: controlplane.v1.PlatformCommandService.ValidateEmailMailboxDraft:input_type -> controlplane.v1.ValidateEmailMailboxDraftRequest
+	916,  // 1587: controlplane.v1.PlatformCommandService.PublishEmailMailboxDraft:input_type -> controlplane.v1.PublishEmailMailboxDraftRequest
+	918,  // 1588: controlplane.v1.PlatformCommandService.DiscardEmailMailboxDraft:input_type -> controlplane.v1.DiscardEmailMailboxDraftRequest
+	920,  // 1589: controlplane.v1.PlatformCommandService.BindEmailMailboxConfiguration:input_type -> controlplane.v1.BindEmailMailboxConfigurationRequest
+	922,  // 1590: controlplane.v1.PlatformCommandService.UnbindEmailMailboxConfiguration:input_type -> controlplane.v1.UnbindEmailMailboxConfigurationRequest
+	687,  // 1591: controlplane.v1.PlatformCommandService.PrepareRuntimeSecretDraftImpact:input_type -> controlplane.v1.PrepareRuntimeSecretDraftImpactRequest
+	586,  // 1592: controlplane.v1.PlatformCommandService.PrepareSaveRuntimeSecretDraft:input_type -> controlplane.v1.PrepareSaveRuntimeSecretDraftRequest
+	588,  // 1593: controlplane.v1.PlatformCommandService.PrepareValidateRuntimeSecretDraft:input_type -> controlplane.v1.PrepareValidateRuntimeSecretDraftRequest
+	590,  // 1594: controlplane.v1.PlatformCommandService.PreparePublishRuntimeSecretDraft:input_type -> controlplane.v1.PreparePublishRuntimeSecretDraftRequest
+	592,  // 1595: controlplane.v1.PlatformCommandService.PrepareDiscardRuntimeSecretDraft:input_type -> controlplane.v1.PrepareDiscardRuntimeSecretDraftRequest
+	436,  // 1596: controlplane.v1.PlatformCommandService.SavePromptTemplateDraft:input_type -> controlplane.v1.SavePromptTemplateDraftRequest
+	438,  // 1597: controlplane.v1.PlatformCommandService.DiscardPromptTemplateDraft:input_type -> controlplane.v1.DiscardPromptTemplateDraftRequest
+	440,  // 1598: controlplane.v1.PlatformCommandService.SaveRoleImageRevisionDraft:input_type -> controlplane.v1.SaveRoleImageRevisionDraftRequest
+	442,  // 1599: controlplane.v1.PlatformCommandService.DiscardRoleImageRevisionDraft:input_type -> controlplane.v1.DiscardRoleImageRevisionDraftRequest
+	444,  // 1600: controlplane.v1.PlatformCommandService.SaveIntegrationDefinitionDraft:input_type -> controlplane.v1.SaveIntegrationDefinitionDraftRequest
+	446,  // 1601: controlplane.v1.PlatformCommandService.DiscardIntegrationDefinitionDraft:input_type -> controlplane.v1.DiscardIntegrationDefinitionDraftRequest
+	448,  // 1602: controlplane.v1.PlatformCommandService.SaveSystemSTTConfigurationDraft:input_type -> controlplane.v1.SaveSystemSTTConfigurationDraftRequest
+	450,  // 1603: controlplane.v1.PlatformCommandService.DiscardSystemSTTConfigurationDraft:input_type -> controlplane.v1.DiscardSystemSTTConfigurationDraftRequest
+	937,  // 1604: controlplane.v1.PlatformCommandService.ReconcileEmailEffect:input_type -> controlplane.v1.ReconcileEmailEffectRequest
+	927,  // 1605: controlplane.v1.PlatformCommandService.ConfigureEmailMailboxCredential:input_type -> controlplane.v1.ConfigureEmailMailboxCredentialRequest
+	959,  // 1606: controlplane.v1.PlatformCommandService.CreateSkillBundleDraft:input_type -> controlplane.v1.CreateSkillBundleDraftRequest
+	960,  // 1607: controlplane.v1.PlatformCommandService.SaveSkillBundleDraft:input_type -> controlplane.v1.SaveSkillBundleDraftRequest
+	964,  // 1608: controlplane.v1.PlatformCommandService.ValidateSkillBundleDraft:input_type -> controlplane.v1.ValidateSkillBundleDraftRequest
+	961,  // 1609: controlplane.v1.PlatformCommandService.ReviewSkillBundleDraft:input_type -> controlplane.v1.ReviewSkillBundleDraftRequest
+	965,  // 1610: controlplane.v1.PlatformCommandService.PublishSkillBundleDraft:input_type -> controlplane.v1.PublishSkillBundleDraftRequest
+	966,  // 1611: controlplane.v1.PlatformCommandService.DiscardSkillBundleDraft:input_type -> controlplane.v1.DiscardSkillBundleDraftRequest
+	967,  // 1612: controlplane.v1.PlatformCommandService.ArchiveSkillBundle:input_type -> controlplane.v1.ArchiveSkillBundleRequest
+	968,  // 1613: controlplane.v1.PlatformCommandService.RestoreSkillBundle:input_type -> controlplane.v1.RestoreSkillBundleRequest
+	969,  // 1614: controlplane.v1.PlatformCommandService.PurgeSkillBundle:input_type -> controlplane.v1.PurgeSkillBundleRequest
+	970,  // 1615: controlplane.v1.PlatformCommandService.BindAgentSkillBundle:input_type -> controlplane.v1.BindAgentSkillBundleRequest
+	972,  // 1616: controlplane.v1.PlatformCommandService.UnbindAgentSkillBundle:input_type -> controlplane.v1.UnbindAgentSkillBundleRequest
+	962,  // 1617: controlplane.v1.PlatformCommandService.CreateMemoryRecord:input_type -> controlplane.v1.CreateMemoryRecordRequest
+	963,  // 1618: controlplane.v1.PlatformCommandService.ReviseMemoryRecord:input_type -> controlplane.v1.ReviseMemoryRecordRequest
+	974,  // 1619: controlplane.v1.PlatformCommandService.ArchiveMemoryRecord:input_type -> controlplane.v1.ArchiveMemoryRecordRequest
+	975,  // 1620: controlplane.v1.PlatformCommandService.RestoreMemoryRecord:input_type -> controlplane.v1.RestoreMemoryRecordRequest
+	976,  // 1621: controlplane.v1.PlatformCommandService.PurgeMemoryRecord:input_type -> controlplane.v1.PurgeMemoryRecordRequest
+	977,  // 1622: controlplane.v1.PlatformCommandService.BindAgentMemoryRecord:input_type -> controlplane.v1.BindAgentMemoryRecordRequest
+	979,  // 1623: controlplane.v1.PlatformCommandService.UnbindAgentMemoryRecord:input_type -> controlplane.v1.UnbindAgentMemoryRecordRequest
+	655,  // 1624: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentDraft:input_type -> controlplane.v1.CreateRuntimeEnvironmentDraftRequest
+	657,  // 1625: controlplane.v1.PlatformCommandService.SaveRuntimeEnvironmentDraft:input_type -> controlplane.v1.SaveRuntimeEnvironmentDraftRequest
+	659,  // 1626: controlplane.v1.PlatformCommandService.ValidateRuntimeEnvironmentDraft:input_type -> controlplane.v1.ValidateRuntimeEnvironmentDraftRequest
+	661,  // 1627: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentDraft:input_type -> controlplane.v1.PublishRuntimeEnvironmentDraftRequest
+	663,  // 1628: controlplane.v1.PlatformCommandService.DiscardRuntimeEnvironmentDraft:input_type -> controlplane.v1.DiscardRuntimeEnvironmentDraftRequest
+	675,  // 1629: controlplane.v1.PlatformCommandService.RebindRuntimeEnvironment:input_type -> controlplane.v1.RebindRuntimeEnvironmentRequest
+	695,  // 1630: controlplane.v1.PlatformCommandService.RebindRuntimeSecret:input_type -> controlplane.v1.RebindRuntimeSecretRequest
+	545,  // 1631: controlplane.v1.PlatformCommandService.BindInteractionIdentity:input_type -> controlplane.v1.BindInteractionIdentityRequest
+	547,  // 1632: controlplane.v1.PlatformCommandService.RevokeInteractionIdentity:input_type -> controlplane.v1.RevokeInteractionIdentityRequest
+	412,  // 1633: controlplane.v1.PlatformCommandService.CompleteOnboarding:input_type -> controlplane.v1.CompleteOnboardingRequest
+	213,  // 1634: controlplane.v1.PlatformCommandService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
+	215,  // 1635: controlplane.v1.PlatformCommandService.UpdateProject:input_type -> controlplane.v1.UpdateProjectRequest
+	217,  // 1636: controlplane.v1.PlatformCommandService.TrashProject:input_type -> controlplane.v1.TrashProjectRequest
+	219,  // 1637: controlplane.v1.PlatformCommandService.RestoreProject:input_type -> controlplane.v1.RestoreProjectRequest
+	221,  // 1638: controlplane.v1.PlatformCommandService.PurgeProject:input_type -> controlplane.v1.PurgeProjectRequest
+	227,  // 1639: controlplane.v1.PlatformCommandService.AddPlatformMembership:input_type -> controlplane.v1.AddPlatformMembershipRequest
+	229,  // 1640: controlplane.v1.PlatformCommandService.ChangePlatformMembership:input_type -> controlplane.v1.ChangePlatformMembershipRequest
+	231,  // 1641: controlplane.v1.PlatformCommandService.RemovePlatformMembership:input_type -> controlplane.v1.RemovePlatformMembershipRequest
+	237,  // 1642: controlplane.v1.PlatformCommandService.AddProjectMembership:input_type -> controlplane.v1.AddProjectMembershipRequest
+	239,  // 1643: controlplane.v1.PlatformCommandService.ChangeProjectMembership:input_type -> controlplane.v1.ChangeProjectMembershipRequest
+	241,  // 1644: controlplane.v1.PlatformCommandService.RemoveProjectMembership:input_type -> controlplane.v1.RemoveProjectMembershipRequest
+	247,  // 1645: controlplane.v1.PlatformCommandService.CreateAgent:input_type -> controlplane.v1.CreateAgentRequest
+	249,  // 1646: controlplane.v1.PlatformCommandService.UpdateAgent:input_type -> controlplane.v1.UpdateAgentRequest
+	251,  // 1647: controlplane.v1.PlatformCommandService.SetAgentEnabled:input_type -> controlplane.v1.SetAgentEnabledRequest
+	253,  // 1648: controlplane.v1.PlatformCommandService.ArchiveAgent:input_type -> controlplane.v1.ArchiveAgentRequest
+	789,  // 1649: controlplane.v1.PlatformCommandService.SetAgentAvatar:input_type -> controlplane.v1.SetAgentAvatarRequest
+	791,  // 1650: controlplane.v1.PlatformCommandService.RemoveAgentAvatar:input_type -> controlplane.v1.RemoveAgentAvatarRequest
+	255,  // 1651: controlplane.v1.PlatformCommandService.CreateInstructionDraft:input_type -> controlplane.v1.CreateInstructionDraftRequest
+	257,  // 1652: controlplane.v1.PlatformCommandService.ValidateInstructionDraft:input_type -> controlplane.v1.ValidateInstructionDraftRequest
+	259,  // 1653: controlplane.v1.PlatformCommandService.PublishInstructionDraft:input_type -> controlplane.v1.PublishInstructionDraftRequest
+	261,  // 1654: controlplane.v1.PlatformCommandService.RollbackInstructions:input_type -> controlplane.v1.RollbackInstructionsRequest
+	263,  // 1655: controlplane.v1.PlatformCommandService.ChangeAgentCapability:input_type -> controlplane.v1.ChangeAgentCapabilityRequest
+	265,  // 1656: controlplane.v1.PlatformCommandService.ChangeAgentIntegrationGrant:input_type -> controlplane.v1.ChangeAgentIntegrationGrantRequest
+	271,  // 1657: controlplane.v1.PlatformCommandService.CreateWorkflow:input_type -> controlplane.v1.CreateWorkflowRequest
+	273,  // 1658: controlplane.v1.PlatformCommandService.UpdateWorkflowDraft:input_type -> controlplane.v1.UpdateWorkflowDraftRequest
+	275,  // 1659: controlplane.v1.PlatformCommandService.ValidateWorkflowDraft:input_type -> controlplane.v1.ValidateWorkflowDraftRequest
+	277,  // 1660: controlplane.v1.PlatformCommandService.PublishWorkflowDraft:input_type -> controlplane.v1.PublishWorkflowDraftRequest
+	279,  // 1661: controlplane.v1.PlatformCommandService.ArchiveWorkflow:input_type -> controlplane.v1.ArchiveWorkflowRequest
+	289,  // 1662: controlplane.v1.PlatformCommandService.LaunchRun:input_type -> controlplane.v1.LaunchRunRequest
+	291,  // 1663: controlplane.v1.PlatformCommandService.AddSessionTurn:input_type -> controlplane.v1.AddSessionTurnRequest
+	293,  // 1664: controlplane.v1.PlatformCommandService.CancelRun:input_type -> controlplane.v1.CancelRunRequest
+	295,  // 1665: controlplane.v1.PlatformCommandService.RetryRun:input_type -> controlplane.v1.RetryRunRequest
+	301,  // 1666: controlplane.v1.PlatformCommandService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
+	324,  // 1667: controlplane.v1.PlatformCommandService.UploadAgentAvatar:input_type -> controlplane.v1.UploadAgentAvatarRequest
+	321,  // 1668: controlplane.v1.PlatformCommandService.UploadArtifact:input_type -> controlplane.v1.UploadArtifactRequest
+	326,  // 1669: controlplane.v1.PlatformCommandService.UploadOrganizationArtifact:input_type -> controlplane.v1.UploadOrganizationArtifactRequest
+	328,  // 1670: controlplane.v1.PlatformCommandService.DownloadArtifact:input_type -> controlplane.v1.DownloadArtifactRequest
+	330,  // 1671: controlplane.v1.PlatformCommandService.ChangeArtifactBinding:input_type -> controlplane.v1.ChangeArtifactBindingRequest
+	332,  // 1672: controlplane.v1.PlatformCommandService.DeleteArtifact:input_type -> controlplane.v1.DeleteArtifactRequest
+	334,  // 1673: controlplane.v1.PlatformCommandService.RestoreArtifact:input_type -> controlplane.v1.RestoreArtifactRequest
+	336,  // 1674: controlplane.v1.PlatformCommandService.PurgeArtifact:input_type -> controlplane.v1.PurgeArtifactRequest
+	309,  // 1675: controlplane.v1.PlatformCommandService.CreateAttachmentSetDraft:input_type -> controlplane.v1.CreateAttachmentSetDraftRequest
+	311,  // 1676: controlplane.v1.PlatformCommandService.CreateOrganizationAttachmentSetDraft:input_type -> controlplane.v1.CreateOrganizationAttachmentSetDraftRequest
+	313,  // 1677: controlplane.v1.PlatformCommandService.AddAttachmentSetItems:input_type -> controlplane.v1.AddAttachmentSetItemsRequest
+	315,  // 1678: controlplane.v1.PlatformCommandService.RemoveAttachmentSetItems:input_type -> controlplane.v1.RemoveAttachmentSetItemsRequest
+	317,  // 1679: controlplane.v1.PlatformCommandService.FinalizeAttachmentSet:input_type -> controlplane.v1.FinalizeAttachmentSetRequest
+	340,  // 1680: controlplane.v1.PlatformCommandService.CreateSchedule:input_type -> controlplane.v1.CreateScheduleRequest
+	342,  // 1681: controlplane.v1.PlatformCommandService.UpdateSchedule:input_type -> controlplane.v1.UpdateScheduleRequest
+	344,  // 1682: controlplane.v1.PlatformCommandService.SetScheduleEnabled:input_type -> controlplane.v1.SetScheduleEnabledRequest
+	556,  // 1683: controlplane.v1.PlatformCommandService.ArchiveSchedule:input_type -> controlplane.v1.ArchiveScheduleRequest
+	783,  // 1684: controlplane.v1.PlatformCommandService.DeleteSchedule:input_type -> controlplane.v1.DeleteScheduleRequest
+	756,  // 1685: controlplane.v1.PlatformCommandService.CreateProviderAccount:input_type -> controlplane.v1.CreateProviderAccountRequest
+	758,  // 1686: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:input_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationRequest
+	760,  // 1687: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:input_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyRequest
+	762,  // 1688: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:input_type -> controlplane.v1.RefreshProviderAccountAuthorizationRequest
+	764,  // 1689: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:input_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest
+	766,  // 1690: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:input_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest
+	768,  // 1691: controlplane.v1.PlatformCommandService.RevokeProviderAccount:input_type -> controlplane.v1.RevokeProviderAccountRequest
+	770,  // 1692: controlplane.v1.PlatformCommandService.DeleteProviderAccount:input_type -> controlplane.v1.DeleteProviderAccountRequest
+	772,  // 1693: controlplane.v1.PlatformCommandService.CancelProviderAccountQueuedWork:input_type -> controlplane.v1.CancelProviderAccountQueuedWorkRequest
+	777,  // 1694: controlplane.v1.PlatformCommandService.SetProviderAccountEnabled:input_type -> controlplane.v1.SetProviderAccountEnabledRequest
+	775,  // 1695: controlplane.v1.PlatformCommandService.SetProviderAccountConcurrency:input_type -> controlplane.v1.SetProviderAccountConcurrencyRequest
+	366,  // 1696: controlplane.v1.PlatformCommandService.CreateIntegrationConnection:input_type -> controlplane.v1.CreateIntegrationConnectionRequest
+	368,  // 1697: controlplane.v1.PlatformCommandService.UpdateIntegrationConnection:input_type -> controlplane.v1.UpdateIntegrationConnectionRequest
+	370,  // 1698: controlplane.v1.PlatformCommandService.DeleteIntegrationConnection:input_type -> controlplane.v1.DeleteIntegrationConnectionRequest
+	372,  // 1699: controlplane.v1.PlatformCommandService.ConfigureIntegrationConnectionCredential:input_type -> controlplane.v1.ConfigureIntegrationConnectionCredentialRequest
+	374,  // 1700: controlplane.v1.PlatformCommandService.TestIntegrationConnection:input_type -> controlplane.v1.TestIntegrationConnectionRequest
+	376,  // 1701: controlplane.v1.PlatformCommandService.SetIntegrationConnectionEnabled:input_type -> controlplane.v1.SetIntegrationConnectionEnabledRequest
+	378,  // 1702: controlplane.v1.PlatformCommandService.ChangeIntegrationGrant:input_type -> controlplane.v1.ChangeIntegrationGrantRequest
+	640,  // 1703: controlplane.v1.PlatformCommandService.PublishAgentRuntimeConfiguration:input_type -> controlplane.v1.PublishAgentRuntimeConfigurationRequest
+	642,  // 1704: controlplane.v1.PlatformCommandService.CreateConfigOverlayDraft:input_type -> controlplane.v1.CreateConfigOverlayDraftRequest
+	644,  // 1705: controlplane.v1.PlatformCommandService.ValidateConfigOverlayDraft:input_type -> controlplane.v1.ValidateConfigOverlayDraftRequest
+	646,  // 1706: controlplane.v1.PlatformCommandService.PublishConfigOverlayDraft:input_type -> controlplane.v1.PublishConfigOverlayDraftRequest
+	648,  // 1707: controlplane.v1.PlatformCommandService.RollbackConfigOverlay:input_type -> controlplane.v1.RollbackConfigOverlayRequest
+	650,  // 1708: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentSet:input_type -> controlplane.v1.CreateRuntimeEnvironmentSetRequest
+	666,  // 1709: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentVersion:input_type -> controlplane.v1.PublishRuntimeEnvironmentVersionRequest
+	668,  // 1710: controlplane.v1.PlatformCommandService.RollbackRuntimeEnvironment:input_type -> controlplane.v1.RollbackRuntimeEnvironmentRequest
+	720,  // 1711: controlplane.v1.PlatformCommandService.SetRuntimeEnvironmentEnabled:input_type -> controlplane.v1.SetRuntimeEnvironmentEnabledRequest
+	722,  // 1712: controlplane.v1.PlatformCommandService.DeleteRuntimeEnvironment:input_type -> controlplane.v1.DeleteRuntimeEnvironmentRequest
+	670,  // 1713: controlplane.v1.PlatformCommandService.BindAgentRuntimeEnvironment:input_type -> controlplane.v1.BindAgentRuntimeEnvironmentRequest
+	738,  // 1714: controlplane.v1.PlatformCommandService.PromoteRoleImage:input_type -> controlplane.v1.PromoteRoleImageRequest
+	616,  // 1715: controlplane.v1.PlatformCommandService.PrepareCreateRuntimeSecret:input_type -> controlplane.v1.PrepareCreateRuntimeSecretRequest
+	618,  // 1716: controlplane.v1.PlatformCommandService.PrepareRotateRuntimeSecret:input_type -> controlplane.v1.PrepareRotateRuntimeSecretRequest
+	620,  // 1717: controlplane.v1.PlatformCommandService.PrepareRevealRuntimeSecret:input_type -> controlplane.v1.PrepareRevealRuntimeSecretRequest
+	622,  // 1718: controlplane.v1.PlatformCommandService.PrepareRevokeRuntimeSecret:input_type -> controlplane.v1.PrepareRevokeRuntimeSecretRequest
+	826,  // 1719: controlplane.v1.PlatformCommandService.CreatePromptTemplateDraft:input_type -> controlplane.v1.CreatePromptTemplateDraftRequest
+	828,  // 1720: controlplane.v1.PlatformCommandService.ValidatePromptTemplateDraft:input_type -> controlplane.v1.ValidatePromptTemplateDraftRequest
+	830,  // 1721: controlplane.v1.PlatformCommandService.PublishPromptTemplateDraft:input_type -> controlplane.v1.PublishPromptTemplateDraftRequest
+	832,  // 1722: controlplane.v1.PlatformCommandService.RebindPromptTemplateConsumers:input_type -> controlplane.v1.RebindPromptTemplateConsumersRequest
+	834,  // 1723: controlplane.v1.PlatformCommandService.CreateRoleImageRevisionDraft:input_type -> controlplane.v1.CreateRoleImageRevisionDraftRequest
+	836,  // 1724: controlplane.v1.PlatformCommandService.ValidateRoleImageRevisionDraft:input_type -> controlplane.v1.ValidateRoleImageRevisionDraftRequest
+	838,  // 1725: controlplane.v1.PlatformCommandService.PublishRoleImageRevisionDraft:input_type -> controlplane.v1.PublishRoleImageRevisionDraftRequest
+	840,  // 1726: controlplane.v1.PlatformCommandService.RebindRoleImageConsumers:input_type -> controlplane.v1.RebindRoleImageConsumersRequest
+	854,  // 1727: controlplane.v1.PlatformCommandService.PrepareRoleImageImpactPlan:input_type -> controlplane.v1.PrepareRoleImageImpactPlanRequest
+	846,  // 1728: controlplane.v1.PlatformCommandService.PrepareEnvironmentDraftImpact:input_type -> controlplane.v1.PrepareEnvironmentDraftImpactRequest
+	848,  // 1729: controlplane.v1.PlatformCommandService.PrepareInstructionsImpact:input_type -> controlplane.v1.PrepareInstructionsImpactRequest
+	850,  // 1730: controlplane.v1.PlatformCommandService.PreparePromptTemplateImpact:input_type -> controlplane.v1.PreparePromptTemplateImpactRequest
+	858,  // 1731: controlplane.v1.PlatformCommandService.CreateIntegrationDefinitionDraft:input_type -> controlplane.v1.CreateIntegrationDefinitionDraftRequest
+	860,  // 1732: controlplane.v1.PlatformCommandService.ValidateIntegrationDefinitionDraft:input_type -> controlplane.v1.ValidateIntegrationDefinitionDraftRequest
+	862,  // 1733: controlplane.v1.PlatformCommandService.PublishIntegrationDefinitionDraft:input_type -> controlplane.v1.PublishIntegrationDefinitionDraftRequest
+	864,  // 1734: controlplane.v1.PlatformCommandService.RebindIntegrationDefinitionConsumers:input_type -> controlplane.v1.RebindIntegrationDefinitionConsumersRequest
+	866,  // 1735: controlplane.v1.PlatformCommandService.CreateSystemSTTConfigurationDraft:input_type -> controlplane.v1.CreateSystemSTTConfigurationDraftRequest
+	868,  // 1736: controlplane.v1.PlatformCommandService.ValidateSystemSTTConfigurationDraft:input_type -> controlplane.v1.ValidateSystemSTTConfigurationDraftRequest
+	870,  // 1737: controlplane.v1.PlatformCommandService.PublishSystemSTTConfigurationDraft:input_type -> controlplane.v1.PublishSystemSTTConfigurationDraftRequest
+	872,  // 1738: controlplane.v1.PlatformCommandService.RebindSystemSTTConsumers:input_type -> controlplane.v1.RebindSystemSTTConsumersRequest
+	874,  // 1739: controlplane.v1.PlatformCommandService.DetachGitManagedConfiguration:input_type -> controlplane.v1.DetachGitManagedConfigurationRequest
+	876,  // 1740: controlplane.v1.PlatformCommandService.CopyGitManagedConfiguration:input_type -> controlplane.v1.CopyGitManagedConfigurationRequest
+	810,  // 1741: controlplane.v1.PlatformCommandService.CopyRoleImageConfiguration:input_type -> controlplane.v1.CopyRoleImageConfigurationRequest
+	813,  // 1742: controlplane.v1.PlatformCommandService.CopyIntegrationDefinitionConfiguration:input_type -> controlplane.v1.CopyIntegrationDefinitionConfigurationRequest
+	815,  // 1743: controlplane.v1.PlatformCommandService.ArchiveRoleImageConfiguration:input_type -> controlplane.v1.ArchiveRoleImageConfigurationRequest
+	817,  // 1744: controlplane.v1.PlatformCommandService.ArchiveIntegrationDefinitionConfiguration:input_type -> controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest
+	1031, // 1745: controlplane.v1.PlatformCommandService.ConfigureRoleImageGitSource:input_type -> controlplane.v1.ConfigureRoleImageGitSourceRequest
+	1033, // 1746: controlplane.v1.PlatformCommandService.ConfigureIntegrationDefinitionGitSource:input_type -> controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest
+	1035, // 1747: controlplane.v1.PlatformCommandService.RefreshRoleImageGitSource:input_type -> controlplane.v1.RefreshRoleImageGitSourceRequest
+	1037, // 1748: controlplane.v1.PlatformCommandService.RefreshIntegrationDefinitionGitSource:input_type -> controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest
+	1051, // 1749: controlplane.v1.PlatformCommandService.PrepareRoleImageGitWriteBack:input_type -> controlplane.v1.PrepareRoleImageGitWriteBackRequest
+	1053, // 1750: controlplane.v1.PlatformCommandService.PrepareIntegrationDefinitionGitWriteBack:input_type -> controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest
+	1055, // 1751: controlplane.v1.PlatformCommandService.ApproveManagedConfigurationGitWriteBack:input_type -> controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest
+	1057, // 1752: controlplane.v1.PlatformCommandService.RejectManagedConfigurationGitWriteBack:input_type -> controlplane.v1.RejectManagedConfigurationGitWriteBackRequest
+	1059, // 1753: controlplane.v1.PlatformCommandService.CancelManagedConfigurationGitWriteBack:input_type -> controlplane.v1.CancelManagedConfigurationGitWriteBackRequest
+	1067, // 1754: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.ClaimManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkRequest
+	1069, // 1755: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.RenewManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest
+	1071, // 1756: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.BeginManagedConfigurationGitWriteBackEffect:input_type -> controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest
+	1073, // 1757: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.CompleteManagedConfigurationGitWriteBackEffect:input_type -> controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest
+	1075, // 1758: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.FailManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest
+	1041, // 1759: controlplane.v1.ManagedConfigurationSourceWorkService.ClaimManagedConfigurationSourceWork:input_type -> controlplane.v1.ClaimManagedConfigurationSourceWorkRequest
+	1043, // 1760: controlplane.v1.ManagedConfigurationSourceWorkService.RenewManagedConfigurationSourceWork:input_type -> controlplane.v1.RenewManagedConfigurationSourceWorkRequest
+	1045, // 1761: controlplane.v1.ManagedConfigurationSourceWorkService.CompleteManagedConfigurationSourceWork:input_type -> controlplane.v1.CompleteManagedConfigurationSourceWorkRequest
+	1047, // 1762: controlplane.v1.ManagedConfigurationSourceWorkService.FailManagedConfigurationSourceWork:input_type -> controlplane.v1.FailManagedConfigurationSourceWorkRequest
+	596,  // 1763: controlplane.v1.RuntimeSecretDraftWorkService.CheckRuntimeSecretDraftWorkReadiness:input_type -> controlplane.v1.CheckRuntimeSecretDraftWorkReadinessRequest
+	598,  // 1764: controlplane.v1.RuntimeSecretDraftWorkService.ConsumeRuntimeSecretDraftOperation:input_type -> controlplane.v1.ConsumeRuntimeSecretDraftOperationRequest
+	600,  // 1765: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftOperation:input_type -> controlplane.v1.CompleteRuntimeSecretDraftOperationRequest
+	602,  // 1766: controlplane.v1.RuntimeSecretDraftWorkService.FailRuntimeSecretDraftOperation:input_type -> controlplane.v1.FailRuntimeSecretDraftOperationRequest
+	604,  // 1767: controlplane.v1.RuntimeSecretDraftWorkService.ListRuntimeSecretDraftRecoveryWork:input_type -> controlplane.v1.ListRuntimeSecretDraftRecoveryWorkRequest
+	606,  // 1768: controlplane.v1.RuntimeSecretDraftWorkService.RecoverRuntimeSecretDraftMaterialization:input_type -> controlplane.v1.RecoverRuntimeSecretDraftMaterializationRequest
+	608,  // 1769: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftCleanup:input_type -> controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest
+	625,  // 1770: controlplane.v1.RuntimeSecretWorkService.CheckRuntimeSecretWorkReadiness:input_type -> controlplane.v1.CheckRuntimeSecretWorkReadinessRequest
+	1021, // 1771: controlplane.v1.RuntimeSecretWorkService.CheckCredentialProjectionWorkReadiness:input_type -> controlplane.v1.CheckCredentialProjectionWorkReadinessRequest
+	627,  // 1772: controlplane.v1.RuntimeSecretWorkService.ListRuntimeSecretRecoveryWork:input_type -> controlplane.v1.ListRuntimeSecretRecoveryWorkRequest
+	630,  // 1773: controlplane.v1.RuntimeSecretWorkService.ConsumeRuntimeSecretOperation:input_type -> controlplane.v1.ConsumeRuntimeSecretOperationRequest
+	634,  // 1774: controlplane.v1.RuntimeSecretWorkService.CompleteRuntimeSecretOperation:input_type -> controlplane.v1.CompleteRuntimeSecretOperationRequest
+	636,  // 1775: controlplane.v1.RuntimeSecretWorkService.FailRuntimeSecretOperation:input_type -> controlplane.v1.FailRuntimeSecretOperationRequest
+	638,  // 1776: controlplane.v1.RuntimeSecretWorkService.RecoverRuntimeSecretMaterialization:input_type -> controlplane.v1.RecoverRuntimeSecretMaterializationRequest
+	1023, // 1777: controlplane.v1.RuntimeSecretWorkService.ResolveRuntimeCredentialProjection:input_type -> controlplane.v1.ResolveRuntimeCredentialProjectionRequest
+	1025, // 1778: controlplane.v1.RuntimeSecretWorkService.ValidateRuntimeCredentialProjection:input_type -> controlplane.v1.ValidateRuntimeCredentialProjectionRequest
+	1027, // 1779: controlplane.v1.RuntimeSecretWorkService.ResolveTranscriptionCredentialProjection:input_type -> controlplane.v1.ResolveTranscriptionCredentialProjectionRequest
+	380,  // 1780: controlplane.v1.SystemAssistantService.GetSystemAssistant:input_type -> controlplane.v1.GetSystemAssistantRequest
+	382,  // 1781: controlplane.v1.SystemAssistantService.ListAssistantConversations:input_type -> controlplane.v1.ListAssistantConversationsRequest
+	384,  // 1782: controlplane.v1.SystemAssistantService.CreateAssistantConversation:input_type -> controlplane.v1.CreateAssistantConversationRequest
+	394,  // 1783: controlplane.v1.SystemAssistantService.UpdateAssistantConversationTitle:input_type -> controlplane.v1.UpdateAssistantConversationTitleRequest
+	386,  // 1784: controlplane.v1.SystemAssistantService.ArchiveAssistantConversation:input_type -> controlplane.v1.ArchiveAssistantConversationRequest
+	388,  // 1785: controlplane.v1.SystemAssistantService.RestoreAssistantConversation:input_type -> controlplane.v1.RestoreAssistantConversationRequest
+	390,  // 1786: controlplane.v1.SystemAssistantService.PurgeAssistantConversation:input_type -> controlplane.v1.PurgeAssistantConversationRequest
+	392,  // 1787: controlplane.v1.SystemAssistantService.MoveAssistantConversationToProject:input_type -> controlplane.v1.MoveAssistantConversationToProjectRequest
+	396,  // 1788: controlplane.v1.SystemAssistantService.AddAssistantTurn:input_type -> controlplane.v1.AddAssistantTurnRequest
+	398,  // 1789: controlplane.v1.SystemAssistantService.CancelAssistantTurn:input_type -> controlplane.v1.CancelAssistantTurnRequest
+	400,  // 1790: controlplane.v1.SystemAssistantService.UpdateAssistantPlanDraft:input_type -> controlplane.v1.UpdateAssistantPlanDraftRequest
+	402,  // 1791: controlplane.v1.SystemAssistantService.ValidateAssistantPlan:input_type -> controlplane.v1.ValidateAssistantPlanRequest
+	404,  // 1792: controlplane.v1.SystemAssistantService.ApplyAssistantPlan:input_type -> controlplane.v1.ApplyAssistantPlanRequest
+	406,  // 1793: controlplane.v1.SystemAssistantService.RejectAssistantPlan:input_type -> controlplane.v1.RejectAssistantPlanRequest
+	408,  // 1794: controlplane.v1.SystemAssistantService.UpdateAssistantOwnerInstructions:input_type -> controlplane.v1.UpdateAssistantOwnerInstructionsRequest
+	410,  // 1795: controlplane.v1.SystemAssistantService.RecoverSystemAssistant:input_type -> controlplane.v1.RecoverSystemAssistantRequest
+	924,  // 1796: controlplane.v1.RuntimeWorkService.ReportEmailConfigurationReadback:input_type -> controlplane.v1.ReportEmailConfigurationReadbackRequest
+	931,  // 1797: controlplane.v1.RuntimeWorkService.ResolveEmailAuthorization:input_type -> controlplane.v1.ResolveEmailAuthorizationRequest
+	934,  // 1798: controlplane.v1.RuntimeWorkService.ReportEmailEffectReceipt:input_type -> controlplane.v1.ReportEmailEffectReceiptRequest
+	939,  // 1799: controlplane.v1.RuntimeWorkService.ResolveEmailReconciliation:input_type -> controlplane.v1.ResolveEmailReconciliationRequest
+	462,  // 1800: controlplane.v1.RuntimeWorkService.ClaimExecution:input_type -> controlplane.v1.ClaimExecutionRequest
+	822,  // 1801: controlplane.v1.RuntimeWorkService.GetRuntimeEnvironmentRoleImageConfiguration:input_type -> controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationRequest
+	465,  // 1802: controlplane.v1.RuntimeWorkService.ReadExecutionArtifact:input_type -> controlplane.v1.ReadExecutionArtifactRequest
+	467,  // 1803: controlplane.v1.RuntimeWorkService.StreamExecutionArtifact:input_type -> controlplane.v1.StreamExecutionArtifactRequest
+	428,  // 1804: controlplane.v1.RuntimeWorkService.SearchExecutionFiles:input_type -> controlplane.v1.SearchExecutionFilesRequest
+	200,  // 1805: controlplane.v1.RuntimeWorkService.SearchAssistantResources:input_type -> controlplane.v1.SearchAssistantResourcesRequest
+	430,  // 1806: controlplane.v1.RuntimeWorkService.GetExecutionFileMetadata:input_type -> controlplane.v1.GetExecutionFileMetadataRequest
+	432,  // 1807: controlplane.v1.RuntimeWorkService.PreviewExecutionFile:input_type -> controlplane.v1.PreviewExecutionFileRequest
+	434,  // 1808: controlplane.v1.RuntimeWorkService.GetExecutionFileManifest:input_type -> controlplane.v1.GetExecutionFileManifestRequest
+	470,  // 1809: controlplane.v1.RuntimeWorkService.RenewExecution:input_type -> controlplane.v1.RenewExecutionRequest
+	472,  // 1810: controlplane.v1.RuntimeWorkService.ReportExecutionProgress:input_type -> controlplane.v1.ReportExecutionProgressRequest
+	1015, // 1811: controlplane.v1.RuntimeWorkService.CommitProviderCredentialRefresh:input_type -> controlplane.v1.CommitProviderCredentialRefreshRequest
+	475,  // 1812: controlplane.v1.RuntimeWorkService.CompleteExecution:input_type -> controlplane.v1.CompleteExecutionRequest
+	493,  // 1813: controlplane.v1.RuntimeWorkService.DelegateExecution:input_type -> controlplane.v1.DelegateExecutionRequest
+	495,  // 1814: controlplane.v1.RuntimeWorkService.ProposeAssistantPlan:input_type -> controlplane.v1.ProposeAssistantPlanRequest
+	497,  // 1815: controlplane.v1.RuntimeWorkService.ProposeAssistantMetadata:input_type -> controlplane.v1.ProposeAssistantMetadataRequest
+	499,  // 1816: controlplane.v1.RuntimeWorkService.ProposeRunMetadata:input_type -> controlplane.v1.ProposeRunMetadataRequest
+	501,  // 1817: controlplane.v1.RuntimeWorkService.RecordRunToolCall:input_type -> controlplane.v1.RecordRunToolCallRequest
+	503,  // 1818: controlplane.v1.RuntimeWorkService.ReconcileWarmRuntime:input_type -> controlplane.v1.ReconcileWarmRuntimeRequest
+	505,  // 1819: controlplane.v1.RuntimeWorkService.ReportWarmRuntime:input_type -> controlplane.v1.ReportWarmRuntimeRequest
+	508,  // 1820: controlplane.v1.RuntimeWorkService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
+	512,  // 1821: controlplane.v1.RuntimeWorkService.RenewScheduleOccurrence:input_type -> controlplane.v1.RenewScheduleOccurrenceRequest
+	510,  // 1822: controlplane.v1.RuntimeWorkService.MaterializeScheduleOccurrence:input_type -> controlplane.v1.MaterializeScheduleOccurrenceRequest
+	514,  // 1823: controlplane.v1.RuntimeWorkService.FailScheduleOccurrence:input_type -> controlplane.v1.FailScheduleOccurrenceRequest
+	521,  // 1824: controlplane.v1.RuntimeWorkService.ClaimIntegrationConnectionTests:input_type -> controlplane.v1.ClaimIntegrationConnectionTestsRequest
+	824,  // 1825: controlplane.v1.RuntimeWorkService.GetIntegrationConnectionDefinitionConfiguration:input_type -> controlplane.v1.GetIntegrationConnectionDefinitionConfigurationRequest
+	523,  // 1826: controlplane.v1.RuntimeWorkService.CompleteIntegrationConnectionTest:input_type -> controlplane.v1.CompleteIntegrationConnectionTestRequest
+	525,  // 1827: controlplane.v1.RuntimeWorkService.ResolveIntegrationInvocation:input_type -> controlplane.v1.ResolveIntegrationInvocationRequest
+	528,  // 1828: controlplane.v1.RuntimeWorkService.ClaimIntegrationInvocations:input_type -> controlplane.v1.ClaimIntegrationInvocationsRequest
+	530,  // 1829: controlplane.v1.RuntimeWorkService.GetIntegrationInvocation:input_type -> controlplane.v1.GetIntegrationInvocationRequest
+	533,  // 1830: controlplane.v1.RuntimeWorkService.CompleteIntegrationInvocation:input_type -> controlplane.v1.CompleteIntegrationInvocationRequest
+	479,  // 1831: controlplane.v1.SessionArchiveWorkService.ClaimSessionArchiveTasks:input_type -> controlplane.v1.ClaimSessionArchiveTasksRequest
+	481,  // 1832: controlplane.v1.SessionArchiveWorkService.RenewSessionArchiveTask:input_type -> controlplane.v1.RenewSessionArchiveTaskRequest
+	483,  // 1833: controlplane.v1.SessionArchiveWorkService.CompleteSessionSnapshot:input_type -> controlplane.v1.CompleteSessionSnapshotRequest
+	484,  // 1834: controlplane.v1.SessionArchiveWorkService.CompleteSessionRestore:input_type -> controlplane.v1.CompleteSessionRestoreRequest
+	485,  // 1835: controlplane.v1.SessionArchiveWorkService.CompleteSessionPVCDeletion:input_type -> controlplane.v1.CompleteSessionPVCDeletionRequest
+	486,  // 1836: controlplane.v1.SessionArchiveWorkService.CompleteSessionObjectDeletion:input_type -> controlplane.v1.CompleteSessionObjectDeletionRequest
+	487,  // 1837: controlplane.v1.SessionArchiveWorkService.FailSessionArchiveTask:input_type -> controlplane.v1.FailSessionArchiveTaskRequest
+	536,  // 1838: controlplane.v1.InteractionWorkService.ListInteractionSources:input_type -> controlplane.v1.ListInteractionSourcesRequest
+	539,  // 1839: controlplane.v1.InteractionWorkService.ClaimInteractionDeliveries:input_type -> controlplane.v1.ClaimInteractionDeliveriesRequest
+	541,  // 1840: controlplane.v1.InteractionWorkService.CompleteInteractionDelivery:input_type -> controlplane.v1.CompleteInteractionDeliveryRequest
+	543,  // 1841: controlplane.v1.InteractionWorkService.AcceptInteractionMessage:input_type -> controlplane.v1.AcceptInteractionMessageRequest
+	1002, // 1842: controlplane.v1.ProviderCredentialMaterializerService.ObserveProviderModelCatalog:input_type -> controlplane.v1.ObserveProviderModelCatalogRequest
+	1000, // 1843: controlplane.v1.ProviderCredentialMaterializerService.CheckProviderCredentialMaterializerReadiness:input_type -> controlplane.v1.CheckProviderCredentialMaterializerReadinessRequest
+	1005, // 1844: controlplane.v1.ProviderCredentialMaterializerService.StartDeviceAuthorization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest
+	1009, // 1845: controlplane.v1.ProviderCredentialMaterializerService.ObserveDeviceAuthorization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest
+	1011, // 1846: controlplane.v1.ProviderCredentialMaterializerService.MaterializeAPIKey:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest
+	1013, // 1847: controlplane.v1.ProviderCredentialMaterializerService.DiscardProviderCredentialMaterialization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest
+	1018, // 1848: controlplane.v1.ProviderCredentialMaterializerService.CleanupProviderCredential:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest
+	901,  // 1849: controlplane.v1.PlatformQueryService.ListEmailMailboxConfigurations:output_type -> controlplane.v1.ListEmailMailboxConfigurationsResponse
+	903,  // 1850: controlplane.v1.PlatformQueryService.GetEmailMailboxConfiguration:output_type -> controlplane.v1.GetEmailMailboxConfigurationResponse
+	905,  // 1851: controlplane.v1.PlatformQueryService.ListEmailMailboxCredentials:output_type -> controlplane.v1.ListEmailMailboxCredentialsResponse
+	907,  // 1852: controlplane.v1.PlatformQueryService.GetEmailMailboxCredentialReceipt:output_type -> controlplane.v1.GetEmailMailboxCredentialReceiptResponse
+	909,  // 1853: controlplane.v1.PlatformQueryService.PreviewEmailMailboxConfiguration:output_type -> controlplane.v1.PreviewEmailMailboxConfigurationResponse
+	690,  // 1854: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraftImpact:output_type -> controlplane.v1.GetRuntimeSecretDraftImpactResponse
+	585,  // 1855: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraft:output_type -> controlplane.v1.GetRuntimeSecretDraftResponse
+	422,  // 1856: controlplane.v1.PlatformQueryService.GetRuntimeRevisionDiff:output_type -> controlplane.v1.GetRuntimeRevisionDiffResponse
+	942,  // 1857: controlplane.v1.PlatformQueryService.GetEmailEffectReceipt:output_type -> controlplane.v1.GetEmailEffectReceiptResponse
+	948,  // 1858: controlplane.v1.PlatformQueryService.ListSkillBundles:output_type -> controlplane.v1.ListSkillBundlesResponse
+	950,  // 1859: controlplane.v1.PlatformQueryService.GetSkillBundle:output_type -> controlplane.v1.GetSkillBundleResponse
+	952,  // 1860: controlplane.v1.PlatformQueryService.ListSkillBundleRevisions:output_type -> controlplane.v1.ListSkillBundleRevisionsResponse
+	954,  // 1861: controlplane.v1.PlatformQueryService.ListMemoryRecords:output_type -> controlplane.v1.ListMemoryRecordsResponse
+	956,  // 1862: controlplane.v1.PlatformQueryService.GetMemoryRecord:output_type -> controlplane.v1.GetMemoryRecordResponse
+	958,  // 1863: controlplane.v1.PlatformQueryService.ListMemoryRecordRevisions:output_type -> controlplane.v1.ListMemoryRecordRevisionsResponse
+	188,  // 1864: controlplane.v1.PlatformQueryService.GetBootstrapState:output_type -> controlplane.v1.GetBootstrapStateResponse
+	190,  // 1865: controlplane.v1.PlatformQueryService.GetPlatformEventCursor:output_type -> controlplane.v1.GetPlatformEventCursorResponse
+	192,  // 1866: controlplane.v1.PlatformQueryService.GetOverview:output_type -> controlplane.v1.GetOverviewResponse
+	194,  // 1867: controlplane.v1.PlatformQueryService.ListPlatformCapabilities:output_type -> controlplane.v1.ListPlatformCapabilitiesResponse
+	196,  // 1868: controlplane.v1.PlatformQueryService.ListRuntimeSelections:output_type -> controlplane.v1.ListRuntimeSelectionsResponse
+	199,  // 1869: controlplane.v1.PlatformQueryService.SearchPlatform:output_type -> controlplane.v1.SearchPlatformResponse
+	204,  // 1870: controlplane.v1.PlatformQueryService.ListVFSNodes:output_type -> controlplane.v1.ListVFSNodesResponse
+	206,  // 1871: controlplane.v1.PlatformQueryService.SearchVFS:output_type -> controlplane.v1.SearchVFSResponse
+	208,  // 1872: controlplane.v1.PlatformQueryService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
+	210,  // 1873: controlplane.v1.PlatformQueryService.ListTrashedProjects:output_type -> controlplane.v1.ListTrashedProjectsResponse
+	212,  // 1874: controlplane.v1.PlatformQueryService.GetProject:output_type -> controlplane.v1.GetProjectResponse
+	224,  // 1875: controlplane.v1.PlatformQueryService.ListPlatformMemberships:output_type -> controlplane.v1.ListPlatformMembershipsResponse
+	226,  // 1876: controlplane.v1.PlatformQueryService.ListPlatformMembershipCandidates:output_type -> controlplane.v1.ListPlatformMembershipCandidatesResponse
+	234,  // 1877: controlplane.v1.PlatformQueryService.ListProjectMemberships:output_type -> controlplane.v1.ListProjectMembershipsResponse
+	236,  // 1878: controlplane.v1.PlatformQueryService.ListProjectMembershipCandidates:output_type -> controlplane.v1.ListProjectMembershipCandidatesResponse
+	244,  // 1879: controlplane.v1.PlatformQueryService.ListAgents:output_type -> controlplane.v1.ListAgentsResponse
+	246,  // 1880: controlplane.v1.PlatformQueryService.GetAgent:output_type -> controlplane.v1.GetAgentResponse
+	553,  // 1881: controlplane.v1.PlatformQueryService.ListAgentInstructionVersions:output_type -> controlplane.v1.ListAgentInstructionVersionsResponse
+	268,  // 1882: controlplane.v1.PlatformQueryService.ListWorkflows:output_type -> controlplane.v1.ListWorkflowsResponse
+	270,  // 1883: controlplane.v1.PlatformQueryService.GetWorkflow:output_type -> controlplane.v1.GetWorkflowResponse
+	282,  // 1884: controlplane.v1.PlatformQueryService.ListRuns:output_type -> controlplane.v1.ListRunsResponse
+	284,  // 1885: controlplane.v1.PlatformQueryService.GetRun:output_type -> controlplane.v1.GetRunResponse
+	286,  // 1886: controlplane.v1.PlatformQueryService.GetRunGraph:output_type -> controlplane.v1.GetRunGraphResponse
+	288,  // 1887: controlplane.v1.PlatformQueryService.ListRunEvents:output_type -> controlplane.v1.ListRunEventsResponse
+	298,  // 1888: controlplane.v1.PlatformQueryService.ListOwnerGates:output_type -> controlplane.v1.ListOwnerGatesResponse
+	300,  // 1889: controlplane.v1.PlatformQueryService.GetOwnerGate:output_type -> controlplane.v1.GetOwnerGateResponse
+	304,  // 1890: controlplane.v1.PlatformQueryService.ListArtifacts:output_type -> controlplane.v1.ListArtifactsResponse
+	306,  // 1891: controlplane.v1.PlatformQueryService.GetArtifact:output_type -> controlplane.v1.GetArtifactResponse
+	788,  // 1892: controlplane.v1.PlatformQueryService.GetArtifactImpact:output_type -> controlplane.v1.GetArtifactImpactResponse
+	308,  // 1893: controlplane.v1.PlatformQueryService.GetAttachmentSet:output_type -> controlplane.v1.GetAttachmentSetResponse
+	339,  // 1894: controlplane.v1.PlatformQueryService.ListSchedules:output_type -> controlplane.v1.ListSchedulesResponse
+	555,  // 1895: controlplane.v1.PlatformQueryService.GetSchedule:output_type -> controlplane.v1.GetScheduleResponse
+	780,  // 1896: controlplane.v1.PlatformQueryService.ListScheduleRevisions:output_type -> controlplane.v1.ListScheduleRevisionsResponse
+	782,  // 1897: controlplane.v1.PlatformQueryService.ListScheduleRuns:output_type -> controlplane.v1.ListScheduleRunsResponse
+	519,  // 1898: controlplane.v1.PlatformQueryService.PreviewSchedule:output_type -> controlplane.v1.PreviewScheduleResponse
+	753,  // 1899: controlplane.v1.PlatformQueryService.ListProviderAccounts:output_type -> controlplane.v1.ListProviderAccountsResponse
+	755,  // 1900: controlplane.v1.PlatformQueryService.GetProviderAccount:output_type -> controlplane.v1.GetProviderAccountResponse
+	748,  // 1901: controlplane.v1.PlatformQueryService.ListProviderAccountBlockers:output_type -> controlplane.v1.ListProviderAccountBlockersResponse
+	347,  // 1902: controlplane.v1.PlatformQueryService.ListIntegrationDefinitions:output_type -> controlplane.v1.ListIntegrationDefinitionsResponse
+	349,  // 1903: controlplane.v1.PlatformQueryService.ListIntegrationConnections:output_type -> controlplane.v1.ListIntegrationConnectionsResponse
+	357,  // 1904: controlplane.v1.PlatformQueryService.ListIntegrationGrantConnectionCandidates:output_type -> controlplane.v1.ListIntegrationGrantConnectionCandidatesResponse
+	359,  // 1905: controlplane.v1.PlatformQueryService.ListIntegrationGrantProjectCandidates:output_type -> controlplane.v1.ListIntegrationGrantProjectCandidatesResponse
+	361,  // 1906: controlplane.v1.PlatformQueryService.ListIntegrationGrantRecipientCandidates:output_type -> controlplane.v1.ListIntegrationGrantRecipientCandidatesResponse
+	363,  // 1907: controlplane.v1.PlatformQueryService.ListIntegrationGrantCapabilityCandidates:output_type -> controlplane.v1.ListIntegrationGrantCapabilityCandidatesResponse
+	365,  // 1908: controlplane.v1.PlatformQueryService.GetIntegrationConnection:output_type -> controlplane.v1.GetIntegrationConnectionResponse
+	415,  // 1909: controlplane.v1.PlatformQueryService.GetAdministration:output_type -> controlplane.v1.GetAdministrationResponse
+	417,  // 1910: controlplane.v1.PlatformQueryService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
+	559,  // 1911: controlplane.v1.PlatformQueryService.GetAgentRuntimeConfiguration:output_type -> controlplane.v1.GetAgentRuntimeConfigurationResponse
+	567,  // 1912: controlplane.v1.PlatformQueryService.GetAgentEffectiveCapabilities:output_type -> controlplane.v1.GetAgentEffectiveCapabilitiesResponse
+	563,  // 1913: controlplane.v1.PlatformQueryService.ListArtifactBindingTargets:output_type -> controlplane.v1.ListArtifactBindingTargetsResponse
+	565,  // 1914: controlplane.v1.PlatformQueryService.GetRunAttachmentEligibility:output_type -> controlplane.v1.GetRunAttachmentEligibilityResponse
+	569,  // 1915: controlplane.v1.PlatformQueryService.ListConfigOverlayRevisions:output_type -> controlplane.v1.ListConfigOverlayRevisionsResponse
+	571,  // 1916: controlplane.v1.PlatformQueryService.GetConfigOverlayRevision:output_type -> controlplane.v1.GetConfigOverlayRevisionResponse
+	573,  // 1917: controlplane.v1.PlatformQueryService.ListAgentRuntimeConfigurationVersions:output_type -> controlplane.v1.ListAgentRuntimeConfigurationVersionsResponse
+	575,  // 1918: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentSets:output_type -> controlplane.v1.ListRuntimeEnvironmentSetsResponse
+	577,  // 1919: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentSet:output_type -> controlplane.v1.GetRuntimeEnvironmentSetResponse
+	579,  // 1920: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentVersions:output_type -> controlplane.v1.ListRuntimeEnvironmentVersionsResponse
+	717,  // 1921: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentReadiness:output_type -> controlplane.v1.GetRuntimeEnvironmentReadinessResponse
+	719,  // 1922: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentAgents:output_type -> controlplane.v1.ListRuntimeEnvironmentAgentsResponse
+	581,  // 1923: controlplane.v1.PlatformQueryService.ListTemplateVariables:output_type -> controlplane.v1.ListTemplateVariablesResponse
+	730,  // 1924: controlplane.v1.PlatformQueryService.ListProviderDefinitions:output_type -> controlplane.v1.ListProviderDefinitionsResponse
+	733,  // 1925: controlplane.v1.PlatformQueryService.ListModelCapabilities:output_type -> controlplane.v1.ListModelCapabilitiesResponse
+	737,  // 1926: controlplane.v1.PlatformQueryService.ListRoleImageRecipeRevisions:output_type -> controlplane.v1.ListRoleImageRecipeRevisionsResponse
+	795,  // 1927: controlplane.v1.PlatformQueryService.ValidatePromptTemplate:output_type -> controlplane.v1.ValidatePromptTemplateResponse
+	801,  // 1928: controlplane.v1.PlatformQueryService.PreviewPromptTemplate:output_type -> controlplane.v1.PreviewPromptTemplateResponse
+	613,  // 1929: controlplane.v1.PlatformQueryService.ListRuntimeSecrets:output_type -> controlplane.v1.ListRuntimeSecretsResponse
+	615,  // 1930: controlplane.v1.PlatformQueryService.GetRuntimeSecret:output_type -> controlplane.v1.GetRuntimeSecretResponse
+	881,  // 1931: controlplane.v1.PlatformQueryService.ListManagedConfigurationHistory:output_type -> controlplane.v1.ListManagedConfigurationHistoryResponse
+	880,  // 1932: controlplane.v1.PlatformQueryService.ListManagedConfigurations:output_type -> controlplane.v1.ListManagedConfigurationsResponse
+	883,  // 1933: controlplane.v1.PlatformQueryService.GetManagedConfigurationImpact:output_type -> controlplane.v1.GetManagedConfigurationImpactResponse
+	857,  // 1934: controlplane.v1.PlatformQueryService.GetRoleImageImpactPlan:output_type -> controlplane.v1.GetRoleImageImpactPlanResponse
+	853,  // 1935: controlplane.v1.PlatformQueryService.GetRevisionImpactPlan:output_type -> controlplane.v1.GetRevisionImpactPlanResponse
+	1062, // 1936: controlplane.v1.PlatformQueryService.GetManagedConfigurationGitWriteBack:output_type -> controlplane.v1.GetManagedConfigurationGitWriteBackResponse
+	1064, // 1937: controlplane.v1.PlatformQueryService.ListManagedConfigurationGitWriteBacks:output_type -> controlplane.v1.ListManagedConfigurationGitWriteBacksResponse
+	998,  // 1938: controlplane.v1.PlatformQueryService.GetSystemSTTConfiguration:output_type -> controlplane.v1.GetSystemSTTConfigurationResponse
+	654,  // 1939: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentDraft:output_type -> controlplane.v1.GetRuntimeEnvironmentDraftResponse
+	674,  // 1940: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentImpact:output_type -> controlplane.v1.GetRuntimeEnvironmentImpactResponse
+	693,  // 1941: controlplane.v1.PlatformQueryService.GetRuntimeSecretImpact:output_type -> controlplane.v1.GetRuntimeSecretImpactResponse
+	550,  // 1942: controlplane.v1.PlatformQueryService.ListInteractionIdentities:output_type -> controlplane.v1.ListInteractionIdentitiesResponse
+	911,  // 1943: controlplane.v1.PlatformCommandService.CreateEmailMailboxDraft:output_type -> controlplane.v1.CreateEmailMailboxDraftResponse
+	913,  // 1944: controlplane.v1.PlatformCommandService.SaveEmailMailboxDraft:output_type -> controlplane.v1.SaveEmailMailboxDraftResponse
+	915,  // 1945: controlplane.v1.PlatformCommandService.ValidateEmailMailboxDraft:output_type -> controlplane.v1.ValidateEmailMailboxDraftResponse
+	917,  // 1946: controlplane.v1.PlatformCommandService.PublishEmailMailboxDraft:output_type -> controlplane.v1.PublishEmailMailboxDraftResponse
+	919,  // 1947: controlplane.v1.PlatformCommandService.DiscardEmailMailboxDraft:output_type -> controlplane.v1.DiscardEmailMailboxDraftResponse
+	921,  // 1948: controlplane.v1.PlatformCommandService.BindEmailMailboxConfiguration:output_type -> controlplane.v1.BindEmailMailboxConfigurationResponse
+	923,  // 1949: controlplane.v1.PlatformCommandService.UnbindEmailMailboxConfiguration:output_type -> controlplane.v1.UnbindEmailMailboxConfigurationResponse
+	688,  // 1950: controlplane.v1.PlatformCommandService.PrepareRuntimeSecretDraftImpact:output_type -> controlplane.v1.PrepareRuntimeSecretDraftImpactResponse
+	587,  // 1951: controlplane.v1.PlatformCommandService.PrepareSaveRuntimeSecretDraft:output_type -> controlplane.v1.PrepareSaveRuntimeSecretDraftResponse
+	589,  // 1952: controlplane.v1.PlatformCommandService.PrepareValidateRuntimeSecretDraft:output_type -> controlplane.v1.PrepareValidateRuntimeSecretDraftResponse
+	591,  // 1953: controlplane.v1.PlatformCommandService.PreparePublishRuntimeSecretDraft:output_type -> controlplane.v1.PreparePublishRuntimeSecretDraftResponse
+	593,  // 1954: controlplane.v1.PlatformCommandService.PrepareDiscardRuntimeSecretDraft:output_type -> controlplane.v1.PrepareDiscardRuntimeSecretDraftResponse
+	437,  // 1955: controlplane.v1.PlatformCommandService.SavePromptTemplateDraft:output_type -> controlplane.v1.SavePromptTemplateDraftResponse
+	439,  // 1956: controlplane.v1.PlatformCommandService.DiscardPromptTemplateDraft:output_type -> controlplane.v1.DiscardPromptTemplateDraftResponse
+	441,  // 1957: controlplane.v1.PlatformCommandService.SaveRoleImageRevisionDraft:output_type -> controlplane.v1.SaveRoleImageRevisionDraftResponse
+	443,  // 1958: controlplane.v1.PlatformCommandService.DiscardRoleImageRevisionDraft:output_type -> controlplane.v1.DiscardRoleImageRevisionDraftResponse
+	445,  // 1959: controlplane.v1.PlatformCommandService.SaveIntegrationDefinitionDraft:output_type -> controlplane.v1.SaveIntegrationDefinitionDraftResponse
+	447,  // 1960: controlplane.v1.PlatformCommandService.DiscardIntegrationDefinitionDraft:output_type -> controlplane.v1.DiscardIntegrationDefinitionDraftResponse
+	449,  // 1961: controlplane.v1.PlatformCommandService.SaveSystemSTTConfigurationDraft:output_type -> controlplane.v1.SaveSystemSTTConfigurationDraftResponse
+	451,  // 1962: controlplane.v1.PlatformCommandService.DiscardSystemSTTConfigurationDraft:output_type -> controlplane.v1.DiscardSystemSTTConfigurationDraftResponse
+	938,  // 1963: controlplane.v1.PlatformCommandService.ReconcileEmailEffect:output_type -> controlplane.v1.ReconcileEmailEffectResponse
+	928,  // 1964: controlplane.v1.PlatformCommandService.ConfigureEmailMailboxCredential:output_type -> controlplane.v1.ConfigureEmailMailboxCredentialResponse
+	981,  // 1965: controlplane.v1.PlatformCommandService.CreateSkillBundleDraft:output_type -> controlplane.v1.CreateSkillBundleDraftResponse
+	982,  // 1966: controlplane.v1.PlatformCommandService.SaveSkillBundleDraft:output_type -> controlplane.v1.SaveSkillBundleDraftResponse
+	983,  // 1967: controlplane.v1.PlatformCommandService.ValidateSkillBundleDraft:output_type -> controlplane.v1.ValidateSkillBundleDraftResponse
+	984,  // 1968: controlplane.v1.PlatformCommandService.ReviewSkillBundleDraft:output_type -> controlplane.v1.ReviewSkillBundleDraftResponse
+	985,  // 1969: controlplane.v1.PlatformCommandService.PublishSkillBundleDraft:output_type -> controlplane.v1.PublishSkillBundleDraftResponse
+	986,  // 1970: controlplane.v1.PlatformCommandService.DiscardSkillBundleDraft:output_type -> controlplane.v1.DiscardSkillBundleDraftResponse
+	987,  // 1971: controlplane.v1.PlatformCommandService.ArchiveSkillBundle:output_type -> controlplane.v1.ArchiveSkillBundleResponse
+	988,  // 1972: controlplane.v1.PlatformCommandService.RestoreSkillBundle:output_type -> controlplane.v1.RestoreSkillBundleResponse
+	989,  // 1973: controlplane.v1.PlatformCommandService.PurgeSkillBundle:output_type -> controlplane.v1.PurgeSkillBundleResponse
+	971,  // 1974: controlplane.v1.PlatformCommandService.BindAgentSkillBundle:output_type -> controlplane.v1.BindAgentSkillBundleResponse
+	973,  // 1975: controlplane.v1.PlatformCommandService.UnbindAgentSkillBundle:output_type -> controlplane.v1.UnbindAgentSkillBundleResponse
+	990,  // 1976: controlplane.v1.PlatformCommandService.CreateMemoryRecord:output_type -> controlplane.v1.CreateMemoryRecordResponse
+	991,  // 1977: controlplane.v1.PlatformCommandService.ReviseMemoryRecord:output_type -> controlplane.v1.ReviseMemoryRecordResponse
+	992,  // 1978: controlplane.v1.PlatformCommandService.ArchiveMemoryRecord:output_type -> controlplane.v1.ArchiveMemoryRecordResponse
+	993,  // 1979: controlplane.v1.PlatformCommandService.RestoreMemoryRecord:output_type -> controlplane.v1.RestoreMemoryRecordResponse
+	994,  // 1980: controlplane.v1.PlatformCommandService.PurgeMemoryRecord:output_type -> controlplane.v1.PurgeMemoryRecordResponse
+	978,  // 1981: controlplane.v1.PlatformCommandService.BindAgentMemoryRecord:output_type -> controlplane.v1.BindAgentMemoryRecordResponse
+	980,  // 1982: controlplane.v1.PlatformCommandService.UnbindAgentMemoryRecord:output_type -> controlplane.v1.UnbindAgentMemoryRecordResponse
+	656,  // 1983: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentDraft:output_type -> controlplane.v1.CreateRuntimeEnvironmentDraftResponse
+	658,  // 1984: controlplane.v1.PlatformCommandService.SaveRuntimeEnvironmentDraft:output_type -> controlplane.v1.SaveRuntimeEnvironmentDraftResponse
+	660,  // 1985: controlplane.v1.PlatformCommandService.ValidateRuntimeEnvironmentDraft:output_type -> controlplane.v1.ValidateRuntimeEnvironmentDraftResponse
+	662,  // 1986: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentDraft:output_type -> controlplane.v1.PublishRuntimeEnvironmentDraftResponse
+	664,  // 1987: controlplane.v1.PlatformCommandService.DiscardRuntimeEnvironmentDraft:output_type -> controlplane.v1.DiscardRuntimeEnvironmentDraftResponse
+	676,  // 1988: controlplane.v1.PlatformCommandService.RebindRuntimeEnvironment:output_type -> controlplane.v1.RebindRuntimeEnvironmentResponse
+	696,  // 1989: controlplane.v1.PlatformCommandService.RebindRuntimeSecret:output_type -> controlplane.v1.RebindRuntimeSecretResponse
+	546,  // 1990: controlplane.v1.PlatformCommandService.BindInteractionIdentity:output_type -> controlplane.v1.BindInteractionIdentityResponse
+	548,  // 1991: controlplane.v1.PlatformCommandService.RevokeInteractionIdentity:output_type -> controlplane.v1.RevokeInteractionIdentityResponse
+	413,  // 1992: controlplane.v1.PlatformCommandService.CompleteOnboarding:output_type -> controlplane.v1.CompleteOnboardingResponse
+	214,  // 1993: controlplane.v1.PlatformCommandService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
+	216,  // 1994: controlplane.v1.PlatformCommandService.UpdateProject:output_type -> controlplane.v1.UpdateProjectResponse
+	218,  // 1995: controlplane.v1.PlatformCommandService.TrashProject:output_type -> controlplane.v1.TrashProjectResponse
+	220,  // 1996: controlplane.v1.PlatformCommandService.RestoreProject:output_type -> controlplane.v1.RestoreProjectResponse
+	222,  // 1997: controlplane.v1.PlatformCommandService.PurgeProject:output_type -> controlplane.v1.PurgeProjectResponse
+	228,  // 1998: controlplane.v1.PlatformCommandService.AddPlatformMembership:output_type -> controlplane.v1.AddPlatformMembershipResponse
+	230,  // 1999: controlplane.v1.PlatformCommandService.ChangePlatformMembership:output_type -> controlplane.v1.ChangePlatformMembershipResponse
+	232,  // 2000: controlplane.v1.PlatformCommandService.RemovePlatformMembership:output_type -> controlplane.v1.RemovePlatformMembershipResponse
+	238,  // 2001: controlplane.v1.PlatformCommandService.AddProjectMembership:output_type -> controlplane.v1.AddProjectMembershipResponse
+	240,  // 2002: controlplane.v1.PlatformCommandService.ChangeProjectMembership:output_type -> controlplane.v1.ChangeProjectMembershipResponse
+	242,  // 2003: controlplane.v1.PlatformCommandService.RemoveProjectMembership:output_type -> controlplane.v1.RemoveProjectMembershipResponse
+	248,  // 2004: controlplane.v1.PlatformCommandService.CreateAgent:output_type -> controlplane.v1.CreateAgentResponse
+	250,  // 2005: controlplane.v1.PlatformCommandService.UpdateAgent:output_type -> controlplane.v1.UpdateAgentResponse
+	252,  // 2006: controlplane.v1.PlatformCommandService.SetAgentEnabled:output_type -> controlplane.v1.SetAgentEnabledResponse
+	254,  // 2007: controlplane.v1.PlatformCommandService.ArchiveAgent:output_type -> controlplane.v1.ArchiveAgentResponse
+	790,  // 2008: controlplane.v1.PlatformCommandService.SetAgentAvatar:output_type -> controlplane.v1.SetAgentAvatarResponse
+	792,  // 2009: controlplane.v1.PlatformCommandService.RemoveAgentAvatar:output_type -> controlplane.v1.RemoveAgentAvatarResponse
+	256,  // 2010: controlplane.v1.PlatformCommandService.CreateInstructionDraft:output_type -> controlplane.v1.CreateInstructionDraftResponse
+	258,  // 2011: controlplane.v1.PlatformCommandService.ValidateInstructionDraft:output_type -> controlplane.v1.ValidateInstructionDraftResponse
+	260,  // 2012: controlplane.v1.PlatformCommandService.PublishInstructionDraft:output_type -> controlplane.v1.PublishInstructionDraftResponse
+	262,  // 2013: controlplane.v1.PlatformCommandService.RollbackInstructions:output_type -> controlplane.v1.RollbackInstructionsResponse
+	264,  // 2014: controlplane.v1.PlatformCommandService.ChangeAgentCapability:output_type -> controlplane.v1.ChangeAgentCapabilityResponse
+	266,  // 2015: controlplane.v1.PlatformCommandService.ChangeAgentIntegrationGrant:output_type -> controlplane.v1.ChangeAgentIntegrationGrantResponse
+	272,  // 2016: controlplane.v1.PlatformCommandService.CreateWorkflow:output_type -> controlplane.v1.CreateWorkflowResponse
+	274,  // 2017: controlplane.v1.PlatformCommandService.UpdateWorkflowDraft:output_type -> controlplane.v1.UpdateWorkflowDraftResponse
+	276,  // 2018: controlplane.v1.PlatformCommandService.ValidateWorkflowDraft:output_type -> controlplane.v1.ValidateWorkflowDraftResponse
+	278,  // 2019: controlplane.v1.PlatformCommandService.PublishWorkflowDraft:output_type -> controlplane.v1.PublishWorkflowDraftResponse
+	280,  // 2020: controlplane.v1.PlatformCommandService.ArchiveWorkflow:output_type -> controlplane.v1.ArchiveWorkflowResponse
+	290,  // 2021: controlplane.v1.PlatformCommandService.LaunchRun:output_type -> controlplane.v1.LaunchRunResponse
+	292,  // 2022: controlplane.v1.PlatformCommandService.AddSessionTurn:output_type -> controlplane.v1.AddSessionTurnResponse
+	294,  // 2023: controlplane.v1.PlatformCommandService.CancelRun:output_type -> controlplane.v1.CancelRunResponse
+	296,  // 2024: controlplane.v1.PlatformCommandService.RetryRun:output_type -> controlplane.v1.RetryRunResponse
+	302,  // 2025: controlplane.v1.PlatformCommandService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
+	325,  // 2026: controlplane.v1.PlatformCommandService.UploadAgentAvatar:output_type -> controlplane.v1.UploadAgentAvatarResponse
+	322,  // 2027: controlplane.v1.PlatformCommandService.UploadArtifact:output_type -> controlplane.v1.UploadArtifactResponse
+	327,  // 2028: controlplane.v1.PlatformCommandService.UploadOrganizationArtifact:output_type -> controlplane.v1.UploadOrganizationArtifactResponse
+	329,  // 2029: controlplane.v1.PlatformCommandService.DownloadArtifact:output_type -> controlplane.v1.DownloadArtifactResponse
+	331,  // 2030: controlplane.v1.PlatformCommandService.ChangeArtifactBinding:output_type -> controlplane.v1.ChangeArtifactBindingResponse
+	333,  // 2031: controlplane.v1.PlatformCommandService.DeleteArtifact:output_type -> controlplane.v1.DeleteArtifactResponse
+	335,  // 2032: controlplane.v1.PlatformCommandService.RestoreArtifact:output_type -> controlplane.v1.RestoreArtifactResponse
+	337,  // 2033: controlplane.v1.PlatformCommandService.PurgeArtifact:output_type -> controlplane.v1.PurgeArtifactResponse
+	310,  // 2034: controlplane.v1.PlatformCommandService.CreateAttachmentSetDraft:output_type -> controlplane.v1.CreateAttachmentSetDraftResponse
+	312,  // 2035: controlplane.v1.PlatformCommandService.CreateOrganizationAttachmentSetDraft:output_type -> controlplane.v1.CreateOrganizationAttachmentSetDraftResponse
+	314,  // 2036: controlplane.v1.PlatformCommandService.AddAttachmentSetItems:output_type -> controlplane.v1.AddAttachmentSetItemsResponse
+	316,  // 2037: controlplane.v1.PlatformCommandService.RemoveAttachmentSetItems:output_type -> controlplane.v1.RemoveAttachmentSetItemsResponse
+	318,  // 2038: controlplane.v1.PlatformCommandService.FinalizeAttachmentSet:output_type -> controlplane.v1.FinalizeAttachmentSetResponse
+	341,  // 2039: controlplane.v1.PlatformCommandService.CreateSchedule:output_type -> controlplane.v1.CreateScheduleResponse
+	343,  // 2040: controlplane.v1.PlatformCommandService.UpdateSchedule:output_type -> controlplane.v1.UpdateScheduleResponse
+	345,  // 2041: controlplane.v1.PlatformCommandService.SetScheduleEnabled:output_type -> controlplane.v1.SetScheduleEnabledResponse
+	557,  // 2042: controlplane.v1.PlatformCommandService.ArchiveSchedule:output_type -> controlplane.v1.ArchiveScheduleResponse
+	784,  // 2043: controlplane.v1.PlatformCommandService.DeleteSchedule:output_type -> controlplane.v1.DeleteScheduleResponse
+	757,  // 2044: controlplane.v1.PlatformCommandService.CreateProviderAccount:output_type -> controlplane.v1.CreateProviderAccountResponse
+	759,  // 2045: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:output_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationResponse
+	761,  // 2046: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:output_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyResponse
+	763,  // 2047: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:output_type -> controlplane.v1.RefreshProviderAccountAuthorizationResponse
+	765,  // 2048: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:output_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse
+	767,  // 2049: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:output_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse
+	769,  // 2050: controlplane.v1.PlatformCommandService.RevokeProviderAccount:output_type -> controlplane.v1.RevokeProviderAccountResponse
+	771,  // 2051: controlplane.v1.PlatformCommandService.DeleteProviderAccount:output_type -> controlplane.v1.DeleteProviderAccountResponse
+	774,  // 2052: controlplane.v1.PlatformCommandService.CancelProviderAccountQueuedWork:output_type -> controlplane.v1.CancelProviderAccountQueuedWorkResponse
+	778,  // 2053: controlplane.v1.PlatformCommandService.SetProviderAccountEnabled:output_type -> controlplane.v1.SetProviderAccountEnabledResponse
+	776,  // 2054: controlplane.v1.PlatformCommandService.SetProviderAccountConcurrency:output_type -> controlplane.v1.SetProviderAccountConcurrencyResponse
+	367,  // 2055: controlplane.v1.PlatformCommandService.CreateIntegrationConnection:output_type -> controlplane.v1.CreateIntegrationConnectionResponse
+	369,  // 2056: controlplane.v1.PlatformCommandService.UpdateIntegrationConnection:output_type -> controlplane.v1.UpdateIntegrationConnectionResponse
+	371,  // 2057: controlplane.v1.PlatformCommandService.DeleteIntegrationConnection:output_type -> controlplane.v1.DeleteIntegrationConnectionResponse
+	373,  // 2058: controlplane.v1.PlatformCommandService.ConfigureIntegrationConnectionCredential:output_type -> controlplane.v1.ConfigureIntegrationConnectionCredentialResponse
+	375,  // 2059: controlplane.v1.PlatformCommandService.TestIntegrationConnection:output_type -> controlplane.v1.TestIntegrationConnectionResponse
+	377,  // 2060: controlplane.v1.PlatformCommandService.SetIntegrationConnectionEnabled:output_type -> controlplane.v1.SetIntegrationConnectionEnabledResponse
+	379,  // 2061: controlplane.v1.PlatformCommandService.ChangeIntegrationGrant:output_type -> controlplane.v1.ChangeIntegrationGrantResponse
+	641,  // 2062: controlplane.v1.PlatformCommandService.PublishAgentRuntimeConfiguration:output_type -> controlplane.v1.PublishAgentRuntimeConfigurationResponse
+	643,  // 2063: controlplane.v1.PlatformCommandService.CreateConfigOverlayDraft:output_type -> controlplane.v1.CreateConfigOverlayDraftResponse
+	645,  // 2064: controlplane.v1.PlatformCommandService.ValidateConfigOverlayDraft:output_type -> controlplane.v1.ValidateConfigOverlayDraftResponse
+	647,  // 2065: controlplane.v1.PlatformCommandService.PublishConfigOverlayDraft:output_type -> controlplane.v1.PublishConfigOverlayDraftResponse
+	649,  // 2066: controlplane.v1.PlatformCommandService.RollbackConfigOverlay:output_type -> controlplane.v1.RollbackConfigOverlayResponse
+	665,  // 2067: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentSet:output_type -> controlplane.v1.CreateRuntimeEnvironmentSetResponse
+	667,  // 2068: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentVersion:output_type -> controlplane.v1.PublishRuntimeEnvironmentVersionResponse
+	669,  // 2069: controlplane.v1.PlatformCommandService.RollbackRuntimeEnvironment:output_type -> controlplane.v1.RollbackRuntimeEnvironmentResponse
+	721,  // 2070: controlplane.v1.PlatformCommandService.SetRuntimeEnvironmentEnabled:output_type -> controlplane.v1.SetRuntimeEnvironmentEnabledResponse
+	723,  // 2071: controlplane.v1.PlatformCommandService.DeleteRuntimeEnvironment:output_type -> controlplane.v1.DeleteRuntimeEnvironmentResponse
+	671,  // 2072: controlplane.v1.PlatformCommandService.BindAgentRuntimeEnvironment:output_type -> controlplane.v1.BindAgentRuntimeEnvironmentResponse
+	740,  // 2073: controlplane.v1.PlatformCommandService.PromoteRoleImage:output_type -> controlplane.v1.PromoteRoleImageResponse
+	617,  // 2074: controlplane.v1.PlatformCommandService.PrepareCreateRuntimeSecret:output_type -> controlplane.v1.PrepareCreateRuntimeSecretResponse
+	619,  // 2075: controlplane.v1.PlatformCommandService.PrepareRotateRuntimeSecret:output_type -> controlplane.v1.PrepareRotateRuntimeSecretResponse
+	621,  // 2076: controlplane.v1.PlatformCommandService.PrepareRevealRuntimeSecret:output_type -> controlplane.v1.PrepareRevealRuntimeSecretResponse
+	623,  // 2077: controlplane.v1.PlatformCommandService.PrepareRevokeRuntimeSecret:output_type -> controlplane.v1.PrepareRevokeRuntimeSecretResponse
+	827,  // 2078: controlplane.v1.PlatformCommandService.CreatePromptTemplateDraft:output_type -> controlplane.v1.CreatePromptTemplateDraftResponse
+	829,  // 2079: controlplane.v1.PlatformCommandService.ValidatePromptTemplateDraft:output_type -> controlplane.v1.ValidatePromptTemplateDraftResponse
+	831,  // 2080: controlplane.v1.PlatformCommandService.PublishPromptTemplateDraft:output_type -> controlplane.v1.PublishPromptTemplateDraftResponse
+	833,  // 2081: controlplane.v1.PlatformCommandService.RebindPromptTemplateConsumers:output_type -> controlplane.v1.RebindPromptTemplateConsumersResponse
+	835,  // 2082: controlplane.v1.PlatformCommandService.CreateRoleImageRevisionDraft:output_type -> controlplane.v1.CreateRoleImageRevisionDraftResponse
+	837,  // 2083: controlplane.v1.PlatformCommandService.ValidateRoleImageRevisionDraft:output_type -> controlplane.v1.ValidateRoleImageRevisionDraftResponse
+	839,  // 2084: controlplane.v1.PlatformCommandService.PublishRoleImageRevisionDraft:output_type -> controlplane.v1.PublishRoleImageRevisionDraftResponse
+	841,  // 2085: controlplane.v1.PlatformCommandService.RebindRoleImageConsumers:output_type -> controlplane.v1.RebindRoleImageConsumersResponse
+	855,  // 2086: controlplane.v1.PlatformCommandService.PrepareRoleImageImpactPlan:output_type -> controlplane.v1.PrepareRoleImageImpactPlanResponse
+	847,  // 2087: controlplane.v1.PlatformCommandService.PrepareEnvironmentDraftImpact:output_type -> controlplane.v1.PrepareEnvironmentDraftImpactResponse
+	849,  // 2088: controlplane.v1.PlatformCommandService.PrepareInstructionsImpact:output_type -> controlplane.v1.PrepareInstructionsImpactResponse
+	851,  // 2089: controlplane.v1.PlatformCommandService.PreparePromptTemplateImpact:output_type -> controlplane.v1.PreparePromptTemplateImpactResponse
+	859,  // 2090: controlplane.v1.PlatformCommandService.CreateIntegrationDefinitionDraft:output_type -> controlplane.v1.CreateIntegrationDefinitionDraftResponse
+	861,  // 2091: controlplane.v1.PlatformCommandService.ValidateIntegrationDefinitionDraft:output_type -> controlplane.v1.ValidateIntegrationDefinitionDraftResponse
+	863,  // 2092: controlplane.v1.PlatformCommandService.PublishIntegrationDefinitionDraft:output_type -> controlplane.v1.PublishIntegrationDefinitionDraftResponse
+	865,  // 2093: controlplane.v1.PlatformCommandService.RebindIntegrationDefinitionConsumers:output_type -> controlplane.v1.RebindIntegrationDefinitionConsumersResponse
+	867,  // 2094: controlplane.v1.PlatformCommandService.CreateSystemSTTConfigurationDraft:output_type -> controlplane.v1.CreateSystemSTTConfigurationDraftResponse
+	869,  // 2095: controlplane.v1.PlatformCommandService.ValidateSystemSTTConfigurationDraft:output_type -> controlplane.v1.ValidateSystemSTTConfigurationDraftResponse
+	871,  // 2096: controlplane.v1.PlatformCommandService.PublishSystemSTTConfigurationDraft:output_type -> controlplane.v1.PublishSystemSTTConfigurationDraftResponse
+	873,  // 2097: controlplane.v1.PlatformCommandService.RebindSystemSTTConsumers:output_type -> controlplane.v1.RebindSystemSTTConsumersResponse
+	875,  // 2098: controlplane.v1.PlatformCommandService.DetachGitManagedConfiguration:output_type -> controlplane.v1.DetachGitManagedConfigurationResponse
+	877,  // 2099: controlplane.v1.PlatformCommandService.CopyGitManagedConfiguration:output_type -> controlplane.v1.CopyGitManagedConfigurationResponse
+	811,  // 2100: controlplane.v1.PlatformCommandService.CopyRoleImageConfiguration:output_type -> controlplane.v1.CopyRoleImageConfigurationResponse
+	814,  // 2101: controlplane.v1.PlatformCommandService.CopyIntegrationDefinitionConfiguration:output_type -> controlplane.v1.CopyIntegrationDefinitionConfigurationResponse
+	816,  // 2102: controlplane.v1.PlatformCommandService.ArchiveRoleImageConfiguration:output_type -> controlplane.v1.ArchiveRoleImageConfigurationResponse
+	818,  // 2103: controlplane.v1.PlatformCommandService.ArchiveIntegrationDefinitionConfiguration:output_type -> controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse
+	1032, // 2104: controlplane.v1.PlatformCommandService.ConfigureRoleImageGitSource:output_type -> controlplane.v1.ConfigureRoleImageGitSourceResponse
+	1034, // 2105: controlplane.v1.PlatformCommandService.ConfigureIntegrationDefinitionGitSource:output_type -> controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse
+	1036, // 2106: controlplane.v1.PlatformCommandService.RefreshRoleImageGitSource:output_type -> controlplane.v1.RefreshRoleImageGitSourceResponse
+	1038, // 2107: controlplane.v1.PlatformCommandService.RefreshIntegrationDefinitionGitSource:output_type -> controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse
+	1052, // 2108: controlplane.v1.PlatformCommandService.PrepareRoleImageGitWriteBack:output_type -> controlplane.v1.PrepareRoleImageGitWriteBackResponse
+	1054, // 2109: controlplane.v1.PlatformCommandService.PrepareIntegrationDefinitionGitWriteBack:output_type -> controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse
+	1056, // 2110: controlplane.v1.PlatformCommandService.ApproveManagedConfigurationGitWriteBack:output_type -> controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse
+	1058, // 2111: controlplane.v1.PlatformCommandService.RejectManagedConfigurationGitWriteBack:output_type -> controlplane.v1.RejectManagedConfigurationGitWriteBackResponse
+	1060, // 2112: controlplane.v1.PlatformCommandService.CancelManagedConfigurationGitWriteBack:output_type -> controlplane.v1.CancelManagedConfigurationGitWriteBackResponse
+	1068, // 2113: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.ClaimManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse
+	1070, // 2114: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.RenewManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse
+	1072, // 2115: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.BeginManagedConfigurationGitWriteBackEffect:output_type -> controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse
+	1074, // 2116: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.CompleteManagedConfigurationGitWriteBackEffect:output_type -> controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse
+	1076, // 2117: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.FailManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse
+	1042, // 2118: controlplane.v1.ManagedConfigurationSourceWorkService.ClaimManagedConfigurationSourceWork:output_type -> controlplane.v1.ClaimManagedConfigurationSourceWorkResponse
+	1044, // 2119: controlplane.v1.ManagedConfigurationSourceWorkService.RenewManagedConfigurationSourceWork:output_type -> controlplane.v1.RenewManagedConfigurationSourceWorkResponse
+	1046, // 2120: controlplane.v1.ManagedConfigurationSourceWorkService.CompleteManagedConfigurationSourceWork:output_type -> controlplane.v1.CompleteManagedConfigurationSourceWorkResponse
+	1048, // 2121: controlplane.v1.ManagedConfigurationSourceWorkService.FailManagedConfigurationSourceWork:output_type -> controlplane.v1.FailManagedConfigurationSourceWorkResponse
+	597,  // 2122: controlplane.v1.RuntimeSecretDraftWorkService.CheckRuntimeSecretDraftWorkReadiness:output_type -> controlplane.v1.CheckRuntimeSecretDraftWorkReadinessResponse
+	599,  // 2123: controlplane.v1.RuntimeSecretDraftWorkService.ConsumeRuntimeSecretDraftOperation:output_type -> controlplane.v1.ConsumeRuntimeSecretDraftOperationResponse
+	601,  // 2124: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftOperation:output_type -> controlplane.v1.CompleteRuntimeSecretDraftOperationResponse
+	603,  // 2125: controlplane.v1.RuntimeSecretDraftWorkService.FailRuntimeSecretDraftOperation:output_type -> controlplane.v1.FailRuntimeSecretDraftOperationResponse
+	605,  // 2126: controlplane.v1.RuntimeSecretDraftWorkService.ListRuntimeSecretDraftRecoveryWork:output_type -> controlplane.v1.ListRuntimeSecretDraftRecoveryWorkResponse
+	607,  // 2127: controlplane.v1.RuntimeSecretDraftWorkService.RecoverRuntimeSecretDraftMaterialization:output_type -> controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse
+	609,  // 2128: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftCleanup:output_type -> controlplane.v1.CompleteRuntimeSecretDraftCleanupResponse
+	626,  // 2129: controlplane.v1.RuntimeSecretWorkService.CheckRuntimeSecretWorkReadiness:output_type -> controlplane.v1.CheckRuntimeSecretWorkReadinessResponse
+	1022, // 2130: controlplane.v1.RuntimeSecretWorkService.CheckCredentialProjectionWorkReadiness:output_type -> controlplane.v1.CheckCredentialProjectionWorkReadinessResponse
+	629,  // 2131: controlplane.v1.RuntimeSecretWorkService.ListRuntimeSecretRecoveryWork:output_type -> controlplane.v1.ListRuntimeSecretRecoveryWorkResponse
+	631,  // 2132: controlplane.v1.RuntimeSecretWorkService.ConsumeRuntimeSecretOperation:output_type -> controlplane.v1.ConsumeRuntimeSecretOperationResponse
+	635,  // 2133: controlplane.v1.RuntimeSecretWorkService.CompleteRuntimeSecretOperation:output_type -> controlplane.v1.CompleteRuntimeSecretOperationResponse
+	637,  // 2134: controlplane.v1.RuntimeSecretWorkService.FailRuntimeSecretOperation:output_type -> controlplane.v1.FailRuntimeSecretOperationResponse
+	639,  // 2135: controlplane.v1.RuntimeSecretWorkService.RecoverRuntimeSecretMaterialization:output_type -> controlplane.v1.RecoverRuntimeSecretMaterializationResponse
+	1024, // 2136: controlplane.v1.RuntimeSecretWorkService.ResolveRuntimeCredentialProjection:output_type -> controlplane.v1.ResolveRuntimeCredentialProjectionResponse
+	1026, // 2137: controlplane.v1.RuntimeSecretWorkService.ValidateRuntimeCredentialProjection:output_type -> controlplane.v1.ValidateRuntimeCredentialProjectionResponse
+	1028, // 2138: controlplane.v1.RuntimeSecretWorkService.ResolveTranscriptionCredentialProjection:output_type -> controlplane.v1.ResolveTranscriptionCredentialProjectionResponse
+	381,  // 2139: controlplane.v1.SystemAssistantService.GetSystemAssistant:output_type -> controlplane.v1.GetSystemAssistantResponse
+	383,  // 2140: controlplane.v1.SystemAssistantService.ListAssistantConversations:output_type -> controlplane.v1.ListAssistantConversationsResponse
+	385,  // 2141: controlplane.v1.SystemAssistantService.CreateAssistantConversation:output_type -> controlplane.v1.CreateAssistantConversationResponse
+	395,  // 2142: controlplane.v1.SystemAssistantService.UpdateAssistantConversationTitle:output_type -> controlplane.v1.UpdateAssistantConversationTitleResponse
+	387,  // 2143: controlplane.v1.SystemAssistantService.ArchiveAssistantConversation:output_type -> controlplane.v1.ArchiveAssistantConversationResponse
+	389,  // 2144: controlplane.v1.SystemAssistantService.RestoreAssistantConversation:output_type -> controlplane.v1.RestoreAssistantConversationResponse
+	391,  // 2145: controlplane.v1.SystemAssistantService.PurgeAssistantConversation:output_type -> controlplane.v1.PurgeAssistantConversationResponse
+	393,  // 2146: controlplane.v1.SystemAssistantService.MoveAssistantConversationToProject:output_type -> controlplane.v1.MoveAssistantConversationToProjectResponse
+	397,  // 2147: controlplane.v1.SystemAssistantService.AddAssistantTurn:output_type -> controlplane.v1.AddAssistantTurnResponse
+	399,  // 2148: controlplane.v1.SystemAssistantService.CancelAssistantTurn:output_type -> controlplane.v1.CancelAssistantTurnResponse
+	401,  // 2149: controlplane.v1.SystemAssistantService.UpdateAssistantPlanDraft:output_type -> controlplane.v1.UpdateAssistantPlanDraftResponse
+	403,  // 2150: controlplane.v1.SystemAssistantService.ValidateAssistantPlan:output_type -> controlplane.v1.ValidateAssistantPlanResponse
+	405,  // 2151: controlplane.v1.SystemAssistantService.ApplyAssistantPlan:output_type -> controlplane.v1.ApplyAssistantPlanResponse
+	407,  // 2152: controlplane.v1.SystemAssistantService.RejectAssistantPlan:output_type -> controlplane.v1.RejectAssistantPlanResponse
+	409,  // 2153: controlplane.v1.SystemAssistantService.UpdateAssistantOwnerInstructions:output_type -> controlplane.v1.UpdateAssistantOwnerInstructionsResponse
+	411,  // 2154: controlplane.v1.SystemAssistantService.RecoverSystemAssistant:output_type -> controlplane.v1.RecoverSystemAssistantResponse
+	925,  // 2155: controlplane.v1.RuntimeWorkService.ReportEmailConfigurationReadback:output_type -> controlplane.v1.ReportEmailConfigurationReadbackResponse
+	932,  // 2156: controlplane.v1.RuntimeWorkService.ResolveEmailAuthorization:output_type -> controlplane.v1.ResolveEmailAuthorizationResponse
+	935,  // 2157: controlplane.v1.RuntimeWorkService.ReportEmailEffectReceipt:output_type -> controlplane.v1.ReportEmailEffectReceiptResponse
+	940,  // 2158: controlplane.v1.RuntimeWorkService.ResolveEmailReconciliation:output_type -> controlplane.v1.ResolveEmailReconciliationResponse
+	464,  // 2159: controlplane.v1.RuntimeWorkService.ClaimExecution:output_type -> controlplane.v1.ClaimExecutionResponse
+	823,  // 2160: controlplane.v1.RuntimeWorkService.GetRuntimeEnvironmentRoleImageConfiguration:output_type -> controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse
+	466,  // 2161: controlplane.v1.RuntimeWorkService.ReadExecutionArtifact:output_type -> controlplane.v1.ReadExecutionArtifactResponse
+	468,  // 2162: controlplane.v1.RuntimeWorkService.StreamExecutionArtifact:output_type -> controlplane.v1.StreamExecutionArtifactResponse
+	429,  // 2163: controlplane.v1.RuntimeWorkService.SearchExecutionFiles:output_type -> controlplane.v1.SearchExecutionFilesResponse
+	201,  // 2164: controlplane.v1.RuntimeWorkService.SearchAssistantResources:output_type -> controlplane.v1.SearchAssistantResourcesResponse
+	431,  // 2165: controlplane.v1.RuntimeWorkService.GetExecutionFileMetadata:output_type -> controlplane.v1.GetExecutionFileMetadataResponse
+	433,  // 2166: controlplane.v1.RuntimeWorkService.PreviewExecutionFile:output_type -> controlplane.v1.PreviewExecutionFileResponse
+	435,  // 2167: controlplane.v1.RuntimeWorkService.GetExecutionFileManifest:output_type -> controlplane.v1.GetExecutionFileManifestResponse
+	471,  // 2168: controlplane.v1.RuntimeWorkService.RenewExecution:output_type -> controlplane.v1.RenewExecutionResponse
+	473,  // 2169: controlplane.v1.RuntimeWorkService.ReportExecutionProgress:output_type -> controlplane.v1.ReportExecutionProgressResponse
+	1016, // 2170: controlplane.v1.RuntimeWorkService.CommitProviderCredentialRefresh:output_type -> controlplane.v1.CommitProviderCredentialRefreshResponse
+	476,  // 2171: controlplane.v1.RuntimeWorkService.CompleteExecution:output_type -> controlplane.v1.CompleteExecutionResponse
+	494,  // 2172: controlplane.v1.RuntimeWorkService.DelegateExecution:output_type -> controlplane.v1.DelegateExecutionResponse
+	496,  // 2173: controlplane.v1.RuntimeWorkService.ProposeAssistantPlan:output_type -> controlplane.v1.ProposeAssistantPlanResponse
+	498,  // 2174: controlplane.v1.RuntimeWorkService.ProposeAssistantMetadata:output_type -> controlplane.v1.ProposeAssistantMetadataResponse
+	500,  // 2175: controlplane.v1.RuntimeWorkService.ProposeRunMetadata:output_type -> controlplane.v1.ProposeRunMetadataResponse
+	502,  // 2176: controlplane.v1.RuntimeWorkService.RecordRunToolCall:output_type -> controlplane.v1.RecordRunToolCallResponse
+	504,  // 2177: controlplane.v1.RuntimeWorkService.ReconcileWarmRuntime:output_type -> controlplane.v1.ReconcileWarmRuntimeResponse
+	506,  // 2178: controlplane.v1.RuntimeWorkService.ReportWarmRuntime:output_type -> controlplane.v1.ReportWarmRuntimeResponse
+	509,  // 2179: controlplane.v1.RuntimeWorkService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
+	513,  // 2180: controlplane.v1.RuntimeWorkService.RenewScheduleOccurrence:output_type -> controlplane.v1.RenewScheduleOccurrenceResponse
+	511,  // 2181: controlplane.v1.RuntimeWorkService.MaterializeScheduleOccurrence:output_type -> controlplane.v1.MaterializeScheduleOccurrenceResponse
+	515,  // 2182: controlplane.v1.RuntimeWorkService.FailScheduleOccurrence:output_type -> controlplane.v1.FailScheduleOccurrenceResponse
+	522,  // 2183: controlplane.v1.RuntimeWorkService.ClaimIntegrationConnectionTests:output_type -> controlplane.v1.ClaimIntegrationConnectionTestsResponse
+	825,  // 2184: controlplane.v1.RuntimeWorkService.GetIntegrationConnectionDefinitionConfiguration:output_type -> controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse
+	524,  // 2185: controlplane.v1.RuntimeWorkService.CompleteIntegrationConnectionTest:output_type -> controlplane.v1.CompleteIntegrationConnectionTestResponse
+	526,  // 2186: controlplane.v1.RuntimeWorkService.ResolveIntegrationInvocation:output_type -> controlplane.v1.ResolveIntegrationInvocationResponse
+	529,  // 2187: controlplane.v1.RuntimeWorkService.ClaimIntegrationInvocations:output_type -> controlplane.v1.ClaimIntegrationInvocationsResponse
+	531,  // 2188: controlplane.v1.RuntimeWorkService.GetIntegrationInvocation:output_type -> controlplane.v1.GetIntegrationInvocationResponse
+	534,  // 2189: controlplane.v1.RuntimeWorkService.CompleteIntegrationInvocation:output_type -> controlplane.v1.CompleteIntegrationInvocationResponse
+	480,  // 2190: controlplane.v1.SessionArchiveWorkService.ClaimSessionArchiveTasks:output_type -> controlplane.v1.ClaimSessionArchiveTasksResponse
+	482,  // 2191: controlplane.v1.SessionArchiveWorkService.RenewSessionArchiveTask:output_type -> controlplane.v1.RenewSessionArchiveTaskResponse
+	488,  // 2192: controlplane.v1.SessionArchiveWorkService.CompleteSessionSnapshot:output_type -> controlplane.v1.CompleteSessionSnapshotResponse
+	489,  // 2193: controlplane.v1.SessionArchiveWorkService.CompleteSessionRestore:output_type -> controlplane.v1.CompleteSessionRestoreResponse
+	490,  // 2194: controlplane.v1.SessionArchiveWorkService.CompleteSessionPVCDeletion:output_type -> controlplane.v1.CompleteSessionPVCDeletionResponse
+	491,  // 2195: controlplane.v1.SessionArchiveWorkService.CompleteSessionObjectDeletion:output_type -> controlplane.v1.CompleteSessionObjectDeletionResponse
+	492,  // 2196: controlplane.v1.SessionArchiveWorkService.FailSessionArchiveTask:output_type -> controlplane.v1.FailSessionArchiveTaskResponse
+	537,  // 2197: controlplane.v1.InteractionWorkService.ListInteractionSources:output_type -> controlplane.v1.ListInteractionSourcesResponse
+	540,  // 2198: controlplane.v1.InteractionWorkService.ClaimInteractionDeliveries:output_type -> controlplane.v1.ClaimInteractionDeliveriesResponse
+	542,  // 2199: controlplane.v1.InteractionWorkService.CompleteInteractionDelivery:output_type -> controlplane.v1.CompleteInteractionDeliveryResponse
+	551,  // 2200: controlplane.v1.InteractionWorkService.AcceptInteractionMessage:output_type -> controlplane.v1.AcceptInteractionMessageResponse
+	1003, // 2201: controlplane.v1.ProviderCredentialMaterializerService.ObserveProviderModelCatalog:output_type -> controlplane.v1.ObserveProviderModelCatalogResponse
+	1004, // 2202: controlplane.v1.ProviderCredentialMaterializerService.CheckProviderCredentialMaterializerReadiness:output_type -> controlplane.v1.CheckProviderCredentialMaterializerReadinessResponse
+	1006, // 2203: controlplane.v1.ProviderCredentialMaterializerService.StartDeviceAuthorization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse
+	1010, // 2204: controlplane.v1.ProviderCredentialMaterializerService.ObserveDeviceAuthorization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
+	1012, // 2205: controlplane.v1.ProviderCredentialMaterializerService.MaterializeAPIKey:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse
+	1014, // 2206: controlplane.v1.ProviderCredentialMaterializerService.DiscardProviderCredentialMaterialization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse
+	1019, // 2207: controlplane.v1.ProviderCredentialMaterializerService.CleanupProviderCredential:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
+	1849, // [1849:2208] is the sub-list for method output_type
+	1490, // [1490:1849] is the sub-list for method input_type
+	1490, // [1490:1490] is the sub-list for extension type_name
+	1490, // [1490:1490] is the sub-list for extension extendee
+	0,    // [0:1490] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_control_plane_proto_init() }
@@ -85484,21 +85611,21 @@ func file_controlplane_v1_control_plane_proto_init() {
 		(*StreamExecutionArtifactResponse_Chunk)(nil),
 		(*StreamExecutionArtifactResponse_Complete)(nil),
 	}
-	file_controlplane_v1_control_plane_proto_msgTypes[675].OneofWrappers = []any{}
-	file_controlplane_v1_control_plane_proto_msgTypes[678].OneofWrappers = []any{}
-	file_controlplane_v1_control_plane_proto_msgTypes[680].OneofWrappers = []any{
+	file_controlplane_v1_control_plane_proto_msgTypes[677].OneofWrappers = []any{}
+	file_controlplane_v1_control_plane_proto_msgTypes[680].OneofWrappers = []any{}
+	file_controlplane_v1_control_plane_proto_msgTypes[682].OneofWrappers = []any{
 		(*CopyRoleImageConfigurationRequest_RecipeRef)(nil),
 		(*CopyRoleImageConfigurationRequest_ConfigurationRef)(nil),
 	}
-	file_controlplane_v1_control_plane_proto_msgTypes[683].OneofWrappers = []any{
+	file_controlplane_v1_control_plane_proto_msgTypes[685].OneofWrappers = []any{
 		(*CopyIntegrationDefinitionConfigurationRequest_Shipped)(nil),
 		(*CopyIntegrationDefinitionConfigurationRequest_ConfigurationRef)(nil),
 	}
-	file_controlplane_v1_control_plane_proto_msgTypes[765].OneofWrappers = []any{
+	file_controlplane_v1_control_plane_proto_msgTypes[767].OneofWrappers = []any{
 		(*EmailMailboxDraftContent_Specification)(nil),
 		(*EmailMailboxDraftContent_Yaml)(nil),
 	}
-	file_controlplane_v1_control_plane_proto_msgTypes[799].OneofWrappers = []any{
+	file_controlplane_v1_control_plane_proto_msgTypes[801].OneofWrappers = []any{
 		(*EmailExecutionBinding_InvocationRef)(nil),
 		(*EmailExecutionBinding_ConnectionTestRef)(nil),
 	}
@@ -85508,7 +85635,7 @@ func file_controlplane_v1_control_plane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlplane_v1_control_plane_proto_rawDesc), len(file_controlplane_v1_control_plane_proto_rawDesc)),
 			NumEnums:      128,
-			NumMessages:   950,
+			NumMessages:   952,
 			NumExtensions: 0,
 			NumServices:   11,
 		},

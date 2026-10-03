@@ -132,3 +132,17 @@ func (server *Server) SetProviderAccountEnabled(
 	}
 	return &controlplanev1.SetProviderAccountEnabledResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
 }
+
+func (server *Server) SetProviderAccountConcurrency(
+	ctx context.Context,
+	request *controlplanev1.SetProviderAccountConcurrencyRequest,
+) (*controlplanev1.SetProviderAccountConcurrencyResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SetProviderAccountConcurrency_FullMethodName,
+		command.SetProviderAccountConcurrency, request.GetMutation(), command.ProviderAccountInput{
+			AccountRef: request.GetAccountRef(), MaximumConcurrentExecutions: request.GetMaximumConcurrentExecutions(),
+		})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.SetProviderAccountConcurrencyResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
+}

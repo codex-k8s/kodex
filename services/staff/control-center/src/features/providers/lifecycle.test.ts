@@ -70,6 +70,7 @@ const account: ProviderAccount = {
   state: "DELETING",
   enabled: false,
   ready: false,
+  maximumConcurrentExecutions: 10,
   nextActions: [],
   createdAt: "2026-09-01T00:00:00Z",
   updatedAt: "2026-09-01T00:00:00Z",

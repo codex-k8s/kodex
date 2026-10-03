@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.317
+version: 1.0.319
 updated: 2026-10-03
 ---
 
@@ -6935,7 +6935,7 @@ GitHub checks не считается `PASS`.
 
 - [ ] Общеплатформенные образы и секреты имеют явную организационную область,
       без фиктивного проекта и без обхода сборки, допуска или secret-broker.
-- [ ] Лимит параллельных выполнений аккаунта провайдера по умолчанию — 10
+- [x] Лимит параллельных выполнений аккаунта провайдера по умолчанию — 10
       вместо 1. Настраивается в параметрах аккаунта через штатные API и UI
       владельцем/администратором, RU/EN; сохраняется в CP с OCC, idempotency,
       аудитом и событием. Это общий лимит аккаунта для помощников и сотрудников,
@@ -6946,6 +6946,8 @@ GitHub checks не считается `PASS`.
       не редактируется; явные пользовательские настройки сохраняются.
       Изменение лимита не переписывает RuntimeRevision и не обрывает активные
       ходы. При снижении лимита новые задания ждут освобождения слотов.
+      Миграция и перевод текущего аккаунта уже проверены; сценарий снижения
+      лимита при активных ходах остаётся частью следующей матрицы admission.
 - [ ] Полная системная настройка: модель/аккаунт/reasoning, образ, проверенные
       инструменты, окружение, несекретные переменные, привязки секретов, ресурсы,
       тома, сетевой доступ и инструкции. Доступ — владелец/администратор.
@@ -7011,6 +7013,24 @@ session направляется в отдельный turn runtime. Эти ме
 
 ### Карта полномочий и жизненного цикла
 
+Для настройки ёмкости аккаунта фиксируется отдельный путь: проверенная owner/admin
+session → `PUT /api/v1/provider-accounts/{providerAccountRef}/concurrency` →
+gateway → `PlatformCommandService.SetProviderAccountConcurrency` → команда
+`SET_PROVIDER_ACCOUNT_CONCURRENCY` → owner-транзакция CP. Подписанная operation
+`platform.command.provider-accounts.concurrency.set` связывает полный метод,
+точный account ref, expected version, idempotency и verified actor; project и
+owner не берутся из payload. CP разрешает аккаунт внутри org до OCC/receipt,
+проверяет owner/admin и диапазон 1..256, блокирует ту же строку аккаунта, что
+использует claim, сохраняет значение, новую version, receipt, audit и
+`PROVIDER_ACCOUNT_CHANGED` атомарно. Ответ — актуальный `ProviderAccount`,
+включая maximumConcurrentExecutions; unknown/чужой ref — NOT_FOUND, отсутствие
+прав — FORBIDDEN, stale version/idempotency — штатный conflict, invalid limit —
+INVALID_REQUEST. Consumers: scheduler/controller через авторитетный claim;
+frontend cache через существующий scoped event/read path. Задачи не создаются,
+leases/grants/attempts и текущие RuntimeRevision не меняются; cancel/delete/retry
+этой настройке неприменимы. Снижение ёмкости запрещает новые claims, но не
+прерывает ранее выданные. Конкретная реализация и проверки ещё не завершены.
+
 | Сценарий                | Инициатор и authority                                                                             | Владелец состояния и эффект                                                                                          | Потребитель / terminal                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Системная настройка     | Owner/admin через проверенную browser session; отдельный системный API, org назначает CP          | CP: специализированная команда, точный ресурс организации, OCC/idempotency, immutable версия, audit/outbox           | Runtime-controller и secret-broker заново разрешают зависимости следующего хода; текущий snapshot не меняется                  |
@@ -7075,3 +7095,48 @@ revisions — 0. Данные не переписывались. Ранее пр
   исключены. Обновление действующей admission-policy и переключение системного
   runtime на новый образ ещё NOT RUN: подготовка артефакта не считается его
   активацией. Checkbox удаления capability остаётся незакрытым до readback.
+
+### Этап 1 — параметры параллельности аккаунта
+
+- [x] Отдельная команда `SetProviderAccountConcurrency` и
+      `PUT /api/v1/provider-accounts/{providerAccountRef}/concurrency`:
+      точные account/version/idempotency, закрытая регистрация операции,
+      owner/admin и domain permission до проверки версии или replay.
+      Изменение фиксируется общей транзакцией CP с receipt/audit/outbox.
+- [x] Account read/list и usage возвращают один сохранённый лимит.
+      В UI — настройки аккаунта, RU/EN и слайдер 1..256 с текущим значением;
+      элементы управления высотой 32 px. Устаревшие запросы и поздние ответы
+      после переключения аккаунта либо утраты доступа не применяются.
+- [x] Новая forward-only migration `20261003000300` меняет только DEFAULT.
+      На локальном стенде применена единственная выбранная Job
+      `control-plane-migrate` через repo-owned `render-local.sh` и
+      `deploy-local.sh --stage migrate --workload control-plane-migrate`.
+      Readback: schema default = 10, ledger = 20261003000300. Существующие
+      значения аккаунтов не изменяются миграцией.
+- [x] Текущий подключённый аккаунт переведён с 1 на 10 штатной командой
+      из Chrome MCP: PUT = 200; повторное чтение PostgreSQL подтверждает 10.
+      Авторизация и credential revision этой командой не меняются.
+- [x] Локальные проверки: control-plane domain/repository/gRPC unit,
+      controlplaneclient/policygen, gateway HTTP, Proto lint/codegen,
+      policy codegen и SQL boundary; отдельный PostgreSQL subtest
+      `TestBootstrapComponent/provider_concurrency_settings_are_versioned_and_isolated`.
+      Проверены 0/-1/257, 1/10/256, stale version, exact replay, иной payload,
+      обычный участник с делегированным manage, отсутствие EDIT у него,
+      отказ по полномочиям до раскрытия результата проверки версии.
+- [x] Frontend: 73 теста девяти файлов, typecheck, scoped ESLint и build.
+      Через Chrome: hard reload, сохранение, скриншот слайдера, смена значения
+      до 256 без сохранения и возврат к 10, отсутствие overflow и ошибок Console.
+      Совпадают host/Pod SHA256 миграции, SQL команды и компонента слайдера.
+- [ ] Общая матрица параллельного admission: 2/10 чатов, очередь 11-го,
+      race двух claim workers, снижение лимита с активными leases,
+      Stop/delete/retry отдельного графа и восстановление после restart/rejoin.
+      Изменение только account row ещё не доказывает всю эту матрицу.
+- [ ] Полный TestBootstrapComponent: ранее зафиксированный FAIL не закрыт
+      успехом отдельного subtest. Общеплатформенные ресурсы и проектные профили,
+      активация нового runner, реальные ИИ/STT/device-code и staging/production
+      не объявлены проверенными.
+
+Документация Context7: PostgreSQL 18 — DEFAULT при ALTER и row locks;
+Vue — реактивные props/watch и cleanup устаревших асинхронных запросов.
+Цель остаётся активной; следующий этап — изолированное параллельное admission
+и полные системные/проектные runtime-профили по checklist выше.

@@ -3770,6 +3770,7 @@ const (
 	PlatformCommandService_DeleteProviderAccount_FullMethodName                     = "/controlplane.v1.PlatformCommandService/DeleteProviderAccount"
 	PlatformCommandService_CancelProviderAccountQueuedWork_FullMethodName           = "/controlplane.v1.PlatformCommandService/CancelProviderAccountQueuedWork"
 	PlatformCommandService_SetProviderAccountEnabled_FullMethodName                 = "/controlplane.v1.PlatformCommandService/SetProviderAccountEnabled"
+	PlatformCommandService_SetProviderAccountConcurrency_FullMethodName             = "/controlplane.v1.PlatformCommandService/SetProviderAccountConcurrency"
 	PlatformCommandService_CreateIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
 	PlatformCommandService_UpdateIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/UpdateIntegrationConnection"
 	PlatformCommandService_DeleteIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/DeleteIntegrationConnection"
@@ -3950,6 +3951,7 @@ type PlatformCommandServiceClient interface {
 	DeleteProviderAccount(ctx context.Context, in *DeleteProviderAccountRequest, opts ...grpc.CallOption) (*DeleteProviderAccountResponse, error)
 	CancelProviderAccountQueuedWork(ctx context.Context, in *CancelProviderAccountQueuedWorkRequest, opts ...grpc.CallOption) (*CancelProviderAccountQueuedWorkResponse, error)
 	SetProviderAccountEnabled(ctx context.Context, in *SetProviderAccountEnabledRequest, opts ...grpc.CallOption) (*SetProviderAccountEnabledResponse, error)
+	SetProviderAccountConcurrency(ctx context.Context, in *SetProviderAccountConcurrencyRequest, opts ...grpc.CallOption) (*SetProviderAccountConcurrencyResponse, error)
 	CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error)
 	UpdateIntegrationConnection(ctx context.Context, in *UpdateIntegrationConnectionRequest, opts ...grpc.CallOption) (*UpdateIntegrationConnectionResponse, error)
 	DeleteIntegrationConnection(ctx context.Context, in *DeleteIntegrationConnectionRequest, opts ...grpc.CallOption) (*DeleteIntegrationConnectionResponse, error)
@@ -5146,6 +5148,16 @@ func (c *platformCommandServiceClient) SetProviderAccountEnabled(ctx context.Con
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) SetProviderAccountConcurrency(ctx context.Context, in *SetProviderAccountConcurrencyRequest, opts ...grpc.CallOption) (*SetProviderAccountConcurrencyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetProviderAccountConcurrencyResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SetProviderAccountConcurrency_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateIntegrationConnectionResponse)
@@ -5846,6 +5858,7 @@ type PlatformCommandServiceServer interface {
 	DeleteProviderAccount(context.Context, *DeleteProviderAccountRequest) (*DeleteProviderAccountResponse, error)
 	CancelProviderAccountQueuedWork(context.Context, *CancelProviderAccountQueuedWorkRequest) (*CancelProviderAccountQueuedWorkResponse, error)
 	SetProviderAccountEnabled(context.Context, *SetProviderAccountEnabledRequest) (*SetProviderAccountEnabledResponse, error)
+	SetProviderAccountConcurrency(context.Context, *SetProviderAccountConcurrencyRequest) (*SetProviderAccountConcurrencyResponse, error)
 	CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error)
 	UpdateIntegrationConnection(context.Context, *UpdateIntegrationConnectionRequest) (*UpdateIntegrationConnectionResponse, error)
 	DeleteIntegrationConnection(context.Context, *DeleteIntegrationConnectionRequest) (*DeleteIntegrationConnectionResponse, error)
@@ -6246,6 +6259,9 @@ func (UnimplementedPlatformCommandServiceServer) CancelProviderAccountQueuedWork
 }
 func (UnimplementedPlatformCommandServiceServer) SetProviderAccountEnabled(context.Context, *SetProviderAccountEnabledRequest) (*SetProviderAccountEnabledResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetProviderAccountEnabled not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SetProviderAccountConcurrency(context.Context, *SetProviderAccountConcurrencyRequest) (*SetProviderAccountConcurrencyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetProviderAccountConcurrency not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateIntegrationConnection not implemented")
@@ -8401,6 +8417,24 @@ func _PlatformCommandService_SetProviderAccountEnabled_Handler(srv interface{}, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_SetProviderAccountConcurrency_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetProviderAccountConcurrencyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SetProviderAccountConcurrency(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SetProviderAccountConcurrency_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SetProviderAccountConcurrency(ctx, req.(*SetProviderAccountConcurrencyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_CreateIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
@@ -9879,6 +9913,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetProviderAccountEnabled",
 			Handler:    _PlatformCommandService_SetProviderAccountEnabled_Handler,
+		},
+		{
+			MethodName: "SetProviderAccountConcurrency",
+			Handler:    _PlatformCommandService_SetProviderAccountConcurrency_Handler,
 		},
 		{
 			MethodName: "CreateIntegrationConnection",

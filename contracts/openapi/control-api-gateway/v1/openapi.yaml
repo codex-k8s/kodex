@@ -1846,6 +1846,38 @@ paths:
                 { schema: { $ref: "#/components/schemas/ProviderAccount" } },
             }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/provider-accounts/{providerAccountRef}/concurrency:
+    put:
+      tags: [Agents]
+      operationId: setProviderAccountConcurrency
+      parameters:
+        [
+          { $ref: "#/components/parameters/ProviderAccountRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  {
+                    $ref: "#/components/schemas/ProviderAccountConcurrencyInput",
+                  },
+              },
+          }
+      responses:
+        "200":
+          description: Лимит параллельных выполнений изменён без остановки активных ходов
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ProviderAccount" } },
+            }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/prompt-templates/catalog:
     get:
       tags: [Agents]
@@ -15644,6 +15676,7 @@ components:
           state,
           enabled,
           ready,
+          maximumConcurrentExecutions,
           nextActions,
           createdAt,
           updatedAt,
@@ -15688,6 +15721,8 @@ components:
           }
         enabled: { type: boolean }
         ready: { type: boolean }
+        maximumConcurrentExecutions:
+          { type: integer, format: int32, minimum: 1, maximum: 256 }
         usage: { $ref: "#/components/schemas/ProviderAccountUsage" }
         authorization: { $ref: "#/components/schemas/ProviderAuthorization" }
         deletion: { $ref: "#/components/schemas/ProviderAccountDeletion" }
@@ -15697,6 +15732,13 @@ components:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         updatedAt: { $ref: "#/components/schemas/Timestamp" }
+    ProviderAccountConcurrencyInput:
+      type: object
+      additionalProperties: false
+      required: [maximumConcurrentExecutions]
+      properties:
+        maximumConcurrentExecutions:
+          { type: integer, format: int32, minimum: 1, maximum: 256 }
     ProviderAccountDeletion:
       type: object
       additionalProperties: false

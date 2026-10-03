@@ -379,6 +379,7 @@ type ProviderCredentialDescriptor struct {
 }
 
 type ProviderAccount struct {
+	MaximumConcurrentExecutions                                              int32
 	Usage                                                                    *ProviderAccountUsage
 	Deletion                                                                 *ProviderAccountDeletion
 	Verification                                                             *ProviderAccountVerification

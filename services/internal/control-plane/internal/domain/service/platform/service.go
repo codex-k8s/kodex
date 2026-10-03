@@ -1340,7 +1340,7 @@ func knownCommand(kind command.Kind) bool {
 		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet, command.CreateSchedule,
 		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule,
 		command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
-		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled,
+		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled, command.SetProviderAccountConcurrency,
 		command.CreateConnection, command.UpdateConnection, command.DeleteConnection,
 		command.ConfigureConnectionCredential, command.ConfigureEmailCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,

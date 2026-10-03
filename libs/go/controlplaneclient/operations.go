@@ -267,6 +267,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.provider-accounts.revoke":                     controlplanev1.PlatformCommandService_RevokeProviderAccount_FullMethodName,
 		"platform.command.provider-accounts.delete":                     controlplanev1.PlatformCommandService_DeleteProviderAccount_FullMethodName,
 		"platform.command.provider-accounts.queued-work.cancel":         controlplanev1.PlatformCommandService_CancelProviderAccountQueuedWork_FullMethodName,
+		"platform.command.provider-accounts.concurrency.set":            controlplanev1.PlatformCommandService_SetProviderAccountConcurrency_FullMethodName,
 		"platform.command.provider-accounts.enable":                     controlplanev1.PlatformCommandService_SetProviderAccountEnabled_FullMethodName,
 		"platform.command.integrations.create":                          controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName,
 		"platform.command.integrations.update":                          controlplanev1.PlatformCommandService_UpdateIntegrationConnection_FullMethodName,

@@ -11155,16 +11155,17 @@ type PromptVariableCatalogInputTargetKind string
 
 // ProviderAccount defines model for ProviderAccount.
 type ProviderAccount struct {
-	Authorization         *ProviderAuthorization       `json:"authorization,omitempty"`
-	CreatedAt             Timestamp                    `json:"createdAt"`
-	DefinitionKey         ProviderAccountDefinitionKey `json:"definitionKey"`
-	Deletion              *ProviderAccountDeletion     `json:"deletion,omitempty"`
-	Enabled               bool                         `json:"enabled"`
-	ExternalAccountMasked string                       `json:"externalAccountMasked"`
-	Name                  string                       `json:"name"`
-	NextActions           []NextAction                 `json:"nextActions"`
-	Ready                 bool                         `json:"ready"`
-	Ref                   OpaqueRef                    `json:"ref"`
+	Authorization               *ProviderAuthorization       `json:"authorization,omitempty"`
+	CreatedAt                   Timestamp                    `json:"createdAt"`
+	DefinitionKey               ProviderAccountDefinitionKey `json:"definitionKey"`
+	Deletion                    *ProviderAccountDeletion     `json:"deletion,omitempty"`
+	Enabled                     bool                         `json:"enabled"`
+	ExternalAccountMasked       string                       `json:"externalAccountMasked"`
+	MaximumConcurrentExecutions int32                        `json:"maximumConcurrentExecutions"`
+	Name                        string                       `json:"name"`
+	NextActions                 []NextAction                 `json:"nextActions"`
+	Ready                       bool                         `json:"ready"`
+	Ref                         OpaqueRef                    `json:"ref"`
 
 	// SafeStatusReason Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
 	SafeStatusReason *ProviderAccountSafeStatusReason `json:"safeStatusReason,omitempty"`
@@ -11227,6 +11228,11 @@ type ProviderAccountCandidateInput struct {
 	CatalogRevision       string    `json:"catalogRevision"`
 	ProviderDefinitionKey string    `json:"providerDefinitionKey"`
 	Weight                int       `json:"weight"`
+}
+
+// ProviderAccountConcurrencyInput defines model for ProviderAccountConcurrencyInput.
+type ProviderAccountConcurrencyInput struct {
+	MaximumConcurrentExecutions int32 `json:"maximumConcurrentExecutions"`
 }
 
 // ProviderAccountCreateInput defines model for ProviderAccountCreateInput.
@@ -15295,6 +15301,13 @@ type ListProviderAccountBlockersParams struct {
 	PageToken *string                     `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// SetProviderAccountConcurrencyParams defines parameters for SetProviderAccountConcurrency.
+type SetProviderAccountConcurrencyParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // StartProviderAccountDeviceAuthorizationParams defines parameters for StartProviderAccountDeviceAuthorization.
 type StartProviderAccountDeviceAuthorizationParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -16231,6 +16244,9 @@ type CreateProviderAccountJSONRequestBody = ProviderAccountCreateInput
 
 // AuthorizeProviderAccountApiKeyJSONRequestBody defines body for AuthorizeProviderAccountApiKey for application/json ContentType.
 type AuthorizeProviderAccountApiKeyJSONRequestBody = ProviderApiKeyInput
+
+// SetProviderAccountConcurrencyJSONRequestBody defines body for SetProviderAccountConcurrency for application/json ContentType.
+type SetProviderAccountConcurrencyJSONRequestBody = ProviderAccountConcurrencyInput
 
 // SetProviderAccountEnabledJSONRequestBody defines body for SetProviderAccountEnabled for application/json ContentType.
 type SetProviderAccountEnabledJSONRequestBody = EnabledInput
@@ -17279,6 +17295,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/provider-accounts/{providerAccountRef}/blockers)
 	ListProviderAccountBlockers(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params ListProviderAccountBlockersParams)
+
+	// (PUT /api/v1/provider-accounts/{providerAccountRef}/concurrency)
+	SetProviderAccountConcurrency(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params SetProviderAccountConcurrencyParams)
 
 	// (POST /api/v1/provider-accounts/{providerAccountRef}/device-authorization)
 	StartProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params StartProviderAccountDeviceAuthorizationParams)
@@ -35911,6 +35930,112 @@ func (siw *ServerInterfaceWrapper) ListProviderAccountBlockers(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// SetProviderAccountConcurrency operation middleware
+func (siw *ServerInterfaceWrapper) SetProviderAccountConcurrency(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "providerAccountRef" -------------
+	var providerAccountRef ProviderAccountRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "providerAccountRef", r.PathValue("providerAccountRef"), &providerAccountRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerAccountRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetProviderAccountConcurrencyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetProviderAccountConcurrency(w, r, providerAccountRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StartProviderAccountDeviceAuthorization operation middleware
 func (siw *ServerInterfaceWrapper) StartProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request) {
 
@@ -45419,6 +45544,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/api-key-authorization", wrapper.AuthorizeProviderAccountApiKey)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/authorization-refresh", wrapper.RefreshProviderAccountAuthorization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/blockers", wrapper.ListProviderAccountBlockers)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/concurrency", wrapper.SetProviderAccountConcurrency)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-authorization", wrapper.StartProviderAccountDeviceAuthorization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification", wrapper.VerifyProviderAccountDeviceAuthorization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-reauthorizations", wrapper.ReauthorizeProviderAccountDeviceCode)

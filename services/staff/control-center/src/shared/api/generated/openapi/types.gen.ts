@@ -3181,6 +3181,7 @@ export type ProviderAccount = {
     state: 'PENDING_AUTHORIZATION' | 'AUTHORIZED' | 'REAUTHORIZATION_REQUIRED' | 'REVOKED' | 'DISABLED' | 'DELETING' | 'DELETED';
     enabled: boolean;
     ready: boolean;
+    maximumConcurrentExecutions: number;
     usage?: ProviderAccountUsage;
     authorization?: ProviderAuthorization;
     deletion?: ProviderAccountDeletion;
@@ -3188,6 +3189,10 @@ export type ProviderAccount = {
     nextActions: Array<NextAction>;
     createdAt: Timestamp;
     updatedAt: Timestamp;
+};
+
+export type ProviderAccountConcurrencyInput = {
+    maximumConcurrentExecutions: number;
 };
 
 export type ProviderAccountDeletion = {
@@ -6687,6 +6692,38 @@ export type SetProviderAccountEnabledResponses = {
 };
 
 export type SetProviderAccountEnabledResponse = SetProviderAccountEnabledResponses[keyof SetProviderAccountEnabledResponses];
+
+export type SetProviderAccountConcurrencyData = {
+    body: ProviderAccountConcurrencyInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/concurrency';
+};
+
+export type SetProviderAccountConcurrencyErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SetProviderAccountConcurrencyError = SetProviderAccountConcurrencyErrors[keyof SetProviderAccountConcurrencyErrors];
+
+export type SetProviderAccountConcurrencyResponses = {
+    /**
+     * Лимит параллельных выполнений изменён без остановки активных ходов
+     */
+    200: ProviderAccount;
+};
+
+export type SetProviderAccountConcurrencyResponse = SetProviderAccountConcurrencyResponses[keyof SetProviderAccountConcurrencyResponses];
 
 export type ListPromptTemplateVariablesData = {
     body?: never;

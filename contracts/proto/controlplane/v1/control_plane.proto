@@ -227,6 +227,7 @@ service PlatformCommandService {
   rpc DeleteProviderAccount(DeleteProviderAccountRequest) returns (DeleteProviderAccountResponse);
   rpc CancelProviderAccountQueuedWork(CancelProviderAccountQueuedWorkRequest) returns (CancelProviderAccountQueuedWorkResponse);
   rpc SetProviderAccountEnabled(SetProviderAccountEnabledRequest) returns (SetProviderAccountEnabledResponse);
+  rpc SetProviderAccountConcurrency(SetProviderAccountConcurrencyRequest) returns (SetProviderAccountConcurrencyResponse);
   rpc CreateIntegrationConnection(CreateIntegrationConnectionRequest) returns (CreateIntegrationConnectionResponse);
   rpc UpdateIntegrationConnection(UpdateIntegrationConnectionRequest) returns (UpdateIntegrationConnectionResponse);
   rpc DeleteIntegrationConnection(DeleteIntegrationConnectionRequest) returns (DeleteIntegrationConnectionResponse);
@@ -5508,6 +5509,7 @@ message ProviderAccount {
   ProviderAccountUsage usage = 14;
   ProviderAccountDeletion deletion = 15;
   ProviderAccountVerification verification = 16;
+  int32 maximum_concurrent_executions = 17;
 }
 
 enum ProviderAccountBlockerKind {
@@ -5810,6 +5812,15 @@ message CancelProviderAccountQueuedWorkResponse {
   ProviderAccount account = 1;
   repeated ProviderAccountQueuedWorkResult outcomes = 2;
 }
+message SetProviderAccountConcurrencyRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+  int32 maximum_concurrent_executions = 3;
+}
+message SetProviderAccountConcurrencyResponse {
+  ProviderAccount account = 1;
+}
+
 message SetProviderAccountEnabledRequest {
   MutationContext mutation = 1;
   string account_ref = 2;

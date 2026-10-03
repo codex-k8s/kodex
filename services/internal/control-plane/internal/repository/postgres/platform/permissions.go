@@ -21,6 +21,18 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.SetProviderAccountConcurrency:
+		permission, target, err := repository.commandAccessTarget(ctx, tx, current, input)
+		if err != nil {
+			return err
+		}
+		if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
+			return errs.ErrNotFound
+		}
+		if current.role != "OWNER" && current.role != "ADMINISTRATOR" {
+			return errs.ErrForbidden
+		}
+		return nil
 	case command.CreateAssistantRoleImageRecipe:
 		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
 		if !ok {

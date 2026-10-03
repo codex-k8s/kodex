@@ -648,6 +648,11 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.command.provider-accounts.concurrency.set",
+      "source_binding_sha256": "4d10025df2bb19d2e09dd295f21f8bdfa403fcdc4014ecf5f3ddccfcbbeba26f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.command.provider-accounts.create",
       "source_binding_sha256": "f53a96b2e1f0a6df689d5788743b0d6415f33bbecb6afa5f5f0c8e2b6eed00d4",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"

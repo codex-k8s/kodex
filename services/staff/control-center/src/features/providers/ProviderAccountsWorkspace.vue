@@ -13,6 +13,7 @@ import {
   Search,
   ShieldOff,
   Smartphone,
+  SlidersHorizontal,
   Trash2,
   Maximize2,
 } from "@lucide/vue";
@@ -40,6 +41,7 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { loadProviderDefinitions } from "./api";
 import ProviderUsageDetails from "./ProviderUsageDetails.vue";
+import ProviderAccountConcurrencySettings from "./ProviderAccountConcurrencySettings.vue";
 import ProviderAccountLifecyclePanel from "./ProviderAccountLifecyclePanel.vue";
 import ProviderLifecycleRecovery from "./ProviderLifecycleRecovery.vue";
 import type { ProviderLifecycleResult } from "./lifecycle";
@@ -84,6 +86,7 @@ const createOpen = ref(false);
 const authorizationAccount = ref<ProviderAccount>();
 const revokeAccount = ref<ProviderAccount>();
 const impactAccount = ref<ProviderAccount>();
+const settingsAccount = ref<ProviderAccount>();
 const authorizationRecoveryPending = ref(false);
 const authorizationMethod = ref<ProviderAuthorizationMethod>("DEVICE_CODE");
 const apiKey = ref("");
@@ -372,6 +375,8 @@ async function confirmRevoke(): Promise<void> {
 }
 
 function receiveLifecycleAccount(account: ProviderAccount): void {
+  const current = store.accounts.find((item) => item.ref === account.ref);
+  if (current && current.version > account.version) return;
   store.accounts = upsertProviderAccount(store.accounts, account);
   if (authorizationAccount.value?.ref === account.ref) {
     if (account.state === "DELETED") closeAuthorization();
@@ -401,6 +406,13 @@ async function copyUserCode(): Promise<void> {
 
 onMounted(() => store.restoreSnapshot());
 watch(accounts, (items) => {
+  if (settingsAccount.value) {
+    const updated = items.find(
+      (item) => item.ref === settingsAccount.value?.ref,
+    );
+    settingsAccount.value =
+      updated && accountAllows(updated, "EDIT") ? updated : undefined;
+  }
   const currentRef = authorizationAccount.value?.ref;
   if (!currentRef) return;
   const updated = items.find((item) => item.ref === currentRef);
@@ -656,6 +668,17 @@ onBeforeUnmount(() => {
                       <RefreshCw :size="18" aria-hidden="true" />
                     </button>
                     <button
+                      v-if="accountAllows(account, 'EDIT')"
+                      type="button"
+                      class="icon-button"
+                      :title="$t('providers.accountSettings')"
+                      :aria-label="$t('providers.accountSettings')"
+                      :disabled="busyRefs.includes(account.ref)"
+                      @click="settingsAccount = account"
+                    >
+                      <SlidersHorizontal :size="18" aria-hidden="true" />
+                    </button>
+                    <button
                       v-if="accountAllows(account, 'CONFIGURE_CREDENTIAL')"
                       type="button"
                       class="icon-button"
@@ -772,6 +795,20 @@ onBeforeUnmount(() => {
       "
       :problem="localProblem"
     />
+
+    <ModalDialog
+      v-if="settingsAccount"
+      :title="
+        $t('providers.accountSettingsTitle', { name: settingsAccount.name })
+      "
+      size="md"
+      @close="settingsAccount = undefined"
+    >
+      <ProviderAccountConcurrencySettings
+        :account="settingsAccount"
+        @saved="receiveLifecycleAccount"
+      />
+    </ModalDialog>
 
     <ModalDialog
       v-if="createOpen"

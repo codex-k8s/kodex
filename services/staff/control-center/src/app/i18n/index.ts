@@ -3369,6 +3369,13 @@ const ru = {
   },
   providers: {
     catalogObserved: "Проверено",
+    accountSettings: "Настройки аккаунта",
+    accountSettingsTitle: "Настройки аккаунта: {name}",
+    concurrencyLimit: "Параллельные выполнения",
+    concurrencyHint:
+      "Общий лимит для помощников и ИИ-сотрудников, использующих этот аккаунт. По умолчанию — 10, допустимо от 1 до 256.",
+    concurrencyActiveHint:
+      "При снижении лимита текущие работы продолжаются. Новые ходы ждут освобождения места. Это ограничение Kodex, а не квота провайдера.",
     catalogAsOf: "Каталог Kodex от {date}",
     catalogPending: "Каталог проверяется",
     catalogReady: "Каталог актуален",
@@ -7647,6 +7654,13 @@ const en = {
   },
   providers: {
     ...ru.providers,
+    accountSettings: "Account settings",
+    accountSettingsTitle: "Account settings: {name}",
+    concurrencyLimit: "Concurrent executions",
+    concurrencyHint:
+      "Shared limit for assistants and AI employees using this account. The default is 10; allowed values are 1–256.",
+    concurrencyActiveHint:
+      "Lowering the limit does not stop active work. New turns wait for capacity. This is a Kodex limit, not a provider quota.",
     catalogObserved: "Observed",
     catalogAsOf: "Kodex catalog as of {date}",
     catalogPending: "Checking catalog",

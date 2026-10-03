@@ -193,6 +193,7 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("model catalog is version bound", func(t *testing.T) { testModelCatalogVersion(t, ctx, repository) })
 	t.Run("catalog cards preserve eligible activity and counts", func(t *testing.T) { testCatalogCardProjections(t, ctx, repository) })
 	t.Run("provider usage dimensions and authority", func(t *testing.T) { testProviderUsageProjection(t, ctx, repository) })
+	t.Run("provider concurrency settings are versioned and isolated", func(t *testing.T) { testProviderAccountConcurrency(t, ctx, repository) })
 	t.Run("authorized device verification requires a fresh exact observation", func(t *testing.T) {
 		testProviderVerificationFreshObservation(t, ctx, repository)
 	})

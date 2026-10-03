@@ -131,6 +131,7 @@ const (
 	RevokeProviderAccount              Kind = "REVOKE_PROVIDER_ACCOUNT"
 	DeleteProviderAccount              Kind = "DELETE_PROVIDER_ACCOUNT"
 	SetProviderAccountEnabled          Kind = "SET_PROVIDER_ACCOUNT_ENABLED"
+	SetProviderAccountConcurrency      Kind = "SET_PROVIDER_ACCOUNT_CONCURRENCY"
 	CreateConnection                   Kind = "CREATE_INTEGRATION_CONNECTION"
 	UpdateConnection                   Kind = "UPDATE_INTEGRATION_CONNECTION"
 	DeleteConnection                   Kind = "DELETE_INTEGRATION_CONNECTION"
@@ -354,6 +355,7 @@ type ScheduleInput struct {
 	Enabled                                                                                                          bool
 }
 type ProviderAccountInput struct {
+	MaximumConcurrentExecutions                                            int32
 	SelectedRunRefs                                                        []string
 	BlockersDigest                                                         string
 	AccountRef, DefinitionKey, Name, AuthorizationRef, AuthorizationMethod string

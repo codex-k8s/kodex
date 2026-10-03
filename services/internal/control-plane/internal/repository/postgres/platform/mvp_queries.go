@@ -437,7 +437,7 @@ func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 	if err := row.Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.ExternalAccountMasked,
 		&item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt,
 		&authorization.Ref, &authorization.Method, &authorization.State, &authorization.VerificationURI,
-		&authorization.UserCode, &expiresAt, &authorization.SafeFailureCode, &authorization.MaterializerAttemptRef); err != nil {
+		&authorization.UserCode, &expiresAt, &authorization.SafeFailureCode, &authorization.MaterializerAttemptRef, &item.MaximumConcurrentExecutions); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ProviderAccount{}, errs.ErrNotFound
 		}
@@ -447,7 +447,7 @@ func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 		authorization.ExpiresAt = expiresAt
 		item.Authorization = &authorization
 	}
-	if !validProviderAccountLifecycle(item.State, item.Enabled) {
+	if !validProviderAccountLifecycle(item.State, item.Enabled) || item.MaximumConcurrentExecutions < 1 || item.MaximumConcurrentExecutions > 256 {
 		return entity.ProviderAccount{}, errs.ErrUnavailable
 	}
 	item.Ready = item.Enabled && item.State == "AUTHORIZED"
@@ -507,13 +507,16 @@ func validProviderAccountLifecycle(state string, enabled bool) bool {
 	}
 }
 
-func providerAccountActions(item entity.ProviderAccount, canManage, canAuthorize, canRevoke bool) []string {
+func providerAccountActions(item entity.ProviderAccount, canManage, canAuthorize, canRevoke, canEditConcurrency bool) []string {
 	actions := []string{"OPEN"}
 	if item.State == "DELETING" || item.State == "DELETED" {
 		if item.State == "DELETING" && item.Deletion != nil && item.Deletion.State == "FAILED" && canRevoke {
 			actions = append(actions, "DELETE")
 		}
 		return actions
+	}
+	if canEditConcurrency {
+		actions = append(actions, "EDIT")
 	}
 	if canRevoke {
 		actions = append(actions, "DELETE")
@@ -595,7 +598,8 @@ func (repository *Repository) authorizeProviderAccountActions(
 		canManage := accessservice.Evaluate(subject.AccessSubject, "provider.account.manage", target, "", bindings, at).Allowed
 		canAuthorize := accessservice.Evaluate(subject.AccessSubject, "provider.account.authorize", target, "", bindings, at).Allowed
 		canRevoke := accessservice.Evaluate(subject.AccessSubject, "provider.account.revoke", target, "", bindings, at).Allowed
-		items[index].NextActions = providerAccountActions(items[index], canManage, canAuthorize, canRevoke)
+		canEditConcurrency := canManage && (current.role == "OWNER" || current.role == "ADMINISTRATOR")
+		items[index].NextActions = providerAccountActions(items[index], canManage, canAuthorize, canRevoke, canEditConcurrency)
 	}
 	return items, collectionActions, nil
 }

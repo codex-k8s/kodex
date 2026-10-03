@@ -10,6 +10,7 @@ import {
   refreshProviderAccountAuthorization,
   revokeProviderAccount as revokeProviderAccountRequest,
   setProviderAccountEnabled as setProviderAccountEnabledRequest,
+  setProviderAccountConcurrency as setProviderAccountConcurrencyRequest,
   startProviderAccountDeviceAuthorization,
   verifyProviderAccountDeviceAuthorization,
 } from "@/shared/api/generated/openapi/sdk.gen";
@@ -256,6 +257,25 @@ export async function setProviderAccountEnabled(
           headers: versionedHeaders(headers),
           signal: requestSignal(),
         }),
+      account.version,
+    )
+  ).data;
+}
+
+export async function setProviderAccountConcurrency(
+  account: ProviderAccount,
+  maximumConcurrentExecutions: number,
+  signal: AbortSignal = requestSignal(),
+): Promise<ProviderAccount> {
+  return (
+    await mutate(
+      (headers) =>
+        setProviderAccountConcurrencyRequest({
+          path: { providerAccountRef: account.ref },
+          body: { maximumConcurrentExecutions },
+          headers: versionedHeaders(headers),
+          signal,
+        }).then(checkMutationRejection),
       account.version,
     )
   ).data;
