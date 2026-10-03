@@ -42,6 +42,7 @@ import { resolveAssistantContext } from "@/features/assistant/context";
 import { useAssistantStore } from "@/features/assistant/store";
 import { useAccessStore } from "@/features/access/store";
 import { usePlatformStore } from "@/features/platform/store";
+import OnboardingReturn from "@/features/onboarding/components/OnboardingReturn.vue";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useRoleImagesStore } from "@/features/role-images/store";
 import { useRuntimeStore } from "@/features/runtime/store";
@@ -121,7 +122,7 @@ useCursorInfiniteScroll({
 const projectRef = computed(
   () =>
     routeProjectRef(route.params) ??
-    (route.name === "configuration-catalog"
+    (route.name === "configuration-catalog" || route.name === "onboarding"
       ? routeProjectRef(route.query)
       : undefined),
 );
@@ -792,6 +793,7 @@ onBeforeUnmount(() => {
           </li>
         </ol>
       </nav>
+      <OnboardingReturn v-if="route.name !== 'onboarding'" />
       <RouterView />
     </div>
 

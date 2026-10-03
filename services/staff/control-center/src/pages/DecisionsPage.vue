@@ -1371,7 +1371,7 @@ const serverMessage = useServerMessage();
   color: var(--accent-strong);
 }
 .decision-toolbar select {
-  min-height: 38px;
+  min-height: var(--control-height);
 }
 .decision-toolbar__count {
   color: var(--muted);

@@ -506,7 +506,12 @@ describe("AsyncEntityPicker", () => {
         locale: "ru",
         messages: {
           ru: {
-            common: { loading: "Загрузка", retry: "Повторить", empty: "Пусто" },
+            common: {
+              loading: "Загрузка",
+              retry: "Повторить",
+              empty: "Пусто",
+              clearSelection: "Очистить выбор",
+            },
             errors: { default: "Ошибка" },
             runtime: { pickerShown: "Показано: {count}", pickerScroll: "Ещё" },
           },
@@ -517,10 +522,23 @@ describe("AsyncEntityPicker", () => {
     const html = await renderToString(app);
 
     expect(html).toContain("Офисные документы");
-    expect(html).toContain("rev 4 · готово");
+    expect(html).not.toContain("rev 4 · готово");
+    expect(html).not.toContain("<small");
     expect(html).not.toContain("renv_internal_ref");
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('aria-label="Рабочее окружение"');
+  });
+
+  it("закрытый селектор использует общую компактную высоту поля", () => {
+    const source = readFileSync(
+      new URL("./AsyncEntityPicker.vue", import.meta.url),
+      "utf8",
+    );
+    const triggerStyle = source.match(
+      /\.async-picker__trigger \{([^}]+)\}/,
+    )?.[1];
+    expect(triggerStyle).toContain("height: var(--control-height, 32px)");
+    expect(triggerStyle).toContain("padding: 6px 9px");
   });
 
   it("не показывает очистку выбора для пустого строкового значения", async () => {

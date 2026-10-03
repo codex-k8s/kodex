@@ -730,14 +730,14 @@ onBeforeUnmount(() => {
 .vfs-search input {
   min-width: 0;
   width: 100%;
-  min-height: 34px;
+  min-height: var(--control-height);
   padding: 0;
   border: 0;
   outline: 0;
 }
 .vfs-filter select {
   width: 100%;
-  min-height: 36px;
+  min-height: var(--control-height);
 }
 .vfs-kind-filter {
   position: relative;

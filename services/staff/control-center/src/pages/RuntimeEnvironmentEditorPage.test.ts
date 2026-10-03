@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reactive, type Ref } from "vue";
 import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
-import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  RoleImageArtifact,
+  RuntimeEnvironmentInput,
+} from "@/shared/api/generated/openapi/types.gen";
 
 const runtime = vi.hoisted(() => ({
   environments: {},
@@ -42,6 +45,8 @@ async function editor() {
     imageArtifact: Ref<RoleImageArtifact | undefined>;
     imageLoading: Ref<boolean>;
     imageProblem: Ref<unknown>;
+    selectedImage: Ref<{ ref: string; title: string } | undefined>;
+    applyRestoredInput(input: RuntimeEnvironmentInput): void;
     loadImageArtifact(recipe: string, artifact: string): Promise<void>;
     load(): Promise<void>;
   };
@@ -63,6 +68,16 @@ beforeEach(() => {
 });
 
 describe("ответы образа принадлежат текущему окружению", () => {
+  it("пустой черновик не показывает ложную загрузку восстановленного образа", async () => {
+    const state = await editor();
+    state.selectedImage.value = { ref: "old_image", title: "Старый образ" };
+    state.applyRestoredInput({
+      ...state.input,
+      imageArtifactRef: "",
+    } as RuntimeEnvironmentInput);
+    expect(state.selectedImage.value).toBeUndefined();
+    expect(state.imageArtifact.value).toBeUndefined();
+  });
   it.each(["success", "failure"])(
     "старый %s не заменяет новый образ",
     async (outcome) => {

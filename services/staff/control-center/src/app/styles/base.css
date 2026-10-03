@@ -130,6 +130,7 @@
   --surface: #fff;
   --panel: #fbfcfd;
   --canvas: #f7f9fb;
+  --control-height: 32px;
   --topbar-height: 58px;
   --sidebar-width: 258px;
   --page-frame-gutter: clamp(16px, 2vw, 32px);
@@ -647,7 +648,7 @@ p {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 32px;
+  min-height: var(--control-height);
   padding: 5px 11px;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -685,7 +686,7 @@ p {
   background: transparent;
 }
 .button--large {
-  min-height: 46px;
+  min-height: var(--control-height);
   padding-inline: 22px;
 }
 .icon-button {
@@ -735,6 +736,13 @@ textarea {
   border-radius: 7px;
   color: inherit;
   background: var(--surface);
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+    [type="file"]
+  ):not([type="hidden"]),
+select:not([multiple]) {
+  height: var(--control-height);
+  min-height: var(--control-height);
 }
 input:is([type="checkbox"], [type="radio"]) {
   width: 16px;

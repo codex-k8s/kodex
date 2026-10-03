@@ -7,6 +7,31 @@ import type {
 export const openAssistantEvent = "kodex:assistant:open";
 export const assistantPlanAppliedEvent = "kodex:assistant:plan-applied";
 
+export interface AssistantSetupRequest {
+  kind: "SETUP";
+  step: "project" | "image" | "environment" | "team" | "launch";
+}
+
+export function isAssistantSetupRequest(
+  value: unknown,
+): value is AssistantSetupRequest {
+  if (!value || typeof value !== "object") return false;
+  const request = value as Partial<AssistantSetupRequest>;
+  return (
+    request.kind === "SETUP" &&
+    ["project", "image", "environment", "team", "launch"].includes(
+      request.step ?? "",
+    )
+  );
+}
+
+export function requestAssistantSetup(
+  step: AssistantSetupRequest["step"],
+): void {
+  const detail: AssistantSetupRequest = { kind: "SETUP", step };
+  window.dispatchEvent(new CustomEvent(openAssistantEvent, { detail }));
+}
+
 export interface AssistantPlanAppliedDetail {
   projectRef?: string;
   kinds: string[];

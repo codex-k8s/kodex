@@ -157,7 +157,7 @@ onBeforeUnmount(() => observer?.disconnect());
 .agent-catalog__search input {
   width: 100%;
   min-width: 0;
-  height: 36px;
+  height: var(--control-height);
   padding: 6px 38px 6px 34px;
 }
 .agent-catalog__search button {

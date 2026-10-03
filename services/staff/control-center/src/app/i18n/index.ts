@@ -1011,7 +1011,8 @@ const ru = {
   },
   onboarding: {
     title: "Настроим Kodex",
-    subtitle: "Помощник уже готов и проведёт через первый рабочий запуск.",
+    subtitle:
+      "От подключения модели до первого результата — по шагам, самостоятельно или с помощником.",
     ready: "Системный помощник готов",
     webOnly: "Внешние интеграции не нужны для начала работы",
     stepProject: "Создайте первый Проект",
@@ -1019,6 +1020,148 @@ const ru = {
     stepRun: "Дайте первое задание",
     startAssistant: "Начать с помощником",
     finish: "Завершить настройку",
+    yourSetup: "Первичная настройка",
+    progress: "Готово {count} из {total} шагов",
+    stepsLabel: "Шаги первичной настройки",
+    currentStep: "Шаг {step} из {total}",
+    done: "Готово",
+    previous: "Назад",
+    next: "Далее",
+    backToSetup: "Вернуться к настройке",
+    saveHelp:
+      "Настройки сохраняются в своих разделах. Можно вернуться к любому шагу; галочка появляется по фактической готовности.",
+    modelRequired: "Для помощника и запусков подключите аккаунт модели",
+    providerUnknown: "Не удалось проверить доступность аккаунта модели",
+    assistantReady: "Помощник готов к работе",
+    assistantFailed:
+      "Аккаунт подключён, но помощник не готов. Проверьте его настройки",
+    assistantPreparing: "Аккаунт подключён. Помощник подготавливается к работе",
+    assistantSettings: "Настройки помощника",
+    connectProviderTitle: "Подключите аккаунт OpenAI",
+    connectedProviderTitle: "Аккаунт модели подключён",
+    connectedProviderHelp:
+      "Авторизация подтверждена. Теперь можно создавать проект и настраивать работу с помощью Kodex. Другие аккаунты можно добавить позже.",
+    continueAfterModel:
+      "Первый шаг готов. Нажмите «Далее», чтобы создать или выбрать проект.",
+    connectProviderHelp:
+      "Войдите через device-code, чтобы использовать подписку, или добавьте API key. Авторизация выполняется в защищённой форме; не отправляйте ключи в чат.",
+    connectModel: "Подключить аккаунт модели",
+    manageModel: "Управлять аккаунтами модели",
+    defaultModelHelp:
+      "Модель и уровень рассуждений по умолчанию. Их можно изменить отдельно для помощника и каждого ИИ-сотрудника.",
+    manualWithoutModel:
+      "Модель нужна для работы ИИ. Проект, образ и окружение можно подготовить вручную уже сейчас — нажмите «Далее».",
+    selectProject: "Проект для дальнейшей настройки",
+    chooseProject: "Выберите проект",
+    projectTitle: "Отдельное пространство для вашей задачи",
+    projectHelp:
+      "Укажите название и цель проекта. Здесь будут храниться его сотрудники, процессы, секреты и результаты. Можно создать новый проект или продолжить настройку существующего.",
+    createProject: "Создать проект вручную",
+    openProject: "Открыть проект",
+    projectRequired: "Сначала выберите или создайте проект",
+    projectRequiredHelp:
+      "Образы, окружения, сотрудники и процессы принадлежат проекту. Вернитесь на предыдущий шаг, чтобы выбрать, где их создавать.",
+    goToProject: "Перейти к проекту",
+    baseImage: "Базовый образ — быстрый старт",
+    baseImageHelp:
+      "Для обычных задач начните с поставляемого платформой образа. Базовый образ и окружение появятся при создании первого сотрудника; отдельная сборка не нужна.",
+    useBaseImage: "Продолжить с базовым образом",
+    customImage: "Свой образ — если нужны дополнительные инструменты",
+    customImageHelp:
+      "Добавьте пакеты или Dockerfile, выполните сборку и проверку, затем опубликуйте образ. Его можно выбрать в окружении после успешной сборки.",
+    configureImage: "Настроить свой образ",
+    imageNeedsRole:
+      "Свой образ связан с ролью сотрудника. Сначала создайте сотрудника с базовыми настройками, затем вернитесь сюда, чтобы добавить инструменты и настроить собственный образ.",
+    createEmployeeForImage: "Создать сотрудника с базовым образом",
+    existingImages: "Посмотреть образы",
+    environmentTitle: "Подготовьте рабочее окружение",
+    environmentHelp:
+      "Используйте окружение по умолчанию или создайте своё: выберите образ, добавьте переменные и настройте ресурсы и доступ. Проверьте готовность и опубликуйте изменения.",
+    configureEnvironment: "Выбрать и настроить окружение",
+    defaultEnvironmentHelp:
+      "Окружение по умолчанию создаётся вместе с первым сотрудником. Для старта можно перейти дальше, а переменные, секреты и ограничения добавить позже.",
+    useDefaultEnvironment: "Продолжить с настройками по умолчанию",
+    newEnvironment: "Создать окружение",
+    secretsTitle: "Секреты для внешних сервисов",
+    secretsHelp:
+      "Если нужны токены или пароли, создайте их в защищённой форме и привяжите к окружению. Для задач без внешних сервисов этот пункт можно пропустить. Значения секретов не передаются в чат.",
+    configureSecrets: "Настроить секреты",
+    optional: "При необходимости",
+    employeeTitle: "Добавьте первого ИИ-сотрудника",
+    employeeHelp:
+      "Опишите его задачу, выберите модель и окружение, настройте полномочия и опубликуйте инструкции. Готовый сотрудник сможет выполнять поручения.",
+    createEmployee: "Создать ИИ-сотрудника",
+    existingEmployees: "Посмотреть сотрудников",
+    processTitle: "Объедините работу в процесс",
+    processHelp:
+      "Процесс связывает несколько этапов и исполнителей. Если пока достаточно одного сотрудника, начните без процесса — его можно добавить позже.",
+    createProcess: "Создать процесс",
+    firstRunTitle: "Получите первый результат",
+    firstRunNeedsEmployee:
+      "В проекте пока нет готового исполнителя. Сначала создайте и настройте сотрудника, затем вернитесь сюда для первого запуска.",
+    goToEmployees: "Перейти к сотрудникам",
+    firstRunHelp:
+      "Выберите сотрудника или процесс, задайте входные данные и запустите работу. Следите за ходом выполнения, отвечайте на запросы согласования и проверьте результат.",
+    firstRun: "Запустить первую работу",
+    results: "Посмотреть запуски",
+    automationTitle: "Автоматизируйте повторяющиеся задачи",
+    automationHelp:
+      "После первого успешного запуска добавьте расписание или триггер, если работу нужно повторять. Для первого запуска автоматизация не обязательна.",
+    configureAutomations: "Настроить автоматизации",
+    assistantHelp: "Предпочитаете описать задачу словами?",
+    assistantNeedsModel:
+      "Сначала подключите аккаунт модели на шаге 1. Ручная настройка доступна без него.",
+    finishHelp:
+      "Завершение станет доступно, когда в выбранном проекте будет готовый сотрудник и успешный запуск сотрудника или процесса.",
+    steps: {
+      model: {
+        title: "Модель",
+        short: "Подключение аккаунта",
+        description:
+          "Подключите модель, чтобы помощник и ИИ-сотрудники могли выполнять задачи. Для старта достаточно одного аккаунта.",
+      },
+      project: {
+        title: "Проект",
+        short: "Цель и рабочее пространство",
+        description:
+          "Создайте проект сами или поручите это помощнику. Для каждого следующего шага будем использовать выбранный проект.",
+      },
+      image: {
+        title: "Образ",
+        short: "Базовый или собственный",
+        description:
+          "Образ определяет инструменты, доступные сотруднику. Базового достаточно для старта; собственный нужен для особых зависимостей.",
+      },
+      environment: {
+        title: "Секреты и окружение",
+        short: "Переменные, ресурсы и доступ",
+        description:
+          "Выберите базовые настройки или подготовьте собственное окружение с переменными, секретами и правилами доступа.",
+      },
+      team: {
+        title: "Сотрудники и процессы",
+        short: "Исполнители и этапы работы",
+        description:
+          "Определите, кто будет работать и что должен сделать. Начните с одного сотрудника; многоэтапный процесс добавьте по необходимости.",
+      },
+      launch: {
+        title: "Автоматизации и запуск",
+        short: "Первый результат и расписания",
+        description:
+          "Сначала выполните задачу вручную и убедитесь в результате. Затем настройте повторение, если оно нужно.",
+      },
+    },
+    assistantPrompts: {
+      project:
+        "Помоги создать мой первый проект. Уточни его цель и предложи заполненный черновик проекта для моего подтверждения.",
+      image:
+        "Помоги подобрать образ для текущего проекта: начни с базового. Если нужны дополнительные инструменты, предложи черновик собственного образа и после подтверждения проверь сборку.",
+      environment:
+        "Помоги настроить рабочее окружение текущего проекта: образ, переменные, ресурсы и доступ. Если нужны секреты, запроси их через защищённую форму. Подготовь черновик для подтверждения.",
+      team: "Помоги создать первого ИИ-сотрудника в текущем проекте: уточни задачу, настрой инструкции, модель, окружение и права. Если нужны несколько этапов, предложи процесс. Все изменения подготовь как черновики для подтверждения.",
+      launch:
+        "Помоги выполнить первую задачу в текущем проекте. Проверь готовность сотрудника или процесса и предложи запуск для моего подтверждения. После успешного результата предложи автоматизацию, если она полезна.",
+    },
   },
   home: {
     failedRuns: "Запуски с ошибкой",
@@ -5243,7 +5386,8 @@ const en = {
   onboarding: {
     ...ru.onboarding,
     title: "Set up Kodex",
-    subtitle: "The assistant is ready to guide your first working run.",
+    subtitle:
+      "From connecting a model to your first result — step by step, on your own or with the assistant.",
     ready: "System assistant is ready",
     webOnly: "External integrations are not required",
     stepProject: "Create your first Project",
@@ -5251,6 +5395,148 @@ const en = {
     stepRun: "Give the first task",
     startAssistant: "Start with assistant",
     finish: "Complete setup",
+    yourSetup: "Getting started",
+    progress: "{count} of {total} steps ready",
+    stepsLabel: "Setup steps",
+    currentStep: "Step {step} of {total}",
+    done: "Ready",
+    previous: "Back",
+    next: "Next",
+    backToSetup: "Return to setup",
+    saveHelp:
+      "Settings are saved in their own sections. Revisit any step; checkmarks reflect actual readiness.",
+    modelRequired: "Connect a model account to use the assistant and run tasks",
+    providerUnknown: "Could not check model account availability",
+    assistantReady: "Assistant is ready",
+    assistantFailed:
+      "Account connected, but the assistant is not ready. Check its settings",
+    assistantPreparing: "Account connected. The assistant is getting ready",
+    assistantSettings: "Assistant settings",
+    connectProviderTitle: "Connect an OpenAI account",
+    connectedProviderTitle: "Model account connected",
+    connectedProviderHelp:
+      "Authorization is confirmed. You can now create a project and set up work with Kodex. Add other accounts later if needed.",
+    continueAfterModel:
+      "The first step is ready. Select Next to create or choose a project.",
+    connectProviderHelp:
+      "Sign in with device-code to use your subscription, or add an API key. Use the protected form; do not send keys in chat.",
+    connectModel: "Connect model account",
+    manageModel: "Manage model accounts",
+    defaultModelHelp:
+      "Default model and reasoning level. You can adjust them separately for the assistant and each AI employee.",
+    manualWithoutModel:
+      "AI tasks require a model. You can already prepare a project, image and environment manually — select Next.",
+    selectProject: "Project to configure",
+    chooseProject: "Select a project",
+    projectTitle: "A workspace for your task",
+    projectHelp:
+      "Give the project a name and purpose. Its employees, processes, secrets and results will live here. Create a new project or continue setting up an existing one.",
+    createProject: "Create project manually",
+    openProject: "Open project",
+    projectRequired: "Select or create a project first",
+    projectRequiredHelp:
+      "Images, environments, employees and processes belong to a project. Return to the project step to select where to create them.",
+    goToProject: "Go to project step",
+    baseImage: "Base image — a quick start",
+    baseImageHelp:
+      "Start with the platform's supplied image for everyday tasks. The base image and environment are created with your first employee; no separate build is needed.",
+    useBaseImage: "Continue with base image",
+    customImage: "Custom image — for extra tools",
+    customImageHelp:
+      "Add packages or a Dockerfile, build and verify, then publish the image. Select it in an environment after a successful build.",
+    configureImage: "Configure custom image",
+    imageNeedsRole:
+      "A custom image belongs to an employee role. Create an employee with the base settings first, then return here to add tools and configure a custom image.",
+    createEmployeeForImage: "Create employee with base image",
+    existingImages: "View images",
+    environmentTitle: "Prepare a work environment",
+    environmentHelp:
+      "Use the default environment or create your own: select an image, add variables, and configure resources and access. Check readiness and publish changes.",
+    configureEnvironment: "Select and configure environment",
+    defaultEnvironmentHelp:
+      "The default environment is created with your first employee. Continue to the next step now and add variables, secrets and restrictions later.",
+    useDefaultEnvironment: "Continue with default settings",
+    newEnvironment: "Create environment",
+    secretsTitle: "Secrets for external services",
+    secretsHelp:
+      "If you need tokens or passwords, create them in the protected form and bind them to the environment. Skip this for tasks without external services. Secret values are never sent in chat.",
+    configureSecrets: "Configure secrets",
+    optional: "If needed",
+    employeeTitle: "Add your first AI employee",
+    employeeHelp:
+      "Describe the task, choose a model and environment, configure permissions, and publish instructions. A ready employee can carry out assignments.",
+    createEmployee: "Create AI employee",
+    existingEmployees: "View employees",
+    processTitle: "Combine work into a process",
+    processHelp:
+      "A process connects multiple stages and employees. If one employee is enough, start without a process and add one later.",
+    createProcess: "Create process",
+    firstRunTitle: "Get your first result",
+    firstRunNeedsEmployee:
+      "There is no ready executor in this project yet. Create and configure an employee first, then return here for your first run.",
+    goToEmployees: "Go to employees",
+    firstRunHelp:
+      "Select an employee or process, provide input and start work. Follow progress, respond to approval requests, and check the result.",
+    firstRun: "Start first task",
+    results: "View runs",
+    automationTitle: "Automate recurring work",
+    automationHelp:
+      "After your first successful run, add a schedule or trigger if the task should repeat. Automation is not required for the first run.",
+    configureAutomations: "Configure automations",
+    assistantHelp: "Prefer describing the task in words?",
+    assistantNeedsModel:
+      "Connect a model account in step 1 first. Manual setup is available without one.",
+    finishHelp:
+      "Complete setup after the selected project has a ready employee and a successful employee or process run.",
+    steps: {
+      model: {
+        title: "Model",
+        short: "Connect an account",
+        description:
+          "Connect a model so the assistant and AI employees can perform tasks. One account is enough to get started.",
+      },
+      project: {
+        title: "Project",
+        short: "Purpose and workspace",
+        description:
+          "Create a project yourself or ask the assistant. The following steps will use your selected project.",
+      },
+      image: {
+        title: "Image",
+        short: "Base or custom",
+        description:
+          "An image defines the tools an employee can use. Start with the base image; create a custom one for special dependencies.",
+      },
+      environment: {
+        title: "Secrets and environment",
+        short: "Variables, resources and access",
+        description:
+          "Choose the base settings or prepare a custom environment with variables, secrets and access rules.",
+      },
+      team: {
+        title: "Employees and processes",
+        short: "People and stages of work",
+        description:
+          "Define who will work and what they should do. Start with one employee; add a multi-stage process if needed.",
+      },
+      launch: {
+        title: "Automation and first run",
+        short: "First result and schedules",
+        description:
+          "Run a task manually and check the result first. Then configure recurrence if needed.",
+      },
+    },
+    assistantPrompts: {
+      project:
+        "Help create my first project. Ask about its purpose and propose a filled-out project draft for my approval.",
+      image:
+        "Help choose an image for the current project, starting with the base image. If extra tools are needed, propose a custom image draft and verify the build after approval.",
+      environment:
+        "Help configure the current project's work environment: image, variables, resources and access. Request secrets through the protected form if needed. Prepare a draft for approval.",
+      team: "Help create the current project's first AI employee: clarify the task and configure instructions, model, environment and permissions. Propose a process if multiple stages are needed. Prepare all changes as drafts for approval.",
+      launch:
+        "Help run the first task in the current project. Check employee or process readiness and propose a run for my approval. After a successful result, suggest automation if useful.",
+    },
   },
   home: {
     ...ru.home,

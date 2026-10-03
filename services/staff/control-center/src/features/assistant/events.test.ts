@@ -1,9 +1,28 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isAssistantSetupRequest,
   isAssistantRoleImageBuildDebugRequest,
   isAssistantRunDebugRequest,
 } from "@/features/assistant/events";
+
+describe("запрос помощника для первичной настройки", () => {
+  it.each(["project", "image", "environment", "team", "launch"])(
+    "принимает известный шаг %s",
+    (step) => {
+      expect(isAssistantSetupRequest({ kind: "SETUP", step })).toBe(true);
+    },
+  );
+  it.each([
+    undefined,
+    {},
+    { kind: "SETUP", step: "model" },
+    { kind: "SETUP", step: "../project" },
+    { kind: "SETUP", step: 1 },
+  ])("не принимает неизвестный запрос %j", (value) => {
+    expect(isAssistantSetupRequest(value)).toBe(false);
+  });
+});
 
 const valid = {
   kind: "ROLE_IMAGE_BUILD_DEBUG",

@@ -59,6 +59,7 @@ import {
 import {
   isAssistantRunDebugRequest,
   isAssistantRoleImageBuildDebugRequest,
+  isAssistantSetupRequest,
   notifyAssistantPlanApplied,
   openAssistantEvent,
   type AssistantIntegrationPublicationRequest,
@@ -378,6 +379,17 @@ function handleOpenAssistant(event: Event): void {
     const request =
       event instanceof CustomEvent ? (event.detail as unknown) : undefined;
     await show();
+    if (isAssistantSetupRequest(request)) {
+      if (
+        message.value.trim() &&
+        !(await requestConfirmation(t("assistant.replaceDraftConfirm")))
+      )
+        return;
+      message.value = t(`onboarding.assistantPrompts.${request.step}`);
+      await nextTick();
+      composer.value?.focus();
+      return;
+    }
     if (isAssistantRoleImageBuildDebugRequest(request)) {
       if (
         message.value.trim() &&

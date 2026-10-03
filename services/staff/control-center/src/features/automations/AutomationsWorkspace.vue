@@ -1147,7 +1147,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 .automations-workspace__toolbar select {
-  min-height: 36px;
+  min-height: var(--control-height);
 }
 .automations-workspace__search {
   display: flex;
@@ -1160,7 +1160,7 @@ onBeforeUnmount(() => {
 }
 .automations-workspace__search input {
   width: 100%;
-  min-height: 34px;
+  min-height: var(--control-height);
   padding: 0;
   border: 0;
   outline: 0;

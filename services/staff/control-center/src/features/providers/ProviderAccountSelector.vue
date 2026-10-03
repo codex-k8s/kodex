@@ -65,6 +65,13 @@ const selectedAccounts = computed(() =>
     account: resolved.value[candidate.accountRef],
   })),
 );
+const selectedLabel = computed(
+  () =>
+    selectedAccounts.value
+      .map(({ account }) => account?.name)
+      .filter(Boolean)
+      .join(", ") || t("providers.selectorLabel"),
+);
 const selectionEligible = computed(
   () =>
     props.modelValue.length > 0 &&
@@ -303,11 +310,8 @@ function changeWeight(accountRef: string, event: Event): void {
           :disabled="disabled || !definitionKey"
           @click="toggle"
         >
-          <span
-            ><strong>{{ $t("providers.selectorLabel") }}</strong
-            ><small>{{
-              $t("providers.selectedCount", { count: modelValue.length })
-            }}</small></span
+          <span :title="selectedLabel"
+            ><strong>{{ selectedLabel }}</strong></span
           ><ChevronDown :size="17" aria-hidden="true" />
         </button>
       </template>
@@ -426,11 +430,12 @@ function changeWeight(accountRef: string, event: Event): void {
 .provider-selector__trigger {
   display: flex;
   width: 100%;
-  min-height: 54px;
+  height: var(--control-height, 32px);
+  min-height: var(--control-height, 32px);
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 12px;
+  padding: 6px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel);
@@ -446,6 +451,14 @@ function changeWeight(accountRef: string, event: Event): void {
 }
 .provider-selector small {
   color: var(--muted);
+}
+.provider-selector__trigger strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.provider-selector__trigger > svg {
+  flex: 0 0 auto;
 }
 .provider-selector__option-copy {
   display: grid;

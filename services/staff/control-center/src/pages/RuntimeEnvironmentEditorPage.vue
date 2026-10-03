@@ -391,12 +391,17 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
     kubernetesAccess: value.policy.kubernetesAccess,
   };
 
-  if (selectedImage.value?.ref !== value.imageArtifactRef) {
-    selectedImage.value = {
-      ref: value.imageArtifactRef,
-      title: value.imageArtifactRef,
-      description: t("runtime.restoredImageSelection"),
-    };
+  if (
+    !value.imageArtifactRef ||
+    selectedImage.value?.ref !== value.imageArtifactRef
+  ) {
+    selectedImage.value = value.imageArtifactRef
+      ? {
+          ref: value.imageArtifactRef,
+          title: value.imageArtifactRef,
+          description: t("runtime.restoredImageSelection"),
+        }
+      : undefined;
     imageArtifact.value = undefined;
   }
 }
