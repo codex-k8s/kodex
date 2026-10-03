@@ -314,8 +314,6 @@ func castRuntimeNetworkDestination(value string) controlplanev1.RuntimeNetworkDe
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK
 	case runtimecontract.RuntimeEgressProviderProxy:
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY
-	case runtimecontract.RuntimeEgressKubernetesAPI:
-		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API
 	default:
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_UNSPECIFIED
 	}
@@ -329,8 +327,8 @@ func castRuntimeNetworkProtocol(value string) controlplanev1.RuntimeNetworkProto
 }
 
 func castRuntimeKubernetesAccessKind(value string) controlplanev1.RuntimeKubernetesAccessKind {
-	if value == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
+	if value != runtimecontract.RuntimeKubernetesAccessNone {
+		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED
 	}
 	return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
 }

@@ -190,7 +190,7 @@ async function runtimeEnvironment(
     `/api/v1/runtime-environments/${encodeURIComponent(environmentRef)}`,
   );
   expect(result.currentVersion.policy.kubernetesAccess.kind).toMatch(
-    /^(NONE|READ_OWN_EXECUTION)$/,
+    /^NONE$/,
   );
   for (const item of result.currentVersion.policy.network.egress)
     expect(item.destination).not.toMatch(/^RUNTIME_NETWORK_DESTINATION_/);

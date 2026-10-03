@@ -1611,7 +1611,6 @@ const ru = {
       DNS: "DNS",
       PROVIDER_PROXY: "Provider proxy",
       RUNTIME_CALLBACK: "Runtime callback",
-      KUBERNETES_API: "Kubernetes API",
     },
     networkDestinationHelp: {
       DNS: "Разрешение имён через DNS кластера, TCP/UDP 53.",
@@ -1619,8 +1618,6 @@ const ru = {
         "Вызовы провайдера и разрешённый веб-доступ только через платформенный proxy, TCP 8084.",
       RUNTIME_CALLBACK:
         "Возврат событий выполнения в runtime-controller, TCP 8444.",
-      KUBERNETES_API:
-        "Добавляется только вместе с профилем чтения собственного execution, TCP 443.",
     },
     mandatoryDestination: "Обязательно",
     scopedAccessEnabled: "Scoped доступ",
@@ -1645,20 +1642,6 @@ const ru = {
     addWebAccessRule: "Добавить домен",
     networkPolicyUnavailable:
       "API не предоставляет typed destinations и итоговый NetworkPolicy preview.",
-    kubernetesRbac: "Ограниченные права Kubernetes (RBAC)",
-    kubernetesAccessLabel: {
-      NONE: "Нет доступа к Kubernetes API",
-      READ_OWN_EXECUTION: "Чтение собственного запуска",
-    },
-    kubernetesRbacHelp:
-      "Профиль не выдаёт произвольный доступ и ограничен объектами текущего execution.",
-    readOwnExecution: "Разрешить чтение собственного execution",
-    readOwnExecutionHelp:
-      "READ_OWN_EXECUTION: только точные Pod и Pod logs, назначенные текущему запуску.",
-    kubernetesAccessBoundary:
-      "ServiceAccount, resourceNames и namespace kodex-runtime назначает сервер. List, watch, exec и доступ к Secret не выдаются.",
-    kubernetesRbacUnavailable:
-      "API не возвращает workload identity, RBAC profile и effective grants.",
     effectivePolicyPreview: "Итоговые правила доступа",
     effectivePolicyPreviewHelp:
       "Черновик отправляется как typed policy; после публикации ниже показывается авторитетная нормализованная policy сервера.",
@@ -1753,9 +1736,9 @@ const ru = {
       volumeKind: "Разрешены только EPHEMERAL_DISK и EPHEMERAL_MEMORY.",
       volumeSizeRange:
         "Размер тома должен быть целым числом от 16 до 10 240 MiB.",
-      kubernetesAccess: "Неизвестный профиль Kubernetes доступа.",
+      kubernetesAccess: "Доступ агента к Kubernetes больше не поддерживается.",
       networkDestinations:
-        "Сеть должна содержать DNS, provider proxy и runtime callback, а Kubernetes API — только при READ_OWN_EXECUTION.",
+        "Сеть должна содержать только DNS, прокси провайдера и обратный вызов среды выполнения.",
       webAccessMode: "Неизвестный режим публичного доступа.",
       webAccessRulesForMode:
         "Для выбранного режима список доменов должен быть пустым.",
@@ -3386,6 +3369,7 @@ const ru = {
   },
   providers: {
     catalogObserved: "Проверено",
+    catalogAsOf: "Каталог Kodex от {date}",
     catalogPending: "Каталог проверяется",
     catalogReady: "Каталог актуален",
     catalogFailed: "Не удалось проверить каталог",
@@ -6003,7 +5987,6 @@ const en = {
       DNS: "DNS",
       PROVIDER_PROXY: "Provider proxy",
       RUNTIME_CALLBACK: "Runtime callback",
-      KUBERNETES_API: "Kubernetes API",
     },
     networkDestinationHelp: {
       DNS: "Name resolution through cluster DNS on TCP/UDP 53.",
@@ -6011,8 +5994,6 @@ const en = {
         "Provider calls and allowed web access only through the platform proxy on TCP 8084.",
       RUNTIME_CALLBACK:
         "Execution events returned to runtime-controller on TCP 8444.",
-      KUBERNETES_API:
-        "Added only with read access to the current execution on TCP 443.",
     },
     mandatoryDestination: "Required",
     scopedAccessEnabled: "Scoped access",
@@ -6037,20 +6018,6 @@ const en = {
     addWebAccessRule: "Add domain",
     networkPolicyUnavailable:
       "The API does not expose typed destinations or final NetworkPolicy preview.",
-    kubernetesRbac: "Scoped Kubernetes RBAC",
-    kubernetesAccessLabel: {
-      NONE: "No Kubernetes API access",
-      READ_OWN_EXECUTION: "Read own execution",
-    },
-    kubernetesRbacHelp:
-      "The profile grants no arbitrary access and is limited to current execution objects.",
-    readOwnExecution: "Allow reading the current execution",
-    readOwnExecutionHelp:
-      "READ_OWN_EXECUTION: exact Pods and Pod logs assigned to the current run only.",
-    kubernetesAccessBoundary:
-      "The server assigns ServiceAccount, resourceNames and the kodex-runtime namespace. List, watch, exec and Secret access are not granted.",
-    kubernetesRbacUnavailable:
-      "The API does not return workload identity, RBAC profile or effective grants.",
     effectivePolicyPreview: "Effective policy preview",
     effectivePolicyPreviewHelp:
       "The draft is sent as typed policy; after publishing this view shows the authoritative normalized server policy.",
@@ -6142,9 +6109,9 @@ const en = {
       duplicateVolume: "Ephemeral volume names must be unique.",
       volumeKind: "Only EPHEMERAL_DISK and EPHEMERAL_MEMORY are allowed.",
       volumeSizeRange: "Volume size must be an integer from 16 to 10,240 MiB.",
-      kubernetesAccess: "Unknown Kubernetes access profile.",
+      kubernetesAccess: "Agent access to Kubernetes is no longer supported.",
       networkDestinations:
-        "Network policy must include DNS, provider proxy and runtime callback; Kubernetes API is allowed only with READ_OWN_EXECUTION.",
+        "Network policy must include only DNS, provider proxy and runtime callback.",
       webAccessMode: "Unknown public network access mode.",
       webAccessRulesForMode:
         "The domain list must be empty for the selected mode.",
@@ -7681,6 +7648,7 @@ const en = {
   providers: {
     ...ru.providers,
     catalogObserved: "Observed",
+    catalogAsOf: "Kodex catalog as of {date}",
     catalogPending: "Checking catalog",
     catalogReady: "Catalog is current",
     catalogFailed: "Catalog check failed",

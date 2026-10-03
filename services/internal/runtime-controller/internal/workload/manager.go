@@ -24,7 +24,6 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -103,7 +102,6 @@ type Config struct {
 	RuntimeEgressSigningKey                                                            []byte
 	RuntimeEgressCASecret                                                              string
 	ProviderAppArmorProfile                                                            string
-	KubernetesAPIServiceIP                                                             string
 	PromotedRoleImageRepository, DefaultRoleImageReference                             string
 	RoleRuntimeContractSHA256                                                          string
 	RoleRuntimeContractRevision                                                        uint64
@@ -164,7 +162,6 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 		len(config.RuntimeEgressSigningKey) < 32 ||
 		!validDNSLabel(config.RuntimeEgressCASecret) ||
 		(config.ProviderAppArmorProfile != "" && config.ProviderAppArmorProfile != "kodex-provider-runtime") ||
-		net.ParseIP(config.KubernetesAPIServiceIP) == nil ||
 		(config.StorageClass != "" && !validDNSSubdomain(config.StorageClass)) ||
 		config.RunnerServiceAccount == "" ||
 		config.PromotedRoleImageRepository == "" || config.RoleRuntimeContractRevision == 0 ||
@@ -775,8 +772,6 @@ func runtimeNetworkDestination(value controlplanev1.RuntimeNetworkDestination) s
 		return runtimecontract.RuntimeEgressRuntimeCallback
 	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY:
 		return runtimecontract.RuntimeEgressProviderProxy
-	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API:
-		return runtimecontract.RuntimeEgressKubernetesAPI
 	default:
 		return ""
 	}
@@ -797,8 +792,6 @@ func runtimeKubernetesAccessKind(value controlplanev1.RuntimeKubernetesAccessKin
 	switch value {
 	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
 		return runtimecontract.RuntimeKubernetesAccessNone
-	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION:
-		return runtimecontract.RuntimeKubernetesAccessReadOwnExecution
 	default:
 		return ""
 	}
@@ -956,16 +949,7 @@ func (manager *Manager) ensureExecutionPolicy(ctx context.Context, input runtime
 	if err := manager.ensureServiceAccount(ctx, serviceAccount); err != nil {
 		return err
 	}
-	if input.EffectiveKubernetesAccess.Profile.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		role := manager.executionRole(input)
-		if err := manager.ensureRole(ctx, role); err != nil {
-			return err
-		}
-		binding := manager.executionRoleBinding(input)
-		if err := manager.ensureRoleBinding(ctx, binding); err != nil {
-			return err
-		}
-	} else if err := manager.ensureExecutionRBACAbsent(ctx, input); err != nil {
+	if err := manager.ensureExecutionRBACAbsent(ctx, input); err != nil {
 		return err
 	}
 	networkPolicy, err := manager.executionNetworkPolicy(input, podName)
@@ -984,26 +968,6 @@ func (manager *Manager) executionMetadata(input runtimecontract.RunnerInput) met
 			networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
 			effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest,
 		},
-	}
-}
-
-func (manager *Manager) executionRole(input runtimecontract.RunnerInput) *rbacv1.Role {
-	metadata := manager.executionMetadata(input)
-	metadata.Name = runtimecontract.RuntimeRoleName(input.LeaseRef)
-	rules := make([]rbacv1.PolicyRule, 0, len(input.EffectiveKubernetesAccess.Rules))
-	for _, rule := range input.EffectiveKubernetesAccess.Rules {
-		rules = append(rules, rbacv1.PolicyRule{APIGroups: []string{rule.APIGroup}, Resources: []string{rule.Resource},
-			Verbs: append([]string(nil), rule.Verbs...), ResourceNames: append([]string(nil), rule.ResourceNames...)})
-	}
-	return &rbacv1.Role{ObjectMeta: metadata, Rules: rules}
-}
-
-func (manager *Manager) executionRoleBinding(input runtimecontract.RunnerInput) *rbacv1.RoleBinding {
-	metadata := manager.executionMetadata(input)
-	metadata.Name = runtimecontract.RuntimeRoleBindingName(input.LeaseRef)
-	return &rbacv1.RoleBinding{ObjectMeta: metadata,
-		Subjects: []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: input.EffectiveKubernetesAccess.ServiceAccountName, Namespace: manager.config.RuntimeNamespace}},
-		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: runtimecontract.RuntimeRoleName(input.LeaseRef)},
 	}
 }
 
@@ -1037,8 +1001,6 @@ func (manager *Manager) executionNetworkPolicy(input runtimecontract.RunnerInput
 				NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": manager.config.ControlNamespace}},
 				PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "egress-gateway", "app.kubernetes.io/component": "platform-egress"}},
 			}}
-		case runtimecontract.RuntimeEgressKubernetesAPI:
-			rule.To = []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: manager.config.KubernetesAPIServiceIP + "/32"}}}
 		default:
 			return nil, errors.New("runtime network destination is unsupported")
 		}
@@ -1059,37 +1021,6 @@ func (manager *Manager) ensureServiceAccount(ctx context.Context, desired *corev
 	}
 	if err != nil {
 		return errors.New("create runtime ServiceAccount")
-	}
-	return nil
-}
-
-func (manager *Manager) ensureRole(ctx context.Context, desired *rbacv1.Role) error {
-	_, err := manager.client.RbacV1().Roles(manager.config.RuntimeNamespace).Create(ctx, desired, metav1.CreateOptions{})
-	if apierrors.IsAlreadyExists(err) {
-		existing, getErr := manager.client.RbacV1().Roles(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
-		if getErr != nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) || !apiequality.Semantic.DeepEqual(existing.Rules, desired.Rules) {
-			return errors.New("existing runtime Role conflicts with immutable revision")
-		}
-		return nil
-	}
-	if err != nil {
-		return errors.New("create runtime Role")
-	}
-	return nil
-}
-
-func (manager *Manager) ensureRoleBinding(ctx context.Context, desired *rbacv1.RoleBinding) error {
-	_, err := manager.client.RbacV1().RoleBindings(manager.config.RuntimeNamespace).Create(ctx, desired, metav1.CreateOptions{})
-	if apierrors.IsAlreadyExists(err) {
-		existing, getErr := manager.client.RbacV1().RoleBindings(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
-		if getErr != nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) ||
-			!apiequality.Semantic.DeepEqual(existing.Subjects, desired.Subjects) || existing.RoleRef != desired.RoleRef {
-			return errors.New("existing runtime RoleBinding conflicts with immutable revision")
-		}
-		return nil
-	}
-	if err != nil {
-		return errors.New("create runtime RoleBinding")
 	}
 	return nil
 }
@@ -2015,17 +1946,6 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	serviceAccountName := manager.config.RunnerServiceAccount
 	if mode == "turn" {
 		serviceAccountName = input.EffectiveKubernetesAccess.ServiceAccountName
-	}
-	if mode == "turn" && input.EffectiveKubernetesAccess.Profile.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		expirationSeconds := int64(3600)
-		volumes = append(volumes, corev1.Volume{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
-			DefaultMode: int32Pointer(0o440), Sources: []corev1.VolumeProjection{
-				{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token", ExpirationSeconds: &expirationSeconds}},
-				{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
-				{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.namespace"}}}}},
-			},
-		}}})
-		roleMounts = append(roleMounts, corev1.VolumeMount{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true})
 	}
 	resources := runtimePolicyResourceRequirements(input.EnvironmentPolicy.Resources)
 	role := corev1.Container{Name: "role-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: roleArgs,

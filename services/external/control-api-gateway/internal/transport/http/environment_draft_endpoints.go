@@ -289,7 +289,7 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 	if resources.GetCpuRequestMilli() < 100 || resources.GetCpuRequestMilli() > 8000 || resources.GetCpuLimitMilli() < 100 || resources.GetCpuLimitMilli() > 16000 ||
 		resources.GetMemoryRequestMib() < 128 || resources.GetMemoryRequestMib() > 32768 || resources.GetMemoryLimitMib() < 128 || resources.GetMemoryLimitMib() > 65536 ||
 		resources.GetEphemeralStorageRequestMib() < 256 || resources.GetEphemeralStorageRequestMib() > 20480 || resources.GetEphemeralStorageLimitMib() < 256 || resources.GetEphemeralStorageLimitMib() > 102400 ||
-		len(input.GetVolumes()) > 16 || len(input.GetNetworkDestinations()) < 3 || len(input.GetNetworkDestinations()) > 4 {
+		len(input.GetVolumes()) > 16 || len(input.GetNetworkDestinations()) != 3 {
 		return nil, false
 	}
 	result := &generated.RuntimeEnvironmentPolicyInput{Resources: generated.RuntimeResourcePolicy{
@@ -298,7 +298,7 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 	}, Volumes: []generated.RuntimeVolumeInput{}, NetworkDestinations: []generated.RuntimeNetworkDestination{},
 		WebAccess: generated.RuntimeWebAccess{Mode: generated.NONE, Rules: []generated.RuntimeWebAccessRule{}}}
 	switch input.GetKubernetesAccess() {
-	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE, controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION:
+	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
 		result.KubernetesAccess = generated.RuntimeKubernetesAccessKind(strings.TrimPrefix(input.GetKubernetesAccess().String(), "RUNTIME_KUBERNETES_ACCESS_KIND_"))
 	default:
 		return nil, false
@@ -312,7 +312,7 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 	for _, destination := range input.GetNetworkDestinations() {
 		switch destination {
 		case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS, controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK,
-			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY, controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API:
+			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY:
 			result.NetworkDestinations = append(result.NetworkDestinations, generated.RuntimeNetworkDestination(strings.TrimPrefix(destination.String(), "RUNTIME_NETWORK_DESTINATION_")))
 		default:
 			return nil, false

@@ -524,7 +524,7 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 		{"projectRef": "prj_example", "name": "Environment", "secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "valueType": "FILE", "sourceHelp": "Provider dashboard"}}},
 		{"projectRef": "prj_example", "name": "Environment", "tools": []any{map[string]any{"name": "Shell", "command": "sh;rm", "description": "Unsafe command"}}},
 		{"projectRef": "prj_example", "name": "Environment", "tools": []any{map[string]any{"name": "Git", "command": "git", "description": "First"}, map[string]any{"name": "Git again", "command": "git", "description": "Second"}}},
-		{"projectRef": "prj_example", "name": "Environment", "policy": map[string]any{"kubernetesAccess": "READ_OWN_EXECUTION", "networkDestinations": []any{"DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "ANY"}}},
+		{"projectRef": "prj_example", "name": "Environment", "policy": map[string]any{"kubernetesAccess": "UNSUPPORTED", "networkDestinations": []any{"DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "ANY"}}},
 		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "DUPLICATE", "value": "safe"}}, "secretBindings": []any{map[string]any{"name": "DUPLICATE", "secretRef": "sec_example1"}}},
 		{"projectRef": "prj_example", "name": "Environment", "imageArtifactRef": "https://untrusted.example/image"},
 		{"projectRef": "", "name": "Environment"},

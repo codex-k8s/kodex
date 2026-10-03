@@ -649,7 +649,7 @@
       "additionalProperties": false,
       "required": ["destination", "protocol", "port"],
       "properties": {
-        "destination": {"enum": ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY", "KUBERNETES_API"]},
+        "destination": {"enum": ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY"]},
         "protocol": {"enum": ["TCP", "UDP"]},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535}
       }
@@ -663,7 +663,7 @@
         "egress": {
           "type": "array",
           "minItems": 4,
-          "maxItems": 5,
+          "maxItems": 4,
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/network_egress"}
         }
@@ -674,7 +674,7 @@
       "additionalProperties": false,
       "required": ["kind", "namespace"],
       "properties": {
-        "kind": {"enum": ["NONE", "READ_OWN_EXECUTION"]},
+        "kind": {"enum": ["NONE"]},
         "namespace": {"const": "kodex-runtime"}
       }
     },
@@ -702,22 +702,6 @@
         "rbac_digest": {"$ref": "#/$defs/sha256"}
       }
     },
-    "kubernetes_rule": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["api_group", "resource", "verbs", "resource_names"],
-      "properties": {
-        "api_group": {"const": ""},
-        "resource": {"enum": ["pods", "pods/log"]},
-        "verbs": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"const": "get"}},
-        "resource_names": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 1,
-          "items": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"}
-        }
-      }
-    },
     "effective_kubernetes_access": {
       "type": "object",
       "additionalProperties": false,
@@ -725,7 +709,7 @@
       "properties": {
         "profile": {"$ref": "#/$defs/kubernetes_access_profile"},
         "service_account_name": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"},
-        "rules": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/kubernetes_rule"}},
+        "rules": {"type": "array", "maxItems": 0},
         "digest": {"$ref": "#/$defs/sha256"}
       }
     },

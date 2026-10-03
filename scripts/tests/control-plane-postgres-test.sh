@@ -19,14 +19,43 @@ command -v docker >/dev/null 2>&1 || fail 'docker is required'
 command -v pg_isready >/dev/null 2>&1 || fail 'pg_isready is required'
 command -v psql >/dev/null 2>&1 || fail 'psql is required'
 
+# Host-вариант нужен на локальных Linux-стендах, где Docker DNAT закрыт
+# политикой хоста. PostgreSQL слушает только loopback; firewall не изменяется.
+network_mode=${KODEX_TEST_POSTGRES_NETWORK:-bridge}
+network_arguments=(-p 127.0.0.1::5432)
+postgres_arguments=()
+case "$network_mode" in
+  bridge) ;;
+  host)
+    command -v node >/dev/null 2>&1 || fail 'node is required for host network fixture'
+    [[ ( -z "${DOCKER_HOST:-}" || "$DOCKER_HOST" == unix:///* ) &&
+       "$(docker context inspect --format '{{.Endpoints.docker.Host}}')" == unix:///* &&
+       "$(docker info --format '{{.OSType}}')" == linux ]] || fail 'host fixture requires local Linux Docker'
+    port=$(node --input-type=module -e '
+      import {createServer} from "node:net";
+      const server = createServer();
+      server.on("error", () => process.exit(1));
+      server.listen(0, "127.0.0.1", () => {
+        process.stdout.write(String(server.address().port));
+        server.close();
+      });
+    ') || fail 'host fixture port allocation failed'
+    [[ "$port" =~ ^[0-9]+$ && "$port" -ge 1024 && "$port" -le 65535 ]] || fail 'host fixture port is invalid'
+    network_arguments=(--network host)
+    postgres_arguments=(postgres -c listen_addresses=127.0.0.1 -p "$port")
+    ;;
+  *) fail 'test PostgreSQL network must be bridge or host' ;;
+esac
+
 # У rootless Docker выбранный автоматически порт иногда успевает занять другой
 # локальный процесс до того, как RootlessKit создаст listener. Повторяем только
 # этот отказ до запуска теста; уже созданную БД и тестовые эффекты не повторяем.
 for attempt in 1 2 3 4; do
   if docker_run_output=$(docker run --rm -d --name "$container_name" \
     -e POSTGRES_HOST_AUTH_METHOD=trust \
-    -p 127.0.0.1::5432 \
+    "${network_arguments[@]}" \
     docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7 \
+    "${postgres_arguments[@]}" \
     2>&1); then
     break
   fi
@@ -40,19 +69,21 @@ for attempt in 1 2 3 4; do
   sleep 1
 done
 
-port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}' "$container_name")
+if [[ "$network_mode" == bridge ]]; then
+  port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}' "$container_name")
+fi
 [[ "$port" =~ ^[0-9]+$ ]] || fail 'disposable PostgreSQL port is invalid'
 for _ in $(seq 1 30); do
-  if pg_isready -h 127.0.0.1 -p "$port" -U postgres >/dev/null 2>&1; then
+  if pg_isready -h 127.0.0.1 -p "$port" -U postgres -t 1 >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-pg_isready -h 127.0.0.1 -p "$port" -U postgres >/dev/null 2>&1 ||
+pg_isready -h 127.0.0.1 -p "$port" -U postgres -t 1 >/dev/null 2>&1 ||
   fail 'disposable PostgreSQL did not become ready'
 
 admin_dsn="postgresql://postgres@127.0.0.1:${port}/postgres?sslmode=disable"
-psql "$admin_dsn" --no-password --file \
+psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 --file \
   "$repository_root/deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql" \
   >/dev/null
 dsn="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane?sslmode=disable"

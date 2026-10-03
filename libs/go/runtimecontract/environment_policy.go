@@ -19,7 +19,6 @@ const (
 	RuntimeEgressDNS             = "DNS"
 	RuntimeEgressRuntimeCallback = "RUNTIME_CALLBACK"
 	RuntimeEgressProviderProxy   = "PROVIDER_PROXY"
-	RuntimeEgressKubernetesAPI   = "KUBERNETES_API"
 
 	RuntimeProtocolTCP = "TCP"
 	RuntimeProtocolUDP = "UDP"
@@ -38,9 +37,8 @@ const (
 	RuntimeHTTPMethodPatch   = "PATCH"
 	RuntimeHTTPMethodDelete  = "DELETE"
 
-	RuntimeKubernetesAccessNone             = "NONE"
-	RuntimeKubernetesAccessReadOwnExecution = "READ_OWN_EXECUTION"
-	RuntimeKubernetesNamespace              = "kodex-runtime"
+	RuntimeKubernetesAccessNone = "NONE"
+	RuntimeKubernetesNamespace  = "kodex-runtime"
 )
 
 var runtimeVolumeNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}[a-z0-9]$|^[a-z]$`)
@@ -98,8 +96,8 @@ type RuntimeNetworkPolicy struct {
 	WebAccess     RuntimeWebAccess       `json:"web_access"`
 }
 
-// RuntimeKubernetesAccessProfile является environment-level выбором. Exact
-// resourceNames и ServiceAccount назначаются сервером для каждой execution.
+// RuntimeKubernetesAccessProfile фиксирует отсутствие Kubernetes-прав.
+// ServiceAccount назначается сервером и не получает token mount или RBAC.
 type RuntimeKubernetesAccessProfile struct {
 	Kind      string `json:"kind"`
 	Namespace string `json:"namespace"`
@@ -204,10 +202,10 @@ func NormalizeRuntimeEnvironmentPolicy(input RuntimeEnvironmentPolicy) (RuntimeE
 	if access.Namespace == "" {
 		access.Namespace = RuntimeKubernetesNamespace
 	}
-	if err := validateRuntimeNetwork(network, access); err != nil {
+	if err := validateRuntimeNetwork(network); err != nil {
 		return RuntimeEnvironmentPolicy{}, err
 	}
-	if !containsString([]string{RuntimeKubernetesAccessNone, RuntimeKubernetesAccessReadOwnExecution}, access.Kind) || access.Namespace != RuntimeKubernetesNamespace {
+	if access.Kind != RuntimeKubernetesAccessNone || access.Namespace != RuntimeKubernetesNamespace {
 		return RuntimeEnvironmentPolicy{}, errors.New("runtime Kubernetes access profile is invalid")
 	}
 	result := RuntimeEnvironmentPolicy{Resources: input.Resources, Volumes: volumes, Network: network, KubernetesAccess: access}
@@ -232,12 +230,12 @@ func DefaultRuntimeEnvironmentPolicyWithoutDigests() RuntimeEnvironmentPolicy {
 }
 
 func RuntimeEnvironmentPolicyFromInput(input RuntimeEnvironmentPolicyInput) (RuntimeEnvironmentPolicy, error) {
+	if input.KubernetesAccess != RuntimeKubernetesAccessNone {
+		return RuntimeEnvironmentPolicy{}, errors.New("runtime Kubernetes access is not supported")
+	}
 	access := RuntimeKubernetesAccessProfile{Kind: input.KubernetesAccess, Namespace: RuntimeKubernetesNamespace}
 	required := map[string]struct{}{
 		RuntimeEgressDNS: {}, RuntimeEgressProviderProxy: {}, RuntimeEgressRuntimeCallback: {},
-	}
-	if access.Kind == RuntimeKubernetesAccessReadOwnExecution {
-		required[RuntimeEgressKubernetesAPI] = struct{}{}
 	}
 	if len(input.NetworkDestinations) != len(required) {
 		return RuntimeEnvironmentPolicy{}, errors.New("runtime network destination set is invalid")
@@ -256,9 +254,6 @@ func RuntimeEnvironmentPolicyFromInput(input RuntimeEnvironmentPolicyInput) (Run
 		{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolUDP, Port: 53},
 		{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8084},
 		{Destination: RuntimeEgressRuntimeCallback, Protocol: RuntimeProtocolTCP, Port: 8444},
-	}
-	if access.Kind == RuntimeKubernetesAccessReadOwnExecution {
-		egress = append(egress, RuntimeNetworkEgress{Destination: RuntimeEgressKubernetesAPI, Protocol: RuntimeProtocolTCP, Port: 443})
 	}
 	return NormalizeRuntimeEnvironmentPolicy(RuntimeEnvironmentPolicy{
 		Resources: input.Resources, Volumes: input.Volumes,
@@ -282,11 +277,6 @@ func RuntimeKubernetesAccessForExecution(profile RuntimeKubernetesAccessProfile,
 	switch profile.Kind {
 	case RuntimeKubernetesAccessNone:
 		result.ServiceAccountName = serviceAccountName
-	case RuntimeKubernetesAccessReadOwnExecution:
-		result.Rules = []RuntimeKubernetesRule{
-			{APIGroup: "", Resource: "pods", Verbs: []string{"get"}, ResourceNames: []string{podName}},
-			{APIGroup: "", Resource: "pods/log", Verbs: []string{"get"}, ResourceNames: []string{podName}},
-		}
 	default:
 		return RuntimeKubernetesAccess{}, errors.New("runtime Kubernetes access profile is invalid")
 	}
@@ -353,16 +343,13 @@ func validateRuntimeVolumes(values []RuntimeVolume) error {
 	return nil
 }
 
-func validateRuntimeNetwork(value RuntimeNetworkPolicy, access RuntimeKubernetesAccessProfile) error {
-	if !value.DenyByDefault || len(value.Egress) < 4 || len(value.Egress) > 5 {
+func validateRuntimeNetwork(value RuntimeNetworkPolicy) error {
+	if !value.DenyByDefault || len(value.Egress) != 4 {
 		return errors.New("runtime network policy must be deny-by-default")
 	}
 	required := map[string]struct{}{
 		RuntimeEgressDNS + "|TCP|53": {}, RuntimeEgressDNS + "|UDP|53": {},
 		RuntimeEgressProviderProxy + "|TCP|8084": {}, RuntimeEgressRuntimeCallback + "|TCP|8444": {},
-	}
-	if access.Kind == RuntimeKubernetesAccessReadOwnExecution {
-		required[RuntimeEgressKubernetesAPI+"|TCP|443"] = struct{}{}
 	}
 	if len(value.Egress) != len(required) {
 		return errors.New("runtime network policy destination set is invalid")

@@ -290,10 +290,10 @@ func environmentPolicySchema() map[string]any {
 			"name": stringSchema(1, 32), "kind": enumSchema("EPHEMERAL_DISK", "EPHEMERAL_MEMORY"),
 			"sizeMib": map[string]any{"type": "integer", "minimum": 16, "maximum": 10240},
 		})},
-		"networkDestinations": map[string]any{"type": "array", "minItems": 3, "maxItems": 4, "uniqueItems": true,
-			"items": enumSchema("DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "KUBERNETES_API")},
+		"networkDestinations": map[string]any{"type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+			"items": enumSchema("DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK")},
 		"webAccess":        webAccess,
-		"kubernetesAccess": enumSchema("NONE", "READ_OWN_EXECUTION"),
+		"kubernetesAccess": enumSchema("NONE"),
 	})
 }
 

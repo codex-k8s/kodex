@@ -390,8 +390,6 @@ func runtimeNetworkDestination(value string) controlplanev1.RuntimeNetworkDestin
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK
 	case "PROVIDER_PROXY":
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY
-	case "KUBERNETES_API":
-		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API
 	default:
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_UNSPECIFIED
 	}
@@ -401,8 +399,6 @@ func runtimeKubernetesAccessKind(value string) controlplanev1.RuntimeKubernetesA
 	switch value {
 	case "NONE":
 		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
-	case "READ_OWN_EXECUTION":
-		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
 	default:
 		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED
 	}

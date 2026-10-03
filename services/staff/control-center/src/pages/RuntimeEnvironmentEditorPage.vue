@@ -1663,16 +1663,6 @@ onBeforeUnmount(() => {
                         {{ input.policy.networkDestinations.length }}
                       </dd>
                     </div>
-                    <div>
-                      <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
-                      <dd>
-                        {{
-                          $t(
-                            `runtime.kubernetesAccessLabel.${input.policy.kubernetesAccess}`,
-                          )
-                        }}
-                      </dd>
-                    </div>
                   </dl>
                   <p v-if="!publishedPolicy" class="boundary-note" role="note">
                     <CircleAlert :size="17" aria-hidden="true" />

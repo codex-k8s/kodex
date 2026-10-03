@@ -4,14 +4,14 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.314
+version: 1.0.315
 updated: 2026-10-03
 ---
 
 # Совместная отладка прототипа
 
-Область: локальный `trusted-cluster`, единственный клон
-`/home/s/projects/matter-codex`, эпик #1763, текущие Issue #1784 и PR #1785.
+Область: локальный `trusted-cluster`, единственный обслуживаемый клон
+`/home/s/projects/kodex`, эпик #1763, текущие Issue #1789 и Draft PR #1790.
 Это рабочий журнал, а не доказательство приёмки. Слияние PR — только по
 отдельной команде владельца; staging и production не затрагиваются.
 
@@ -6922,3 +6922,94 @@ GitHub checks не считается `PASS`.
       в тестовой оснастке; bash -n и diff-check проходят. Это не доказательство
       реальной установки на новом сервере.
 - [ ] Реальные ИИ/STT/device-code и staging/production — NOT RUN.
+
+## 03.10.2026 — полная системная и проектная конфигурация помощника
+
+Последнее решение владельца заменяет промежуточные варианты «только
+общеплатформенный контур» и «только проектная привязка». В onboarding полностью
+настраивается системный Kodex; дополнительно у каждого проекта может быть
+собственная конфигурация помощника. Владелец подтвердил вариант 1: отдельные
+системные ресурсы организации, без служебного проекта; ограничение фиксированного
+образа в #1789 снято и readback обновлённого Issue подтверждён. Это требования
+и план, не результат проверки всей новой функциональности.
+
+- [ ] Полная системная настройка: модель/аккаунт/reasoning, образ, проверенные
+      инструменты, окружение, несекретные переменные, привязки секретов, ресурсы,
+      тома, сетевой доступ и инструкции. Доступ — владелец/администратор.
+- [ ] Общеплатформенные образы и секреты имеют явную организационную область,
+      без фиктивного проекта и без обхода сборки, допуска или secret-broker.
+- [ ] Отдельная конфигурация помощника проекта использует ресурсы только своего
+      проекта. Системные секреты, grants и полномочия не копируются автоматически.
+- [ ] В чате и настройках явно различимы системный и проектный помощники.
+      Изменение выбора проекта не перепривязывает историю или активный ход.
+- [ ] Системный помощник подготавливает изменения себе и проектному помощнику;
+      настроенный проектный помощник — себе. Полномочия определяет текущий actor,
+      а не имя помощника, текст запроса или идентификатор из tool payload.
+- [ ] Все пути подготовки создают один versioned draft с объяснением изменений,
+      проверкой и редактируемой штатной формой. Публикация требует отдельного
+      подтверждения; текст секрета вводится только в защищённую форму.
+- [ ] Onboarding сохраняет настройку системного помощника вторым шагом; сначала
+      видны основные действия, расширенные параметры доступны под раскрытием.
+      Настройку можно закончить раньше и затем вернуться к ней.
+- [x] Подпись модели: локализованная дата каталога Kodex без account ref и сырых
+      timestamps; reasoning отсортирован от меньшего к большему.
+- [ ] READ_OWN_EXECUTION полностью удалён из контрактов, типов, настройки и
+      выдачи runtime-прав; совместимость со старым профилем не поддерживается.
+- [ ] Contract/codegen, Go/unit/disposable PostgreSQL, frontend/lint/typecheck/build,
+      итоговый render, hot-reload readback и Chrome MCP со скриншотами, Console и
+      relevant Network. Реальный inference, STT, device-code и production — NOT RUN.
+
+### Карта полномочий и жизненного цикла
+
+| Сценарий                | Инициатор и authority                                                                             | Владелец состояния и эффект                                                                                          | Потребитель / terminal                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Системная настройка     | Owner/admin через проверенную browser session; отдельный системный API, org назначает CP          | CP: специализированная команда, точный ресурс организации, OCC/idempotency, immutable версия, audit/outbox           | Runtime-controller и secret-broker заново разрешают зависимости следующего хода; текущий snapshot не меняется                  |
+| Проектная настройка     | Проверенная session и актуальное право управления конкретным проектом; projectRef — locator       | CP разрешает Project и профиль внутри tenant до версии/receipt; новая неизменяемая конфигурация                      | Следующий ход связан с точным профилем/проектом; чужой проект скрывается как отсутствующий                                     |
+| Образ                   | Специализированные recipe/build/promotion commands; отдельно image source/build/promote authority | CP назначает recipe, generation, attempt, immutable input; прежние fenced claim/renew/complete и admission           | Только ACCEPTED + PROMOTED exact digest/ABI; cancel/retry/expiry закрывают прежний build-граф штатно                           |
+| Секрет                  | Специализированные create/rotate/revoke/draft commands; свежий scope и отдельный reveal gate      | CP хранит только descriptor, broker — material; OCC/idempotency, audit и точная immutable revision                   | Materialize/validate проверяют exact execution/lease/attempt и область секрета; terminal/cancel/expiry отзывают прежний допуск |
+| Настройка через чат     | Системный или уже настроенный проектный помощник, но authority принадлежит текущему root actor    | PREPARE draft → validation → редактируемая форма → подтверждаемая application; сохраняются target/ref/version/digest | CP повторно проверяет текущие права до применения и receipt replay; stale/отозванный draft не применяется                      |
+| Смена проекта / профиля | Навигация либо создание нового диалога через проверенную session                                  | Сам выбор ничего не публикует и не запускает; существующая история сохраняет привязку                                | Отправка разрешает профиль сервером; Stop закрывает только текущий граф выбранного диалога                                     |
+
+Физический формат новых scoped API, Proto и таблиц фиксируется вместе с
+реализацией до изменения контрактов; существующие project endpoints не
+получают неявное значение «системный» через произвольный projectRef.
+
+### Отказ от READ_OWN_EXECUTION: карта применимого изменения
+
+Источник — решение владельца от 03.10.2026 и checklist #1789. Владелец явно
+исключил обратную совместимость. Enum, schema и обработчики содержат только
+NONE; неизвестные профили закрыто отклоняются, включая read/rollback.
+Read-only проверка текущей БД: несовместимых environment versions и runtime
+revisions — 0. Данные не переписывались. Ранее применённые миграции остаются
+неизменяемой историей схемы, а не действующим контуром совместимости.
+
+| Сценарий | Authority и точный путь | Результат / event / consumer |
+| --- | --- | --- |
+| Новая среда или версия | Проверенная user session → createRuntimeEnvironmentSet / publishRuntimeEnvironmentVersion → RuntimeConfigurationService.CreateRuntimeEnvironmentSet / PublishRuntimeEnvironmentVersion → CreateRuntimeEnvironment / PublishRuntimeEnvironment; CP разрешает org/project/resource до OCC/idempotency | Input принимает только NONE; READ_OWN_EXECUTION и KUBERNETES_API отклоняются INVALID_REQUEST, без business state, receipt или события. Успешный NONE сохраняет прежний audit/outbox и version-pinned readback |
+| Черновик, assistant plan | Проверенная session/root actor → create/save/validate/publishRuntimeEnvironmentDraft либо PREPARE_RUNTIME_ENVIRONMENT_REVISION → те же typed policy parser и activation admission владельца CP | Неизвестный параметр не проходит validation/publication; plan не выдаёт authority. Read path также принимает только NONE |
+| Rollback | Проверенная session → rollbackRuntimeEnvironment → RuntimeConfigurationService.RollbackRuntimeEnvironment; owner resolves exact environment/version, OCC/idempotency | Неизвестный профиль закрыто отклоняется без новой версии или события. NONE rollback сохраняет прежние immutable/audit/outbox semantics |
+| Execution/retry/continuation | CP разрешает свежую exact RuntimeRevision и execution lease → RuntimeKubernetesAccessForExecution → runtime-controller ValidateRuntimeKubernetesAccess / ensureExecutionPolicy | READ-правила не выпускаются; подделанный старый input закрыто отклоняется до выдачи Role/RoleBinding/token. NONE использует ServiceAccount без token mount и штатное отсутствие execution RBAC |
+| Terminal/cancel/delete/expiry | Прежние server-owned task/session/lease/attempt transitions, без изменения consumer topology | Прежние атомарные owner events и exact resource cleanup. Отдельного события удаления capability нет; read path — существующие environment/version/execution API с единственным профилем NONE |
+
+### Проверки текущего пакета 03.10.2026
+
+- PASS: runtimecontract unit, runtime-controller целиком, gateway HTTP,
+  scoped CP environment/assistant-tool unit, agent-runner, Proto
+  lint/build/codegen, authority-policy codegen, SQL boundary, оба release render.
+- PASS: frontend — 54 теста шести связанных файлов, scoped ESLint, typecheck,
+  production build с configLoader runner; без реального вызова модели.
+- PASS: disposable PostgreSQL — отдельный компонентный сценарий fresh auth,
+  permission и отказа неизвестному Kubernetes-профилю при create/publish;
+  опубликованная версия после отказа не изменилась. На этом хосте Docker DNAT
+  недоступен: использован явный KODEX_TEST_POSTGRES_NETWORK=host, PostgreSQL
+  слушал только 127.0.0.1. Firewall и общая БД не менялись.
+- FAIL: полный TestBootstrapComponent — проверки демоции последнего владельца,
+  assistant turn/title и затем каскад claim/time-budget ошибок. Это не PASS;
+  полная проверка прототипа и допуск PR остаются незавершёнными. Новые
+  глобальные ресурсы и проектные профили ещё не реализованы.
+- PASS: Chrome hard reload, настройки модели и окружения; блок RBAC отсутствует,
+  ошибок/предупреждений Console нет, все 58 fetch/xhr текущей навигации — 200.
+  Сверены одинаковые host/Pod SHA256 shared policy, controller и UI-компонента.
+- NOT RUN: реальный агент, STT, повторная авторизация, staging/production.
+  Собранный ранее runner ещё не обновлён: удаление capability из исходников
+  не считается доказательством замены бинарного образа.

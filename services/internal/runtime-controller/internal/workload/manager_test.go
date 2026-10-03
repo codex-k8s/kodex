@@ -1673,6 +1673,55 @@ func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
 	}
 }
 
+func TestRetiredKubernetesAccessCannotMaterializeExecutionPolicy(t *testing.T) {
+	t.Parallel()
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, _, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.EnvironmentPolicy.KubernetesAccess.Kind = "UNSUPPORTED"
+	input.EffectiveKubernetesAccess.Profile = input.EnvironmentPolicy.KubernetesAccess
+	client.ClearActions()
+	if err := manager.ensureExecutionPolicy(context.Background(), input, runtimecontract.RuntimeTurnPodName(input.LeaseRef)); err == nil {
+		t.Fatal("retired Kubernetes access was accepted")
+	}
+	if len(client.Actions()) != 0 {
+		t.Fatal("retired access touched Kubernetes resources before denial")
+	}
+	input.EnvironmentPolicy.Network.Egress = append(input.EnvironmentPolicy.Network.Egress, runtimecontract.RuntimeNetworkEgress{
+		Destination: "UNSUPPORTED", Protocol: runtimecontract.RuntimeProtocolTCP, Port: 443,
+	})
+	if _, err := manager.executionNetworkPolicy(input, runtimecontract.RuntimeTurnPodName(input.LeaseRef)); err == nil {
+		t.Fatal("retired Kubernetes API egress was materialized")
+	}
+}
+
+func TestRuntimePodDoesNotProjectKubernetesToken(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	input, binding, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials := testCredentialProjection(input)
+	pod := manager.runtimePod(input, binding, &credentials, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
+	if pod == nil || pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken {
+		t.Fatal("runtime Pod did not disable Kubernetes token automount")
+	}
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Projected == nil {
+			continue
+		}
+		for _, source := range volume.Projected.Sources {
+			if source.ServiceAccountToken != nil {
+				t.Fatal("runtime Pod projects a Kubernetes ServiceAccount token")
+			}
+		}
+	}
+}
+
 func TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1729,7 +1778,6 @@ func testManagerConfig() Config {
 		RuntimeEgressSigningKey: []byte("0123456789abcdef0123456789abcdef"),
 		RuntimeEgressCASecret:   "runtime-egress-proxy-ca",
 		ProviderAppArmorProfile: "kodex-provider-runtime",
-		KubernetesAPIServiceIP:  "10.43.0.1",
 		StorageClass:            "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
 		PromotedRoleImageRepository: "registry.example/kodex/roles",
 		DefaultRoleImageReference:   "registry.example/kodex/agent-runner@" + testDefaultDigest,
@@ -1989,9 +2037,6 @@ func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironment
 			DomainPattern: rule.DomainPattern, Protocol: rule.Protocol, Port: rule.Port, HttpMethods: append([]string(nil), rule.HTTPMethods...),
 		})
 	}
-	if policy.KubernetesAccess.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		result.KubernetesAccess.Kind = controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
-	}
 	for _, volume := range policy.Volumes {
 		kind := controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK
 		if volume.Kind == runtimecontract.RuntimeVolumeEphemeralMemory {
@@ -2004,7 +2049,6 @@ func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironment
 			runtimecontract.RuntimeEgressDNS:             controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS,
 			runtimecontract.RuntimeEgressRuntimeCallback: controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK,
 			runtimecontract.RuntimeEgressProviderProxy:   controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY,
-			runtimecontract.RuntimeEgressKubernetesAPI:   controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API,
 		}[egress.Destination]
 		protocol := controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_TCP
 		if egress.Protocol == runtimecontract.RuntimeProtocolUDP {
@@ -2017,9 +2061,6 @@ func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironment
 
 func testRuntimeKubernetesAccessProto(access runtimecontract.RuntimeKubernetesAccess) *controlplanev1.RuntimeKubernetesAccess {
 	profileKind := controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
-	if access.Profile.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		profileKind = controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
-	}
 	result := &controlplanev1.RuntimeKubernetesAccess{Profile: &controlplanev1.RuntimeKubernetesAccessProfile{
 		Kind: profileKind, Namespace: access.Profile.Namespace,
 	}, ServiceAccountName: access.ServiceAccountName, Digest: access.Digest}

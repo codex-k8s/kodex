@@ -2,7 +2,6 @@ import type {
   RuntimeEnvironmentInput,
   RuntimeEnvironmentPolicy,
   RuntimeEnvironmentPolicyInput,
-  RuntimeKubernetesAccessKind,
   RuntimeNetworkDestination,
   RuntimeSecretBinding,
   RuntimeSecretDescriptor,
@@ -123,9 +122,7 @@ export function editableRuntimeEnvironmentPolicy(
       kind,
       sizeMib,
     })),
-    networkDestinations: runtimeNetworkDestinations(
-      policy.kubernetesAccess.kind,
-    ),
+    networkDestinations: runtimeNetworkDestinations(),
     webAccess: {
       mode: policy.network.webAccess.mode,
       rules: policy.network.webAccess.rules.map((rule) => ({
@@ -133,24 +130,12 @@ export function editableRuntimeEnvironmentPolicy(
         httpMethods: [...rule.httpMethods],
       })),
     },
-    kubernetesAccess: policy.kubernetesAccess.kind,
+    kubernetesAccess: "NONE",
   };
 }
 
-export function runtimeNetworkDestinations(
-  access: RuntimeKubernetesAccessKind,
-): RuntimeNetworkDestination[] {
-  return access === "READ_OWN_EXECUTION"
-    ? [...mandatoryRuntimeNetworkDestinations, "KUBERNETES_API"]
-    : [...mandatoryRuntimeNetworkDestinations];
-}
-
-export function setRuntimeKubernetesAccess(
-  policy: RuntimeEnvironmentPolicyInput,
-  access: RuntimeKubernetesAccessKind,
-): void {
-  policy.kubernetesAccess = access;
-  policy.networkDestinations = runtimeNetworkDestinations(access);
+export function runtimeNetworkDestinations(): RuntimeEnvironmentPolicyInput["networkDestinations"] {
+  return [...mandatoryRuntimeNetworkDestinations];
 }
 
 export function emptyRuntimeVolume(): RuntimeVolumeInput {
@@ -406,11 +391,16 @@ function validateRuntimePolicy(
     );
   }
 
-  const expectedDestinations = runtimeNetworkDestinations(
-    policy.kubernetesAccess,
-  );
+  const requestedAccess: string = policy.kubernetesAccess;
+  if (requestedAccess !== "NONE")
+    problems.push({
+      field: "policy.kubernetesAccess",
+      message: "runtime.errors.kubernetesAccess",
+    });
+  const expectedDestinations = runtimeNetworkDestinations();
   if (
-    policy.networkDestinations.length !== expectedDestinations.length ||
+    (policy.networkDestinations as readonly string[]).length !==
+      expectedDestinations.length ||
     expectedDestinations.some(
       (destination) =>
         policy.networkDestinations.filter((item) => item === destination)

@@ -122,7 +122,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		RuntimeEgressSigningKey: egressSigningKey,
 		RuntimeEgressCASecret:   config.RuntimeEgressCASecret,
 		ProviderAppArmorProfile: config.ProviderAppArmorProfile,
-		KubernetesAPIServiceIP:  config.KubernetesAPIServiceIP,
 		StorageClass:            config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
 		PromotedRoleImageRepository: config.PromotedRoleImageRepository, RoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
 		DefaultRoleImageReference: config.DefaultRoleImageReference,

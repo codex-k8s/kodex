@@ -94,9 +94,6 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 		volumes = append(volumes, map[string]any{"name": volume.Name, "kind": volume.Kind, "sizeMib": volume.SizeMiB})
 	}
 	destinations := []string{runtimecontract.RuntimeEgressDNS, runtimecontract.RuntimeEgressProviderProxy, runtimecontract.RuntimeEgressRuntimeCallback}
-	if policy.KubernetesAccess.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		destinations = append(destinations, runtimecontract.RuntimeEgressKubernetesAPI)
-	}
 	webRules := make([]map[string]any, 0, len(policy.Network.WebAccess.Rules))
 	for _, rule := range policy.Network.WebAccess.Rules {
 		webRules = append(webRules, map[string]any{

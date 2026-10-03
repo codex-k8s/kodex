@@ -5,6 +5,7 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { providerBlockerMessage } from "./usage";
+import { catalogDate, orderedReasoningEfforts } from "./catalog-presentation";
 import type {
   AsyncEntityOption,
   AsyncEntityOptionPage,
@@ -29,7 +30,7 @@ const emit = defineEmits<{
   "availability-change": [available: boolean];
   "selection-change": [selection: ModelSelection | undefined];
 }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const catalogLabels = computed(() => ({
   PENDING: t("providers.catalogPending"),
   READY: t("providers.catalogReady"),
@@ -42,6 +43,14 @@ const catalogLabels = computed(() => ({
   AUTHORIZATION_REJECTED: t("providers.catalogAuthorizationRejected"),
 }));
 const models = ref<AccountModelSnapshot[]>([]);
+const catalogCaption = computed(() => {
+  const dates = models.value
+    .map((item) => item.catalogStatus.observedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  const date = catalogDate(dates[0], locale.value);
+  return date ? t("providers.catalogAsOf", { date }) : "";
+});
 const expired = ref(false);
 let expiryTimer: ReturnType<typeof setTimeout> | undefined;
 onBeforeUnmount(() => clearTimeout(expiryTimer));
@@ -70,7 +79,9 @@ const selected = computed<AsyncEntityOption | undefined>(() =>
         description: resolving.value
           ? t("common.loading")
           : available.value
-            ? models.value[0]?.model?.reasoningEfforts.join(" · ")
+            ? orderedReasoningEfforts(
+                models.value[0]?.model?.reasoningEfforts ?? [],
+              ).join(" · ")
             : t("providers.modelUnavailable"),
         disabled: !available.value,
       }
@@ -177,7 +188,9 @@ async function loadPage(
       return {
         ref: model.id,
         title: model.id,
-        description: model.reasoningEfforts.join(" · "),
+        description: orderedReasoningEfforts(model.reasoningEfforts).join(
+          " · ",
+        ),
         meta: blocker,
         disabled,
         disabledReason: disabled
@@ -207,20 +220,14 @@ function choose(value: string | null | readonly string[]): void {
       @update:model-value="choose"
     />
     <ProblemNotice v-if="problem" :problem="problem" />
-    <small v-for="snapshot in models" :key="snapshot.accountRef">
-      {{ snapshot.accountRef }} ·
+    <small v-if="catalogCaption">{{ catalogCaption }}</small>
+    <small
+      v-for="snapshot in models.filter(
+        (item) => expired || item.catalogStatus.state !== 'READY',
+      )"
+      :key="snapshot.accountRef"
+    >
       {{ catalogLabels[expired ? "EXPIRED" : snapshot.catalogStatus.state] }}
-      <span v-if="snapshot.catalogStatus.observedAt">
-        · {{ $t("providers.catalogObserved") }}
-        {{ snapshot.catalogStatus.observedAt }}</span
-      >
-      <span v-if="snapshot.catalogStatus.expiresAt">
-        · {{ $t("providers.catalogExpires") }}
-        {{ snapshot.catalogStatus.expiresAt }}</span
-      >
-      <span v-if="snapshot.catalogStatus.source">
-        · {{ catalogLabels[snapshot.catalogStatus.source] }}</span
-      >
       <span
         v-if="
           snapshot.catalogStatus.failure &&

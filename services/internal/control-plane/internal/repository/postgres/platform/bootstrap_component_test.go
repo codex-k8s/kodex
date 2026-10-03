@@ -2675,6 +2675,25 @@ func testRuntimeEnvironmentPrivilegedAdmission(t *testing.T, ctx context.Context
 	if executeErr := create("runtime-environment-reauth-create-fresh", owner, privilegedPolicy); !errors.Is(executeErr, domainerrs.ErrInvalid) {
 		t.Fatalf("fresh privileged create did not reach image validation: %v", executeErr)
 	}
+	// Неизвестный профиль не допускается к сохранению или запуску.
+	retiredPolicy := runtimecontract.DefaultRuntimeEnvironmentPolicyWithoutDigests()
+	retiredPolicy.KubernetesAccess.Kind = "UNSUPPORTED"
+	if executeErr := create("runtime-environment-retired-access-create", owner, retiredPolicy); !errors.Is(executeErr, domainerrs.ErrInvalid) {
+		t.Fatalf("retired Kubernetes access create error = %v", executeErr)
+	}
+	retiredVersion := configuration.Environment.Version
+	_, retiredErr := service.Execute(ctx, command.Command{Kind: command.PublishRuntimeEnvironment, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-retired-access-publish", ExpectedVersion: &retiredVersion},
+		Payload: command.RuntimeEnvironmentInput{Ref: configuration.Environment.Ref, Name: configuration.Environment.Name,
+			Description: configuration.Environment.Description, Policy: retiredPolicy}})
+	if !errors.Is(retiredErr, domainerrs.ErrInvalid) {
+		t.Fatalf("retired Kubernetes access publish error = %v", retiredErr)
+	}
+	unchanged, readErr := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
+	if readErr != nil || unchanged.Environment.Version != retiredVersion ||
+		unchanged.Environment.CurrentVersion.Policy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
+		t.Fatalf("denied access changed the published environment: err=%v", readErr)
+	}
 
 	staleOwner := owner
 	staleOwner.CredentialAuthenticatedAt = now.Add(-6 * time.Minute)

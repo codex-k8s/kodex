@@ -9,6 +9,7 @@ import { restoreOverlayRevision } from "./overlay-history";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import { ProviderAccountSelector } from "@/features/providers";
 import ProviderModelSelector from "@/features/providers/ProviderModelSelector.vue";
+import { orderedReasoningEfforts } from "@/features/providers/catalog-presentation";
 import type { ModelSelection } from "@/features/providers/model-catalog";
 import {
   pinnedRuntimeInput,
@@ -259,7 +260,9 @@ watch(
   },
   { flush: "sync" },
 );
-const effortOptions = computed(() => effortField.value?.allowedValues ?? []);
+const effortOptions = computed(() =>
+  orderedReasoningEfforts(effortField.value?.allowedValues ?? []),
+);
 function chooseEffort(event: Event): void {
   if (
     !props.canEdit ||

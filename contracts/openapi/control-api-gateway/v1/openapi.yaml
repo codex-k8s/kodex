@@ -11967,7 +11967,7 @@ components:
       enum: [EPHEMERAL_DISK, EPHEMERAL_MEMORY]
     RuntimeNetworkDestination:
       type: string
-      enum: [DNS, RUNTIME_CALLBACK, PROVIDER_PROXY, KUBERNETES_API]
+      enum: [DNS, RUNTIME_CALLBACK, PROVIDER_PROXY]
     RuntimeNetworkProtocol:
       type: string
       enum: [TCP, UDP]
@@ -11991,7 +11991,11 @@ components:
           minItems: 1
           maxItems: 7
           uniqueItems: true
-          items: { type: string, enum: [GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE] }
+          items:
+            {
+              type: string,
+              enum: [GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE],
+            }
     RuntimeWebAccess:
       type: object
       additionalProperties: false
@@ -12004,7 +12008,7 @@ components:
           items: { $ref: "#/components/schemas/RuntimeWebAccessRule" }
     RuntimeKubernetesAccessKind:
       type: string
-      enum: [NONE, READ_OWN_EXECUTION]
+      enum: [NONE]
     RuntimeResourcePolicy:
       type: object
       additionalProperties: false
@@ -12054,7 +12058,8 @@ components:
     RuntimeEnvironmentPolicyInput:
       type: object
       additionalProperties: false
-      required: [resources, volumes, networkDestinations, kubernetesAccess, webAccess]
+      required:
+        [resources, volumes, networkDestinations, kubernetesAccess, webAccess]
       properties:
         resources: { $ref: "#/components/schemas/RuntimeResourcePolicy" }
         volumes:
@@ -12066,7 +12071,7 @@ components:
         networkDestinations:
           type: array
           minItems: 3
-          maxItems: 4
+          maxItems: 3
           uniqueItems: true
           items: { $ref: "#/components/schemas/RuntimeNetworkDestination" }
         kubernetesAccess:
@@ -12090,7 +12095,7 @@ components:
           {
             type: array,
             minItems: 4,
-            maxItems: 5,
+            maxItems: 4,
             items: { $ref: "#/components/schemas/RuntimeNetworkEgress" },
           }
         webAccess: { $ref: "#/components/schemas/RuntimeWebAccess" }

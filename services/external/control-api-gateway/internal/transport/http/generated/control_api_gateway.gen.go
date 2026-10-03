@@ -5391,16 +5391,13 @@ func (e RuntimeEnvironmentSetState) Valid() bool {
 
 // Defines values for RuntimeKubernetesAccessKind.
 const (
-	RuntimeKubernetesAccessKindNONE             RuntimeKubernetesAccessKind = "NONE"
-	RuntimeKubernetesAccessKindREADOWNEXECUTION RuntimeKubernetesAccessKind = "READ_OWN_EXECUTION"
+	RuntimeKubernetesAccessKindNONE RuntimeKubernetesAccessKind = "NONE"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeKubernetesAccessKind enum.
 func (e RuntimeKubernetesAccessKind) Valid() bool {
 	switch e {
 	case RuntimeKubernetesAccessKindNONE:
-		return true
-	case RuntimeKubernetesAccessKindREADOWNEXECUTION:
 		return true
 	default:
 		return false
@@ -5425,7 +5422,6 @@ func (e RuntimeKubernetesAccessProfileNamespace) Valid() bool {
 // Defines values for RuntimeNetworkDestination.
 const (
 	DNS             RuntimeNetworkDestination = "DNS"
-	KUBERNETESAPI   RuntimeNetworkDestination = "KUBERNETES_API"
 	PROVIDERPROXY   RuntimeNetworkDestination = "PROVIDER_PROXY"
 	RUNTIMECALLBACK RuntimeNetworkDestination = "RUNTIME_CALLBACK"
 )
@@ -5434,8 +5430,6 @@ const (
 func (e RuntimeNetworkDestination) Valid() bool {
 	switch e {
 	case DNS:
-		return true
-	case KUBERNETESAPI:
 		return true
 	case PROVIDERPROXY:
 		return true

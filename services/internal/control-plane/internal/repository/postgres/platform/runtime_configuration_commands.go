@@ -948,11 +948,10 @@ func (repository *Repository) admitRuntimeEnvironmentPolicy(
 	policy runtimecontract.RuntimeEnvironmentPolicy,
 ) (runtimecontract.RuntimeEnvironmentPolicy, error) {
 	normalized, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
-	if err != nil {
+	if err != nil || normalized.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
 		return runtimecontract.RuntimeEnvironmentPolicy{}, errs.ErrInvalid
 	}
-	if normalized.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone ||
-		normalized.Network.WebAccess.Mode != runtimecontract.RuntimeWebAccessNone {
+	if normalized.Network.WebAccess.Mode != runtimecontract.RuntimeWebAccessNone {
 		resourceKind, resourceRef := "RUNTIME_ENVIRONMENT", environmentRef
 		if environmentRef == "" {
 			resourceKind, resourceRef = "PROJECT", projectRef

@@ -148,11 +148,10 @@ function parsePolicy(
       "volumes",
       "webAccess",
     ]) ||
-    (value.kubernetesAccess !== "NONE" &&
-      value.kubernetesAccess !== "READ_OWN_EXECUTION") ||
+    value.kubernetesAccess !== "NONE" ||
     !Array.isArray(value.networkDestinations) ||
     !value.networkDestinations.every((item) =>
-      ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY", "KUBERNETES_API"].includes(
+      ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY"].includes(
         String(item),
       ),
     ) ||

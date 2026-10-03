@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import {
-  CircleAlert,
-  Cpu,
-  Network,
-  Plus,
-  ShieldCheck,
-  Trash2,
-} from "@lucide/vue";
+import { Cpu, Network, Plus, Trash2 } from "@lucide/vue";
 
 import {
   emptyRuntimeVolume,
@@ -15,7 +8,6 @@ import {
   runtimeResourceBounds,
   runtimeWebMethodsForMode,
   runtimeVolumeBounds,
-  setRuntimeKubernetesAccess,
 } from "@/features/runtime/environment-form";
 import type {
   RuntimeEnvironmentPolicyInput,
@@ -125,23 +117,6 @@ function removeVolume(index: number): void {
     ...props.policy,
     volumes: props.policy.volumes.filter((_, current) => current !== index),
   });
-}
-
-function changeAccess(event: Event): void {
-  if (props.disabled) return;
-  const target = event.target;
-  if (!(target instanceof HTMLInputElement)) return;
-  const next: RuntimeEnvironmentPolicyInput = {
-    ...props.policy,
-    resources: { ...props.policy.resources },
-    volumes: [...props.policy.volumes],
-    networkDestinations: [...props.policy.networkDestinations],
-  };
-  setRuntimeKubernetesAccess(
-    next,
-    target.checked ? "READ_OWN_EXECUTION" : "NONE",
-  );
-  emit("update:policy", next);
 }
 
 function changeWebAccessMode(event: Event): void {
@@ -376,26 +351,6 @@ function changeWebRule(index: number, event: Event): void {
             :label="$t('runtime.mandatoryDestination')"
           />
         </article>
-        <article class="destination-row">
-          <div>
-            <strong>{{
-              $t("runtime.networkDestination.KUBERNETES_API")
-            }}</strong>
-            <p>{{ $t("runtime.networkDestinationHelp.KUBERNETES_API") }}</p>
-          </div>
-          <StatusBadge
-            :state="
-              policy.kubernetesAccess === 'READ_OWN_EXECUTION'
-                ? 'AVAILABLE'
-                : 'DISABLED'
-            "
-            :label="
-              policy.kubernetesAccess === 'READ_OWN_EXECUTION'
-                ? $t('runtime.scopedAccessEnabled')
-                : $t('common.disabled')
-            "
-          />
-        </article>
       </div>
       <div class="web-access-editor">
         <label class="field">
@@ -487,33 +442,6 @@ function changeWebRule(index: number, event: Event): void {
         </template>
       </div>
     </section>
-
-    <section class="policy-group">
-      <div class="section-header">
-        <div>
-          <h3>{{ $t("runtime.kubernetesRbac") }}</h3>
-          <p>{{ $t("runtime.kubernetesRbacHelp") }}</p>
-        </div>
-        <ShieldCheck :size="20" aria-hidden="true" />
-      </div>
-      <label class="access-toggle">
-        <input
-          type="checkbox"
-          name="runtime-read-own-execution"
-          :checked="policy.kubernetesAccess === 'READ_OWN_EXECUTION'"
-          :disabled="disabled"
-          @change="changeAccess"
-        />
-        <span>
-          <strong>{{ $t("runtime.readOwnExecution") }}</strong>
-          <small>{{ $t("runtime.readOwnExecutionHelp") }}</small>
-        </span>
-      </label>
-      <p class="boundary-note" role="note">
-        <CircleAlert :size="17" aria-hidden="true" />
-        {{ $t("runtime.kubernetesAccessBoundary") }}
-      </p>
-    </section>
   </div>
 </template>
 
@@ -554,7 +482,6 @@ function changeWebRule(index: number, event: Event): void {
   gap: 12px;
 }
 .resource-grid .field small,
-.access-toggle small,
 .volume-mount span {
   color: var(--text-secondary);
 }
@@ -645,30 +572,6 @@ function changeWebRule(index: number, event: Event): void {
 }
 .web-rule-add {
   justify-self: start;
-}
-.access-toggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 13px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  cursor: pointer;
-}
-.access-toggle > span {
-  display: grid;
-  gap: 4px;
-}
-.boundary-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 11px 12px;
-  border: 1px solid var(--warning);
-  border-radius: 7px;
-  background: var(--warning-soft);
-  color: var(--warning);
 }
 @media (max-width: 1040px) {
   .volume-row {

@@ -1617,7 +1617,7 @@ export type RuntimeEnvironmentTool = {
 
 export type RuntimeVolumeKind = 'EPHEMERAL_DISK' | 'EPHEMERAL_MEMORY';
 
-export type RuntimeNetworkDestination = 'DNS' | 'RUNTIME_CALLBACK' | 'PROVIDER_PROXY' | 'KUBERNETES_API';
+export type RuntimeNetworkDestination = 'DNS' | 'RUNTIME_CALLBACK' | 'PROVIDER_PROXY';
 
 export type RuntimeNetworkProtocol = 'TCP' | 'UDP';
 
@@ -1635,7 +1635,7 @@ export type RuntimeWebAccess = {
     rules: Array<RuntimeWebAccessRule>;
 };
 
-export type RuntimeKubernetesAccessKind = 'NONE' | 'READ_OWN_EXECUTION';
+export type RuntimeKubernetesAccessKind = 'NONE';
 
 export type RuntimeResourcePolicy = {
     cpuRequestMilli: number;
@@ -1662,7 +1662,11 @@ export type RuntimeVolume = {
 export type RuntimeEnvironmentPolicyInput = {
     resources: RuntimeResourcePolicy;
     volumes: Array<RuntimeVolumeInput>;
-    networkDestinations: Array<RuntimeNetworkDestination>;
+    networkDestinations: [
+        RuntimeNetworkDestination,
+        RuntimeNetworkDestination,
+        RuntimeNetworkDestination
+    ];
     kubernetesAccess: RuntimeKubernetesAccessKind;
     webAccess: RuntimeWebAccess;
 };
@@ -1675,7 +1679,12 @@ export type RuntimeNetworkEgress = {
 
 export type RuntimeNetworkPolicy = {
     denyByDefault: true;
-    egress: Array<RuntimeNetworkEgress>;
+    egress: [
+        RuntimeNetworkEgress,
+        RuntimeNetworkEgress,
+        RuntimeNetworkEgress,
+        RuntimeNetworkEgress
+    ];
     webAccess: RuntimeWebAccess;
 };
 

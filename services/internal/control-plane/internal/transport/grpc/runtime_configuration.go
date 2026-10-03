@@ -279,8 +279,6 @@ func domainRuntimeNetworkDestination(value controlplanev1.RuntimeNetworkDestinat
 		return runtimecontract.RuntimeEgressRuntimeCallback
 	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY:
 		return runtimecontract.RuntimeEgressProviderProxy
-	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API:
-		return runtimecontract.RuntimeEgressKubernetesAPI
 	default:
 		return ""
 	}
@@ -290,8 +288,6 @@ func domainRuntimeKubernetesAccessKind(value controlplanev1.RuntimeKubernetesAcc
 	switch value {
 	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
 		return runtimecontract.RuntimeKubernetesAccessNone
-	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION:
-		return runtimecontract.RuntimeKubernetesAccessReadOwnExecution
 	default:
 		return ""
 	}

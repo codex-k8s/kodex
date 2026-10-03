@@ -7,7 +7,6 @@ import {
   emptySecretBinding,
   normalizeRuntimeEnvironmentInput,
   runtimeEnvironmentCollectionLimit,
-  setRuntimeKubernetesAccess,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 
@@ -127,7 +126,7 @@ describe("runtime environment form", () => {
     ]);
   });
 
-  it("создаёт безопасную policy по умолчанию и связывает Kubernetes API с scoped RBAC", () => {
+  it("создаёт безопасную policy без доступа к Kubernetes", () => {
     const policy = defaultRuntimeEnvironmentPolicy();
 
     expect(policy).toEqual({
@@ -145,14 +144,6 @@ describe("runtime environment form", () => {
       kubernetesAccess: "NONE",
     });
 
-    setRuntimeKubernetesAccess(policy, "READ_OWN_EXECUTION");
-    expect(policy.networkDestinations).toEqual([
-      "DNS",
-      "PROVIDER_PROXY",
-      "RUNTIME_CALLBACK",
-      "KUBERNETES_API",
-    ]);
-    setRuntimeKubernetesAccess(policy, "NONE");
     expect(policy.networkDestinations).not.toContain("KUBERNETES_API");
   });
 
@@ -175,12 +166,11 @@ describe("runtime environment form", () => {
             { destination: "DNS", protocol: "UDP", port: 53 },
             { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
             { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
-            { destination: "KUBERNETES_API", protocol: "TCP", port: 443 },
           ],
           webAccess: { mode: "NONE", rules: [] },
         },
         kubernetesAccess: {
-          kind: "READ_OWN_EXECUTION",
+          kind: "NONE",
           namespace: "kodex-runtime",
         },
         resourcesDigest: "a".repeat(64),
@@ -197,15 +187,32 @@ describe("runtime environment form", () => {
           sizeMib: 2048,
         },
       ],
-      networkDestinations: [
-        "DNS",
-        "PROVIDER_PROXY",
-        "RUNTIME_CALLBACK",
-        "KUBERNETES_API",
-      ],
+      networkDestinations: ["DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"],
       webAccess: { mode: "NONE", rules: [] },
-      kubernetesAccess: "READ_OWN_EXECUTION",
+      kubernetesAccess: "NONE",
     });
+  });
+
+  it("закрыто отклоняет подставленные старые Kubernetes-права", () => {
+    const policy = defaultRuntimeEnvironmentPolicy();
+    Object.assign(policy, { kubernetesAccess: "UNSUPPORTED" });
+    policy.networkDestinations.push("DNS");
+    expect(
+      validateEnvironmentInput({
+        name: "Среда",
+        description: "",
+        imageArtifactRef: "imgart_test",
+        tools: [],
+        values: [],
+        secretBindings: [],
+        policy,
+      }).map((problem) => problem.message),
+    ).toEqual(
+      expect.arrayContaining([
+        "runtime.errors.kubernetesAccess",
+        "runtime.errors.networkDestinations",
+      ]),
+    );
   });
 
   it("закрыто отклоняет policy вне admission ranges и несогласованную сеть", () => {
@@ -218,7 +225,7 @@ describe("runtime environment form", () => {
       { name: "tmp", kind: "EPHEMERAL_MEMORY", sizeMib: 8 },
       { name: "tmp", kind: "EPHEMERAL_DISK", sizeMib: 1024 },
     ];
-    policy.networkDestinations.push("KUBERNETES_API");
+    policy.networkDestinations.push("DNS");
 
     const problems = validateEnvironmentInput({
       name: "Окружение",

@@ -60,7 +60,6 @@ type Config struct {
 	RuntimeEgressSigningKeyFile    string        `env:"RUNTIME_CONTROLLER_EGRESS_SIGNING_KEY_FILE"`
 	RuntimeEgressCASecret          string        `env:"RUNTIME_CONTROLLER_EGRESS_CA_SECRET"`
 	ProviderAppArmorProfile        string        `env:"RUNTIME_CONTROLLER_PROVIDER_APPARMOR_PROFILE"`
-	KubernetesAPIServiceIP         string        `env:"KUBERNETES_SERVICE_HOST"`
 	StorageClass                   string        `env:"RUNTIME_CONTROLLER_STORAGE_CLASS"`
 	SessionPVCSize                 string        `env:"RUNTIME_CONTROLLER_SESSION_PVC_SIZE"`
 	RunnerServiceAccount           string        `env:"RUNTIME_CONTROLLER_RUNNER_SERVICE_ACCOUNT"`
@@ -98,7 +97,6 @@ func loadConfig() (Config, error) {
 		RuntimeEgressSigningKeyFile: "/var/run/secrets/kodex/runtime-controller/egress-signing/key",
 		RuntimeEgressCASecret:       "runtime-egress-proxy-ca",
 		ProviderAppArmorProfile:     "",
-		KubernetesAPIServiceIP:      "10.43.0.1",
 		StorageClass:                "", SessionPVCSize: "20Gi",
 		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16,
 		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
@@ -158,7 +156,6 @@ func (config Config) validate() error {
 		return errors.New("runtime role image policy is invalid")
 	}
 	if config.MaximumConcurrentTurns < 1 || config.MaximumConcurrentTurns > 128 ||
-		net.ParseIP(config.KubernetesAPIServiceIP) == nil ||
 		config.PollInterval < 100*time.Millisecond || config.PollInterval > 10*time.Second ||
 		config.InfrastructureCheckInterval < 5*time.Second || config.InfrastructureCheckInterval > time.Minute ||
 		config.LeaseRenewInterval < time.Second || config.LeaseRenewInterval > 20*time.Second ||

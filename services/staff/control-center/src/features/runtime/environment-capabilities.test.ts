@@ -8,9 +8,12 @@ import {
   safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
 import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
-import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  RuntimeEnvironmentPolicy,
+  RuntimeEnvironmentSet,
+} from "@/shared/api/generated/openapi/types.gen";
 
-function effectivePolicy() {
+function effectivePolicy(): RuntimeEnvironmentPolicy {
   return {
     resources: defaultRuntimeEnvironmentPolicy().resources,
     volumes: [],
@@ -58,7 +61,6 @@ describe("runtime environment capabilities", () => {
       verifiedTools: "AVAILABLE",
       resources: "AVAILABLE",
       networkPolicy: "AVAILABLE",
-      kubernetesRbac: "AVAILABLE",
       effectivePolicy: "AVAILABLE",
       secretLifecycle: "AVAILABLE",
       secretReveal: "AVAILABLE",
