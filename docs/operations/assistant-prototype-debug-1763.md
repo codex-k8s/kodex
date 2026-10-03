@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.321
+version: 1.0.322
 updated: 2026-10-03
 ---
 
@@ -7079,10 +7079,10 @@ revisions — 0. Данные не переписывались. Ранее пр
   опубликованная версия после отказа не изменилась. На этом хосте Docker DNAT
   недоступен: использован явный KODEX_TEST_POSTGRES_NETWORK=host, PostgreSQL
   слушал только 127.0.0.1. Firewall и общая БД не менялись.
-- FAIL: полный TestBootstrapComponent — проверки демоции последнего владельца,
-  assistant turn/title и затем каскад claim/time-budget ошибок. Это не PASS;
-  полная проверка прототипа и допуск PR остаются незавершёнными. Новые
-  глобальные ресурсы и проектные профили ещё не реализованы.
+- PASS: полный `TestBootstrapComponent` на текущем рабочем дереве — 81,6 с;
+  дополнительно прошли worker-grant и runner-policy read-only queries. Это
+  закрывает прежний каскад shared fixture/lifecycle, но не заменяет browser,
+  реальные ИИ/STT/device-code, staging/production и ручной допуск владельца.
 - PASS: Chrome hard reload, настройки модели и окружения; блок RBAC отсутствует,
   ошибок/предупреждений Console нет, все 58 fetch/xhr текущей навигации — 200.
   Сверены одинаковые host/Pod SHA256 shared policy, controller и UI-компонента.
@@ -7132,10 +7132,11 @@ revisions — 0. Данные не переписывались. Ранее пр
       race двух claim workers, снижение лимита с активными leases,
       Stop/delete/retry отдельного графа и восстановление после restart/rejoin.
       Изменение только account row ещё не доказывает всю эту матрицу.
-- [ ] Полный TestBootstrapComponent: ранее зафиксированный FAIL не закрыт
-      успехом отдельного subtest. Общеплатформенные ресурсы и проектные профили,
-      активация нового runner, реальные ИИ/STT/device-code и staging/production
-      не объявлены проверенными.
+- [x] Полный `TestBootstrapComponent` повторён на общей последовательной
+      fixture и завершён PASS за 81,6 с; отдельно прошли worker-grant и
+      runner-policy read-only queries. Общеплатформенные ресурсы и проектные
+      профили, активация нового runner, реальные ИИ/STT/device-code и
+      staging/production этим не объявлены проверенными.
 
 Документация Context7: PostgreSQL 18 — DEFAULT при ALTER и row locks;
 Vue — реактивные props/watch и cleanup устаревших асинхронных запросов.
@@ -7164,13 +7165,11 @@ Vue — реактивные props/watch и cleanup устаревших аси�
 - [x] Повторный локальный gateway HTTP на
       `5238aa73fd5710034ca41a3138e5d15ac0e9df9c` — PASS.
       Новые SQL boundary и Go domain/repository unit — PASS на рабочем diff.
-- [ ] Полный component suite пока FAIL: ошибки lifecycle, capability
-      readiness и shared fixture isolation не закрыты отдельными PASS.
-      Сохранён полный локальный журнал
-      `/tmp/kodex-full-component-20261003.log`; временная БД удалена оснасткой.
-      Ожидания self-demotion и раннего title приведены к действующим
-      контрактам; общий bounded budget матрицы увеличен с 60 секунд до
-      5 минут без изменения production deadlines.
+- [x] Полный component suite PASS на общей последовательной fixture.
+      Исправлены server-owned model capability ожидания, полный lifecycle
+      environment snapshot, точный audit kind runtime claim, очистка synthetic
+      leases, starvation заполненного provider account и учёт workflow child
+      concurrency без coordinator node. Временная БД удалена оснасткой.
 - [ ] Browser-проверка 10 активных synthetic диалогов, retry/delete,
       interruption/queue, reconnect/restart, активация нового runner и
       полные системные/проектные профили остаются впереди.
@@ -7210,5 +7209,30 @@ parallel admission и `TestBootstrapComponentProviderAccountLifecycle` — PASS
 на рабочем diff; Go repository/domain/gRPC unit также PASS. Соседний lifecycle
 вновь может отозвать освобождённый fixture account. Console после локальной
 миграции без errors/warnings; bootstrap/session/ticket возвращают 200.
-Цель остаётся активной; следующий этап — изолированное параллельное admission
-и полные системные/проектные runtime-профили по checklist выше.
+Цель остаётся активной; следующий этап — полные системные и проектные
+runtime-профили, browser smoke и ручная приёмка по checklist выше.
+
+### Этап 2.2 — общий admission и полный component readback
+
+- [x] Полный `TestBootstrapComponent` выполнен в новой disposable PostgreSQL
+      БД: PASS за 81,6 с. Worker grant и runner policy read-only queries — PASS.
+- [x] Runtime admission отбрасывает заполненные provider accounts до
+      `ORDER BY/LIMIT`, затем сохраняет точную account lock и повторный подсчёт
+      в owner-транзакции. Старейшая очередь заполненного аккаунта больше не
+      блокирует доступную работу другого аккаунта.
+- [x] `workflow.concurrency` ограничивает параллельные дочерние этапы;
+      coordinator и его continuation не занимают child slot. Self-delegation
+      при concurrency=1 и нелинейная делегация проходят в общей fixture.
+- [x] Synthetic матрица после 2/10/race/Stop завершает оставшиеся leases
+      штатными worker callbacks и подтверждает active=0; последующие сценарии
+      больше не зависят от 30-секундного lease expiry.
+- [x] Environment lifecycle snapshot содержит полный image contract, включая
+      platform-owned marker; disable/enable/delete и immutable readback — PASS.
+- [x] Server-owned `DefaultReasoningEffort` и `ModelCapabilityDigest` не
+      принимаются обратно как client input. Stale selected-model capability
+      закрывает claim, изменение посторонней модели сохранённый pin не отзывает.
+- [x] Локально на том же дереве: `make check-sql-boundary` — PASS;
+      `go test -p 2 ./internal/...` control-plane — PASS.
+- [ ] Browser smoke после публикации нового commit и полный owner acceptance
+      остаются впереди. Реальные ИИ, STT, device-code и staging/production —
+      `NOT RUN` по ограничениям владельца.

@@ -238,4 +238,13 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 		t.Fatal("queued eleventh did not get its own free slot")
 	}
 	assertActive(10)
+	// CancelRun переводит уже исполняемую работу в CANCELLING и сохраняет lease
+	// до подтверждения worker либо expiry. Для общей component fixture завершаем
+	// все оставшиеся исполнения штатными callback-командами, иначе следующие
+	// сценарии видят занятую ёмкость аккаунта до истечения lease.
+	activeLeases := append(append([]map[string]any{}, leases[1:]...), eleventh[0])
+	for index, lease := range activeLeases {
+		completeClaimedExecution(t, ctx, service, worker, lease, fmt.Sprintf("parallel-complete-%02d", index), false)
+	}
+	assertActive(0)
 }

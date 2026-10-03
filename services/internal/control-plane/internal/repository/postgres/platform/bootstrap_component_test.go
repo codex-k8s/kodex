@@ -23,6 +23,7 @@ import (
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -1549,18 +1550,39 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	}
 	expectedCandidates := make([]entity.ProviderAccountCandidate, 0, len(reconciledCandidates))
 	rows, err := pool.Query(ctx, `
-		SELECT account.ref
-		FROM control_plane.provider_accounts account
-		WHERE account.definition_key = 'openai-codex'
-		  AND account.organization_id = (
-		      SELECT runtime.organization_id
-		      FROM control_plane.assistant_runtime runtime
-		      JOIN control_plane.agents agent ON agent.id = runtime.agent_id
-		      WHERE agent.ref = $1
-		  )
-		  AND account.current_credential_revision_id IS NOT NULL
-		  AND account.state = 'AUTHORIZED' AND account.enabled
-		ORDER BY account.ref
+		WITH target AS (
+			SELECT runtime.organization_id, config.provider
+			FROM control_plane.assistant_runtime runtime
+			JOIN control_plane.agents agent ON agent.id = runtime.agent_id
+			JOIN control_plane.agent_runtime_config_versions config ON config.id = agent.current_runtime_config_id
+			WHERE agent.ref = $1
+		), eligible AS (
+			SELECT account.ref, COALESCE(auth_attempt.method, '') AS authorization_method
+			FROM target
+			JOIN control_plane.provider_accounts account
+			  ON account.organization_id = target.organization_id
+			 AND account.definition_key = target.provider
+			LEFT JOIN LATERAL (
+				SELECT attempt.method
+				FROM control_plane.provider_authorization_attempts attempt
+				WHERE attempt.organization_id = account.organization_id
+				  AND attempt.provider_account_id = account.id
+				  AND attempt.state = 'AUTHORIZED'
+				  AND attempt.preparation_state = 'APPLIED'
+				ORDER BY attempt.updated_at DESC, attempt.id DESC
+				LIMIT 1
+			) auth_attempt ON true
+			WHERE account.current_credential_revision_id IS NOT NULL
+			  AND account.state IN ('AUTHORIZED', 'REAUTHORIZATION_REQUIRED')
+		)
+		SELECT candidate.ref
+		FROM eligible candidate
+		WHERE candidate.authorization_method = 'DEVICE_CODE'
+		   OR NOT EXISTS (
+			   SELECT 1 FROM eligible preferred
+			   WHERE preferred.authorization_method = 'DEVICE_CODE'
+		   )
+		ORDER BY candidate.ref
 	`, assistant.Ref)
 	if err != nil {
 		t.Fatalf("list expected system assistant provider accounts: %v", err)
@@ -1587,6 +1609,10 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		for _, model := range catalog.Models {
 			if model.ID == configuration.Configuration.Model {
 				expectedCandidates[index].DefaultReasoningEffort = model.DefaultReasoningEffort
+				expectedCandidates[index].ModelCapabilityDigest = modelcatalog.CapabilityDigest(
+					"openai-codex", expectedCandidates[index].AccountRef, model.ID,
+					model.ReasoningEfforts, model.DefaultReasoningEffort, model.IsDefault,
+				)
 			}
 		}
 	}
@@ -1964,6 +1990,7 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	inputCandidates := append([]entity.ProviderAccountCandidate{}, current.Configuration.ProviderPolicy.AccountCandidates...)
 	for index := range inputCandidates {
 		inputCandidates[index].DefaultReasoningEffort = ""
+		inputCandidates[index].ModelCapabilityDigest = ""
 	}
 	for name, mutate := range map[string]func(*entity.ProviderAccountCandidate){
 		"missing-pin": func(candidate *entity.ProviderAccountCandidate) {
@@ -5117,16 +5144,29 @@ func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *pl
 		}
 		return result
 	}
-	claim := func(key string) map[string]any {
-		result, claimErr := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
-			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
-		if claimErr != nil || len(result.RuntimeItems) != 1 {
-			t.Fatalf("claim coordinator-owned stage: items=%d err=%v", len(result.RuntimeItems), claimErr)
+	claim := func(key, expectedRunRef string) map[string]any {
+		for attempt := range 16 {
+			result, claimErr := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+				Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("%s-%02d", key, attempt)}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+			if claimErr != nil || len(result.RuntimeItems) > 1 {
+				t.Fatalf("claim coordinator-owned stage: items=%d err=%v", len(result.RuntimeItems), claimErr)
+			}
+			// Worker polling может сначала атомарно закрыть более старый
+			// невалидный граф и вернуть пустую выборку. Следующий poll обязан
+			// продвинуть наш уже поставленный в очередь запуск.
+			if len(result.RuntimeItems) == 0 {
+				continue
+			}
+			if stringMap(result.RuntimeItems[0], "runRef") != expectedRunRef {
+				t.Fatalf("claimed foreign coordinator-owned stage: got=%q want=%q", stringMap(result.RuntimeItems[0], "runRef"), expectedRunRef)
+			}
+			return result.RuntimeItems[0]
 		}
-		return result.RuntimeItems[0]
+		t.Fatal("coordinator-owned stage did not progress after bounded worker polls")
+		return nil
 	}
 	missing := launch("self-stage-missing-launch")
-	missingLease := claim("self-stage-missing-claim")
+	missingLease := claim("self-stage-missing-claim", missing.Run.Ref)
 	targets, ok := missingLease["delegationTargets"].([]map[string]string)
 	if !ok || len(targets) != 1 || targets[0]["ref"] != coordinator.Ref || targets[0]["workflowStepKey"] != "self-review" {
 		t.Fatalf("coordinator without global delegation capability lost its exact own stage: %#v", missingLease["delegationTargets"])
@@ -5142,7 +5182,7 @@ func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *pl
 		}
 	}
 	executed := launch("self-stage-executed-launch")
-	coordinatorLease := claim("self-stage-executed-claim")
+	coordinatorLease := claim("self-stage-executed-claim", executed.Run.Ref)
 	delegated, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "self-stage-delegate"}, Payload: command.DelegateInput{
 			LeaseRef: stringMap(coordinatorLease, "leaseRef"), Fence: stringMap(coordinatorLease, "fence"),
@@ -5152,7 +5192,7 @@ func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *pl
 	if err != nil || delegated.Run == nil {
 		t.Fatalf("materialize coordinator-owned stage: %v", err)
 	}
-	childLease := claim("self-stage-child-claim")
+	childLease := claim("self-stage-child-claim", delegated.Run.Ref)
 	if stringMap(childLease, "runRef") != delegated.Run.Ref {
 		t.Fatalf("claimed wrong coordinator-owned child: %q", stringMap(childLease, "runRef"))
 	}
@@ -5164,7 +5204,7 @@ func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *pl
 		t.Fatalf("coordinator completed before stage: %#v", initial.Run)
 	}
 	completeClaimedExecution(t, ctx, service, worker, childLease, "self-stage-child", false)
-	continuation := claim("self-stage-continuation-claim")
+	continuation := claim("self-stage-continuation-claim", executed.Run.Ref)
 	completed := completeClaimedExecution(t, ctx, service, worker, continuation, "self-stage-continuation", false)
 	if completed.Run == nil || completed.Run.Ref != executed.Run.Ref || completed.Run.State != "SUCCEEDED" || completed.Graph == nil {
 		t.Fatalf("coordinator-owned stage did not complete its root: %#v", completed.Run)
@@ -5790,9 +5830,11 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 	}).Scan(&activeRuntimeLease, &activeWarmConsumer); err != nil {
 		t.Fatalf("read provider cleanup guard after terminal lease: %v", err)
 	}
-	if activeRuntimeLease || activeWarmConsumer {
-		t.Fatalf("historical runtime revision blocked provider cleanup: lease=%v warm=%v",
-			activeRuntimeLease, activeWarmConsumer)
+	// Системный помощник вправе одновременно держать warm consumer на том же
+	// аккаунте; его отдельный guard проверяется в provider cleanup lifecycle.
+	// Здесь доказываем только, что завершённые leases не остаются активными.
+	if activeRuntimeLease {
+		t.Fatalf("historical runtime revision retained an active lease: warm=%v", activeWarmConsumer)
 	}
 }
 

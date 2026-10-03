@@ -47,7 +47,11 @@ func testEffectiveCapabilityReadinessRedaction(t *testing.T, ctx context.Context
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate.CatalogRevision, candidate.CatalogDigest, candidate.ProviderDefinitionKey, candidate.DefaultReasoningEffort = catalog.Revision, catalog.Digest, view.Configuration.Provider, ""
+	candidate.CatalogRevision, candidate.CatalogDigest, candidate.ProviderDefinitionKey = catalog.Revision, catalog.Digest, view.Configuration.Provider
+	// Эти поля назначает сервер после проверки выбранной модели, клиент не
+	// вправе возвращать их из предыдущей сохранённой конфигурации.
+	candidate.DefaultReasoningEffort = ""
+	candidate.ModelCapabilityDigest = ""
 	configured, err := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "readiness-redaction-runtime", ExpectedVersion: &view.AgentVersion}, Payload: command.AgentRuntimeConfigurationInput{AgentRef: agent.Ref, RuntimeProfileRef: view.Configuration.RuntimeProfileRef, Model: view.Configuration.Model, ProviderPolicyMode: "FIXED", ProviderAccounts: []entity.ProviderAccountCandidate{candidate}}})
 	if err != nil {
 		t.Fatal(err)

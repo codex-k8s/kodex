@@ -734,6 +734,11 @@ WHERE n.organization_id = $1::uuid
             AND input_content.size_bytes = input_item.size_bytes
       )
   )
+  -- Не позволяем старейшей очереди заполненного аккаунта вытеснить готовую
+  -- работу другого аккаунта до истечения lease. После выбора код всё равно
+  -- блокирует точный provider account и повторно считает active executions,
+  -- поэтому конкурентные worker не могут превысить лимит.
+  AND control_plane.provider_account_active_executions(r.organization_id, pa.id) < pa.max_concurrent_executions
   AND NOT EXISTS (
       SELECT 1
       FROM control_plane.run_edges edge
@@ -748,6 +753,7 @@ WHERE n.organization_id = $1::uuid
       WHERE active.root_run_id = r.root_run_id
         AND active.type = 'AGENT_EXECUTION'
         AND active.state = 'RUNNING'
+        AND active.workflow_step_key NOT LIKE 'workflow.coordinator.%'
   ) < root.concurrency_limit
   AND NOT EXISTS (
       SELECT 1
