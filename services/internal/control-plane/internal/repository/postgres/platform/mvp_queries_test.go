@@ -289,7 +289,15 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	if err != nil || len(accounts) == 0 {
 		t.Fatalf("list provider accounts: accounts=%#v err=%v", accounts, err)
 	}
-	account := accounts[0]
+	// Выбираем точный bootstrap-аккаунт, а не первый элемент общего каталога.
+	var bootstrapAccountRef string
+	if err := pool.QueryRow(ctx, `SELECT ref FROM control_plane.provider_accounts WHERE stable_key = 'default-openai-codex'`).Scan(&bootstrapAccountRef); err != nil {
+		t.Fatalf("resolve bootstrap provider account: %v", err)
+	}
+	account, err := service.GetProviderAccountWithUsage(ctx, owner, bootstrapAccountRef, nil)
+	if err != nil {
+		t.Fatalf("read bootstrap provider account: %v", err)
+	}
 	materializerPrincipal, err := repository.ResolvePrincipal(ctx, owner)
 	if err != nil {
 		t.Fatalf("resolve provider materializer principal: %v", err)
@@ -316,12 +324,12 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 
 	account = executeProviderEnabledTransition(t, ctx, service, owner, account, false, "provider-disable-component")
 	if account.State != "DISABLED" || account.Enabled || account.Ready ||
-		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "REVOKE", "ENABLE"}) {
+		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE", "REVOKE", "ENABLE"}) {
 		t.Fatalf("disabled provider account = %#v", account)
 	}
 	account = executeProviderEnabledTransition(t, ctx, service, owner, account, true, "provider-enable-component")
 	if account.State != "AUTHORIZED" || !account.Enabled || !account.Ready ||
-		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "TEST", "REVOKE", "DISABLE"}) {
+		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE", "TEST", "REVOKE", "DISABLE"}) {
 		t.Fatalf("re-enabled provider account = %#v", account)
 	}
 	version := account.Version
@@ -335,7 +343,7 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	}
 	account = *revoked.ProviderAccount
 	if account.State != "REVOKED" || account.Enabled || account.Ready ||
-		!reflect.DeepEqual(account.NextActions, []string{"OPEN"}) {
+		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE"}) {
 		t.Fatalf("revoked provider account = %#v", account)
 	}
 	version = account.Version

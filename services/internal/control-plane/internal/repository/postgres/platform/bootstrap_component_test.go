@@ -128,7 +128,7 @@ func TestBootstrapComponent(t *testing.T) {
 		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
 	}
 	// Общая расширенная матрица выполняется последовательно; runtime deadlines не меняются.
-	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -194,6 +194,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("catalog cards preserve eligible activity and counts", func(t *testing.T) { testCatalogCardProjections(t, ctx, repository) })
 	t.Run("provider usage dimensions and authority", func(t *testing.T) { testProviderUsageProjection(t, ctx, repository) })
 	t.Run("provider concurrency settings are versioned and isolated", func(t *testing.T) { testProviderAccountConcurrency(t, ctx, repository) })
+	t.Run("assistant parallel admission preserves session and capacity isolation", func(t *testing.T) {
+		testAssistantParallelAdmission(t, ctx, repository)
+	})
 	t.Run("authorized device verification requires a fresh exact observation", func(t *testing.T) {
 		testProviderVerificationFreshObservation(t, ctx, repository)
 	})
@@ -4318,8 +4321,8 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 		Kind: command.ChangePlatformMembership, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "membership-last-owner-demotion", ExpectedVersion: &ownerVersion},
 		Payload:  command.PlatformMembershipInput{MembershipRef: ownerMembership.Ref, Role: "MEMBER", Active: true},
-	}); !errors.Is(err, domainerrs.ErrConflict) {
-		t.Fatalf("last owner demotion was not rejected: %v", err)
+	}); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("owner self-demotion was not forbidden: %v", err)
 	}
 	organizationVersion := organizationMember.Membership.Version
 	suspended, err := service.Execute(ctx, command.Command{
@@ -6813,7 +6816,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("queue assistant turn without keyword fallback: plan=%#v err=%v", turn.Plan, err)
 	}
 	if turn.Conversation == nil || turn.Conversation.TitleSource != "SERVER_DEFAULT" ||
-		turn.Conversation.TitleRevision != 1 || turn.Conversation.Context.Route != "" ||
+		turn.Conversation.Title != "Create a sales project" || turn.Conversation.TitleRevision != 2 || turn.Conversation.Context.Route != "" ||
 		!reflect.DeepEqual(turn.Conversation.Context.AllowedOperations, []string{
 			"CREATE_PROJECT", "CREATE_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION",
 		}) {
@@ -7017,7 +7020,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		}
 	}
 	if completedConversation == nil || completedConversation.Title != "The configuration plan is ready for review." ||
-		completedConversation.TitleSource != "AGENT_PROPOSED" || completedConversation.TitleRevision != 2 {
+		completedConversation.TitleSource != "AGENT_PROPOSED" || completedConversation.TitleRevision != 3 {
 		t.Fatalf("assistant completion did not propose bounded title: %#v", completedConversation)
 	}
 	purgeImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "PURGE")

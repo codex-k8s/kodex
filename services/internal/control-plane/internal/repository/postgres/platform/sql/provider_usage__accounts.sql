@@ -4,7 +4,7 @@ SELECT account.ref,account.version,account.definition_key,account.state,account.
  credential.observed_at,account.max_concurrent_executions,
  control_plane.provider_account_active_executions(account.organization_id,account.id),
  COALESCE(latest.id::text,''),latest.observed_at,latest.expires_at,
- CASE WHEN latest.id IS NULL OR latest.account_version<>account.version
+ CASE WHEN latest.id IS NULL OR latest.account_version<account.catalog_authority_version OR latest.account_version>account.version
   OR latest.provider_credential_revision_id IS DISTINCT FROM account.current_credential_revision_id THEN 'PENDING'
   WHEN latest.failure<>'NONE' THEN 'FAILED'
   WHEN latest.expires_at<=transaction_timestamp() THEN 'EXPIRED' ELSE 'READY' END,

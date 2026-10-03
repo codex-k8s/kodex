@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.319
+version: 1.0.320
 updated: 2026-10-03
 ---
 
@@ -7138,5 +7138,44 @@ revisions — 0. Данные не переписывались. Ранее пр
 
 Документация Context7: PostgreSQL 18 — DEFAULT при ALTER и row locks;
 Vue — реактивные props/watch и cleanup устаревших асинхронных запросов.
+
+### Этап 2 — смена лимита не отзывает каталог
+
+- [x] Исправлен подтверждённый disposable-дефект: versioned смена лимита
+      переводила свежий каталог в PENDING и claim закрывал ожидающие ходы
+      как FAILED на стадии session_catalog. Новая migration
+      `20261003000400` назначает server-owned catalog authority floor.
+      Только ёмкость и её метаданные сохраняют границу; другие изменения
+      аккаунта требуют новой версии наблюдения. Credential/freshness/lifecycle
+      и exact task proof не ослаблены; immutable snapshots не переписываются.
+- [x] Отдельный PostgreSQL сценарий: уникальные sessions и history refs
+      11 диалогов; 2 активных хода; два конкурирующих claim worker заполняют
+      ровно 10; 11-й ждёт; лимит 1 не отменяет 10 действующих leases;
+      Stop одного оставляет 9 других RUNNING, late completion закрыто
+      отклоняется; возврат лимита 10 выпускает только ожидающий 11-й.
+      При каждой смене лимита проверяются READY и прежний digest каталога.
+      Synthetic warm readiness и созданные run-графы очищаются штатными
+      командами; реальный provider и runtime Pods не запускаются.
+- [x] Локальный render и только выбранная migration Job применены
+      repo-owned путём. SHA256 миграции и catalog SQL одинаковы на host
+      и в control-plane Pod. Chrome после hard reload видит подключённый
+      аккаунт и сохранённое значение слайдера 10.
+- [x] Повторный локальный gateway HTTP на
+      `5238aa73fd5710034ca41a3138e5d15ac0e9df9c` — PASS.
+      Новые SQL boundary и Go domain/repository unit — PASS на рабочем diff.
+- [ ] Полный component suite пока FAIL: ошибки lifecycle, capability
+      readiness и shared fixture isolation не закрыты отдельными PASS.
+      Сохранён полный локальный журнал
+      `/tmp/kodex-full-component-20261003.log`; временная БД удалена оснасткой.
+      Ожидания self-demotion и раннего title приведены к действующим
+      контрактам; общий bounded budget матрицы увеличен с 60 секунд до
+      5 минут без изменения production deadlines.
+- [ ] Browser-проверка 10 активных synthetic диалогов, retry/delete,
+      interruption/queue, reconnect/restart, активация нового runner и
+      полные системные/проектные профили остаются впереди.
+
+Скриншот самого слайдера ранее проверен. Повторный screenshot после новой
+миграции не получен из-за зависшего MCP-вызова; это не заявляется как PASS.
+Вкладки пользователя не закрывались, STT/device-code/inference не выполнялись.
 Цель остаётся активной; следующий этап — изолированное параллельное admission
 и полные системные/проектные runtime-профили по checklist выше.

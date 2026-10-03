@@ -8,12 +8,12 @@ SELECT definition.stable_key, account.ref,
          WHEN account.state = 'REVOKED' THEN 'PROVIDER_ACCOUNT_REVOKED'
          WHEN account.state <> 'AUTHORIZED' THEN 'PROVIDER_ACCOUNT_AUTHORIZATION_PENDING'
          WHEN current_credential.id IS NULL THEN 'PROVIDER_ACCOUNT_CREDENTIAL_MISSING'
-         WHEN latest.id IS NULL OR latest.account_version <> account.version
+         WHEN latest.id IS NULL OR latest.account_version < account.catalog_authority_version OR latest.account_version > account.version
            OR latest.provider_credential_revision_id IS DISTINCT FROM account.current_credential_revision_id THEN 'MODEL_CATALOG_PENDING'
          WHEN latest.failure <> 'NONE' THEN 'MODEL_CATALOG_' || latest.failure
          WHEN latest.expires_at <= clock_timestamp() THEN 'MODEL_CATALOG_EXPIRED'
          ELSE '' END,
-       CASE WHEN latest.id IS NULL OR latest.account_version <> account.version
+       CASE WHEN latest.id IS NULL OR latest.account_version < account.catalog_authority_version OR latest.account_version > account.version
            OR latest.provider_credential_revision_id IS DISTINCT FROM account.current_credential_revision_id THEN 'PENDING'
          WHEN latest.failure <> 'NONE' THEN 'FAILED'
          WHEN latest.expires_at <= clock_timestamp() THEN 'EXPIRED'
