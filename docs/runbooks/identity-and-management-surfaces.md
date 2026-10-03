@@ -4,7 +4,7 @@ title: Identity и административные интерфейсы
 type: runbook
 status: approved
 owner: sre
-version: 2.0.5
+version: 2.0.6
 updated: 2026-10-03
 ---
 
@@ -63,6 +63,8 @@ OIDC client secrets, cookie secrets и Grafana admin password генерирую
 - OAuth2 Proxy Control Center и Headlamp проверяет exact role;
 - OAuth2 Proxy Grafana проверяет claim `groups` и допускает членство хотя бы в
   одной из четырёх утверждённых групп;
+- Grafana не загружает внешнюю новостную ленту и Gravatar, не отправляет
+  usage reporting и не обращается наружу за обновлениями Grafana и plugins;
 - OAuth2 Proxy разрешает публичное имя issuer во внутренний ClusterIP
   `identity/sso`, проверяет исходный TLS/SNI и имеет egress только к pod
   Keycloak на объявленный target port; корректность входа не зависит от

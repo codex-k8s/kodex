@@ -106,6 +106,14 @@ jq -e '
   ([.charts[].name] | sort) == ["headlamp","kube-prometheus-stack","oauth2-proxy"] and
   all(.charts[]; (.sha256 | test("^[a-f0-9]{64}$")))
 ' "$lock" >/dev/null || fail 'management chart lock is invalid'
+yq -e '
+  .grafana."grafana.ini".analytics.reporting_enabled == false and
+  .grafana."grafana.ini".analytics.check_for_updates == false and
+  .grafana."grafana.ini".analytics.check_for_plugin_updates == false and
+  .grafana."grafana.ini".analytics.feedback_links_enabled == false and
+  .grafana."grafana.ini".security.disable_gravatar == true and
+  .grafana."grafana.ini".news.news_feed_enabled == false
+' "$monitoring_values" >/dev/null || fail 'Grafana external telemetry and content are not disabled'
 
 headlamp_chart=$(download_chart headlamp)
 monitoring_chart=$(download_chart kube-prometheus-stack)
