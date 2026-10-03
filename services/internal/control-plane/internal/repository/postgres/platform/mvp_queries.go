@@ -81,17 +81,18 @@ func (repository *Repository) ListProviderDefinitions(ctx context.Context, princ
 			item.ModelIDs = append(item.ModelIDs, model.ID)
 			if model.Available {
 				item.Ready = true
+				if model.ID == repository.defaultRuntimeModel {
+					item.DefaultModelID = model.ID
+				}
 				if model.IsDefault {
 					if observedDefault != "" && observedDefault != model.ID {
 						defaultAmbiguous = true
 					}
 					observedDefault = model.ID
-				} else if item.DefaultModelID == "" && model.ID == repository.defaultRuntimeModel {
-					item.DefaultModelID = model.ID
 				}
 			}
 		}
-		if observedDefault != "" && !defaultAmbiguous {
+		if item.DefaultModelID == "" && observedDefault != "" && !defaultAmbiguous {
 			item.DefaultModelID = observedDefault
 		}
 		if !item.Available {

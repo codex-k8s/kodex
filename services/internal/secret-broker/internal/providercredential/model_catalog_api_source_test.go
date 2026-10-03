@@ -17,6 +17,7 @@ import (
 
 func expectedAPICapabilities() []CatalogModel {
 	return []CatalogModel{
+		{ID: "gpt-6.1-sol", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"low", "medium", "high", "xhigh", "max"}},
 		{ID: "gpt-6-astra", DefaultReasoningEffort: "low", ReasoningEfforts: []string{"low", "medium", "high", "xhigh", "max"}},
 		{ID: "gpt-6-sol", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"none", "low", "medium", "high", "xhigh", "max"}},
 		{ID: "gpt-5.6-sol", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"none", "low", "medium", "high", "xhigh", "max"}},
@@ -28,9 +29,9 @@ func expectedAPICapabilities() []CatalogModel {
 	}
 }
 
-func TestAPIExactEightCapabilitiesAndAccountSubsets(t *testing.T) {
+func TestAPIExactNineCapabilitiesAndAccountSubsets(t *testing.T) {
 	want := expectedAPICapabilities()
-	models, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC))
+	models, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC))
 	if err != nil || !reflect.DeepEqual(models, want) {
 		t.Fatalf("API capabilities mismatch: %v", err)
 	}
@@ -79,12 +80,12 @@ func TestAPICapabilitySourceRejectsUnverifiedSnapshot(t *testing.T) {
 			case "source":
 				source.Models[1].Source = "https://example.invalid"
 			case "default_origin":
-				source.Models[0].DefaultOrigin = "UNKNOWN"
+				source.Models[1].DefaultOrigin = "UNKNOWN"
 			case "astra_api_default":
 				value := "low"
-				source.Models[0].APIDefault = &value
+				source.Models[1].APIDefault = &value
 			case "api_default":
-				source.Models[1].APIDefault = nil
+				source.Models[0].APIDefault = nil
 			case "unsupported_default":
 				source.Models[0].DefaultReasoningEffort = "none"
 			}

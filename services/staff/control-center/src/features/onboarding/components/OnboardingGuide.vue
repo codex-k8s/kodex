@@ -21,9 +21,11 @@ import { useProvidersStore } from "@/features/providers/store";
 import ProjectPicker from "@/features/projects/ProjectPicker.vue";
 import {
   requestAssistantSetup,
+  requestAssistantSettings,
   type AssistantSetupRequest,
 } from "@/features/assistant/events";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import { onboardingSteps, type OnboardingStep } from "../model";
 import { useOnboardingStore } from "../store";
 
@@ -35,6 +37,7 @@ const router = useRouter();
 const { t } = useI18n();
 const icons = {
   model: Cpu,
+  assistant: Bot,
   project: FolderKanban,
   image: Container,
   environment: Layers3,
@@ -76,9 +79,14 @@ function selectProject(projectRef: string): void {
   void router.replace(guide.returnTo);
 }
 async function startAssistant(): Promise<void> {
-  if (!guide.progress.assistantReady || guide.step === "model") return;
+  if (
+    !guide.progress.assistantReady ||
+    guide.step === "model" ||
+    guide.step === "assistant"
+  )
+    return;
   const steps: Record<
-    Exclude<OnboardingStep, "model">,
+    Exclude<OnboardingStep, "model" | "assistant">,
     AssistantSetupRequest["step"]
   > = {
     project: "project",
@@ -96,7 +104,22 @@ async function startAssistant(): Promise<void> {
   requestAssistantSetup(step);
 }
 async function finish(): Promise<void> {
-  if (await guide.finish()) await router.push(projectPath.value);
+  if (!guide.active) {
+    await router.push("/");
+    return;
+  }
+  if (await guide.finish()) await router.push("/");
+}
+async function finishLater(): Promise<void> {
+  if (!guide.canFinish || guide.busy) return;
+  if (
+    await requestConfirmation({
+      title: t("onboarding.finishLater"),
+      message: t("onboarding.finishLaterConfirm"),
+      confirmLabel: t("onboarding.finishLater"),
+    })
+  )
+    await finish();
 }
 watch(
   () => [
@@ -256,7 +279,7 @@ onMounted(() => {
           <div class="setup-note">
             <Cpu :size="18" aria-hidden="true" />
             <div>
-              <strong>gpt-5.6-sol · medium</strong>
+              <strong>gpt-6.1-sol · medium</strong>
               <p>{{ $t("onboarding.defaultModelHelp") }}</p>
             </div>
           </div>
@@ -269,6 +292,29 @@ onMounted(() => {
               )
             }}
           </p>
+        </template>
+        <template v-else-if="guide.step === 'assistant'">
+          <div class="setup-detail">
+            <strong>{{ $t("onboarding.assistantSettings") }}</strong>
+            <p>{{ $t("onboarding.assistantConfigurationHelp") }}</p>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="!assistant?.nextActions.includes('EDIT')"
+              @click="requestAssistantSettings"
+            >
+              <Bot :size="16" aria-hidden="true" />{{
+                $t("onboarding.configureAssistant")
+              }}
+            </button>
+          </div>
+          <div class="setup-note">
+            <Check :size="19" aria-hidden="true" />
+            <div>
+              <strong>{{ $t("onboarding.assistantDefaultsTitle") }}</strong>
+              <p>{{ $t("onboarding.assistantDefaultsHelp") }}</p>
+            </div>
+          </div>
         </template>
         <template v-else-if="guide.step === 'project'">
           <label v-if="guide.projects.length" class="setup-project"
@@ -451,6 +497,7 @@ onMounted(() => {
         <div
           v-if="
             guide.step !== 'model' &&
+            guide.step !== 'assistant' &&
             (guide.step === 'project' || guide.project)
           "
           class="setup-with-assistant"
@@ -482,6 +529,14 @@ onMounted(() => {
           <ArrowLeft :size="16" aria-hidden="true" />{{
             $t("onboarding.previous")
           }}</button
+        ><button
+          v-if="guide.active && guide.canFinish"
+          class="button"
+          type="button"
+          :disabled="guide.busy"
+          @click="finishLater"
+        >
+          {{ $t("onboarding.finishLater") }}</button
         ><span v-if="guide.project" class="setup-project-name">{{
           guide.project.name
         }}</span
@@ -489,7 +544,9 @@ onMounted(() => {
           v-if="index < onboardingSteps.length - 1"
           class="button button--primary"
           type="button"
-          :disabled="guide.step !== 'model' && !guide.project"
+          :disabled="
+            !['model', 'assistant'].includes(guide.step) && !guide.project
+          "
           @click="navigateStep(onboardingSteps[index + 1]!)"
         >
           {{ $t("onboarding.next")
@@ -498,16 +555,13 @@ onMounted(() => {
           v-else
           class="button button--primary"
           type="button"
-          :disabled="!guide.canFinish || guide.busy"
+          :disabled="(guide.active && !guide.canFinish) || guide.busy"
           @click="finish"
         >
           {{ $t("onboarding.finish") }}
         </button>
       </footer>
-      <p
-        v-if="guide.step === 'launch' && !guide.canFinish"
-        class="setup-finish-help"
-      >
+      <p v-if="guide.active" class="setup-finish-help">
         {{ $t("onboarding.finishHelp") }}
       </p>
     </div>
@@ -564,7 +618,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 72px;
+  min-height: 64px;
   padding: 12px;
   text-align: left;
   border: 1px solid transparent;

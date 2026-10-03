@@ -11,6 +11,7 @@ import type {
 
 export const onboardingSteps = [
   "model",
+  "assistant",
   "project",
   "image",
   "environment",
@@ -111,6 +112,7 @@ export function onboardingProgress(input: {
   );
   const complete = {
     model: modelReady,
+    assistant: assistantReady,
     project: Boolean(projectRef),
     image: imageReady,
     environment: environmentReady,

@@ -24,8 +24,8 @@ WITH policy AS (
     INSERT INTO control_plane.agent_config_overlay_versions
         (ref, organization_id, agent_id, version_number, state, content, digest,
          validation_errors, created_by, validated_at, published_at)
-    VALUES (@overlay_ref, @organization_id::uuid, @agent_id::uuid, 1, 'PUBLISHED', '',
-            'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    VALUES (@overlay_ref, @organization_id::uuid, @agent_id::uuid, 1, 'PUBLISHED', @overlay_content,
+            @overlay_digest,
             '[]'::jsonb, @created_by::uuid, clock_timestamp(), clock_timestamp())
     RETURNING id
 ), inserted_environment AS (

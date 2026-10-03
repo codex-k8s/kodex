@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	apiCatalogRevision = "openai-api-2026-09-23.1"
-	apiCatalogDigest   = "b5079e04537c4ad245566da10227d393fab8cd8b8bd5de820436de2215b77214"
+	apiCatalogRevision = "openai-api-2026-10-03.1"
+	apiCatalogDigest   = "45ef3dc265c887d396d15b3a15233fc585d9e076e80cb525f18e305bd1e53381"
 	apiCatalogMaxAge   = 30 * 24 * time.Hour
 )
 
@@ -48,7 +48,7 @@ func readAPICapabilities(raw []byte, expectedDigest string, now time.Time) ([]Ca
 	var source apiCapabilitySource
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&source) != nil || decoder.Decode(new(any)) != io.EOF || source.SchemaVersion != 1 || source.Revision != apiCatalogRevision || source.RuntimeVersion != catalogCodexVersion || source.VerifiedAt.IsZero() || now.Before(source.VerifiedAt) || !now.Before(source.ValidUntil) || !source.ValidUntil.After(source.VerifiedAt) || source.ValidUntil.Sub(source.VerifiedAt) > apiCatalogMaxAge || len(source.Models) != 8 {
+	if decoder.Decode(&source) != nil || decoder.Decode(new(any)) != io.EOF || source.SchemaVersion != 1 || source.Revision != apiCatalogRevision || source.RuntimeVersion != catalogCodexVersion || source.VerifiedAt.IsZero() || now.Before(source.VerifiedAt) || !now.Before(source.ValidUntil) || !source.ValidUntil.After(source.VerifiedAt) || source.ValidUntil.Sub(source.VerifiedAt) > apiCatalogMaxAge || len(source.Models) != 9 {
 		return nil, errModelCatalogUnverified
 	}
 	models := make([]CatalogModel, 0, len(source.Models))

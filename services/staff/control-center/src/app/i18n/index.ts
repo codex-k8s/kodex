@@ -1028,6 +1028,15 @@ const ru = {
     previous: "Назад",
     next: "Далее",
     backToSetup: "Вернуться к настройке",
+    finishLater: "Настрою остальное позже",
+    finishLaterConfirm:
+      "Первичная настройка завершится без создания проектов и запуска задач. Сохранённые настройки останутся. Продолжить можно в любой момент через «Первичная настройка» в боковом меню.",
+    configureAssistant: "Настроить системного помощника",
+    assistantConfigurationHelp:
+      "Выберите модель и аккаунт, проверьте сетевой доступ и рабочее окружение, добавьте свои инструкции. Это настройки системного Kodex, а не сотрудников проекта.",
+    assistantDefaultsTitle: "Можно начать с базовых настроек",
+    assistantDefaultsHelp:
+      "Помощник уже настроен для безопасной работы. Изменения необязательны: переходите к проекту и возвращайтесь к настройкам, когда понадобится.",
     saveHelp:
       "Настройки сохраняются в своих разделах. Можно вернуться к любому шагу; галочка появляется по фактической готовности.",
     modelRequired: "Для помощника и запусков подключите аккаунт модели",
@@ -1042,7 +1051,7 @@ const ru = {
     connectedProviderHelp:
       "Авторизация подтверждена. Теперь можно создавать проект и настраивать работу с помощью Kodex. Другие аккаунты можно добавить позже.",
     continueAfterModel:
-      "Первый шаг готов. Нажмите «Далее», чтобы создать или выбрать проект.",
+      "Первый шаг готов. Нажмите «Далее», чтобы проверить настройки системного помощника.",
     connectProviderHelp:
       "Войдите через device-code, чтобы использовать подписку, или добавьте API key. Авторизация выполняется в защищённой форме; не отправляйте ключи в чат.",
     connectModel: "Подключить аккаунт модели",
@@ -1112,13 +1121,19 @@ const ru = {
     assistantNeedsModel:
       "Сначала подключите аккаунт модели на шаге 1. Ручная настройка доступна без него.",
     finishHelp:
-      "Завершение станет доступно, когда в выбранном проекте будет готовый сотрудник и успешный запуск сотрудника или процесса.",
+      "Все шаги необязательны. Можно завершить настройку сейчас и продолжить позже через боковое меню.",
     steps: {
       model: {
         title: "Модель",
         short: "Подключение аккаунта",
         description:
           "Подключите модель, чтобы помощник и ИИ-сотрудники могли выполнять задачи. Для старта достаточно одного аккаунта.",
+      },
+      assistant: {
+        title: "Системный помощник",
+        short: "Модель, доступ и инструкции",
+        description:
+          "Настройте Kodex под себя. Его модель, окружение и инструкции задаются отдельно от настроек ИИ-сотрудников проекта.",
       },
       project: {
         title: "Проект",
@@ -5403,6 +5418,15 @@ const en = {
     previous: "Back",
     next: "Next",
     backToSetup: "Return to setup",
+    finishLater: "Set up the rest later",
+    finishLaterConfirm:
+      "This will finish onboarding without creating projects or running tasks. Saved settings will remain. You can resume any time using Getting started in the sidebar.",
+    configureAssistant: "Configure system assistant",
+    assistantConfigurationHelp:
+      "Choose a model and account, review network access and the work environment, and add your instructions. These settings belong to the system Kodex assistant, not project employees.",
+    assistantDefaultsTitle: "Start with the base settings",
+    assistantDefaultsHelp:
+      "The assistant is already configured for safe work. Changes are optional: continue to your project and revisit these settings whenever needed.",
     saveHelp:
       "Settings are saved in their own sections. Revisit any step; checkmarks reflect actual readiness.",
     modelRequired: "Connect a model account to use the assistant and run tasks",
@@ -5417,7 +5441,7 @@ const en = {
     connectedProviderHelp:
       "Authorization is confirmed. You can now create a project and set up work with Kodex. Add other accounts later if needed.",
     continueAfterModel:
-      "The first step is ready. Select Next to create or choose a project.",
+      "The first step is ready. Select Next to review the system assistant settings.",
     connectProviderHelp:
       "Sign in with device-code to use your subscription, or add an API key. Use the protected form; do not send keys in chat.",
     connectModel: "Connect model account",
@@ -5487,13 +5511,19 @@ const en = {
     assistantNeedsModel:
       "Connect a model account in step 1 first. Manual setup is available without one.",
     finishHelp:
-      "Complete setup after the selected project has a ready employee and a successful employee or process run.",
+      "All steps are optional. Finish setup now and resume later using the sidebar.",
     steps: {
       model: {
         title: "Model",
         short: "Connect an account",
         description:
           "Connect a model so the assistant and AI employees can perform tasks. One account is enough to get started.",
+      },
+      assistant: {
+        title: "System assistant",
+        short: "Model, access and instructions",
+        description:
+          "Customize Kodex. Its model, environment and instructions are configured separately from project AI employees.",
       },
       project: {
         title: "Project",

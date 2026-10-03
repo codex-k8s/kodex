@@ -12,7 +12,7 @@ const (
 	maximumCatalogEfforts    = 16
 	maximumModelCatalogBytes = 4 << 20
 	modelCatalogTimeout      = 15 * time.Second
-	catalogCodexVersion      = "0.153.4"
+	catalogCodexVersion      = "0.160.0"
 )
 
 type ModelCatalogSource string

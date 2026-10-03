@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.312
+version: 1.0.313
 updated: 2026-10-03
 ---
 
@@ -6868,3 +6868,39 @@ GitHub checks не считается `PASS`.
 - [ ] Реальный запуск ИИ, ответы помощника, STT и повторная device-code
       авторизация — `NOT RUN`: оставлены владельцу. Эти проверки являются отладкой
       разрешённого локального стенда, а не staging/production приёмкой.
+
+## 03.10.2026 — gpt-6.1-sol, помощник и свободное завершение настройки
+
+Решение владельца: модель по умолчанию `gpt-6.1-sol`, reasoning `medium`.
+Второй шаг — системный помощник; завершение не требует всех остальных шагов.
+
+- [x] Семь шагов, отдельный переход к существующим настройкам Kodex,
+      подтверждаемое «Настрою остальное позже», постоянный пункт бокового меню
+      для владельца/администратора, RU/EN. Галочки отражают готовность, а не
+      фиктивное прохождение после завершения.
+- [x] Каталог API дополнен подтверждённой моделью и усилиями
+      `low|medium|high|xhigh|max`; `none` не добавлен. Проверены официальная
+      страница модели OpenAI и Context7 `/openai/codex` для `model/list`.
+- [x] Runtime default изменяется отдельной forward-only migration только для
+      прежнего `builtin-safe-runtime`. Существующие immutable настройки
+      сотрудников и снимки выполняемых/terminal задач не переписываются.
+      Новая конфигурация gpt-6.1-sol получает канонический overlay `medium`.
+      Каталог провайдера предпочитает доступный platform default; если его нет,
+      сохраняется авторитетный default провайдера. Недоступная модель не выдаётся
+      за доступную.
+- [x] Карта: owner UI → существующая COMPLETE_ONBOARDING с server nextActions →
+      gateway → control-plane owner transaction → installation, receipt/audit и
+      SYSTEM_ASSISTANT_CHANGED → bootstrap/realtime. Повтор сохраняет прежний
+      onboarding timestamp. Навигация к настройкам сама ничего не создаёт и не
+      запускает. Cancel/Delete/Retry/leases/grants текущих задач не меняются;
+      новая RuntimeRevision следующего хода разрешает новую конфигурацию штатно.
+- [x] Frontend: 61 тест, ESLint, typecheck, production build; Go: providercredential,
+      control-plane app и platform unit; host-hardening contract — PASS.
+      Полный install-contract — FAIL на прежнем счётчике PostgreSQL/SCRAM, вне
+      изменения модели (не выдаётся за успешную проверку установки).
+- [ ] Пересобрать и применить pinned Codex CLI 0.160.0: CLI 0.153.4 на текущем
+      стенде ещё не возвращает gpt-6.1-sol в каталоге подписочного аккаунта.
+- [ ] Применить migration, сверить default/readback и host/Pod source hashes.
+- [ ] Chrome: hard reload без кэша, настройки помощника, каталог, завершение
+      без проекта/запуска, возврат; screenshot, Console и Network.
+- [ ] Реальные ИИ/STT/device-code и staging/production — NOT RUN.

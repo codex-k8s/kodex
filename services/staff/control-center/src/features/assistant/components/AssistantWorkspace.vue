@@ -60,6 +60,7 @@ import {
   isAssistantRunDebugRequest,
   isAssistantRoleImageBuildDebugRequest,
   isAssistantSetupRequest,
+  isAssistantSettingsRequest,
   notifyAssistantPlanApplied,
   openAssistantEvent,
   type AssistantIntegrationPublicationRequest,
@@ -379,6 +380,10 @@ function handleOpenAssistant(event: Event): void {
     const request =
       event instanceof CustomEvent ? (event.detail as unknown) : undefined;
     await show();
+    if (isAssistantSettingsRequest(request)) {
+      openAssistantSettings();
+      return;
+    }
     if (isAssistantSetupRequest(request)) {
       if (
         message.value.trim() &&

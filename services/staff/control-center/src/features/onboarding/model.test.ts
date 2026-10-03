@@ -79,9 +79,9 @@ describe("пошаговая первичная настройка", () => {
       });
     }
   });
-  it("показывает фактическую готовность всех шести шагов", () => {
+  it("показывает фактическую готовность всех семи шагов", () => {
     const result = onboardingProgress(input());
-    expect(result.completedCount).toBe(6);
+    expect(result.completedCount).toBe(7);
     expect(result.assistantReady).toBe(true);
   });
   it("не называет помощника готовым без аккаунта даже при старом READY", () => {
@@ -128,7 +128,7 @@ describe("пошаговая первичная настройка", () => {
       ...input(),
       project: { ...project, ref: "prj_other" },
     });
-    expect(result.completedCount).toBe(2);
+    expect(result.completedCount).toBe(3);
     expect(result.complete.team).toBe(false);
     expect(result.complete.launch).toBe(false);
   });

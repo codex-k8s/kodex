@@ -7,6 +7,23 @@ import type {
 export const openAssistantEvent = "kodex:assistant:open";
 export const assistantPlanAppliedEvent = "kodex:assistant:plan-applied";
 
+export function requestAssistantSettings(): void {
+  window.dispatchEvent(
+    new CustomEvent(openAssistantEvent, { detail: { kind: "SETTINGS" } }),
+  );
+}
+
+export function isAssistantSettingsRequest(
+  value: unknown,
+): value is { kind: "SETTINGS" } {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    "kind" in value &&
+    value.kind === "SETTINGS",
+  );
+}
+
 export interface AssistantSetupRequest {
   kind: "SETUP";
   step: "project" | "image" | "environment" | "team" | "launch";

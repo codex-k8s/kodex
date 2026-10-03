@@ -61,12 +61,7 @@ export const useOnboardingStore = defineStore("onboarding", () => {
     },
   }));
   const canFinish = computed(() =>
-    Boolean(
-      platform.bootstrap?.nextActions.includes("COMPLETE_ONBOARDING") &&
-      progress.value.complete.project &&
-      progress.value.complete.team &&
-      progress.value.complete.launch,
-    ),
+    Boolean(platform.bootstrap?.nextActions.includes("COMPLETE_ONBOARDING")),
   );
   watch(
     () => platform.bootstrap?.currentUser.ref,

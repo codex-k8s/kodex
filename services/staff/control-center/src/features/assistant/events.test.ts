@@ -2,11 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import {
   isAssistantSetupRequest,
+  isAssistantSettingsRequest,
   isAssistantRoleImageBuildDebugRequest,
   isAssistantRunDebugRequest,
 } from "@/features/assistant/events";
 
 describe("запрос помощника для первичной настройки", () => {
+  it("открывает только настройки по точному виду запроса", () => {
+    expect(isAssistantSettingsRequest({ kind: "SETTINGS" })).toBe(true);
+    for (const value of [undefined, null, "SETTINGS", {}, { kind: "SETUP" }]) {
+      expect(isAssistantSettingsRequest(value)).toBe(false);
+    }
+  });
   it.each(["project", "image", "environment", "team", "launch"])(
     "принимает известный шаг %s",
     (step) => {

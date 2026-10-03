@@ -45,6 +45,25 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("навигация первичной настройки", () => {
+  it("разрешает завершение без проекта и запусков только по серверному полномочию", async () => {
+    changeOwner("owner-one");
+    const finishOnboarding = vi.fn().mockResolvedValue(undefined);
+    dependencies.platform.finishOnboarding = finishOnboarding;
+    const guide = useOnboardingStore();
+    expect(guide.canFinish).toBe(false);
+    expect(await guide.finish()).toBe(false);
+    expect(finishOnboarding).not.toHaveBeenCalled();
+    dependencies.platform.bootstrap = {
+      currentUser: { ref: "owner-one" },
+      nextActions: ["COMPLETE_ONBOARDING"],
+      onboardingComplete: false,
+    };
+    guide.selectStep("assistant");
+    expect(guide.returnTo.query.step).toBe("assistant");
+    expect(guide.canFinish).toBe(true);
+    expect(await guide.finish()).toBe(true);
+    expect(finishOnboarding).toHaveBeenCalledOnce();
+  });
   it("сохраняет этап и выбранный проект отдельно для текущего пользователя", () => {
     changeOwner("owner-one");
     const guide = useOnboardingStore();

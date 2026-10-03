@@ -23,7 +23,7 @@ def run(image):
         "--entrypoint", "/usr/local/bin/codex",
     ]
     version = subprocess.run(common + [image, "--version"], capture_output=True, timeout=20, check=True)
-    if version.stdout.strip() != b"codex-cli 0.153.4":
+    if version.stdout.strip() != b"codex-cli 0.160.0":
         raise RuntimeError("pinned Codex version mismatch")
     process = subprocess.Popen(common + ["--name", name, "-i", image, "app-server", "--strict-config", "--listen", "stdio://"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     selector = selectors.DefaultSelector()

@@ -58,6 +58,14 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	if len(candidates) == 1 {
 		mode = "FIXED"
 	}
+	overlay := ""
+	if runtime.Provider == "openai-codex" && runtime.Model == "gpt-6.1-sol" {
+		overlay = "model_reasoning_effort = \"medium\"\n"
+	}
+	overlay, overlayDigest, err := runtimecontract.CanonicalConfigOverlay(overlay)
+	if err != nil {
+		return errors.New("compute bootstrap runtime overlay digest")
+	}
 	err = tx.QueryRow(ctx, queryRuntimeConfigurationBootstrapAgent, pgx.StrictNamedArgs{
 		"account_candidates": rawCandidates, "policy_mode": mode, "policy_digest": digestBytes([]byte(mode), rawCandidates),
 		"organization_id": organizationID, "agent_id": agentID, "project_id": projectID,
@@ -65,6 +73,7 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 		"environment_ref": environmentRef, "environment_version_ref": environmentVersionRef,
 		"binding_ref": bindingRef, "runtime_profile_ref": runtime.Ref, "provider": runtime.Provider,
 		"model": runtime.Model, "created_by": createdBy,
+		"overlay_content": overlay, "overlay_digest": overlayDigest,
 		"environment_image_artifact_id": imageArtifactID, "environment_selected_tools": selectedTools,
 		"environment_core_digest": coreDigest, "environment_digest": environmentDigest,
 		"environment_resource_policy": asJSON(policy.Resources), "environment_volume_policy": asJSON(policy.Volumes),
