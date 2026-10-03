@@ -7265,10 +7265,11 @@ runtime-профили, browser smoke и ручная приёмка по checkl
 - [ ] Общеплатформенные API каталогов, реальная сборка собственного образа,
       секреты через broker и подтверждаемая публикация окружения ещё не
       завершены. Этот этап не закрывает общий пункт организационных ресурсов.
-- [ ] Migration `20261003000500`, изменённый runner и admission policy
-      ещё не активированы на обслуживаемом локальном стенде: `NOT RUN`.
-      Synthetic проверка сохранения custom marker не является реальной
-      сборкой, допуском или production acceptance.
+- [x] Migration `20261003000500` и `20261003000600`, runner V8 и exact
+      admission policy активированы repo-owned скриптами в разрешённом
+      локальном trusted-cluster; readback ниже. Synthetic проверка custom
+      marker не является сборкой пользовательского образа или production
+      acceptance.
 
 Правило продолжения владельца: текущая цель завершается только после полного
 checklist выше. Затем основной агент, без субагентов, создаёт отдельную цель,
@@ -7341,3 +7342,42 @@ checklist выше. Затем основной агент, без субаге�
   Read-only Kubernetes проверка: control-plane сейчас 1/2 и завершается на
   materialization системного образа; новая организационная migration ещё не
   применена live. Green остальных Pod не считается готовностью платформы.
+
+### Этап 3.3 — checkpoint `a9dae7e1`, локальная активация и warm wire
+
+Предыдущие FAIL/NOT RUN в этапе 3.2 сохранены как история, не текущий статус.
+
+- PASS на точном SHA `a9dae7e10a3e44cff566967d07f9508f3707f951`:
+  четыре disposable PostgreSQL suites одним публичным запуском — 92,960 с;
+  повтор migrations, worker grant и runner policy read-only — PASS. Новый
+  frontend Vitest — 318 suites / 2118 тестов; полный render — PASS, включая
+  39 отрицательных email cases. Использован Go 1.26.6. Первая попытка PG через
+  Docker bridge не достигла readiness; отдельный loopback host fixture прошёл,
+  shared/live БД в тестах не использовались.
+- PASS локальная активация через `build-local-runner.sh`, `render-local.sh`,
+  `deploy-local.sh` и `seed-local-image-supply-chain.sh`: migrations 5/6
+  применены; serving runner digest
+  `sha256:8c827da02d20c1aa34a0c1eab9a2ec8f0bd72377af7d1003590f28b8c0882b1b`;
+  exact admission policy SHA256
+  `9b417537a24f0a20ab1067417faa8027fe20d2e8f4e61c68e581a04005d5bb05`
+  одинаков у control-plane и runtime-controller. Read-only preflight:
+  active runs, pending admission/promotion и claimed leases — 0.
+- Найден и исправлен production warm defect: owner snapshot имел typed image,
+  но не содержал три flattened image pins, необходимые Proto caster. Добавлены
+  artifact, recipe и generation; turn producer уже содержал их. После hot reload
+  журнал controller подтвердил восстановление warm runtime. Все три контейнера
+  warm Pod используют точный digest выше; control-plane — 2/2 Ready.
+- PASS новой публичной synthetic точки `scripts/tests/assistant-warm-wire-test.sh`:
+  настоящий isolated owner → production caster → protobuf roundtrip → controller
+  BuildWarmInput, без пересчёта ожидаемого owner digest. PG 3,898 с, caster
+  0,044 с, controller 0,045 с. Шесть missing/foreign image pins отклонены.
+  Unit и vet control-plane transport и runtime-controller — PASS. Проверка
+  относится к исправлению поверх `a9dae7e1`, SHA нового checkpoint фиксируется
+  следующим коммитом; не приписывается неизменённому предыдущему SHA.
+- PASS Chrome MCP: действующий SSO, provider account READY, realtime connected;
+  slider текущего аккаунта 10, границы 1..256, сохранение без изменений disabled.
+  Скриншот проверен визуально; Console warning/error — 0. Реальные чаты,
+  распознавание и device-code не запускались.
+- NOT RUN: свежий организационный API образа/секрета → broker → RuntimeRevision,
+  подтверждаемая публикация полной среды, полный synthetic browser lifecycle
+  2/10/11 чатов и owner acceptance. Общий checklist остаётся открытым.
