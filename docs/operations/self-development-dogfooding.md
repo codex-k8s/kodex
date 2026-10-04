@@ -19,6 +19,7 @@ updated: 2026-10-04
 Исходный `main`: `d43bd605ec7b41335ec038a84a896b1ab5b0d189`, PR #1790 уже слит.
 Связанное Issue: https://github.com/codex-k8s/kodex/issues/1797.
 Ветка: `kodex-agent/issue-1797-self-development-bootstrap`.
+Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
 Все новые платформенные изменения — в одном сквозном bootstrap PR как явно
 разрешённое владельцем исключение из правила одного deployable unit.
 Данный документ фиксирует дополнения владельца; полный исходный сценарий
@@ -58,7 +59,7 @@ updated: 2026-10-04
 
 ## План с доказательствами
 
-- [ ] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
+- [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
   PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
 - [ ] 2. Полные управляемые MCP/tool profiles системного помощника,
   проектного помощника и каждого сотрудника; host Context7 reference,
@@ -128,3 +129,13 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 новый живой QA не запускался. Два явно разрешённых ключа в проектном `.env`
 присутствуют и перенесены в единый private source с readback 0600; значения
 не выводились. Рабочая вкладка Chrome MCP доступна.
+
+04.10.2026, bootstrap checkpoint `2c103867cf9b14bbcfd8ead0555f1f1dfcde691a`:
+PASS — Issue #1797, ветка от подтверждённого main, Draft PR #1798 и совпадающий
+GitHub head SHA. Реализация и новый живой QA пока NOT RUN.
+
+Подтверждён разрыв переписки: runner принимает `commentary`, но не передаёт
+его владельцу состояния; native tool calls сохраняются пакетом после хода,
+а MCP — после завершения вызова. Исправление должно сохранять исходную
+хронологию, точные session/turn/attempt и состояния вызова. Служебный summary
+ограничен 2000 символами и не заменяет полный bounded текст сообщения.

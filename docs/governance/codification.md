@@ -127,6 +127,7 @@ updated: 2026-07-28
 | `OPS-DOC-1330` | `docs/operations/mvp-1330-access-scope-proof.md` |
 | `OPS-DOC-1274` | `docs/operations/mvp-1274-browser-proof.md` |
 | `OPS-DOC-1763` | `docs/operations/assistant-prototype-debug-1763.md` |
+| `OPS-DOC-SELFDEV-001` | `docs/operations/self-development-dogfooding.md` |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |
 | `ADR-DOC-004`      | `docs/decisions/0014-domain-events-transactional-outbox.md` |
 | `GUIDE-MC-001`     | `docs/guides/README.md`                                     |
