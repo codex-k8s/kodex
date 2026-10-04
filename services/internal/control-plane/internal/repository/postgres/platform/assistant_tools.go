@@ -95,7 +95,8 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		operation, err = repository.hydrateAssistantOperation(ctx, tx, actorScope, projectRef, operation)
-		if err != nil {
+		noRuntimeChange := operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" && errors.Is(err, errAssistantRuntimeConfigurationNoChange)
+		if err != nil && !noRuntimeChange {
 			if (operation.Type == "CHANGE_CAPABILITY" || operation.Type == "CHANGE_INTEGRATION_GRANT") && errors.Is(err, errs.ErrConflict) {
 				continue
 			}
@@ -115,6 +116,18 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		}
 		if err := repository.authorizeCommand(ctx, tx, actorScope, planned); err != nil {
 			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
+		}
+		if noRuntimeChange {
+			// Пропускается только точный no-op, после обычных authority/binding
+			// проверок и повторной сверки server-owned версии и свежих pins.
+			matches, err := repository.assistantRuntimeConfigurationSnapshotMatches(ctx, tx, actorScope, operation)
+			if err != nil {
+				return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
+			}
+			if !matches {
+				return commandOutcome{}, errs.WithAssistantPlanStage(errs.ErrVersionMismatch, errs.AssistantPlanAuthorize, index+1)
+			}
+			continue
 		}
 		normalizedOperations = append(normalizedOperations, operation)
 	}

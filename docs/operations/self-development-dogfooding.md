@@ -888,3 +888,21 @@ DOM readback. Первый отменённый screenshot не объявляе
 Installed MCP screenshot handler не имеет отдельного deadline и держит
 toolMutex; cancellation caller не доказывает отмену capture. Глубокая
 диагностика причины без trace NOT RUN; browser/npm configuration не менялись.
+
+04.10.2026 13:27–13:31 UTC, source поверх `f26a8713`:
+PASS — точный unchanged-runtime marker отделён от generic Conflict.
+Операция исключается только после normalize/bind/authorize и fresh
+snapshot/version/pin recheck. Full settings, fresh owner profile pins и
+persisted canonical catalog pins сравниваются; новые catalog pins остаются
+реальным UPDATE. Historical profile publication pin домен не сохраняет,
+его не выдумывали и не заменяли caller RuntimeRevision.
+Detached Go1.26.6 public disposable component: исходный FAIL11.170 s →
+PASS19.768 s, SYSTEM+PROJECT mixed effects, all-no-op EMPTY/CONFLICT,
+malformed title/ineligible account/stale lease closed failure, catalog advance.
+Unit .575 s/race1.199 s/vet/format/diffcheck PASS.
+Root scoped repository unit PASS, точное время в console execution evidence.
+Actual22 причина до повторного live хода остаётся UNKNOWN; component
+воспроизвёл самостоятельный no-op defect, не доказал исходные private inputs.
+PASS — второй inline screenshot действительно показывает Главную: пять
+видимых строк, внутренний скролл и компактные блоки ниже; снимок просмотрен.
+Ранее полученный снимок чата не подменял эту проверку.

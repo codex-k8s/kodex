@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"sort"
 
@@ -19,6 +20,40 @@ import (
 
 var assistantRuntimeEditable = []string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts"}
 var assistantRuntimeOwnerFields = []string{"agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef"}
+
+// Маркер относится только к полностью проверенной подготовке; обычный conflict
+// и ошибки готовности не означают отсутствие изменений.
+var errAssistantRuntimeConfigurationNoChange = errors.Join(errs.ErrConflict, errors.New("assistant runtime configuration is unchanged"))
+
+func assistantRuntimeConfigurationUnchanged(before, after map[string]any, persisted []entity.ProviderAccountCandidate) bool {
+	for _, field := range []string{"runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode"} {
+		previous, previousOK := before[field].(string)
+		prepared, preparedOK := after[field].(string)
+		if !previousOK || !preparedOK || previous != prepared {
+			return false
+		}
+	}
+	if !assistantJSONEqual(before["runtimeProfilePin"], after["runtimeProfilePin"]) ||
+		!assistantJSONEqual(before["providerAccounts"], after["providerAccounts"]) {
+		return false
+	}
+	prepared, ok := after["providerCatalogPins"].([]entity.ProviderAccountCandidate)
+	if !ok || len(persisted) == 0 || len(persisted) != len(prepared) {
+		return false
+	}
+	// Эти два поля publication намеренно не сохраняет. Catalog revision/digest
+	// и provider identity остаются обязательной частью точного сравнения.
+	canonical := func(entries []entity.ProviderAccountCandidate) []entity.ProviderAccountCandidate {
+		result := append([]entity.ProviderAccountCandidate(nil), entries...)
+		for index := range result {
+			result[index].DefaultReasoningEffort = ""
+			result[index].ModelCapabilityDigest = ""
+		}
+		sort.Slice(result, func(i, j int) bool { return result[i].AccountRef < result[j].AccountRef })
+		return result
+	}
+	return assistantJSONEqual(canonical(persisted), canonical(prepared))
+}
 
 func assistantReasoningOverlay(current, effort string) (string, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(current)
@@ -185,14 +220,14 @@ func (repository *Repository) hydrateAssistantRuntimeConfiguration(ctx context.C
 		return operation, err
 	}
 	before := assistantRuntimeBefore(target, current, view, currentPin)
-	if assistantString(before, "runtimeProfileRef") == assistantString(after, "runtimeProfileRef") && assistantString(before, "model") == assistantString(after, "model") && assistantString(before, "reasoningEffort") == effort && assistantString(before, "providerPolicyMode") == assistantString(after, "providerPolicyMode") && assistantJSONEqual(before["providerAccounts"], after["providerAccounts"]) {
-		return operation, errs.ErrConflict
-	}
 	version := view.AgentVersion
 	operation.Action = "UPDATE"
 	operation.Target = entity.AssistantPlanTarget{Kind: "AGENT", Ref: agentRef, Name: target.name, Version: &version}
 	operation.Before, operation.Parameters, operation.After = before, after, cloneAssistantFields(after)
 	operation.ExpectedVersion, operation.Selected, operation.Input = &version, true, nil
+	if assistantRuntimeConfigurationUnchanged(before, after, view.Configuration.ProviderPolicy.AccountCandidates) {
+		return operation, errAssistantRuntimeConfigurationNoChange
+	}
 	return operation, nil
 }
 

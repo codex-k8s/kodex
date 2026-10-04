@@ -263,6 +263,63 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	if err != nil || parsed.ModelReasoningEffort != "medium" {
 		t.Fatalf("reasoning overlay not published: %v", err)
 	}
+	noChange := operation
+	noChange.Key = "unchanged-runtime"
+	noChange.Parameters = cloneAssistantFields(operation.Parameters)
+	noChange.Parameters["reasoningEffort"] = "medium"
+	actualChange := noChange
+	actualChange.Key = "changed-runtime"
+	actualChange.Parameters = cloneAssistantFields(noChange.Parameters)
+	actualChange.Parameters["reasoningEffort"] = "high"
+	mixed, mixedErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-mixed-no-change"}, Payload: command.ProposeAssistantPlanInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation,
+			Summary: "Synthetic unchanged and effective configuration", Operations: []entity.AssistantPlanOperation{noChange, actualChange},
+		}})
+	if mixedErr != nil || mixed.Plan == nil || mixed.Plan.State != "DRAFT" || len(mixed.Plan.Operations) != 1 || mixed.Plan.Operations[0].Key != actualChange.Key {
+		t.Fatalf("unchanged runtime prevented an authorized effective draft: %v", mixedErr)
+	}
+	_, emptyErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-all-no-change"}, Payload: command.ProposeAssistantPlanInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation,
+			Summary: "Synthetic unchanged configuration", Operations: []entity.AssistantPlanOperation{noChange},
+		}})
+	stage, category, _, diagnostic := errs.AssistantPlanDiagnostic(emptyErr)
+	if !errors.Is(emptyErr, errs.ErrConflict) || !diagnostic || stage != errs.AssistantPlanEmpty || category != "CONFLICT" {
+		t.Fatal("all unchanged operations created an empty plan or lost the closed EMPTY result")
+	}
+	for _, invalid := range []struct {
+		name     string
+		expected error
+	}{
+		{"invalid-title", errs.ErrInvalid},
+		{"ineligible-account", errs.ErrConflict},
+		{"stale-lease", errs.ErrForbidden},
+	} {
+		candidate := noChange
+		candidate.Parameters = cloneAssistantFields(noChange.Parameters)
+		fence := stringMap(lease, "fence")
+		switch invalid.name {
+		case "invalid-title":
+			candidate.Title = ""
+		case "ineligible-account":
+			candidate.Parameters["providerAccounts"] = []map[string]any{{"accountRef": "pacc_absent_synthetic", "weight": 1}}
+		case "stale-lease":
+			fence = "stale-synthetic-fence"
+		}
+		_, candidateErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: prefix + "-no-change-" + invalid.name}, Payload: command.ProposeAssistantPlanInput{
+				LeaseRef: stringMap(lease, "leaseRef"), Fence: fence, Generation: generation,
+				Summary: "Synthetic no-change boundary rejection", Operations: []entity.AssistantPlanOperation{candidate, actualChange},
+			}})
+		if !errors.Is(candidateErr, invalid.expected) {
+			t.Fatalf("no-change skipped %s boundary", invalid.name)
+		}
+	}
+	afterNoChange, noChangeReadErr := service.GetAgentRuntimeConfiguration(ctx, owner, agentRef)
+	if noChangeReadErr != nil || !assistantJSONEqual(changed, afterNoChange) {
+		t.Fatal("preparing a mixed no-change draft changed current configuration")
+	}
 	if err := r.pool.QueryRow(ctx, queryAssistantConfigurationComponentRevision, stringMap(lease, "leaseRef")).Scan(&afterRevision); err != nil || string(beforeRevision) != string(afterRevision) {
 		t.Fatal("self-config rewrote active immutable runtime")
 	}
@@ -376,6 +433,22 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	_, catalogEditErr := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantPlan, Principal: owner, Mutation: value.Mutation{IdempotencyKey: prefix + "-catalog-drift-edit", ExpectedVersion: &catalogDriftPlan.Version}, Payload: command.AssistantPlanDraftInput{PlanRef: catalogDriftPlan.Ref, Summary: catalogDriftPlan.Summary, Operations: []entity.AssistantPlanOperation{catalogEdited}}})
 	if !errors.Is(catalogEditErr, errs.ErrConflict) {
 		t.Fatalf("DRAFT edit silently healed selected account catalog: %v", catalogEditErr)
+	}
+	catalogRefreshView, catalogRefreshErr := service.GetAgentRuntimeConfiguration(ctx, owner, agentRef)
+	if catalogRefreshErr != nil {
+		t.Fatal(catalogRefreshErr)
+	}
+	catalogRefreshOverlay, catalogRefreshErr := runtimecontract.ParseConfigOverlay(catalogRefreshView.PublishedOverlay.Content)
+	if catalogRefreshErr != nil {
+		t.Fatal(catalogRefreshErr)
+	}
+	catalogRefresh := operation
+	catalogRefresh.Parameters = map[string]any{"agentRef": agentRef, "runtimeProfileRef": catalogRefreshView.Configuration.RuntimeProfileRef,
+		"model": catalogRefreshView.Configuration.Model, "reasoningEffort": catalogRefreshOverlay.ModelReasoningEffort,
+		"providerPolicyMode": catalogRefreshView.Configuration.ProviderPolicy.Mode, "providerAccounts": minimalAssistantRuntimeAccounts(catalogRefreshView.Configuration.ProviderPolicy.AccountCandidates)}
+	catalogRefreshPlan := propose(catalogRefresh, "catalog-pins-refresh")
+	if len(catalogRefreshPlan.Operations) != 1 || assistantJSONEqual(catalogRefreshView.Configuration.ProviderPolicy.AccountCandidates, catalogRefreshPlan.Operations[0].Parameters["providerCatalogPins"]) {
+		t.Fatal("same settings with advanced catalog pins were discarded as a no-op")
 	}
 	operation.Parameters["reasoningEffort"] = "medium"
 	if sourceScope == "SYSTEM" {
