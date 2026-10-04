@@ -497,6 +497,7 @@ func castRun(value entity.Run) *controlplanev1.Run {
 	for _, incident := range value.Incidents {
 		result.Incidents = append(result.Incidents, castIncident(incident))
 	}
+	result.SessionReadiness = castRunSessionReadiness(value.SessionReadiness)
 	if pin := value.AssistantPin; pin != nil {
 		result.AssistantPin = &controlplanev1.AssistantRunPin{
 			Scope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+pin.Scope]), OrganizationRef: pin.OrganizationRef,

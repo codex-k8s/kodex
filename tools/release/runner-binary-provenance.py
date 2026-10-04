@@ -19,6 +19,7 @@ OCI = 'application/vnd.oci.image.'
 LIMIT = 8 * 1024**3
 JSON_LIMIT = 4 * 1024**2
 MEMBER_LIMIT = 500000
+PROFILE_LABEL = 'kodex.dev/runner-image-profile'
 
 
 class Failure(Exception):
@@ -32,6 +33,12 @@ def require(value, code):
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def profile_input(source_digest, image_profile):
+    require(re.fullmatch('[a-f0-9]{64}', source_digest) and image_profile in ('local', 'full'), 'IMAGE_PROFILE_INVALID')
+    # Одинаковые source inputs разных stages никогда не разделяют cache identity.
+    return sha(('kodex-runner-image-profile/v1\0' + image_profile + '\0' + source_digest).encode())
 
 
 def stream_hash(stream, limit=LIMIT, sink=None):
@@ -206,7 +213,7 @@ def descriptor(value, media):
     return 'blobs/sha256/' + value['digest'][7:]
 
 
-def verify_archive(archive_path, expected, input_digest, repository):
+def verify_archive(archive_path, expected, input_digest, repository, image_profile='local'):
     require(Path(archive_path).name == f'agent-runner-{input_digest}.oci.tar', 'ARCHIVE_INPUT_BINDING_MISMATCH')
     archive, before = regular_open(archive_path)
     with archive:
@@ -252,6 +259,9 @@ def verify_archive(archive_path, expected, input_digest, repository):
             manifest = decode(raw(manifest_name))
             require(manifest.get('schemaVersion') == 2 and manifest.get('mediaType') == OCI + 'manifest.v1+json', 'MANIFEST_INVALID')
             config = decode(raw(blob(manifest.get('config'), {OCI + 'config.v1+json'})))
+            image_config = config.get('config', {})
+            require(isinstance(image_config, dict) and isinstance(image_config.get('Labels'), dict)
+                    and image_config['Labels'].get(PROFILE_LABEL) == image_profile, 'IMAGE_PROFILE_BINDING_MISMATCH')
             layers = manifest.get('layers')
             require(config.get('os') == 'linux' and config.get('architecture') == 'amd64' and isinstance(layers, list) and 0 < len(layers) <= 128, 'IMAGE_PLATFORM_INVALID')
             rootfs = config.get('rootfs', {})
@@ -319,6 +329,7 @@ def main(argv):
     parser.add_argument('phase', choices=('input', 'verify', 'check'))
     parser.add_argument('--source-root', required=True)
     parser.add_argument('--revision', required=True)
+    parser.add_argument('--image-profile', choices=('local', 'full'), default='local')
     parser.add_argument('--archive')
     parser.add_argument('--expected-manifest')
     parser.add_argument('--expected-input-digest')
@@ -328,7 +339,8 @@ def main(argv):
     # Не допускаем неоднозначного повторения security-significant flags.
     flags = [v.split('=', 1)[0] for v in argv if v.startswith('--')]
     require(len(flags) == len(set(flags)), 'ARGUMENT_DUPLICATE')
-    digest = source_input(args.source_root, args.revision)
+    source_digest = source_input(args.source_root, args.revision)
+    digest = profile_input(source_digest, args.image_profile)
     if args.phase == 'input':
         require(not any((args.archive, args.expected_manifest, args.expected_input_digest, args.repository, args.output)), 'ARGUMENT_INVALID')
         print(digest)
@@ -336,10 +348,11 @@ def main(argv):
     require(args.expected_input_digest == digest, 'SOURCE_INPUT_MISMATCH')
     require(args.archive and args.output and re.fullmatch('sha256:[a-f0-9]{64}', args.expected_manifest or '')
             and re.fullmatch('[a-z0-9][a-z0-9./:_-]*', args.repository or ''), 'ARGUMENT_INVALID')
-    proof = verify_archive(args.archive, args.expected_manifest, digest, args.repository)
-    require(source_input(args.source_root, args.revision) == digest, 'SOURCE_CHANGED')
+    proof = verify_archive(args.archive, args.expected_manifest, digest, args.repository, args.image_profile)
+    require(source_input(args.source_root, args.revision) == source_digest, 'SOURCE_CHANGED')
     value = {'version': 1, 'kind': 'RUNNER_BINARY_PROVENANCE', 'sourceRevision': args.revision,
-             'sourceInputSHA256': digest, 'baseImage': args.repository + '@' + args.expected_manifest,
+             'sourceInputSHA256': source_digest, 'buildInputSHA256': digest, 'imageProfile': args.image_profile,
+             'baseImage': args.repository + '@' + args.expected_manifest,
              'binaryPath': '/' + TARGET, **proof}
     output_digest = publish(args.output, value, args.phase == 'check')
     print(json.dumps({'status': 'PASS', 'provenanceSHA256': output_digest, 'binarySHA256': proof['binarySHA256']}))

@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildRunActivityItems,
+  executionKey,
   buildRunTranscriptItems,
   isTranscriptNearBottom,
   publishedRunMessage,
   assistantTurnHasAuthoritativeActivity,
+  assistantTurnIsEmptyTerminalReceipt,
+  assistantTurnIsDuplicateFailureReceipt,
+  isAssistantPlanToolReceipt,
   activeTranscriptItemId,
   assistantTerminalTranscriptScopes,
   assistantTranscriptReplacesWorkingFallback,
@@ -57,6 +61,35 @@ describe("закрытая локализация failed результата", 
   });
 });
 
+describe("закрытая машинная квитанция инструмента подготовки плана", () => {
+  const tool: NonNullable<RunActivityItem["toolCall"]> = {
+    ref: "tcl_example",
+    tool: "propose_configuration_plan",
+    state: "SUCCEEDED",
+    revision: 2,
+    durationMs: 10,
+    safeParameters: {},
+    safeResult: "propose_configuration_plan:pln_fixtureplan123",
+    auditRef: "aud_example",
+  };
+  it("опознаёт только exact SUCCEEDED plan receipt, не текст ответа или ошибку", () => {
+    expect(isAssistantPlanToolReceipt(tool)).toBe(true);
+    for (const state of ["RUNNING", "FAILED", "CANCELLED"] as const)
+      expect(isAssistantPlanToolReceipt({ ...tool, state })).toBe(false);
+    expect(isAssistantPlanToolReceipt({ ...tool, tool: "unknown_tool" })).toBe(
+      false,
+    );
+    for (const safeResult of [
+      "propose_configuration_plan:pln_short",
+      "propose_configuration_plan:run_fixtureplan123",
+      "propose_configuration_plan:pln_fixtureplan123\nНужно подтверждение",
+      `propose_configuration_plan:pln_${"a".repeat(125)}`,
+      "TOOL_UNAVAILABLE",
+    ])
+      expect(isAssistantPlanToolReceipt({ ...tool, safeResult })).toBe(false);
+  });
+});
+
 describe("компактное представление exact хода", () => {
   const execution = {
     runRef: "run_exact",
@@ -80,6 +113,71 @@ describe("компактное представление exact хода", () =>
     summary: "MODEL_REQUEST_RUNNING",
     state: "RUNNING",
     ...changes,
+  });
+
+  it("не показывает пустую завершённую service карточку до догрузки FINAL только для exact закрытого хода", () => {
+    const completed = item("completed-empty", {
+      summary: "",
+      state: "SUCCEEDED",
+      messageKind: "FINAL_MESSAGE",
+      eventType: "TURN_COMPLETED",
+    });
+    const scope = executionKey(execution);
+    if (!scope) throw new Error("Synthetic execution scope is missing");
+    expect(presentRunTranscriptItems([completed], null, [scope])).toEqual([]);
+    expect(presentRunTranscriptItems([completed], null)).toHaveLength(1);
+    expect(
+      presentRunTranscriptItems([completed], null, ["foreign_scope"]),
+    ).toHaveLength(1);
+    for (const changed of [
+      { summary: "Проверено 5 параметров" },
+      { state: "FAILED" as const, summary: "" },
+      { historical: true },
+      { phase: "FINAL" as const, kind: "agent" as const },
+    ]) {
+      expect(
+        presentRunTranscriptItems([{ ...completed, ...changed }], null, [
+          scope,
+        ]),
+      ).toHaveLength(1);
+    }
+  });
+
+  it("возвращает служебные этапы в details после FINAL, не теряя meaningful старую историю", () => {
+    const scope = executionKey(execution);
+    if (!scope) throw new Error("Synthetic execution scope is missing");
+    const stages = [
+      item("start", { summary: "RUN_STARTED", eventType: "TURN_STARTED" }),
+      item("progress"),
+      item("completed", {
+        summary: "",
+        state: "SUCCEEDED",
+        messageKind: "FINAL_MESSAGE",
+        eventType: "TURN_COMPLETED",
+      }),
+    ];
+    const unchanged = JSON.stringify(stages);
+    expect(presentRunTranscriptItems(stages, null, [scope])).toEqual([]);
+    const final = item("final", {
+      kind: "agent",
+      phase: "FINAL",
+      summary: "Настройки подготовлены",
+      state: "SUCCEEDED",
+    });
+    const result = presentRunTranscriptItems([...stages, final], null, [scope]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "final",
+      summary: final.summary,
+      completedServiceHistory: stages,
+    });
+    expect(JSON.stringify(stages)).toBe(unchanged);
+    const meaningful = stages.map((step, index) =>
+      index === 1 ? { ...step, summary: "Проверена настройка" } : step,
+    );
+    expect(presentRunTranscriptItems(meaningful, null, [scope])).toHaveLength(
+      1,
+    );
   });
 
   it("сводит запуск и прогресс в одну запись, не меняя исходную историю", () => {
@@ -631,6 +729,174 @@ describe("terminal receipt раньше terminal RunEvent", () => {
       [changedNode],
       [changedEvent],
     );
+
+  it("скрывает только пустую successful ASSISTANT квитанцию с exact persisted owner и fresh terminal version", () => {
+    const emptyReceipt = {
+      ...receipt,
+      content: " \n",
+      state: "COMPLETED" as const,
+    };
+    const ownedConversation = { ...conversation, turns: [user, emptyReceipt] };
+    const checkEmpty = (
+      turn = emptyReceipt,
+      currentConversation = ownedConversation,
+      currentRun: Run | undefined = ownedRun,
+      currentNode = boundNode,
+      currentEvents: RunEvent[] = [progress],
+      organizationRef: string | undefined = "org_example",
+    ) =>
+      assistantTurnIsEmptyTerminalReceipt(
+        turn,
+        currentConversation,
+        organizationRef,
+        currentRun,
+        [currentNode],
+        currentEvents,
+      );
+    expect(checkEmpty()).toBe(true);
+    expect(
+      assistantTurnIsEmptyTerminalReceipt(
+        emptyReceipt,
+        ownedConversation,
+        "org_example",
+        undefined,
+        [boundNode],
+        [progress],
+      ),
+    ).toBe(false);
+    expect(
+      checkEmpty(emptyReceipt, ownedConversation, ownedRun, boundNode, []),
+    ).toBe(false);
+    expect(
+      checkEmpty(
+        emptyReceipt,
+        ownedConversation,
+        ownedRun,
+        boundNode,
+        [progress],
+        "foreign_org",
+      ),
+    ).toBe(false);
+    expect(checkEmpty({ ...emptyReceipt, content: "Готов полный ответ" })).toBe(
+      false,
+    );
+    expect(checkEmpty({ ...emptyReceipt, runVersion: 0 })).toBe(false);
+    expect(checkEmpty({ ...emptyReceipt, runRef: "run_other" })).toBe(false);
+    expect(
+      checkEmpty(emptyReceipt, ownedConversation, ownedRun, {
+        ...boundNode,
+        turnRef: "trn_other",
+      }),
+    ).toBe(false);
+    for (const state of ["RUNNING", "FAILED", "CANCELLED"] as const)
+      expect(
+        assistantTurnIsEmptyTerminalReceipt(
+          { ...emptyReceipt, state },
+          { ...ownedConversation, turns: [user, { ...emptyReceipt, state }] },
+          "org_example",
+          ownedRun,
+          [boundNode],
+          [progress],
+        ),
+      ).toBe(false);
+  });
+
+  it("убирает только exact машинную failed квитанцию до запуска, сохраняя другие ответы и события", () => {
+    const message = "Входные данные исполнения недопустимы";
+    const failedRun: Run = {
+      ...ownedRun,
+      state: "FAILED",
+      safeErrorCode: "RUNTIME_INPUT_INVALID",
+      safeErrorMessage: message,
+    };
+    const failedReceipt: AssistantTurn = {
+      ...receipt,
+      state: "FAILED",
+      content: message,
+    };
+    const failedConversation = {
+      ...conversation,
+      turns: [user, failedReceipt],
+    };
+    const failedNode: RunNode = { ...boundNode, state: "FAILED" };
+    const failedEvent: RunEvent = {
+      ...progress,
+      type: "NODE_STATE_CHANGED",
+      runState: "FAILED",
+      nodeState: "FAILED",
+    };
+    const check = (
+      turn = failedReceipt,
+      currentRun = failedRun,
+      currentEvent = failedEvent,
+      currentNode = failedNode,
+      org: string | undefined = "org_example",
+      currentConversation = failedConversation,
+    ) =>
+      assistantTurnIsDuplicateFailureReceipt(
+        turn,
+        currentConversation,
+        org,
+        currentRun,
+        [currentNode],
+        [currentEvent],
+      );
+    expect(check()).toBe(true);
+    expect(
+      check({ ...failedReceipt, content: "Есть дополнительная причина" }),
+    ).toBe(false);
+    expect(check({ ...failedReceipt, runVersion: 0 })).toBe(false);
+    expect(check({ ...failedReceipt, role: "SYSTEM_RECEIPT" })).toBe(false);
+    expect(
+      check(failedReceipt, {
+        ...failedRun,
+        safeErrorCode: "PROVIDER_UNAVAILABLE",
+      }),
+    ).toBe(false);
+    expect(
+      check(failedReceipt, { ...failedRun, safeErrorMessage: undefined }),
+    ).toBe(false);
+    expect(check(failedReceipt, { ...failedRun, state: "RUNNING" })).toBe(
+      false,
+    );
+    expect(
+      check(failedReceipt, failedRun, {
+        ...failedEvent,
+        type: "TURN_PROGRESS",
+      }),
+    ).toBe(false);
+    expect(
+      check(failedReceipt, failedRun, { ...failedEvent, execution: undefined }),
+    ).toBe(false);
+    expect(
+      check(failedReceipt, failedRun, { ...failedEvent, nodeState: "RUNNING" }),
+    ).toBe(false);
+    expect(
+      check(failedReceipt, failedRun, failedEvent, {
+        ...failedNode,
+        state: "CANCELLED",
+      }),
+    ).toBe(false);
+    expect(
+      check(failedReceipt, failedRun, failedEvent, failedNode, "foreign_org"),
+    ).toBe(false);
+    expect(
+      check(failedReceipt, failedRun, failedEvent, failedNode, "org_example", {
+        ...failedConversation,
+        ref: "cnv_foreign",
+      }),
+    ).toBe(false);
+    const foreignExecution = {
+      ...required(failedEvent.execution),
+      sessionRef: "ses_foreign",
+    };
+    expect(
+      check(failedReceipt, failedRun, {
+        ...failedEvent,
+        execution: foreignExecution,
+      }),
+    ).toBe(false);
+  });
 
   it.each(["SYSTEM", "PROJECT"] as const)(
     "terminal %s receipt закрывает только exact pending progress",

@@ -35,6 +35,19 @@ export interface RunActivityItem {
   serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
 }
 
+// Только exact машинная квитанция успешной подготовки плана, не его описание.
+export function isAssistantPlanToolReceipt(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): boolean {
+  return (
+    tool.state === "SUCCEEDED" &&
+    tool.tool === "propose_configuration_plan" &&
+    /^propose_configuration_plan:pln_[A-Za-z0-9_-]{8,124}$/.test(
+      tool.safeResult,
+    )
+  );
+}
+
 interface ActivityContext {
   initiator?: string;
   target?: string;
@@ -529,6 +542,7 @@ export function assistantTranscriptReplacesWorkingFallback(
 export function presentRunTranscriptItems(
   items: readonly RunActivityItem[],
   activeItemId: string | null = activeTranscriptItemId(items),
+  closedExecutionKeys: readonly string[] = [],
 ): PresentedTranscriptItem[] {
   const services = new Map<
     string,
@@ -593,13 +607,132 @@ export function presentRunTranscriptItems(
     hidden.add(item.id);
   }
   return presented
-    .filter((item) => !hidden.has(item.id))
+    .filter((item) => {
+      if (hidden.has(item.id)) return false;
+      const scope = executionKey(item.execution);
+      // До FINAL пустая successful квитанция не образует отдельный пузырь.
+      // История остаётся в исходных events и присоединяется к FINAL при rejoin.
+      return !(
+        scope &&
+        closedExecutionKeys.includes(scope) &&
+        item.serviceHistory &&
+        !item.working &&
+        item.state === "SUCCEEDED" &&
+        !item.summary?.trim() &&
+        !item.progress?.trim() &&
+        item.serviceHistory.every((step) =>
+          [step.summary, step.progress].every((value) => {
+            const code = value?.trim().replace(/^i18n:/, "");
+            return (
+              !code ||
+              serviceStartEvents.has(code) ||
+              serviceProgressCodes.has(code) ||
+              code === "RUN_STARTED"
+            );
+          }),
+        )
+      );
+    })
     .map((item) => {
       const completedServiceHistory = attached.get(item.id);
       return completedServiceHistory
         ? { ...item, completedServiceHistory }
         : item;
     });
+}
+
+export function assistantTurnIsEmptyTerminalReceipt(
+  turn: AssistantTurn,
+  conversation: AssistantConversation | undefined,
+  organizationRef: string | undefined,
+  run: Run | undefined,
+  nodes: readonly RunNode[],
+  events: readonly RunEvent[],
+): boolean {
+  return Boolean(
+    turn.role === "ASSISTANT" &&
+    turn.state === "COMPLETED" &&
+    !turn.plan &&
+    !turn.content.trim() &&
+    run &&
+    turn.runRef === run.ref &&
+    Number.isSafeInteger(turn.runVersion) &&
+    (turn.runVersion ?? 0) >= run.version &&
+    conversation?.turns.some(
+      (item) =>
+        item.ref === turn.ref &&
+        item.runRef === turn.runRef &&
+        item.runVersion === turn.runVersion &&
+        item.role === turn.role &&
+        item.state === turn.state &&
+        item.content === turn.content &&
+        !item.plan,
+    ) &&
+    assistantTerminalTranscriptScopes(
+      conversation,
+      organizationRef,
+      run,
+      nodes,
+      events,
+    ).length > 0,
+  );
+}
+
+// Отказ до запуска runner уже показан exact terminal событием узла.
+// Убирается только его машинная квитанция, не самостоятельный ответ агента.
+export function assistantTurnIsDuplicateFailureReceipt(
+  turn: AssistantTurn,
+  conversation: AssistantConversation | undefined,
+  organizationRef: string | undefined,
+  run: Run | undefined,
+  nodes: readonly RunNode[],
+  events: readonly RunEvent[],
+): boolean {
+  if (
+    !run ||
+    run.state !== "FAILED" ||
+    run.safeErrorCode !== "RUNTIME_INPUT_INVALID" ||
+    !run.safeErrorMessage ||
+    turn.role !== "ASSISTANT" ||
+    turn.state !== "FAILED" ||
+    turn.plan ||
+    turn.runRef !== run.ref ||
+    turn.content !== run.safeErrorMessage ||
+    !Number.isSafeInteger(turn.runVersion) ||
+    (turn.runVersion ?? 0) < run.version ||
+    !conversation?.turns.some(
+      (item) =>
+        item.ref === turn.ref &&
+        item.runRef === turn.runRef &&
+        item.runVersion === turn.runVersion &&
+        item.role === turn.role &&
+        item.state === turn.state &&
+        item.content === turn.content &&
+        !item.plan,
+    )
+  )
+    return false;
+  const scopes = assistantTerminalTranscriptScopes(
+    conversation,
+    organizationRef,
+    run,
+    nodes,
+    events,
+  );
+  return events.some((event) => {
+    const scope = executionKey(event.execution);
+    return Boolean(
+      scope &&
+      scopes.includes(scope) &&
+      event.type === "NODE_STATE_CHANGED" &&
+      event.runState === "FAILED" &&
+      event.nodeState === "FAILED" &&
+      nodes.some(
+        (node) =>
+          node.ref === event.execution?.nodeRef && node.state === "FAILED",
+      ),
+    );
+  });
 }
 
 // Summary из истории заменяется только событием exact persisted USER/run/node

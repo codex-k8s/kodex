@@ -14,6 +14,7 @@ import type {
 const api = vi.hoisted(() => ({
   connections: vi.fn(),
   candidates: vi.fn(),
+  ownerRead: vi.fn(),
   save: vi.fn(),
   owner: new AbortController(),
 }));
@@ -24,6 +25,7 @@ vi.mock("@/features/assistant/system-integration-grants", async (original) => ({
   ...(await original<object>()),
   readSystemGrantConnections: api.connections,
   readSystemGrantCandidates: api.candidates,
+  readSystemGrantOwner: api.ownerRead,
   saveSystemGrant: api.save,
 }));
 const platform = reactive({
@@ -135,6 +137,32 @@ describe("SYSTEM grant controls", () => {
       total: 1,
       nextPageToken: "",
     });
+    api.ownerRead.mockResolvedValue({
+      organizationRef: "organization_test",
+      assistantRef: "assistant_test",
+      assistantVersion: 9,
+    });
+  });
+  it("catalog получает Agent version, а не SystemAssistant heartbeat version", async () => {
+    const state = await setup();
+    await select(state);
+    expect(api.ownerRead).toHaveBeenCalledWith(
+      "organization_test",
+      { ref: "assistant_test" },
+      expect.any(AbortSignal),
+    );
+    expect(api.candidates).toHaveBeenCalledWith(
+      {
+        organizationRef: "organization_test",
+        assistantRef: "assistant_test",
+        assistantVersion: 9,
+      },
+      connection,
+      "",
+      undefined,
+      expect.any(AbortSignal),
+      undefined,
+    );
   });
   it("явно предвыбирает каталог policy и отправляет только specialized fields", async () => {
     const state = await setup();
@@ -188,6 +216,7 @@ describe("SYSTEM grant controls", () => {
       undefined,
       new AbortController().signal,
     );
+    await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
     state.clearConnection();
     resolve({ items: [candidate], total: 1, nextPageToken: "" });
     await expect(reading).rejects.toMatchObject({ name: "AbortError" });

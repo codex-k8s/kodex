@@ -13,6 +13,7 @@ import {
 } from "../system-integration-grant-plan";
 import {
   readSystemGrantCandidates,
+  readSystemGrantOwner,
   validSystemGrantSelection,
 } from "../system-integration-grants";
 import {
@@ -155,11 +156,11 @@ watch(
         assistant.ref !== operation.parameters.systemAssistantRef
       )
         throw new Error("System assistant grant plan readback mismatch");
-      const owner = {
-        organizationRef: platform.bootstrap?.organizationRef ?? "",
-        assistantRef: assistant.ref,
-        assistantVersion: assistant.version,
-      };
+      const owner = await readSystemGrantOwner(
+        platform.bootstrap?.organizationRef ?? "",
+        assistant,
+        signal,
+      );
       const seen = new Set<string>();
       let cursor: string | undefined;
       for (let pageCount = 0; pageCount < 10; pageCount++) {

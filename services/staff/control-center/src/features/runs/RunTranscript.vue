@@ -19,6 +19,7 @@ import {
   executionKey,
   activeTranscriptItemId,
   assistantFailureMessageKey,
+  isAssistantPlanToolReceipt,
   isTranscriptNearBottom,
   presentRunTranscriptItems,
   type RunActivityItem,
@@ -52,7 +53,11 @@ const activeItemId = computed(() =>
     : props.activeItemId,
 );
 const displayItems = computed(() =>
-  presentRunTranscriptItems(props.items, activeItemId.value).map((item) => {
+  presentRunTranscriptItems(
+    props.items,
+    activeItemId.value,
+    props.closedExecutionKeys,
+  ).map((item) => {
     const text = (
       value: string | undefined,
       messageKind = item.messageKind,
@@ -159,9 +164,10 @@ const managedTools = new Set([
 function toolPreview(
   toolCall: NonNullable<RunActivityItem["toolCall"]>,
 ): string | undefined {
-  return toolCall.state === "SUCCEEDED" &&
+  return (toolCall.state === "SUCCEEDED" &&
     managedTools.has(toolCall.tool) &&
-    toolCall.safeResult === `${toolCall.tool}:completed`
+    toolCall.safeResult === `${toolCall.tool}:completed`) ||
+    isAssistantPlanToolReceipt(toolCall)
     ? undefined
     : toolCall.safeResult || undefined;
 }

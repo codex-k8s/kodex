@@ -443,7 +443,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		updateImageSchema["anyOf"] = []map[string]any{{"required": []string{"name"}}, {"required": []string{"environmentKey"}}, {"required": []string{"dockerfile"}}}
 		result = append(result,
 			assistantOperationSchema("CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", objectSchema(
-				[]string{"systemAssistantRef", "name", "environmentKey", "dockerfile"}, map[string]any{
+				[]string{"systemAssistantRef", "name", "environmentKey"}, map[string]any{
 					"systemAssistantRef": enumSchema(input.AgentRef), "name": stringSchema(1, 160),
 					"environmentKey": assistantRoleEnvironmentKeySchema(), "dockerfile": stringSchema(1, 65536),
 				})),

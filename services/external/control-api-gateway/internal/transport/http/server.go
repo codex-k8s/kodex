@@ -473,6 +473,9 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 			return errPublicAvatarShape
 		}
 	}
+	if err := validateRunSessionReadinessShape(value, descriptor); err != nil {
+		return err
+	}
 	return normalizeIntegrationShape(value, descriptor)
 }
 
@@ -575,6 +578,9 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	if descriptor.FullName() == "controlplane.v1.ConfigOverlayDiagnostic" && field.Kind() == protoreflect.Int32Kind {
 		return float64(0), field.JSONName() == "line" || field.JSONName() == "column"
 	}
+	if descriptor.FullName() == "controlplane.v1.RunSessionArchiveTask" && field.Kind() == protoreflect.Int32Kind {
+		return float64(0), field.JSONName() == "attempt"
+	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"
 	}
@@ -640,6 +646,9 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 	switch field.Kind() {
 	case protoreflect.EnumKind:
+		if normalized, owned, err := normalizeRunSessionReadinessEnum(value, field); owned {
+			return normalized, err
+		}
 		if field.Enum().FullName() == "controlplane.v1.RuntimeResourceScopeKind" {
 			name, ok := value.(string)
 			kind := runtimeResourceScopeKind(name)
@@ -748,7 +757,9 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 			if publishedMessage && (key == "text" || key == "ref") {
 				continue
 			}
-			if key == "integrationIntent" {
+			// Session readiness — закрытая code-only проекция: добавление
+			// generic safeErrorMessage нарушает её публичный контракт.
+			if key == "integrationIntent" || key == "sessionReadiness" {
 				continue
 			}
 			LocalizeSafeErrors(item, localize)

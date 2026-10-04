@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { HomeResultItem } from "../result-catalog";
 import SafeSummary from "@/shared/ui/SafeSummary.vue";
@@ -34,6 +34,15 @@ function visibleDescription(item: HomeResultItem): string | undefined {
 }
 const root = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const visibleLimit = ref(5);
+const visibleItems = computed(() =>
+  props.dashboard ? props.items.slice(0, visibleLimit.value) : props.items,
+);
+const hasMore = computed(() =>
+  props.dashboard
+    ? visibleLimit.value < props.items.length
+    : Boolean(props.more),
+);
 const pageSize = useAdaptiveCursorPageSize({
   container: root,
   itemSelector: ".home-result-row",
@@ -46,8 +55,12 @@ const pageSize = useAdaptiveCursorPageSize({
 useCursorInfiniteScroll({
   root,
   sentinel,
-  enabled: () => Boolean(props.more) && !props.loading,
-  loadMore: () => emit("more", pageSize.value),
+  enabled: () => hasMore.value && !props.loading,
+  loadMore: () => {
+    if (props.dashboard) visibleLimit.value += 5;
+    else emit("more", pageSize.value);
+  },
+  rootMargin: props.dashboard ? "0px 0px 40px" : undefined,
 });
 </script>
 <template>
@@ -55,8 +68,9 @@ useCursorInfiniteScroll({
     ref="root"
     class="home-result-rows"
     :class="{ 'home-result-rows--dashboard': dashboard }"
+    :tabindex="dashboard ? 0 : undefined"
   >
-    <div v-for="item in items" :key="item.ref" class="home-result-row">
+    <div v-for="item in visibleItems" :key="item.ref" class="home-result-row">
       <RouterLink v-if="item.to" :to="item.to">{{
         serverMessage(item.title)
       }}</RouterLink>
@@ -83,7 +97,7 @@ useCursorInfiniteScroll({
       <StatusBadge :state="item.state" />
     </div>
     <div
-      v-if="more"
+      v-if="hasMore"
       ref="sentinel"
       class="home-result-rows__sentinel"
       role="status"
@@ -136,15 +150,16 @@ useCursorInfiniteScroll({
   min-height: 1px;
 }
 .home-result-rows--dashboard {
-  max-height: none;
-  overflow: visible;
+  max-height: min(460px, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .home-result-rows--dashboard .home-result-row {
-  height: auto;
-  min-height: 82px;
+  height: 92px;
   align-items: start;
   row-gap: 5px;
-  padding: 14px 16px;
+  padding: 10px 16px;
 }
 .home-result-rows--dashboard .home-result-row > :first-child {
   grid-column: 1;
@@ -159,7 +174,7 @@ useCursorInfiniteScroll({
   grid-column: 1;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   white-space: normal;
   overflow-wrap: anywhere;
   line-height: 1.4;

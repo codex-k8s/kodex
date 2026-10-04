@@ -6,6 +6,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 const sdk = vi.hoisted(() => ({
   changeSystemAssistantIntegrationGrant: vi.fn(),
+  getAgent: vi.fn(),
   getSystemAssistantIntegrationGrantCandidates: vi.fn(),
   listIntegrationConnections: vi.fn(),
 }));
@@ -27,6 +28,7 @@ vi.mock("@/shared/api/mutation", () => ({
 import {
   assertSystemGrantCandidates,
   readSystemGrantCandidates,
+  readSystemGrantOwner,
   saveSystemGrant,
   selectedSystemGrantPolicy,
   validSystemGrantSelection,
@@ -87,6 +89,110 @@ const page: SystemAssistantIntegrationGrantCandidates = {
 
 describe("grant общесистемного помощника", () => {
   beforeEach(() => vi.clearAllMocks());
+  it("читает Agent version независимо от heartbeat aggregate version", async () => {
+    sdk.getAgent.mockResolvedValue({
+      response: new Response(null, { status: 200 }),
+      data: {
+        ref: owner.assistantRef,
+        version: owner.assistantVersion,
+        system: true,
+        enabled: true,
+        projectRef: "",
+      },
+    });
+    const assistant = { ref: owner.assistantRef, version: 1014 };
+    const signal = new AbortController().signal;
+    await expect(
+      readSystemGrantOwner(owner.organizationRef, assistant, signal),
+    ).resolves.toEqual(owner);
+    expect(sdk.getAgent).toHaveBeenCalledWith({
+      path: { agentRef: owner.assistantRef },
+      signal,
+      cache: "no-store",
+    });
+  });
+  it.each([
+    { ref: "foreign" },
+    { system: false },
+    { enabled: false },
+    { projectRef: "project_foreign" },
+    { version: 0 },
+    { version: 1.5 },
+  ])("закрывает несовместимый SYSTEM Agent readback %j", async (changed) => {
+    sdk.getAgent.mockResolvedValue({
+      response: new Response(null, { status: 200 }),
+      data: {
+        ref: owner.assistantRef,
+        version: 3,
+        system: true,
+        enabled: true,
+        projectRef: "",
+        ...changed,
+      },
+    });
+    await expect(
+      readSystemGrantOwner(
+        owner.organizationRef,
+        { ref: owner.assistantRef },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("Invalid system assistant grant owner pins");
+  });
+  it("отмена не запускает owner read и не принимает поздний Agent readback", async () => {
+    const stopped = new AbortController();
+    stopped.abort();
+    await expect(
+      readSystemGrantOwner(
+        owner.organizationRef,
+        { ref: owner.assistantRef },
+        stopped.signal,
+      ),
+    ).rejects.toThrow();
+    expect(sdk.getAgent).not.toHaveBeenCalled();
+    const pending = new AbortController();
+    sdk.getAgent.mockImplementation(() => {
+      pending.abort();
+      return Promise.resolve({
+        response: new Response(null, { status: 200 }),
+        data: {
+          ref: owner.assistantRef,
+          version: 3,
+          system: true,
+          enabled: true,
+          projectRef: "",
+        },
+      });
+    });
+    await expect(
+      readSystemGrantOwner(
+        owner.organizationRef,
+        { ref: owner.assistantRef },
+        pending.signal,
+      ),
+    ).rejects.toThrow();
+  });
+  it("принимает отсутствующий конечный cursor, но не null или иной тип", () => {
+    const lastPage = { ...page, nextPageToken: undefined };
+    expect(() =>
+      assertSystemGrantCandidates(
+        lastPage as unknown as SystemAssistantIntegrationGrantCandidates,
+        owner,
+        connection,
+      ),
+    ).not.toThrow();
+    for (const nextPageToken of [null, 1, {}, []]) {
+      expect(() =>
+        assertSystemGrantCandidates(
+          {
+            ...page,
+            nextPageToken,
+          } as SystemAssistantIntegrationGrantCandidates,
+          owner,
+          connection,
+        ),
+      ).toThrow("Invalid system assistant grant candidate pins");
+    }
+  });
   it("принимает только точную организацию, помощника и опубликованный connection tuple", () => {
     expect(() =>
       assertSystemGrantCandidates(page, owner, connection),

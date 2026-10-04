@@ -2744,6 +2744,7 @@ export type Run = ({
     version: number;
     projectRef?: OpaqueRef;
     assistantPin?: AssistantRunPin;
+    sessionReadiness?: RunSessionReadiness;
     sessionRef: OpaqueRef;
     rootRunRef: OpaqueRef;
     parentRunRef?: OpaqueRef;
@@ -2912,6 +2913,28 @@ export type RunGraph = {
     edges: Array<RunEdge>;
 };
 
+/**
+ * Текущие session-gates в одном защищённом read snapshot. NO_SESSION_BLOCKER не доказывает глобальную claim readiness. Отсутствие проекции не означает готовность.
+ */
+export type RunSessionReadiness = {
+    sessionRef: OpaqueRef;
+    storageState: 'UNTRACKED' | 'LIVE' | 'SNAPSHOT_READY' | 'SNAPSHOTTING' | 'DELETE_PVC_READY' | 'ARCHIVED' | 'RESTORE_READY' | 'RESTORING' | 'ERROR' | 'PURGED';
+    reason: 'STORAGE_NOT_LIVE' | 'SESSION_ACCOUNT_UNAVAILABLE' | 'EARLIER_EXECUTION' | 'NO_SESSION_BLOCKER';
+    latestArchiveTask?: RunSessionArchiveTask;
+};
+
+/**
+ * Последняя задача изменения storage этой exact session, без cleanup DELETE_OBJECT и содержимого архива.
+ */
+export type RunSessionArchiveTask = {
+    ref: OpaqueRef;
+    kind: 'SNAPSHOT' | 'RESTORE' | 'DELETE_PVC';
+    state: 'READY' | 'CLAIMED' | 'SUCCEEDED' | 'DEAD_LETTER' | 'CANCELLED';
+    attempt: number;
+    maximumAttempts: number;
+    safeErrorCode: 'NONE' | 'UNKNOWN' | 'SESSION_ARCHIVE_SOURCE_INVALID' | 'SESSION_ARCHIVE_OBJECT_WRITE_FAILED' | 'SESSION_ARCHIVE_OBJECT_READBACK_FAILED' | 'SESSION_ARCHIVE_OBJECT_DELETE_FAILED' | 'SESSION_ARCHIVE_RESTORE_INVALID' | 'SESSION_ARCHIVE_PVC_BUSY' | 'SESSION_ARCHIVE_PVC_MISSING' | 'SESSION_ARCHIVE_PVC_REPLACED' | 'SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE' | 'SESSION_ARCHIVE_WORKER_FAILED' | 'SESSION_ARCHIVE_TIMEOUT' | 'SESSION_ARCHIVE_LEASE_EXPIRED' | 'SESSION_BECAME_ACTIVE';
+};
+
 export type PublicRuntimeRevisionIdentity = {
     ref: OpaqueRef;
     version: number;
@@ -3017,7 +3040,7 @@ export type SystemAssistantIntegrationGrantCandidates = {
     definitionDigest: string;
     items: Array<SystemAssistantIntegrationGrantCandidate>;
     total: number;
-    nextPageToken: string;
+    nextPageToken?: string;
 };
 
 export type OwnerGate = {

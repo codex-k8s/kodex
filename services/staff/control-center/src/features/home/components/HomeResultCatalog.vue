@@ -100,10 +100,7 @@ const cachedDashboardItems = computed<HomeResultItem[]>(() => {
     }));
 });
 const dashboardItems = computed(() =>
-  (props.dashboard ? cachedDashboardItems.value : items.value).slice(
-    0,
-    props.dashboard ? 3 : undefined,
-  ),
+  props.dashboard ? cachedDashboardItems.value : items.value,
 );
 const displayTotal = computed(() =>
   props.dashboard ? cachedDashboardItems.value.length : total.value,

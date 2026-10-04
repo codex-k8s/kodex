@@ -117,7 +117,7 @@ RUN apk add --no-cache ca-certificates git \
 	&& CGO_ENABLED=0 go install github.com/mikefarah/yq/v4@"${YQ_VERSION}" \
 	&& CGO_ENABLED=0 go install github.com/sqlc-dev/sqlc/cmd/sqlc@"${SQLC_VERSION}" \
 	&& CGO_ENABLED=0 go install go.uber.org/mock/mockgen@"${MOCKGEN_VERSION}"
-FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584
+FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS full-runtime
 
 ENV GOTOOLCHAIN=local
 

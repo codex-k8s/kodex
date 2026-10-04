@@ -45,6 +45,18 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("не создаёт пустой successful fallback bubble только при авторитетном terminal binding", () => {
+    expect(source).toContain("assistantTurnIsEmptyTerminalReceipt(");
+    expect(source).toContain("!turnIsEmptyTerminalReceipt(turn)");
+    const rule = source.slice(
+      source.indexOf("function turnIsEmptyTerminalReceipt"),
+      source.indexOf("const transcriptTurns"),
+    );
+    expect(rule).toContain("store.selectedConversation");
+    expect(rule).toContain("platform.bootstrap?.organizationRef");
+    expect(rule).toContain("graph?.nodes ?? []");
+    expect(rule).toContain("conversationRunEvents.value");
+  });
   it("помещает применённый план в одну компактную карточку без внешнего повторного статуса", () => {
     expect(template).toContain("'assistant-message--applied-plan'");
     expect(template).toContain("turn.plan?.state !== 'APPLIED'");

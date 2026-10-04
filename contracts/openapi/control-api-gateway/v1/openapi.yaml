@@ -14857,6 +14857,7 @@ components:
         version: { type: integer, format: int64, minimum: 1 }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         assistantPin: { $ref: "#/components/schemas/AssistantRunPin" }
+        sessionReadiness: { $ref: "#/components/schemas/RunSessionReadiness" }
         sessionRef: { $ref: "#/components/schemas/OpaqueRef" }
         rootRunRef: { $ref: "#/components/schemas/OpaqueRef" }
         parentRunRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15274,6 +15275,74 @@ components:
             maxItems: 4000,
             items: { $ref: "#/components/schemas/RunEdge" },
           }
+    RunSessionReadiness:
+      type: object
+      additionalProperties: false
+      description: Текущие session-gates в одном защищённом read snapshot. NO_SESSION_BLOCKER не доказывает глобальную claim readiness. Отсутствие проекции не означает готовность.
+      required: [sessionRef, storageState, reason]
+      properties:
+        sessionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        storageState:
+          type: string
+          enum:
+            [
+              UNTRACKED,
+              LIVE,
+              SNAPSHOT_READY,
+              SNAPSHOTTING,
+              DELETE_PVC_READY,
+              ARCHIVED,
+              RESTORE_READY,
+              RESTORING,
+              ERROR,
+              PURGED,
+            ]
+        reason:
+          type: string
+          enum:
+            [
+              STORAGE_NOT_LIVE,
+              SESSION_ACCOUNT_UNAVAILABLE,
+              EARLIER_EXECUTION,
+              NO_SESSION_BLOCKER,
+            ]
+        latestArchiveTask:
+          { $ref: "#/components/schemas/RunSessionArchiveTask" }
+    RunSessionArchiveTask:
+      type: object
+      additionalProperties: false
+      description: Последняя задача изменения storage этой exact session, без cleanup DELETE_OBJECT и содержимого архива.
+      required: [ref, kind, state, attempt, maximumAttempts, safeErrorCode]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        kind: { type: string, enum: [SNAPSHOT, RESTORE, DELETE_PVC] }
+        state:
+          {
+            type: string,
+            enum: [READY, CLAIMED, SUCCEEDED, DEAD_LETTER, CANCELLED],
+          }
+        attempt: { type: integer, minimum: 0, maximum: 5 }
+        maximumAttempts: { type: integer, minimum: 1, maximum: 5 }
+        safeErrorCode:
+          type: string
+          enum:
+            [
+              NONE,
+              UNKNOWN,
+              SESSION_ARCHIVE_SOURCE_INVALID,
+              SESSION_ARCHIVE_OBJECT_WRITE_FAILED,
+              SESSION_ARCHIVE_OBJECT_READBACK_FAILED,
+              SESSION_ARCHIVE_OBJECT_DELETE_FAILED,
+              SESSION_ARCHIVE_RESTORE_INVALID,
+              SESSION_ARCHIVE_PVC_BUSY,
+              SESSION_ARCHIVE_PVC_MISSING,
+              SESSION_ARCHIVE_PVC_REPLACED,
+              SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE,
+              SESSION_ARCHIVE_WORKER_FAILED,
+              SESSION_ARCHIVE_TIMEOUT,
+              SESSION_ARCHIVE_LEASE_EXPIRED,
+              SESSION_BECAME_ACTIVE,
+            ]
     PublicRuntimeRevisionIdentity:
       type: object
       additionalProperties: false
@@ -15436,7 +15505,7 @@ components:
     SystemAssistantIntegrationGrantCandidates:
       type: object
       additionalProperties: false
-      required: [scopeKind, organizationRef, assistantRef, assistantVersion, connectionRef, connectionVersion, definitionVersion, definitionDigest, items, total, nextPageToken]
+      required: [scopeKind, organizationRef, assistantRef, assistantVersion, connectionRef, connectionVersion, definitionVersion, definitionDigest, items, total]
       properties:
         scopeKind: { type: string, enum: [ORGANIZATION] }
         organizationRef: { $ref: "#/components/schemas/OpaqueRef" }

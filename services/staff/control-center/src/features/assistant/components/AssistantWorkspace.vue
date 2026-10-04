@@ -93,6 +93,8 @@ import {
 } from "@/features/assistant/chat-timeline";
 import {
   assistantTurnHasAuthoritativeActivity,
+  assistantTurnIsEmptyTerminalReceipt,
+  assistantTurnIsDuplicateFailureReceipt,
   assistantTerminalTranscriptScopes,
   assistantTranscriptReplacesWorkingFallback,
   assistantFailureMessageKey,
@@ -219,9 +221,29 @@ function transcriptTurnContent(turn: AssistantTurn): string {
     turn.role !== "USER" ? runtimeProgressKey(turn.content) : undefined;
   return key ? t(key) : turn.content;
 }
+function turnIsEmptyTerminalReceipt(turn: AssistantTurn): boolean {
+  const run = turn.runRef ? platform.runs[turn.runRef] : undefined;
+  const graph = run
+    ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
+    : undefined;
+  const args = [
+    turn,
+    store.selectedConversation,
+    platform.bootstrap?.organizationRef,
+    run,
+    graph?.nodes ?? [],
+    conversationRunEvents.value,
+  ] as const;
+  return (
+    assistantTurnIsEmptyTerminalReceipt(...args) ||
+    assistantTurnIsDuplicateFailureReceipt(...args)
+  );
+}
 const transcriptTurns = computed(() =>
   (store.selectedConversation?.turns ?? []).filter(
-    (turn) => turn.plan || !turnHasPublishedMessage(turn),
+    (turn) =>
+      turn.plan ||
+      (!turnHasPublishedMessage(turn) && !turnIsEmptyTerminalReceipt(turn)),
   ),
 );
 const chatTimeline = computed(() =>

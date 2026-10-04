@@ -16,6 +16,24 @@ const createSystemImageOperation = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 const updateSystemImageOperation = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 const prepareAssistantConfigurationOperation = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
 
+func TestSystemAssistantImageSchemaAllowsOnlyCatalogTemplateOmission(t *testing.T) {
+	for _, schema := range assistantPlanOperationSchemas(assistantConfigurationFixture(runtimecontract.AssistantScopeSystem)) {
+		if assistantSchemaType(schema) != createSystemImageOperation {
+			continue
+		}
+		parameters := schema["properties"].(map[string]any)["parameters"].(map[string]any)
+		if !reflect.DeepEqual(parameters["required"], []string{"systemAssistantRef", "name", "environmentKey"}) || parameters["additionalProperties"] != false {
+			t.Fatal("catalog template omission changed required owner locator or exposed extra fields")
+		}
+		dockerfile := parameters["properties"].(map[string]any)["dockerfile"].(map[string]any)
+		if dockerfile["type"] != "string" || dockerfile["minLength"] != 1 || dockerfile["maxLength"] != 65536 {
+			t.Fatal("explicit Dockerfile lost its bounded strict schema")
+		}
+		return
+	}
+	t.Fatal("system assistant image operation is missing")
+}
+
 func TestAssistantRuntimeConfigurationSearchClosedOwnBoundary(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input := assistantConfigurationFixture(scope)
@@ -145,6 +163,7 @@ func TestAssistantSpecializedConfigurationProposesOnlyOwnerDraft(t *testing.T) {
 		scope              runtimecontract.AssistantScope
 		parameters         map[string]any
 	}{
+		{"system create image from catalog template", createSystemImageOperation, "ROLE_IMAGE_RECIPE", runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_own12345", "name": "Assistant tools", "environmentKey": "standard"}},
 		{"system create image", createSystemImageOperation, "ROLE_IMAGE_RECIPE", runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_own12345", "name": "Assistant tools", "environmentKey": "standard", "dockerfile": "FROM scratch\n"}},
 		{"system update image", updateSystemImageOperation, "ROLE_IMAGE_RECIPE", runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_own12345", "recipeRef": "imgrec_current123", "dockerfile": "FROM scratch\n"}},
 		{"system configure self", prepareAssistantConfigurationOperation, "AGENT", runtimecontract.AssistantScopeSystem, assistantConfigurationParameters("agt_own12345")},
@@ -189,7 +208,8 @@ func TestAssistantSpecializedConfigurationRejectsScopeAndAuthorityInjection(t *t
 		{"system foreign assistant image", updateSystemImageOperation, runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_foreign123", "recipeRef": "imgrec_current123", "name": "Tools"}},
 		{"system empty image update", updateSystemImageOperation, runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_own12345", "recipeRef": "imgrec_current123"}},
 		{"system image authority injection", createSystemImageOperation, runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_own12345", "name": "Tools", "environmentKey": "standard", "dockerfile": "FROM scratch", "projectRef": "prj_foreign123"}},
-		{"system image missing dockerfile", createSystemImageOperation, runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_own12345", "name": "Tools", "environmentKey": "standard"}},
+		{"system image empty dockerfile", createSystemImageOperation, runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_own12345", "name": "Tools", "environmentKey": "standard", "dockerfile": ""}},
+		{"system image null dockerfile", createSystemImageOperation, runtimecontract.AssistantScopeSystem, map[string]any{"systemAssistantRef": "agt_own12345", "name": "Tools", "environmentKey": "standard", "dockerfile": nil}},
 		{"project foreign assistant config", prepareAssistantConfigurationOperation, runtimecontract.AssistantScopeProject, assistantConfigurationParameters("agt_foreign123")},
 		{"ordinary execution config", prepareAssistantConfigurationOperation, runtimecontract.AssistantScopeNone, assistantConfigurationParameters("agt_own12345")},
 	} {

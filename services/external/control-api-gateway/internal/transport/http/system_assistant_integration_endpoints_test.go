@@ -23,6 +23,15 @@ func TestSystemAssistantGrantCandidateProjectionRequiresOwnerPins(t *testing.T) 
 	if !ok || view["scopeKind"] != "ORGANIZATION" || view["items"].([]map[string]any)[0]["currentGrantEnabled"] != false {
 		t.Fatal("exact organization candidate projection was rejected")
 	}
+	if _, present := view["nextPageToken"]; present {
+		t.Fatal("terminal candidate page must omit the optional cursor")
+	}
+	continued := proto.Clone(base).(*cp.GetSystemAssistantIntegrationGrantCandidatesResponse)
+	continued.Page.NextPageToken = "fixture_cursor"
+	continuedView, continuedOK := systemAssistantGrantCandidatePage(continued, base.ConnectionRef, 50)
+	if !continuedOK || continuedView["nextPageToken"] != "fixture_cursor" {
+		t.Fatal("candidate continuation cursor was lost")
+	}
 	for name, mutate := range map[string]func(*cp.GetSystemAssistantIntegrationGrantCandidatesResponse){
 		"unknown scope": func(v *cp.GetSystemAssistantIntegrationGrantCandidatesResponse) { v.ScopeKind = 0 },
 		"project scope": func(v *cp.GetSystemAssistantIntegrationGrantCandidatesResponse) {

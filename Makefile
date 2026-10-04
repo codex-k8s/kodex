@@ -383,6 +383,7 @@ test-email-combined-acceptance:
 .PHONY: test-runner-binary-provenance
 test-runner-binary-provenance:
 	@timeout 120s python3 -B tools/release/runner-binary-provenance.test.py
+	@timeout 60s python3 -B tools/dev/test_build_local_runner_profile.py
 	@bash -n tools/dev/build-local-runner.sh
 	@./scripts/tests/local-image-cache-import-contract-test.sh
 

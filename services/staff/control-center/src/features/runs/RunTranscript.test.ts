@@ -155,6 +155,30 @@ describe("RunTranscript: названия native инструментов", () =
 });
 
 describe("RunTranscript: managed инструменты", () => {
+  it("оставляет exact successful plan ref в деталях без дублирующего машинного preview", async () => {
+    const html = await render(
+      "propose_configuration_plan",
+      {},
+      "ru",
+      "propose_configuration_plan:pln_fixtureplan123",
+    );
+    expect(title(html)).toBe("Настройки помощника");
+    expect(html).not.toContain("run-transcript__preview");
+    expect(html).toContain("propose_configuration_plan:—");
+    expect(html).toContain("<details");
+  });
+  it.each([
+    "propose_configuration_plan:pln_short",
+    "propose_configuration_plan:run_fixtureplan123",
+    "propose_configuration_plan:pln_fixtureplan123\nПроверьте настройки",
+    "propose_configuration_plan:pln_fixtureplan123:Ошибка",
+  ])(
+    "сохраняет информативное или неподтверждённое описание %s",
+    async (result) => {
+      const html = await render("propose_configuration_plan", {}, "ru", result);
+      expect(html).toContain("run-transcript__preview");
+    },
+  );
   it.each([
     ["get_configuration_catalog", "Каталог настроек", "Configuration catalog"],
     ["propose_configuration_plan", "Настройки помощника", "Assistant settings"],

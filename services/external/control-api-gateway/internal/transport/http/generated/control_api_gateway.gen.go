@@ -5761,6 +5761,177 @@ func (e RunNodeType) Valid() bool {
 	}
 }
 
+// Defines values for RunSessionArchiveTaskKind.
+const (
+	RunSessionArchiveTaskKindDELETEPVC RunSessionArchiveTaskKind = "DELETE_PVC"
+	RunSessionArchiveTaskKindRESTORE   RunSessionArchiveTaskKind = "RESTORE"
+	RunSessionArchiveTaskKindSNAPSHOT  RunSessionArchiveTaskKind = "SNAPSHOT"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionArchiveTaskKind enum.
+func (e RunSessionArchiveTaskKind) Valid() bool {
+	switch e {
+	case RunSessionArchiveTaskKindDELETEPVC:
+		return true
+	case RunSessionArchiveTaskKindRESTORE:
+		return true
+	case RunSessionArchiveTaskKindSNAPSHOT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSessionArchiveTaskSafeErrorCode.
+const (
+	RunSessionArchiveTaskSafeErrorCodeNONE                                RunSessionArchiveTaskSafeErrorCode = "NONE"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEKUBERNETESUNAVAILABLE RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVELEASEEXPIRED          RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_LEASE_EXPIRED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTDELETEFAILED    RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_OBJECT_DELETE_FAILED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTREADBACKFAILED  RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_OBJECT_READBACK_FAILED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTWRITEFAILED     RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_OBJECT_WRITE_FAILED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCBUSY               RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_PVC_BUSY"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCMISSING            RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_PVC_MISSING"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCREPLACED           RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_PVC_REPLACED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVERESTOREINVALID        RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_RESTORE_INVALID"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVESOURCEINVALID         RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_SOURCE_INVALID"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVETIMEOUT               RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_TIMEOUT"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEWORKERFAILED          RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_WORKER_FAILED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONBECAMEACTIVE                 RunSessionArchiveTaskSafeErrorCode = "SESSION_BECAME_ACTIVE"
+	RunSessionArchiveTaskSafeErrorCodeUNKNOWN                             RunSessionArchiveTaskSafeErrorCode = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionArchiveTaskSafeErrorCode enum.
+func (e RunSessionArchiveTaskSafeErrorCode) Valid() bool {
+	switch e {
+	case RunSessionArchiveTaskSafeErrorCodeNONE:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEKUBERNETESUNAVAILABLE:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVELEASEEXPIRED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTDELETEFAILED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTREADBACKFAILED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTWRITEFAILED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCBUSY:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCMISSING:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCREPLACED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVERESTOREINVALID:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVESOURCEINVALID:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVETIMEOUT:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEWORKERFAILED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONBECAMEACTIVE:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSessionArchiveTaskState.
+const (
+	RunSessionArchiveTaskStateCANCELLED  RunSessionArchiveTaskState = "CANCELLED"
+	RunSessionArchiveTaskStateCLAIMED    RunSessionArchiveTaskState = "CLAIMED"
+	RunSessionArchiveTaskStateDEADLETTER RunSessionArchiveTaskState = "DEAD_LETTER"
+	RunSessionArchiveTaskStateREADY      RunSessionArchiveTaskState = "READY"
+	RunSessionArchiveTaskStateSUCCEEDED  RunSessionArchiveTaskState = "SUCCEEDED"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionArchiveTaskState enum.
+func (e RunSessionArchiveTaskState) Valid() bool {
+	switch e {
+	case RunSessionArchiveTaskStateCANCELLED:
+		return true
+	case RunSessionArchiveTaskStateCLAIMED:
+		return true
+	case RunSessionArchiveTaskStateDEADLETTER:
+		return true
+	case RunSessionArchiveTaskStateREADY:
+		return true
+	case RunSessionArchiveTaskStateSUCCEEDED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSessionReadinessReason.
+const (
+	EARLIEREXECUTION          RunSessionReadinessReason = "EARLIER_EXECUTION"
+	NOSESSIONBLOCKER          RunSessionReadinessReason = "NO_SESSION_BLOCKER"
+	SESSIONACCOUNTUNAVAILABLE RunSessionReadinessReason = "SESSION_ACCOUNT_UNAVAILABLE"
+	STORAGENOTLIVE            RunSessionReadinessReason = "STORAGE_NOT_LIVE"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionReadinessReason enum.
+func (e RunSessionReadinessReason) Valid() bool {
+	switch e {
+	case EARLIEREXECUTION:
+		return true
+	case NOSESSIONBLOCKER:
+		return true
+	case SESSIONACCOUNTUNAVAILABLE:
+		return true
+	case STORAGENOTLIVE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSessionReadinessStorageState.
+const (
+	RunSessionReadinessStorageStateARCHIVED       RunSessionReadinessStorageState = "ARCHIVED"
+	RunSessionReadinessStorageStateDELETEPVCREADY RunSessionReadinessStorageState = "DELETE_PVC_READY"
+	RunSessionReadinessStorageStateERROR          RunSessionReadinessStorageState = "ERROR"
+	RunSessionReadinessStorageStateLIVE           RunSessionReadinessStorageState = "LIVE"
+	RunSessionReadinessStorageStatePURGED         RunSessionReadinessStorageState = "PURGED"
+	RunSessionReadinessStorageStateRESTOREREADY   RunSessionReadinessStorageState = "RESTORE_READY"
+	RunSessionReadinessStorageStateRESTORING      RunSessionReadinessStorageState = "RESTORING"
+	RunSessionReadinessStorageStateSNAPSHOTREADY  RunSessionReadinessStorageState = "SNAPSHOT_READY"
+	RunSessionReadinessStorageStateSNAPSHOTTING   RunSessionReadinessStorageState = "SNAPSHOTTING"
+	RunSessionReadinessStorageStateUNTRACKED      RunSessionReadinessStorageState = "UNTRACKED"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionReadinessStorageState enum.
+func (e RunSessionReadinessStorageState) Valid() bool {
+	switch e {
+	case RunSessionReadinessStorageStateARCHIVED:
+		return true
+	case RunSessionReadinessStorageStateDELETEPVCREADY:
+		return true
+	case RunSessionReadinessStorageStateERROR:
+		return true
+	case RunSessionReadinessStorageStateLIVE:
+		return true
+	case RunSessionReadinessStorageStatePURGED:
+		return true
+	case RunSessionReadinessStorageStateRESTOREREADY:
+		return true
+	case RunSessionReadinessStorageStateRESTORING:
+		return true
+	case RunSessionReadinessStorageStateSNAPSHOTREADY:
+		return true
+	case RunSessionReadinessStorageStateSNAPSHOTTING:
+		return true
+	case RunSessionReadinessStorageStateUNTRACKED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunTargetType.
 const (
 	RunTargetTypeAGENT           RunTargetType = "AGENT"
@@ -7296,19 +7467,19 @@ func (e SystemAssistantIntegrationGrantCandidatesScopeKind) Valid() bool {
 
 // Defines values for SystemAssistantIntegrationGrantInputApprovalPolicy.
 const (
-	HUMANEACHEFFECT SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_EACH_EFFECT"
-	HUMANSCOPED     SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_SCOPED"
-	NONE            SystemAssistantIntegrationGrantInputApprovalPolicy = "NONE"
+	SystemAssistantIntegrationGrantInputApprovalPolicyHUMANEACHEFFECT SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_EACH_EFFECT"
+	SystemAssistantIntegrationGrantInputApprovalPolicyHUMANSCOPED     SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_SCOPED"
+	SystemAssistantIntegrationGrantInputApprovalPolicyNONE            SystemAssistantIntegrationGrantInputApprovalPolicy = "NONE"
 )
 
 // Valid indicates whether the value is a known member of the SystemAssistantIntegrationGrantInputApprovalPolicy enum.
 func (e SystemAssistantIntegrationGrantInputApprovalPolicy) Valid() bool {
 	switch e {
-	case HUMANEACHEFFECT:
+	case SystemAssistantIntegrationGrantInputApprovalPolicyHUMANEACHEFFECT:
 		return true
-	case HUMANSCOPED:
+	case SystemAssistantIntegrationGrantInputApprovalPolicyHUMANSCOPED:
 		return true
-	case NONE:
+	case SystemAssistantIntegrationGrantInputApprovalPolicyNONE:
 		return true
 	default:
 		return false
@@ -8436,16 +8607,16 @@ func (e DownloadArtifactParamsPurpose) Valid() bool {
 
 // Defines values for GetArtifactImpactParamsAction.
 const (
-	DELETE GetArtifactImpactParamsAction = "DELETE"
-	PURGE  GetArtifactImpactParamsAction = "PURGE"
+	GetArtifactImpactParamsActionDELETE GetArtifactImpactParamsAction = "DELETE"
+	GetArtifactImpactParamsActionPURGE  GetArtifactImpactParamsAction = "PURGE"
 )
 
 // Valid indicates whether the value is a known member of the GetArtifactImpactParamsAction enum.
 func (e GetArtifactImpactParamsAction) Valid() bool {
 	switch e {
-	case DELETE:
+	case GetArtifactImpactParamsActionDELETE:
 		return true
-	case PURGE:
+	case GetArtifactImpactParamsActionPURGE:
 		return true
 	default:
 		return false
@@ -12586,16 +12757,19 @@ type Run struct {
 	RootRunRef            OpaqueRef        `json:"rootRunRef"`
 	SafeErrorCode         *string          `json:"safeErrorCode,omitempty"`
 	SafeErrorMessage      *string          `json:"safeErrorMessage,omitempty"`
-	SessionRef            OpaqueRef        `json:"sessionRef"`
-	Source                RunSource        `json:"source"`
-	StartedAt             *Timestamp       `json:"startedAt,omitempty"`
-	State                 RunState         `json:"state"`
-	Target                RunTarget        `json:"target"`
-	Title                 string           `json:"title"`
-	TitleSource           RunTitleSource   `json:"titleSource"`
-	Usage                 TokenUsage       `json:"usage"`
-	Version               int64            `json:"version"`
-	union                 json.RawMessage
+
+	// SessionReadiness Текущие session-gates в одном защищённом read snapshot. NO_SESSION_BLOCKER не доказывает глобальную claim readiness. Отсутствие проекции не означает готовность.
+	SessionReadiness *RunSessionReadiness `json:"sessionReadiness,omitempty"`
+	SessionRef       OpaqueRef            `json:"sessionRef"`
+	Source           RunSource            `json:"source"`
+	StartedAt        *Timestamp           `json:"startedAt,omitempty"`
+	State            RunState             `json:"state"`
+	Target           RunTarget            `json:"target"`
+	Title            string               `json:"title"`
+	TitleSource      RunTitleSource       `json:"titleSource"`
+	Usage            TokenUsage           `json:"usage"`
+	Version          int64                `json:"version"`
+	union            json.RawMessage
 }
 
 // RunSource defines model for Run.Source.
@@ -12835,6 +13009,40 @@ type RunPage struct {
 	NextPageToken *string `json:"nextPageToken,omitempty"`
 	Total         int64   `json:"total"`
 }
+
+// RunSessionArchiveTask Последняя задача изменения storage этой exact session, без cleanup DELETE_OBJECT и содержимого архива.
+type RunSessionArchiveTask struct {
+	Attempt         int                                `json:"attempt"`
+	Kind            RunSessionArchiveTaskKind          `json:"kind"`
+	MaximumAttempts int                                `json:"maximumAttempts"`
+	Ref             OpaqueRef                          `json:"ref"`
+	SafeErrorCode   RunSessionArchiveTaskSafeErrorCode `json:"safeErrorCode"`
+	State           RunSessionArchiveTaskState         `json:"state"`
+}
+
+// RunSessionArchiveTaskKind defines model for RunSessionArchiveTask.Kind.
+type RunSessionArchiveTaskKind string
+
+// RunSessionArchiveTaskSafeErrorCode defines model for RunSessionArchiveTask.SafeErrorCode.
+type RunSessionArchiveTaskSafeErrorCode string
+
+// RunSessionArchiveTaskState defines model for RunSessionArchiveTask.State.
+type RunSessionArchiveTaskState string
+
+// RunSessionReadiness Текущие session-gates в одном защищённом read snapshot. NO_SESSION_BLOCKER не доказывает глобальную claim readiness. Отсутствие проекции не означает готовность.
+type RunSessionReadiness struct {
+	// LatestArchiveTask Последняя задача изменения storage этой exact session, без cleanup DELETE_OBJECT и содержимого архива.
+	LatestArchiveTask *RunSessionArchiveTask          `json:"latestArchiveTask,omitempty"`
+	Reason            RunSessionReadinessReason       `json:"reason"`
+	SessionRef        OpaqueRef                       `json:"sessionRef"`
+	StorageState      RunSessionReadinessStorageState `json:"storageState"`
+}
+
+// RunSessionReadinessReason defines model for RunSessionReadiness.Reason.
+type RunSessionReadinessReason string
+
+// RunSessionReadinessStorageState defines model for RunSessionReadiness.StorageState.
+type RunSessionReadinessStorageState string
 
 // RunTarget defines model for RunTarget.
 type RunTarget struct {
@@ -14001,7 +14209,7 @@ type SystemAssistantIntegrationGrantCandidates struct {
 	DefinitionDigest  string                                             `json:"definitionDigest"`
 	DefinitionVersion string                                             `json:"definitionVersion"`
 	Items             []SystemAssistantIntegrationGrantCandidate         `json:"items"`
-	NextPageToken     string                                             `json:"nextPageToken"`
+	NextPageToken     *string                                            `json:"nextPageToken,omitempty"`
 	OrganizationRef   OpaqueRef                                          `json:"organizationRef"`
 	ScopeKind         SystemAssistantIntegrationGrantCandidatesScopeKind `json:"scopeKind"`
 	Total             int64                                              `json:"total"`
@@ -17923,6 +18131,13 @@ func (t Run) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if t.SessionReadiness != nil {
+		object["sessionReadiness"], err = json.Marshal(t.SessionReadiness)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'sessionReadiness': %w", err)
+		}
+	}
+
 	object["sessionRef"], err = json.Marshal(t.SessionRef)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'sessionRef': %w", err)
@@ -18143,6 +18358,13 @@ func (t *Run) UnmarshalJSON(b []byte) error {
 		err = json.Unmarshal(raw, &t.SafeErrorMessage)
 		if err != nil {
 			return fmt.Errorf("error reading 'safeErrorMessage': %w", err)
+		}
+	}
+
+	if raw, found := object["sessionReadiness"]; found {
+		err = json.Unmarshal(raw, &t.SessionReadiness)
+		if err != nil {
+			return fmt.Errorf("error reading 'sessionReadiness': %w", err)
 		}
 	}
 

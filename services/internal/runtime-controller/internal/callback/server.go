@@ -1320,7 +1320,7 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 		}
 		if kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 			return onlyKeys(parameters, "systemAssistantRef", "name", "environmentKey", "dockerfile") &&
-				assistantRequiredStrings(parameters, "name", "environmentKey", "dockerfile")
+				assistantRequiredStrings(parameters, "name", "environmentKey") && assistantOptionalStrings(parameters, "dockerfile")
 		}
 		return onlyKeys(parameters, "systemAssistantRef", "recipeRef", "name", "environmentKey", "dockerfile") &&
 			assistantRequiredStrings(parameters, "recipeRef") && assistantOptionalStrings(parameters, "name", "environmentKey", "dockerfile") && len(parameters) > 2

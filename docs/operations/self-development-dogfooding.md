@@ -1214,3 +1214,54 @@ Owner audit доказывает исчерпание одной архивно�
 До полного QA три исполнителя параллельно ведут bounded session readiness
 readback, собственный image/tools selector и компактные home running lists.
 Root сохраняет Chrome/actual AI/rollout authority. Checkbox2–15 OPEN.
+
+04.10.2026 17:20 UTC, проверенный tree поверх `b99047ad9340712c27caa4a22897d9d8ac5dbcfd`:
+PASS — Home показывает первые5 записей с внутренней прокруткой и постепенным
+раскрытием уже полученного realtime cache, без нового polling. Screenshot
+`/tmp/kodex-home-compact-1627.png` просмотрен: attention18/5visible,
+overflow отсутствует; >5 actual running ещё NOT RUN, unit покрывает границу.
+PASS — реальный typed plan32 `pln_u2hZcIK8WK99KsxRKtqg7jK1` подтверждён
+штатной UI командой Apply. Оба Context7 READ/NONE grants применены собственному
+SYSTEM помощнику; connection12 и enabled readback подтверждены. Исправлено
+сравнение exact Agent.version9 вместо heartbeat aggregate SYSTEM.version1014;
+terminal candidate cursor optional, null/unknown по-прежнему отклоняются.
+PASS — gateway удаляет internal-only grant.connectionVersion из публичной
+проекции; actual WebSocket больше не отклоняет IntegrationConnection snapshot,
+state live/attempt0/sequence1145. Internal runtime/config pins не ослаблены.
+Gateway host/Pod normalization hash совпал:
+0f39ff78f0c42f8dd0a3e2135b54223215d4fb2e9972e52c4529e5e123c51dd8.
+PASS — protected GetRun включает bounded code-only sessionReadiness после
+owner eligibility; ERROR/DEAD_LETTER и exact task/session доказаны old Run29.
+PURGED остаётся STORAGE_NOT_LIVE, task safeErrorMessage не добавляется
+локализацией. Unit и detached disposable PostgreSQL 3.57s прошли;
+это не repair старой session и не доказательство общего runtime readiness.
+FAIL — actual Context7 Run33 `run_7Poz6BvPNwIA0fvpBab6K8TD` остановлен до
+создания Pod: RUNTIME_INPUT_INVALID. Prompt proof POD_NOT_READY, actual MCP
+call NOT RUN. Истёк real health receipt5min, producer auto-refresh отсутствует;
+старый combined stage пока не отличает Materialize от managed MCP validation.
+Новая CP-owned probe/current-authority реализация выполняется отдельно.
+FAIL — snapshot fresh SYSTEM session повторно не завершается; readback
+SNAPSHOTTING и exact tasks/attempts подтверждён. Read-only watcher поймал
+worker Job/Pod с session/org/PVC UID binding; stage UNKNOWN, raw logs не
+выводились. Конкретная причина failure и task→Pod ещё не доказаны.
+PASS — USER справа, агент и tools слева, machine plan preview скрыт в details.
+Empty exact successful receipt не образует пустой пузырь. Исправлен повтор
+машинного pre-run failed receipt только при exact owner/run/turn/attempt,
+fresh version, совпадении safeErrorMessage и terminal FAILED node event.
+Один отказ, working0, Console error/warn0, relevant GET/ticket200;
+desktop `/tmp/kodex-system-failure-dedup-1711.png` и mobile390x844
+`/tmp/kodex-mobile-failure-dedup-1713.png` просмотрены без overflow.
+Frontend host/Pod run-activity hash совпал:
+a27a50f53b34fd21d590ce3bcb4162f2fe29503ee125af9a7ea845dc0bced3d9.
+PASS — SYSTEM CREATE_ROLE_IMAGE schema/dispatcher допускает отсутствие
+Dockerfile только для server-pinned catalog template; явные empty/null и
+неизвестный key запрещены. Root callback .053s / catalog .030s.
+PASS — добавлен canonical runner --image-profile local|full; defaultlocal,
+раздельные cache/build digests и exact OCI profile label/provenance.
+Root public make test-runner-binary-provenance:40+6tests и cache import PASS;
+actual full build/import/inventory38/38 VERIFIED ещё NOT RUN.
+Root final quick frontend221tests/9files PASS3.05s, typecheck PASS;
+gateway HTTP .054s/WS .046s, CP platform .046s/gRPC .029s, buf lint/generate
+и OpenAPI Go/TS codegen PASS. Watcher5 synthetic tests PASS121ms.
+Незапущенные full suites, actual archive/restore, MCP calls и полный Workflow
+не объявляются PASS. Checkbox2–15 остаются открытыми.

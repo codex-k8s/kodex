@@ -508,6 +508,7 @@ type Run struct {
 	ArtifactRefs, GateRefs, NextActions                                  []string
 	Incidents                                                            []Incident
 	AssistantPin                                                         *AssistantRunPin
+	SessionReadiness                                                     *RunSessionReadiness
 	CreatedAt                                                            time.Time
 	StartedAt, FinishedAt                                                *time.Time
 }

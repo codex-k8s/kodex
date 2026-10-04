@@ -1384,6 +1384,9 @@ func (repository *Repository) GetRun(ctx context.Context, principal value.Princi
 	if err != nil {
 		return entity.Run{}, err
 	}
+	if err := attachRunSessionReadiness(ctx, tx, scope, &item); err != nil {
+		return entity.Run{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.Run{}, errs.ErrUnavailable
 	}

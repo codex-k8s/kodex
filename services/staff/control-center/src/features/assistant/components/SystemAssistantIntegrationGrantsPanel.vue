@@ -21,6 +21,7 @@ import { approvalScopeOptions } from "@/features/integrations/approval-scope-opt
 import {
   readSystemGrantConnections,
   readSystemGrantCandidates,
+  readSystemGrantOwner,
   saveSystemGrant,
   selectedSystemGrantPolicy,
   validSystemGrantSelection,
@@ -34,7 +35,6 @@ const ownerLifetime = ownerRequestSignal();
 const owner = computed(() => ({
   organizationRef: platform.bootstrap?.organizationRef ?? "",
   assistantRef: props.assistant.ref,
-  assistantVersion: props.assistant.version,
 }));
 const ownerKey = computed(() => JSON.stringify(owner.value));
 const connection = ref<IntegrationConnection>();
@@ -191,8 +191,13 @@ async function loadCapabilities(
   if (!selected) return { items: [], nextPageToken: "", total: 0 };
   const current = generation;
   const combined = AbortSignal.any([signal, controller.signal, ownerLifetime]);
+  const selectedOwner = await readSystemGrantOwner(
+    owner.value.organizationRef,
+    { ref: owner.value.assistantRef },
+    combined,
+  );
   const page = await readSystemGrantCandidates(
-    owner.value,
+    selectedOwner,
     selected,
     query,
     cursor,

@@ -1,10 +1,12 @@
 import {
   changeSystemAssistantIntegrationGrant,
+  getAgent,
   getSystemAssistantIntegrationGrantCandidates,
   listIntegrationConnections,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   IntegrationConnection,
+  SystemAssistant,
   SystemAssistantIntegrationGrantCandidates,
   SystemAssistantIntegrationGrantCandidate,
   SystemAssistantIntegrationGrantInput,
@@ -36,11 +38,48 @@ const candidateReasons = [
 const positiveVersion = (value: number) =>
   Number.isSafeInteger(value) && value >= 1;
 
+// Candidate привязан к Agent, а не к агрегату статуса SystemAssistant.
+export async function readSystemGrantOwner(
+  organizationRef: string,
+  assistant: Pick<SystemAssistant, "ref">,
+  signal: AbortSignal,
+): Promise<SystemGrantOwner> {
+  signal.throwIfAborted();
+  if (!organizationRef || !assistant.ref)
+    throw new Error("Invalid system assistant grant owner");
+  const agent = (
+    await unwrap(
+      getAgent({
+        path: { agentRef: assistant.ref },
+        signal: requestSignal(signal),
+        cache: "no-store",
+      }),
+    )
+  ).data;
+  signal.throwIfAborted();
+  const system: unknown = agent.system;
+  const enabled: unknown = agent.enabled;
+  if (
+    agent.ref !== assistant.ref ||
+    system !== true ||
+    enabled !== true ||
+    agent.projectRef ||
+    !positiveVersion(agent.version)
+  )
+    throw new Error("Invalid system assistant grant owner pins");
+  return {
+    organizationRef,
+    assistantRef: agent.ref,
+    assistantVersion: agent.version,
+  };
+}
+
 export function assertSystemGrantCandidates(
   page: SystemAssistantIntegrationGrantCandidates,
   owner: SystemGrantOwner,
   connection: IntegrationConnection,
 ): void {
+  const nextPageToken: unknown = page.nextPageToken;
   if (
     !isSystemAssistantGrantScope(page.scopeKind) ||
     !owner.organizationRef ||
@@ -60,7 +99,7 @@ export function assertSystemGrantCandidates(
     page.items.length > 100 ||
     !Number.isSafeInteger(page.total) ||
     page.total < page.items.length ||
-    typeof page.nextPageToken !== "string" ||
+    (nextPageToken !== undefined && typeof nextPageToken !== "string") ||
     new Set(page.items.map((item) => item.capability.key)).size !==
       page.items.length
   )

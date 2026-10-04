@@ -1090,6 +1090,8 @@ message Run {
   // Только SYSTEM_ASSISTANT target с SYSTEM_ASSISTANT source; server-owned
   // conversation pin различает системную и проектную конфигурации помощника.
   AssistantRunPin assistant_pin = 33;
+  // Текущий авторитетный read-only snapshot session gates, только GetRun.
+  RunSessionReadiness session_readiness = 34;
 }
 
 message RunNode {
@@ -8436,4 +8438,53 @@ message AssistantIntegrationDefinition {
   repeated IntegrationConfigurationField configuration_fields = 7;
   repeated string capability_keys = 8;
   string origin = 9;
+}
+
+enum RunSessionStorageState {
+  RUN_SESSION_STORAGE_STATE_UNSPECIFIED = 0;
+  RUN_SESSION_STORAGE_STATE_UNTRACKED = 1;
+  RUN_SESSION_STORAGE_STATE_LIVE = 2;
+  RUN_SESSION_STORAGE_STATE_SNAPSHOT_READY = 3;
+  RUN_SESSION_STORAGE_STATE_SNAPSHOTTING = 4;
+  RUN_SESSION_STORAGE_STATE_DELETE_PVC_READY = 5;
+  RUN_SESSION_STORAGE_STATE_ARCHIVED = 6;
+  RUN_SESSION_STORAGE_STATE_RESTORE_READY = 7;
+  RUN_SESSION_STORAGE_STATE_RESTORING = 8;
+  RUN_SESSION_STORAGE_STATE_ERROR = 9;
+  RUN_SESSION_STORAGE_STATE_PURGED = 10;
+}
+
+enum RunSessionReadinessReason {
+  RUN_SESSION_READINESS_REASON_UNSPECIFIED = 0;
+  RUN_SESSION_READINESS_REASON_STORAGE_NOT_LIVE = 1;
+  RUN_SESSION_READINESS_REASON_SESSION_ACCOUNT_UNAVAILABLE = 2;
+  RUN_SESSION_READINESS_REASON_EARLIER_EXECUTION = 3;
+  RUN_SESSION_READINESS_REASON_NO_SESSION_BLOCKER = 4;
+}
+
+enum RunSessionArchiveTaskState {
+  RUN_SESSION_ARCHIVE_TASK_STATE_UNSPECIFIED = 0;
+  RUN_SESSION_ARCHIVE_TASK_STATE_READY = 1;
+  RUN_SESSION_ARCHIVE_TASK_STATE_CLAIMED = 2;
+  RUN_SESSION_ARCHIVE_TASK_STATE_SUCCEEDED = 3;
+  RUN_SESSION_ARCHIVE_TASK_STATE_DEAD_LETTER = 4;
+  RUN_SESSION_ARCHIVE_TASK_STATE_CANCELLED = 5;
+}
+
+message RunSessionReadiness {
+  string session_ref = 1;
+  RunSessionStorageState storage_state = 2;
+  RunSessionReadinessReason reason = 3;
+  // Последняя задача, меняющая storage; DELETE_OBJECT cleanup не подменяет её.
+  RunSessionArchiveTask latest_archive_task = 4;
+}
+
+message RunSessionArchiveTask {
+  string ref = 1;
+  SessionArchiveTaskKind kind = 2;
+  RunSessionArchiveTaskState state = 3;
+  int32 attempt = 4;
+  int32 maximum_attempts = 5;
+  // Закрытый producer whitelist; неизвестный сохранённый код становится UNKNOWN.
+  string safe_error_code = 6;
 }
