@@ -313,6 +313,42 @@ class Verifier(unittest.TestCase):
         self.fixture([[file(), file('./' + TARGET)]])
         self.reject('TAR_DUPLICATE_PATH')
 
+    def test_full_profile_preserves_literal_systemd_escaped_filename(self):
+        self.profile = 'full'
+        self.input_digest = m.profile_input(self.source_digest, self.profile)
+        self.archive = self.root / f'agent-runner-{self.input_digest}.oci.tar'
+        escaped = r'usr/lib/systemd/system/system-systemd\x2dcryptsetup.slice'
+        self.fixture([[file(), file(escaped, b'public unit fixture')]])
+        result = self.cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(m.member_path(escaped), escaped)
+        self.assertEqual(json.loads(self.output.read_bytes())['binarySHA256'], m.sha(BINARY))
+        self.assertEqual(self.cli('check').returncode, 0)
+
+    def test_literal_escape_does_not_allow_traversal_absolute_or_windows_paths(self):
+        for name in (r'usr\local\file', r'usr\..\file', r'usr/lib/\x2zescape',
+                     r'usr/lib/\x2', r'usr/lib/\xGG', r'usr/lib/\X2dfile',
+                     r'/usr/lib/\x2dfile', r'usr/../\x2dfile', r'usr//lib/\x2dfile'):
+            with self.subTest(name=name):
+                self.fixture([[file(), file(name)]])
+                self.reject('TAR_PATH_INVALID')
+
+    def test_literal_encoded_parent_never_decodes_or_selects_runner(self):
+        escaped = r'usr/\x2e\x2e/file'
+        self.assertEqual(m.member_path(escaped), escaped)
+        tree = {}
+        m.overlay_layer(tree, io.BytesIO(tar_bytes([file(escaped)])))
+        self.assertIn(escaped, tree)
+        self.assertNotIn('file', tree)
+        self.fixture([[file(r'\x2e\x2e/' + TARGET)]])
+        self.reject('RUNNER_EXECUTABLE_REQUIRED')
+
+    def test_literal_escapes_do_not_allow_runner_or_parent_links(self):
+        for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE):
+            for path in (TARGET, 'usr/local/bin'):
+                self.fixture([[(path, rb'\x2e\x2e/foreign', kind, 0o777)]])
+                self.reject()
+
     def test_outer_duplicates_and_link(self):
         self.fixture(outer=lambda entries: entries + [entries[0]])
         self.reject('TAR_DUPLICATE_PATH')

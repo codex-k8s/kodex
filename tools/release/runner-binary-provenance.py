@@ -120,7 +120,11 @@ def source_input(source, revision):
 
 
 def member_path(name):
-    require(isinstance(name, str) and '\\' not in name and '\x00' not in name and not name.startswith('/'), 'TAR_PATH_INVALID')
+    require(isinstance(name, str) and '\x00' not in name and not name.startswith('/'), 'TAR_PATH_INVALID')
+    # Systemd unit filenames содержат буквальные POSIX escapes \\xHH.
+    # Их не декодируем и не считаем разделителями: остальные backslashes
+    # по-прежнему закрыто запрещены, включая Windows/traversal spellings.
+    require('\\' not in re.sub(r'\\x[0-9a-fA-F]{2}', '', name), 'TAR_PATH_INVALID')
     if name.startswith('./'):
         name = name[2:]
     name = name.rstrip('/')

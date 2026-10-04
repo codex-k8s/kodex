@@ -1293,3 +1293,18 @@ Chrome reload: live attempt0/sequence1165, Console0, relevant bootstrap,
 session/ticket/graphs200; dialog и страница без горизонтального overflow.
 До полного QA параллельно работают три исполнителя: owner MCP health,
 provenance полного OCI и причинная диагностика archive. Checkbox2–15 OPEN.
+
+04.10.2026 17:43 UTC, tree поверх `d50d703f19082359b706f4f433c8fc319abfed31`:
+PASS — TAR_PATH_INVALID воспроизведён на обычном POSIX имени systemd
+`usr/lib/systemd/system/system-systemd\x2dcryptsetup.slice`. Verifier допускает
+только буквальный escape \xHH без декодирования; absolute/traversal/опасные
+links и прочие backslashes по-прежнему отклоняются. Root публичная проверка
+44tests16.529s +6profilefixtures3.583s и cache import contract PASS.
+Detached read-only проверка того же full OCI6f2462 прошла все18 layers и
+подтвердила binary SHA45b8801450be28439ce98d128a10f38d8f3a92d0e9bfcf4cb0b4f4a26113a518.
+Импорт/активация полного образа ещё NOT RUN.
+PASS — canonical archive build/import на чистом d50: digest
+57009c579655731b7588aac32eb4bdd6baebeb7e540915bbbcc8798deaff52e7.
+FAIL — render d50 остановился GO_TOOLCHAIN_MISMATCH: host PATH содержал
+Go1.27 вместо утверждённого1.26.6. Apply не запускался; повторный render
+будет выполнен с exact toolchain PATH, без обхода проверки.
