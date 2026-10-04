@@ -14,6 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -366,13 +368,13 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 		kind := strings.TrimPrefix(catalog.GetKind().String(), "ASSISTANT_CONFIGURATION_CATALOG_KIND_")
 		result, err := server.service.ListAssistantConfigurationCatalog(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: catalog.GetAssistantRef(), Query: catalog.GetQuery(), Offset: catalog.GetOffset(), AccountRef: catalog.GetAccountRef(), RuntimeProfileRef: catalog.GetRuntimeProfileRef()})
 		if err != nil {
-			return nil, transportError(err)
+			return nil, assistantCatalogTransportError(catalog.GetKind(), err)
 		}
 		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
 		if result.CurrentConfiguration != nil {
 			response.CurrentConfiguration, err = castAssistantCurrentConfiguration(*result.CurrentConfiguration)
 			if err != nil {
-				return nil, transportError(err)
+				return nil, assistantCatalogTransportError(catalog.GetKind(), errs.WithAssistantCurrentConfigurationStage(err, errs.AssistantCurrentTemplateProjection))
 			}
 		}
 		for _, entry := range result.Entries {
@@ -412,6 +414,15 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 		response.Results = append(response.Results, castSearchResult(item))
 	}
 	return response, nil
+}
+
+// Только own-read получает закрытый этап; остальные RPC и коды не меняются.
+func assistantCatalogTransportError(kind controlplanev1.AssistantConfigurationCatalogKind, err error) error {
+	result := transportError(err)
+	if kind != controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION || status.Code(result) != codes.Unavailable {
+		return result
+	}
+	return statusErrorWithReason(codes.Unavailable, status.Convert(result).Message(), errs.AssistantCurrentConfigurationStage(err))
 }
 
 func (server *Server) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest) (*controlplanev1.RenewExecutionResponse, error) {

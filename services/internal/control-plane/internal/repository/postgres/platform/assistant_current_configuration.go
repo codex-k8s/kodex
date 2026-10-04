@@ -19,19 +19,19 @@ var queryAssistantCurrentConfigurationOwnerInstructions string
 func (repository *Repository) assistantCurrentConfigurationTx(ctx context.Context, tx pgx.Tx, current scope, ref, assistantScope string) (entity.AssistantCurrentConfiguration, error) {
 	snapshot, err := repository.promptPreviewContextTx(ctx, tx, current, promptservice.TargetAgent, ref, query.PromptPreviewContext{ScopeOnly: true})
 	if err != nil {
-		return entity.AssistantCurrentConfiguration{}, err
+		return entity.AssistantCurrentConfiguration{}, errs.WithAssistantCurrentConfigurationStage(err, errs.AssistantCurrentPromptContext)
 	}
 	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, current, ref)
 	if err != nil {
-		return entity.AssistantCurrentConfiguration{}, err
+		return entity.AssistantCurrentConfiguration{}, errs.WithAssistantCurrentConfigurationStage(err, errs.AssistantCurrentConfigurationView)
 	}
 	result := projectAssistantCurrentConfiguration(view, snapshot)
 	if assistantScope == "SYSTEM" {
 		if err := tx.QueryRow(ctx, queryAssistantCurrentConfigurationOwnerInstructions, pgx.StrictNamedArgs{"organization_id": current.organizationID, "agent_ref": ref}).Scan(&result.SystemCoreRevision, &result.OwnerInstructions, &result.OwnerInstructionsRevision); err != nil {
-			return entity.AssistantCurrentConfiguration{}, errs.ErrUnavailable
+			return entity.AssistantCurrentConfiguration{}, errs.WithAssistantCurrentConfigurationStage(errs.ErrUnavailable, errs.AssistantCurrentOwnerCoreRead)
 		}
 		if result.SystemCoreRevision != systemassistant.CorePromptRevision {
-			return entity.AssistantCurrentConfiguration{}, errs.ErrUnavailable
+			return entity.AssistantCurrentConfiguration{}, errs.WithAssistantCurrentConfigurationStage(errs.ErrUnavailable, errs.AssistantCurrentOwnerCoreVersion)
 		}
 		result.SystemCoreInstructions = systemassistant.CorePrompt()
 	}

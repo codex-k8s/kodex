@@ -750,3 +750,30 @@ PASS7.93 s с прежним предупреждением размера bundl
 NOT RUN — actual materialized prompt proof: Pod17/18 завершились и удалены
 до bounded readback; unavailable не считается доказательством prompts.
 SYSTEM ownread/планы и дальнейшие dogfooding этапы остаются открытыми.
+
+04.10.2026 12:08–12:13 UTC, дерево поверх `163ec38d`:
+PASS — own-read диагностика сохраняет Unavailable/TOOL_UNAVAILABLE,
+добавляет только closed ErrorInfo stage и exact callback whitelist. Никаких
+сырых SQL/errors/headers/task/instructions; wrong domain/code/metadata и
+duplicate details закрыто переходят в прежний fallback.
+Go1.26.6: CP errs/grpc/repo unit .005/.761/.456 s, targeted race1.026/1.133 s,
+controller unit .901 s/race1.119 s, vet/gofmt/diffcheck PASS.
+Host/Pod own helper SHA256 CP
+`3e1fb8d9ff46067255003d27202982c6ad4df2c2053defcfa2aff687eb1764e8`,
+controller `dcd65807cfea9db155affa4b2c1557d6bdca88c4e6e0c2bcb709c035184dad12`.
+PROVEN — bootstrap во время hot restart CP временно503; повтор через штатный
+«Повторить» дал bootstrap/session200. Это не истечение SSO и не успешная
+проверка initial load во время backend restart.
+PASS — реальный no-effect ход19 `run_GsONdcurJwWHRQYujmwrltA5`
+SUCCEEDED/version2 через WSS. Но текущие настройки НЕ прочитаны: слишком
+узкая инструкция не разрешила сначала взять current_runtime из базового
+get_configuration_catalog. Ответ модели не считается PASS ownread.
+PASS — actual materialization readback до удаления Pod:
+`runtime-turn-9e9becefa2937aed`, run/node/session/turn/attempt/revision точно
+совпадают с этим ходом; AGENTS.md == immutable input.instructions,
+input.task и prompt.md содержат несекретную QA_OWN_CONFIGURATION_19,
+prompt.md содержит точный task, gpt-6.1-sol/medium/prompt-service-v2 совпадают.
+USER_TEMPLATE и7 известных PLATFORM slots присутствуют; input artifacts0,
+managed MCP profiles0. Полные тексты и secret values не печатались.
+Это доказательство одного SYSTEM хода, не каждого будущего сотрудника;
+пункт5 полностью не отмечается.

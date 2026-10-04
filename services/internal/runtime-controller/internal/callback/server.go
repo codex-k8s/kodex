@@ -29,6 +29,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -789,6 +790,27 @@ func invalidAssistantPlan(reason string) error {
 }
 
 func controlFailureClass(err error) string {
+	if value := status.Convert(err); value.Code() == codes.Unavailable {
+		details := value.Details()
+		if len(details) == 1 {
+			if info, ok := details[0].(*errdetails.ErrorInfo); ok && info.Domain == "kodex.control-plane" && len(info.Metadata) == 0 {
+				switch info.Reason {
+				case "ASSISTANT_CURRENT_CONFIGURATION_PROMPT_CONTEXT":
+					return "assistant_current_configuration_prompt_context"
+				case "ASSISTANT_CURRENT_CONFIGURATION_CONFIG_VIEW":
+					return "assistant_current_configuration_config_view"
+				case "ASSISTANT_CURRENT_CONFIGURATION_OWNER_CORE_READ":
+					return "assistant_current_configuration_owner_core_read"
+				case "ASSISTANT_CURRENT_CONFIGURATION_OWNER_CORE_VERSION":
+					return "assistant_current_configuration_owner_core_version"
+				case "ASSISTANT_CURRENT_CONFIGURATION_TEMPLATE_PROJECTION":
+					return "assistant_current_configuration_template_projection"
+				case "ASSISTANT_CURRENT_CONFIGURATION_UNCLASSIFIED":
+					return "assistant_current_configuration_unclassified"
+				}
+			}
+		}
+	}
 	switch status.Convert(err).Message() {
 	case "authority proof permission is rejected":
 		return "authority_proof_permission"
