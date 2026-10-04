@@ -14,6 +14,10 @@ function fixture() {
   const httpServer = new EventEmitter();
   const invalidation = vi.fn();
   const diagnostic = vi.fn();
+  const restart = vi.fn<() => Promise<void>>().mockImplementation(() => {
+    server.config = { ...server.config };
+    return Promise.resolve();
+  });
   let middleware: (
     request: { url: string },
     response: object,
@@ -25,9 +29,11 @@ function fixture() {
       configFile: join(root, "vite.config.ts"),
       configFileDependencies: [],
       logger: { error: diagnostic },
+      server: { hmr: false },
     },
     watcher,
     httpServer,
+    restart,
     environments: { client: { moduleGraph: { onFileChange: invalidation } } },
     middlewares: {
       use(handler: typeof middleware) {
@@ -50,7 +56,16 @@ function fixture() {
   }
   const change = (file: string, event = "change") =>
     watcher.emit(event, join(root, file));
-  return { root, watcher, httpServer, diagnostic, invalidation, read, change };
+  return {
+    root,
+    watcher,
+    httpServer,
+    diagnostic,
+    invalidation,
+    restart,
+    read,
+    change,
+  };
 }
 afterEach(() => {
   vi.useRealTimers();
@@ -140,4 +155,100 @@ test("прерванная generation не зависает молча: expired 
   expect(f.read().status).toBe(503);
   expect(f.diagnostic).toHaveBeenCalledTimes(1);
   f.httpServer.emit("close");
+});
+
+test("hmr:false не перезапускает config сам: plugin выполняет один stable server.restart", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  f.change("vite.config.ts");
+  await vi.advanceTimersByTimeAsync(1_000);
+  f.change("vite.config.ts");
+  await vi.advanceTimersByTimeAsync(1_499);
+  expect(f.restart).not.toHaveBeenCalled();
+  expect(f.read().status).toBe(204);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.restart).toHaveBeenCalledTimes(1);
+  f.httpServer.emit("close");
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test("restart failure не объявляет старый config готовым; новый config change разрешает retry", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  f.restart.mockRejectedValueOnce(new Error("private synthetic error"));
+  f.change("vite.config.ts");
+  await vi.advanceTimersByTimeAsync(1_500);
+  expect(f.read().status).toBe(503);
+  expect(f.diagnostic).toHaveBeenCalledExactlyOnceWith(
+    "Frontend development server restart failed",
+  );
+  f.change("vite.config.ts");
+  expect(f.read().status).toBe(204);
+  await vi.advanceTimersByTimeAsync(1_500);
+  expect(f.restart).toHaveBeenCalledTimes(2);
+  f.httpServer.emit("close");
+});
+
+test("server close отменяет отложенный config restart и не затрагивает другой server", async () => {
+  vi.useFakeTimers();
+  const first = fixture();
+  const second = fixture();
+  first.change("vite.config.ts");
+  second.change("vite.config.ts");
+  first.httpServer.emit("close");
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(first.restart).not.toHaveBeenCalled();
+  expect(second.restart).toHaveBeenCalledTimes(1);
+  second.httpServer.emit("close");
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test("Vite restart resolved без нового config и timeout не выдают старый kernel за READY", async () => {
+  vi.useFakeTimers();
+  const swallowed = fixture();
+  swallowed.restart.mockResolvedValue(undefined);
+  swallowed.change("vite.config.ts");
+  await vi.advanceTimersByTimeAsync(1_500);
+  expect(swallowed.read().status).toBe(503);
+  swallowed.httpServer.emit("close");
+  const expired = fixture();
+  let resolveRestart: () => void = () => undefined;
+  expired.restart.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        resolveRestart = resolve;
+      }),
+  );
+  expired.change("vite.config.ts");
+  await vi.advanceTimersByTimeAsync(31_500);
+  expect(expired.read().status).toBe(503);
+  expect(expired.diagnostic).toHaveBeenCalledTimes(1);
+  resolveRestart();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(expired.read().status).toBe(503);
+  expired.httpServer.emit("close");
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test("close во время restart закрывает watchdog; поздний reject не меняет новый lifetime", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  let rejectRestart: (reason: Error) => void = () => undefined;
+  f.restart.mockImplementation(
+    () =>
+      new Promise<void>((_resolve, reject) => {
+        rejectRestart = reject;
+      }),
+  );
+  f.change("vite.config.ts");
+  await vi.advanceTimersByTimeAsync(1_500);
+  expect(f.restart).toHaveBeenCalledTimes(1);
+  f.httpServer.emit("close");
+  expect(vi.getTimerCount()).toBe(0);
+  rejectRestart(new Error("private late rejection"));
+  f.change("vite.config.ts");
+  await vi.advanceTimersByTimeAsync(31_500);
+  expect(f.diagnostic).not.toHaveBeenCalled();
+  expect(f.restart).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
 });

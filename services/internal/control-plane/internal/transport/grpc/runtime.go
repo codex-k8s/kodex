@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -423,6 +424,23 @@ func assistantCatalogTransportError(kind controlplanev1.AssistantConfigurationCa
 		return result
 	}
 	return statusErrorWithReason(codes.Unavailable, status.Convert(result).Message(), errs.AssistantCurrentConfigurationStage(err))
+}
+
+func assistantPlanTransportError(err error) error {
+	result := transportError(err)
+	stage, category, index, ok := errs.AssistantPlanDiagnostic(err)
+	if !ok || status.Code(result) != codes.Aborted {
+		return result
+	}
+	metadata := map[string]string{"category": category}
+	if index > 0 {
+		metadata["operation_index"] = strconv.Itoa(index)
+	}
+	withDetails, detailErr := status.Convert(result).WithDetails(&errdetails.ErrorInfo{Domain: controlPlaneErrorDomain, Reason: stage, Metadata: metadata})
+	if detailErr != nil {
+		return result
+	}
+	return withDetails.Err()
 }
 
 func (server *Server) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest) (*controlplanev1.RenewExecutionResponse, error) {

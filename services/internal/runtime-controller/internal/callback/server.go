@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -729,9 +730,11 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		if errors.As(err, &invocationInputErr) {
 			failureClass = "integration_call_" + invocationInputErr.reason
 		}
-		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed",
-			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(),
-			"failure_class", failureClass)
+		attributes := []any{"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(), "failure_class", failureClass}
+		if _, index := assistantPlanFailureDiagnostic(err); index > 0 {
+			attributes = append(attributes, "operation_index", index)
+		}
+		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed", attributes...)
 	}
 	if projectionErr != nil {
 		server.logger.WarnContext(request.Context(), "runtime MCP tool projection failed",
@@ -790,6 +793,9 @@ func invalidAssistantPlan(reason string) error {
 }
 
 func controlFailureClass(err error) string {
+	if class, _ := assistantPlanFailureDiagnostic(err); class != "" {
+		return class
+	}
 	if value := status.Convert(err); value.Code() == codes.Unavailable {
 		details := value.Details()
 		if len(details) == 1 {
@@ -827,6 +833,49 @@ func controlFailureClass(err error) string {
 	default:
 		return "control_" + strings.ToLower(status.Code(err).String())
 	}
+}
+
+// Метаданные принимаются только из точного внутреннего RPC и закрытой схемы.
+func assistantPlanFailureDiagnostic(err error) (string, int) {
+	value := status.Convert(err)
+	if value.Code() != codes.Aborted || len(value.Details()) != 1 {
+		return "", 0
+	}
+	info, ok := value.Details()[0].(*errdetails.ErrorInfo)
+	if !ok || info.Domain != "kodex.control-plane" || len(info.ProtoReflect().GetUnknown()) != 0 {
+		return "", 0
+	}
+	stage := ""
+	switch info.Reason {
+	case "ASSISTANT_PLAN_HYDRATE":
+		stage = "hydrate"
+	case "ASSISTANT_PLAN_NORMALIZE":
+		stage = "normalize"
+	case "ASSISTANT_PLAN_BIND":
+		stage = "bind"
+	case "ASSISTANT_PLAN_AUTHORIZE":
+		stage = "authorize"
+	case "ASSISTANT_PLAN_EMPTY":
+		stage = "empty"
+	default:
+		return "", 0
+	}
+	category := info.Metadata["category"]
+	if category != "CONFLICT" && category != "VERSION" {
+		return "", 0
+	}
+	index := 0
+	if stage == "empty" {
+		if len(info.Metadata) != 1 {
+			return "", 0
+		}
+	} else {
+		index, _ = strconv.Atoi(info.Metadata["operation_index"])
+		if len(info.Metadata) != 2 || index < 1 || index > 32 || strconv.Itoa(index) != info.Metadata["operation_index"] {
+			return "", 0
+		}
+	}
+	return "assistant_plan_" + stage + "_" + strings.ToLower(category), index
 }
 
 func decodeMCPToolCallParams(raw json.RawMessage) (mcpToolCallParams, error) {
@@ -964,8 +1013,11 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		Summary: strings.TrimSpace(summary), Operations: operations,
 	})
 	if err != nil {
-		server.logger.WarnContext(ctx, "control-plane assistant plan request failed",
-			"grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
+		attributes := []any{"grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err)}
+		if _, index := assistantPlanFailureDiagnostic(err); index > 0 {
+			attributes = append(attributes, "operation_index", index)
+		}
+		server.logger.WarnContext(ctx, "control-plane assistant plan request failed", attributes...)
 		return nil, assistantPlanControlError(err)
 	}
 	if response.GetPlan().GetRef() == "" || response.GetConversation().GetRef() == "" {
@@ -978,6 +1030,13 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 func assistantPlanControlError(err error) error {
 	if status.Code(err) == codes.InvalidArgument {
 		return invalidAssistantPlan("server_validation")
+	}
+	if class, _ := assistantPlanFailureDiagnostic(err); class != "" {
+		info := status.Convert(err).Details()[0].(*errdetails.ErrorInfo)
+		withDetails, detailErr := status.New(status.Code(err), "propose assistant plan").WithDetails(info)
+		if detailErr == nil {
+			return withDetails.Err()
+		}
 	}
 	return status.Error(status.Code(err), "propose assistant plan")
 }
@@ -1627,7 +1686,24 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		return map[string]any{}, "platform.resources.search", "", input.IsAssistant()
 	case "propose_configuration_plan":
 		operations, _ := arguments["operations"].([]any)
-		return map[string]any{"operation_count": len(operations)}, "platform.configuration.plan", "", input.IsAssistant()
+		parameters := map[string]any{"operation_count": len(operations)}
+		if len(operations) > 0 && len(operations) <= 32 {
+			allowed := assistantOperationTypes(input)
+			types := make([]any, 0, len(operations))
+			for _, raw := range operations {
+				operation, ok := raw.(map[string]any)
+				kind, _ := operation["type"].(string)
+				if !ok || !slices.Contains(allowed, kind) {
+					types = nil
+					break
+				}
+				types = append(types, kind)
+			}
+			if len(types) == len(operations) {
+				parameters["operation_types"] = types
+			}
+		}
+		return parameters, "platform.configuration.plan", "", input.IsAssistant()
 	case "propose_assistant_metadata":
 		title, _ := arguments["title"].(string)
 		return map[string]any{"title": truncateRunes(title, 160)}, "platform.presentation.propose", "", input.IsAssistant()

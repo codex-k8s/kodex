@@ -58,7 +58,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	}
 	seen := make(map[string]struct{}, len(payload.Operations))
 	normalizedOperations := make([]entity.AssistantPlanOperation, 0, len(payload.Operations))
-	for _, operation := range payload.Operations {
+	for index, operation := range payload.Operations {
 		if assistant.Scope == "PROJECT" && !projectAssistantOperation(operation.Type) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
@@ -99,27 +99,27 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 			if (operation.Type == "CHANGE_CAPABILITY" || operation.Type == "CHANGE_INTEGRATION_GRANT") && errors.Is(err, errs.ErrConflict) {
 				continue
 			}
-			return commandOutcome{}, err
+			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanHydrate, index+1)
 		}
 		operation, err = normalizeAssistantOperation(operation)
 		if err != nil {
-			return commandOutcome{}, err
+			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanNormalize, index+1)
 		}
 		operation, err = bindAssistantOperationProject(operation, projectRef)
 		if err != nil {
-			return commandOutcome{}, err
+			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanBind, index+1)
 		}
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
 			return commandOutcome{}, err
 		}
 		if err := repository.authorizeCommand(ctx, tx, actorScope, planned); err != nil {
-			return commandOutcome{}, err
+			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
 		}
 		normalizedOperations = append(normalizedOperations, operation)
 	}
 	if len(normalizedOperations) == 0 {
-		return commandOutcome{}, errs.ErrConflict
+		return commandOutcome{}, errs.WithAssistantPlanStage(errs.ErrConflict, errs.AssistantPlanEmpty, 0)
 	}
 	planRef, err := newRef("pln")
 	if err != nil {

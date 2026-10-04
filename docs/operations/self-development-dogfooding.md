@@ -809,3 +809,37 @@ Console error/warn0. Live204 во время короткой generation не б
 OPEN — manual hard reload во время неполного SDK может упасть до main
 bootstrap catch; отдельный dev-only entry fallback/recovery готовится.
 SYSTEM Configuration Plan пока не создан/не применён; этапы2–15 открыты.
+
+04.10.2026 12:27–12:58 UTC, дерево поверх `8d57f99a`:
+PASS — actual SYSTEM ход21 `run_x_4fu7Zhi7w0kF97lmdb9IEm`
+SUCCEEDED/version2; ownread и транспорт завершены. Но сам план НЕ создан:
+propose_configuration_plan вернул Aborted, операция FAILED, count4.
+Точные четыре типа старый event не сохранял; причина пока UNKNOWN.
+Обычный heartbeat не изменяет Agent version, поэтому version drift не
+выдаётся за доказанную причину. Actual prompt21 прочитан до удаления Pod:
+immutable instructions/task/template/model/effort и семь slots совпадают.
+PASS — закрытая диагностика плана HYDRATE/NORMALIZE/BIND/AUTHORIZE/EMPTY,
+CONFLICT/VERSION и index1..32 проходит exact ErrorInfo whitelist. Public
+TOOL_UNAVAILABLE/FAILED и authority не меняются; safe operation_types
+содержит только разрешённые enum без parameters/instructions.
+Новый full MCP regression сначала выявил несовместимость []string с
+protobuf Struct; исправление на []any проверено FAIL→PASS.
+Go1.26.6 root CP errs/grpc/repo unit .004/.621/.536 s,
+controller full callback1.056 s PASS; detached targeted race/vet PASS.
+PASS — own execution snapshot публикует validated безопасные capacity/root
+workspace и отдельно SDK_DEFAULT_CACHED metadata hosted search. Это не
+проверенный native search и не новый editable ConfigOverlay; private auth
+paths/rules не выводятся, invalid policy закрыто отклоняется.
+PASS — dev-only entry fallback и bounded canonical config restart при
+hmr:false: debounce1500ms, watchdog30s, replacement proof, failure503,
+cleanup. Root23 адресных теста PASS735ms; detached53 tests783ms,
+typecheck/lint/format PASS.
+NOT ACTIVE — controlled browser entry fault12:41 не затронул приложение:
+старый Vite kernel продолжал использовать native main entry, несмотря на
+совпавший host/Pod source hash. Fault немедленно отменён. Это НЕ browser
+PASS fallback. Требуется fresh clean render и exact staff-only deployment
+по существующему frontend-bootstrap-sha256, затем повторная live проверка.
+После12:52 reload SSO запросил повторный вход; восстановление сессии идёт.
+OPEN — полный verified tool inventory образа отсутствует в producer/typed
+contract, recipe.Tools не подменяет inventory; безопасный сквозной план
+подготовлен отдельно. Checkbox2–15 не отмечаются.

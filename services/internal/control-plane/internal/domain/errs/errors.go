@@ -67,3 +67,55 @@ func assistantCurrentConfigurationStage(stage string) string {
 		return AssistantCurrentUnclassified
 	}
 }
+
+const (
+	AssistantPlanHydrate   = "ASSISTANT_PLAN_HYDRATE"
+	AssistantPlanNormalize = "ASSISTANT_PLAN_NORMALIZE"
+	AssistantPlanBind      = "ASSISTANT_PLAN_BIND"
+	AssistantPlanAuthorize = "ASSISTANT_PLAN_AUTHORIZE"
+	AssistantPlanEmpty     = "ASSISTANT_PLAN_EMPTY"
+)
+
+type assistantPlanFailure struct {
+	stage string
+	index int
+	cause error
+}
+
+func (failure *assistantPlanFailure) Error() string { return "assistant plan preparation failed" }
+func (failure *assistantPlanFailure) Unwrap() error { return failure.cause }
+
+// Диагностика не меняет status boundary и не хранит параметры операции.
+func WithAssistantPlanStage(err error, stage string, index int) error {
+	if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrVersionMismatch) || !validAssistantPlanStage(stage, index) {
+		return err
+	}
+	return &assistantPlanFailure{stage: stage, index: index, cause: err}
+}
+
+// AssistantPlanDiagnostic возвращает только закрытый этап, класс и номер операции.
+func AssistantPlanDiagnostic(err error) (stage, category string, index int, ok bool) {
+	var failure *assistantPlanFailure
+	if !errors.As(err, &failure) || !validAssistantPlanStage(failure.stage, failure.index) {
+		return "", "", 0, false
+	}
+	if errors.Is(failure.cause, ErrVersionMismatch) {
+		category = "VERSION"
+	} else if errors.Is(failure.cause, ErrConflict) {
+		category = "CONFLICT"
+	} else {
+		return "", "", 0, false
+	}
+	return failure.stage, category, failure.index, true
+}
+
+func validAssistantPlanStage(stage string, index int) bool {
+	switch stage {
+	case AssistantPlanHydrate, AssistantPlanNormalize, AssistantPlanBind, AssistantPlanAuthorize:
+		return index >= 1 && index <= 32
+	case AssistantPlanEmpty:
+		return index == 0
+	default:
+		return false
+	}
+}

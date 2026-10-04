@@ -20,6 +20,7 @@ func assistantOwnCurrentFixture(scope runtimecontract.AssistantScope) (runtimeco
 	input.RuntimeConfigRef, input.RuntimeConfigVersion, input.RuntimeConfigDigest = "cfg_previous123", 2, strings.Repeat("b", 64)
 	input.ImageManifestDigest = "sha256:" + strings.Repeat("b", 64)
 	input.ImageReference = "pull.fixture.invalid/assistant@" + input.ImageManifestDigest
+	input.WorkspacePolicy = runtimecontract.RuntimeWorkspacePolicyV1()
 	input.ProviderCredentialSHA256 = "PRIVATE_CREDENTIAL_SENTINEL"
 	input.Instructions, input.Task = "PRIVATE_EXECUTION_SENTINEL", "PRIVATE_TASK_SENTINEL"
 	digest := strings.Repeat("a", 64)

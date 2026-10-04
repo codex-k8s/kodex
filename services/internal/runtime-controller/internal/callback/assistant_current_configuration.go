@@ -72,6 +72,10 @@ func castAssistantOwnCurrentConfiguration(input runtimecontract.RunnerInput, req
 	if runtimecontract.ValidateRuntimeEnvironment(values, nil) != nil {
 		return nil, invalid
 	}
+	execution, err := assistantCurrentExecutionSnapshot(input)
+	if err != nil {
+		return nil, invalid
+	}
 	// Сериализуется только новый typed public DTO: private descriptors отсутствуют
 	// в его схеме. Не используется исходный RuntimeEnvironmentVersion или input.
 	raw, err := (protojson.MarshalOptions{UseProtoNames: true, EmitUnpopulated: true}).Marshal(current)
@@ -85,19 +89,36 @@ func castAssistantOwnCurrentConfiguration(input runtimecontract.RunnerInput, req
 	return map[string]any{"kind": "CURRENT_CONFIGURATION", "assistant_ref": input.AgentRef,
 		"scope_kind": response.GetScopeKind(), "organization_ref": response.GetOrganizationRef(), "project_ref": response.GetProjectRef(),
 		"assistant_profile_ref": response.GetAssistantProfileRef(), "entries": []any{}, "next_offset": 0,
-		"current_configuration": projection, "execution_snapshot": assistantCurrentExecutionSnapshot(input)}, nil
+		"current_configuration": projection, "execution_snapshot": execution}, nil
 }
 
 // Только безопасные pins immutable owner input, без fence, credential, input/task
 // или resolved template values; не является перечитыванием текущих настроек.
-func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) map[string]any {
+func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) (map[string]any, error) {
+	if err := input.WorkspacePolicy.Validate(); err != nil {
+		return nil, err
+	}
+	// Полный набор rules содержит private auth path. После canonical validation
+	// публикуются только безопасные capacity и фиксированные logical roots.
+	workspace := map[string]any{"revision": input.WorkspacePolicy.Revision, "root": input.WorkspacePolicy.Root,
+		"maximum_writable_bytes": input.WorkspacePolicy.MaximumWritableBytes, "maximum_file_count": input.WorkspacePolicy.MaximumFileCount,
+		"readonly_logical_roots": []string{"input", "knowledge", "context"}}
+	// Writer закреплённого Codex 0.160.0 не задаёт web_search; upstream default
+	// Cached: openai/codex@a956835d020762cb2b570053af06f643a11c0ecc,
+	// codex-rs/core/src/config/mod.rs (resolve_web_search_mode).
+	// Это metadata default, не доказательство effective mode либо native call.
+	// Hosted search не ограничивается sandbox domain allowlist и не становится
+	// editable ConfigOverlay. Полномочия и runtime ABI не меняются.
+	search := map[string]any{"configuration_source": "SDK_DEFAULT_CACHED", "owner_editable": false,
+		"sandbox_domain_allowlist_applies": false, "actual_call_verified": false}
 	return map[string]any{"run_ref": input.RunRef, "node_ref": input.NodeRef, "session_ref": input.SessionRef, "turn_ref": input.TurnRef, "attempt": input.Attempt,
 		"runtime_revision_ref": input.RuntimeRevisionRef, "runtime_revision_version": input.RuntimeRevisionVersion, "runtime_revision_digest": input.RuntimeRevisionDigest,
 		"runtime_config_ref": input.RuntimeConfigRef, "runtime_config_version": input.RuntimeConfigVersion, "runtime_config_digest": input.RuntimeConfigDigest,
 		"environment_ref": input.RuntimeEnvironmentRef, "environment_version": input.RuntimeEnvironmentVersion, "environment_digest": input.RuntimeEnvironmentDigest,
 		"image_reference": input.ImageReference, "image_manifest_digest": input.ImageManifestDigest,
 		"instruction_ref": input.InstructionRef, "instruction_digest": input.InstructionDigest, "prompt_template_ref": input.PromptTemplateRef,
-		"prompt_template_digest": input.PromptTemplateDigest, "model": input.Model, "reasoning_effort": input.EffectiveReasoningEffort}
+		"prompt_template_digest": input.PromptTemplateDigest, "model": input.Model, "reasoning_effort": input.EffectiveReasoningEffort,
+		"workspace_policy": workspace, "hosted_native_search": search}, nil
 }
 
 func validAssistantCurrentImage(input runtimecontract.RunnerInput, image *controlplanev1.RuntimeEnvironmentImage) bool {
