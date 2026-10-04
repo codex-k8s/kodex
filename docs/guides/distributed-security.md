@@ -1298,6 +1298,16 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   OpenAPI вызов получает ограниченный отказ; прежний Pod с устаревшими pins
   не обслуживает запросы через Service. Остальные listener используют свой
   Service и не зависят от переключения OpenAPI selector.
+- Закрытый Context7 adapter использует тот же owner-managed integration
+  CONNECT listener `egress-gateway-openapi:8083`, а не общий SaaS listener
+  `8080`. SHIPPED подключение без managed binding участвует в проекции только
+  при ACTIVE/enabled connection и точном совпадении key/version/digest с
+  текущим enabled definition и immutable shipped registry. Существующий
+  managed binding не обходится shipped ветвью: действуют прежние published/
+  current revision pins, проверка package/config и обязательного destination.
+  До успешного owner DNS/CNI/policy/Service/Deployment readback доступ закрыт;
+  credential/configuration values не входят в сетевую проекцию. Отсутствие
+  CONNECT origin не разрешает прямой внешний dial, другой listener или URL.
 - Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
   Он не получает direct outbound: producer из того же version-pinned typed
   mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.

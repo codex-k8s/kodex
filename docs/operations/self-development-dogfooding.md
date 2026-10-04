@@ -1003,3 +1003,34 @@ changed configuration cold start. Root quick unit: CP .059 s, workload .103 s,
 archive controller .048 s, runtimecontract .010 s; diff-check PASS.
 NOT RUN — actual native history/resume и actual archive restore на новом коде
 до canonical migration/activation; synthetic результаты этого не заменяют.
+
+04.10.2026 14:31–14:38 UTC, tree поверх `54878baf00f9b9338fd63d318fbd77e4f6027df0`:
+PASS — canonical render `render-54878baf00f9b9338fd63d318fbd77e4f6027df0.COlUG8.yaml`
+и exact control-plane-migrate stage завершены. Новая migration008 применена;
+живое восстановление thread/archive ещё не объявляется проверенным.
+PASS — Context7 transport использует exact integration CONNECT listener8083.
+Owner origins включает только ACTIVE/enabled SHIPPED Context7 без managed
+binding с точными registry/DB pins; stale managed binding не обходится.
+Root адресные unit: Context7 .286 s, integration egress .132 s; detached
+RED→GREEN component проверил managed/stale/config/disabled/deleted negatives.
+Host/Pod production hashes совпали: transport bc70f81024c17719df59186be10b9239f70475b62cbb08d42b6f28133e99d3e7;
+owner projection c637731f3e2c8922dd0e347f9db84fefe07a75d8429038b1765927a3ead50223;
+origins SQL 0330e3d5ffdccfc72479d29c85df7489fce94faccea46db104e9f695397cd0cc.
+PASS — owner projection штатно достиг generation2 с единственным
+mcp.context7.com:443, immutable policy и новым exact Service selector.
+Реальный Run26 `run_wBQD2Uwi2pJbHJ7vCO91Mq4a` подготовил plan
+`pln_6DeYA0C2d0xBfvJKCQBcEp2J` только TEST существующей version4.
+Owner UI validate/apply, authoritative connection version6/configuredtrue,
+state CONNECTED и outcome «Подключение работает»; UI показывает «Подключено».
+Внешний adapter тест подтверждён, но actual managed MCP вызовы и grants
+ещё OPEN. Console error/warn0 до этой проверки; read-only диагностические
+GET по двум неверным путям дали 405/404 и не выполняли mutations.
+PASS — новый archive image собран repo-owned скриптом, exact digest
+ed4c834991f7b352073aa05af730b560df3330af7b0fee9ae6f7e5c0133b5e5a.
+Локальный deploy selection дополнен только explicit session-archive:
+не включён в full core и запрещён для остальных stages; 10 selection tests
+PASS .230 s, bash syntax/diff-check PASS. Activation/readback ещё NOT RUN.
+Продолжается параллельная реализация native web search typed overlay,
+owner-confirmed project assistant connection specialty и signed tool inventory.
+Обязательная визуальная UX-проверка остаётся в правилах текущей цели выше.
+Checkbox2–15 не закрыты по частичному успеху.

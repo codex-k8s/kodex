@@ -14,7 +14,7 @@ import (
 const (
 	context7Origin        = "https://mcp.context7.com"
 	context7Endpoint      = context7Origin + "/mcp"
-	context7Proxy         = "http://egress-gateway.kodex-system.svc.cluster.local:8080"
+	context7Proxy         = "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083"
 	context7RequestBytes  = 16 << 10
 	context7ResponseBytes = 512 << 10
 	context7TextBytes     = 32 << 10
@@ -22,7 +22,7 @@ const (
 )
 
 func newContext7HTTPClient(config Config) (*http.Client, error) {
-	if config.ProxyURL != context7Proxy || config.Timeout < time.Second || config.Timeout > 2*time.Minute {
+	if config.OpenAPIProxyURL != context7Proxy || config.Timeout < time.Second || config.Timeout > 2*time.Minute {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
 	proxy, _ := url.Parse(context7Proxy)

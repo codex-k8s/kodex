@@ -26,7 +26,8 @@ var queryIntegrationEgressProjectionLock string
 //go:embed sql/integration_egress_projection_update.sql
 var queryIntegrationEgressProjectionUpdate string
 
-// IntegrationEgressHostnames читает только действующие owner bindings.
+// IntegrationEgressHostnames читает действующие owner bindings либо точный
+// SHIPPED Context7 package активного подключения без managed binding.
 // Наличие опубликованного draft без connection не открывает сетевой доступ.
 func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([]string, error) {
 	rows, err := repository.pool.Query(ctx, queryIntegrationEgressOrigins)
@@ -49,7 +50,7 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 		if !valid {
 			return nil, errs.ErrUnavailable
 		}
-		definition, err := repository.executableIntegrationPackage(format, content)
+		definition, err := repository.integrationEgressPackage(key, version, digest, format, content)
 		if err != nil || definition.Metadata.Key != key || definition.Metadata.Version != version || definition.Digest != digest ||
 			!definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) ||
 			(definition.Spec.Adapter != string(integrationpackage.AdapterOpenAPIMCP) && definition.Spec.Adapter != string(integrationpackage.AdapterContext7)) || definition.ValidateConfiguration(configuration) != nil {
@@ -58,6 +59,11 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 		if definition.Spec.Adapter == string(integrationpackage.AdapterContext7) {
 			if key != "context7" {
 				return nil, errs.ErrUnavailable
+			}
+			for _, destination := range repository.integrationDefinitions[key].Spec.NetworkDestinations {
+				if !definition.HasNetworkDestination(destination) {
+					return nil, errs.ErrUnavailable
+				}
 			}
 			// Единственный origin принадлежит repo-owned adapter, а не настройкам
 			// или ответу удалённого MCP. Не расширяем доступ к произвольным URLs.
@@ -101,6 +107,22 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 	}
 	slices.Sort(result)
 	return result, nil
+}
+
+func (repository *Repository) integrationEgressPackage(key, version, digest, format, content string) (integrationpackage.Package, error) {
+	if format == "" && content == "" {
+		shipped, exists := repository.integrationDefinitions[key]
+		if key != "context7" || !exists {
+			return integrationpackage.Package{}, errs.ErrUnavailable
+		}
+		definition, exact := integrationpackage.ResolveShippedRevision(shipped, version, digest)
+		if !exact {
+			return integrationpackage.Package{}, errs.ErrUnavailable
+		}
+		return definition, nil
+	}
+	// Неполный либо неверный managed snapshot никогда не подменяется shipped.
+	return repository.executableIntegrationPackage(format, content)
 }
 
 // PrepareIntegrationEgressProjection фиксирует поколение под owner row lock.

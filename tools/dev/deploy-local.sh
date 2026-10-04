@@ -49,7 +49,7 @@ if [[ -n "$selected_workload" ]]; then
     [[ "$selected_workload" == control-plane-migrate ]] ||
       fail 'migration workload selection requires control-plane-migrate'
   else
-    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service|clamav-db-updater)$ ]] ||
+    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service|clamav-db-updater|session-archive)$ ]] ||
       fail 'workload selection requires an exact core deployment'
   fi
 fi
@@ -1846,8 +1846,9 @@ PY
         fail 'ClamAV egress gateway is unavailable'
     fi
     for workload in egress-gateway control-plane secret-broker control-api-gateway \
-      staff-control-center automation-scheduler integration-gateway integration-synthetic email-bridge stt-tts-service; do
+      staff-control-center automation-scheduler integration-gateway integration-synthetic email-bridge stt-tts-service session-archive; do
       [[ "$workload" != stt-tts-service || "$selected_workload" == stt-tts-service ]] || continue
+      [[ "$workload" != session-archive || "$selected_workload" == session-archive ]] || continue
       [[ -z "$selected_workload" || "$selected_workload" == "$workload" ]] || continue
       kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=5m >/dev/null ||
         fail "local core Deployment is unavailable: $workload"

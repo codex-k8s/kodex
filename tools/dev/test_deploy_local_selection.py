@@ -33,6 +33,22 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertIn("local render is invalid", result.stderr)
         self.assertNotIn("workload selection", result.stderr)
 
+    def test_archive_is_an_explicit_core_selection_only(self):
+        result = self.run_selection("session-archive")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("local render is invalid", result.stderr)
+        source = SCRIPT.read_text()
+        core = source[source.index('  if [[ "$stage" == core ]]'):]
+        full_selection = core[core.index("apply_render core-applications"):]
+        full_selection = full_selection[:full_selection.index("      '")]
+        self.assertNotIn("session-archive", full_selection)
+        self.assertIn('[[ "$workload" != session-archive || "$selected_workload" == session-archive ]]', core)
+        for stage in ("data", "network", "migrate", "supply-chain"):
+            with self.subTest(stage=stage):
+                result = self.run_selection("session-archive", stage)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("workload selection requires", result.stderr)
+
     def test_supply_chain_reaches_render_guard_without_cluster_access(self):
         result = self.run_selection(stage="supply-chain")
         self.assertNotEqual(result.returncode, 0)

@@ -113,7 +113,8 @@ func TestContext7DeadlineAndProtocolFailure(t *testing.T) {
 }
 
 func TestContext7TransportClosedBoundary(t *testing.T) {
-	client, err := newContext7HTTPClient(Config{ProxyURL: context7Proxy, Timeout: 10 * time.Second})
+	const integrationProxy = "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083"
+	client, err := newContext7HTTPClient(Config{ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", OpenAPIProxyURL: integrationProxy, Timeout: 10 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,11 +124,13 @@ func TestContext7TransportClosedBoundary(t *testing.T) {
 	}
 	request, _ := http.NewRequest(http.MethodPost, context7Endpoint, nil)
 	proxy, _ := base.Proxy(request)
-	if proxy.String() != context7Proxy {
+	if proxy.String() != integrationProxy {
 		t.Fatal("invalid CONNECT route")
 	}
-	if _, err := newContext7HTTPClient(Config{ProxyURL: "http://127.0.0.1:8080", Timeout: time.Second}); err == nil {
-		t.Fatal("private proxy override accepted")
+	for _, invalidProxy := range []string{"", "http://127.0.0.1:8083", "http://egress-gateway.kodex-system.svc.cluster.local:8080", integrationProxy + "/", integrationProxy + "?override=1"} {
+		if _, err := newContext7HTTPClient(Config{ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", OpenAPIProxyURL: invalidProxy, Timeout: time.Second}); err == nil {
+			t.Fatal("alternate integration proxy accepted")
+		}
 	}
 	var calls int
 	transport := context7Transport{credential: "fixture-context7-key", base: roundTripFunc(func(*http.Request) (*http.Response, error) { calls++; return nil, nil })}
