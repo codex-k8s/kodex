@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -257,6 +258,432 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 		}
 		if _, err := runtimeManagedMCPProfiles(ctx, tx, organizationID, "AGENT", "agt_legacy001", "agt_legacy001", "prj_legacy001", grants); !errors.Is(err, errs.ErrConflict) {
 			t.Fatal("historical terminal granted health authority")
+		}
+	})
+	t.Run("background refresh ledger failure recovery expiry and revoke", func(t *testing.T) {
+		c := connection("refresh")
+		project := execute(command.CreateProject, "refresh-project", nil, command.ProjectInput{Name: "Refresh fixture", Language: "en"}).Project
+		agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "refresh-agent", "Refresh reader")
+		for _, key := range []string{runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability} {
+			c = *execute(command.ChangeIntegrationGrant, "refresh-"+key, &c.Version, command.IntegrationGrantInput{
+				ConnectionRef: c.Ref, CapabilityKey: key, AgentRef: agent.Ref, ApprovalPolicy: "NONE", Enabled: true}).Connection
+		}
+		// Только synthetic real-probe ledger metadata; сетевого adapter нет.
+		if _, err := pool.Exec(ctx, `INSERT INTO control_plane.integration_connection_tests
+			(ref,organization_id,connection_id,state,generation,claimed_workload,completed_at,created_by)
+			SELECT 'tst_refreshold',organization_id,id,'SUCCEEDED',1,'integration-gateway',
+			clock_timestamp()-INTERVAL '6 minutes',created_by FROM control_plane.integration_connections WHERE ref=$1`, c.Ref); err != nil {
+			t.Fatal("prepare expired synthetic receipt")
+		}
+		var organizationID string
+		if err := pool.QueryRow(ctx, `SELECT organization_id::text FROM control_plane.integration_connections WHERE ref=$1`, c.Ref).Scan(&organizationID); err != nil {
+			t.Fatal("read synthetic health organization")
+		}
+		grants := func(c entity.IntegrationConnection) []runtimecontract.RunnerIntegrationGrant {
+			result := []runtimecontract.RunnerIntegrationGrant{}
+			for _, g := range c.Grants {
+				capability, _ := r.integrationDefinitions["context7"].Capability(g.CapabilityKey)
+				schema, _ := capability.InputSchema()
+				digest, _ := capability.InputSchemaDigest()
+				result = append(result, runtimecontract.RunnerIntegrationGrant{Ref: g.Ref, GrantVersion: g.Version,
+					ConnectionRef: c.Ref, ConnectionVersion: c.Version, ApprovalPolicy: g.ApprovalPolicy, DefinitionKey: c.DefinitionKey,
+					DefinitionVersion: c.DefinitionVersion, DefinitionDigest: c.DefinitionDigest, ConnectionName: c.Name,
+					CapabilityKey: g.CapabilityKey, CapabilityName: capability.Name, CapabilityDescription: capability.Description,
+					Risk: capability.Risk, Operation: capability.Operation, InputSchema: string(schema), InputSchemaSHA256: digest})
+			}
+			return result
+		}
+		proof := func(c entity.IntegrationConnection) error {
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatal("open synthetic proof transaction")
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			_, err = runtimeManagedMCPProfiles(ctx, tx, organizationID, "AGENT", agent.Ref, agent.Ref, project.Ref, grants(c))
+			return err
+		}
+		if !errors.Is(proof(c), errs.ErrConflict) {
+			t.Fatal("expired receipt authorized required MCP")
+		}
+		version := c.Version
+		var eventBefore, eventAfter int64
+		item := claim(c.Ref)
+		if item == nil {
+			t.Fatal("owner did not enqueue and claim required refresh")
+		}
+		if duplicate := claim(c.Ref); duplicate != nil {
+			t.Fatal("duplicate concurrent refresh was claimed")
+		}
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET purpose='OWNER_TEST' WHERE ref=$1`, stringMap(item, "testRef")); err == nil {
+			t.Fatal("worker task origin changed")
+		}
+		run := execute(command.LaunchRun, "refresh-run", nil, command.LaunchRunInput{ProjectRef: project.Ref,
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Synthetic MCP owner health read"}).Run
+		controller := principal("runtime-controller", "platform.runtime.execution.claim", "kodex-system-subject", "kodex-installation")
+		runtimeClaim := func(key string) command.Result {
+			t.Helper()
+			result, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: controller,
+				Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LeaseInput{WorkloadInstance: "health-runtime-fixture", Limit: 32}})
+			if err != nil {
+				t.Fatal("synthetic readiness claim failed")
+			}
+			return result
+		}
+		assertPending := func() {
+			t.Helper()
+			readback, err := service.GetRun(ctx, owner, run.Ref)
+			if err != nil || readback.State != run.State {
+				t.Fatal("pending probe terminalized or started the runtime graph")
+			}
+			var revisions, leases int
+			if err := pool.QueryRow(ctx, `SELECT
+				(SELECT count(*) FROM control_plane.runtime_revisions revision JOIN control_plane.run_nodes n ON n.id=revision.node_id JOIN control_plane.runs r ON r.id=n.run_id WHERE r.ref=$1),
+				(SELECT count(*) FROM control_plane.runtime_leases lease JOIN control_plane.run_nodes n ON n.id=lease.node_id JOIN control_plane.runs r ON r.id=n.run_id WHERE r.ref=$1)`, run.Ref).Scan(&revisions, &leases); err != nil || revisions != 0 || leases != 0 {
+				t.Fatal("pending probe published RuntimeRevision or execution grant")
+			}
+		}
+		if len(runtimeClaim("health-pending-first").RuntimeItems) != 0 {
+			t.Fatal("pending probe was treated as successful health")
+		}
+		assertPending()
+		// Новая owner transaction/instance не сбрасывает durable wait window.
+		if len(runtimeClaim("health-pending-restart").RuntimeItems) != 0 {
+			t.Fatal("new poll bypassed pending readiness")
+		}
+		assertPending()
+		healthy := createLifecycleAgent(t, ctx, service, owner, project.Ref, "refresh-healthy", "Independent reader")
+		healthyRun := execute(command.LaunchRun, "refresh-healthy-run", nil, command.LaunchRunInput{ProjectRef: project.Ref,
+			Target: entity.RunTarget{Type: "AGENT", Ref: healthy.Ref}, Task: "Synthetic independent work"}).Run
+		mixed := runtimeClaim("health-pending-mixed")
+		if len(mixed.RuntimeItems) != 1 || stringMap(mixed.RuntimeItems[0], "runRef") != healthyRun.Ref {
+			t.Fatal("pending candidate blocked unrelated eligible work")
+		}
+		assertPending()
+		if err := pool.QueryRow(ctx, `SELECT platform_sequence FROM control_plane.installation`).Scan(&eventBefore); err != nil {
+			t.Fatal("read initial event sequence")
+		}
+		finished, err := complete("refresh-ok", item, payload(item))
+		if err != nil || finished.Connection == nil || finished.Connection.Version != version || finished.Connection.State != "CONNECTED" {
+			t.Fatal("successful refresh churned connection pins")
+		}
+		c = *finished.Connection
+		if proof(c) != nil {
+			t.Fatal("actual claimed refresh receipt did not restore freshness")
+		}
+		if err := pool.QueryRow(ctx, `SELECT platform_sequence FROM control_plane.installation`).Scan(&eventAfter); err != nil || eventBefore != eventAfter {
+			t.Fatal("successful health-only refresh emitted configuration event")
+		}
+		claimed := runtimeClaim("health-refresh-runtime-claim")
+		if len(claimed.RuntimeItems) != 1 || stringMap(claimed.RuntimeItems[0], "runRef") != run.Ref {
+			t.Fatal("fresh health did not permit immutable runtime claim")
+		}
+		var nodeID string
+		if err := pool.QueryRow(ctx, `SELECT n.id::text FROM control_plane.run_nodes n JOIN control_plane.runs r ON r.id=n.run_id WHERE r.ref=$1 AND n.ref=$2`, run.Ref, stringMap(claimed.RuntimeItems[0], "nodeRef")).Scan(&nodeID); err != nil {
+			t.Fatal("read synthetic claimed node")
+		}
+		currentHealth := func() error {
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatal("begin owner health read")
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			return requireCurrentManagedMCPHealth(ctx, tx, organizationID, nodeID, c.Ref)
+		}
+		if healthErr := currentHealth(); healthErr != nil {
+			var raw []byte
+			if err := pool.QueryRow(ctx, `SELECT safe_snapshot FROM control_plane.runtime_revisions WHERE node_id=$1::uuid`, nodeID).Scan(&raw); err != nil {
+				t.Fatal("read synthetic execution projection")
+			}
+			var snapshot map[string]json.RawMessage
+			_ = json.Unmarshal(raw, &snapshot)
+			var profiles []runtimecontract.ManagedMCPProfile
+			_ = json.Unmarshal(snapshot["managedMCPProfiles"], &profiles)
+			_, decodeErr := managedMCPInputFromOwnerSnapshot(raw)
+			t.Fatalf("protected owner health rejected synthetic execution: class=%s profiles=%d decode_invalid=%t", runtimeEligibilityErrorClass(healthErr), len(profiles), decodeErr != nil)
+		}
+		createDue := func(ref string) {
+			t.Helper()
+			if _, err := pool.Exec(ctx, `INSERT INTO control_plane.integration_connection_tests
+				(ref,organization_id,connection_id,state,created_by,purpose)
+				SELECT $2,organization_id,id,'DUE',created_by,'MANAGED_MCP_REFRESH'
+				FROM control_plane.integration_connections WHERE ref=$1`, c.Ref, ref); err != nil {
+				t.Fatal("create synthetic bounded refresh")
+			}
+		}
+		var immutableBefore, immutableAfter []byte
+		if err := pool.QueryRow(ctx, `SELECT safe_snapshot FROM control_plane.runtime_revisions WHERE node_id=$1::uuid`, nodeID).Scan(&immutableBefore); err != nil {
+			t.Fatal("read initial immutable MCP input")
+		}
+		createDue("tst_refreshsecond")
+		second := claim(c.Ref)
+		if second == nil {
+			t.Fatal("second real probe was not claimed")
+		}
+		secondResult, err := complete("refresh-second", second, payload(second))
+		if err != nil || secondResult.Connection.Version != c.Version || currentHealth() != nil {
+			t.Fatal("new fresh observation changed immutable call eligibility")
+		}
+		if err := pool.QueryRow(ctx, `SELECT safe_snapshot FROM control_plane.runtime_revisions WHERE node_id=$1::uuid`, nodeID).Scan(&immutableAfter); err != nil || !bytes.Equal(immutableBefore, immutableAfter) {
+			t.Fatal("background probe rewrote immutable execution")
+		}
+		// Все success receipts этих synthetic inputs имеют ту же current version.
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET completed_at=clock_timestamp()-INTERVAL '6 minutes' WHERE connection_id=(SELECT id FROM control_plane.integration_connections WHERE ref=$1) AND state='SUCCEEDED'`, c.Ref); err != nil {
+			t.Fatal("expire isolated same-input health receipts")
+		}
+		if currentHealth() == nil {
+			t.Fatal("live call bypassed current owner health TTL")
+		}
+		renewal := claim(c.Ref)
+		if renewal == nil {
+			t.Fatal("expired owner health was not refreshed automatically")
+		}
+		if _, err := complete("refresh-renewed", renewal, payload(renewal)); err != nil || currentHealth() != nil {
+			t.Fatal("fresh owner probe did not restore unchanged immutable execution")
+		}
+		createDue("tst_refreshfail")
+		failed := claim(c.Ref)
+		if failed == nil {
+			t.Fatal("failure fixture was not claimed")
+		}
+		bad := payload(failed)
+		bad.Success, bad.SafeErrorCode = false, "INTEGRATION_UNAVAILABLE"
+		failure, err := complete("refresh-failed", failed, bad)
+		if err != nil || failure.Connection.State != "DEGRADED" || failure.Connection.Version != c.Version+1 {
+			t.Fatal("failed refresh did not close readiness")
+		}
+		c = *failure.Connection
+		if proof(c) == nil {
+			t.Fatal("prior fresh receipt survived failed refresh")
+		}
+		if currentHealth() == nil {
+			t.Fatal("live invocation retained health authority after probe failure")
+		}
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET retry_after=clock_timestamp()-INTERVAL '1 second' WHERE ref=$1`, stringMap(failed, "testRef")); err != nil {
+			t.Fatal("advance isolated retry clock")
+		}
+		recovery := claim(c.Ref)
+		if recovery == nil || stringMap(recovery, "testRef") == stringMap(failed, "testRef") {
+			t.Fatal("recovery did not create a new immutable task")
+		}
+		recovered, err := complete("refresh-recovered", recovery, payload(recovery))
+		if err != nil || recovered.Connection.State != "CONNECTED" || recovered.Connection.Version != c.Version+1 || proof(*recovered.Connection) != nil {
+			t.Fatal("own same-input health recovery failed")
+		}
+		c = *recovered.Connection
+		createDue("tst_refreshexpiry")
+		expired := claim(c.Ref)
+		if expired == nil {
+			t.Fatal("expiry fixture was not claimed")
+		}
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET lease_expires_at=clock_timestamp()-INTERVAL '1 second' WHERE ref=$1`, stringMap(expired, "testRef")); err != nil {
+			t.Fatal("expire isolated refresh lease")
+		}
+		if claim(c.Ref) != nil {
+			t.Fatal("expired attempt bypassed retry backoff")
+		}
+		if _, err := complete("refresh-expired-completion", expired, payload(expired)); !errors.Is(err, errs.ErrNotFound) {
+			t.Fatal("expired worker published health authority")
+		}
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET retry_after=clock_timestamp()-INTERVAL '1 second' WHERE ref=$1`, stringMap(expired, "testRef")); err != nil {
+			t.Fatal("advance isolated expiry backoff")
+		}
+		retry := claim(c.Ref)
+		if retry == nil || stringMap(retry, "testRef") == stringMap(expired, "testRef") {
+			t.Fatal("expired retry reused prior receipt")
+		}
+		c = *execute(command.ChangeIntegrationGrant, "refresh-revoke", &c.Version, command.IntegrationGrantInput{
+			ConnectionRef: c.Ref, CapabilityKey: runtimecontract.Context7QueryCapability, AgentRef: agent.Ref, ApprovalPolicy: "NONE", Enabled: false}).Connection
+		if claim(c.Ref) != nil {
+			t.Fatal("revoked pair continued refresh")
+		}
+		if _, err := complete("refresh-revoked-completion", retry, payload(retry)); err == nil {
+			t.Fatal("revoked refresh published a successful receipt")
+		}
+		if currentHealth() == nil {
+			t.Fatal("revoked grant retained immutable invocation authority")
+		}
+		preparePair := func(key string) entity.IntegrationConnection {
+			t.Helper()
+			item := connection(key)
+			for _, capability := range []string{runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability} {
+				item = *execute(command.ChangeIntegrationGrant, key+capability, &item.Version, command.IntegrationGrantInput{
+					ConnectionRef: item.Ref, CapabilityKey: capability, AgentRef: agent.Ref, ApprovalPolicy: "NONE", Enabled: true}).Connection
+			}
+			return item
+		}
+		limitConnection := preparePair("retrylimit")
+		for attempt := 1; attempt <= 3; attempt++ {
+			work := claim(limitConnection.Ref)
+			if work == nil {
+				t.Fatal("bounded retry fixture was not claimed")
+			}
+			var actualAttempt int
+			if err := pool.QueryRow(ctx, `SELECT attempt FROM control_plane.integration_connection_tests WHERE ref=$1`, stringMap(work, "testRef")).Scan(&actualAttempt); err != nil || actualAttempt != attempt {
+				t.Fatal("retry task lost attempt lineage")
+			}
+			failure := payload(work)
+			failure.Success, failure.SafeErrorCode = false, "INTEGRATION_UNAVAILABLE"
+			if _, err := complete("retry-limit-"+string(rune('0'+attempt)), work, failure); err != nil {
+				t.Fatal("complete bounded retry failure")
+			}
+			if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET retry_after=clock_timestamp()-INTERVAL '1 second' WHERE ref=$1`, stringMap(work, "testRef")); err != nil {
+				t.Fatal("advance bounded retry clock")
+			}
+		}
+		if claim(limitConnection.Ref) != nil {
+			t.Fatal("exhausted health retry created unbounded work")
+		}
+		driftConnection := preparePair("recoverdrift")
+		driftWork := claim(driftConnection.Ref)
+		if driftWork == nil {
+			t.Fatal("drift fixture was not claimed")
+		}
+		driftFailure := payload(driftWork)
+		driftFailure.Success, driftFailure.SafeErrorCode = false, "INTEGRATION_UNAVAILABLE"
+		if _, err := complete("drift-failure", driftWork, driftFailure); err != nil {
+			t.Fatal("complete drift fixture failure")
+		}
+		mutateConfig(driftConnection.Ref)
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET retry_after=clock_timestamp()-INTERVAL '1 second' WHERE ref=$1`, stringMap(driftWork, "testRef")); err != nil {
+			t.Fatal("advance drift retry clock")
+		}
+		if claim(driftConnection.Ref) != nil {
+			t.Fatal("background recovery adopted configuration drift")
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO control_plane.integration_connection_tests
+			(ref,organization_id,connection_id,state,created_by,purpose,attempt,predecessor_ref)
+			SELECT 'tst_foreignprevious',organization_id,id,'DUE',created_by,'MANAGED_MCP_REFRESH',2,$2
+			FROM control_plane.integration_connections WHERE ref=$1`, limitConnection.Ref, stringMap(driftWork, "testRef")); err == nil {
+			t.Fatal("cross-connection predecessor authorized health retry")
+		}
+	})
+
+	t.Run("startup pending is exact and durably bounded", func(t *testing.T) {
+		project := execute(command.CreateProject, "pending-project", nil, command.ProjectInput{Name: "Pending fixture", Language: "en"}).Project
+		type fixture struct {
+			connection     entity.IntegrationConnection
+			agent          entity.Agent
+			organizationID string
+			grants         []runtimecontract.RunnerIntegrationGrant
+		}
+		prepare := func(key string) fixture {
+			t.Helper()
+			c := connection("pending-" + key)
+			a := createLifecycleAgent(t, ctx, service, owner, project.Ref, "pending-agent-"+key, "Pending reader "+key)
+			for _, key := range []string{runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability} {
+				c = *execute(command.ChangeIntegrationGrant, "pending-"+a.Ref+key, &c.Version, command.IntegrationGrantInput{
+					ConnectionRef: c.Ref, CapabilityKey: key, AgentRef: a.Ref, ApprovalPolicy: "NONE", Enabled: true}).Connection
+			}
+			f := fixture{connection: c, agent: a}
+			if err := pool.QueryRow(ctx, `SELECT organization_id::text FROM control_plane.integration_connections WHERE ref=$1`, c.Ref).Scan(&f.organizationID); err != nil {
+				t.Fatal("read pending fixture organization")
+			}
+			for _, g := range c.Grants {
+				capability, _ := r.integrationDefinitions["context7"].Capability(g.CapabilityKey)
+				schema, _ := capability.InputSchema()
+				digest, _ := capability.InputSchemaDigest()
+				f.grants = append(f.grants, runtimecontract.RunnerIntegrationGrant{Ref: g.Ref, GrantVersion: g.Version, ConnectionRef: c.Ref, ConnectionVersion: c.Version,
+					ApprovalPolicy: g.ApprovalPolicy, DefinitionKey: c.DefinitionKey, DefinitionVersion: c.DefinitionVersion, DefinitionDigest: c.DefinitionDigest,
+					ConnectionName: c.Name, CapabilityKey: g.CapabilityKey, CapabilityName: capability.Name, CapabilityDescription: capability.Description,
+					Risk: capability.Risk, Operation: capability.Operation, InputSchema: string(schema), InputSchemaSHA256: digest})
+			}
+			return f
+		}
+		startup := func(f fixture) error {
+			t.Helper()
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatal("begin pending fixture read")
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			if err := requireManagedMCPStartupDependencies(ctx, tx, f.organizationID, f.agent.Ref, f.grants); err != nil {
+				return err
+			}
+			_, err = runtimeManagedMCPProfilesForStartup(ctx, tx, f.organizationID, "AGENT", f.agent.Ref, f.agent.Ref, project.Ref, f.grants)
+			return err
+		}
+		due := func(f fixture, key string, ageSeconds int, attempt int, predecessor string) {
+			t.Helper()
+			if _, err := pool.Exec(ctx, `INSERT INTO control_plane.integration_connection_tests
+				(ref,organization_id,connection_id,state,created_by,purpose,created_at,attempt,predecessor_ref)
+				SELECT $2,organization_id,id,'DUE',created_by,'MANAGED_MCP_REFRESH',clock_timestamp()-$3*INTERVAL '1 second',$4,NULLIF($5,'')
+				FROM control_plane.integration_connections WHERE ref=$1`, f.connection.Ref, key, ageSeconds, attempt, predecessor); err != nil {
+				t.Fatal("insert bounded pending fixture")
+			}
+		}
+		cold := prepare("cold")
+		if !errors.Is(startup(cold), errs.ErrConflict) {
+			t.Fatal("missing real probe did not fail closed")
+		}
+		due(cold, "tst_pendingcold", 0, 1, "")
+		for poll := 0; poll < 2; poll++ {
+			if !errors.Is(startup(cold), errManagedMCPHealthPending) {
+				t.Fatal("exact DUE probe was not pending across transactions")
+			}
+		}
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET created_at=clock_timestamp() WHERE ref='tst_pendingcold'`); err == nil {
+			t.Fatal("restart reset immutable pending budget")
+		}
+		timed := prepare("timeout")
+		due(timed, "tst_pendingtimeout", 31, 1, "")
+		if !errors.Is(startup(timed), errs.ErrConflict) {
+			t.Fatal("expired 30-second pending window did not reject")
+		}
+		// Новая attempt не получает новый startup wait budget старого цикла.
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET state='FAILED',completed_at=clock_timestamp(),retry_after=clock_timestamp() WHERE ref='tst_pendingtimeout'`); err != nil {
+			t.Fatal("finish synthetic timed out probe")
+		}
+		due(timed, "tst_pendingretry", 0, 2, "tst_pendingtimeout")
+		if !errors.Is(startup(timed), errs.ErrConflict) {
+			t.Fatal("retry reset durable first-attempt window")
+		}
+		changed := prepare("config")
+		due(changed, "tst_pendingconfig", 0, 1, "")
+		mutateConfig(changed.connection.Ref)
+		if !errors.Is(startup(changed), errs.ErrConflict) {
+			t.Fatal("configuration drift was hidden by pending probe")
+		}
+		revoked := prepare("revoke")
+		due(revoked, "tst_pendingrevoke", 0, 1, "")
+		_ = execute(command.ChangeIntegrationGrant, "pending-revoke", &revoked.connection.Version, command.IntegrationGrantInput{
+			ConnectionRef: revoked.connection.Ref, CapabilityKey: runtimecontract.Context7QueryCapability, AgentRef: revoked.agent.Ref, ApprovalPolicy: "NONE", Enabled: false})
+		if !errors.Is(startup(revoked), errs.ErrConflict) {
+			t.Fatal("revoked grant was hidden by pending probe")
+		}
+		expired := prepare("lease")
+		work := claim(expired.connection.Ref)
+		if work == nil {
+			t.Fatal("claim exact lease fixture")
+		}
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET lease_expires_at=clock_timestamp()-INTERVAL '1 second' WHERE ref=$1`, stringMap(work, "testRef")); err != nil {
+			t.Fatal("expire pending fixture lease")
+		}
+		if !errors.Is(startup(expired), errs.ErrConflict) {
+			t.Fatal("expired lease was treated as current pending proof")
+		}
+		failure := prepare("failed")
+		work = claim(failure.connection.Ref)
+		if work == nil {
+			t.Fatal("claim failed refresh fixture")
+		}
+		bad := payload(work)
+		bad.Success, bad.SafeErrorCode = false, "INTEGRATION_UNAVAILABLE"
+		if _, err := complete("pending-failed", work, bad); err != nil {
+			t.Fatal("finish failed pending fixture")
+		}
+		// Общий callable path исключит DEGRADED grants; required dependency всё
+		// равно должен остановить startup, не превратить его в пустой MCP profile.
+		failure.grants = nil
+		if !errors.Is(startup(failure), errs.ErrConflict) {
+			t.Fatal("failed refresh silently removed required MCP")
+		}
+		controller := principal("runtime-controller", "platform.runtime.execution.claim", "kodex-system-subject", "kodex-installation")
+		run := execute(command.LaunchRun, "pending-failed-run", nil, command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: failure.agent.Ref}, Task: "Synthetic failed dependency"}).Run
+		if result, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: controller, Mutation: value.Mutation{IdempotencyKey: "pending-failed-runtime"}, Payload: command.LeaseInput{WorkloadInstance: "pending-failed-worker", Limit: 32}}); err != nil || len(result.RuntimeItems) != 0 {
+			t.Fatal("failed dependency created runtime work")
+		}
+		if result, err := service.GetRun(ctx, owner, run.Ref); err != nil || result.State != "FAILED" {
+			t.Fatal("failed dependency did not close runtime graph")
 		}
 	})
 }

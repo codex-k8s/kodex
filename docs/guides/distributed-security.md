@@ -1326,6 +1326,24 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   До успешного owner DNS/CNI/policy/Service/Deployment readback доступ закрыт;
   credential/configuration values не входят в сетевую проекцию. Отсутствие
   CONNECT origin не разрешает прямой внешний dial, другой listener или URL.
+  Свежесть required managed MCP подтверждается реальным owner ledger probe
+  `initialize/tools/list`, не `last_test_outcome` и не readiness самого worker.
+  CP ставит закрытые Context7 refresh tasks через прежний разрешённый claim RPC:
+  active connection, current package/credential и точная пара READ/NONE grants.
+  Успех для CONNECTED обновляет только immutable receipt, не configuration/
+  connectionVersion. TTL остаётся пять минут. На каждом invocation CP читает
+  текущий ledger и сравнивает config/credential/package и обе grant версии с
+  неизменной RuntimeRevision; новый receipt не переписывает её input/digest.
+  Failure закрывает readiness, а recovery допустим только после собственного
+  probe failure с теми же semantic inputs. Disable, revoke, delete и drift не
+  исправляются фоновой проверкой. Task origin, predecessor, lease/fence и
+  поколения сохраняются; три попытки и устойчивый backoff ограничивают retry.
+  Первый/expired proof допускает только ограниченное ожидание собственного
+  exact DUE/CLAIMED probe: не более 30 секунд от durable первой attempt,
+  без RuntimeRevision, Pod grant и health PASS. Retry/restart не продлевают
+  бюджет, другие candidates не блокируются. Missing probe, stale lease,
+  failed refresh, drift/revoke и истёкшее ожидание закрыто отклоняются;
+  DEGRADED не превращает enabled required dependency в отсутствующий tool.
 - Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
   Он не получает direct outbound: producer из того же version-pinned typed
   mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.

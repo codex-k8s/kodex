@@ -72,6 +72,42 @@ startup/readiness, exact NetworkPolicy и deployment controller/CP. Runner
 Proto является источником истины для внутреннего синхронного API. Generated Go
 code размещается рядом с потребителем и вручную не редактируется.
 
+## Текущая readiness управляемого Context7
+
+Инициатор фоновой проверки — CP в прежнем
+`RuntimeWorkService.ClaimIntegrationConnectionTests`. Actor/org и workload
+разрешаются сервером. Только exact `integration-gateway` и закрытый Context7
+с активной парой READ/NONE grants получают `MANAGED_MCP_REFRESH`; ключ остаётся
+в прежней защищённой credential projection gateway. Task фиксирует immutable
+package/config/credential/connection pins, purpose, predecessor и attempt.
+Прежние startup barrier, adapter.Test initialize/tools/list, lease/fence и
+CompleteIntegrationConnectionTest используются без нового RPC или listener.
+Refresh начинается после четырёх минут; допустимость proof остаётся пять минут.
+
+| Переход | Owner result / событие / consumer |
+| --- | --- |
+| DUE → CLAIMED | Одна task/lease, новое generation и fence; ledger читается прежним claim RPC, события нет |
+| CONNECTED refresh → SUCCEEDED | Новый настоящий receipt; connection state/version и RuntimeRevision неизменны; события нет, authoritative read — CP health ledger |
+| Refresh → FAILED | DEGRADED закрывает readiness; прежние audit/idempotency/outbox INTEGRATION_CONNECTION_CHANGED в одной транзакции |
+| Recovery → SUCCEEDED | Только собственный последний probe failure с теми же config/credential/package и активной парой grants; CONNECTED, audit/outbox прежнего события |
+| Lease expiry | Прежняя task terminal FAILED, lease очищена; поздний complete отклонён. После 30 секунд новая task/predecessor, максимум три attempts; ledger read, события нет |
+| Retry exhaustion | Новых tasks нет; свежесть не продлевается, startup/call закрыто отклоняются; явный owner Test остаётся поддерживаемым recovery path |
+| Disable/revoke/delete/config drift | Незавершённый refresh CANCELLED; новое proof не публикуется и ресурс не воскресает; ledger read, прежние события соответствующей owner command |
+| Первый/expired proof и exact собственный DUE/CLAIMED probe | Private pending оставляет только этот candidate в очереди, не создаёт RuntimeRevision/lease/Pod grant или событие; другие candidates продолжают. Общий wait не более 30 секунд от immutable created_at первой attempt этого цикла; retry/restart его не сбрасывают |
+| Expired receipt / worker outage | Fresh RuntimeRevision не выдаётся; closed eligibility stage managed_mcp. Readiness worker не заменяет upstream receipt |
+| Каждый MCP call | Прежний ResolveIntegrationInvocation читает CP-owned текущий proof, active execution lease и immutable/current config/credential/package/grant pins до постановки invocation; события чтения нет |
+| Перед внешним READ | Прежний ClaimIntegrationInvocations повторяет тот же current-health check; selected ApprovalPolicy и invocation fences остаются обязательными |
+
+Controller проверяет структуру immutable profile, а CP — текущую freshness.
+Первоначальный receipt по-прежнему проверяется на runner startup. Нельзя
+подменять старый immutable input новым временем, считать успешную прошлую
+проверку бессрочной или продолжать call после отзыва одной части grant pair.
+Отсутствующий exact probe, stale lease, истёкшее ожидание, failed refresh или
+изменение pins немедленно дают прежний closed отказ. Enabled Context7 dependency
+не исчезает молча из required startup при DEGRADED connection: callable authority
+не расширяется, а запуск без обязательного профиля отклоняется.
+Query/refresh не получают новую authority на shell, arbitrary MCP или credential.
+
 ## Package и версии
 
 ```proto

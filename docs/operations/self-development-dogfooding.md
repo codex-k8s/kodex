@@ -1308,3 +1308,26 @@ PASS — canonical archive build/import на чистом d50: digest
 FAIL — render d50 остановился GO_TOOLCHAIN_MISMATCH: host PATH содержал
 Go1.27 вместо утверждённого1.26.6. Apply не запускался; повторный render
 будет выполнен с exact toolchain PATH, без обхода проверки.
+
+04.10.2026 17:52 UTC, интеграционный tree поверх `146d4ebcf2e03f98330faea2f84c2d6ddd5ef917`:
+PASS — canonical full runner build/provenance/import завершились на146d:
+image6f2462b6e1abda05ec10f9eb2b8dc1907226a503ad532b55bcb801b542a602af,
+provenance3f73d8cd156676af99ebebcb366cbf23a0a9076b24a90e1c42ee37f72189c17f,
+binary45b8801450be28439ce98d128a10f38d8f3a92d0e9bfcf4cb0b4f4a26113a518.
+PASS — интегрированы CP-owned real MCP probes, свежий owner receipt на каждом
+invocation и pending wait не более30s от durable first attempt без новых
+RuntimeRevision/leases/Pod grants. Успешный probe не меняет configuration
+version/event; failed/degraded/revoke/drift закрывают required dependency.
+Detached disposable PostgreSQL exact source5.686s PASS: cold/expired/pending,
+timeout/restart/retry, healthy candidates, stale lease, config drift/revoke,
+failed refresh и recovery. Root CP unit .517s и archive ./... PASS;
+component evidence остаётся detached, actual auto-refresh ещё NOT RUN.
+Добавлена только forward migration016, прежние applied migrations неизменны.
+PASS — causal archive diagnostic связывает проверенный task tuple с exact
+Job UID и Pod/PVC до чтения результата и выдаёт закрытые stage/reason/exit/
+safe-code до cleanup. Raw task/termination/input/logs не выводятся; lifecycle
+и retry неизменны. Actual SNAPSHOT root cause всё ещё UNKNOWN до активации.
+Frozen оптимизация Dockerfile cache подготовлена отдельным исполнителем:
+runner source больше не будет инвалидировать toolchain/apt/npm/Chromium.
+Её actual build/time ещё NOT RUN; в текущий активируемый tree не включена.
+Checkbox2–15 OPEN; 38/38 actual inventory, MCP call и полный QA ещё впереди.

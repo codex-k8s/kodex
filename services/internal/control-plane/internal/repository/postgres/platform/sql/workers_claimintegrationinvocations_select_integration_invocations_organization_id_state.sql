@@ -5,7 +5,7 @@ SELECT i.id::text,i.ref,i.generation,i.state,c.ref,c.definition_key,c.public_con
 	COALESCE(cr.ref,''),COALESCE(cr.revision,0),COALESCE(cr.secret_ref,''),COALESCE(cr.secret_uid::text,''),
 	COALESCE(cr.secret_resource_version,''),COALESCE(cr.content_sha256,''),cr.created_at,initiator.ref,
 	COALESCE(approval.scope_paths,'{}'::text[]),COALESCE(approval.scope_digest,''),
-	COALESCE(approval.input_schema_digest,''),g.ref,i.grant_version
+	COALESCE(approval.input_schema_digest,''),g.ref,i.grant_version,n.id::text
 FROM control_plane.integration_invocations i
 JOIN control_plane.integration_connections c ON c.id=i.connection_id
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key

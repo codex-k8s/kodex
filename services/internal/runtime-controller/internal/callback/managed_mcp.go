@@ -34,7 +34,10 @@ func managedMCPTools(input runtimecontract.RunnerInput) []map[string]any {
 }
 
 func managedMCPArguments(input runtimecontract.RunnerInput, tool string, arguments map[string]any) (map[string]any, error) {
-	if runtimecontract.ValidateManagedMCPReadiness(input, time.Now().UTC()) != nil || len(input.ManagedMCPProfiles) != 1 {
+	// Freshness проверяет CP при каждом ResolveIntegrationInvocation по текущему
+	// owner ledger. Исторический immutable receipt не получает новый срок.
+	if runtimecontract.ValidateManagedMCPProfiles(input) != nil || len(input.ManagedMCPProfiles) != 1 ||
+		input.ManagedMCPProfiles[0].Health.CheckedAt.After(time.Now().UTC()) {
 		return nil, errors.New("required managed MCP health proof is unavailable")
 	}
 	profile := input.ManagedMCPProfiles[0]

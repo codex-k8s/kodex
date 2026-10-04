@@ -7,7 +7,10 @@ FROM control_plane.integration_connection_tests t
 JOIN control_plane.integration_connections c ON c.id=t.connection_id
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
-WHERE t.organization_id=$1::uuid AND t.state='DUE' AND c.enabled AND c.state='TESTING'
+WHERE t.organization_id=$1::uuid AND t.state='DUE' AND c.enabled
+  AND ((t.purpose='OWNER_TEST' AND c.state='TESTING') OR
+       (t.purpose='MANAGED_MCP_REFRESH' AND $3='integration-gateway'
+        AND control_plane.context7_health_refresh_eligible(t.organization_id,c.id)))
   AND t.input_snapshot <> '{}'::jsonb
   AND t.input_snapshot->>'connectionRef'=c.ref
   AND (t.input_snapshot->>'connectionVersion')::bigint=c.version
@@ -16,7 +19,7 @@ WHERE t.organization_id=$1::uuid AND t.state='DUE' AND c.enabled AND c.state='TE
   AND t.input_snapshot->>'definitionDigest'=c.definition_digest
   AND t.input_snapshot->>'credentialRevisionRef'=COALESCE(cr.ref,'')
   AND t.input_snapshot->>'credentialSHA256'=COALESCE(cr.content_sha256,'')
-  AND (t.attempt=1 OR t.updated_at<=clock_timestamp()-INTERVAL '5 seconds')
+  AND (t.purpose='MANAGED_MCP_REFRESH' OR t.attempt=1 OR t.updated_at<=clock_timestamp()-INTERVAL '5 seconds')
   AND d.enabled AND d.adapter_owner=$3 AND d.execution_route=$4 AND d.adapter_readiness='READY'
 ORDER BY t.created_at
 FOR UPDATE OF t SKIP LOCKED

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -33,6 +34,7 @@ const (
 )
 
 type Config struct {
+	Logger                                                                               *slog.Logger
 	WorkerNamespace, Environment, WorkerImage, WorkerServiceAccount, ObjectStorageSecret string
 	StorageClass, SessionPVCSize                                                         string
 	ObjectStorageEndpoint, ObjectStorageRegion, ObjectStorageBucket                      string
@@ -178,7 +180,7 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 			if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
 				continue
 			}
-			return controller.readResult(ctx, name, job.Status.Succeeded > 0)
+			return controller.readResult(ctx, task, job, sourcePVCUID)
 		}
 	}
 }
@@ -329,26 +331,6 @@ func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (m
 	}
 }
 
-func (controller *Controller) readResult(ctx context.Context, jobName string, succeeded bool) (model.Result, error) {
-	pods, err := controller.client.CoreV1().Pods(controller.config.WorkerNamespace).List(ctx, metav1.ListOptions{LabelSelector: "job-name=" + jobName})
-	if err != nil || len(pods.Items) != 1 {
-		return model.Result{}, errors.New("read session archive worker pod")
-	}
-	for _, status := range pods.Items[0].Status.ContainerStatuses {
-		if status.Name == "worker" && status.State.Terminated != nil {
-			var result model.Result
-			if json.Unmarshal([]byte(status.State.Terminated.Message), &result) != nil {
-				return model.Result{}, errors.New("decode session archive worker result")
-			}
-			if succeeded != result.Success {
-				return model.Result{}, errors.New("session archive worker status conflicts")
-			}
-			return result, nil
-		}
-	}
-	return model.Result{}, errors.New("session archive worker result is missing")
-}
-
 func (controller *Controller) job(name string, task model.Task, sourcePVCUID types.UID) *batchv1.Job {
 	zero, deadline, ttl := int32(0), int64(controller.config.WorkerTimeout/time.Second), int32(300)
 	falseValue := false
@@ -383,7 +365,7 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 		VolumeMounts: mounts, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 		SecurityContext: restricted(workerUID)}
 	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
-		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
+		Labels: map[string]string{managedLabel: "true"}, Annotations: workerDiagnosticAnnotations(task, sourcePVCUID)},
 		Spec: batchv1.JobSpec{BackoffLimit: &zero, ActiveDeadlineSeconds: &deadline, TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true"}}, Spec: corev1.PodSpec{
 				ServiceAccountName: controller.config.WorkerServiceAccount, AutomountServiceAccountToken: &falseValue,

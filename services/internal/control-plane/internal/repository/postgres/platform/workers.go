@@ -959,6 +959,11 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationtestsExpireStaleTestLeases, scope.organizationID, principal.CallerWorkload); err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	if principal.CallerWorkload == "integration-gateway" {
+		if err := enqueueManagedMCPHealthRefresh(ctx, tx, scope, limit); err != nil {
+			return nil, err
+		}
+	}
 	rows, err := tx.Query(ctx, queryWorkersClaimintegrationtestsSelectIntegrationConnectionTestsOrganizationIdState, scope.organizationID, limit, principal.CallerWorkload, route)
 	if err != nil {
 		return nil, errs.ErrUnavailable
@@ -1046,7 +1051,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 		healthCredentialInvalid = report.CredentialInvalid()
 	}
 	var testID, connectionID, connectionRef, storedDigest, state, leaseRef string
-	var definitionKey, connectionState string
+	var definitionKey, connectionState, purpose string
 	var connectionEnabled bool
 	var attempt int
 	var createdAt time.Time
@@ -1054,7 +1059,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	var expiresAt time.Time
 	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef, input.Principal.CallerWorkload).Scan(
 		&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt,
-		&attempt, &createdAt, &definitionKey, &connectionState, &connectionEnabled,
+		&attempt, &createdAt, &definitionKey, &connectionState, &connectionEnabled, &purpose,
 	); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
@@ -1094,6 +1099,14 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	}
 	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionTestsStateResultSummarySafeErrorCode, testID, nextTest, summary, payload.SafeErrorCode); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if purpose == "MANAGED_MCP_REFRESH" && payload.Success && connectionState == "CONNECTED" {
+		item, err := readConnection(ctx, tx, scope, connectionRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION",
+			resourceRef: connectionRef, summary: "i18n:INTEGRATION_CONNECTION_TEST_COMPLETED"}, nil
 	}
 	var item entity.IntegrationConnection
 	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionsStateMaskedCredentialsStateLastTestSummary, connectionID, nextConnection, credentials, summary).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
@@ -1158,6 +1171,11 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	if packageErr != nil || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
 		capability.Risk != risk || !capability.AllowsApprovalPolicy(approvalPolicy) || capability.ResourceScope.Kind != resourceKind || grantVersion < 1 {
 		return nil, errs.ErrForbidden
+	}
+	if definitionKey == "context7" {
+		if err := requireCurrentManagedMCPHealth(ctx, tx, scope.organizationID, nodeID, input["connection_ref"]); err != nil {
+			return nil, err
+		}
 	}
 	canonicalInput, err := capability.ValidateInput(encodedInput)
 	if err != nil {
@@ -1339,7 +1357,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		return nil, errs.ErrUnavailable
 	}
 	type candidate struct {
-		id, ref, state, connectionRef, definitionKey, capabilityKey          string
+		id, ref, state, connectionRef, definitionKey, capabilityKey, nodeID  string
 		initiatorRef                                                         string
 		definitionVersion, definitionDigest, operation, risk, approvalPolicy string
 		resourceKind, resourceScopeDigest, effectKey, inputDigest            string
@@ -1364,7 +1382,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
 			&item.credentialCreatedAt, &item.initiatorRef,
 			&item.approvalScopePaths, &item.approvalScopeDigest, &item.approvalSchemaDigest,
-			&item.grantRef, &item.grantVersion,
+			&item.grantRef, &item.grantVersion, &item.nodeID,
 		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
@@ -1381,6 +1399,11 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		initiatorScope.actorRef = item.initiatorRef
 		if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef}); err != nil {
 			continue
+		}
+		if item.definitionKey == "context7" {
+			if err := requireCurrentManagedMCPHealth(ctx, tx, scope.organizationID, item.nodeID, item.connectionRef); err != nil {
+				return nil, err
+			}
 		}
 		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
 		if err != nil {

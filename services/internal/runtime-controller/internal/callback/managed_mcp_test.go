@@ -126,7 +126,7 @@ func TestManagedMCPAliasesResolveExactOwnerConnectionAndProjectSafeActivity(t *t
 	}
 }
 
-func TestManagedMCPRejectsUnboundOrStaleHealthBeforeAnyOwnerCall(t *testing.T) {
+func TestManagedMCPRejectsUnboundHealthBeforeAnyOwnerCall(t *testing.T) {
 	base := managedMCPCallbackFixture(t)
 	for name, mutate := range map[string]func(*runtimecontract.RunnerInput){
 		"missing profile":     func(i *runtimecontract.RunnerInput) { i.ManagedMCPProfiles = nil },
@@ -142,10 +142,6 @@ func TestManagedMCPRejectsUnboundOrStaleHealthBeforeAnyOwnerCall(t *testing.T) {
 		},
 		"legacy outcome": func(i *runtimecontract.RunnerInput) { i.ManagedMCPProfiles[0].Health.Probe = "LAST_TEST_OUTCOME" },
 		"wrong scope":    func(i *runtimecontract.RunnerInput) { i.ManagedMCPProfiles[0].ScopeRef = "agt_foreign01" },
-		"stale": func(i *runtimecontract.RunnerInput) {
-			i.ManagedMCPProfiles[0].Health.CheckedAt = time.Now().UTC().Add(-6 * time.Minute)
-			rederiveManagedMCPCallback(t, i)
-		},
 		"future": func(i *runtimecontract.RunnerInput) {
 			i.ManagedMCPProfiles[0].Health.CheckedAt = time.Now().UTC().Add(time.Minute)
 			rederiveManagedMCPCallback(t, i)
@@ -182,6 +178,22 @@ func rederiveManagedMCPCallback(t *testing.T, input *runtimecontract.RunnerInput
 		t.Fatal(err)
 	}
 	input.ManagedMCPProfiles[0] = derived
+}
+
+func TestManagedMCPImmutableOldReceiptDefersFreshnessToOwner(t *testing.T) {
+	input := managedMCPCallbackFixture(t)
+	input.ManagedMCPProfiles[0].Health.CheckedAt = time.Now().UTC().Add(-time.Hour)
+	rederiveManagedMCPCallback(t, &input)
+	original, _ := json.Marshal(input.ManagedMCPProfiles)
+	mapped, err := managedMCPArguments(input, runtimecontract.Context7ResolveTool,
+		map[string]any{"library_name": "Go", "query": "docs"})
+	if err != nil || mapped["grant_ref"] != input.IntegrationGrants[0].Ref {
+		t.Fatal("immutable receipt prevented authoritative owner health check")
+	}
+	after, _ := json.Marshal(input.ManagedMCPProfiles)
+	if string(original) != string(after) {
+		t.Fatal("local guard rewrote immutable health proof")
+	}
 }
 
 func TestManagedMCPClosedInputGuardPrecedesOwnerMutation(t *testing.T) {

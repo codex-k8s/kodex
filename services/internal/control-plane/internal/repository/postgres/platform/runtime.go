@@ -773,7 +773,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			} else if runtimeAssistantScope(stableKey) == runtimecontract.AssistantScopeProject {
 				mcpScopeKind, mcpScopeRef = "PROJECT", candidate.assistantProfileRef
 			}
-			managedMCPProfiles, err := runtimeManagedMCPProfiles(ctx, tx, scope.organizationID, mcpScopeKind, mcpScopeRef, agentRef, projectRef, runtimeRevisionGrants(integrationGrants))
+			eligibilityStage = "managed_mcp"
+			if err := requireManagedMCPStartupDependencies(ctx, tx, scope.organizationID, agentRef, runtimeRevisionGrants(integrationGrants)); err != nil {
+				return commandOutcome{}, err
+			}
+			managedMCPProfiles, err := runtimeManagedMCPProfilesForStartup(ctx, tx, scope.organizationID, mcpScopeKind, mcpScopeRef, agentRef, projectRef, runtimeRevisionGrants(integrationGrants))
 			if err != nil {
 				return commandOutcome{}, err
 			}
@@ -966,6 +970,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		if err := candidateTx.Rollback(ctx); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if errors.Is(candidateErr, errManagedMCPHealthPending) {
+			continue
 		}
 		if !runtimeCandidateEligibilityFailure(candidateErr) {
 			return commandOutcome{}, candidateErr

@@ -60,7 +60,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize,
 		ObjectStorageEndpoint: config.ObjectStorageEndpoint, ObjectStorageRegion: config.ObjectStorageRegion,
 		ObjectStorageBucket: config.ObjectStorageBucket, ObjectStorageAllowInsecureLocal: config.ObjectStorageAllowInsecureLocal,
-		WorkerTimeout: config.WorkerTimeout})
+		WorkerTimeout: config.WorkerTimeout, Logger: logger})
 	if err != nil {
 		_ = control.Close()
 		return err
