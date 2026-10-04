@@ -1034,3 +1034,25 @@ PASS .230 s, bash syntax/diff-check PASS. Activation/readback ещё NOT RUN.
 owner-confirmed project assistant connection specialty и signed tool inventory.
 Обязательная визуальная UX-проверка остаётся в правилах текущей цели выше.
 Checkbox2–15 не закрыты по частичному успеху.
+
+04.10.2026 14:39–14:48 UTC, tree поверх `1309e85a4235826929c33044405a289495c741a5`:
+FAIL — реальные соседние Run27/28 завершились PROVIDER_UNAVAILABLE.
+Safe provider log Run28 дал THREAD_BIND/classPROVIDER/detailNONE до model
+request; это не доказательство сетевой ошибки OpenAI. Prompt proof26/28
+UNAVAILABLE/INPUT_NOT_READY после cleanup Pod, не CAPTURED.
+Pinned Codex CLI0.160.0 в disposable CODEX_HOME без credential/provider
+calls сгенерировал официальную JSON schema: ThreadResumeResponse содержит
+nullable collaborationMode, отсутствующий в закрытом decoder Kodex.
+Официальная документация App Server Start or resume a thread проверена.
+RED — synthetic exact nullable/typed resume fixture отклонён до изменения;
+добавлен только закрытый typed nullable mode/default|plan/settings decoder,
+metadata отбрасывается, не назначает current model/authority/instructions и
+не публикуется. Invalid/unknown/type negatives остаются закрытыми.
+Actual cause окончательно подтверждается только повторным live resume после
+canonical runner rebuild/activation; до этого OPEN.
+FAIL — точечный session-archive deployment выявил ошибку trusted render:
+Air entrypoint потерял обязательный controller argument; child завершился
+«session-archive mode is required». Исправлен renderer argument, explicit
+selection и сохранение аргумента закреплены 10 tests PASS .310 s.
+NOT RUN — actual native resume/archive и managed Context7 tool calls до
+активации этого исправления и остальных pending image changes.

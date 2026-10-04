@@ -246,6 +246,40 @@ func marshalProtocolFixture(t *testing.T, value any) json.RawMessage {
 	return encoded
 }
 
+func TestThreadResumeAcceptsCodex160CollaborationModeMetadata(t *testing.T) {
+	for _, metadata := range []any{nil,
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "reasoning_effort": nil, "developer_instructions": nil}},
+		map[string]any{"mode": "plan", "settings": map[string]any{"model": "codex", "reasoning_effort": "high", "developer_instructions": "discarded-private-instructions"}},
+	} {
+		state := newProtocolState(testThreadID)
+		response := map[string]any{"approvalPolicy": "never", "approvalsReviewer": "user", "cwd": "/workspace", "model": "codex", "modelProvider": "openai", "sandbox": map[string]any{"type": "readOnly"}, "thread": codex160ThreadFixture(t), "collaborationMode": metadata}
+		if err := state.bindThread(marshalProtocolFixture(t, response), "codex", "/workspace", "never"); err != nil {
+			t.Fatal("pinned Codex resume collaboration metadata rejected")
+		}
+		if state.threadID != testThreadID || state.workspaceRoot != "/workspace" || bytes.Contains(marshalProtocolFixture(t, state.result), []byte("discarded-private")) {
+			t.Fatal("resume metadata changed authority or leaked discarded instructions")
+		}
+	}
+}
+
+func TestThreadResumeRejectsInvalidCollaborationModeMetadata(t *testing.T) {
+	for _, metadata := range []any{1, "private", []any{},
+		map[string]any{"mode": "unknown", "settings": map[string]any{"model": "codex"}},
+		map[string]any{"mode": "default"},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": nil}},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "reasoning_effort": 2}},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "developer_instructions": false}},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "unknown": "private"}},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex"}, "unknown": "private"},
+	} {
+		state := newProtocolState(testThreadID)
+		response := map[string]any{"approvalPolicy": "never", "approvalsReviewer": "user", "cwd": "/workspace", "model": "codex", "modelProvider": "openai", "sandbox": map[string]any{"type": "readOnly"}, "thread": codex160ThreadFixture(t), "collaborationMode": metadata}
+		if err := state.bindThread(marshalProtocolFixture(t, response), "codex", "/workspace", "never"); err == nil || state.threadID != "" || state.result.SessionID != "" {
+			t.Fatal("invalid resume metadata accepted or partially bound")
+		}
+	}
+}
+
 func TestCodex160ThreadMetadataIsTypedAndDiscarded(t *testing.T) {
 	for _, nullable := range []bool{false, true} {
 		thread := codex160ThreadFixture(t)

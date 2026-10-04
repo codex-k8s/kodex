@@ -1821,7 +1821,7 @@ if [[ "$security_profile" == trusted-cluster ]]; then
   # использует exact image с вшитым бинарём для краткоживущих archive Jobs.
   protected_render=$render
   render=$output
-  patch_go_container Deployment session-archive session-archive services/jobs/session-archive ./cmd/session-archive
+  patch_go_container Deployment session-archive session-archive services/jobs/session-archive ./cmd/session-archive controller
   render=$protected_render
   yq -o=json -I=0 '.' "$output" | jq -s '.' |
     python3 -B "$repository_root/tools/dev/trusted_cluster_render.py" materialize \

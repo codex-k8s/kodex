@@ -226,13 +226,16 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 
 func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expectedWorkspace, expectedApproval string) error {
 	fields, err := decodeObject(raw, schema([]string{"approvalPolicy", "approvalsReviewer", "cwd", "model", "modelProvider", "sandbox", "thread"},
-		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "cwd", "disabledPluginIds", "initialTurnsPage", "instructionSources", "itemsBackwardsCursor",
+		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "collaborationMode", "cwd", "disabledPluginIds", "initialTurnsPage", "instructionSources", "itemsBackwardsCursor",
 		"model", "modelProvider", "multiAgentMode", "reasoningEffort", "runtimeWorkspaceRoots", "sandbox", "serviceTier", "thread", "turnsBackwardsCursor"))
 	if err != nil {
 		return errors.New("Codex app-server thread response is invalid")
 	}
 	if plugins, present := fields["disabledPluginIds"]; present && !validThreadMetadataStrings(plugins, 256, 512) {
 		return errors.New("Codex app-server thread plugin metadata is invalid")
+	}
+	if collaboration, present := fields["collaborationMode"]; present && !validThreadCollaborationMetadata(collaboration) {
+		return errors.New("Codex app-server thread collaboration metadata is invalid")
 	}
 	model, modelErr := decodeBoundedString(fields["model"], 128)
 	cwd, cwdErr := decodeBoundedString(fields["cwd"], 4096)
@@ -252,6 +255,41 @@ func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expec
 	state.workspaceRoot = expectedWorkspace
 	state.result.SessionID = threadID
 	return nil
+}
+
+// ThreadResumeResponse rust-v0.160.0 добавляет nullable collaborationMode.
+// Проверенные метаданные не подменяют immutable выбор модели, reasoning,
+// инструкций или полномочий текущего хода и не попадают в результат/логи.
+func validThreadCollaborationMetadata(raw json.RawMessage) bool {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return true
+	}
+	fields, err := decodeObject(raw, schema([]string{"mode", "settings"}, "mode", "settings"))
+	if err != nil {
+		return false
+	}
+	mode, err := decodeBoundedString(fields["mode"], 16)
+	if err != nil || (mode != "default" && mode != "plan") {
+		return false
+	}
+	settings, err := decodeObject(fields["settings"], schema([]string{"model"}, "model", "reasoning_effort", "developer_instructions"))
+	if err != nil {
+		return false
+	}
+	model, err := decodeBoundedString(settings["model"], 128)
+	if err != nil || model == "" {
+		return false
+	}
+	for key, maximum := range map[string]int{"reasoning_effort": 128, "developer_instructions": 64 << 10} {
+		value, present := settings[key]
+		if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			continue
+		}
+		if !validThreadMetadataString(value, maximum) {
+			return false
+		}
+	}
+	return true
 }
 
 func (state *protocolState) bindThreadRead(raw json.RawMessage) error {

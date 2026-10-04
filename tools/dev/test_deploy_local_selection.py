@@ -43,6 +43,8 @@ class DeployLocalSelectionTest(unittest.TestCase):
         full_selection = full_selection[:full_selection.index("      '")]
         self.assertNotIn("session-archive", full_selection)
         self.assertIn('[[ "$workload" != session-archive || "$selected_workload" == session-archive ]]', core)
+        renderer = SCRIPT.with_name("render-local.sh").read_text()
+        self.assertIn("patch_go_container Deployment session-archive session-archive services/jobs/session-archive ./cmd/session-archive controller", renderer)
         for stage in ("data", "network", "migrate", "supply-chain"):
             with self.subTest(stage=stage):
                 result = self.run_selection("session-archive", stage)
