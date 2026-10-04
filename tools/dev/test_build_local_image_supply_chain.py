@@ -33,10 +33,10 @@ def event(kind, target="", delta=0, child=0):
                                          pid=os.getpid(), child=child)) + "\n")
         return active
 if name == "git":
-    print("a" * 40)
+    print(os.environ.get("BUILD_REVISION", "a" * 40))
 elif name == "kubectl":
     if args == ["config", "current-context"]:
-        print("synthetic-staging")
+        print("k3d-import-fixture" if os.environ.get("IMPORT_K3D") else "synthetic-staging")
     else:
         print(json.dumps({"metadata": {"labels": {
             "app.kubernetes.io/part-of": "kodex", "kodex.dev/environment": "staging"}}}))
@@ -52,6 +52,29 @@ elif name == "import-local-image.sh":
     assert args[args.index("--exact-reference") + 1] == repository + "@sha256:" + "b" * 64
 elif name == "docker" and args[:2] == ["buildx", "version"]:
     pass
+elif name == "k3d":
+    if args[:2] == ["image", "import"]:
+        event("archive_import")
+    elif args == ["node", "list", "-o", "json"]:
+        print(json.dumps([{"name": "k3d-import-fixture-server-0", "role": "server"},
+                          {"name": "k3d-import-fixture-agent-0", "role": "agent"}]))
+    else:
+        sys.exit(94)
+elif name == "docker" and args[0] == "exec":
+    node, command = args[1], args[2:]
+    assert command[:3] == ["ctr", "-n", "k8s.io"]
+    command = command[3:]
+    if command[:3] == ["images", "tag", "--force"]:
+        assert command[-1] == os.environ["IMPORT_REFERENCE"]
+        event("node_tag", node)
+    elif command == ["images", "list", "--quiet"]:
+        if node != os.environ.get("MISSING_IMPORT_NODE"):
+            print(os.environ["IMPORT_REFERENCE"])
+    elif command[:2] == ["content", "get"]:
+        event("node_digest_readback", node)
+        sys.stdout.write(os.environ["IMPORT_MANIFEST"])
+    else:
+        sys.exit(95)
 elif name == "docker" and args[:2] == ["buildx", "build"]:
     tag = args[args.index("--tag") + 1]
     target = tag.split(":")[0].rsplit("/", 1)[-1]
@@ -115,7 +138,7 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         mock = self.root / "mock.py"
         mock.write_text(MOCK)
         mock.chmod(0o700)
-        for name in ("git", "kubectl", "docker"):
+        for name in ("git", "kubectl", "docker", "k3d"):
             (self.bin / name).symlink_to(mock)
         for name in ("ensure-local-buildx-builder.sh", "import-local-image.sh"):
             (self.source / "tools/dev" / name).symlink_to(mock)
@@ -169,11 +192,50 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         self.assertEqual(repeated.returncode, 0, repeated.stderr)
         self.assertEqual([item["target"] for item in self.events()[before:] if item["kind"] == "start"],
                          ["image-admission-tools-load"])
+        self.assertEqual([item["target"] for item in self.events()[before:] if item["kind"] == "import"],
+                         list(IMAGE_NAMES), "cache hit must restore every exact image, not trust previous pointers")
+
+    def test_commit_only_change_invalidates_versioned_recipe_in_all_profiles(self):
+        for component in ("all", "image-admission", "authority-security"):
+            with self.subTest(component=component):
+                first = self.run_build(4, component=component)
+                self.assertEqual(first.returncode, 0, first.stderr)
+                before = len(self.events())
+                revision = {"all": "c", "image-admission": "d", "authority-security": "e"}[component] * 40
+                (self.state / "cache/image-supply-chain" / f"role-input-{revision}.oci.tar").write_text("cached synthetic role input")
+                second = self.run_build(4, component=component, BUILD_REVISION=revision)
+                self.assertEqual(second.returncode, 0, second.stderr)
+                starts = [item["target"] for item in self.events()[before:] if item["kind"] == "start"]
+                expected = list(IMAGE_NAMES) + ["image-admission-tools-load"] if component == "all" else (
+                    ["image-admission"] if component == "image-admission" else ["internal-rpc-authority", "image-admission"])
+                self.assertCountEqual(starts, expected, "new SOURCE_SHA/VERSION must not reuse the old OCI archive")
 
     def test_default_remains_sequential(self):
         result = self.run_build()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(max(item["active"] for item in self.events()), 1)
+
+    def test_cached_import_requires_exact_reference_and_digest_on_every_node(self):
+        import hashlib
+        manifest = '{"schemaVersion":2,"layers":[]}'
+        digest = "sha256:" + hashlib.sha256(manifest.encode()).hexdigest()
+        repository = "registry.local.kodex/kodex/role-image-builder"
+        reference = repository + "@" + digest
+        archive = self.root / "cached.oci.tar"
+        archive.write_text("synthetic cached archive")
+        args = ["bash", str(SCRIPT.with_name("import-local-image.sh")),
+                "--context", "k3d-import-fixture", "--archive", str(archive),
+                "--repository", repository, "--tag", repository + ":cached", "--exact-reference", reference]
+        environment = dict(self.environment, IMPORT_K3D="1", IMPORT_MANIFEST=manifest, IMPORT_REFERENCE=reference)
+        result = subprocess.run(args, env=environment, capture_output=True, text=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        nodes = {"k3d-import-fixture-server-0", "k3d-import-fixture-agent-0"}
+        self.assertEqual({item["target"] for item in self.events() if item["kind"] == "node_tag"}, nodes)
+        self.assertEqual({item["target"] for item in self.events() if item["kind"] == "node_digest_readback"}, nodes)
+        result = subprocess.run(args, env=dict(environment, MISSING_IMPORT_NODE="k3d-import-fixture-server-0"),
+                                capture_output=True, text=True, timeout=12)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("immutable image reference is absent", result.stderr)
 
     def test_failed_build_cancels_siblings_without_import_or_pointer(self):
         result = self.run_build(4, FAIL_BUILD="image-admission")

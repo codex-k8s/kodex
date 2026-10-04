@@ -45,6 +45,15 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("называет главную страницу понятно и не дублирует маршрут в компактном контексте", () => {
+    expect(source).toContain('route.name === "home"');
+    expect(source).toContain('return t("nav.home")');
+    const contextStrip = template
+      .split('class="assistant-context-strip"')[1]
+      ?.split("</button>")[0];
+    expect(contextStrip).toContain("{{ contextTitle }}");
+    expect(contextStrip).not.toContain("{{ context.route }}");
+  });
   it("не создаёт пустой successful fallback bubble только при авторитетном terminal binding", () => {
     expect(source).toContain("assistantTurnIsEmptyTerminalReceipt(");
     expect(source).toContain("!turnIsEmptyTerminalReceipt(turn)");

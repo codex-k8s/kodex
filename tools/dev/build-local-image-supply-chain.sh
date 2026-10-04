@@ -112,11 +112,9 @@ compute_input_digest() {
       sha256sum | awk '{print $1}'
   ) || fail 'supply-chain inputs cannot be read'
   [[ "$digest" =~ ^[a-f0-9]{64}$ ]] || fail 'supply-chain input digest is invalid'
-  if [[ "$component" == authority-security ]]; then
-    # VERSION/SOURCE_SHA входят в recipe: одинаковое дерево нового commit не
-    # должно возвращать старую versioned binary из прежнего cache key.
-    digest=$(printf '%s\n%s\n%s\n' "$digest" "$source_revision" "$component" | sha256sum | awk '{print $1}')
-  fi
+  # VERSION/SOURCE_SHA входят во все recipes: новый commit с тем же деревом
+  # не должен возвращать прежнюю binary или OCI revision label из кэша.
+  digest=$(printf '%s\n%s\n%s\n' "$digest" "$source_revision" "$component" | sha256sum | awk '{print $1}')
   printf '%s' "$digest"
 }
 input_digest=$(compute_input_digest)

@@ -1358,3 +1358,41 @@ live apply и измерение ускорения NOT RUN. Подтвержд�
 До полного QA три дочерних исполнителя параллельно разбирают owner completion,
 supply-chain pull/readback и доказательство full tool inventory; основной
 агент интегрирует и проверяет нормальные UI-сценарии. Checkbox2–15 OPEN.
+
+04.10.2026 18:32 UTC, интеграционный tree поверх `cff85db56f8133ef542ee9db52f78c830a8a07c0`:
+FAIL — реальный UI Context7 ход34/run_GeDLStqQ-M_wluMF1OUytLxi завершён
+SUCCEEDED, но resolve получил Tool authorization unavailable, query не вызван.
+Не считаем успех хода доказательством MCP. Actual full6f использовался тремя
+контейнерами; input prompt materialization не успела до удаления Pod: NOT RUN.
+Найдена точная source причина: CP toolCapabilityMatches принимал только
+invoke_integration, отвергая Context7 aliases до effect. Минимальная правка
+разрешает каждый alias только со своей capability и exact integration grant;
+прочие owner/lease/SQL проверки неизменны. Root адресные unit PASS .069s;
+реальный повтор после hot reload ещё NOT RUN.
+PASS — архивный source failure воспроизведён disposable SQLSTATE23505 в обоих
+scope: повторный snapshot того же content generation после active→terminal.
+Forward migration017 вводит publication uniqueness с отдельным object key,
+не переписывает immutable receipt и не меняет applied migrations.
+Detached canonical SYSTEM/PROJECT roundtrip FAIL→PASS6.684s: restore/GC,
+два DELETED старых receipt, новая current publication, неизменное поколение,
+byte-equal immutable columns, idempotent replay и exact current restore.
+Все read paths привязаны к archive id/current_archive_id, не только generation.
+Actual migration017 и повторный live snapshot ещё NOT RUN.
+PASS — canonical full rebuild/import на чистом cff85 с новым layer layout:
+image498b9012b2549d18ce0adc99ac8742d043f95950d0af435a2fcde0a40c696aab,
+provenancef6ab103a16c51d4b588c43b38111d01f65c45989870280a85b0d3805b9ad53ae,
+binary45b8801450be28439ce98d128a10f38d8f3a92d0e9bfcf4cb0b4f4a26113a518.
+Первый переход перестроил toolchain/heavy layers; последующее ускорение ещё
+не измерено. Archive image716009bbbb4cb52fdd50befb084f78567aff95feef806a123c72edb830b0a885
+также построен и импортирован. Их новая активация ещё NOT RUN.
+PASS — cache key supply-chain теперь включает HEAD для всех versioned recipes;
+Root11hermetic tests21.557s. Старый authority fixture исправлен под direct
+kubectl без изменения production CLI, negative boundaries сохранены.
+Actual исчезновение старого builder image из node cache остаётся UNKNOWN;
+новый canonical all build/import завершён, но новый render ещё не применён.
+PASS — frontend37unit .531s и typecheck: Главная вместо slash в контексте,
+дублирующий raw route убран из компактной шапки; visual recheck ещё NOT RUN.
+UI helper35 самостоятельно создал typed план собственного standard образа
+pln_sHFqfPWwNm04gJykxewQiKOk; обычная Validate прошла, Apply ещё NOT RUN.
+Перед Apply после смены full base нужен свежий readback шаблона и каталога.
+Checkbox2–15 OPEN: полный tool inventory/build/admit/promote и Workflow впереди.

@@ -307,7 +307,14 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 		return integration && capability == ""
 	}
 	if integration {
-		return tool == "invoke_integration" && capability != ""
+		switch tool {
+		case runtimecontract.Context7ResolveTool:
+			return capability == runtimecontract.Context7ResolveCapability
+		case runtimecontract.Context7QueryTool:
+			return capability == runtimecontract.Context7QueryCapability
+		default:
+			return tool == "invoke_integration" && capability != ""
+		}
 	}
 	switch tool {
 	case runtimecontract.NativeToolKindShell, runtimecontract.NativeToolKindFileChange,

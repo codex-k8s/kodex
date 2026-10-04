@@ -410,6 +410,13 @@ const configurationKinds = new Set([
   "SYSTEM_STT",
 ]);
 const contextTitle = computed(() => {
+  if (
+    route.name === "home" &&
+    !props.context.entityRef &&
+    !checkedContext.value?.entityRef
+  ) {
+    return t("nav.home");
+  }
   const kind = route.params.kind;
   if (
     !props.context.entityName &&
@@ -1934,7 +1941,6 @@ onBeforeUnmount(() => {
             >
               <span>{{ $t("assistant.context") }}</span>
               <strong>{{ contextTitle }}</strong>
-              <small>{{ context.route }}</small>
             </button>
             <section
               v-if="createdDefinitionRef"

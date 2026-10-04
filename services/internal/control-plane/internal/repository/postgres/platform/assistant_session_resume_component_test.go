@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -100,7 +103,7 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 			if err := pool.QueryRow(ctx, `SELECT storage.content_generation FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id WHERE session.ref=$1`, conversation.SessionRef).Scan(&generation); err != nil || generation != 1 {
 				t.Fatalf("confirmed helper binding missing or duplicated: %d %v", generation, err)
 			}
-			restoreWhenQueued = prepareAssistantSessionArchiveRoundTrip(t, ctx, r, service, worker, conversation.SessionRef, scopeKind)
+			restoreWhenQueued = prepareAssistantSessionArchiveRoundTrip(t, ctx, r, service, worker, owner, conversation.Ref, conversation.SessionRef, scopeKind)
 			second := claim("second")
 			if stringMap(second, "codexSessionID") != threadID {
 				var raw []byte
@@ -256,16 +259,53 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 	}
 }
 
-func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, worker value.Principal, sessionRef, suffix string) func() {
+func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, worker, owner value.Principal, conversationRef, sessionRef, suffix string) func() {
 	t.Helper()
 	if _, err := r.pool.Exec(ctx, `UPDATE control_plane.session_storage SET idle_since=clock_timestamp()-interval '1 hour' WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, sessionRef); err != nil {
 		t.Fatal(err)
 	}
 	claimPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.tasks.claim")
+	queue := func(key string) {
+		t.Helper()
+		if _, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "republication-" + suffix + key}, Payload: command.AssistantTurnInput{ConversationRef: conversationRef, Content: "Synthetic archive publication fixture", DeliveryMode: "QUEUE"}}); err != nil {
+			t.Fatal("queue archive publication fixture failed")
+		}
+	}
+	cancelQueued := func(key string) {
+		t.Helper()
+		var runRef string
+		if err := r.pool.QueryRow(ctx, `SELECT ref FROM control_plane.runs WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1) AND state IN ('QUEUED','RUNNING') ORDER BY created_at DESC LIMIT 1`, sessionRef).Scan(&runRef); err != nil {
+			t.Fatal("queued publication fixture run is missing")
+		}
+		run, err := service.GetRun(ctx, owner, runRef)
+		if err != nil {
+			t.Fatal("queued publication fixture run read failed")
+		}
+		if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "republication-cancel-" + suffix + key, ExpectedVersion: &run.Version}, Payload: command.RunCommandInput{RunRef: runRef}}); err != nil {
+			t.Fatal("cancel queued publication fixture failed")
+		}
+	}
 	complete := func(kind command.Kind, operation, key string, payload command.SessionArchiveTaskInput) {
 		t.Helper()
 		actor := sessionArchivePrincipal(t, ctx, r, operation)
 		if _, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "resume-archive-" + suffix + key}, Payload: payload}); err != nil {
+			if kind == command.CompleteSessionSnapshot && errors.Is(err, errs.ErrUnavailable) {
+				var taskID, organizationID, sessionID string
+				if readErr := r.pool.QueryRow(ctx, `SELECT id::text,organization_id::text,session_id::text FROM control_plane.session_archive_tasks WHERE ref=$1`, payload.TaskRef).Scan(&taskID, &organizationID, &sessionID); readErr != nil {
+					t.Fatal("snapshot failure fixture identity read failed")
+				}
+				_, probeErr := r.pool.Exec(ctx, querySessionArchiveCompleteSnapshot, pgx.StrictNamedArgs{
+					"archive_ref": "sar_repeated_publication_fixture", "organization_id": organizationID, "session_id": sessionID,
+					"task_id": taskID, "content_generation": snapshotGeneration(t, ctx, r, sessionRef), "format_version": payload.FormatVersion,
+					"object_key": payload.ObjectKey, "object_version": payload.ObjectVersion, "object_etag": payload.ObjectETag,
+					"object_digest": payload.ObjectDigest, "object_size_bytes": payload.ObjectSizeBytes,
+					"active_turn": false, "retention_seconds": int64(sessionArchiveRetention / time.Second), "maximum_attempts": sessionArchiveMaxAttempts,
+				})
+				var databaseError *pgconn.PgError
+				if errors.As(probeErr, &databaseError) && databaseError.Code == "23505" && databaseError.ConstraintName == "session_archives_session_id_content_generation_key" {
+					t.Fatal("snapshot publication SQLSTATE 23505: session_archives_session_id_content_generation_key")
+				}
+			}
 			t.Fatalf("helper archive %s: %v", key, err)
 		}
 	}
@@ -278,6 +318,20 @@ func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, 
 	payload.ObjectKey = stringMap(snapshot, "objectKey")
 	payload.ObjectVersion = "synthetic-version"
 	payload.ObjectETag = "synthetic-etag"
+	payload.ObjectDigest = "sha256:" + strings.Repeat("b", 64)
+	payload.ObjectSizeBytes = 1152
+	payload.SourceSizeBytes = 128
+	// Имитируем появление нового queued-хода после claim snapshot, но до receipt.
+	// После его terminal без нового rollout content generation остаётся прежним.
+	queue("snapshot-race")
+	complete(command.CompleteSessionSnapshot, "platform.session-archive.snapshot.complete", "active-snapshot", payload)
+	cancelQueued("snapshot-race")
+	snapshot = claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
+	payload = claimedSessionArchivePayload(snapshot)
+	payload.FormatVersion = 1
+	payload.ObjectKey = stringMap(snapshot, "objectKey")
+	payload.ObjectVersion = "synthetic-second-version"
+	payload.ObjectETag = "synthetic-second-etag"
 	payload.ObjectDigest = "sha256:" + strings.Repeat("b", 64)
 	payload.ObjectSizeBytes = 1152
 	payload.SourceSizeBytes = 128
@@ -317,5 +371,97 @@ func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, 
 		}
 		complete(command.CompleteSessionRestore, "platform.session-archive.restore.complete", "restore", payload)
 		complete(command.CompleteSessionRestore, "platform.session-archive.restore.complete", "restore", payload)
+		// Restore не меняет содержимое. После GC повторная публикация этого
+		// поколения не должна переписывать либо оживлять прежние receipts.
+		cancelQueued("restored-before-gc")
+		if _, err := r.pool.Exec(ctx, `UPDATE control_plane.session_storage SET idle_since=clock_timestamp() WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, sessionRef); err != nil {
+			t.Fatal(err)
+		}
+		var previousReceipts string
+		const immutableReceipts = `SELECT jsonb_agg(to_jsonb(archive)-'lifecycle_state'-'retention_until'-'deleted_at' ORDER BY archive.ref)::text FROM control_plane.session_archives archive WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1) AND ref=ANY($2::text[])`
+		rows, err := r.pool.Query(ctx, `SELECT ref FROM control_plane.session_archives WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1) ORDER BY ref`, sessionRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var previousRefs []string
+		for rows.Next() {
+			var ref string
+			if err := rows.Scan(&ref); err != nil {
+				t.Fatal(err)
+			}
+			previousRefs = append(previousRefs, ref)
+		}
+		rows.Close()
+		if rows.Err() != nil || len(previousRefs) != 2 {
+			t.Fatal("repeated snapshot did not retain two immutable receipts")
+		}
+		if err := r.pool.QueryRow(ctx, immutableReceipts, sessionRef, previousRefs).Scan(&previousReceipts); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.pool.Exec(ctx, `UPDATE control_plane.session_archives SET retention_until=clock_timestamp()-interval '1 second' WHERE ref=ANY($1::text[])`, previousRefs); err != nil {
+			t.Fatal(err)
+		}
+		for index := range previousRefs {
+			deletion := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "DELETE_OBJECT")
+			deletionPayload := claimedSessionArchivePayload(deletion)
+			deletionPayload.ObjectKey = stringMap(deletion, "objectKey")
+			deletionPayload.ObjectVersion = stringMap(deletion, "objectVersion")
+			complete(command.CompleteSessionObjectDeletion, "platform.session-archive.object-delete.complete", "gc-"+fmt.Sprint(index), deletionPayload)
+		}
+		if _, err := r.pool.Exec(ctx, `UPDATE control_plane.session_storage SET idle_since=clock_timestamp()-interval '1 hour' WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, sessionRef); err != nil {
+			t.Fatal(err)
+		}
+		republished := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
+		republishedPayload := claimedSessionArchivePayload(republished)
+		republishedPayload.FormatVersion = 1
+		republishedPayload.ObjectKey = stringMap(republished, "objectKey")
+		republishedPayload.ObjectETag = "synthetic-republished-etag"
+		republishedPayload.ObjectDigest = "sha256:" + strings.Repeat("b", 64)
+		republishedPayload.ObjectSizeBytes = 1152
+		republishedPayload.SourceSizeBytes = 128
+		complete(command.CompleteSessionSnapshot, "platform.session-archive.snapshot.complete", "republish", republishedPayload)
+		complete(command.CompleteSessionSnapshot, "platform.session-archive.snapshot.complete", "republish", republishedPayload)
+		var retainedReceipts string
+		var generation int64
+		var archivedCount, deletedCount int
+		if err := r.pool.QueryRow(ctx, immutableReceipts, sessionRef, previousRefs).Scan(&retainedReceipts); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE lifecycle_state='DELETED') FROM control_plane.session_archives WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, sessionRef).Scan(&archivedCount, &deletedCount); err != nil {
+			t.Fatal(err)
+		}
+		generation = snapshotGeneration(t, ctx, r, sessionRef)
+		if retainedReceipts != previousReceipts || archivedCount != 3 || deletedCount != 2 || generation != republished["contentGeneration"].(int64) {
+			t.Fatal("republication changed immutable receipts, content generation or receipt cardinality")
+		}
+		deletion = claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "DELETE_PVC")
+		payload = claimedSessionArchivePayload(deletion)
+		payload.PVCName = stringMap(deletion, "pvcName")
+		complete(command.CompleteSessionPVCDeletion, "platform.session-archive.pvc-delete.complete", "republish-delete", payload)
+		queue("republished-restore")
+		restore = claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "RESTORE")
+		archive, ok = restore["archive"].(map[string]any)
+		if !ok || stringMap(archive, "objectKey") != republishedPayload.ObjectKey {
+			t.Fatal("restore did not select the exact current publication")
+		}
+		payload = claimedSessionArchivePayload(restore)
+		payload.FormatVersion = uint32(archive["formatVersion"].(int32))
+		payload.ObjectKey = stringMap(archive, "objectKey")
+		payload.ObjectVersion = stringMap(archive, "objectVersion")
+		payload.ObjectETag = stringMap(archive, "objectETag")
+		payload.ObjectDigest = stringMap(archive, "objectDigest")
+		payload.ObjectSizeBytes = archive["objectSizeBytes"].(int64)
+		payload.RestoredSourceSHA256 = stringMap(archive, "sourceSHA256")
+		payload.SourceSizeBytes = archive["sourceSizeBytes"].(int64)
+		complete(command.CompleteSessionRestore, "platform.session-archive.restore.complete", "republish-restore", payload)
 	}
+}
+
+func snapshotGeneration(t *testing.T, ctx context.Context, r *Repository, sessionRef string) int64 {
+	t.Helper()
+	var generation int64
+	if err := r.pool.QueryRow(ctx, `SELECT content_generation FROM control_plane.session_storage WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, sessionRef).Scan(&generation); err != nil {
+		t.Fatal("snapshot generation fixture read failed")
+	}
+	return generation
 }

@@ -46,3 +46,32 @@ func TestIntegrationCatalogProjectionHasExactReadCapability(t *testing.T) {
 		t.Fatal("integration catalog projection crossed the invocation boundary")
 	}
 }
+
+func TestManagedMCPToolProjectionRequiresExactCapabilityAndGrant(t *testing.T) {
+	t.Parallel()
+	for tool, capability := range map[string]string{
+		runtimecontract.Context7ResolveTool: runtimecontract.Context7ResolveCapability,
+		runtimecontract.Context7QueryTool:   runtimecontract.Context7QueryCapability,
+	} {
+		t.Run(tool, func(t *testing.T) {
+			for _, assistant := range []bool{false, true} {
+				if !toolCapabilityMatches(tool, capability, true, assistant) {
+					t.Fatal("exact managed MCP grant projection was rejected")
+				}
+				for _, wrongCapability := range []string{"", "platform.configuration.read", "context7.unknown", runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability} {
+					if wrongCapability != capability && toolCapabilityMatches(tool, wrongCapability, true, assistant) {
+						t.Fatal("managed MCP alias crossed its exact capability boundary")
+					}
+				}
+				if toolCapabilityMatches(tool, capability, false, assistant) {
+					t.Fatal("managed MCP alias was accepted without a grant")
+				}
+			}
+		})
+	}
+	if !toolCapabilityMatches("invoke_integration", "context7.library.resolve", true, false) ||
+		toolCapabilityMatches("invoke_integration", "", true, true) ||
+		toolCapabilityMatches("context7_arbitrary_alias", runtimecontract.Context7ResolveCapability, true, true) {
+		t.Fatal("generic integration or closed alias boundary changed")
+	}
+}
