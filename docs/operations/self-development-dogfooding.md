@@ -1513,3 +1513,18 @@ INPUT_FETCH_REJECTED, Immutable build input was rejected. Новый Docker buil
 проверяют exact source/seed/owner pins и materializer failure path.
 Checkbox2–15 OPEN: собственный image38/admission/promotion, полный restore,
 PROJECT/сотрудники/Workflow пока не завершены.
+
+04.10.2026 20:08 UTC, интеграционный tree поверх `03d92656fd2c416800a2d3dfabcbd572c6525a03`:
+FAIL→исправлено — node HTTPS verifier требовал owner UID0, тогда как
+repo-owned producer docker cp сохранил UID текущего оператора1001 при strict
+regular0600 на обеих нодах. Разрешены только root/текущий оператор; foreignUID,
+symlink и0644/0640 не принимаются. Root9 unit PASS2.054s, live повтор NOT RUN.
+Инцидент — в одной дочерней диагностике полный Docker labels map содержал
+служебный cluster token. Значение здесь, в Git/PR и дальнейших сообщениях не
+повторяется; вывод ограничен whitelist. Ротация NOT RUN: отдельная owner
+операция требует backup/bootstrap encryption binding и согласованного startup
+source, иначе restart нод может нарушить join/startup. Наличие Ready Pods
+не объявляется устранением инцидента.
+В работе closed INPUT_FETCH_REJECTED reason без значений входных данных и
+явное versioned обновление own SYSTEM recipe после смены server catalog pins.
+RequestBuild не переписывает immutable recipe автоматически; guard не обходится.

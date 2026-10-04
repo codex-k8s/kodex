@@ -116,6 +116,12 @@ def credentials(config, host):
     return auth
 
 
+def valid_node_file_metadata(metadata, operator_uid):
+    # docker cp штатного installer может сохранить UID владельца material.
+    # Допускаются только root/текущий оператор; private key/auth остаются 0600.
+    return metadata in {"regular file:0:600", "regular file:"+str(operator_uid)+":600"}
+
+
 def quote(value):
     return '"'+value.replace("\\", "\\\\").replace('"', '\\"')+'"'
 
@@ -262,7 +268,7 @@ def main():
                 info[0].get("Config", {}).get("Labels", {}).get("k3d.role") in {"server", "agent"}, "NODE_IDENTITY_INVALID")
         for path in ["/etc/rancher/k3s/registries.yaml", *TLS_PATHS.values()]:
             metadata = capture(["docker", "exec", node, "stat", "-c", "%F:%u:%a", path], deadline).decode().strip()
-            require(metadata == "regular file:0:600", "NODE_IDENTITY_INVALID")
+            require(valid_node_file_metadata(metadata, os.getuid()), "NODE_IDENTITY_INVALID")
         raw = capture(["docker", "exec", node, "cat", "/etc/rancher/k3s/registries.yaml"], deadline)
         config = document(capture(["yq", "-o=json", "-I=0", "."], deadline, raw))
         auth = credentials(config, host)

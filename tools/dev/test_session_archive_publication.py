@@ -49,6 +49,14 @@ class FixtureReader:
 
 
 class PublicationTests(unittest.TestCase):
+    def test_node_file_ownership_matches_installer_not_arbitrary_uid(self):
+        self.assertTrue(MODULE.valid_node_file_metadata("regular file:0:600", 1001))
+        self.assertTrue(MODULE.valid_node_file_metadata("regular file:1001:600", 1001))
+        for metadata in ("regular file:1002:600", "regular file:1001:644", "regular file:0:640",
+                         "symbolic link:1001:600", "directory:1001:600", "regular file:1001:400",
+                         "PRIVATE_SENTINEL", "regular file:1001:600\nPRIVATE_SENTINEL"):
+            self.assertFalse(MODULE.valid_node_file_metadata(metadata, 1001))
+
     def test_manifest_and_all_image_blobs_without_node_cache(self):
         reader = FixtureReader()
         manifest = reader.manifest()
@@ -178,7 +186,7 @@ with (root/'argv.jsonl').open('a') as output: output.write(json.dumps(args)+'\\n
 if args[:2] == ['image','inspect']: print('sha256:'+'a'*64)
 elif args[0] == 'inspect': print(json.dumps([{'State':{'Running':True},'Config':{'Labels':{'k3d.cluster':'kodex','k3d.role':'server' if 'server' in args[1] else 'agent'}}}]))
 elif args[0] == 'exec':
-    if args[2] == 'stat': print('regular file:0:600')
+    if args[2] == 'stat': print('regular file:'+str(os.getuid())+':600')
     elif args[2] == 'getent': print('172.18.0.2 pull.fixture.invalid')
     elif args[-1] == '/etc/rancher/k3s/registries.yaml': print((root/'config.json').read_text())
     elif args[2] == 'cat': print('PRIVATE_CERT_SENTINEL')
