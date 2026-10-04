@@ -45,6 +45,7 @@ import {
   listIntegrationConnections,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import { requestSignal } from "@/shared/api/client";
+import { selectedProjectRef } from "@/shared/project-context";
 import type {
   IntegrationConnection,
   IntegrationConfigurationField,
@@ -96,7 +97,7 @@ function applyConnectionSnapshot(): boolean {
   if (connectionSearch.value.trim()) return false;
   const snapshot = platform.realtimeSnapshot(
     "INTEGRATION_CONNECTION",
-    undefined,
+    selectedProjectRef(),
   );
   if (!snapshot) return false;
   connectionController?.abort();
@@ -170,13 +171,26 @@ watch(connectionSearch, () => {
   connectionTimer = setTimeout(() => void loadConnections(), 500);
 });
 watch(
-  () =>
-    Object.values(platform.connections)
-      .map((item) => `${item.ref}:${String(item.version)}`)
-      .sort()
-      .join("|"),
+  [
+    () => platform.integrationRealtimeRevision,
+    () =>
+      platform.realtimeSnapshot("INTEGRATION_CONNECTION", selectedProjectRef()),
+    () =>
+      Object.values(platform.connections)
+        .map((item) => `${item.ref}:${String(item.version)}`)
+        .sort()
+        .join("|"),
+  ],
   () => {
-    applyConnectionSnapshot();
+    if (connectionSearch.value.trim() || applyConnectionSnapshot()) return;
+    connectionController?.abort();
+    connectionGeneration += 1;
+    connectionCursors.clear();
+    connectionEntries.value = [];
+    connectionCursor.value = "";
+    connectionLoading.value = false;
+    connectionProblem.value = undefined;
+    integrationsLoaded.value = false;
   },
 );
 const activeSection = ref<IntegrationsSection>("CONNECTIONS");
@@ -203,7 +217,7 @@ function applyCatalogSnapshot(): boolean {
   if (catalogSearch.value.trim() || catalogCategory.value) return false;
   const snapshot = platform.realtimeSnapshot(
     "INTEGRATION_CONNECTION",
-    undefined,
+    selectedProjectRef(),
   );
   if (!snapshot) return false;
   catalogController?.abort();
@@ -284,12 +298,31 @@ watch(
   },
 );
 watch(
-  () =>
-    Object.values(platform.definitions)
-      .map((item) => `${item.key}:${item.digest}`)
-      .sort()
-      .join("|"),
-  () => applyCatalogSnapshot(),
+  [
+    () => platform.integrationRealtimeRevision,
+    () =>
+      platform.realtimeSnapshot("INTEGRATION_CONNECTION", selectedProjectRef()),
+    () =>
+      Object.values(platform.definitions)
+        .map((item) => `${item.key}:${item.digest}`)
+        .sort()
+        .join("|"),
+  ],
+  () => {
+    if (
+      catalogSearch.value.trim() ||
+      catalogCategory.value ||
+      applyCatalogSnapshot()
+    )
+      return;
+    catalogController?.abort();
+    catalogGeneration += 1;
+    catalogCursors.clear();
+    catalogDefinitions.value = [];
+    catalogNextPageToken.value = undefined;
+    catalogLoading.value = false;
+    catalogProblem.value = undefined;
+  },
 );
 const dialog = ref(false);
 const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");

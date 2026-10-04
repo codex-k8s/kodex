@@ -1131,3 +1131,17 @@ global snapshot marker scopeKey="" существует, integration revision1.
 Исполнитель воспроизвёл late marker watcher failure и отдельный project-scope
 аналог. Исправление страницы не добавляет polling; live повтор ещё OPEN.
 Checkbox2–15 остаются открытыми; частичный source/доступ не заменяет Workflow.
+
+04.10.2026 15:38 UTC, tree поверх `058aad525abdd2e8e343f05df18e7378a26d9909`:
+PASS — detached disposable PostgreSQL smoke на точном 058aad52: profiles,
+project connection, organization environment/workspace, signed image inventory
+и negative inventory; package29.169 s, весь запуск около67 s, exit0.
+Fresh migrations014/015 и повторное применение прошли; live apply015 ещё OPEN.
+PASS — исправлен late realtime snapshot marker и точный selected project scope
+на странице интеграций без polling/fallback. Root23 unit PASS3.40 s.
+После hard reload в Chrome Context7 виден, ложное empty state исчезло;
+Console error/warn0, relevant bootstrap/session/connection HTTP200,
+alerts отсутствуют, горизонтального overflow нет. Screenshot ещё OPEN.
+До полного QA три дочерних исполнителя выполняют независимые UX-доработки:
+полезные названия чатов, компактная общая хронология и достоверная подсказка
+уже привязанного системного окружения. Root владеет Chrome и canonical rollout.
