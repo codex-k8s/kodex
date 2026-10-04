@@ -352,7 +352,7 @@ type claimableExecution struct {
 	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
-	codexSessionID, previousContextDigest                                                        string
+	codexSessionID                                                                               string
 	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
 	roleRuntimeContractRevision                                                                  int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
@@ -427,7 +427,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID, &candidate.previousContextDigest); err != nil {
+			&candidate.codexSessionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -874,7 +874,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				return commandOutcome{}, err
 			}
 			snapshot["contextSnapshot"] = contextSnapshot
-			snapshot["codexSessionID"] = runtimeContextSessionID(codexSessionID, candidate.previousContextDigest, contextSnapshot.Digest)
+			snapshot["codexSessionID"], err = runtimeSessionResumeID(ctx, tx, scope, snapshot, codexSessionID)
+			if err != nil {
+				return commandOutcome{}, err
+			}
 			var continuationNotice *preparedContinuationNotice
 			if candidate.turnNumber > 1 {
 				continuationNotice, err = repository.prepareRuntimeContinuationNotice(ctx, tx, scope, snapshot, promptSnapshot)
@@ -1576,8 +1579,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if hasArchiveBinding && targetType != "SYSTEM_ASSISTANT" {
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
+	if hasArchiveBinding {
+		stored, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
 			"organization_id":      scope.organizationID,
 			"session_id":           sessionID,
 			"runtime_revision_id":  lease["runtimeRevisionID"],
@@ -1586,7 +1589,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			"source_sha256":        payload.ArchiveSHA256,
 			"source_size_bytes":    payload.ArchiveSizeBytes,
 			"retention_seconds":    int64((30 * 24 * time.Hour) / time.Second),
-		}); err != nil {
+		})
+		if err != nil || stored.RowsAffected() != 1 {
 			return commandOutcome{}, fmt.Errorf("record session storage binding: %w", errs.ErrUnavailable)
 		}
 	}

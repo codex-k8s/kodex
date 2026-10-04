@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -221,6 +222,15 @@ func pvcFailure(code string) *model.Result {
 }
 
 func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.Task) error {
+	volumeLabels, volumeAnnotations, err := runtimecontract.SessionVolumeMetadata(task.OrganizationRef, task.ProjectRef, task.SessionRef)
+	if err != nil {
+		return err
+	}
+	expectedName, err := runtimecontract.SessionPVCName(task.SessionRef)
+	if err != nil || task.PVCName != expectedName {
+		return errors.New("restored session PVC name is invalid")
+	}
+	volumeAnnotations[restoreInputAnnotation] = task.InputDigest
 	pvcs := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace)
 	existing, err := pvcs.Get(ctx, task.PVCName, metav1.GetOptions{})
 	if err == nil {
@@ -234,7 +244,7 @@ func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.T
 		storageClassName = &controller.config.StorageClass
 	}
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: controller.config.WorkerNamespace,
-		Annotations: map[string]string{restoreInputAnnotation: task.InputDigest}}, Spec: corev1.PersistentVolumeClaimSpec{
+		Labels: volumeLabels, Annotations: volumeAnnotations}, Spec: corev1.PersistentVolumeClaimSpec{
 		AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 		Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: controller.pvcRequest}},
 	}}
@@ -249,6 +259,17 @@ func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.T
 }
 
 func (controller *Controller) validateRestorePVC(pvc *corev1.PersistentVolumeClaim, task model.Task) error {
+	wantedLabels, wantedAnnotations, err := runtimecontract.SessionVolumeMetadata(task.OrganizationRef, task.ProjectRef, task.SessionRef)
+	if err != nil {
+		return err
+	}
+	for _, pair := range []struct{ actual, wanted map[string]string }{{pvc.Labels, wantedLabels}, {pvc.Annotations, wantedAnnotations}} {
+		for key, value := range pair.wanted {
+			if pair.actual[key] != value {
+				return errors.New("restored session PVC owner conflicts with immutable task input")
+			}
+		}
+	}
 	wantedClass := controller.config.StorageClass
 	actualClass := ""
 	if pvc.Spec.StorageClassName != nil {

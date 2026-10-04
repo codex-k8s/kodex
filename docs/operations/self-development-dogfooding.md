@@ -972,3 +972,34 @@ model/medium/input marker, profiles0. Но plan не создан: из теку
 environment route каталог не предоставляет TEST_INTEGRATION_CONNECTION
 и INTEGRATION_CONNECTIONS. Помощник корректно не выдумал полномочия и test.
 OPEN — штатный integration context/retry и последующие grants/readiness.
+
+04.10.2026 14:06–14:21 UTC, tree поверх
+`b266f4572a5c27f554bdf457b48c9948a4fdaeea`:
+PASS — Run25 `run_1F6UPnyBILLVSfOHpsaqMEuz` из штатного integration
+context создал `pln_fLy5l8FgwAJD0c0TlGkaS7J-`, TEST_INTEGRATION_CONNECTION
+с exact version2. Owner validated/applied plan; connection TESTING/version3.
+FAIL — реальная проверка закончилась DEGRADED/version4, safe outcome
+«Внешняя система временно недоступна». Grant/MCP readiness не объявляются PASS.
+Source показывает два самостоятельных дефекта: Context7 transport использует
+общий listener8080 вместо existing integration listener8083; owner origins
+SQL требует managed binding даже для shipped package. Адресные RED→GREEN
+unit/component воспроизведения готовятся отдельно; actual cause до повторного
+live теста не считается окончательно доказанной. Context7 primary docs
+проверены через resolve/query: официальный remote /mcp и CONTEXT7_API_KEY header.
+PASS — изолированный helper session resume overlay интегрирован: confirmed
+complete сохраняет canonical storage; свежий claim сверяет предыдущую immutable
+revision с semantic identity/config/authority, не текущим task/history/lease.
+Health observation ref/generation/time не сбрасывают thread, exact grants/
+config/credential/package и fresh readiness сохраняются. Unknown/changed pins
+закрыто используют cold start. Restore PVC получает те же exact managed
+metadata, что producer runtime PVC; чужой PVC не усыновляется.
+Новая forward миграция 20261004000800 учитывает server-owned queued Run ещё
+до session turn и закрывает archive restore deadlock. Applied migrations не
+изменены. Runner/Proto/API ABI не менялись.
+PASS — detached public disposable PostgreSQL Resume+ParallelLifecycle+Profiles
+26.113 s: SYSTEM/PROJECT, complete/replay, retry/replay, Cancel/late ACK,
+snapshot/delete/restore/resume, corrupt restore denied, отдельные разговоры,
+changed configuration cold start. Root quick unit: CP .059 s, workload .103 s,
+archive controller .048 s, runtimecontract .010 s; diff-check PASS.
+NOT RUN — actual native history/resume и actual archive restore на новом коде
+до canonical migration/activation; synthetic результаты этого не заменяют.

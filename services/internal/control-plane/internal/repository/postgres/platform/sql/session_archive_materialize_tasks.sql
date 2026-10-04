@@ -65,10 +65,7 @@ WITH expired_locked AS MATERIALIZED (
      WHERE task.session_id = storage.session_id
        AND task.kind = 'DELETE_PVC' AND task.state = 'READY'
        AND storage.state = 'DELETE_PVC_READY'
-       AND EXISTS (
-           SELECT 1 FROM control_plane.session_turns turn
-           WHERE turn.session_id = storage.session_id AND turn.state IN ('QUEUED', 'RUNNING')
-       )
+       AND control_plane.session_archive_pending_execution(storage.organization_id, storage.session_id)
     RETURNING storage.session_id, storage.current_archive_id
 ), cancelled_archives AS (
     UPDATE control_plane.session_archives archive
@@ -99,10 +96,7 @@ WITH expired_locked AS MATERIALIZED (
           session.state = 'CLOSED'
           OR storage.idle_since <= clock_timestamp() - @idle_seconds * interval '1 second'
       )
-      AND NOT EXISTS (
-          SELECT 1 FROM control_plane.session_turns turn
-          WHERE turn.session_id = storage.session_id AND turn.state IN ('QUEUED', 'RUNNING')
-      )
+      AND NOT control_plane.session_archive_pending_execution(storage.organization_id, storage.session_id)
       AND NOT EXISTS (
           SELECT 1 FROM control_plane.runtime_leases lease
           JOIN control_plane.runtime_revisions revision ON revision.id = lease.runtime_revision_id
@@ -143,10 +137,7 @@ WITH expired_locked AS MATERIALIZED (
     WHERE storage.state = 'ARCHIVED'
       AND (storage.project_id IS NULL OR restore_project.lifecycle <> 'PURGE_PENDING')
       AND archive.lifecycle_state = 'AVAILABLE'
-      AND EXISTS (
-          SELECT 1 FROM control_plane.session_turns turn
-          WHERE turn.session_id = storage.session_id AND turn.state IN ('QUEUED', 'RUNNING')
-      )
+      AND control_plane.session_archive_pending_execution(storage.organization_id, storage.session_id)
     FOR UPDATE OF storage SKIP LOCKED
 ), restore_prepared AS (
     SELECT gen_random_uuid() AS id, candidate.* FROM restore_candidates candidate

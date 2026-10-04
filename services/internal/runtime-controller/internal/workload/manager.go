@@ -1758,6 +1758,10 @@ func runtimeTicketMatches(existing *corev1.Secret, podName, mode string, input r
 }
 
 func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontract.RunnerInput) error {
+	volumeLabels, volumeAnnotations, err := runtimecontract.SessionVolumeMetadata(input.OrganizationRef, input.ProjectRef, input.SessionRef)
+	if err != nil {
+		return err
+	}
 	name, err := runtimecontract.SessionPVCName(input.SessionRef)
 	if err != nil {
 		return err
@@ -1767,8 +1771,8 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontr
 		storageClassName = &manager.config.StorageClass
 	}
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.RuntimeNamespace,
-		Labels:      map[string]string{managedLabel: "true", sessionHashAnnotation: shortHash(input.SessionRef)},
-		Annotations: map[string]string{organizationHashAnnotation: shortHash(input.OrganizationRef), projectHashAnnotation: shortHash(input.ProjectRef)}},
+		Labels:      volumeLabels,
+		Annotations: volumeAnnotations},
 		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
 	existing, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})

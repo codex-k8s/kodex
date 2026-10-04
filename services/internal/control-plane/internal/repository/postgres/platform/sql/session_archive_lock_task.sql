@@ -8,10 +8,7 @@ SELECT task.id::text, task.ref, task.kind, task.state, task.generation,
        storage.state, storage.content_generation, storage.source_relative_path,
        storage.source_sha256, storage.source_size_bytes,
        COALESCE(storage.current_archive_id::text, ''), session.ref,
-       EXISTS (
-           SELECT 1 FROM control_plane.session_turns turn
-           WHERE turn.session_id = task.session_id AND turn.state IN ('QUEUED', 'RUNNING')
-       )
+       control_plane.session_archive_pending_execution(task.organization_id, task.session_id)
 FROM control_plane.session_archive_tasks task
 JOIN control_plane.session_storage storage ON storage.session_id = task.session_id
 JOIN control_plane.sessions session ON session.id = task.session_id

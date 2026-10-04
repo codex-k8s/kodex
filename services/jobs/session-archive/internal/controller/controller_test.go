@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -121,7 +122,8 @@ func TestEnsureRestorePVCCreatesBoundedCanonicalVolume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create controller: %v", err)
 	}
-	task := model.Task{PVCName: "runtime-session-0123456789abcdef", InputDigest: strings.Repeat("a", 64)}
+	task := model.Task{OrganizationRef: "org_fixture01", SessionRef: "ses_fixture01", InputDigest: strings.Repeat("a", 64)}
+	task.PVCName, _ = runtimecontract.SessionPVCName(task.SessionRef)
 	if err := controller.ensureRestorePVC(context.Background(), task); err != nil {
 		t.Fatalf("ensure restore PVC: %v", err)
 	}
@@ -131,6 +133,14 @@ func TestEnsureRestorePVCCreatesBoundedCanonicalVolume(t *testing.T) {
 	}
 	if pvc.Annotations[restoreInputAnnotation] != task.InputDigest || pvc.Spec.Resources.Requests.Storage().String() != "20Gi" {
 		t.Fatalf("restore PVC is not bound to the immutable task: %#v", pvc)
+	}
+	wantedLabels, wantedAnnotations, _ := runtimecontract.SessionVolumeMetadata(task.OrganizationRef, task.ProjectRef, task.SessionRef)
+	for _, pair := range []struct{ actual, wanted map[string]string }{{pvc.Labels, wantedLabels}, {pvc.Annotations, wantedAnnotations}} {
+		for key, value := range pair.wanted {
+			if pair.actual[key] != value {
+				t.Fatal("restore PVC cannot pass the runtime managed owner predicate")
+			}
+		}
 	}
 
 	conflict := task
