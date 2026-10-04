@@ -1440,3 +1440,50 @@ preload name, не опубликованный реестр. Попытки kub
 Forward017 canonical SYSTEM/PROJECT component на exactab source PASS7.868s;
 live archive, restore/restart и full dogfooding остаются NOT RUN.
 Checkbox2–15 OPEN; частичный SYSTEM успех не закрывает PROJECT/сотрудников.
+
+04.10.2026 19:40 UTC, интеграционный tree поверх `9c5a67cbb7c2cda4cdc6eae23d2fc55872d82aea`:
+PASS — own SYSTEM recipe imgrec_8fwVelZAPPnm993yRFYLuoc5 создан помощником
+через normal Apply; build imgbld_RMS6q4kTVTX3QxgZUHBzv68Y COMPLETED100%
+в19:07:32 UTC. Это не допуск: promotionCandidate/activeArtifact отсутствуют,
+owner promotedImageReady=false; actual38-required inventory ещё NOT RUN.
+FAIL — exact scan predecessor был Evicted: emptyDir превышен1Gi, exit137.
+OOM не доказан. Controller ждал отсутствующий signature.complete вместо
+закрытия owner admission. Интегрирован bounded32Gi scratch без повышения
+памяти и exact failed Job UID/run/phase → technical admit → actual bound
+inventory → canonical durable REJECTED → existing RecordAdmission/event.
+Root admissioncontroller unit PASS7.915s после восстановления отсутствующего
+локального inventory/hash/provenance существующим exact-digest verifier.
+Detached baseline FAIL→PASS; CEL/negativefixtures/vet PASS. Offline реальные
+production verifier и inventory validator: три восстановления и пять
+registry/digest/manifest/labels/provenance отказов PASS; corrupt present evidence
+не исправляется молча. Missing/invalid actual manifest owner-terminal пока
+NOT PASS: нет готового specialized failure RPC, пустой inventory не подменяется.
+PASS — image editor показывает отдельно завершённую сборку и ожидание допуска,
+не выдаёт сборку за готовый образ. Убраны повторные статусы внутри карточек.
+Root36 frontend unit PASS6.34s, полный typecheck PASS. Desktop screenshot
+`/tmp/kodex-image-status-1938.png` просмотрен: компактные статусы без дублей,
+прокрутка доступна, нет горизонтального переполнения; Console error/warn нет,
+relevant owner recipe/history/bootstrap/session/network200.
+PASS — просмотрены desktop и mobile390 чатовые screenshots: user справа,
+agent слева, компактные раскрываемые tools, нет повторных successful receipts
+или horizontal overflow. Это trusted-local hot-reload evidence, не production.
+PASS — clean9c canonical full runner rebuild/import: image498b9012b2549d18ce0adc99ac8742d043f95950d0af435a2fcde0a40c696aab,
+provenance3cb46a49cdf1e67f7a1f2c0020b7c4d402fb00543698a067774f336a9b681e16,
+binary45b8801450be28439ce98d128a10f38d8f3a92d0e9bfcf4cb0b4f4a26113a518.
+Тяжёлые слои CACHED, Go32s, OCI export26.6s; общий причинный benchmark
+параллелизации не заявляется. Новый archive3ddb169c8eb4e63dde1d31f83fc45abbc9733326cc8af7704252d17f2c684592
+построен/imported, supply-chain all9c построена; новая активация NOT RUN.
+PASS — интегрирована durable archive OCI publication через existing promotion
+writer TLS/mTLS/application boundary и exact node pull allowlist только
+kodex/session-archive. Проверка preserved OCI не зависит от node cache:
+Root8 tests PASS.611s, pull authorizer PASS.328s, seed CLI4 PASS5.938s.
+Фактические publication/node HTTPS/CRI и live restore ещё NOT RUN.
+Host/Pod source hash readback control-plane/archive diagnostic/frontend PASS;
+это доказательство source mount, не бинарной активации текущих dirty правок.
+Checkbox2–15 OPEN; PROJECT, шесть сотрудников и полный Workflow впереди.
+PASS — root seed CLI4 повтор PASS5.94s, frontend адресные ESLint/Prettier
+PASS. Public cache contract и три cache/import regressions PASS. Public render
+первоначально FAIL из-за host Go1.27 вместо pinned1.26.6, затем выявлен ложный
+новый yq array-equality predicate. Fixture исправлена на exact jq cardinality,
+controller digest и worker env; boundary не ослаблена. Полный повтор render
+на закреплённом tree ещё NOT RUN, не объявляется PASS по отдельным suites.

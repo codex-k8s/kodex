@@ -178,7 +178,8 @@ case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is in
 [[ "$kubernetes_endpoint_port" =~ ^[1-9][0-9]{0,4}$ ]] || fail 'Kubernetes API port is invalid'
 [[ "$runner_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local runner image must use an exact manifest digest'
-[[ "$session_archive_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
+[[ "$session_archive_image" =~ ^registry\.local\.kodex/kodex/session-archive@sha256:[a-f0-9]{64}$ &&
+  "$session_archive_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'local session archive image must use an exact manifest digest'
 [[ "$stt_hot_reload_image" =~ ^registry\.local\.kodex/kodex/stt-hot-reload@sha256:[a-f0-9]{64}$ &&
   "$stt_hot_reload_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
@@ -395,6 +396,8 @@ yq -i '
 
 runner_digest=${runner_image#*@}
 runtime_runner_image="$promoted_pull_host/kodex/agent-runner@$runner_digest"
+session_archive_digest=${session_archive_image#*@}
+runtime_session_archive_image="$promoted_pull_host/kodex/session-archive@$session_archive_digest"
 admission_tools_digest=${image_admission_tools_image#*@}
 admission_tools_sha256=${image_admission_tools_image#*@sha256:}
 frontend_sha256=$("$source_root/tools/dev/resolve-local-dockerfile-frontend.sh" \
@@ -1209,7 +1212,7 @@ PUBLIC_HOST="$public_host" yq -i '
   )
 ' "$render"
 
-SESSION_ARCHIVE_IMAGE="$session_archive_image" \
+SESSION_ARCHIVE_IMAGE="$runtime_session_archive_image" \
 DEPLOYMENT_PROFILE="$deployment_profile" \
 AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
   with(select(.kind == "ConfigMap" and
@@ -1517,7 +1520,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'dedicated local runtime namespace boundary is invalid'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "integration-synthetic")' "$output" >/dev/null ||
   fail 'integration-synthetic development workload is absent'
-yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$session_archive_image" '
+yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$runtime_session_archive_image" '
   any(.[];
     .kind == "Deployment" and .metadata.name == "session-archive" and
     .metadata.namespace == "kodex-system" and

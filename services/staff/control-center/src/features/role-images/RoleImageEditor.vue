@@ -119,6 +119,13 @@ const recipe = computed(() => {
 const recipeDisplayName = computed(() =>
   recipe.value ? localizeServerMessage(recipe.value.name) : t("roleImages.new"),
 );
+const entityLabel = computed(() =>
+  t(
+    recipe.value?.scopeKind === "ORGANIZATION"
+      ? "roleImages.assistantEntity"
+      : "roleImages.entity",
+  ),
+);
 const nameFieldValue = computed({
   get: () =>
     recipe.value && !recipe.value.nextActions.includes("UPDATE")
@@ -179,6 +186,28 @@ const promotionVisualState = computed(() => {
   if (recipe.value?.promotedImageReady) return "PROMOTED";
   if (promotionReceipt.value?.state === "PROMOTING") return "RUNNING";
   return promotionReceipt.value?.state ?? "PENDING";
+});
+const summaryStatus = computed<{ state: string; label?: string }>(() => {
+  if (!recipe.value) return { state: "PENDING" };
+  const state = roleImageState(recipe.value, currentBuild.value);
+  if (state === "PROMOTED") return { state, label: t("roleImages.promoted") };
+  if (state !== "COMPLETED") return { state };
+  const currentArtifact =
+    currentBuild.value?.recipeGeneration === recipe.value.generation &&
+    artifact.value?.buildRef === currentBuild.value.ref &&
+    artifact.value.recipeGeneration === currentBuild.value.recipeGeneration
+      ? artifact.value
+      : undefined;
+  if (!currentArtifact)
+    return { state: "PENDING", label: t("roleImages.awaitingAdmission") };
+  if (currentArtifact.admissionVerdict === "REJECTED")
+    return { state: "REJECTED", label: t("roleImages.admissionRejected") };
+  if (promotionReceipt.value?.imageArtifactRef === currentArtifact.ref) {
+    if (promotionReceipt.value.state === "FAILED") return { state: "FAILED" };
+    if (promotionReceipt.value.state === "PROMOTING")
+      return { state: "PROMOTING" };
+  }
+  return { state: "PENDING", label: t("roleImages.awaitingPromotion") };
 });
 const dependencies = computed(() =>
   props.recipeRef ? (store.dependencies[props.recipeRef] ?? []) : [],
@@ -434,19 +463,15 @@ onBeforeUnmount(() => {
         <div class="image-summary__identity">
           <span class="image-summary__icon"><Box :size="22" /></span>
           <div>
-            <span class="eyebrow">{{ t("roleImages.entity") }}</span>
+            <span class="eyebrow">{{ entityLabel }}</span>
             <h2>{{ recipeDisplayName }}</h2>
             <p>{{ roleLabel }}</p>
           </div>
         </div>
         <StatusBadge
           v-if="recipe"
-          :state="roleImageState(recipe, currentBuild)"
-          :label="
-            recipe.promotedImageReady && currentBuild?.stage === 'COMPLETED'
-              ? t('roleImages.promoted')
-              : undefined
-          "
+          :state="summaryStatus.state"
+          :label="summaryStatus.label"
         />
         <div v-if="recipe" class="image-summary__actions">
           <ConfigurationCopyDialog
@@ -557,13 +582,6 @@ onBeforeUnmount(() => {
           <Hammer :size="18" aria-hidden="true" />
           <div>
             <span>{{ t("roleImages.buildHistory") }}</span>
-            <strong>
-              {{
-                currentBuild
-                  ? t(`states.${currentBuild.stage}`)
-                  : t("states.PENDING")
-              }}
-            </strong>
             <small v-if="currentBuild">
               {{ currentBuild.progressPercent }}% ·
               {{ new Date(currentBuild.updatedAt).toLocaleString() }}
@@ -576,15 +594,19 @@ onBeforeUnmount(() => {
               >{{ t("roleImages.retryPending") }}</small
             >
           </div>
-          <StatusBadge :state="currentBuild?.stage ?? 'PENDING'" />
+          <StatusBadge
+            :state="currentBuild?.stage ?? 'PENDING'"
+            :label="
+              currentBuild?.stage === 'COMPLETED'
+                ? t('roleImages.buildCompleted')
+                : undefined
+            "
+          />
         </article>
         <article class="panel lifecycle-step">
           <ShieldCheck :size="18" aria-hidden="true" />
           <div>
             <span>{{ t("roleImages.admissionVerdict") }}</span>
-            <strong>
-              {{ artifact ? t("roleImages.evidence") : t("states.PENDING") }}
-            </strong>
             <small v-if="artifact">{{ artifact.manifestDigest }}</small>
           </div>
           <StatusBadge
@@ -602,7 +624,6 @@ onBeforeUnmount(() => {
           <PackageCheck :size="18" aria-hidden="true" />
           <div>
             <span>{{ t("roleImages.promotion") }}</span>
-            <strong>{{ t(`states.${promotionVisualState}`) }}</strong>
             <small v-if="recipe.promotedImageReference">
               {{ recipe.promotedImageReference }}
             </small>

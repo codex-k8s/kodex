@@ -163,6 +163,7 @@ load_owner_claim() {
 
 write_technical_rejection() {
   reason=$1
+  rejected_phase=${2:-$admission_phase}
   [ -f /work/owner-claim.json ] || return 0
   jq -e --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" '
     (.artifactId | type == "string" and length > 0) and
@@ -183,19 +184,69 @@ write_technical_rejection() {
       buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
       manifestDigest:$manifest,policyRevision:$policy,policySHA256:$policy_sha,
       schema:$schema,specSHA256:$spec}' >/work/provenance.json
-  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+  jq -Sjc -n --arg phase "$rejected_phase" --arg reason "$reason" \
     '[{schema:"kodex.dev/native-provenance-rejection/v1",phase:$phase,reason:$reason}]' \
     >/work/native-provenance.json
-  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+  jq -Sjc -n --arg phase "$rejected_phase" --arg reason "$reason" \
     '{schema:"kodex.dev/sbom-unavailable/v1",phase:$phase,reason:$reason}' >/work/sbom.json
-  jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
+  jq -Sjc -n --arg phase "$rejected_phase" --arg reason "$reason" \
     '{schema:"kodex.dev/vulnerability-evidence-unavailable/v1",phase:$phase,reason:$reason}' \
     >/work/vulnerability.json
   sha256sum /work/provenance.json | awk '{print $1}' >/work/provenance.sha256
   sha256sum /work/sbom.json | awk '{print $1}' >/work/sbom.sha256
   sha256sum /work/vulnerability.json | awk '{print $1}' >/work/vulnerability.sha256
   printf '%s\n' REJECTED >/work/verdict
-  write_marker signature.complete
+  [ "$admission_phase" = admit ] || write_marker signature.complete
+}
+
+reject_failed_predecessor() {
+  case "$1" in
+    SCAN_PREDECESSOR_FAILED) rejected_phase=scan ;;
+    SIGN_PREDECESSOR_FAILED) rejected_phase=sign ;;
+    *) fail "invalid failed admission predecessor" ;;
+  esac
+  if [ ! -f /work/tool-inventory.json ] || [ ! -f /work/tool-inventory.sha256 ] ||
+    [ ! -f /work/provenance.json ] || [ ! -f /work/provenance.sha256 ]; then
+    # Восстанавливается фактическое evidence из exact digest, без повторного scan/sign.
+    login_registry "$staging_host" /identity/username /identity/password
+    [ "$(regctl image digest "$source_ref")" = "$image_digest" ] || fail "staging digest mismatch"
+    verify_image_and_provenance
+  fi
+  # Используется только фактическое evidence той же owner claim, не выдуманный inventory.
+  [ -f /work/tool-inventory.json ] && [ -f /work/tool-inventory.sha256 ] &&
+    [ -f /work/provenance.json ] && [ -f /work/provenance.sha256 ] ||
+    fail "failed predecessor tool inventory is unavailable"
+  image-tool-inventory-validator inventory </work/tool-inventory.json ||
+    fail "failed predecessor tool inventory is invalid"
+  expected_provenance_sha256=$(jq -er .provenanceSHA256 /work/owner-claim.json)
+  [ "$(sha256sum /work/tool-inventory.json | awk '{print $1}')" = "$(cat /work/tool-inventory.sha256)" ] &&
+    [ "$(sha256sum /work/provenance.json | awk '{print $1}')" = "$expected_provenance_sha256" ] &&
+    [ "$(cat /work/provenance.sha256)" = "$expected_provenance_sha256" ] ||
+    fail "failed predecessor evidence hash mismatch"
+  jq -e --arg image "$image_digest" --arg provenance "$expected_provenance_sha256" \
+    --arg spec "$spec_sha256" --arg immutable "$immutable_build_sha256" '
+    .imageDigest == $image and .provenanceSHA256 == $provenance and
+    all(.platforms[]; .manifest.specSHA256 == $spec and .manifest.immutableBuildSHA256 == $immutable)
+  ' /work/tool-inventory.json >/dev/null || fail "failed predecessor tool inventory binding mismatch"
+  jq -e --arg image "$image_digest" --argjson policy "$POLICY_REVISION" \
+    --arg policy_sha "$POLICY_SHA256" --arg scope "$owner_scope_kind" \
+    --arg organization "$owner_organization_ref" --arg project "$owner_project_ref" '
+    .schema == "kodex.dev/image-provenance-binding/v2" and .manifestDigest == $image and
+    .policyRevision == $policy and .policySHA256 == $policy_sha and
+    .scopeKind == $scope and .organizationRef == $organization and .projectRef == $project
+  ' /work/provenance.json >/dev/null || fail "failed predecessor provenance binding mismatch"
+  if [ -f /work/signature.complete ]; then
+    wait_for_marker signature.complete
+    [ "$(cat /work/verdict)" = REJECTED ] || fail "failed predecessor verdict conflicts"
+    return 0
+  fi
+  write_technical_rejection "predecessor workload failed" "$rejected_phase"
+  [ "$(cat /work/provenance.sha256)" = "$expected_provenance_sha256" ] ||
+    fail "failed predecessor provenance digest mismatch"
+  # Старые подписи не относятся к новому техническому отказу.
+  for signature in image-digest provenance native-provenance tool-inventory sbom vulnerability; do
+    : >"/work/$signature.sigstore.json"
+  done
 }
 
 load_promotion_claim() {
@@ -730,6 +781,9 @@ fi
 
 require_policy
 
+[ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$admission_phase" = admit ]; } ||
+  fail "invalid admission phase arguments"
+
 case "${1:-}" in
   claim)
     claim_admission
@@ -784,8 +838,18 @@ case "${1:-}" in
     write_marker signature.complete
     ;;
   admit)
-    wait_for_marker signature.complete
-    load_owner_claim
+    if [ "$#" -eq 2 ]; then
+      case "$2" in
+        SCAN_PREDECESSOR_FAILED|SIGN_PREDECESSOR_FAILED) ;;
+        *) fail "invalid failed admission predecessor" ;;
+      esac
+      wait_for_marker claim.complete
+      load_owner_claim
+      reject_failed_predecessor "$2"
+    else
+      wait_for_marker signature.complete
+      load_owner_claim
+    fi
     verdict=$(cat /work/verdict)
     signature_identity=not-applicable-rejected
     if [ "$verdict" = ACCEPTED ]; then

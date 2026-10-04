@@ -221,6 +221,13 @@ func TestControllerRoutesTechnicalScanFailureThroughAdmissionRecord(t *testing.T
 		t.Fatal(err)
 	}
 	assertJob(t, client, id, "admit")
+	admit, _ := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, "mc-admit-"+id+"-admit", metav1.GetOptions{})
+	scan, _ := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, "mc-admit-"+id+"-scan", metav1.GetOptions{})
+	if len(admit.Spec.Template.Spec.Containers[0].Command) != 4 ||
+		admit.Spec.Template.Spec.Containers[0].Command[3] != "SCAN_PREDECESSOR_FAILED" ||
+		admit.Annotations[failedPredecessorUID] != string(scan.UID) {
+		t.Fatal("failed scan did not receive exact bounded recovery")
+	}
 	if _, err := client.BatchV1().Jobs(testConfig().Namespace).Get(ctx, "mc-admit-"+id+"-sign", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 		t.Fatalf("sign job was created after a technical scan rejection: %v", err)
 	}
@@ -367,7 +374,7 @@ func (testRenderer) Render(_ context.Context, _ *corev1.ConfigMap, environment, 
 	automount := false
 	job := &batchv1.Job{TypeMeta: metav1.TypeMeta{APIVersion: "batch/v1", Kind: "Job"}, ObjectMeta: metav1.ObjectMeta{
 		Name: "mc-admit-" + id + "-" + phase, Namespace: testConfig().Namespace,
-		Labels: map[string]string{idLabel: id, phaseLabel: phase}, UID: types.UID("job-" + id + "-" + phase),
+		Labels: map[string]string{idLabel: id, phaseLabel: phase}, UID: types.UID(id[:8] + "-" + id[8:12] + "-" + id[12:16] + "-" + id[16:20] + "-" + id[20:]),
 	}, Spec: batchv1.JobSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 		ServiceAccountName: phaseAccounts[phase], AutomountServiceAccountToken: &automount,
 		RestartPolicy: corev1.RestartPolicyNever,

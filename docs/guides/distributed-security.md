@@ -1422,6 +1422,16 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   Host runtime получает pull credential code-first через k3s `registries.yaml`;
   конфигурация использует HTTPS и exact registry host, а её изменение требует
   restart/readback k3s на каждом node.
+  Локальный preload не заменяет durable публикацию platform worker: kubelet
+  вправе удалить неиспользуемый cache до следующей фоновой задачи. Repo-owned
+  session-archive OCI перед публикацией проходит bounded проверку всех blobs,
+  descriptors, platform и exact manifest digest; private копия исходных байтов
+  передаётся существующему promotion writer по mTLS/application identity.
+  Controller и его worker используют один exact digest через настроенный
+  promoted pull host. Node и installer получают только закрытый repository
+  `kodex/session-archive`, не право произвольной публикации или role admission.
+  Unknown исход публикации проверяется отдельным readback без повторного import;
+  task/lease/grants, UID, content generation и immutable receipts не меняются.
 - `RuntimeRevision`, runtime-controller client, credential broker, workload
   admission и `ValidatingAdmissionPolicy` используют один exact promoted
   `repository@sha256`, ABI revision/digest и закрытую форму Pod: два init и три

@@ -148,7 +148,7 @@ func decidePullAuthorization(
 	if !authorizedNodePull(request, certificate, registryHost) {
 		return denyPullRequest("node_identity")
 	}
-	if !pathInRepositories(request.URL.Path, []string{"kodex/agent-runner", "kodex/roles"}) {
+	if !pathInRepositories(request.URL.Path, []string{"kodex/agent-runner", "kodex/roles", "kodex/session-archive"}) {
 		return denyPullRequest("node_repository")
 	}
 	return pullAuthorizationDecision{}
@@ -159,7 +159,7 @@ func pullProfiles() map[string]pullProfile {
 		"kodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"kodex/control-plane"}},
 		"kodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"kodex/dockerfile", "kodex/agent-runner", "kodex/role-base-documents"}},
 		"role-image-builder-input-read":   {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
-		"kodex-node-pull-installer":       {"/identity/pull-dockerconfigjson", []string{"kodex/agent-runner", "kodex/roles"}},
+		"kodex-node-pull-installer":       {"/identity/pull-dockerconfigjson", []string{"kodex/agent-runner", "kodex/roles", "kodex/session-archive"}},
 	}
 }
 

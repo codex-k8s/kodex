@@ -127,7 +127,7 @@ emit_job() {
   if [[ $phase == scan ]]; then
     memory_request=256Mi
     memory_limit=2Gi
-    tmp_limit=1Gi
+    tmp_limit=32Gi
   fi
   if [[ $phase == claim || $phase == admit ]]; then
     workload='image-admission'

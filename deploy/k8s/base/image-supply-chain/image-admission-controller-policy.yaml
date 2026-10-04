@@ -170,7 +170,15 @@ spec:
         variables.main.image == params.spec.admissionImage &&
         variables.main.imagePullPolicy == 'IfNotPresent' &&
         has(variables.main.command) &&
-        variables.main.command.size() == 3 &&
+        ((variables.main.command.size() == 3 &&
+            (!has(object.metadata.annotations) ||
+              !('kodex.dev/admission-failed-predecessor-uid' in object.metadata.annotations))) ||
+          (variables.phase == 'admit' && variables.main.command.size() == 4 &&
+            variables.main.command[3] in ['SCAN_PREDECESSOR_FAILED', 'SIGN_PREDECESSOR_FAILED'] &&
+            has(object.metadata.annotations) &&
+            'kodex.dev/admission-failed-predecessor-uid' in object.metadata.annotations &&
+            object.metadata.annotations['kodex.dev/admission-failed-predecessor-uid'].matches(
+              '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'))) &&
         variables.main.command[0] == '/bin/sh' &&
         variables.main.command[1] == '/opt/kodex/image-admission.sh' &&
         variables.main.command[2] == variables.phase &&
@@ -385,7 +393,7 @@ spec:
                volume.persistentVolumeClaim.readOnly == false)) :
           volume.name == 'tmp' ?
             has(volume.emptyDir) && string(volume.emptyDir.sizeLimit) ==
-              (variables.phase == 'scan' ? '1Gi' : '64Mi') :
+              (variables.phase == 'scan' ? '32Gi' : '64Mi') :
           volume.name == 'script' ?
             has(volume.configMap) &&
             volume.configMap.name == 'kodex-image-admission' &&

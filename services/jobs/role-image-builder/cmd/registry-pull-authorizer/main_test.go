@@ -1,17 +1,24 @@
 package main
 
 import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/nodepullidentity"
 )
 
 func TestPullRegistryProxyTimeoutsBoundLargeBlobStreams(t *testing.T) {
@@ -101,10 +108,68 @@ func TestInstallationNodePullProfileIsBounded(t *testing.T) {
 	if profile.configFile != "/identity/pull-dockerconfigjson" {
 		t.Fatalf("installation credential path = %q", profile.configFile)
 	}
-	if len(profile.repositories) != 2 ||
+	if len(profile.repositories) != 3 ||
 		profile.repositories[0] != "kodex/agent-runner" ||
-		profile.repositories[1] != "kodex/roles" {
+		profile.repositories[1] != "kodex/roles" ||
+		profile.repositories[2] != "kodex/session-archive" {
 		t.Fatalf("installation repositories = %v", profile.repositories)
+	}
+}
+
+func TestPlatformArchivePullIsLimitedToNodeIdentities(t *testing.T) {
+	t.Parallel()
+	for name, profile := range pullProfiles() {
+		allowed := pathInRepositories("/v2/kodex/session-archive/manifests/sha256:abc", profile.repositories)
+		if allowed != (name == "kodex-node-pull-installer") {
+			t.Fatalf("platform archive pull profile %s allowed=%v", name, allowed)
+		}
+		for _, path := range []string{
+			"/v2/kodex/session-archive-other/manifests/sha256:abc",
+			"/v2/kodex/session-archive/tags/list",
+		} {
+			if pathInRepositories(path, profile.repositories) {
+				t.Fatalf("unrelated archive path allowed for %s", name)
+			}
+		}
+	}
+}
+
+func TestPlatformArchiveActualNodeAuthorization(t *testing.T) {
+	t.Parallel()
+	const host = "pull.fixture.invalid"
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := nodepullidentity.CommonName("fixture-node", 1)
+	digest := sha256.Sum256([]byte(name + "\n1\n" + host))
+	signature, err := rsa.SignPSS(rand.Reader, key, crypto.SHA256, digest[:], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certificate := &x509.Certificate{Subject: pkix.Name{CommonName: name},
+		IPAddresses: []net.IP{net.ParseIP("192.0.2.1")}, PublicKey: &key.PublicKey}
+	for _, fixture := range []struct {
+		method, path, failure string
+	}{
+		{http.MethodGet, "/v2/kodex/session-archive/manifests/sha256:abc", ""},
+		{http.MethodHead, "/v2/kodex/session-archive/blobs/sha256:abc", ""},
+		{http.MethodPost, "/v2/kodex/session-archive/blobs/uploads/", "request_shape"},
+		{http.MethodDelete, "/v2/kodex/session-archive/manifests/sha256:abc", "request_shape"},
+		{http.MethodGet, "/v2/kodex/session-archive-other/manifests/sha256:abc", "node_repository"},
+		{http.MethodGet, "/v2/kodex/session-archive/tags/list", "node_repository"},
+		{http.MethodGet, "/v2/kodex/control-plane/manifests/sha256:abc", "node_repository"},
+	} {
+		request := httptest.NewRequest(fixture.method, "https://"+host+fixture.path, nil)
+		request.RemoteAddr = "192.0.2.1:1234"
+		request.SetBasicAuth(name, "v1.1."+base64.RawURLEncoding.EncodeToString(signature))
+		if got := decidePullAuthorization(request, certificate, host); got.failure != fixture.failure {
+			t.Fatalf("node path/method decision=%s want=%s", got.failure, fixture.failure)
+		}
+		request.Header.Del("Authorization")
+		if got := decidePullAuthorization(request, certificate, host); got.failure == "" {
+			t.Fatal("missing node application credential allowed")
+		}
 	}
 }
 

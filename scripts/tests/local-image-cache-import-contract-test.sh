@@ -16,6 +16,8 @@ for builder in build-local-runner.sh build-local-session-archive.sh build-local-
     fail "$builder does not restore and verify the exact repository reference"
 done
 
+python3 -B "$root/tools/dev/test_session_archive_seed.py"
+
 image_import="$root/tools/dev/import-local-image.sh"
 grep -Fq 'k3d image import "$archive"' "$image_import" ||
   fail 'k3d archive import is absent'
