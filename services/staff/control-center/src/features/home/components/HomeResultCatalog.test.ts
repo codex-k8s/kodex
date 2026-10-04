@@ -94,4 +94,3 @@ describe("Каталог текущих запусков Главной", () => 
     expect(html).not.toContain("home-result-rows__sentinel");
   });
 });
-

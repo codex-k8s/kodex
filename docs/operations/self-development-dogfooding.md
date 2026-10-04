@@ -1265,3 +1265,13 @@ gateway HTTP .054s/WS .046s, CP platform .046s/gRPC .029s, buf lint/generate
 и OpenAPI Go/TS codegen PASS. Watcher5 synthetic tests PASS121ms.
 Незапущенные full suites, actual archive/restore, MCP calls и полный Workflow
 не объявляются PASS. Checkbox2–15 остаются открытыми.
+
+04.10.2026 17:24 UTC, tree поверх `e2bae89f1cd57170995dac5c3414edb33389ce7f`:
+Первый staged diff-check обнаружил trailing blank lines в новых перенесённых
+файлах; исправлено gofmt/Prettier и точечным SQL formatting. Содержательная
+проверка не подменяется форматированием. Watcher расширен только разрешённой
+shape-only диагностикой UNKNOWN; событие названо WORKER_LOG_STAGE, поскольку
+неизвестная строка не доказывает business failure. Raw текст не сохраняется.
+Последний known worker: one line54, неизвестный prefix; actual cause UNKNOWN.
+Отдельный source defect RESTORE UID10002→runner UID10001 исправляется:
+это не установленная причина текущего SNAPSHOT. Full build ещё NOT RUN.

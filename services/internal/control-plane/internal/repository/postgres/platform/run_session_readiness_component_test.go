@@ -119,4 +119,3 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 		t.Fatal("diagnostic read changed durable state")
 	}
 }
-

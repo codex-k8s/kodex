@@ -53,4 +53,3 @@ func TestIntegrationGrantPublicProjectionStillRejectsUnknownRisk(t *testing.T) {
 		t.Fatal("unknown grant risk was accepted")
 	}
 }
-

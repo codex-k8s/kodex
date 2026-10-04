@@ -37,4 +37,3 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) task ON true
 WHERE run.organization_id = @organization_id::uuid AND run.ref = @run_ref AND session.ref = @session_ref;
-

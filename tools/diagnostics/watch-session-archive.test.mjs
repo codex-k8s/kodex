@@ -6,6 +6,7 @@ import {
   validPVC,
   validJobPod,
   metadataTemplates,
+  workerLineShape,
 } from "./watch-session-archive.mjs";
 
 test("metadata projections preserve the closing JSON object delimiter", () => {
@@ -84,6 +85,27 @@ test("model and worker task errors use exact closed stages only", () => {
     }
     assert.equal(classifyWorkerLine(message), "UNKNOWN");
   }
+});
+
+test("unknown worker shape has bounded static markers and no raw content", () => {
+  const raw =
+    "private sentinel permission denied session archive worker failed: decode session archive task\r";
+  const shape = workerLineShape(raw);
+  assert.equal(shape.workerPrefix, false);
+  assert.equal(shape.knownProducerToken, true);
+  assert.equal(shape.runtimePermissionDenied, true);
+  assert.equal(shape.carriageReturn, true);
+  assert.equal(shape.entryStage, "UNKNOWN");
+  assert.equal(shape.numberLines, 1);
+  assert.equal(shape.length, raw.length);
+  assert.equal(classifyWorkerLine(raw), "UNKNOWN");
+  assert.ok(!JSON.stringify(shape).includes("private sentinel"));
+  assert.deepEqual(workerLineShape("x".repeat(4097)), { bounded: false });
+  assert.deepEqual(workerLineShape(null), { bounded: false });
+  assert.equal(
+    workerLineShape("runtime exec format error").runtimeExecFormat,
+    true,
+  );
 });
 
 test("exact session, owner, PVC UID and Pod Job owner are required", () => {

@@ -20,4 +20,3 @@ func castRunSessionReadiness(value *entity.RunSessionReadiness) *cp.RunSessionRe
 	}
 	return read
 }
-

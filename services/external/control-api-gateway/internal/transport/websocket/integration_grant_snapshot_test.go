@@ -64,4 +64,3 @@ func TestIntegrationGrantSnapshotStillRejectsUndeclaredNestedFields(t *testing.T
 		})
 	}
 }
-

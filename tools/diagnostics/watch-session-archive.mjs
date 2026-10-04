@@ -63,6 +63,26 @@ export function classifyWorkerLine(line) {
   return stages.get(message) ?? "UNKNOWN";
 }
 
+// Неизвестный текст не возвращается: только разрешённые shape/producer markers.
+export function workerLineShape(line) {
+  if (typeof line !== "string" || line.length > 4096) return { bounded: false };
+  return {
+    bounded: true,
+    length: line.length,
+    numberLines: line.split("\n").length,
+    workerPrefix: line.startsWith(prefix),
+    entryStage: entryStages.get(line) ?? "UNKNOWN",
+    knownProducerToken: [...entryStages.keys(), ...stages.keys()].some(
+      (token) => line.includes(token),
+    ),
+    carriageReturn: line.includes("\r"),
+    jsonObjectPrefix: line.startsWith("{"),
+    runtimePermissionDenied: line.includes("permission denied"),
+    runtimeExecFormat: line.includes("exec format error"),
+    runtimeMissingFile: line.includes("no such file or directory"),
+  };
+}
+
 const refPattern = /^[A-Za-z0-9_-]{8,128}$/;
 const kubeName = /^[a-z0-9][a-z0-9.-]{0,252}$/;
 const hash = (value) =>
@@ -240,11 +260,14 @@ export async function watch(options) {
           children.add(child);
           let pending = "",
             oversized = false;
-          const report = (line) =>
-            emit("WORKER_FAILURE_STAGE", {
+          const report = (line) => {
+            const stage = classifyWorkerLine(line);
+            emit("WORKER_LOG_STAGE", {
               ...fields,
-              stage: classifyWorkerLine(line),
+              stage,
+              ...(stage === "UNKNOWN" ? { shape: workerLineShape(line) } : {}),
             });
+          };
           child.stdout.setEncoding("utf8");
           child.stdout.on("data", (chunk) => {
             for (const fragment of chunk.split(/(?<=\n)/)) {

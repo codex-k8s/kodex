@@ -11,4 +11,3 @@ type RunSessionArchiveTask struct {
 	Ref, Kind, State, SafeErrorCode string
 	Attempt, MaximumAttempts        int32
 }
-
