@@ -865,3 +865,26 @@ template и семь slots совпадают; artifacts0/managedMCPProfiles0.
 file-input transfer; никаких secret values в журнале/Git/выводе не было.
 SSO owner login и отдельный штатный вход приложения восстановлены;
 зависший побочный login client остановлен без закрытия браузера/вкладок.
+
+04.10.2026 13:15–13:24 UTC, source поверх `fdd1f81e`:
+PASS — Run22 SUCCEEDED/version2, но propose_configuration_plan FAILED.
+Safe operation_types впервые показывают точные4 операции: инструкции,
+runtime config, environment revision, integration connection. Exact closed
+log: assistant_plan_hydrate_conflict, operation_index2. Это PREPARE_ASSISTANT_
+RUNTIME_CONFIGURATION. No-op, draft, provider eligibility либо profile
+конфликт всё ещё различаются только по source; no-op не считается доказанным.
+Owner GETruntime200, READY, draftOverlay absent, текущая модель gpt-6.1-sol.
+Адресный no-op fix готовится с сохранением normalize/bind/authorize/version
+проверок; любой произвольный Conflict пропускать запрещено.
+PASS — HomeAttention initial5/scroll/doload уже существовали; CSS minimum84
+согласован с existing estimator84, пустой sentinel padding удалён.
+Root6 unit PASS1.91 s, detached35 tests/typecheck/lint/format PASS.
+Actual geometry: height420, overflowauto, DOMrows10, fullyVisible5,
+каждая строка84; это доказательство bounded viewport, не ограничения history.
+PASS — inline Chrome screenshot завершился после длительного ожидания:
+agent/user alignment, folded tools, commentary и final видны, плановая ошибка
+не скрыта. Снимок показывает чат, не HomeAttention; геометрию списка проверил
+DOM readback. Первый отменённый screenshot не объявляется успешным.
+Installed MCP screenshot handler не имеет отдельного deadline и держит
+toolMutex; cancellation caller не доказывает отмену capture. Глубокая
+диагностика причины без trace NOT RUN; browser/npm configuration не менялись.

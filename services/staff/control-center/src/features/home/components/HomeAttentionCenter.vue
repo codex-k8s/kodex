@@ -394,7 +394,7 @@ useCursorInfiniteScroll({
   min-height: 1px;
   align-items: center;
   justify-content: center;
-  padding: 6px 16px;
+  padding: 0;
 }
 .home-attention__count,
 .home-attention__group-head > span {
@@ -460,7 +460,7 @@ useCursorInfiniteScroll({
   grid-template-columns: 32px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 14px;
-  min-height: 68px;
+  min-height: 84px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--hairline);
   color: inherit;

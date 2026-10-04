@@ -47,6 +47,20 @@ describe("HomeAttentionCenter states", () => {
     expect(template).toContain("emit('retryMoreProviders', providerPageSize)");
   });
 
+  it("оставляет не больше пяти компактных строк в viewport без пустого footer", () => {
+    const bodyStyle = source.match(/\.home-attention__body \{([^}]+)\}/)?.[1];
+    const itemStyle = source.match(/\.home-attention__item \{([^}]+)\}/)?.[1];
+    const sentinelStyle = source.match(
+      /\.home-attention__provider-sentinel \{([^}]+)\}/,
+    )?.[1];
+    expect(bodyStyle).toContain("max-height: min(420px, 55vh)");
+    expect(bodyStyle).toContain("overflow-y: auto");
+    expect(itemStyle).toContain("min-height: 84px");
+    expect(sentinelStyle).toContain("padding: 0");
+    expect(template).not.toContain("<footer");
+    expect(source).not.toContain("setInterval");
+  });
+
   it("ограничивает первый render пятью записями, сохраняя общий счётчик", async () => {
     const failedRuns = Array.from(
       { length: 15 },
