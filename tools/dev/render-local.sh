@@ -533,6 +533,23 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   )
 ' "$render"
 
+# CP читает каталог один раз при запуске. Изменение mutable ConfigMap должно
+# менять Pod template, даже если сама конфигурация процесса не изменилась.
+role_environment_catalog=$(yq -r '
+  select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+    .metadata.name == "kodex-role-environments") | .data."catalog.json"
+' "$render")
+[[ -n "$role_environment_catalog" && "$role_environment_catalog" != null ]] ||
+  fail 'local role environment catalog is absent'
+role_environment_catalog_digest=$(printf '%s' "$role_environment_catalog" | sha256sum | awk '{print $1}')
+ROLE_ENVIRONMENT_CATALOG_DIGEST="$role_environment_catalog_digest" yq -i '
+  with(select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "control-plane");
+    .spec.template.metadata.annotations."kodex.dev/role-environment-catalog-sha256" =
+      strenv(ROLE_ENVIRONMENT_CATALOG_DIGEST)
+  )
+' "$render"
+
 admission_policy_payload=$(yq -o=json -I=0 '
   select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
   .data | del(.orchestrationRevision, .policySHA256)

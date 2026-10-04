@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.328
+version: 1.0.329
 updated: 2026-10-04
 ---
 
@@ -6933,7 +6933,7 @@ GitHub checks не считается `PASS`.
 образа в #1789 снято и readback обновлённого Issue подтверждён. Это требования
 и план, не результат проверки всей новой функциональности.
 
-- [ ] Общеплатформенные образы и секреты имеют явную организационную область,
+- [x] Общеплатформенные образы и секреты имеют явную организационную область,
       без фиктивного проекта и без обхода сборки, допуска или secret-broker.
 - [x] Лимит параллельных выполнений аккаунта провайдера по умолчанию — 10
       вместо 1. Настраивается в параметрах аккаунта через штатные API и UI
@@ -6949,7 +6949,7 @@ GitHub checks не считается `PASS`.
       Миграция и перевод текущего аккаунта проверены на локальном стенде;
       снижение при активных ходах — в disposable PostgreSQL (этап 2).
       Это не проверка живого inference и не приёмка остальных путей.
-- [ ] Полная системная настройка: модель/аккаунт/reasoning, образ, проверенные
+- [x] Полная системная настройка: модель/аккаунт/reasoning, образ, проверенные
       инструменты, окружение, несекретные переменные, привязки секретов, ресурсы,
       тома, сетевой доступ и инструкции. Доступ — владелец/администратор.
 - [x] Отдельная конфигурация помощника проекта использует ресурсы только своего
@@ -6987,7 +6987,7 @@ GitHub checks не считается `PASS`.
       timestamps; reasoning отсортирован от меньшего к большему.
 - [x] READ_OWN_EXECUTION полностью удалён из контрактов, типов, настройки и
       выдачи runtime-прав; совместимость со старым профилем не поддерживается.
-- [ ] Contract/codegen, Go/unit/disposable PostgreSQL, frontend/lint/typecheck/build,
+- [x] Contract/codegen, Go/unit/disposable PostgreSQL, frontend/lint/typecheck/build,
       итоговый render, hot-reload readback и Chrome MCP со скриншотами, Console и
       relevant Network. Проверить 2 и 10 одновременных диалогов, очередь 11-го,
       смену/снижение лимита, Stop/retry/delete одного из чатов, переподключение,
@@ -6995,6 +6995,10 @@ GitHub checks не считается `PASS`.
       текущий FAIL полного компонентного набора, активировать новый runner и
       проверить exact digest в обслуживаемом runtime. Реальный inference, STT,
       device-code и production — NOT RUN без отдельного решения владельца.
+      Завершение учитывает последующее решение владельца: вместо нового полного
+      baseline/review выполнен native Chrome/Network/Console/backend повтор.
+      Ранее выполненные suites остаются привязаны к своим checkpoint; текущий
+      hot-reload результат не объявляется immutable release acceptance.
 
 ### 03.10.2026 — решение о параллельных диалогах
 
@@ -8101,3 +8105,72 @@ runner `sha256:da8a365f19dd11c49ebabfcfe9ea6313aa4e60abc256790d51f78de1a1b681b9`
 после hard reload штатное создание поколения 2 прошло. Ошибочный вызов
 stage `core-runtime` был отклонён до изменений; повтор с поддерживаемым
 stage `core` завершился PASS. Эти первые отказы не скрываются.
+
+Checkpoint `67855fde31e52d9111cc4908482de40bb0bfd542`: runner пересобран
+с gRPC `v1.83.2`, exact digest
+`sha256:a323518dca10ba6bceb0a64b848c60e0e3b8b9bd37d9bfe908b7c34ad0ff37e5`.
+Repo-owned render/supply-chain/core завершились PASS; три контейнера warm
+используют этот digest и Ready, inference не запускался.
+
+Chrome выявил отдельную ошибку установки: CP загружал каталог один раз при
+старте и мог сохранить старый base digest при более позднем обновлении
+ConfigMap. Исправление поверх checkpoint: core применяет точный каталог до
+Deployment, render закрепляет SHA-256 каталога в Pod template. Native GET
+после rollout возвращает новый `a323…` digest; Ready replicas — 1, annotation
+`7a428c5cc8ad898987745fc9912ef417b76a146fe961a411e8e35d97b9693f12`.
+Render/core apply/readback — PASS. Добавлена адресная регрессия порядка и
+границы выбора ConfigMap; новый тестовый повтор — NOT RUN по решению владельца.
+Штатная UI-ревизия 3 автоматически создала сборку
+`imgbld_q0glN5ddP8pwOlz4-oYmccK_`; сборка COMPLETED, результат допуска
+на этом этапе ещё ожидается.
+
+Поколение 3 получило ACCEPTED с digest
+`sha256:8adf494cbe58e811dd34255c6f6bdbb5ae19c88950421d09b630c2c2a9367242`.
+Native Chrome обнаружил отсутствие обновления допуска без reload: рабочий
+`RecordAdmission` сохранял verdict, но не публиковал платформенный сигнал.
+Карта исправления: проверенная workload authority `image-admission` → внутренний
+`RecordAdmission` → CP owner-transaction → locked artifact scope/recipe/version →
+receipt и `ROLE_IMAGE_RECIPE_CHANGED` ровно один раз → gateway scoped catalog →
+frontend role-image detail. ACCEPTED и REJECTED одинаково сигнализируются;
+повтор receipt не создаёт событие, terminal другого графа не затрагивается.
+Новых API, event names, декодеров или источников authority нет. Регрессия
+организационной области и idempotent cardinality добавлена, повтор suite
+NOT RUN по решению владельца; native поколение 4 проверяет hot-reload путь.
+Также исправлена RU/EN подпись: отсутствие опубликованного образа больше не
+обозначается отсутствием допуска. Предупреждения controller/builder/admission
+при CP rollout относятся к кратковременному Unavailable; они сохранены как
+наблюдение, а не скрыты за общим PASS.
+
+### 04.10.2026 — завершение native пути собственного образа
+
+Поверх `67855fde31e52d9111cc4908482de40bb0bfd542` проверены исправления
+catalog-startup barrier и admission realtime signal. Native generation 4
+организационного QA-рецепта без проектной привязки получила ACCEPTED;
+кнопка публикации появилась автоматически без ручного reload после допуска.
+Штатная публикация через UI завершилась PROMOTED. Artifact
+`imgart_bt4fHxbEcqVa8oJB7ecNgBFm`, exact OCI digest
+`sha256:6013035ba95b5ea3dd6d5bdcdb76ba3daa65115dd52941cadcb53a7e6d665673`.
+Promotion Job завершился exit 0; native readback подтверждает activeArtifact.
+
+Образ выбран в полной системной форме окружения; штатные сохранение и
+проверка создали `renvd_zgxsvwuM4aJfz07t5xv9usyI`, state VALID,
+scopeKind ORGANIZATION, projectRef пуст, imageArtifactRef совпадает с допущенным
+и опубликованным артефактом. Активная конфигурация владельца не публиковалась.
+Это проверка draft/validation, не inference. Скриншоты
+`/tmp/kodex-assistant-g4-image-promoted.png` и
+`/tmp/kodex-assistant-g4-environment-validated.png` сохранены и просмотрены;
+горизонтального overflow нет, Console error/warn нет, native GET — 200.
+Неверная попытка прочитать уже завершившийся scan container не считается
+доказательством сканирования; основание допуска — авторитетный ACCEPTED.
+
+- [x] Собственный SYSTEM образ: Dockerfile → build → admission → promotion →
+      выбор exact artifact → VALID черновик окружения; все переходы штатные.
+- [x] Realtime обновление результата допуска и публикации без product polling.
+- [x] Исторические REJECTED и кратковременный Unavailable при rollout сохранены.
+- [x] Обязательные пункты конфигурации помощников закрыты в согласованном режиме;
+      новые review/full-suite повтор, real inference, STT, device-code,
+      staging/production — NOT RUN, не PASS.
+
+Владелец дополнительно разрешил субагентов в текущей цели и запросил
+ускорение независимых сборок и подбор ресурсов по возможностям сервера.
+Эта дополнительная оптимизация выполняется в том же PR до слияния.

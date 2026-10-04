@@ -182,16 +182,32 @@ func TestOrganizationRoleImagesComponent(t *testing.T) {
 	if err != nil || admission.Artifact.Ref != artifact.Ref || admission.Artifact.OrganizationRef != artifact.OrganizationRef {
 		t.Fatalf("claim organization admission: %v", err)
 	}
-	admitted, err := repository.RecordAdmission(ctx, roleimagerepo.AdmissionRecordInput{
+	admissionInput := roleimagerepo.AdmissionRecordInput{
 		Principal: admissionWorker, IdempotencyKey: "org-image-admit", ArtifactRef: artifact.Ref, ClaimToken: admission.ClaimToken,
 		ExpectedVersion: admission.Artifact.Version, ExpectedFence: admission.Fence, ManifestDigest: manifest,
 		ImmutableBuildSHA256: artifact.ImmutableBuildSHA256, ProvenanceSHA256: artifact.ProvenanceSHA256,
 		PolicyRevision: repository.roleImages.PolicyRevision, PolicySHA256: repository.roleImages.PolicySHA256, Verdict: "ACCEPTED",
 		SBOMSHA256: strings.Repeat("1", 64), VulnerabilityEvidenceSHA256: strings.Repeat("2", 64), SignatureIdentity: "synthetic-owner",
 		SignatureSHA256: strings.Repeat("3", 64), AdmissionReceiptSHA256: strings.Repeat("4", 64), AdmissionReceiptOCIManifestDigest: "sha256:" + strings.Repeat("5", 64),
-	})
+	}
+	admitted, err := repository.RecordAdmission(ctx, admissionInput)
 	if err != nil || admitted.ScopeKind != "ORGANIZATION" {
 		t.Fatalf("admit organization artifact: %v", err)
+	}
+	if _, err := repository.RecordAdmission(ctx, admissionInput); err != nil {
+		t.Fatalf("replay organization admission: %v", err)
+	}
+	var admissionEventCount int
+	if err := repository.pool.QueryRow(ctx, `
+SELECT count(*) FROM control_plane.outbox_events
+WHERE convert_from(payload, 'UTF8')::jsonb->>'eventName' = 'ROLE_IMAGE_RECIPE_CHANGED'
+  AND convert_from(payload, 'UTF8')::jsonb->>'aggregateRef' = $1
+  AND convert_from(payload, 'UTF8')::jsonb->>'organizationRef' = $2
+  AND (convert_from(payload, 'UTF8')::jsonb->>'aggregateVersion')::bigint = $3
+  AND convert_from(payload, 'UTF8')::jsonb->'data'->>'state' = 'ACCEPTED'
+  AND NOT (convert_from(payload, 'UTF8')::jsonb ? 'projectRef')`,
+		created.Recipe.Ref, admitted.OrganizationRef, admitted.RecipeVersion).Scan(&admissionEventCount); err != nil || admissionEventCount != 1 {
+		t.Fatalf("organization admission realtime signal count=%d err=%v", admissionEventCount, err)
 	}
 	detail, err = repository.GetOrganization(ctx, resolved, created.Recipe.Ref)
 	if err != nil {

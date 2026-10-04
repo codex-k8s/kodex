@@ -186,6 +186,13 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 		input.IdempotencyKey, intent, "IMAGE_ADMISSION_RECORD", locked.Artifact); err != nil {
 		return entity.ImageArtifact{}, err
 	}
+	// Допуск меняет подробности рецепта и доступность публикации. Сигнал
+	// принадлежит той же транзакции; область берётся из заблокированного артефакта.
+	if err := repository.emitPlatformEventSnapshot(ctx, tx, current, "ROLE_IMAGE_RECIPE_CHANGED",
+		locked.Artifact.ProjectRef, locked.Artifact.RecipeRef, "i18n:ROLE_IMAGE_RECIPE_CHANGED",
+		int64(locked.Artifact.RecipeVersion), input.Verdict); err != nil {
+		return entity.ImageArtifact{}, err
+	}
 	if err := committed(tx, ctx); err != nil {
 		return entity.ImageArtifact{}, err
 	}

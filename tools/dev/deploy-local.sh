@@ -1728,6 +1728,14 @@ PY
   fi
   if [[ "$stage" == core ]]; then
     if [[ "$mode" == apply ]]; then
+      if [[ -z "$selected_workload" || "$selected_workload" == control-plane ]]; then
+        # Каталог должен быть применён до старта CP, не только в supply-chain:
+        # процесс загружает его при запуске и не перечитывает projected volume.
+        apply_render core-role-environment-catalog '
+          select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+            .metadata.name == "kodex-role-environments")
+        '
+      fi
       # Точечный rollout должен сначала получить свои source-bound настройки.
       # CA, секреты и конфигурации других компонентов здесь не публикуются.
       case "$selected_workload" in

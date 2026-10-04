@@ -119,6 +119,27 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], [accepted])
         self.assertIn("live image admission runtime configuration readback mismatch", source)
 
+    def test_control_plane_catalog_precedes_start_and_pins_pod_template(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == core ]]'):]
+        match = re.search(r"apply_render core-role-environment-catalog\s+'([^']*)'", stage)
+        self.assertIsNotNone(match)
+        self.assertLess(match.start(), stage.index('apply_render core-application'))
+        accepted = {"kind": "ConfigMap", "metadata": {"name": "kodex-role-environments", "namespace": "kodex-system"}}
+        rejected = [
+            {"kind": "Secret", "metadata": accepted["metadata"]},
+            {"kind": "ConfigMap", "metadata": {"name": "kodex-role-environments", "namespace": "other-project"}},
+        ]
+        result = subprocess.run(
+            ["jq", "-c", match.group(1)], text=True, capture_output=True, timeout=5,
+            input="\n".join(json.dumps(item) for item in [accepted] + rejected),
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], [accepted])
+        renderer = SCRIPT.with_name("render-local.sh").read_text()
+        self.assertIn('kodex.dev/role-environment-catalog-sha256', renderer)
+        self.assertIn('ROLE_ENVIRONMENT_CATALOG_DIGEST', renderer)
+
     def test_materialization_readback_accepts_only_approved_api_defaults(self):
         source = SCRIPT.read_text()
         match = re.search(
