@@ -36,6 +36,66 @@ wait_for_marker() {
   [ "$(cat "/work/$1")" = "$ADMISSION_RUN_ID" ] || fail "stale predecessor evidence"
 }
 
+# Проекция только подтверждённого durable evidence после успешной записи владельца.
+emit_admission_diagnostic() {
+  jq -cen --arg run "$ADMISSION_RUN_ID" \
+    --slurpfile claim /work/owner-claim.json \
+    --slurpfile receipt /work/evidence.readback/admission.receipt.json \
+    --slurpfile report /work/evidence.readback/vulnerability.json '
+    def count_ok: type == "number" and . >= 0 and . <= 1000000 and floor == .;
+    def identifier: type == "string" and (test("[\r\n]") | not);
+    def high: (.vulnerability.severity | ascii_downcase) as $s | $s == "high" or $s == "critical";
+    def fixed: .vulnerability.fix.state == "fixed" and (.vulnerability.fix.versions | type == "array" and length > 0);
+    def name_ok: identifier and test("^[A-Za-z0-9@][A-Za-z0-9.+_:@/~-]{0,159}$") and (contains("://") | not);
+    def version_ok: identifier and test("^[A-Za-z0-9][A-Za-z0-9.+:~_-]{0,159}$");
+    $receipt[0] as $r | $report[0] as $v | $claim[0] as $c |
+    if ($run | identifier and test("^v[0-9]{14}-[a-f0-9]{40}$")) and
+       ($r.artifactId | identifier and test("^imgart_[A-Za-z0-9_-]{8,88}$")) and
+       ($r.imageDigest | identifier and test("^sha256:[a-f0-9]{64}$")) and
+       ($r.vulnerabilityEvidenceSHA256 | identifier and test("^[a-f0-9]{64}$")) and
+       ($r.verdict == "ACCEPTED" or $r.verdict == "REJECTED") and
+       $c.artifactId == $r.artifactId and $c.manifestDigest == $r.imageDigest and
+       ($c.recipeId | identifier and test("^imgrec_[A-Za-z0-9_-]{8,88}$")) and
+       ($c.buildId | identifier and test("^imgbld_[A-Za-z0-9_-]{8,88}$")) and
+       ($c.recipeGeneration | type == "number" and . > 0 and . <= 9007199254740991 and floor == .)
+       then . else error("diagnostic identity is invalid") end |
+    (if $v.schema == "kodex.dev/vulnerability-evidence-unavailable/v1" and $r.verdict == "REJECTED" and
+        ($v.phase == "scan" or $v.phase == "sign") then
+      {reason:(if $v.phase == "scan" then "SCAN_TECHNICAL_REJECTION" else "SIGN_TECHNICAL_REJECTION" end),
+       failureCode:(if $v.reason == "vulnerability scan failed" then "VULNERABILITY_SCAN_FAILED"
+                    elif $v.reason == "SBOM generation failed" then "SBOM_GENERATION_FAILED"
+                    elif $v.reason == "vulnerability policy evaluation failed" then "VULNERABILITY_POLICY_FAILED"
+                    else "TECHNICAL_DETAIL_UNKNOWN" end),
+       highOrCriticalMatchCount:null,blockingMatchCount:null,unresolvedNoFixMatchCount:null,remediation:[]}
+    else
+      $v.kodexPolicy as $p |
+      [$v.matches[] | select(high)] as $high |
+      [$high[] | select(fixed)] as $blocked |
+      if $p.schema == "kodex.dev/fix-available-high-or-critical/v1" and
+         ($p.policyRevision | tostring) == $r.policyRevision and $p.policySHA256 == $r.policySHA256 and
+         ($p.highOrCriticalMatchCount | count_ok) and ($p.blockingMatchCount | count_ok) and
+         ($p.unresolvedNoFixMatchCount | count_ok) and
+         $p.highOrCriticalMatchCount == ($high | length) and $p.blockingMatchCount == ($blocked | length) and
+         $p.unresolvedNoFixMatchCount == (($high | length) - ($blocked | length)) and
+         (($r.verdict == "ACCEPTED" and ($blocked | length) == 0) or
+          ($r.verdict == "REJECTED" and ($blocked | length) > 0)) then . else error("diagnostic policy is invalid") end |
+      {reason:(if $r.verdict == "ACCEPTED" then "ACCEPTED" else "VULNERABILITY" end),
+       failureCode:null,
+       highOrCriticalMatchCount:$p.highOrCriticalMatchCount,blockingMatchCount:$p.blockingMatchCount,
+       unresolvedNoFixMatchCount:$p.unresolvedNoFixMatchCount,
+       remediation:(if $r.verdict == "REJECTED" then
+         [$blocked[] | select(.vulnerability.id | identifier and test("^CVE-[0-9]{4}-[0-9]{4,12}$")) |
+          select(.artifact.name | name_ok) | select(.artifact.version | version_ok) |
+          {cve:.vulnerability.id,package:.artifact.name,version:.artifact.version,
+           fixes:([.vulnerability.fix.versions[] | select(version_ok)] | unique | .[:4])} |
+          select(.fixes | length > 0)] | unique_by([.cve,.package,.version]) | .[:20]
+         else [] end)}
+    end) + {event:"IMAGE_ADMISSION_DIAGNOSTIC",version:1,admissionRunId:$run,
+            artifactRef:$r.artifactId,imageDigest:$r.imageDigest,verdict:$r.verdict,
+            vulnerabilityEvidenceSha256:$r.vulnerabilityEvidenceSHA256,
+            recipeRef:$c.recipeId,recipeGeneration:$c.recipeGeneration,buildRef:$c.buildId}'
+}
+
 require_policy() {
   echo "$POLICY_REVISION" | grep -Eq '^[1-9][0-9]*$' || fail "invalid policy revision"
   echo "$POLICY_SHA256" | grep -Eq '^[a-f0-9]{64}$' || fail "invalid policy digest"
@@ -915,6 +975,7 @@ EOF
     IMAGE_OWNER_SIGNATURE_IDENTITY="$signature_identity" IMAGE_OWNER_VERDICT="$verdict" \
       image-admission-bridge record
     write_marker admission.complete
+    emit_admission_diagnostic 2>/dev/null || printf '%s\n' '{"event":"IMAGE_ADMISSION_DIAGNOSTIC_UNAVAILABLE"}'
     ;;
   promote)
     claim_promotion

@@ -1536,4 +1536,30 @@ onBeforeUnmount(() => {
     flex-direction: column;
   }
 }
+@media (max-width: 640px) {
+  .role-image-editor {
+    padding-bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+  .lifecycle-step {
+    grid-template-columns: 28px minmax(0, 1fr);
+    padding-inline-end: 76px;
+  }
+  .lifecycle-step > .status-badge {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+  .lifecycle-step > div > span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+}
 </style>

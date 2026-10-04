@@ -1808,3 +1808,23 @@ Email configuration CONFLICT и недопустимый gated READ fixture ис
 Штатное повторное admission ещё не запускалось: диагностика готовится для
 заранее известного recipe/generation без извлечения browser cookies.
 Checkbox2–15 OPEN, environment publish и внутренний dogfooding ещё NOT RUN.
+
+04.10.2026 23:50 UTC, новый tree поверх
+`e5cda971080a3707bccda350a6aa96fefd61bec3`:
+PASS — фактический mobile390 screenshot: lifecycle status отдельной строкой,
+полностью читается, FAB его не перекрывает; горизонтального overflow нет.
+ROOT25 frontend unit PASS2.89s, scoped ESLint PASS; desktop сохранён.
+PASS — минимальная admission диагностика после durable readback и owner record:
+exact recipe/generation/build/artifact/digest/report hash и только закрытые
+reason/failureCode/counts. Raw reason/headers/auth не выводятся. Recipe watcher
+запускается до native REQUEST_BUILD, проверяет Job→Pod UID и повторно подключает
+закрытый поток; кандидат сохраняется exclusively0600 в owned0700, до сверки
+protected owner GET остаётся PENDING_OWNER_CONFIRMATION, не admission PASS.
+ROOT11 Node hermetic PASS, существующий retry diagnostic test PASS, shell syntax
+и diff-check PASS. Actual deployment/normal repeat этого delta ещё NOT RUN.
+PASS — stale managed package fixture теперь доказывает INVALID/publish denial
+для недопустимого gated READ без изменения binding/credential, затем успешную
+публикацию допустимого narrowed timeout revision и очистку прежнего credential.
+Isolated disposable PG target PASS7.00s; ROOT Go1.26.6 platform unit PASS.622s.
+Общий Bootstrap остаётся FAIL до исправления email configuration CONFLICT;
+финальный полный повтор ещё NOT RUN. Checkbox2–15 остаются OPEN.

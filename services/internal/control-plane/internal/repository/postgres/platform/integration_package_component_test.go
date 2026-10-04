@@ -71,24 +71,52 @@ UPDATE control_plane.integration_connections connection SET credential_revision_
 FROM revision WHERE connection.id=revision.connection_id`, connectionRef); err != nil {
 		t.Fatalf("seed obsolete credential binding: %v", err)
 	}
-	for index := range definition.Spec.Capabilities {
-		if definition.Spec.Capabilities[index].Operation == definition.Spec.HealthCheck.Operation {
-			definition.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_EACH_EFFECT"
+	before, err := service.GetIntegrationConnection(ctx, owner, connectionRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gated, err := integrationpackage.Parse(asJSON(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range gated.Spec.Capabilities {
+		if gated.Spec.Capabilities[index].Operation == gated.Spec.HealthCheck.Operation {
+			gated.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_EACH_EFFECT"
 		}
 	}
-	definition.Spec.Name = "Интеграция с подтверждением чтения"
-	second := publishAndRebindManagedConfiguration(t, ctx, service, owner, "managed-package-gated-health", command.CreateIntegrationDefinition,
+	gated.Spec.Name = "Интеграция с недопустимым подтверждением чтения"
+	invalid, err := service.Execute(ctx, command.Command{Kind: command.CreateIntegrationDefinition, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-package-gated-health-create"},
+		Payload:  command.ManagedConfigurationInput{Name: gated.Spec.Name, ContentFormat: "JSON", Content: string(asJSON(gated))}})
+	if err != nil || invalid.ManagedConfiguration == nil || invalid.ManagedRevision == nil || invalid.ManagedRevision.State != "DRAFT" {
+		t.Fatalf("create invalid health policy draft: %v", err)
+	}
+	version = invalid.ManagedConfiguration.Version
+	invalid, err = service.Execute(ctx, command.Command{Kind: command.ValidateIntegrationDefinition, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-package-gated-health-validate", ExpectedVersion: &version},
+		Payload:  command.ManagedConfigurationInput{ConfigurationRef: invalid.ManagedConfiguration.Ref, RevisionRef: invalid.ManagedRevision.Ref}})
+	if err != nil || invalid.ManagedConfiguration == nil || invalid.ManagedRevision == nil || invalid.ManagedRevision.State != "INVALID" {
+		t.Fatalf("READ health approval policy was not rejected: %v", err)
+	}
+	version = invalid.ManagedConfiguration.Version
+	if _, err := service.Execute(ctx, command.Command{Kind: command.PublishIntegrationDefinition, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-package-gated-health-publish", ExpectedVersion: &version},
+		Payload:  command.ManagedConfigurationInput{ConfigurationRef: invalid.ManagedConfiguration.Ref, RevisionRef: invalid.ManagedRevision.Ref}}); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("invalid READ health policy publication was accepted: %v", err)
+	}
+	unchanged, err := service.GetIntegrationConnection(ctx, owner, connectionRef)
+	if err != nil || unchanged.Version != before.Version || unchanged.DefinitionDigest != before.DefinitionDigest || unchanged.DefinitionVersion != before.DefinitionVersion ||
+		before.CredentialRevision == nil || unchanged.CredentialRevision == nil || unchanged.CredentialRevision.Ref != before.CredentialRevision.Ref {
+		t.Fatalf("invalid health policy changed exact connection binding: %v", err)
+	}
+	definition.Spec.HealthCheck.TimeoutSeconds--
+	definition.Spec.Name = "Интеграция с ограниченным временем проверки"
+	second := publishAndRebindManagedConfiguration(t, ctx, service, owner, "managed-package-narrowed-health", command.CreateIntegrationDefinition,
 		command.ValidateIntegrationDefinition, command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
 		command.ManagedConfigurationInput{Name: definition.Spec.Name, ContentFormat: "JSON", Content: string(asJSON(definition))},
 		entity.ManagedConfigurationConsumer{Kind: "INTEGRATION_CONNECTION", Ref: connectionRef})
 	connection, err = service.GetIntegrationConnection(ctx, owner, connectionRef)
-	if err != nil || connection.DefinitionDigest != second.ManagedRevision.Digest || connection.CredentialRevision != nil || slices.Contains(connection.NextActions, "TEST") || !connection.TestRequiresApproval {
-		t.Fatalf("gated health readback exposed unsafe test: %+v %v", connection, err)
-	}
-	version = connection.Version
-	_, err = service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "managed-package-gated-denied", ExpectedVersion: &version}, Payload: command.ConnectionInput{Ref: connectionRef}})
-	if !errors.Is(err, errs.ErrForbidden) {
-		t.Fatalf("health gate bypass: %v", err)
+	if err != nil || connection.DefinitionDigest != second.ManagedRevision.Digest || connection.CredentialRevision != nil || !slices.Contains(connection.NextActions, "TEST") || connection.TestRequiresApproval {
+		t.Fatalf("narrowed health binding retained obsolete credential or unsafe test policy: %v", err)
 	}
 }
