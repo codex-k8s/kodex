@@ -4,7 +4,7 @@ title: Внутренние Proto/gRPC-контракты
 type: contract-guide
 status: approved
 owner: architect
-version: 1.0.1
+version: 1.0.2
 updated: 2026-10-04
 ---
 
@@ -15,6 +15,59 @@ updated: 2026-10-04
 ```text
 contracts/proto/<service>/v<major>/*.proto
 ```
+
+## Собственная конфигурация помощника через managed MCP
+
+Сценарий #1797 использует существующий `get_configuration_catalog` с закрытым
+selector `assistant_configuration_catalog: {kind: CURRENT_CONFIGURATION,
+assistant_ref: <собственный agent_ref>}`. `assistant_ref` — только locator,
+не источник полномочий. Query, pagination, account/profile override и другие
+selectors для этого вида запрещены. Новое имя инструмента или RPC не вводится.
+
+| Этап | Проверка и владелец |
+| --- | --- |
+| Runtime → `/runtime/mcp`, `tools/call` | Runtime-controller проверяет execution ticket и exact binding; прежний `RecordRunToolCall` проверяет `platform.configuration.read` перед чтением |
+| Controller → `RuntimeWorkService.SearchAssistantResources` | Тот же generated client и зарегистрированный workload/method; Proto kind `CURRENT_CONFIGURATION` |
+| CP service → repository | Caller `runtime-controller`, permission `platform.runtime.assistant.resources.search`; ограниченные request поля |
+| Authoritative CP snapshot | Lease/fence/generation, незавершённые run/node/session/turn и immutable revision lineage; текущие root initiator/membership, exact source helper и canonical configuration-view eligibility |
+| Собственный target | Для SYSTEM и PROJECT требуется `assistant_ref == sourceRef` из lease; SYSTEM сохраняет ORGANIZATION, PROJECT — exact project/profile; project экран не меняет область SYSTEM |
+| Ответ → MCP consumer | Новый `AssistantCurrentConfiguration` содержит только безопасную typed модель; controller закрыто проверяет scope/agent/binding, unknown fields/enums, версии, digest и размер |
+
+`current_configuration` содержит свежие опубликованные config/overlay pins,
+полный опубликованный шаблон инструкций, SYSTEM core/owner instructions и их
+ревизии, environment/binding/image pins, tools, ресурсы/тома/сеть/RBAC,
+несекретные environment values и каталог template variables. Доступность
+переменных берётся из свежего canonical prompt-preview context, а не из
+подставленных клиентом значений. Template digest относится к исходной immutable
+ревизии шаблона; SYSTEM `published_instructions` дополнительно содержит owner
+instructions, которые закреплены отдельной owner revision. Секреты представлены
+только `name`, логическим `secret_ref`, `revision`; значения, Kubernetes
+имена/namespace/key/UID/resourceVersion и content digest не выдаются.
+
+Отдельный `execution_snapshot` содержит безопасные pins уже назначенного CP
+immutable `RunnerInput` текущего exact run/node/session/turn/attempt. Он не
+подменяет свежие настройки и не получает новый срок, lease или полномочия.
+Изменение current во время хода не переписывает этот snapshot. Int64 внутри
+`current_configuration` представлены каноническими ProtoJSON decimal strings;
+`execution_snapshot` использует прежние bounded JSON числа.
+У организационного SYSTEM bootstrap current image может быть полностью unset:
+он остаётся пустым, а фактически выбранные image reference/digest читаются из
+immutable `execution_snapshot`. Частичная image identity или пустой PROJECT
+image закрыто отклоняются; current не восстанавливается из snapshot хода.
+
+| Lifecycle | Исход чтения |
+| --- | --- |
+| Действующий собственный execution | Один `REPEATABLE READ` snapshot текущего состояния CP; сохранённый turn snapshot выдаётся отдельно |
+| Foreign/missing target, scope/profile mismatch, revoked actor/membership | Закрытый NotFound/Forbidden; resource/version/payload не раскрываются |
+| Terminal/cancel/delete/lease expiry | Прежний authoritative lease resolver не выдаёт состояние через неактивную lease |
+| Retry/continuation | Новая server-owned lease/attempt/revision; старые fence/generation не подходят |
+| Read/repeat/rejoin | Query не изменяет состояние, не создаёт idempotency receipt или domain event; существующие безопасные tool started/completed events сохраняются без полного результата |
+
+Материализация переиспользует прежние RPC registration, client operation,
+startup/readiness, exact NetworkPolicy и deployment controller/CP. Runner
+получает descriptor динамически в том же каталоге managed MCP; UI JWT,
+произвольное чтение и доступ к чужой БД отсутствуют. Самонастройка по-прежнему
+требует отдельного typed plan и подтверждения владельца с его OCC pins.
 
 Proto является источником истины для внутреннего синхронного API. Generated Go
 code размещается рядом с потребителем и вручную не редактируется.
@@ -130,11 +183,13 @@ PROJECT может настраивать только свой профиль, 
 проектный профиль. Обычный сотрудник не становится помощником из-за пустого
 project ref.
 
-Каталог возвращает максимум десять записей закрытого вида с ограниченным
+Страничные виды каталога возвращают максимум десять записей закрытого вида с ограниченным
 поиском и стабильным порядком; offset ограничен, нулевой next offset означает
 конец. Аккаунты и модели читаются только для совместимого активного runtime
 профиля. Ответ не содержит credential, auth refs, значения секретов, Dockerfile
-или произвольные исполняемые параметры. Пустой каталог не означает разрешение
+или произвольные исполняемые параметры. Отдельный `CURRENT_CONFIGURATION`
+возвращает не страницу, а описанную выше безопасную собственную typed модель.
+Пустой каталог не означает разрешение
 угадывать ссылки или объединять области организации и проекта.
 
 Специализированный discovery не заменяет доменную eligibility обычного чтения:

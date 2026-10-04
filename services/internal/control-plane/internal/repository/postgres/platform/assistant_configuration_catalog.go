@@ -67,10 +67,10 @@ func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Cont
 	if err := tx.QueryRow(ctx, queryAssistantConfigurationCatalogSource, pgx.StrictNamedArgs{"organization_id": current.organizationID, "lease_ref": leaseRef}).Scan(&sourceScope, &sourceRef); err != nil {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrNotFound
 	}
-	if sourceScope != "SYSTEM" && sourceScope != "PROJECT" || sourceScope == "PROJECT" && input.AssistantRef != sourceRef {
+	if sourceScope != "SYSTEM" && sourceScope != "PROJECT" || (sourceScope == "PROJECT" || input.Kind == "CURRENT_CONFIGURATION") && input.AssistantRef != sourceRef {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrForbidden
 	}
-	target, err := repository.assistantConfigurationTarget(ctx, tx, current, input.AssistantRef)
+	target, err := repository.assistantConfigurationTargetForRead(ctx, tx, current, input.AssistantRef, input.Kind == "CURRENT_CONFIGURATION")
 	if err != nil {
 		return entity.AssistantConfigurationCatalogResponse{}, err
 	}
@@ -78,6 +78,12 @@ func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Cont
 	base := entity.AssistantConfigurationCatalogEntry{ScopeKind: target.scopeKind, OrganizationRef: current.organizationRef, ProjectRef: target.projectRef, AssistantProfileRef: target.profileRef}
 	var rows pgx.Rows
 	switch input.Kind {
+	case "CURRENT_CONFIGURATION":
+		configuration, readErr := repository.assistantCurrentConfigurationTx(ctx, tx, current, input.AssistantRef, sourceScope)
+		if readErr != nil {
+			return entity.AssistantConfigurationCatalogResponse{}, readErr
+		}
+		result.CurrentConfiguration = &configuration
 	case "ASSISTANTS":
 		rows, err = tx.Query(ctx, queryAssistantConfigurationCatalogAssistants, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project": current.authorityProjectID, "source_scope": sourceScope, "source_ref": sourceRef, "query": input.Query, "offset": input.Offset})
 	case "RUNTIME_PROFILES":

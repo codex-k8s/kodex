@@ -1919,6 +1919,7 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_IMAGE_RECIPES = 5;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS = 6;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_ENVIRONMENTS = 7;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION = 8;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -1961,6 +1962,34 @@ message AssistantConfigurationCatalogResponse {
   string assistant_profile_ref = 6;
   repeated AssistantConfigurationCatalogEntry entries = 7;
   int32 next_offset = 8;
+  // Только собственный помощник exact lease; свежие настройки, не snapshot хода.
+  AssistantCurrentConfiguration current_configuration = 9;
+}
+
+// Закрытая безопасная модель: секреты представлены только логическими bindings.
+message AssistantCurrentConfiguration {
+  int64 agent_version = 1;
+  AgentRuntimeConfiguration configuration = 2;
+  ConfigOverlayVersion published_overlay = 3;
+  AgentRuntimeEnvironmentBinding environment_binding = 4;
+  string environment_ref = 5;
+  int64 environment_version = 6;
+  string environment_version_ref = 7;
+  int64 environment_revision = 8;
+  string environment_digest = 9;
+  RuntimeEnvironmentImage image = 10;
+  repeated RuntimeEnvironmentTool tools = 11;
+  repeated RuntimeEnvironmentValue values = 12;
+  repeated RuntimeSecretBinding secret_bindings = 13;
+  RuntimeEnvironmentPolicy policy = 14;
+  string instruction_template_ref = 15;
+  string instruction_template_digest = 16;
+  string published_instructions = 17;
+  string system_core_revision = 18;
+  string system_core_instructions = 19;
+  string owner_instructions = 20;
+  int64 owner_instructions_revision = 21;
+  repeated TemplateVariable template_variables = 22;
 }
 
 enum VFSNodeKind {

@@ -53,27 +53,48 @@ const activeItemId = computed(() =>
 );
 const displayItems = computed(() =>
   presentRunTranscriptItems(props.items, activeItemId.value).map((item) => {
+    const text = (
+      value: string | undefined,
+      messageKind = item.messageKind,
+    ) => {
+      const key = runtimeProgressKey(value);
+      return key
+        ? t(key)
+        : presentRuntimeText(value, serverMessage, messageKind);
+    };
+    const summaryText = (entry: RunActivityItem) => {
+      const key =
+        entry.kind === "system" && !entry.phase
+          ? assistantFailureMessageKey(entry.summary, entry.state)
+          : undefined;
+      return key ? t(key) : text(entry.summary, entry.messageKind);
+    };
+    const completedServiceHistory = item.completedServiceHistory?.map(
+      (step) => ({
+        ...step,
+        summary: summaryText(step),
+        progress: text(step.progress, step.messageKind),
+      }),
+    );
     if (item.phase) {
       const key =
         item.phase === "FINAL"
           ? assistantFailureMessageKey(item.summary, item.state)
           : undefined;
-      return key ? { ...item, summary: t(key) } : item;
+      return {
+        ...item,
+        summary: key ? t(key) : item.summary,
+        completedServiceHistory,
+      };
     }
-    const text = (value: string | undefined) => {
-      const key = runtimeProgressKey(value);
-      return key
-        ? t(key)
-        : presentRuntimeText(value, serverMessage, item.messageKind);
-    };
     return {
       ...item,
-      summary: text(item.summary),
+      summary: summaryText(item),
       progress: text(item.progress),
       serviceHistory: item.serviceHistory?.map((step) => ({
         ...step,
-        summary: text(step.summary),
-        progress: text(step.progress),
+        summary: summaryText(step),
+        progress: text(step.progress, step.messageKind),
       })),
     };
   }),
@@ -520,18 +541,26 @@ function bytes(value: number): string {
                       :content="item.progress"
                     />
                     <details
-                      v-if="item.serviceHistory"
+                      v-if="item.serviceHistory || item.completedServiceHistory"
                       class="run-transcript__service-history"
                     >
                       <summary>
                         {{
                           $t("runs.serviceProgress", {
-                            count: item.serviceHistory.length,
+                            count:
+                              (
+                                item.serviceHistory ??
+                                item.completedServiceHistory
+                              )?.length ?? 0,
                           })
                         }}
                       </summary>
                       <ol>
-                        <li v-for="step in item.serviceHistory" :key="step.id">
+                        <li
+                          v-for="step in item.serviceHistory ??
+                          item.completedServiceHistory"
+                          :key="step.id"
+                        >
                           <time :datetime="step.occurredAt"
                             >{{ time(step.occurredAt)
                             }}<template v-if="step.sequence">

@@ -108,7 +108,7 @@ const maximumAssistantIntegrationDefinitions = 10
 
 const maximumAssistantConfigurationEntries = 10
 
-var assistantConfigurationCatalogKinds = []string{"ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS"}
+var assistantConfigurationCatalogKinds = []string{"ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION"}
 
 func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput) map[string]any {
 	assistantRef := opaqueRefSchema()
@@ -191,6 +191,11 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 	if kind == "MODELS" && request.AccountRef == "" {
 		return nil, invalid
 	}
+	if kind == "CURRENT_CONFIGURATION" && (assistantRef != input.AgentRef || request.Query != "" || request.Offset != 0 ||
+		input.RuntimeRevisionRef == "" || input.RuntimeRevisionVersion < 1 || !validAssistantCatalogDigest(input.RuntimeRevisionDigest) ||
+		!validAssistantResourceRef(input.RunRef) || !validAssistantResourceRef(input.NodeRef) || !validAssistantResourceRef(input.SessionRef) || !validAssistantResourceRef(input.TurnRef) || input.Attempt < 1) {
+		return nil, invalid
+	}
 	return request, nil
 }
 
@@ -242,6 +247,12 @@ func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, reques
 	}
 	if input.IsSystemAssistant() && ((request.GetAssistantRef() == input.AgentRef && response.GetScopeKind() != "ORGANIZATION") ||
 		(request.GetAssistantRef() != input.AgentRef && response.GetScopeKind() != "PROJECT")) {
+		return nil, invalid
+	}
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION {
+		return castAssistantOwnCurrentConfiguration(input, request, response)
+	}
+	if response.GetCurrentConfiguration() != nil {
 		return nil, invalid
 	}
 	entries := make([]map[string]any, 0, len(response.GetEntries()))

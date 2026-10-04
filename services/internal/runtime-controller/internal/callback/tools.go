@@ -15,7 +15,7 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover refs and up to four schemas; omit operation_types for index. Agent pages: 20; definition pages: 10. Fresh assistant_configuration_catalog excludes other selectors; MODELS requires account_ref. Names are not refs.",
+		"description": "Discover refs/schemas; omit operation_types for index. assistant_configuration_catalog excludes other selectors. MODELS requires account_ref. CURRENT_CONFIGURATION uses your agent_ref: instructions, settings, environment/tools/network, template variables. current_configuration is fresh; execution_snapshot is turn-pinned.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
@@ -35,7 +35,7 @@ func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any 
 			"operation_schemas":               map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 			"integration_definitions":         map[string]any{"type": "array", "maxItems": 10, "items": map[string]any{"type": "object"}},
 			"definition_next_offset":          map[string]any{"type": "integer", "minimum": 0},
-			"assistant_configuration_catalog": map[string]any{"type": "object", "maxProperties": 8},
+			"assistant_configuration_catalog": map[string]any{"type": "object", "maxProperties": 10},
 		}),
 	}
 }

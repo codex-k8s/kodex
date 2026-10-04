@@ -935,7 +935,7 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 	}
 	validKind := false
 	switch input.Kind {
-	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS":
+	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION":
 		validKind = true
 	}
 	if !validKind || len(input.AssistantRef) < 8 || len(input.AssistantRef) > 128 || len([]rune(input.Query)) > 80 || input.Offset < 0 || input.Offset > 10000 ||
@@ -944,6 +944,9 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
 	}
 	input.Query = strings.TrimSpace(input.Query)
+	if input.Kind == "CURRENT_CONFIGURATION" && (input.Query != "" || input.Offset != 0) {
+		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
+	}
 	return service.repository.ListAssistantConfigurationCatalog(ctx, p, leaseRef, fence, generation, input)
 }
 func (service *Service) OpenExecutionArtifactTransfer(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {

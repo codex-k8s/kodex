@@ -60,15 +60,18 @@ func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, re
 	response.ContentLength = 0
 	response.Header.Del("Proxy-Authorization")
 	response.Header.Del("Proxy-Authenticate")
-	if client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))) != nil || response.Write(client) != nil {
+	handshakeWriter := &providerWebSocketHandshakeWriter{Writer: client}
+	if client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))) != nil || response.Write(handshakeWriter) != nil {
 		diagnostic.upgrade("WRITE_FAILED", response.StatusCode)
 		return
 	}
+	diagnostic.handshake(response, handshakeWriter)
 	diagnostic.upgrade("ACCEPTED", response.StatusCode)
 	_ = client.SetDeadline(time.Time{})
 	activity := make(chan struct{}, 1)
 	results := make(chan string, 2)
 	var closeOnce sync.Once
+	var clientData, upstreamData bool
 	reason := "UNKNOWN"
 	closeBoth := func(cause string) {
 		closeOnce.Do(func() { reason = cause; _ = client.Close(); _ = upstream.Close() })
@@ -79,6 +82,11 @@ func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, re
 		for {
 			n, err := source.Read(buffer)
 			if n > 0 {
+				if fromClient {
+					clientData = true
+				} else {
+					upstreamData = true
+				}
 				select {
 				case activity <- struct{}{}:
 				default:
@@ -119,6 +127,8 @@ func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, re
 	}
 	// closeOnce сохраняет причину победившего закрытия, а join синхронизирует
 	// чтение: вторичный IO после closeBoth не подменяет write timeout.
-	diagnostic.pump(reason)
+	// Каждая pump пишет только свой флаг; оба результата получены после этих
+	// записей. Наличие данных не доказывает успешного декодирования SDK.
+	diagnostic.pump(reason, clientData, upstreamData)
 	server.metrics.Connection("completed", "proxy", "none")
 }

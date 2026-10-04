@@ -14,6 +14,32 @@ import (
 )
 
 const runtimeProxyProviderResponsesLog = "Runtime proxy provider responses: route=RESPONSES mode=%s event=%s outcome=%s status_class=%s http_status=%s failure=%s"
+const runtimeProxyProviderResponsesHandshakeLog = runtimeProxyProviderResponsesLog + " http_version=%s connection_close=%s header_lines=%s"
+const runtimeProxyProviderResponsesPumpLog = runtimeProxyProviderResponsesLog + " client_data=%s upstream_data=%s"
+
+// Закреплённый tungstenite fork Codex 0.160.0 допускает 124 header lines.
+const providerResponsesWebSocketMaxHeaders = 124
+
+// Считает только LF записанного 101 без body, не сохраняет header bytes.
+// Две строки принадлежат status и пустому завершению; счётчик насыщается
+// сразу после превышения SDK bound и не влияет на результат Writer.
+type providerWebSocketHandshakeWriter struct {
+	io.Writer
+	lineBreaks int
+}
+
+func (writer *providerWebSocketHandshakeWriter) Write(data []byte) (int, error) {
+	n, err := writer.Writer.Write(data)
+	for _, value := range data[:n] {
+		if writer.lineBreaks == providerResponsesWebSocketMaxHeaders+3 {
+			break
+		}
+		if value == '\n' {
+			writer.lineBreaks++
+		}
+	}
+	return n, err
+}
 
 type providerResponsesDiagnostic struct{ mode string }
 
@@ -137,7 +163,24 @@ func (diagnostic providerResponsesDiagnostic) upgrade(outcome string, status int
 	log.Printf(runtimeProxyProviderResponsesLog, diagnostic.mode, "UPGRADE", outcome, providerDiscoveryStatusClass(status), providerResponsesStatus(status), "NONE")
 }
 
-func (diagnostic providerResponsesDiagnostic) pump(reason string) {
+func (diagnostic providerResponsesDiagnostic) handshake(response *http.Response, writer *providerWebSocketHandshakeWriter) {
+	if diagnostic.mode != "WSS" || response == nil || writer == nil {
+		return
+	}
+	version, closeConnection, headerLines := "OTHER", "FALSE", "WITHIN_124"
+	if response.ProtoMajor == 1 && response.ProtoMinor == 1 {
+		version = "HTTP11"
+	}
+	if response.Close {
+		closeConnection = "TRUE"
+	}
+	if writer.lineBreaks > providerResponsesWebSocketMaxHeaders+2 {
+		headerLines = "OVER_124"
+	}
+	log.Printf(runtimeProxyProviderResponsesHandshakeLog, diagnostic.mode, "HANDSHAKE", "OBSERVED", "1XX", "101", "NONE", version, closeConnection, headerLines)
+}
+
+func (diagnostic providerResponsesDiagnostic) pump(reason string, clientData, upstreamData bool) {
 	if diagnostic.mode != "WSS" {
 		return
 	}
@@ -146,7 +189,14 @@ func (diagnostic providerResponsesDiagnostic) pump(reason string) {
 	default:
 		reason = "UNKNOWN"
 	}
-	log.Printf(runtimeProxyProviderResponsesLog, diagnostic.mode, "PUMP", "CLOSED", "1XX", "101", reason)
+	clientPresence, upstreamPresence := "ABSENT", "ABSENT"
+	if clientData {
+		clientPresence = "PRESENT"
+	}
+	if upstreamData {
+		upstreamPresence = "PRESENT"
+	}
+	log.Printf(runtimeProxyProviderResponsesPumpLog, diagnostic.mode, "PUMP", "CLOSED", "1XX", "101", reason, clientPresence, upstreamPresence)
 }
 
 func providerWebSocketReadFailure(err error, client bool) string {

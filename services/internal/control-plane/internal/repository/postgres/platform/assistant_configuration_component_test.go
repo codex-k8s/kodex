@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -32,6 +33,12 @@ var queryAssistantConfigurationComponentProfileClone string
 
 //go:embed testdata/sql/assistant_configuration_component_account_binding_constraint.sql
 var queryAssistantConfigurationComponentAccountBindingConstraint string
+
+//go:embed testdata/sql/assistant_current_configuration_expire.sql
+var queryAssistantCurrentConfigurationExpire string
+
+//go:embed testdata/sql/assistant_current_configuration_restore_expiry.sql
+var queryAssistantCurrentConfigurationRestoreExpiry string
 
 // Сценарий вызывается публичной обязательной profile suite; callbacks только
 // синтетические, provider и пользовательский браузер не используются.
@@ -82,6 +89,56 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 				}
 			}
 		}
+	}
+	resolvedOwnRead, err := r.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownReadScope, err := r.resolveScope(ctx, resolvedOwnRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ownReadEffectsBefore, ownReadEffectsAfter string
+	if err := r.pool.QueryRow(ctx, queryAssistantConfigurationComponentEffects, ownReadScope.organizationID).Scan(&ownReadEffectsBefore); err != nil {
+		t.Fatal(err)
+	}
+	current := readCatalog("CURRENT_CONFIGURATION")
+	if len(current.Entries) != 0 || current.NextOffset != 0 || current.CurrentConfiguration == nil ||
+		current.CurrentConfiguration.AgentVersion != view.AgentVersion || current.CurrentConfiguration.Configuration.Digest != view.Configuration.Digest ||
+		current.CurrentConfiguration.Environment.Digest != view.Environment.CurrentVersion.Digest || current.CurrentConfiguration.PublishedInstructions == "" ||
+		len(current.CurrentConfiguration.TemplateVariables) == 0 || len(current.CurrentConfiguration.Environment.SecretDescriptors) != 0 {
+		t.Fatal("own current configuration lost fresh safe authoritative settings")
+	}
+	if sourceScope == "SYSTEM" && (current.CurrentConfiguration.SystemCoreRevision == "" || current.CurrentConfiguration.SystemCoreInstructions == "" || current.CurrentConfiguration.OwnerInstructionsRevision < 1) {
+		t.Fatal("SYSTEM current configuration lost versioned core/owner instructions")
+	}
+	for _, denied := range []struct {
+		ref, lease, fence string
+		generation        int64
+	}{
+		{agentRef + "foreign", stringMap(lease, "leaseRef"), stringMap(lease, "fence"), generation},
+		{agentRef, "lease_missing123", stringMap(lease, "fence"), generation},
+		{agentRef, stringMap(lease, "leaseRef"), "stale-fence", generation},
+		{agentRef, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), generation + 1},
+	} {
+		_, err := service.ListAssistantConfigurationCatalog(ctx, reader, denied.lease, denied.fence, denied.generation, entity.AssistantConfigurationCatalogRequest{Kind: "CURRENT_CONFIGURATION", AssistantRef: denied.ref})
+		if !errors.Is(err, errs.ErrForbidden) && !errors.Is(err, errs.ErrNotFound) {
+			t.Fatal("current configuration accepted foreign target or inactive exact lease")
+		}
+	}
+	var originalExpiry time.Time
+	if err := r.pool.QueryRow(ctx, queryAssistantCurrentConfigurationExpire, stringMap(lease, "leaseRef")).Scan(&originalExpiry); err != nil {
+		t.Fatal(err)
+	}
+	_, expiredErr := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), generation, entity.AssistantConfigurationCatalogRequest{Kind: "CURRENT_CONFIGURATION", AssistantRef: agentRef})
+	if tag, err := r.pool.Exec(ctx, queryAssistantCurrentConfigurationRestoreExpiry, stringMap(lease, "leaseRef"), originalExpiry); err != nil || tag.RowsAffected() != 1 {
+		t.Fatal("could not restore disposable exact lease fixture")
+	}
+	if !errors.Is(expiredErr, errs.ErrNotFound) {
+		t.Fatal("expired lease disclosed own configuration")
+	}
+	if err := r.pool.QueryRow(ctx, queryAssistantConfigurationComponentEffects, ownReadScope.organizationID).Scan(&ownReadEffectsAfter); err != nil || ownReadEffectsBefore != ownReadEffectsAfter {
+		t.Fatal("own configuration query changed audit/receipt/state/events")
 	}
 	invalid := entity.AssistantConfigurationCatalogRequest{Kind: "MODELS", AssistantRef: agentRef}
 	if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), generation, invalid); !errors.Is(err, errs.ErrInvalid) {

@@ -123,6 +123,70 @@ func TestProviderWebSocketPumpClosesAndJoinsEveryBoundary(t *testing.T) {
 			}
 			want := map[string]string{"idle": "IDLE", "shutdown": "SHUTDOWN", "clientEOF": "CLIENT_EOF", "upstreamEOF": "UPSTREAM_EOF", "blockedWrite": "WRITE_FAILED"}[boundary]
 			assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPGRADE outcome=ACCEPTED", "event=PUMP outcome=CLOSED status_class=1XX http_status=101 failure="+want)
+			presence := "client_data=ABSENT upstream_data=ABSENT"
+			if boundary == "blockedWrite" {
+				presence = "client_data=ABSENT upstream_data=PRESENT"
+			}
+			assertProviderResponsesEvents(t, logs.String(), "WSS", "event=HANDSHAKE outcome=OBSERVED status_class=1XX http_status=101 failure=NONE http_version=HTTP11 connection_close=FALSE header_lines=WITHIN_124", "event=PUMP outcome=CLOSED status_class=1XX http_status=101 failure="+want+" "+presence)
+		})
+	}
+}
+
+func TestProviderWebSocketPumpDataPresenceAfterJoin(t *testing.T) {
+	for _, direction := range []string{"client", "upstream", "both"} {
+		t.Run(direction, func(t *testing.T) {
+			logs := captureProviderResponsesLogs(t)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			client, consumer := net.Pipe()
+			upstream, producer := net.Pipe()
+			defer consumer.Close()
+			defer producer.Close()
+			server := &Server{context: ctx, metrics: newTestMetrics(t)}
+			limits := policy.Limits{WriteTimeoutMilliseconds: 500, IdleTimeoutMilliseconds: 1000}
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				server.forwardWebSocket(client, bufio.NewReader(client), syntheticUpgradeResponse(upstream), limits, providerResponsesDiagnostic{mode: "WSS"})
+			}()
+			reader := bufio.NewReader(consumer)
+			_ = consumer.SetReadDeadline(time.Now().Add(time.Second))
+			if response, err := http.ReadResponse(reader, nil); err != nil || response.StatusCode != 101 {
+				t.Fatal("synthetic handshake failed")
+			}
+			forward := func(source net.Conn, destination io.Reader) {
+				t.Helper()
+				payload := "private-frame-sentinel"
+				written := make(chan error, 1)
+				go func() { _, err := io.WriteString(source, payload); written <- err }()
+				buffer := make([]byte, len(payload))
+				if _, err := io.ReadFull(destination, buffer); err != nil || string(buffer) != payload {
+					t.Fatal("opaque stream changed synthetic bytes")
+				}
+				if err := <-written; err != nil {
+					t.Fatal("synthetic frame write failed")
+				}
+			}
+			clientPresence, upstreamPresence := "ABSENT", "ABSENT"
+			if direction == "client" || direction == "both" {
+				_ = producer.SetReadDeadline(time.Now().Add(time.Second))
+				forward(consumer, producer)
+				clientPresence = "PRESENT"
+			}
+			if direction == "upstream" || direction == "both" {
+				forward(producer, reader)
+				upstreamPresence = "PRESENT"
+			}
+			_ = consumer.Close()
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				t.Fatal("websocket pumps were not joined")
+			}
+			assertProviderResponsesEvents(t, logs.String(), "WSS", "event=PUMP outcome=CLOSED status_class=1XX http_status=101 failure=CLIENT_EOF client_data="+clientPresence+" upstream_data="+upstreamPresence)
+			if strings.Contains(logs.String(), "private") {
+				t.Fatal("pump diagnostic exposed payload")
+			}
 		})
 	}
 }

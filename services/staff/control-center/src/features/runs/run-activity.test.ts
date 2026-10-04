@@ -260,6 +260,106 @@ describe("компактное представление exact хода", () =>
     },
   );
 
+  it("переносит только пустые этапы в exact FINAL, сохраняя опубликованный ответ и порядок остальных записей", () => {
+    const items = [
+      item("user", { kind: "initiator", phase: "USER", summary: "Запрос" }),
+      item("start"),
+      item("comment", {
+        kind: "agent",
+        phase: "COMMENTARY",
+        summary: "Проверяю",
+      }),
+      item("progress"),
+      item("final", {
+        kind: "agent",
+        phase: "FINAL",
+        state: "SUCCEEDED",
+        summary: "Готово\n\nПолный ответ",
+      }),
+      item("terminal", { eventType: "RUN_STATE_CHANGED", state: "SUCCEEDED" }),
+    ];
+    const original = JSON.stringify(items);
+    const presented = presentRunTranscriptItems(items);
+    expect(presented.map((entry) => entry.id)).toEqual([
+      "user",
+      "comment",
+      "final",
+    ]);
+    expect(presented[2]).toMatchObject({
+      kind: "agent",
+      phase: "FINAL",
+      summary: "Готово\n\nПолный ответ",
+      completedServiceHistory: [items[1], items[3], items[5]],
+    });
+    expect(presented[2]?.serviceHistory).toBeUndefined();
+    expect(JSON.stringify(items)).toBe(original);
+    expect(presentRunTranscriptItems(items)).toEqual(presented);
+  });
+  it.each([
+    "runRef",
+    "nodeRef",
+    "sessionRef",
+    "turnRef",
+    "turnNumber",
+    "attempt",
+  ] as const)("не переносит этапы в FINAL с чужим %s", (key) => {
+    const value = typeof execution[key] === "number" ? 2 : "foreign_ref";
+    const presented = presentRunTranscriptItems([
+      item("start", { eventType: "TURN_COMPLETED", state: "SUCCEEDED" }),
+      item("final", {
+        kind: "agent",
+        phase: "FINAL",
+        state: "SUCCEEDED",
+        execution: { ...execution, [key]: value },
+        summary: "Готово",
+      }),
+    ]);
+    expect(presented).toHaveLength(2);
+    expect(presented[0]?.serviceHistory).toHaveLength(1);
+    expect(presented.some((entry) => entry.completedServiceHistory)).toBe(
+      false,
+    );
+  });
+  it("не скрывает meaningful ошибку, UNSCOPED историю или неоднозначный FINAL", () => {
+    const final = item("final", {
+      kind: "agent",
+      phase: "FINAL",
+      state: "SUCCEEDED",
+      summary: "Ответ",
+    });
+    const failure = item("failure", {
+      eventType: "TURN_COMPLETED",
+      messageKind: "FINAL_MESSAGE",
+      state: "FAILED",
+      summary: "Ошибка провайдера",
+    });
+    expect(presentRunTranscriptItems([failure, final])).toHaveLength(2);
+    expect(
+      presentRunTranscriptItems([
+        item("old", { historical: true, execution: undefined }),
+        final,
+      ]),
+    ).toHaveLength(2);
+    const ambiguous = presentRunTranscriptItems([
+      item("start"),
+      final,
+      { ...final, id: "another-final" },
+    ]);
+    expect(ambiguous).toHaveLength(3);
+    expect(ambiguous.some((entry) => entry.completedServiceHistory)).toBe(
+      false,
+    );
+    const meaningful = item("intermediate", {
+      messageKind: "INTERMEDIATE_MESSAGE",
+      summary: "Обнаружено две настройки",
+    });
+    expect(
+      presentRunTranscriptItems([meaningful, final]).map(
+        (entry) => entry.summary,
+      ),
+    ).toEqual([meaningful.summary, final.summary]);
+  });
+
   it("распознаёт actual INTERMEDIATE progress по исходному коду даже после локализации caller", () => {
     const base = required(events[0]);
     const chain: PresentedRunEvent[] = [

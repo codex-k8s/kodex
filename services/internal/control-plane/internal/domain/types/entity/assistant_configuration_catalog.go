@@ -24,4 +24,21 @@ type AssistantConfigurationCatalogResponse struct {
 	Kind, AssistantRef, ScopeKind, OrganizationRef, ProjectRef, AssistantProfileRef string
 	Entries                                                                         []AssistantConfigurationCatalogEntry
 	NextOffset                                                                      int32
+	CurrentConfiguration                                                            *AssistantCurrentConfiguration
+}
+
+// Свежая read-модель не содержит materialized secret values или transport metadata.
+type AssistantCurrentConfiguration struct {
+	AgentVersion                                                             int64
+	Configuration                                                            AgentRuntimeConfiguration
+	PublishedOverlay                                                         ConfigOverlayVersion
+	EnvironmentBinding                                                       AgentRuntimeEnvironmentBinding
+	EnvironmentRef                                                           string
+	EnvironmentVersion                                                       int64
+	Environment                                                              RuntimeEnvironmentVersion
+	SecretBindings                                                           []RuntimeSecretBinding
+	InstructionTemplateRef, InstructionTemplateDigest, PublishedInstructions string
+	SystemCoreRevision, SystemCoreInstructions, OwnerInstructions            string
+	OwnerInstructionsRevision                                                int64
+	TemplateVariables                                                        []TemplateVariable
 }

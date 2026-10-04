@@ -112,6 +112,9 @@ func assistantFreshCatalogFixture(scope runtimecontract.AssistantScope, kind str
 func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, kind := range assistantConfigurationCatalogKinds {
+			if kind == "CURRENT_CONFIGURATION" {
+				continue // Собственный полный read проверяется отдельным typed сценарием.
+			}
 			t.Run(string(scope)+"/"+kind, func(t *testing.T) {
 				input, arguments, response := assistantFreshCatalogFixture(scope, kind)
 				client := &assistantDefinitionCatalogClient{response: response}
@@ -355,6 +358,9 @@ func TestAssistantFreshConfigurationCatalogRejectsResponseBoundaryMismatch(t *te
 
 func TestAssistantFreshConfigurationCatalogChecksEveryEntryKindAndPagination(t *testing.T) {
 	for _, kind := range assistantConfigurationCatalogKinds {
+		if kind == "CURRENT_CONFIGURATION" {
+			continue // Полный read не имеет entries/pagination.
+		}
 		t.Run(kind, func(t *testing.T) {
 			input, arguments, response := assistantFreshCatalogFixture(runtimecontract.AssistantScopeProject, kind)
 			request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])

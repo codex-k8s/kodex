@@ -360,7 +360,7 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 		return nil, err
 	}
 	if catalog := request.GetAssistantConfigurationCatalog(); catalog != nil {
-		if request.GetQuery() != "" || request.GetIntegrationDefinitionCatalog() || request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
+		if len(request.ProtoReflect().GetUnknown()) != 0 || len(catalog.ProtoReflect().GetUnknown()) != 0 || request.GetQuery() != "" || request.GetIntegrationDefinitionCatalog() || request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
 			return nil, transportError(errs.ErrInvalid)
 		}
 		kind := strings.TrimPrefix(catalog.GetKind().String(), "ASSISTANT_CONFIGURATION_CATALOG_KIND_")
@@ -369,6 +369,12 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 			return nil, transportError(err)
 		}
 		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
+		if result.CurrentConfiguration != nil {
+			response.CurrentConfiguration, err = castAssistantCurrentConfiguration(*result.CurrentConfiguration)
+			if err != nil {
+				return nil, transportError(err)
+			}
+		}
 		for _, entry := range result.Entries {
 			response.Entries = append(response.Entries, &controlplanev1.AssistantConfigurationCatalogEntry{Ref: entry.Ref, Name: entry.Name, Provider: entry.Provider, Model: entry.Model, Version: entry.Version, RecipeGeneration: entry.RecipeGeneration, Reference: entry.Reference, ManifestDigest: entry.ManifestDigest, CatalogRevision: entry.CatalogRevision, CatalogDigest: entry.CatalogDigest, ReasoningEfforts: entry.ReasoningEfforts, DefaultReasoningEffort: entry.DefaultReasoningEffort, ScopeKind: entry.ScopeKind, OrganizationRef: entry.OrganizationRef, ProjectRef: entry.ProjectRef, AssistantProfileRef: entry.AssistantProfileRef, RuntimeEnvironmentRef: entry.RuntimeEnvironmentRef})
 		}

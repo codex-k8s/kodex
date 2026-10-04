@@ -554,6 +554,52 @@ describe("RunTranscript: компактная работа", () => {
     },
   );
 
+  it("пустой completed progress не создаёт отдельную строку: этапы остаются details полного FINAL", async () => {
+    const html = await transcript([
+      progress("start"),
+      progress("model"),
+      progress("final", {
+        kind: "agent",
+        phase: "FINAL",
+        state: "SUCCEEDED",
+        summary: "Готово\n\nПолный результат",
+      }),
+    ]);
+    expect(html.match(/class="run-activity-item /g)).toHaveLength(1);
+    expect(html).toContain('data-phase="FINAL"');
+    expect(html).toContain("Полный результат");
+    expect(html).toContain("Этапы выполнения: 2");
+    expect(html).not.toContain("run-activity-item--compact");
+    expect(html).not.toContain("run-activity-item--service");
+    expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+    expect(html).not.toContain('role="status"');
+  });
+  it.each(["ru", "en"] as const)(
+    "actual no-message SYSTEM TURN_COMPLETED failed summary локализуется в %s",
+    async (locale) => {
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        const html = await transcript([
+          progress("failed", {
+            eventType: "TURN_COMPLETED",
+            messageKind: "FINAL_MESSAGE",
+            state: "FAILED",
+            summary: "PROVIDER_RESULT_UNVERIFIABLE",
+          }),
+        ]);
+        expect(html).toContain(
+          i18n.global.t("serverMessages.PROVIDER_RESULT_UNVERIFIABLE"),
+        );
+        expect(html).not.toContain("PROVIDER_RESULT_UNVERIFIABLE");
+        expect(html.match(/data-state="FAILED"/g)).toHaveLength(1);
+        expect(html).not.toContain('role="status"');
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+    },
+  );
+
   it("сохраняет анимацию и отключает её при reduced motion, tool preview ограничен", () => {
     const source = readFileSync(
       new URL("./RunTranscript.vue", import.meta.url),

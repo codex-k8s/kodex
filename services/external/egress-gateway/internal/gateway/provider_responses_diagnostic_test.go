@@ -165,7 +165,8 @@ func TestProviderResponsesDiagnosticNeverLogsExternalValues(t *testing.T) {
 	diagnostic.body(429, private)
 	diagnostic.body(200, nil)
 	diagnostic.upgrade(private.Error(), 599)
-	diagnostic.pump(private.Error())
+	diagnostic.pump(private.Error(), true, false)
+	diagnostic.handshake(&http.Response{Proto: private.Error(), ProtoMajor: 99, ProtoMinor: 99, Header: http.Header{"Private-Header": {private.Error()}}}, &providerWebSocketHandshakeWriter{lineBreaks: 127})
 	before := output.String()
 	for _, mode := range []string{"", private.Error()} {
 		invalid := providerResponsesDiagnostic{mode: mode}
@@ -173,7 +174,8 @@ func TestProviderResponsesDiagnosticNeverLogsExternalValues(t *testing.T) {
 		invalid.upstream(200, private, false)
 		invalid.body(200, private)
 		invalid.upgrade("ACCEPTED", 101)
-		invalid.pump("IDLE")
+		invalid.pump("IDLE", true, true)
+		invalid.handshake(&http.Response{ProtoMajor: 1, ProtoMinor: 1}, &providerWebSocketHandshakeWriter{})
 	}
 	if output.String() != before || strings.Contains(before, "private") || strings.Contains(before, "599") {
 		t.Fatal("untrusted values escaped closed diagnostic normalization")
@@ -187,5 +189,92 @@ func TestProviderResponsesDiagnosticNeverLogsExternalValues(t *testing.T) {
 		if got := providerWebSocketReadFailure(test.err, test.client); got != test.want {
 			t.Fatalf("read failure=%s want=%s", got, test.want)
 		}
+	}
+}
+
+func TestProviderResponsesHandshakeCountsSerializedLinesWithoutValues(t *testing.T) {
+	for _, test := range []struct {
+		name, version, bucket string
+		major, minor, headers int
+		close                 bool
+	}{
+		{name: "exact124", major: 1, minor: 1, headers: 124, version: "HTTP11", bucket: "WITHIN_124"},
+		{name: "over124", major: 1, minor: 1, headers: 125, version: "HTTP11", bucket: "OVER_124"},
+		{name: "HTTP10", major: 1, minor: 0, headers: 3, version: "OTHER", bucket: "WITHIN_124"},
+		{name: "closeAddsHeader", major: 1, minor: 1, headers: 125, close: true, version: "HTTP11", bucket: "OVER_124"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			logs := captureProviderResponsesLogs(t)
+			response := syntheticUpgradeResponse(nil)
+			response.Request = &http.Request{Method: http.MethodGet}
+			response.ProtoMajor, response.ProtoMinor, response.Close = test.major, test.minor, test.close
+			extra := test.headers - len(response.Header)
+			if test.close {
+				extra--
+			}
+			for range extra {
+				response.Header.Add("X-Private-Header-Sentinel", "private-value-sentinel")
+			}
+			// Эти headers не сериализуются Response.Write при nil body.
+			response.Header.Set("Content-Length", "private-length-sentinel")
+			response.Header.Set("Transfer-Encoding", "private-encoding-sentinel")
+			response.Header.Set("Trailer", "private-trailer-sentinel")
+			var wire bytes.Buffer
+			writer := &providerWebSocketHandshakeWriter{Writer: &wire}
+			if err := response.Write(writer); err != nil {
+				t.Fatal("synthetic handshake serialization failed")
+			}
+			if got := strings.Count(wire.String(), "\n") - 2; got != test.headers {
+				t.Fatal("fixture did not produce expected header line boundary")
+			}
+			providerResponsesDiagnostic{mode: "WSS"}.handshake(response, writer)
+			closeFlag := "FALSE"
+			if test.close {
+				closeFlag = "TRUE"
+			}
+			assertProviderResponsesEvents(t, logs.String(), "WSS", "event=HANDSHAKE outcome=OBSERVED status_class=1XX http_status=101 failure=NONE http_version="+test.version+" connection_close="+closeFlag+" header_lines="+test.bucket)
+			if strings.Contains(logs.String(), "private") || strings.Contains(logs.String(), "125") {
+				t.Fatal("handshake diagnostic exposed header values or counts")
+			}
+		})
+	}
+}
+
+type providerHandshakeShortWriter struct{ failure error }
+
+func (writer providerHandshakeShortWriter) Write([]byte) (int, error) {
+	return 2, writer.failure
+}
+
+func TestProviderResponsesHandshakeWriterPreservesPartialResultAndBounds(t *testing.T) {
+	failure := errors.New("private-writer-error-sentinel")
+	writer := &providerWebSocketHandshakeWriter{Writer: providerHandshakeShortWriter{failure: failure}}
+	if n, err := writer.Write([]byte("\r\n\r\n")); n != 2 || err != failure || writer.lineBreaks != 1 {
+		t.Fatal("diagnostic writer changed partial write result")
+	}
+	writer = &providerWebSocketHandshakeWriter{Writer: io.Discard}
+	for range 4 {
+		if _, err := writer.Write([]byte(strings.Repeat("\r\n", 1024))); err != nil {
+			t.Fatal("synthetic writer failed")
+		}
+	}
+	if writer.lineBreaks != providerResponsesWebSocketMaxHeaders+3 {
+		t.Fatal("diagnostic counter exceeded closed bound")
+	}
+}
+
+func TestProviderResponsesPumpDataPresenceClosedSet(t *testing.T) {
+	for _, test := range []struct {
+		client, upstream bool
+		want             string
+	}{
+		{want: "client_data=ABSENT upstream_data=ABSENT"},
+		{client: true, want: "client_data=PRESENT upstream_data=ABSENT"},
+		{upstream: true, want: "client_data=ABSENT upstream_data=PRESENT"},
+		{client: true, upstream: true, want: "client_data=PRESENT upstream_data=PRESENT"},
+	} {
+		logs := captureProviderResponsesLogs(t)
+		providerResponsesDiagnostic{mode: "WSS"}.pump("CLIENT_EOF", test.client, test.upstream)
+		assertProviderResponsesEvents(t, logs.String(), "WSS", "event=PUMP outcome=CLOSED status_class=1XX http_status=101 failure=CLIENT_EOF "+test.want)
 	}
 }

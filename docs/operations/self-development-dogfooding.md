@@ -44,6 +44,13 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
 - Каждые 10–15 вызовов инструментов или 5–10 минут получать список вкладок
   Chrome MCP; дополнительно обновлять рабочую вкладку раз в 5 минут,
   предварительно сохраняя ввод. Чужие вкладки не закрывать.
+- На каждом затронутом экране сразу оценивать вёрстку и удобство реального
+  сценария в Chrome MCP: просматривать скриншот, проверять desktop/mobile,
+  понятность действий и статусов, размеры и отступы, прокрутку, компактность
+  списков, отсутствие дублей и лишних технических пояснений. Видимые дефекты
+  исправлять на hot reload и повторно проверять до перехода к следующему
+  этапу. Проверять также Console, relevant Network и логи backend; тесты
+  не заменяют визуальную проверку. Это обязательное правило текущей цели.
 - При согласованном bootstrap/dogfooding разрешены реальные ИИ-запуски и
   предусмотренные сценарием GitHub effects. STT/device-code не тестировать.
 - Никакого legacy, двойных источников состояния и ручных обходов платформы.
@@ -680,3 +687,38 @@ HTTP body IO рядом с успешным FINAL не объявляется д
 остаются UX замечаниями, исправление локализации в работе.
 NOT RUN — полный own-configuration read, SYSTEM/PROJECT plans и следующие
 dogfooding этапы; текущая работа не заменяет эти критерии частичным успехом.
+
+04.10.2026 11:43–11:49 UTC, дерево поверх `1cd82b3b`:
+PASS — CURRENT_CONFIGURATION через существующий managed MCP/RPC:
+полные текущие настройки и immutable execution_snapshot раздельны;
+own-source, fresh membership и точная lease boundary для SYSTEM/PROJECT.
+Значения секретов и private Kubernetes descriptors не возвращаются.
+Canonical Go1.26.6 scoped unit/race/vet, Proto codegen/check/lint и SQL boundary
+PASS; disposable TestProjectAssistantProfilesComponent PASS25.035 s,
+включая missing/foreign/stale/generation/expired lease и отсутствие новых
+audit/receipts/events. Host/Pod ownread helpers совпадают: CP
+`7790ac668d203c691c00d769bdc04d1340a854d650bcbb2466f8c3db02cdb1a7`,
+controller `d85d4bdadfa6125760aef522a794b575e2d11a287e6d1f68a8de6a47c3200f9e`.
+Runner ABI и имена MCP tools не изменены. Live ownread/план пока NOT RUN.
+PASS — закрытые WSS diagnostic buckets serialized HTTP version/Close/header
+lines и наличие данных обоих pump после join, без самих headers/payload.
+Go1.26.6 full gateway unit8.29 s, race×3 7.689 s, target×10 1.403 s,
+vet/format/diffcheck PASS. Новая live диагностика пока NOT RUN.
+PASS — exact FINAL получает завершённые служебные этапы в details вместо
+пустого progress header; FAILED SYSTEM summary с известным machine token
+локализуется, произвольные USER/COMMENTARY/FINAL не переписываются.
+175 адресных frontend unit, typecheck/lint/format/diffcheck PASS.
+PASS — главная: «Требует внимания» ограничен 420px/55vh, 5 полных видимых
+записей; при прокрутке из realtime cache порциями по5 раскрылись все15.
+Нет фонового HTTP polling или нового bootstrap чтения. Дозагрузка здесь
+означает render уже полученного кэша, не новый серверный cursor каталог.
+12 адресных home unit PASS; скрин
+`/tmp/kodex-home-attention-five-rows-ready.png` просмотрен, horizontal
+overflow=false, Console чистая. Первый screenshot во время HMR был пустым,
+он не считается PASS. Home typecheck PASS; lint сначала FAIL в новых test
+fixtures (number interpolation), после явного String исправления lint/format
+и повтор12 unit PASS1.89 s. Mobile390×844: скрин
+`/tmp/kodex-home-attention-mobile-ready.png` просмотрен, overflow=false,
+текст/кнопки не пересекаются; desktop восстановлен. Визуальная проверка
+обязательна немедленно для каждого затронутого экрана — правило добавлено
+в раздел «Решения владельца и режим» этой действующей цели.

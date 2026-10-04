@@ -278,6 +278,7 @@ function transcriptServiceProgressCode(
 export interface PresentedTranscriptItem extends RunActivityItem {
   working: boolean;
   serviceHistory?: readonly RunActivityItem[];
+  completedServiceHistory?: readonly RunActivityItem[];
 }
 
 function isTranscriptService(item: RunActivityItem): boolean {
@@ -542,7 +543,7 @@ export function presentRunTranscriptItems(
     group.last = index;
     services.set(key, group);
   });
-  return items.flatMap((item, index) => {
+  const presented: PresentedTranscriptItem[] = items.flatMap((item, index) => {
     if (!isTranscriptService(item))
       return [{ ...item, working: item.id === activeItemId }];
     const key = executionKey(item.execution);
@@ -567,6 +568,38 @@ export function presentRunTranscriptItems(
       },
     ];
   });
+  const finals = new Map<string, PresentedTranscriptItem[]>();
+  for (const item of presented) {
+    const key = executionKey(item.execution);
+    if (!key || item.historical || item.phase !== "FINAL") continue;
+    finals.set(key, [...(finals.get(key) ?? []), item]);
+  }
+  const attached = new Map<string, readonly RunActivityItem[]>();
+  const hidden = new Set<string>();
+  for (const item of presented) {
+    const key = executionKey(item.execution);
+    const target = key ? finals.get(key) : undefined;
+    if (
+      !item.serviceHistory ||
+      item.working ||
+      item.historical ||
+      ["FAILED", "CANCELLED"].includes(item.state ?? "") ||
+      target?.length !== 1
+    )
+      continue;
+    const final = target[0];
+    if (!final) continue;
+    attached.set(final.id, item.serviceHistory);
+    hidden.add(item.id);
+  }
+  return presented
+    .filter((item) => !hidden.has(item.id))
+    .map((item) => {
+      const completedServiceHistory = attached.get(item.id);
+      return completedServiceHistory
+        ? { ...item, completedServiceHistory }
+        : item;
+    });
 }
 
 // Summary из истории заменяется только событием exact persisted USER/run/node
