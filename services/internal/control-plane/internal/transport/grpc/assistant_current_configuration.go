@@ -19,6 +19,7 @@ func castAssistantCurrentConfiguration(value entity.AssistantCurrentConfiguratio
 		InstructionTemplateDigest: value.InstructionTemplateDigest, PublishedInstructions: value.PublishedInstructions,
 		SystemCoreRevision: value.SystemCoreRevision, SystemCoreInstructions: value.SystemCoreInstructions,
 		OwnerInstructions: value.OwnerInstructions, OwnerInstructionsRevision: value.OwnerInstructionsRevision}
+	result.ImageToolInventory = castImageToolInventory(value.ImageToolInventory, value.ImageToolInventorySHA256)
 	for _, tool := range environment.Tools {
 		result.Tools = append(result.Tools, &controlplanev1.RuntimeEnvironmentTool{Name: tool.Name, Command: tool.Command, Description: tool.Description, UsageHint: tool.UsageHint})
 	}

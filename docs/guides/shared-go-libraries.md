@@ -329,6 +329,15 @@ Service config:
 
 ## Compatibility
 
+`runtimecontract.ImageToolInventory` задаёт единый закрытый wire/storage schema
+наблюдения образа для trusted producer, admission bridge, CP и controller.
+Probe registry назначает только известные команды/пути/аргументы и не выдаёт
+capabilities. Decoder отклоняет неизвестные/повторные поля, неподписанную
+подстановку деклараций, неканонический inner manifest и digest mismatch;
+историческое отсутствие evidence имеет отдельный `UNAVAILABLE` read status.
+Execution probes принадлежат deployable agent-runner; shared contract не
+создаёт процессов, не читает env и не владеет admission policy либо Secret.
+
 - Удаление или изменение public API требует миграционного плана потребителей.
 - Storage/wire schema общей библиотеки versioned и проверяется readiness.
 - Общий validator различает stable key каталога и opaque ID агрегата по

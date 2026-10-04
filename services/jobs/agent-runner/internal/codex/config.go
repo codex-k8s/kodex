@@ -45,6 +45,7 @@ func validateRuntimeSelection(input model.Input) error {
 }
 
 type runtimeConfig struct {
+	WebSearchMode          string                       `toml:"web_search,omitempty"`
 	Model                  string                       `toml:"model"`
 	ModelReasoningEffort   string                       `toml:"model_reasoning_effort,omitempty"`
 	Personality            string                       `toml:"personality,omitempty"`
@@ -175,7 +176,8 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		filters[name] = "include"
 	}
 	config := runtimeConfig{Model: input.Model, ModelReasoningEffort: input.EffectiveReasoningEffort,
-		Personality: overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
+		WebSearchMode: overlay.WebSearchMode,
+		Personality:   overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: historyPersistence},
 		Features: runtimeFeatures{CodeModeHost: false, CodeMode: runtimeCodeModeConfig{
@@ -199,7 +201,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	}
 	var decoded runtimeConfig
 	metadata, err := toml.Decode(raw.String(), &decoded)
-	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.Model ||
+	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.Model || decoded.WebSearchMode != overlay.WebSearchMode ||
 		!decoded.MCPServers["kodex"].Required ||
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		decoded.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||

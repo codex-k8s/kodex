@@ -197,6 +197,7 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		}
 	}
 	operation := entity.AssistantPlanOperation{Key: "model", Type: "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", Title: "Prepare model", Summary: "Synthetic versioned model configuration", Parameters: map[string]any{"agentRef": agentRef, "runtimeProfileRef": view.Configuration.RuntimeProfileRef, "model": "gpt-5", "reasoningEffort": "low", "providerPolicyMode": view.Configuration.ProviderPolicy.Mode, "providerAccounts": minimalAssistantRuntimeAccounts(view.Configuration.ProviderPolicy.AccountCandidates)}}
+	operation.Parameters["webSearchMode"] = "cached"
 	propose := func(op entity.AssistantPlanOperation, key string) entity.AssistantPlan {
 		t.Helper()
 		return *executeWorkerAssistantPlan(t, ctx, service, worker, lease, prefix+"-"+key, op).Plan
@@ -244,6 +245,7 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	edited := plan.Operations[0]
 	edited.Parameters = cloneAssistantFields(edited.Parameters)
 	edited.Parameters["reasoningEffort"] = "medium"
+	edited.Parameters["webSearchMode"] = "live"
 	updated := execute(command.UpdateAssistantPlan, "model-edit", plan, command.AssistantPlanDraftInput{PlanRef: plan.Ref, Summary: plan.Summary, Operations: []entity.AssistantPlanOperation{edited}})
 	plan = *updated.Plan
 	validated := validate(plan, "model-validate")
@@ -260,13 +262,14 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatalf("model config not published: %v", err)
 	}
 	parsed, err := runtimecontract.ParseConfigOverlay(changed.PublishedOverlay.Content)
-	if err != nil || parsed.ModelReasoningEffort != "medium" {
+	if err != nil || parsed.ModelReasoningEffort != "medium" || parsed.WebSearchMode != "live" || changed.PublishedOverlay.Digest == view.PublishedOverlay.Digest || changed.PublishedOverlay.Version <= view.PublishedOverlay.Version {
 		t.Fatalf("reasoning overlay not published: %v", err)
 	}
 	noChange := operation
 	noChange.Key = "unchanged-runtime"
 	noChange.Parameters = cloneAssistantFields(operation.Parameters)
 	noChange.Parameters["reasoningEffort"] = "medium"
+	delete(noChange.Parameters, "webSearchMode") // отсутствие сохраняет опубликованный режим
 	actualChange := noChange
 	actualChange.Key = "changed-runtime"
 	actualChange.Parameters = cloneAssistantFields(noChange.Parameters)
@@ -293,6 +296,8 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		expected error
 	}{
 		{"invalid-title", errs.ErrInvalid},
+		{"invalid-search-mode", errs.ErrInvalid},
+		{"null-search-mode", errs.ErrInvalid},
 		{"ineligible-account", errs.ErrConflict},
 		{"stale-lease", errs.ErrForbidden},
 	} {
@@ -302,6 +307,10 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		switch invalid.name {
 		case "invalid-title":
 			candidate.Title = ""
+		case "invalid-search-mode":
+			candidate.Parameters["webSearchMode"] = "future-mode"
+		case "null-search-mode":
+			candidate.Parameters["webSearchMode"] = nil
 		case "ineligible-account":
 			candidate.Parameters["providerAccounts"] = []map[string]any{{"accountRef": "pacc_absent_synthetic", "weight": 1}}
 		case "stale-lease":

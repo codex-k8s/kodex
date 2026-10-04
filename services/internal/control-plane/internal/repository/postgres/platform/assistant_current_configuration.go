@@ -26,6 +26,15 @@ func (repository *Repository) assistantCurrentConfigurationTx(ctx context.Contex
 		return entity.AssistantCurrentConfiguration{}, errs.WithAssistantCurrentConfigurationStage(err, errs.AssistantCurrentConfigurationView)
 	}
 	result := projectAssistantCurrentConfiguration(view, snapshot)
+	if view.Environment.CurrentVersion.Image.ArtifactRef != "" {
+		artifact, artifactErr := scanRoleImageArtifact(tx.QueryRow(ctx, queryRoleImagesGetActiveArtifact, current.organizationID, view.Environment.CurrentVersion.Image.ArtifactRef))
+		if artifactErr != nil || artifact.AdmissionVerdict != "ACCEPTED" || artifact.PromotionState != "PROMOTED" ||
+			artifact.ScopeKind != view.Environment.ScopeKind || artifact.ProjectRef != view.Environment.ProjectRef || artifact.OrganizationRef != view.Environment.OrganizationRef ||
+			artifact.ManifestDigest != result.Environment.Image.Digest || artifact.PromotedReference != result.Environment.Image.Reference {
+			return entity.AssistantCurrentConfiguration{}, errs.ErrUnavailable
+		}
+		result.ImageToolInventory, result.ImageToolInventorySHA256 = artifact.ToolInventory, artifact.ToolInventorySHA256
+	}
 	if assistantScope == "SYSTEM" {
 		if err := tx.QueryRow(ctx, queryAssistantCurrentConfigurationOwnerInstructions, pgx.StrictNamedArgs{"organization_id": current.organizationID, "agent_ref": ref}).Scan(&result.SystemCoreRevision, &result.OwnerInstructions, &result.OwnerInstructionsRevision); err != nil {
 			return entity.AssistantCurrentConfiguration{}, errs.WithAssistantCurrentConfigurationStage(errs.ErrUnavailable, errs.AssistantCurrentOwnerCoreRead)

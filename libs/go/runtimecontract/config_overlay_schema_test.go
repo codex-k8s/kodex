@@ -36,7 +36,7 @@ func TestOverlayDiagnosticsPreservePositionsWithoutValues(t *testing.T) {
 
 func TestOverlaySchemaMatchesValidatorAndModelCapabilities(t *testing.T) {
 	schema := OverlaySchema([]string{"medium", "max"}, "medium")
-	if schema.Revision != "cos_"+schema.Digest || len(schema.Digest) != 64 || len(schema.Fields) != 4 || schema.MaximumBytes != 65536 {
+	if schema.Revision != "cos_"+schema.Digest || len(schema.Digest) != 64 || len(schema.Fields) != 5 || schema.MaximumBytes != 65536 {
 		t.Fatalf("schema = %+v", schema)
 	}
 	if other := OverlaySchema([]string{"medium"}, "medium"); other.Digest == schema.Digest {
@@ -48,7 +48,7 @@ func TestOverlaySchemaMatchesValidatorAndModelCapabilities(t *testing.T) {
 			if field.ValueType == "boolean" {
 				literal = value
 			}
-			if diagnostics := DiagnoseConfigOverlay(field.Key+" = "+literal, schema.Fields[0].AllowedValues); len(diagnostics) != 0 {
+			if diagnostics := DiagnoseConfigOverlay(field.Key+" = "+literal, []string{"medium", "max"}); len(diagnostics) != 0 {
 				t.Fatalf("advertised value rejected: %s: %+v", field.Key, diagnostics)
 			}
 		}

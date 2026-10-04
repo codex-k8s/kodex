@@ -1309,7 +1309,7 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 			assistantRequiredStrings(parameters, "recipeRef") && assistantOptionalStrings(parameters, "name", "environmentKey", "dockerfile") && len(parameters) > 2
 	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
 		if !input.IsAssistant() || input.AgentRef == "" || parameters == nil ||
-			!onlyKeys(parameters, "agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts") ||
+			!onlyKeys(parameters, "agentRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts") ||
 			!assistantRequiredStrings(parameters, "agentRef", "runtimeProfileRef", "model", "providerPolicyMode") {
 			return false
 		}
@@ -1317,6 +1317,12 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 			return false
 		}
 		effort, ok := parameters["reasoningEffort"].(string)
+		if raw, present := parameters["webSearchMode"]; present {
+			searchMode, valid := raw.(string)
+			if !valid || !runtimecontract.ValidWebSearchMode(searchMode) {
+				return false
+			}
+		}
 		if !ok || effort != "" && runtimecontract.ValidateEffectiveReasoningEffort("", effort, runtimecontract.ReasoningSupported) != nil {
 			return false
 		}

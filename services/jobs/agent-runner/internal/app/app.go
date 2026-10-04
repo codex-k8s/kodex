@@ -29,6 +29,7 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/contextfiles"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/credentialrelay"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/imageinventory"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/readiness"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
@@ -47,6 +48,9 @@ type health struct {
 }
 
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
+	if len(args) > 1 && args[1] == imageinventory.Mode {
+		return imageinventory.Run(lifecycleContext, args)
+	}
 	if len(args) != 2 {
 		return errors.New("agent-runner mode is required")
 	}

@@ -169,10 +169,18 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 		input.PolicySHA256 != repository.roleImages.PolicySHA256 {
 		return entity.ImageArtifact{}, errs.ErrForbidden
 	}
+	if input.ToolInventoryJSON != "" {
+		locked.Artifact.ToolInventorySHA256 = input.ToolInventorySHA256
+		if hydrateArtifactToolInventory(&locked.Artifact, input.ToolInventoryJSON) != nil {
+			return entity.ImageArtifact{}, errs.ErrInvalid
+		}
+	} else if input.Verdict == "ACCEPTED" || input.ToolInventorySHA256 != "" {
+		return entity.ImageArtifact{}, errs.ErrInvalid
+	}
 	if err := tx.QueryRow(ctx, queryRoleImagesRecordAdmission, current.organizationID,
 		locked.ID, locked.Artifact.Version, input.Verdict, input.SBOMSHA256,
 		input.VulnerabilityEvidenceSHA256, input.SignatureIdentity, input.SignatureSHA256,
-		input.AdmissionReceiptSHA256, input.AdmissionReceiptOCIManifestDigest).Scan(
+		input.AdmissionReceiptSHA256, input.AdmissionReceiptOCIManifestDigest, input.ToolInventoryJSON, input.ToolInventorySHA256).Scan(
 		&locked.Artifact.Version, &locked.Artifact.AdmissionVerdict,
 		&locked.Artifact.AdmissionRevision, &locked.Artifact.UpdatedAt); err != nil {
 		return entity.ImageArtifact{}, mapRoleImageWriteError(err)

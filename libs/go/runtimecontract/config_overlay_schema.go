@@ -24,6 +24,12 @@ const (
 
 var overlayEffortPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
+// Режимы закреплены по openai/codex rust-v0.160.0, WebSearchMode.
+// Hosted search не выдаёт shell/network authority и не ограничивается sandbox allowlist.
+func ValidWebSearchMode(mode string) bool {
+	return slices.Contains([]string{"disabled", "cached", "indexed", "live"}, mode)
+}
+
 func ValidateEffectiveReasoningEffort(overlay, effective, mode string) error {
 	parsed, err := ParseConfigOverlay(overlay)
 	if err != nil {
@@ -80,6 +86,8 @@ func overlayFields(efforts []string, defaultEffort string) []ConfigOverlayField 
 	return []ConfigOverlayField{
 		{Key: "model_reasoning_effort", ValueType: "string", AllowedValues: slices.Clone(efforts), DefaultValue: defaultEffort,
 			Description: "Степень рассуждения выбранной модели", Completion: "model_reasoning_effort = ", Hover: "Допустимые значения определяются exact каталогами выбранных provider accounts."},
+		{Key: "web_search", ValueType: "string", AllowedValues: []string{"disabled", "cached", "indexed", "live"}, DefaultValue: "cached",
+			Description: "Режим hosted native web search", Completion: "web_search = ", Hover: "Настройка Codex 0.160.0, не доказательство успешного вызова. Sandbox domain allowlist не применяется к hosted search; shell egress не меняется."},
 		{Key: "personality", ValueType: "string", AllowedValues: []string{"none", "friendly", "pragmatic"},
 			Description: "Стиль ответов", Completion: "personality = ", Hover: "Не изменяет полномочия или ограничения runtime."},
 		{Key: "allow_login_shell", ValueType: "boolean", AllowedValues: []string{"false"}, DefaultValue: "false",
@@ -158,7 +166,7 @@ func DiagnoseConfigOverlay(raw string, efforts []string) []ConfigOverlayDiagnost
 								code, message = OverlayEffortUnsupported, "Reasoning effort is not supported by the selected model"
 							}
 						}
-					} else if text == "" || slices.Contains(field.AllowedValues, text) {
+					} else if (text == "" && path != "web_search") || slices.Contains(field.AllowedValues, text) {
 						code = ""
 					}
 				}

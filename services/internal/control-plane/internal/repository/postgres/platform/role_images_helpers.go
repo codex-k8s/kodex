@@ -151,9 +151,10 @@ func scanRoleImageArtifact(row roleImageRowScanner) (entity.ImageArtifact, error
 func scanRoleImageArtifactWith(row roleImageRowScanner, additionalDestinations ...any) (entity.ImageArtifact, error) {
 	var result entity.ImageArtifact
 	var specification []byte
+	var inventoryJSON string
 	destinations := []any{&result.Ref, &result.RecipeRef, &result.SpecSHA256, &result.BuildRef,
 		&result.StagingReference, &result.ManifestDigest, &result.ImmutableBuildSHA256,
-		&result.ProvenanceSHA256, &specification, &result.PolicySHA256,
+		&result.ProvenanceSHA256, &specification, &inventoryJSON, &result.ToolInventorySHA256, &result.PolicySHA256,
 		&result.SBOMSHA256, &result.VulnerabilityEvidenceSHA256,
 		&result.AdmissionVerdict, &result.SignatureIdentity, &result.SignatureSHA256,
 		&result.AdmissionReceiptSHA256, &result.AdmissionReceiptOCIManifestDigest,
@@ -177,18 +178,22 @@ func scanRoleImageArtifactWith(row roleImageRowScanner, additionalDestinations .
 	result.ContextSHA256, result.BuilderSHA256 = recipe.ContextSHA256, recipe.BuilderSHA256
 	result.FrontendSHA256, result.ToolchainSHA256 = recipe.FrontendSHA256, recipe.ToolchainSHA256
 	result.Platforms = append([]entity.RoleImagePlatform(nil), recipe.Platforms...)
-	result.Tools = append([]entity.RoleImageTool(nil), recipe.Tools...)
+	result.DeclaredTools = append([]entity.RoleImageTool(nil), recipe.Tools...)
+	if err := hydrateArtifactToolInventory(&result, inventoryJSON); err != nil {
+		return entity.ImageArtifact{}, err
+	}
 	return result, nil
 }
 
 func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 	var result lockedArtifact
 	var specification []byte
+	var inventoryJSON string
 	err := row.Scan(&result.ID, &result.Artifact.Ref, &result.Artifact.RecipeRef,
 		&result.Artifact.SpecSHA256, &result.Artifact.BuildRef,
 		&result.Artifact.StagingReference, &result.Artifact.ManifestDigest,
 		&result.Artifact.ImmutableBuildSHA256, &result.Artifact.ProvenanceSHA256,
-		&specification, &result.Artifact.PolicySHA256, &result.Artifact.SBOMSHA256,
+		&specification, &inventoryJSON, &result.Artifact.ToolInventorySHA256, &result.Artifact.PolicySHA256, &result.Artifact.SBOMSHA256,
 		&result.Artifact.VulnerabilityEvidenceSHA256, &result.Artifact.AdmissionVerdict,
 		&result.Artifact.SignatureIdentity, &result.Artifact.SignatureSHA256,
 		&result.Artifact.AdmissionReceiptSHA256,
@@ -218,7 +223,10 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 	result.Artifact.ContextSHA256, result.Artifact.BuilderSHA256 = recipe.ContextSHA256, recipe.BuilderSHA256
 	result.Artifact.FrontendSHA256, result.Artifact.ToolchainSHA256 = recipe.FrontendSHA256, recipe.ToolchainSHA256
 	result.Artifact.Platforms = append([]entity.RoleImagePlatform(nil), recipe.Platforms...)
-	result.Artifact.Tools = append([]entity.RoleImageTool(nil), recipe.Tools...)
+	result.Artifact.DeclaredTools = append([]entity.RoleImageTool(nil), recipe.Tools...)
+	if err := hydrateArtifactToolInventory(&result.Artifact, inventoryJSON); err != nil {
+		return lockedArtifact{}, err
+	}
 	result.Artifact.PromotionState = result.PromotionState
 	result.Artifact.PromotionRequested = result.PromotionRequestID != ""
 	return result, nil

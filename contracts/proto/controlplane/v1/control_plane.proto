@@ -1990,6 +1990,31 @@ message AssistantCurrentConfiguration {
   string owner_instructions = 20;
   int64 owner_instructions_revision = 21;
   repeated TemplateVariable template_variables = 22;
+  // Наблюдаемый signed inventory текущего образа, не selected capabilities tools.
+  ImageToolInventory image_tool_inventory = 23;
+}
+
+message ImageToolObservation {
+  string name = 1;
+  string status = 2;
+  string path = 3;
+  string version = 4;
+  string sha256 = 5;
+  bool required = 6;
+}
+message ImagePlatformToolInventory {
+  string platform = 1;
+  string platform_digest = 2;
+  string manifest_sha256 = 3;
+  repeated ImageToolObservation tools = 4;
+}
+message ImageToolInventory {
+  // VERIFIED либо UNAVAILABLE; отсутствие evidence не превращается в декларацию.
+  string status = 1;
+  string sha256 = 2;
+  string image_digest = 3;
+  string provenance_sha256 = 4;
+  repeated ImagePlatformToolInventory platforms = 5;
 }
 
 enum VFSNodeKind {

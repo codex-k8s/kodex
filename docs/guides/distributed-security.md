@@ -579,6 +579,17 @@ token, а запрос нового токена закрыто отклоняе
 env, exact egress, ограниченный вывод, deadline и cancel/join до удаления
 временного credential state; inherited proxy bypass и прямой fallback запрещены.
 
+Настройка hosted native search материализуется только из опубликованного
+version/digest-pinned ConfigOverlay. Для Codex 0.160.0 закрытые режимы
+`disabled|cached|indexed|live` входят в существующий reviewed
+`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`; отсутствие параметра сохраняет
+текущую настройку. Это не sandbox WebAccess: domain allowlist shell egress
+не ограничивает hosted search, и настройка search не выдаёт shell/network
+authority. Readback различает свежую owner-конфигурацию и immutable snapshot
+хода; запрошенный режим либо SDK default не доказывает effective поведение
+provider или успешный native call. Неизвестные режимы и вложенный arbitrary
+TOML закрыто отклоняются, без legacy feature flags.
+
 Закрытый реестр provider transport проверяется по закреплённой версии SDK:
 в него входят точные обязательные bootstrap/account-discovery маршруты,
 а не только inference endpoint. Read-only discovery не расширяет shell/WebAccess

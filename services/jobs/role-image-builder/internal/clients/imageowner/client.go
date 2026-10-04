@@ -31,36 +31,43 @@ func scopeName(scope controlplanev1.RuntimeResourceScopeKind) string {
 }
 
 type Claim struct {
-	ScopeKind                   string    `json:"scopeKind"`
-	OrganizationRef             string    `json:"organizationRef"`
-	ProjectRef                  string    `json:"projectRef"`
-	ArtifactID                  string    `json:"artifactId"`
-	Version                     uint64    `json:"version"`
-	Fence                       uint64    `json:"fence"`
-	ClaimToken                  string    `json:"claimToken"`
-	ExpiresAt                   time.Time `json:"expiresAt"`
-	RecipeID                    string    `json:"recipeId"`
-	RecipeVersion               uint64    `json:"recipeVersion"`
-	RecipeGeneration            uint64    `json:"recipeGeneration"`
-	SpecSHA256                  string    `json:"specSHA256"`
-	BuildID                     string    `json:"buildId"`
-	BuildVersion                uint64    `json:"buildVersion"`
-	BuildAttempt                uint32    `json:"buildAttempt"`
-	StagingReference            string    `json:"stagingReference"`
-	ManifestDigest              string    `json:"manifestDigest"`
-	ImmutableBuildSHA256        string    `json:"immutableBuildSHA256"`
-	ProvenanceSHA256            string    `json:"provenanceSHA256"`
-	BaseImageDigest             string    `json:"baseImageDigest"`
-	SourceSHA256                string    `json:"sourceSHA256"`
-	ContextSHA256               string    `json:"contextSHA256"`
-	BuilderSHA256               string    `json:"builderSHA256"`
-	FrontendSHA256              string    `json:"frontendSHA256"`
-	ToolchainSHA256             string    `json:"toolchainSHA256"`
-	RoleRuntimeContractRevision uint64    `json:"roleRuntimeContractRevision"`
-	RoleRuntimeContractSHA256   string    `json:"roleRuntimeContractSHA256"`
-	Platforms                   []string  `json:"platforms"`
-	PolicyRevision              uint64    `json:"policyRevision"`
-	PolicySHA256                string    `json:"policySHA256"`
+	ScopeKind                   string         `json:"scopeKind"`
+	OrganizationRef             string         `json:"organizationRef"`
+	ProjectRef                  string         `json:"projectRef"`
+	ArtifactID                  string         `json:"artifactId"`
+	Version                     uint64         `json:"version"`
+	Fence                       uint64         `json:"fence"`
+	ClaimToken                  string         `json:"claimToken"`
+	ExpiresAt                   time.Time      `json:"expiresAt"`
+	RecipeID                    string         `json:"recipeId"`
+	RecipeVersion               uint64         `json:"recipeVersion"`
+	RecipeGeneration            uint64         `json:"recipeGeneration"`
+	SpecSHA256                  string         `json:"specSHA256"`
+	BuildID                     string         `json:"buildId"`
+	BuildVersion                uint64         `json:"buildVersion"`
+	BuildAttempt                uint32         `json:"buildAttempt"`
+	StagingReference            string         `json:"stagingReference"`
+	ManifestDigest              string         `json:"manifestDigest"`
+	ImmutableBuildSHA256        string         `json:"immutableBuildSHA256"`
+	ProvenanceSHA256            string         `json:"provenanceSHA256"`
+	BaseImageDigest             string         `json:"baseImageDigest"`
+	SourceSHA256                string         `json:"sourceSHA256"`
+	ContextSHA256               string         `json:"contextSHA256"`
+	BuilderSHA256               string         `json:"builderSHA256"`
+	FrontendSHA256              string         `json:"frontendSHA256"`
+	ToolchainSHA256             string         `json:"toolchainSHA256"`
+	RoleRuntimeContractRevision uint64         `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSHA256   string         `json:"roleRuntimeContractSHA256"`
+	Platforms                   []string       `json:"platforms"`
+	PolicyRevision              uint64         `json:"policyRevision"`
+	PolicySHA256                string         `json:"policySHA256"`
+	DeclaredTools               []DeclaredTool `json:"declaredTools"`
+}
+
+type DeclaredTool struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	SHA256  string `json:"sha256"`
 }
 
 type AdmissionEvidence struct {
@@ -68,6 +75,7 @@ type AdmissionEvidence struct {
 	AdmissionReceiptSHA256                                                      string
 	AdmissionReceiptOCIManifestDigest                                           string
 	Accepted                                                                    bool
+	ToolInventoryJSON, ToolInventorySHA256                                      string
 }
 
 type Promotion struct {
@@ -142,7 +150,11 @@ func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 		}
 		platforms = append(platforms, value)
 	}
-	return Claim{ArtifactID: artifact.GetRef(), Version: artifact.GetVersion(), Fence: response.GetFence(),
+	declared := []DeclaredTool{}
+	for _, tool := range artifact.GetDeclaredTools() {
+		declared = append(declared, DeclaredTool{Name: tool.GetName(), Version: tool.GetVersion(), SHA256: tool.GetSha256()})
+	}
+	return Claim{DeclaredTools: declared, ArtifactID: artifact.GetRef(), Version: artifact.GetVersion(), Fence: response.GetFence(),
 		ScopeKind: scopeName(artifact.GetScopeKind()), OrganizationRef: artifact.GetOrganizationRef(), ProjectRef: artifact.GetProjectRef(),
 		ClaimToken: response.GetClaimToken(), ExpiresAt: response.GetClaimExpiresAt().AsTime(),
 		RecipeID: artifact.GetRecipeRef(), RecipeVersion: artifact.GetRecipeVersion(), RecipeGeneration: artifact.GetRecipeGeneration(),
@@ -174,6 +186,7 @@ func (client *Client) Record(ctx context.Context, key string, claim Claim, evide
 		SignatureIdentity: evidence.SignatureIdentity, SignatureSha256: evidence.SignatureSHA256,
 		AdmissionReceiptSha256:            evidence.AdmissionReceiptSHA256,
 		AdmissionReceiptOciManifestDigest: evidence.AdmissionReceiptOCIManifestDigest,
+		ToolInventoryJson:                 evidence.ToolInventoryJSON, ToolInventorySha256: evidence.ToolInventorySHA256,
 	})
 	if err != nil {
 		return err

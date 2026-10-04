@@ -16,6 +16,33 @@ const createSystemImageOperation = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 const updateSystemImageOperation = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 const prepareAssistantConfigurationOperation = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
 
+func TestAssistantRuntimeConfigurationSearchClosedOwnBoundary(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		input := assistantConfigurationFixture(scope)
+		for _, mode := range []any{nil, "", "disabled", "cached", "indexed", "live", "LIVE", "future", true, map[string]any{"private": "sentinel"}} {
+			parameters := assistantConfigurationParameters(input.AgentRef)
+			parameters["webSearchMode"] = mode
+			text, ok := mode.(string)
+			want := ok && runtimecontract.ValidWebSearchMode(text)
+			if assistantConfigurationParametersAllowed(input, prepareAssistantConfigurationOperation, parameters) != want {
+				t.Fatal("unknown mode crossed own configuration boundary")
+			}
+		}
+		parameters := assistantConfigurationParameters(input.AgentRef)
+		if !assistantConfigurationParametersAllowed(input, prepareAssistantConfigurationOperation, parameters) {
+			t.Fatal("omission did not preserve existing supported path")
+		}
+		parameters["webSearchMode"], parameters["agentRef"] = "live", "agt_foreign123"
+		if scope == runtimecontract.AssistantScopeProject && assistantConfigurationParametersAllowed(input, prepareAssistantConfigurationOperation, parameters) {
+			t.Fatal("hosted search configuration granted foreign project authority")
+		}
+	}
+	properties := assistantRuntimeConfigurationSchema(opaqueRefSchema())["properties"].(map[string]any)
+	if !reflect.DeepEqual(properties["webSearchMode"].(map[string]any)["enum"], []string{"disabled", "cached", "indexed", "live"}) {
+		t.Fatal("public typed modes differ from the pinned SDK")
+	}
+}
+
 func assistantConfigurationFixture(scope runtimecontract.AssistantScope) runtimecontract.RunnerInput {
 	return runtimecontract.RunnerInput{AssistantScope: scope, AgentRef: "agt_own12345", ProjectRef: "prj_context123",
 		RuntimeProfileRef: "builtin-safe-runtime", ProviderAccountRef: "pacc_current123", Model: "gpt-6.1-sol", EffectiveReasoningEffort: "medium",
@@ -73,7 +100,7 @@ func TestAssistantConfigurationCatalogKeepsExactSelfAcrossScreenContexts(t *test
 					t.Fatal("missing closed configuration schema")
 				}
 				properties := configuration["properties"].(map[string]any)
-				if len(properties) != 6 || properties["model"].(map[string]any)["maxLength"] != 128 {
+				if len(properties) != 7 || properties["model"].(map[string]any)["maxLength"] != 128 {
 					t.Fatal("configuration schema exposed extra fields or differs from owner model bound")
 				}
 				account := properties["providerAccounts"].(map[string]any)["items"].(map[string]any)

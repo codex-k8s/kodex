@@ -1056,3 +1056,31 @@ Air entrypoint потерял обязательный controller argument; chil
 selection и сохранение аргумента закреплены 10 tests PASS .310 s.
 NOT RUN — actual native resume/archive и managed Context7 tool calls до
 активации этого исправления и остальных pending image changes.
+
+04.10.2026 15:04 UTC, интеграция поверх `cc02cf1aa2911eabb330cf8096c675866be7d041`:
+PASS — canonical cc02 render и explicit session-archive apply завершены;
+authoritative Deployment readback: readyReplicas=1, Air передаёт controller
+argument. Actual archive/restore и native resume ещё NOT RUN.
+PASS — root объединил differential source signed tool inventory и native
+webSearchMode; общие Proto/OpenAPI generated files заново созданы штатным
+codegen, а не перенесены из устаревшего дерева субагента.
+Root quick unit PASS: runtimecontract .081 s; CP platform .690 s и gRPC
+.644 s; callback .994 s; Codex 4.785 s, imageinventory .014 s, app 14.919 s;
+builder build .038 s, imageowner .014 s, admissioncontroller 5.080 s,
+admission bridge .019 s и inventory validator .022 s. Diff-check PASS.
+NOT RUN — canonical новая сборка/probe/admission всех программ и actual
+native search; source/unit/codegen не означают готовность живого пути.
+Владелец повторно подтвердил параллельные pre-QA доработки: используются
+все три доступных дочерних слота; лимит инструментов — четыре вместе с root.
+Отдельно выполняются project assistant connection specialty, компактные
+APPLIED plan cards и bounded workspace limits без расширения authority.
+Проверка вёрстки/UX на каждом экране обязательна по правилам текущей цели;
+checkbox2–15 остаются открытыми до фактических сквозных доказательств.
+
+FAIL — первый root frontend typecheck обнаружил потребителей удалённого
+artifact.tools. API теперь разделяет declaredTools и verifiedToolInventory;
+потребители не должны возвращаться к recipe fallback. Исправление селекторов,
+фактического списка executable и fixtures передано FE исполнителю.
+Transient hot reload во время переноса Proto дал 503; после codegen CP снова
+запустился, однако новая inventory migration ещё требует canonical apply.
+До этого UI/live path не объявляется PASS.

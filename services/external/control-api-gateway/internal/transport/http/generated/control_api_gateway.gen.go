@@ -1846,6 +1846,225 @@ func (e GateResolutionDecision) Valid() bool {
 	}
 }
 
+// Defines values for ImagePlatformToolInventoryPlatform.
+const (
+	Linuxamd64 ImagePlatformToolInventoryPlatform = "linux/amd64"
+	Linuxarm64 ImagePlatformToolInventoryPlatform = "linux/arm64"
+)
+
+// Valid indicates whether the value is a known member of the ImagePlatformToolInventoryPlatform enum.
+func (e ImagePlatformToolInventoryPlatform) Valid() bool {
+	switch e {
+	case Linuxamd64:
+		return true
+	case Linuxarm64:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageToolInventoryStatus.
+const (
+	ImageToolInventoryStatusUNAVAILABLE ImageToolInventoryStatus = "UNAVAILABLE"
+	ImageToolInventoryStatusVERIFIED    ImageToolInventoryStatus = "VERIFIED"
+)
+
+// Valid indicates whether the value is a known member of the ImageToolInventoryStatus enum.
+func (e ImageToolInventoryStatus) Valid() bool {
+	switch e {
+	case ImageToolInventoryStatusUNAVAILABLE:
+		return true
+	case ImageToolInventoryStatusVERIFIED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageToolObservationName.
+const (
+	Bash            ImageToolObservationName = "bash"
+	Buf             ImageToolObservationName = "buf"
+	Buildctl        ImageToolObservationName = "buildctl"
+	Chromium        ImageToolObservationName = "chromium"
+	Codex           ImageToolObservationName = "codex"
+	Corepack        ImageToolObservationName = "corepack"
+	Curl            ImageToolObservationName = "curl"
+	Docker          ImageToolObservationName = "docker"
+	Eslint          ImageToolObservationName = "eslint"
+	Gh              ImageToolObservationName = "gh"
+	Git             ImageToolObservationName = "git"
+	Gitleaks        ImageToolObservationName = "gitleaks"
+	Go              ImageToolObservationName = "go"
+	Gofumpt         ImageToolObservationName = "gofumpt"
+	Goimports       ImageToolObservationName = "goimports"
+	GolangciLint    ImageToolObservationName = "golangci-lint"
+	Goose           ImageToolObservationName = "goose"
+	Govulncheck     ImageToolObservationName = "govulncheck"
+	Grpcurl         ImageToolObservationName = "grpcurl"
+	Hadolint        ImageToolObservationName = "hadolint"
+	Helm            ImageToolObservationName = "helm"
+	Jq              ImageToolObservationName = "jq"
+	Just            ImageToolObservationName = "just"
+	Kubectl         ImageToolObservationName = "kubectl"
+	Kustomize       ImageToolObservationName = "kustomize"
+	Make            ImageToolObservationName = "make"
+	Mockgen         ImageToolObservationName = "mockgen"
+	Node            ImageToolObservationName = "node"
+	Npm             ImageToolObservationName = "npm"
+	OapiCodegen     ImageToolObservationName = "oapi-codegen"
+	Pip             ImageToolObservationName = "pip"
+	Playwright      ImageToolObservationName = "playwright"
+	PlaywrightMcp   ImageToolObservationName = "playwright-mcp"
+	Pnpm            ImageToolObservationName = "pnpm"
+	Prettier        ImageToolObservationName = "prettier"
+	Protoc          ImageToolObservationName = "protoc"
+	ProtocGenGo     ImageToolObservationName = "protoc-gen-go"
+	ProtocGenGoGrpc ImageToolObservationName = "protoc-gen-go-grpc"
+	Python3         ImageToolObservationName = "python3"
+	Ripgrep         ImageToolObservationName = "ripgrep"
+	Shellcheck      ImageToolObservationName = "shellcheck"
+	Sqlc            ImageToolObservationName = "sqlc"
+	Staticcheck     ImageToolObservationName = "staticcheck"
+	Typescript      ImageToolObservationName = "typescript"
+	Vite            ImageToolObservationName = "vite"
+	Vitest          ImageToolObservationName = "vitest"
+	VueTsc          ImageToolObservationName = "vue-tsc"
+	Wscat           ImageToolObservationName = "wscat"
+	Yarn            ImageToolObservationName = "yarn"
+	Yq              ImageToolObservationName = "yq"
+)
+
+// Valid indicates whether the value is a known member of the ImageToolObservationName enum.
+func (e ImageToolObservationName) Valid() bool {
+	switch e {
+	case Bash:
+		return true
+	case Buf:
+		return true
+	case Buildctl:
+		return true
+	case Chromium:
+		return true
+	case Codex:
+		return true
+	case Corepack:
+		return true
+	case Curl:
+		return true
+	case Docker:
+		return true
+	case Eslint:
+		return true
+	case Gh:
+		return true
+	case Git:
+		return true
+	case Gitleaks:
+		return true
+	case Go:
+		return true
+	case Gofumpt:
+		return true
+	case Goimports:
+		return true
+	case GolangciLint:
+		return true
+	case Goose:
+		return true
+	case Govulncheck:
+		return true
+	case Grpcurl:
+		return true
+	case Hadolint:
+		return true
+	case Helm:
+		return true
+	case Jq:
+		return true
+	case Just:
+		return true
+	case Kubectl:
+		return true
+	case Kustomize:
+		return true
+	case Make:
+		return true
+	case Mockgen:
+		return true
+	case Node:
+		return true
+	case Npm:
+		return true
+	case OapiCodegen:
+		return true
+	case Pip:
+		return true
+	case Playwright:
+		return true
+	case PlaywrightMcp:
+		return true
+	case Pnpm:
+		return true
+	case Prettier:
+		return true
+	case Protoc:
+		return true
+	case ProtocGenGo:
+		return true
+	case ProtocGenGoGrpc:
+		return true
+	case Python3:
+		return true
+	case Ripgrep:
+		return true
+	case Shellcheck:
+		return true
+	case Sqlc:
+		return true
+	case Staticcheck:
+		return true
+	case Typescript:
+		return true
+	case Vite:
+		return true
+	case Vitest:
+		return true
+	case VueTsc:
+		return true
+	case Wscat:
+		return true
+	case Yarn:
+		return true
+	case Yq:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageToolObservationStatus.
+const (
+	ImageToolObservationStatusMISSING     ImageToolObservationStatus = "MISSING"
+	ImageToolObservationStatusPROBEFAILED ImageToolObservationStatus = "PROBE_FAILED"
+	ImageToolObservationStatusVERIFIED    ImageToolObservationStatus = "VERIFIED"
+)
+
+// Valid indicates whether the value is a known member of the ImageToolObservationStatus enum.
+func (e ImageToolObservationStatus) Valid() bool {
+	switch e {
+	case ImageToolObservationStatusMISSING:
+		return true
+	case ImageToolObservationStatusPROBEFAILED:
+		return true
+	case ImageToolObservationStatusVERIFIED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IncidentSeverity.
 const (
 	IncidentSeverityCRITICAL IncidentSeverity = "CRITICAL"
@@ -10214,6 +10433,45 @@ type GateResolutionReceipt struct {
 	Run   Run       `json:"run"`
 }
 
+// ImagePlatformToolInventory defines model for ImagePlatformToolInventory.
+type ImagePlatformToolInventory struct {
+	ManifestSha256 string                             `json:"manifestSha256"`
+	Platform       ImagePlatformToolInventoryPlatform `json:"platform"`
+	PlatformDigest string                             `json:"platformDigest"`
+	Tools          []ImageToolObservation             `json:"tools"`
+}
+
+// ImagePlatformToolInventoryPlatform defines model for ImagePlatformToolInventory.Platform.
+type ImagePlatformToolInventoryPlatform string
+
+// ImageToolInventory defines model for ImageToolInventory.
+type ImageToolInventory struct {
+	ImageDigest      string                       `json:"imageDigest"`
+	Platforms        []ImagePlatformToolInventory `json:"platforms"`
+	ProvenanceSha256 string                       `json:"provenanceSha256"`
+	Sha256           string                       `json:"sha256"`
+	Status           ImageToolInventoryStatus     `json:"status"`
+}
+
+// ImageToolInventoryStatus defines model for ImageToolInventory.Status.
+type ImageToolInventoryStatus string
+
+// ImageToolObservation defines model for ImageToolObservation.
+type ImageToolObservation struct {
+	Name     ImageToolObservationName   `json:"name"`
+	Path     string                     `json:"path"`
+	Required bool                       `json:"required"`
+	Sha256   string                     `json:"sha256"`
+	Status   ImageToolObservationStatus `json:"status"`
+	Version  string                     `json:"version"`
+}
+
+// ImageToolObservationName defines model for ImageToolObservation.Name.
+type ImageToolObservationName string
+
+// ImageToolObservationStatus defines model for ImageToolObservation.Status.
+type ImageToolObservationStatus string
+
 // Incident defines model for Incident.
 type Incident struct {
 	Category     string           `json:"category"`
@@ -11994,6 +12252,7 @@ type RoleEnvironmentView struct {
 type RoleImageArtifact struct {
 	AdmissionVerdict            RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
 	BuildRef                    OpaqueRef                         `json:"buildRef"`
+	DeclaredTools               []RoleImageArtifactTool           `json:"declaredTools"`
 	ManifestDigest              string                            `json:"manifestDigest"`
 	OrganizationRef             OpaqueRef                         `json:"organizationRef"`
 	ProjectRef                  string                            `json:"projectRef"`
@@ -12008,7 +12267,7 @@ type RoleImageArtifact struct {
 	Ref                         OpaqueRef                         `json:"ref"`
 	SbomSha256                  *string                           `json:"sbomSha256,omitempty"`
 	ScopeKind                   RuntimeResourceScopeKind          `json:"scopeKind"`
-	Tools                       []RoleImageArtifactTool           `json:"tools"`
+	VerifiedToolInventory       ImageToolInventory                `json:"verifiedToolInventory"`
 	Version                     int64                             `json:"version"`
 	VulnerabilityEvidenceSha256 *string                           `json:"vulnerabilityEvidenceSha256,omitempty"`
 }

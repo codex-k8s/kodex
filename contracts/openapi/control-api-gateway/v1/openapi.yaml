@@ -14291,7 +14291,8 @@ components:
           admissionVerdict,
           promotionState,
           promotionRequested,
-          tools,
+          declaredTools,
+          verifiedToolInventory,
         ]
       properties:
         scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
@@ -14314,14 +14315,52 @@ components:
         promotionRequested: { type: boolean }
         sbomSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         vulnerabilityEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
-        tools:
+        declaredTools:
           {
             type: array,
             maxItems: 128,
             items: { $ref: "#/components/schemas/RoleImageArtifactTool" },
           }
+        verifiedToolInventory: { $ref: "#/components/schemas/ImageToolInventory" }
         promotedAt: { $ref: "#/components/schemas/Timestamp" }
         promotionReceiptSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+    ImageToolInventory:
+      type: object
+      additionalProperties: false
+      required: [status, sha256, imageDigest, provenanceSha256, platforms]
+      properties:
+        status: { type: string, enum: [VERIFIED, UNAVAILABLE] }
+        sha256: { type: string, pattern: "^$|^[a-f0-9]{64}$" }
+        imageDigest: { type: string, pattern: "^$|^sha256:[a-f0-9]{64}$" }
+        provenanceSha256: { type: string, pattern: "^$|^[a-f0-9]{64}$" }
+        platforms:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/ImagePlatformToolInventory" }
+    ImagePlatformToolInventory:
+      type: object
+      additionalProperties: false
+      required: [platform, platformDigest, manifestSha256, tools]
+      properties:
+        platform: { type: string, enum: [linux/amd64, linux/arm64] }
+        platformDigest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
+        manifestSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        tools:
+          type: array
+          minItems: 50
+          maxItems: 50
+          items: { $ref: "#/components/schemas/ImageToolObservation" }
+    ImageToolObservation:
+      type: object
+      additionalProperties: false
+      required: [name, status, path, version, sha256, required]
+      properties:
+        name: { type: string, enum: [bash, curl, git, gh, jq, yq, ripgrep, make, just, go, goimports, gofumpt, golangci-lint, staticcheck, goose, sqlc, buf, protoc, protoc-gen-go, protoc-gen-go-grpc, grpcurl, mockgen, oapi-codegen, node, npm, pnpm, yarn, typescript, eslint, prettier, vite, vue-tsc, vitest, playwright, chromium, playwright-mcp, wscat, codex, corepack, python3, pip, kubectl, kustomize, helm, buildctl, docker, shellcheck, hadolint, govulncheck, gitleaks] }
+        required: { type: boolean }
+        status: { type: string, enum: [VERIFIED, MISSING, PROBE_FAILED] }
+        path: { type: string, maxLength: 160, pattern: "^$|^/[A-Za-z0-9_./-]+$" }
+        version: { type: string, maxLength: 80, pattern: "^$|^v?[0-9]+(\\.[0-9]+){0,3}([-+][A-Za-z0-9.-]{1,48})?$" }
+        sha256: { type: string, pattern: "^$|^[a-f0-9]{64}$" }
     RoleImageRecipeCommandReceipt:
       type: object
       additionalProperties: false

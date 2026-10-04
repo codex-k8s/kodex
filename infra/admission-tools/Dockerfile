@@ -5,6 +5,15 @@ FROM docker.io/anchore/syft:v1.51.0@sha256:678bfa565b60f747aac0f8e964fe5588a2444
 FROM docker.io/anchore/grype:v0.117.0@sha256:ddf9e9f204049f3a4a0955ef70873cabab6a31432125ad4f20a490b54950a253 AS grype
 FROM docker.io/regclient/regctl:v0.11.5@sha256:dbe356c6cf9f8f85e302b9e47fed481ef3f1b04807350e99b02ab2cadee0a993 AS regctl
 
+FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
+ENV GOTOOLCHAIN=local
+WORKDIR /workspace
+COPY libs/go/ libs/go/
+COPY services/jobs/role-image-builder/ services/jobs/role-image-builder/
+RUN CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
+      -trimpath -buildvcs=false -ldflags="-s -w" \
+      -o /out/image-tool-inventory-validator ./cmd/image-tool-inventory-validator
+
 FROM docker.io/library/alpine:3.22.1@sha256:eafc1edb577d2e9b458664a15f23ea1c370214193226069eb22921169fc7e43f
 ARG SOURCE_SHA=unknown
 ENV GRYPE_DB_CACHE_DIR=/var/lib/grype/db \
@@ -25,6 +34,7 @@ COPY --from=cosign --chmod=0555 /ko-app/cosign /usr/local/bin/cosign
 COPY --from=syft --chmod=0555 /syft /usr/local/bin/syft
 COPY --from=grype --chmod=0555 /grype /usr/local/bin/grype
 COPY --from=regctl --chmod=0555 /regctl /usr/local/bin/regctl
+COPY --from=build --chmod=0555 /out/image-tool-inventory-validator /usr/local/bin/image-tool-inventory-validator
 ADD --checksum=sha256:3c368df5c3624fe083ad646ca3be59525739dfe9caa4b6d14c7f252d155fbd98 \
     https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.9_2026-10-02T00:35:12Z_1790922713.tar.zst \
     /tmp/grype-db.tar.zst
@@ -33,7 +43,7 @@ RUN install -d -m 0755 "$GRYPE_DB_CACHE_DIR" \
     && grype db status >/dev/null \
     && rm -f /tmp/grype-db.tar.zst \
     && chown -R 10001:10001 /var/lib/grype
-RUN for tool in base64 bash cmp cosign curl grype jq openssl pgrep regctl sha256sum syft wc; do \
+RUN for tool in base64 bash cmp cosign curl grype image-tool-inventory-validator jq openssl pgrep regctl sha256sum syft wc; do \
       command -v "$tool" >/dev/null || exit 1; \
     done
 LABEL org.opencontainers.image.title="Kodex image admission tools" \

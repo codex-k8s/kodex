@@ -45,7 +45,9 @@ func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.
 		}
 		parameters := map[string]any{}
 		for _, field := range assistantRuntimeEditable {
-			parameters[field] = request[field]
+			if value, exists := request[field]; exists {
+				parameters[field] = value
+			}
 		}
 		edited.Parameters = parameters
 		refreshed, err = repository.hydrateAssistantRuntimeConfiguration(ctx, tx, current, edited)

@@ -222,8 +222,8 @@ func promotionTestSnapshot() (lockedRecipe, lockedArtifact, lockedPromotionReque
 			Version: 7, RecipeVersion: recipe.Recipe.Version, RecipeGeneration: recipe.Recipe.Generation,
 			BuildVersion: 6, PolicyRevision: recipe.Recipe.PolicyRevision, AdmissionRevision: 1,
 			RoleRuntimeContractRevision: recipe.Recipe.RoleRuntimeContractRevision, BuildAttempt: 1,
-			Platforms: []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}},
-			Tools:     []entity.RoleImageTool{{Name: "codex", Version: "1", SourceRef: "oci://tool", SHA256: digest}},
+			Platforms:     []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}},
+			DeclaredTools: []entity.RoleImageTool{{Name: "codex", Version: "1", SourceRef: "oci://tool", SHA256: digest}},
 		},
 	}
 	request := lockedPromotionRequest{

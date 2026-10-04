@@ -415,6 +415,12 @@ done
 for dockerfile in \
   "$repository_root/infra/admission-tools/Dockerfile" \
   "$repository_root/tools/dev/Dockerfile.local-image-supply-chain"; do
+  grep -Fq './cmd/image-tool-inventory-validator' "$dockerfile" &&
+    grep -Fq '/out/image-tool-inventory-validator /usr/local/bin/image-tool-inventory-validator' "$dockerfile" &&
+    grep -Eq 'RUN for tool in .*image-tool-inventory-validator' "$dockerfile" || {
+      echo "admission tools image omits the bounded inventory validator" >&2
+      exit 1
+    }
   grep -Fq "ADD --checksum=sha256:$grype_database_sha256" "$dockerfile" || {
     echo "admission tools image does not pin the Grype database checksum: $dockerfile" >&2
     exit 1
@@ -469,7 +475,7 @@ cat >"$temporary_directory/bin/kubectl" <<EOF
 #!/bin/sh
 policy_revision=\${FIXTURE_POLICY_REVISION:-7}
 cat <<JSON
-{"immutable":true,"metadata":{"labels":{"kodex.dev/owner-intent":"true"},"annotations":{"kodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/kodex/internal-rpc-authority@$authority_digest","promotionRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles","promotionEvidenceRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence","evidenceRepository":"kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission","promotedPullRepository":"registry.example.test/kodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/kodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc"}}
+{"immutable":true,"metadata":{"labels":{"kodex.dev/owner-intent":"true"},"annotations":{"kodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/kodex/internal-rpc-authority@$authority_digest","promotionRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles","promotionEvidenceRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence","evidenceRepository":"kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission","promotedPullRepository":"registry.example.test/kodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/kodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,jq,regctl,sha256sum,syft,wc"}}
 JSON
 EOF
 chmod 0555 "$temporary_directory/bin/kubectl"
@@ -623,8 +629,10 @@ jq -e '
   .kodexPolicy.unresolvedNoFixMatchCount == 0 and
   (.matches | length) == 1
 ' "$temporary_directory/vulnerability-fixable.result.json" >/dev/null
-if rg -q -- '--slurpfile|admission\.evidence\.json' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+if rg -q -- 'admission\.evidence\.json' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" ||
+  (rg -- '--slurpfile' "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" |
+    rg -v -- '--slurpfile (manifest /work/tool-manifest\.json|claim /work/owner-claim\.json)'); then
   echo "admission evidence still reserializes signed payloads" >&2
   exit 1
 fi
@@ -736,12 +744,14 @@ provenance.json|application/vnd.kodex.provenance-binding.v2+json
 provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
+tool-inventory.json|application/vnd.kodex.image-tool-inventory-binding.v1+json
+tool-inventory.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 sbom.json|application/spdx+json
 sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
 vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 signature.binding.json|application/vnd.kodex.signature-binding.v1+json
-admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
+admission.receipt.json|application/vnd.kodex.admission-receipt.v2+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
 EOF
 }
@@ -765,12 +775,12 @@ EOF
   jq -Ssc --arg artifact artifact-1 --arg image "$image_digest" \
     --arg policy "$policy_revision" --arg policy_sha "$policy_sha256" \
     '{schemaVersion:2,mediaType:"application/vnd.oci.image.manifest.v1+json",
-      artifactType:"application/vnd.kodex.image-admission-evidence.v2",
-      config:{mediaType:"application/vnd.kodex.image-admission-evidence.config.v2+json",
+      artifactType:"application/vnd.kodex.image-admission-evidence.v3",
+      config:{mediaType:"application/vnd.kodex.image-admission-evidence.config.v3+json",
         digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2},
       layers:.,annotations:{
         "kodex.dev/artifact-id":$artifact,
-        "kodex.dev/evidence-schema":"kodex.dev/image-admission-evidence/v2",
+        "kodex.dev/evidence-schema":"kodex.dev/image-admission-evidence/v3",
         "kodex.dev/image-digest":$image,
         "kodex.dev/policy-revision":$policy,
         "kodex.dev/policy-sha256":$policy_sha}}' "$layer_file" >"$manifest_file"
@@ -844,7 +854,18 @@ cat >"$evidence_source/vulnerability.json" <<'EOF'
   "descriptor": { "configuration": { "fail-on-severity": "high" }, "name": "grype" }
 }
 EOF
-for signed_name in image-digest provenance native-provenance sbom vulnerability; do
+provenance_sha=$(sha256sum "$evidence_source/provenance.json" | awk '{print $1}')
+# Canonical manifest fixture: все probes честно MISSING, capabilities не назначаются.
+jq -jcn --argjson names '["bash","curl","git","gh","jq","yq","ripgrep","make","just","go","goimports","gofumpt","golangci-lint","staticcheck","goose","sqlc","buf","protoc","protoc-gen-go","protoc-gen-go-grpc","grpcurl","mockgen","oapi-codegen","node","npm","pnpm","yarn","typescript","eslint","prettier","vite","vue-tsc","vitest","playwright","chromium","playwright-mcp","wscat","codex","corepack","python3","pip","kubectl","kustomize","helm","buildctl","docker","shellcheck","hadolint","govulncheck","gitleaks"]' \
+  '{schema:"kodex.dev/image-tool-inventory/v1",specSHA256:("1"*64),immutableBuildSHA256:("2"*64),runtimeContractSHA256:("3"*64),platform:"linux/amd64",tools:[$names|to_entries[]|{name:.value,status:"MISSING",path:"",version:"",sha256:"",required:(.key<38)}]}' \
+  >"$temporary_directory/tool-manifest.json"
+tool_manifest_sha=$(sha256sum "$temporary_directory/tool-manifest.json" | awk '{print $1}')
+jq -cn --arg image "$image_digest" --arg provenance "$provenance_sha" --arg sha "$tool_manifest_sha" \
+  --slurpfile manifest "$temporary_directory/tool-manifest.json" \
+  '{schema:"kodex.dev/image-tool-inventory-binding/v1",imageDigest:$image,provenanceSHA256:$provenance,platforms:[{platformDigest:$image,manifestSHA256:$sha,manifest:$manifest[0]}]}' \
+  >"$evidence_source/tool-inventory.json"
+(cd "$repository_root/services/jobs/role-image-builder" && GOTOOLCHAIN=go1.26.6 go build -o "$temporary_directory/bin/image-tool-inventory-validator" ./cmd/image-tool-inventory-validator)
+for signed_name in image-digest provenance native-provenance tool-inventory sbom vulnerability; do
   signed_file="$evidence_source/$signed_name.json"
   [[ $signed_name == image-digest ]] && signed_file="$evidence_source/image-digest.subject"
   sign_evidence_fixture "$signed_file" "$evidence_source/$signed_name.sigstore.json"
@@ -862,10 +883,12 @@ provenance_sha=$(sha256sum "$evidence_source/provenance.json" | awk '{print $1}'
 sbom_sha=$(sha256sum "$evidence_source/sbom.json" | awk '{print $1}')
 vulnerability_sha=$(sha256sum "$evidence_source/vulnerability.json" | awk '{print $1}')
 signature_sha=$(sha256sum "$evidence_source/signature.binding.json" | awk '{print $1}')
+inventory_sha=$(sha256sum "$evidence_source/tool-inventory.json" | awk '{print $1}')
 cat >"$evidence_source/admission.receipt.json" <<EOF
 {
   "verdict": "ACCEPTED",
-  "version": "v1", "artifactId": "artifact-1",
+  "version": "v2", "artifactId": "artifact-1",
+  "toolInventorySHA256": "$inventory_sha",
   "signatureSHA256": "$signature_sha",
   "imageDigest": "$image_digest",
   "policySHA256": "$policy_sha256", "policyRevision": "$policy_revision",

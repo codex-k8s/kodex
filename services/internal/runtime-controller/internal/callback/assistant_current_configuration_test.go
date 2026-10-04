@@ -25,6 +25,7 @@ func assistantOwnCurrentFixture(scope runtimecontract.AssistantScope) (runtimeco
 	input.Instructions, input.Task = "PRIVATE_EXECUTION_SENTINEL", "PRIVATE_TASK_SENTINEL"
 	digest := strings.Repeat("a", 64)
 	current := &controlplanev1.AssistantCurrentConfiguration{AgentVersion: 7,
+		ImageToolInventory: &controlplanev1.ImageToolInventory{Status: "UNAVAILABLE"},
 		Configuration: &controlplanev1.AgentRuntimeConfiguration{Ref: "cfg_current123", Version: 4, AgentRef: input.AgentRef, RuntimeProfileRef: input.RuntimeProfileRef,
 			Provider: "openai", Model: "gpt-6.1-sol", Digest: digest, ProviderPolicy: &controlplanev1.ProviderAccountPolicyVersion{Ref: "pol_current123", Version: 3, Mode: "FIXED", Digest: digest}},
 		PublishedOverlay:   &controlplanev1.ConfigOverlayVersion{Ref: "ovr_current123", Version: 5, Revision: 5, State: "PUBLISHED", Content: "model_reasoning_effort = \"high\"", Digest: digest},
@@ -107,6 +108,34 @@ func TestAssistantOwnCurrentConfigurationDoesNotInventBootstrapImageBinding(t *t
 		if _, err := castAssistantConfigurationCatalog(input, request, response.AssistantConfigurationCatalog); err == nil {
 			t.Fatal("partial image identity was accepted as unset")
 		}
+	}
+}
+
+func TestAssistantImageToolInventoryRemainsSeparateFromCapabilities(t *testing.T) {
+	digest := strings.Repeat("a", 64)
+	image := &controlplanev1.RuntimeEnvironmentImage{ArtifactRef: "imgart_owned123", Digest: "sha256:" + digest}
+	value := &controlplanev1.ImageToolInventory{Status: "VERIFIED", Sha256: digest, ImageDigest: image.Digest, ProvenanceSha256: digest,
+		Platforms: []*controlplanev1.ImagePlatformToolInventory{{Platform: "linux/amd64", PlatformDigest: image.Digest, ManifestSha256: digest}}}
+	for _, probe := range runtimecontract.ImageToolProbes() {
+		value.Platforms[0].Tools = append(value.Platforms[0].Tools, &controlplanev1.ImageToolObservation{Name: probe.Name, Status: "MISSING", Required: probe.Required})
+	}
+	if !validAssistantImageToolInventory(value, image) {
+		t.Fatal("truthful observed missing tools rejected")
+	}
+	value.Platforms[0].Tools[0].Status = "VERIFIED"
+	if validAssistantImageToolInventory(value, image) {
+		t.Fatal("capability or declaration faked verified binary")
+	}
+	value.Platforms[0].Tools[0].Status = "MISSING"
+	value.ImageDigest = "sha256:" + strings.Repeat("b", 64)
+	if validAssistantImageToolInventory(value, image) {
+		t.Fatal("foreign image inventory accepted")
+	}
+	if validAssistantImageToolInventory(nil, image) {
+		t.Fatal("missing new typed DTO accepted")
+	}
+	if !validAssistantImageToolInventory(&controlplanev1.ImageToolInventory{Status: "UNAVAILABLE"}, image) {
+		t.Fatal("historical unavailable inventory invented")
 	}
 }
 

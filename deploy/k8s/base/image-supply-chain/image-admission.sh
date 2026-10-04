@@ -63,7 +63,7 @@ require_policy() {
   echo "$TRUSTED_ROLE_BASE_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
     fail "trusted role base repository is invalid"
   echo "$TRUSTED_ROLE_BASE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "trusted role base digest is invalid"
-  for tool in base64 cmp cosign grype image-admission-bridge jq regctl sha256sum syft wc; do
+  for tool in base64 cmp cosign grype image-admission-bridge image-tool-inventory-validator jq regctl sha256sum syft wc; do
     command -v "$tool" >/dev/null || fail "admission image is incomplete"
   done
 }
@@ -324,12 +324,14 @@ provenance.json|application/vnd.kodex.provenance-binding.v2+json
 provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
+tool-inventory.json|application/vnd.kodex.image-tool-inventory-binding.v1+json
+tool-inventory.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 sbom.json|application/spdx+json
 sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
 vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 signature.binding.json|application/vnd.kodex.signature-binding.v1+json
-admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
+admission.receipt.json|application/vnd.kodex.admission-receipt.v2+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
 EOF
 }
@@ -350,12 +352,12 @@ verify_evidence_manifest() {
     --argjson expected "$expected_entries" '
     (. | keys | sort) == (["annotations","artifactType","config","layers","mediaType","schemaVersion"] | sort) and
     .schemaVersion == 2 and .mediaType == "application/vnd.oci.image.manifest.v1+json" and
-    .artifactType == "application/vnd.kodex.image-admission-evidence.v2" and
-    .config == {mediaType:"application/vnd.kodex.image-admission-evidence.config.v2+json",
+    .artifactType == "application/vnd.kodex.image-admission-evidence.v3" and
+    .config == {mediaType:"application/vnd.kodex.image-admission-evidence.config.v3+json",
       digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2} and
     (.annotations | keys | sort) == (["kodex.dev/artifact-id","kodex.dev/evidence-schema",
       "kodex.dev/image-digest","kodex.dev/policy-revision","kodex.dev/policy-sha256"] | sort) and
-    .annotations["kodex.dev/evidence-schema"] == "kodex.dev/image-admission-evidence/v2" and
+    .annotations["kodex.dev/evidence-schema"] == "kodex.dev/image-admission-evidence/v3" and
     .annotations["kodex.dev/artifact-id"] == $artifact and
     .annotations["kodex.dev/image-digest"] == $image and
     .annotations["kodex.dev/policy-revision"] == $policy and
@@ -430,12 +432,13 @@ verify_recovered_evidence() {
     --arg policy "$expected_policy_revision" --arg policy_sha "$expected_policy_sha256" '
     (. | keys | sort) == (["artifactId","imageDigest","immutableBuildSHA256","policyRevision","policySHA256",
       "provenanceSHA256","sbomSHA256","signatureIdentity","signatureSHA256","specSHA256",
-      "version","verdict","vulnerabilityEvidenceSHA256"] | sort) and
-    .version == "v1" and .artifactId == $artifact and .imageDigest == $image and
+      "version","verdict","vulnerabilityEvidenceSHA256","toolInventorySHA256"] | sort) and
+    .version == "v2" and .artifactId == $artifact and .imageDigest == $image and
     .policyRevision == $policy and .policySHA256 == $policy_sha and
     (.specSHA256 | test("^[a-f0-9]{64}$")) and (.immutableBuildSHA256 | test("^[a-f0-9]{64}$")) and
     (.provenanceSHA256 | test("^[a-f0-9]{64}$")) and (.sbomSHA256 | test("^[a-f0-9]{64}$")) and
     (.vulnerabilityEvidenceSHA256 | test("^[a-f0-9]{64}$")) and
+    (.toolInventorySHA256 | test("^[a-f0-9]{64}$")) and
     (.signatureSHA256 | test("^[a-f0-9]{64}$")) and (.verdict == "ACCEPTED" or .verdict == "REJECTED")
   ' "$receipt" >/dev/null || fail "durable admission receipt binding mismatch"
   jq -e --arg image "$expected_image" --arg policy "$expected_policy_revision" \
@@ -449,8 +452,16 @@ verify_recovered_evidence() {
   [ "$(sha256sum "$signature_binding" | awk '{print $1}')" = "$(jq -er .signatureSHA256 "$receipt")" ] &&
     [ "$(sha256sum "$evidence_directory/provenance.json" | awk '{print $1}')" = "$(jq -er .provenanceSHA256 "$receipt")" ] &&
     [ "$(sha256sum "$evidence_directory/sbom.json" | awk '{print $1}')" = "$(jq -er .sbomSHA256 "$receipt")" ] &&
+    [ "$(sha256sum "$evidence_directory/tool-inventory.json" | awk '{print $1}')" = "$(jq -er .toolInventorySHA256 "$receipt")" ] &&
     [ "$(sha256sum "$evidence_directory/vulnerability.json" | awk '{print $1}')" = "$(jq -er .vulnerabilityEvidenceSHA256 "$receipt")" ] ||
     fail "durable admission evidence hash mismatch"
+  image-tool-inventory-validator inventory <"$evidence_directory/tool-inventory.json" ||
+    fail "durable tool inventory is invalid"
+  jq -e --arg image "$expected_image" --arg provenance "$(jq -er .provenanceSHA256 "$receipt")" \
+    --arg spec "$(jq -er .specSHA256 "$receipt")" --arg immutable "$(jq -er .immutableBuildSHA256 "$receipt")" '
+    .imageDigest == $image and .provenanceSHA256 == $provenance and
+    all(.platforms[]; .manifest.specSHA256 == $spec and .manifest.immutableBuildSHA256 == $immutable)
+  ' "$evidence_directory/tool-inventory.json" >/dev/null || fail "durable tool inventory binding mismatch"
   jq -e --arg image "$expected_image" --argjson policy "$expected_policy_revision" \
     --arg policy_sha "$expected_policy_sha256" --arg scope "$owner_scope_kind" \
     --arg organization "$owner_organization_ref" --arg project "$owner_project_ref" '
@@ -472,7 +483,7 @@ verify_recovered_evidence() {
     echo "$signature_identity" | grep -Eq '^[a-f0-9]{64}$' || fail "durable signature identity is invalid"
     [ "$(sha256sum "$evidence_directory/cosign.pub" | awk '{print $1}')" = "$signature_identity" ] ||
       fail "durable signature identity mismatch"
-    for signed_name in image-digest provenance native-provenance sbom vulnerability; do
+    for signed_name in image-digest provenance native-provenance tool-inventory sbom vulnerability; do
       signed_file="$evidence_directory/$signed_name.json"
       [ "$signed_name" = image-digest ] && signed_file="$evidence_directory/image-digest.subject"
       cosign verify-blob --insecure-ignore-tlog --key "$evidence_directory/cosign.pub" \
@@ -490,13 +501,13 @@ verify_recovered_evidence() {
 publish_or_verify_evidence() {
   evidence_tag=$1
   evidence_manifest=$2
-  evidence_type=application/vnd.kodex.image-admission-evidence.v2
-  config_type=application/vnd.kodex.image-admission-evidence.config.v2+json
+  evidence_type=application/vnd.kodex.image-admission-evidence.v3
+  config_type=application/vnd.kodex.image-admission-evidence.config.v3+json
   printf '{}' >/work/evidence.config.json
   if ! regctl manifest get "$evidence_tag" --format raw-body >"$evidence_manifest" 2>/dev/null; then
     set -- --artifact-type "$evidence_type" --config-type "$config_type" \
       --config-file /work/evidence.config.json --file-title --strip-dirs \
-      --annotation "kodex.dev/evidence-schema=kodex.dev/image-admission-evidence/v2" \
+      --annotation "kodex.dev/evidence-schema=kodex.dev/image-admission-evidence/v3" \
       --annotation "kodex.dev/artifact-id=$artifact_id" \
       --annotation "kodex.dev/image-digest=$image_digest" \
       --annotation "kodex.dev/policy-revision=$POLICY_REVISION" \
@@ -585,6 +596,7 @@ verify_image_and_provenance() {
     .digest' \
     /work/image-index.json >/work/platform-manifests
   : >/work/native-provenance.jsonl
+  : >/work/tool-inventory.jsonl
   while IFS= read -r platform_digest; do
     echo "$platform_digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "platform manifest digest is invalid"
     platform_ref="${subject_name}@${platform_digest}"
@@ -625,6 +637,26 @@ verify_image_and_provenance() {
       --arg build_type "$EXPECTED_BUILD_TYPE" -f /opt/kodex/provenance-policy.jq \
       /work/provenance.statement.json >/dev/null || fail "native provenance binding mismatch"
     jq -c . /work/provenance.statement.json >>/work/native-provenance.jsonl
+    # Читается ровно server-owned final path из exact platform manifest, не tag.
+    regctl image get-file "$platform_ref" /usr/share/kodex/tool-inventory.json 2>/dev/null |
+      image-tool-inventory-validator capture-manifest >/work/tool-manifest.json || fail "image tool manifest is invalid"
+    platform_name=$(jq -er --arg digest "$platform_digest" '.manifests[] | select(.digest == $digest) |
+      .platform.os + "/" + .platform.architecture' /work/image-index.json)
+    jq -e --arg spec "$spec_sha256" --arg immutable "$immutable_build_sha256" \
+      --arg runtime "$runtime_contract_sha256" --arg platform "$platform_name" '
+      .specSHA256 == $spec and .immutableBuildSHA256 == $immutable and
+      .runtimeContractSHA256 == $runtime and .platform == $platform
+    ' /work/tool-manifest.json >/dev/null || fail "image tool manifest binding mismatch"
+    jq -e --slurpfile claim /work/owner-claim.json '
+      . as $manifest | ($claim[0].declaredTools | type == "array" and length <= 128) and
+      all($claim[0].declaredTools[]; . as $tool |
+        any($manifest.tools[]; (.path | split("/") | last) == $tool.name and .version == $tool.version and
+          .sha256 == $tool.sha256 and .status == "VERIFIED"))
+    ' /work/tool-manifest.json >/dev/null || fail "declared image tool probe failed"
+    tool_manifest_sha256=$(sha256sum /work/tool-manifest.json | awk '{print $1}')
+    jq -cn --arg digest "$platform_digest" --arg manifest_sha "$tool_manifest_sha256" \
+      --slurpfile manifest /work/tool-manifest.json \
+      '{platformDigest:$digest,manifestSHA256:$manifest_sha,manifest:$manifest[0]}' >>/work/tool-inventory.jsonl
   done </work/platform-manifests
   jq -sSjc . /work/native-provenance.jsonl >/work/native-provenance.json
   jq -Sjc -n --arg build_type "$EXPECTED_BUILD_TYPE" --arg builder_id "$EXPECTED_BUILDER_ID" \
@@ -639,6 +671,11 @@ verify_image_and_provenance() {
   cp /work/provenance.binding.json /work/provenance.json
   sha256sum /work/provenance.binding.json | awk '{print $1}' >/work/provenance.sha256
   [ "$(cat /work/provenance.sha256)" = "$expected_provenance_sha256" ] || fail "owner provenance digest mismatch"
+  jq -sc --arg image "$image_digest" --arg provenance "$expected_provenance_sha256" \
+    '{schema:"kodex.dev/image-tool-inventory-binding/v1",imageDigest:$image,provenanceSHA256:$provenance,platforms:.}' \
+    /work/tool-inventory.jsonl >/work/tool-inventory.json
+  image-tool-inventory-validator inventory </work/tool-inventory.json || fail "image tool inventory is invalid"
+  sha256sum /work/tool-inventory.json | awk '{print $1}' >/work/tool-inventory.sha256
 }
 
 if [ "${1:-}" = validate-runtime-config ]; then
@@ -738,7 +775,7 @@ case "${1:-}" in
       cosign sign-blob --yes --key /identity/cosign.key \
         --signing-config /work/cosign-signing-config.json \
         --bundle /work/image-digest.sigstore.json /work/image-digest.subject >/dev/null
-      for evidence in provenance native-provenance sbom vulnerability; do
+      for evidence in provenance native-provenance tool-inventory sbom vulnerability; do
         cosign sign-blob --yes --key /identity/cosign.key \
           --signing-config /work/cosign-signing-config.json \
           --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" >/dev/null
@@ -756,7 +793,7 @@ case "${1:-}" in
       cosign verify-blob --insecure-ignore-tlog --key /identity/cosign.pub \
         --bundle /work/image-digest.sigstore.json /work/image-digest.subject \
         >/work/signature-verification.json
-      for evidence in provenance native-provenance sbom vulnerability; do
+      for evidence in provenance native-provenance tool-inventory sbom vulnerability; do
         cosign verify-blob --insecure-ignore-tlog --key /identity/cosign.pub \
           --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" \
           >"/work/$evidence-verification.json"
@@ -775,15 +812,16 @@ case "${1:-}" in
       --arg sbom "$(cat /work/sbom.sha256)" --arg vulnerability "$(cat /work/vulnerability.sha256)" \
       --arg policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" --arg verdict "$verdict" \
       --arg signature "$signature_identity" --arg signature_sha "$(cat /work/signature.sha256)" \
-      '{version:"v1",artifactId:$artifact,imageDigest:$image,specSHA256:$spec,
+      --arg inventory "$(cat /work/tool-inventory.sha256)" \
+      '{version:"v2",artifactId:$artifact,imageDigest:$image,specSHA256:$spec,
         immutableBuildSHA256:$immutable,provenanceSHA256:$provenance,sbomSHA256:$sbom,
         vulnerabilityEvidenceSHA256:$vulnerability,policyRevision:$policy,policySHA256:$policy_sha,
-        verdict:$verdict,signatureIdentity:$signature,signatureSHA256:$signature_sha}' \
+        verdict:$verdict,signatureIdentity:$signature,signatureSHA256:$signature_sha,toolInventorySHA256:$inventory}' \
       >/work/admission.receipt.json
     sha256sum /work/admission.receipt.json | awk '{print $1}' >/work/admission.receipt.sha256
     printf '%s\n' "$image_digest" >/work/image-digest.subject
     cp /identity/cosign.pub /work/cosign.pub
-    for signature in image-digest provenance native-provenance sbom vulnerability; do
+    for signature in image-digest provenance native-provenance tool-inventory sbom vulnerability; do
       [ -f "/work/$signature.sigstore.json" ] || : >"/work/$signature.sigstore.json"
     done
     evidence_total=0
@@ -809,6 +847,7 @@ EOF
     IMAGE_OWNER_SIGNATURE_SHA256_FILE=/work/signature.sha256 \
     IMAGE_OWNER_ADMISSION_RECEIPT_SHA256_FILE=/work/admission.receipt.sha256 \
     IMAGE_OWNER_ADMISSION_RECEIPT_OCI_MANIFEST_DIGEST_FILE=/work/admission.receipt-manifest.digest \
+    IMAGE_OWNER_TOOL_INVENTORY_FILE=/work/tool-inventory.json \
     IMAGE_OWNER_SIGNATURE_IDENTITY="$signature_identity" IMAGE_OWNER_VERDICT="$verdict" \
       image-admission-bridge record
     write_marker admission.complete

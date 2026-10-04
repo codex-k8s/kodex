@@ -278,6 +278,7 @@ type AssistantRuntimeConfigurationInput struct {
 	RuntimeProfilePin                                           entity.AssistantRuntimeProfilePin
 	Configuration                                               AgentRuntimeConfigurationInput
 	ReasoningEffort                                             string
+	WebSearchMode                                               string
 	ScopeKind, OrganizationRef, ProjectRef, AssistantProfileRef string
 }
 

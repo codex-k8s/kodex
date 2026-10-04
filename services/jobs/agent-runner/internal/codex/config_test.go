@@ -169,6 +169,42 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	}
 }
 
+func TestPrepareHomeMaterializesPinnedHostedSearchWithoutEgressChanges(t *testing.T) {
+	setRuntimeTransportFixture(t)
+	for _, mode := range []string{"", "disabled", "cached", "indexed", "live", "unknown"} {
+		t.Run(mode, func(t *testing.T) {
+			workspace := t.TempDir()
+			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
+			digest := sha256.Sum256(auth)
+			digestFile := filepath.Join(workspace, "auth.sha256")
+			if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			input := model.Input{WorkspaceRoot: workspace, CodexHome: filepath.Join(workspace, ".kodex", "state", "codex-home"), Model: "fixture-model", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high", CodexApprovalPolicy: "never", CodexSandbox: "workspace-write", ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
+			input.EnvironmentPolicy.Network.WebAccess.Mode = runtimecontract.RuntimeWebAccessNone
+			if mode != "" {
+				input.ConfigOverlay = "web_search = \"" + mode + "\"\n"
+			}
+			err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth)
+			if mode == "unknown" {
+				if err == nil {
+					t.Fatal("unsupported mode reached writer")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(filepath.Join(input.CodexHome, "config.toml"))
+			var config runtimeConfig
+			metadata, decodeErr := toml.Decode(string(raw), &config)
+			if err != nil || decodeErr != nil || config.WebSearchMode != mode || metadata.IsDefined("web_search") != (mode != "") || config.DefaultPermissions != "kodex-runtime" || config.Permissions[config.DefaultPermissions].Network.Enabled {
+				t.Fatal("mode was lost/defaulted or expanded sandbox egress")
+			}
+		})
+	}
+}
+
 func TestValidateProviderAuthenticationFailsClosed(t *testing.T) {
 	auth := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-only"}}`)
 	digest := sha256.Sum256(auth)

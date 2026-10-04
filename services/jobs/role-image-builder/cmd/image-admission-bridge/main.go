@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/clients/imageowner"
 	"github.com/google/uuid"
 )
@@ -97,6 +99,21 @@ func run(ctx context.Context) error {
 			SignatureIdentity:           signatureIdentity, SignatureSHA256: signature,
 			AdmissionReceiptSHA256: receipt, AdmissionReceiptOCIManifestDigest: receiptManifest,
 			Accepted: verdict == "ACCEPTED"}
+		inventoryPath, err := requiredPath("IMAGE_OWNER_TOOL_INVENTORY_FILE")
+		if err != nil {
+			return err
+		}
+		inventoryFile, err := os.Open(inventoryPath)
+		if err != nil {
+			return errors.New("image tool inventory claim binding is invalid")
+		}
+		inventoryRaw, err := io.ReadAll(io.LimitReader(inventoryFile, runtimecontract.MaximumImageInventoryBytes+1))
+		closeErr := inventoryFile.Close()
+		inventory, decodeErr := runtimecontract.DecodeImageToolInventory(inventoryRaw)
+		if err != nil || closeErr != nil || decodeErr != nil || inventory.ImageDigest != claim.ManifestDigest || inventory.ProvenanceSHA256 != claim.ProvenanceSHA256 {
+			return errors.New("image tool inventory claim binding is invalid")
+		}
+		evidence.ToolInventoryJSON, evidence.ToolInventorySHA256 = string(inventoryRaw), runtimecontract.ImageInventorySHA256(inventoryRaw)
 		return client.Record(ctx, idempotencyKey(operation, runID+"\x00"+claim.ArtifactID), claim, evidence)
 	case "claim-promotion":
 		promotion, err := client.ClaimPromotion(ctx, idempotencyKey(operation, runID))

@@ -274,7 +274,7 @@ func completeTestPolicy() *corev1.ConfigMap {
 		"trustedRoleBaseRepository":   "registry.example.test/kodex/agent-runner",
 		"trustedRoleBaseDigest":       "sha256:" + stringsOf("a", 64),
 		"roleRuntimeContractRevision": "1", "roleRuntimeContractSHA256": stringsOf("d", 64),
-		"requiredTools": "base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc",
+		"requiredTools": "base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,jq,regctl,sha256sum,syft,wc",
 	}}
 }
 

@@ -190,6 +190,7 @@ func TestOrganizationRoleImagesComponent(t *testing.T) {
 		SBOMSHA256: strings.Repeat("1", 64), VulnerabilityEvidenceSHA256: strings.Repeat("2", 64), SignatureIdentity: "synthetic-owner",
 		SignatureSHA256: strings.Repeat("3", 64), AdmissionReceiptSHA256: strings.Repeat("4", 64), AdmissionReceiptOCIManifestDigest: "sha256:" + strings.Repeat("5", 64),
 	}
+	admissionInput.ToolInventoryJSON, admissionInput.ToolInventorySHA256 = imageInventoryFixture(admission.Artifact)
 	admitted, err := repository.RecordAdmission(ctx, admissionInput)
 	if err != nil || admitted.ScopeKind != "ORGANIZATION" {
 		t.Fatalf("admit organization artifact: %v", err)

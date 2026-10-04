@@ -734,24 +734,20 @@ func (repository *Repository) resolveScopedRuntimeEnvironmentImage(ctx context.C
 	}
 	var artifactID, storedArtifactRef, recipeRef, reference, manifestDigest string
 	var recipeGeneration int64
-	var rawSpecification []byte
 	err := tx.QueryRow(ctx, queryRuntimeConfigurationResolveImageArtifact, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "project_id": projectID, "scope_kind": scopeKind, "artifact_ref": artifactRef,
-	}).Scan(&artifactID, &storedArtifactRef, &recipeRef, &recipeGeneration, &reference, &manifestDigest, &rawSpecification)
+	}).Scan(&artifactID, &storedArtifactRef, &recipeRef, &recipeGeneration, &reference, &manifestDigest)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrNotFound
 	}
 	if err != nil || storedArtifactRef != artifactRef || recipeGeneration < 1 || reference == "" || manifestDigest == "" {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrUnavailable
 	}
-	var specification entity.RoleImageRecipeInput
-	if json.Unmarshal(rawSpecification, &specification) != nil {
+	artifact, inventoryErr := scanRoleImageArtifact(tx.QueryRow(ctx, queryRoleImagesGetActiveArtifact, organizationID, storedArtifactRef))
+	if inventoryErr != nil || artifact.ManifestDigest != manifestDigest || artifact.PromotedReference != reference {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrUnavailable
 	}
-	available := make(map[string]struct{}, len(specification.Tools))
-	for _, tool := range specification.Tools {
-		available[tool.Name] = struct{}{}
-	}
+	available := verifiedImageToolCommands(artifact.ToolInventory)
 	normalized := append([]entity.RuntimeEnvironmentTool(nil), tools...)
 	if normalized == nil {
 		normalized = []entity.RuntimeEnvironmentTool{}

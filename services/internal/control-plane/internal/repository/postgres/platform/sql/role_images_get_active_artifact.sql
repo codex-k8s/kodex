@@ -1,7 +1,7 @@
 -- name: role_images_get_active_artifact :one
 SELECT artifact.ref, recipe.ref, artifact.spec_sha256, build.ref, artifact.staging_reference,
        artifact.manifest_digest, artifact.immutable_build_sha256, artifact.provenance_sha256,
-       artifact.specification, artifact.policy_sha256, artifact.sbom_sha256,
+       artifact.specification, artifact.tool_inventory_json, artifact.tool_inventory_sha256, artifact.policy_sha256, artifact.sbom_sha256,
        artifact.vulnerability_evidence_sha256, artifact.admission_verdict,
        artifact.signature_identity, artifact.signature_sha256,
        artifact.admission_receipt_sha256, artifact.admission_receipt_oci_manifest_digest,

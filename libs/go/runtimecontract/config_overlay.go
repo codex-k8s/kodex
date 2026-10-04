@@ -30,6 +30,7 @@ var runtimeToolCommandPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{
 // Codex. Provider, credentials, sandbox, approvals, permissions, MCP и shell
 // environment всегда материализуются сервером и не входят в overlay.
 type ConfigOverlay struct {
+	WebSearchMode        string         `toml:"web_search,omitempty" json:"webSearchMode,omitempty"`
 	ModelReasoningEffort string         `toml:"model_reasoning_effort,omitempty" json:"modelReasoningEffort,omitempty"`
 	Personality          string         `toml:"personality,omitempty" json:"personality,omitempty"`
 	AllowLoginShell      *bool          `toml:"allow_login_shell,omitempty" json:"allowLoginShell,omitempty"`
@@ -100,6 +101,7 @@ func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 		Name, SecretName, SecretKey, SecretUID, SecretResourceVersion, ContentSHA256 string
 	}
 	type safeReadback struct {
+		WebSearchMode        string         `toml:"web_search,omitempty"`
 		Model                string         `toml:"model"`
 		ModelReasoningEffort string         `toml:"model_reasoning_effort,omitempty"`
 		Personality          string         `toml:"personality,omitempty"`
@@ -132,7 +134,7 @@ func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 		}
 	}
 	readback := safeReadback{Model: input.Model, ModelReasoningEffort: overlay.ModelReasoningEffort,
-		Personality: overlay.Personality, AllowLoginShell: overlay.AllowLoginShell, History: overlay.History}
+		WebSearchMode: overlay.WebSearchMode, Personality: overlay.Personality, AllowLoginShell: overlay.AllowLoginShell, History: overlay.History}
 	if readback.History.Persistence == "" {
 		readback.History.Persistence = "save-all"
 	}

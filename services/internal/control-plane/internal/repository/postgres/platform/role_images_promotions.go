@@ -227,6 +227,7 @@ func promotionRequestDigest(ref, requestedBy string, artifact lockedArtifact) st
 		ToolchainSHA256, PolicySHA256, SBOMSHA256, VulnerabilityEvidenceSHA256 string
 		SignatureIdentity, SignatureSHA256, AdmissionReceiptSHA256             string
 		AdmissionReceiptOCIManifestDigest, RoleRuntimeContractSHA256           string
+		ToolInventorySHA256                                                    string
 		RecipeVersion, RecipeGeneration, BuildVersion, PolicyRevision          uint64
 		AdmissionRevision, RoleRuntimeContractRevision                         uint64
 		BuildAttempt                                                           uint32
@@ -260,6 +261,7 @@ func promotionRequestDigest(ref, requestedBy string, artifact lockedArtifact) st
 		RoleRuntimeContractRevision:       artifact.Artifact.RoleRuntimeContractRevision,
 		BuildAttempt:                      artifact.Artifact.BuildAttempt,
 		Platforms:                         artifact.Artifact.Platforms,
-		Tools:                             artifact.Artifact.Tools,
+		Tools:                             artifact.Artifact.DeclaredTools,
+		ToolInventorySHA256:               artifact.Artifact.ToolInventorySHA256,
 	})
 }

@@ -11,7 +11,7 @@ import (
 
 func TestAssistantReasoningOverlayPreservesSettings(t *testing.T) {
 	before := "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\n[history]\npersistence = \"save-all\"\n"
-	content, err := assistantReasoningOverlay(before, "medium")
+	content, err := assistantRuntimeOverlay(before, "medium", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,8 +19,29 @@ func TestAssistantReasoningOverlayPreservesSettings(t *testing.T) {
 	if err != nil || parsed.ModelReasoningEffort != "medium" || parsed.Personality != "pragmatic" || parsed.History.Persistence != "save-all" {
 		t.Fatalf("unrelated settings lost: %+v %v", parsed, err)
 	}
-	if _, err := assistantReasoningOverlay("unknown_setting = true\n", "low"); err == nil {
+	if _, err := assistantRuntimeOverlay("unknown_setting = true\n", "low", ""); err == nil {
 		t.Fatal("unknown manual configuration silently discarded")
+	}
+}
+
+func TestAssistantRuntimeOverlayClosedSearchModes(t *testing.T) {
+	before := "web_search = \"indexed\"\npersonality = \"pragmatic\"\n"
+	for _, mode := range []string{"", "disabled", "cached", "indexed", "live", "future", "LIVE"} {
+		content, err := assistantRuntimeOverlay(before, "medium", mode)
+		if mode == "future" || mode == "LIVE" {
+			if !errors.Is(err, errs.ErrInvalid) {
+				t.Fatal("unknown search mode was accepted")
+			}
+			continue
+		}
+		parsed, parseErr := runtimecontract.ParseConfigOverlay(content)
+		want := mode
+		if want == "" {
+			want = "indexed"
+		}
+		if err != nil || parseErr != nil || parsed.WebSearchMode != want || parsed.Personality != "pragmatic" || parsed.ModelReasoningEffort != "medium" {
+			t.Fatal("search update changed unrelated fields or omitted mode was reset")
+		}
 	}
 }
 
@@ -30,6 +51,11 @@ func TestAssistantRuntimeConfigurationNoChangeExactPins(t *testing.T) {
 	before := map[string]any{"runtimeProfileRef": pin.Ref, "model": "model-synthetic", "reasoningEffort": "medium", "providerPolicyMode": "PRIMARY", "runtimeProfilePin": pin, "providerAccounts": minimalAssistantRuntimeAccounts(persisted)}
 	after := cloneAssistantFields(before)
 	after["providerCatalogPins"] = persisted
+	searchChange := cloneAssistantFields(after)
+	searchChange["webSearchMode"] = "live"
+	if assistantRuntimeConfigurationUnchanged(before, searchChange, persisted) {
+		t.Fatal("search-only owner configuration was discarded as unchanged")
+	}
 	if !assistantRuntimeConfigurationUnchanged(before, after, persisted) {
 		t.Fatal("same authoritative settings and persisted catalog pins were not recognized")
 	}

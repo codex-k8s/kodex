@@ -256,12 +256,13 @@ message ImageArtifact {
   google.protobuf.Timestamp promoted_at = 35;
   google.protobuf.Timestamp created_at = 36;
   google.protobuf.Timestamp updated_at = 37;
-  repeated RoleImageTool tools = 38;
+  repeated RoleImageTool declared_tools = 38;
   ImagePromotionState promotion_state = 39;
   bool promotion_requested = 40;
   RuntimeResourceScopeKind scope_kind = 41;
   string organization_ref = 42;
   string project_ref = 43;
+  ImageToolInventory verified_tool_inventory = 44;
 }
 
 enum RoleImageRecipeAction {
@@ -496,6 +497,9 @@ message RecordImageAdmissionRequest {
   string signature_sha256 = 15;
   string admission_receipt_sha256 = 16;
   string admission_receipt_oci_manifest_digest = 17;
+  // Exact signed payload; закрытый decoder проверяет digest и immutable tuple.
+  string tool_inventory_json = 18;
+  string tool_inventory_sha256 = 19;
 }
 message RecordImageAdmissionResponse {
   ImageArtifact image_artifact = 1;

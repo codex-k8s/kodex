@@ -4,8 +4,8 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.7.0
-updated: 2026-09-01
+version: 0.8.0
+updated: 2026-10-04
 ---
 
 # Образы и цепочка поставки
@@ -91,7 +91,57 @@ executable path, version probe, readiness probe и безопасное опис
 readiness probes после materialization. Только подтверждённый effective subset
 попадает в `RuntimeRevision` и типизированную переменную prompt template.
 
-## Сборщик
+## Фактический inventory общего toolchain
+
+`recipe.Tools` — immutable OCI-входы, а `ImageArtifact.declaredTools` — их
+декларативная проекция. Они никогда не являются доказательством наличия
+исполняемого файла. `verifiedToolInventory` содержит отдельный signed read model;
+`CURRENT_CONFIGURATION.image_tool_inventory` читает его из exact promoted
+artifact текущего owner-scoped окружения. `tools` окружения остаётся выбранным
+владельцем набором capabilities; обнаружение программы не выдаёт полномочий.
+Создание и validation окружения разрешают command только из VERIFIED
+intersection всех платформ signed inventory. Используется фактический basename
+executable (`rg`, `tsc`), а не display name либо recipe input. Исторический
+UNAVAILABLE artifact не разрешает добавлять tools; пустой поднабор не становится
+доказательством наличия программ.
+
+Server-owned BuildKit wrapper выполняет закрытый registry из trusted runner
+в отдельной стадии exact trusted runtime-base. Финализированный rootfs образа
+подключается read-only; bounded probes выполняются в chroot под UID10001,
+без сети и inherited environment. Команды, aliases и аргументы не поступают
+из Dockerfile. Parent за пределами недоверенного rootfs вычисляет executable
+SHA256 и сохраняет только bounded version, `MISSING`, `PROBE_FAILED` либо
+`VERIFIED`; raw stdout/stderr не сохраняется. Registry включает 38 обязательных
+программ из QA §31 и 12 дополнительных, отличающихся признаком `required`.
+`image-tool-inventory-validator` материализован в canonical tools/admission
+образах и обязательном tool registry фаз. Он проверяет только bounded stdin
+через общий закрытый decoder, не загружает credentials и не выполняет RPC;
+claim/record остаются отдельной полномочной границей admission bridge.
+Этот признак описывает self-development target, а не новую runtime capability.
+
+Manifest связывает platform, spec, immutable build и runtime contract.
+Admission извлекает только canonical final path из exact platform digest,
+проверяет registry и immutable tuple, и отдельно подписывает outer binding
+с image digest, platform digest, manifest SHA256 и provenance SHA256. Signed
+inventory входит отдельным immutable layer в evidence v3; receipt v2 содержит
+его SHA256. Promotion восстанавливает исходные подписанные байты, проверяет
+digest/подпись/binding и не пересобирает evidence. CP сохраняет payload и digest
+в той же транзакции с fenced admission receipt и существующим recipe event.
+Отсутствие inventory у исторического artifact возвращается как `UNAVAILABLE`,
+без decoder fallback к recipe, автодопуска или ручного заполнения.
+
+| Переход | Authority и binding | Effect / consumer |
+| --- | --- | --- |
+| Build → probe | Серверный builder claim, exact runtime-base/frontend/toolchain, RO finalized rootfs | Canonical manifest; tool failures не становятся capabilities |
+| Scan → sign | Exact index/platform digest и BuildKit provenance; все объявленные OCI tools VERIFIED | Signed inventory binding, evidence v3 / admission workload |
+| RecordAdmission | Existing exact workload permission, claim/fence/version/expiry, payload SHA и immutable tuple | Payload + digest + idempotency receipt + existing recipe event атомарно |
+| Promotion | Existing одноразовая owner authorization, receipt и evidence manifest digests | Исходные signed layers; exact image/evidence readback |
+| Own CURRENT_CONFIGURATION | Existing own SYSTEM/PROJECT lease и canonical current environment/image eligibility | Fresh typed inventory отдельно от immutable execution snapshot; новых событий нет |
+
+Реальный inventory проверяется canonical build/admission; unit и synthetic
+recovery fixtures не доказывают наличие toolchain в развёрнутом образе.
+
+## Сборщик и граница исполнения
 
 Kaniko не используется в промышленной конфигурации, поскольку исходный проект
 архивирован. BuildKit выполняет сборку с process sandbox от namespace-root в

@@ -72,6 +72,7 @@ type AdmissionRecordInput struct {
 	VulnerabilityEvidenceSHA256, PolicySHA256, Verdict         string
 	SignatureIdentity, SignatureSHA256, AdmissionReceiptSHA256 string
 	AdmissionReceiptOCIManifestDigest                          string
+	ToolInventoryJSON, ToolInventorySHA256                     string
 	ExpectedVersion, ExpectedFence, PolicyRevision             uint64
 }
 

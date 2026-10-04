@@ -205,9 +205,10 @@ func castImageArtifact(input entity.ImageArtifact) *controlplanev1.ImageArtifact
 			Os: item.OS, Architecture: item.Architecture, Variant: item.Variant,
 		})
 	}
-	for _, item := range input.Tools {
-		result.Tools = append(result.Tools, &controlplanev1.RoleImageTool{Name: item.Name, Version: item.Version})
+	for _, item := range input.DeclaredTools {
+		result.DeclaredTools = append(result.DeclaredTools, &controlplanev1.RoleImageTool{Name: item.Name, Version: item.Version, SourceRef: item.SourceRef, Sha256: item.SHA256})
 	}
+	result.VerifiedToolInventory = castImageToolInventory(input.ToolInventory, input.ToolInventorySHA256)
 	return result
 }
 
@@ -458,6 +459,7 @@ func (server *RoleImageServer) RecordImageAdmission(ctx context.Context, request
 		SignatureIdentity: request.GetSignatureIdentity(), SignatureSHA256: request.GetSignatureSha256(),
 		AdmissionReceiptSHA256:            request.GetAdmissionReceiptSha256(),
 		AdmissionReceiptOCIManifestDigest: request.GetAdmissionReceiptOciManifestDigest(),
+		ToolInventoryJSON:                 request.GetToolInventoryJson(), ToolInventorySHA256: request.GetToolInventorySha256(),
 	})
 	if err != nil {
 		return nil, transportError(err)

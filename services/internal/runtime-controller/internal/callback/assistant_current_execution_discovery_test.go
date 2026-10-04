@@ -28,13 +28,13 @@ func TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault(t *testi
 			workspace := map[string]any{"revision": input.WorkspacePolicy.Revision, "root": "/workspace",
 				"maximum_writable_bytes": input.WorkspacePolicy.MaximumWritableBytes, "maximum_file_count": input.WorkspacePolicy.MaximumFileCount,
 				"readonly_logical_roots": []string{"input", "knowledge", "context"}}
-			search := map[string]any{"configuration_source": "SDK_DEFAULT_CACHED", "owner_editable": false,
+			search := map[string]any{"configuration_source": "SDK_DEFAULT_CACHED", "requested_mode": "cached", "owner_editable": true,
 				"sandbox_domain_allowlist_applies": false, "actual_call_verified": false}
 			if !reflect.DeepEqual(execution["workspace_policy"], workspace) || !reflect.DeepEqual(execution["hosted_native_search"], search) {
 				t.Fatal("safe workspace policy or bounded SDK default metadata is missing")
 			}
 			current := result["current_configuration"].(map[string]any)
-			if current["workspace_policy"] != nil || current["hosted_native_search"] != nil {
+			if current["workspace_policy"] != nil || !reflect.DeepEqual(current["hosted_native_search"], search) {
 				t.Fatal("immutable execution/default metadata was substituted into fresh owner configuration")
 			}
 			raw, err := json.Marshal(result)
@@ -47,6 +47,31 @@ func TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault(t *testi
 				}
 			}
 		})
+	}
+}
+
+func TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn(t *testing.T) {
+	input, arguments, response := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
+	input.ConfigOverlay = "web_search = \"cached\"\n"
+	response.AssistantConfigurationCatalog.CurrentConfiguration.PublishedOverlay.Content = "web_search = \"live\"\n"
+	request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := castAssistantConfigurationCatalog(input, request, response.AssistantConfigurationCatalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ field, mode string }{{"current_configuration", "live"}, {"execution_snapshot", "cached"}} {
+		search := result[test.field].(map[string]any)["hosted_native_search"].(map[string]any)
+		if search["requested_mode"] != test.mode || search["configuration_source"] != "PUBLISHED_CONFIG_OVERLAY" || search["actual_call_verified"] != false || search["sandbox_domain_allowlist_applies"] != false {
+			t.Fatal("fresh current/default/actual effect was confused with the immutable turn")
+		}
+	}
+	for _, raw := range []string{`web_search = "unknown"`, `web_search = true`, `web_search = ""`} {
+		if _, err := assistantHostedSearchDiscovery(raw); err == nil {
+			t.Fatal("invalid search configuration was replaced by a default")
+		}
 	}
 }
 
@@ -102,7 +127,7 @@ func TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(writer), "web_search") {
-		t.Fatal("SDK default metadata requires revalidation for an explicit writer selection")
+	if !strings.Contains(string(writer), `toml:"web_search,omitempty"`) || !strings.Contains(string(writer), "WebSearchMode: overlay.WebSearchMode") {
+		t.Fatal("hosted search metadata requires the published-overlay writer")
 	}
 }

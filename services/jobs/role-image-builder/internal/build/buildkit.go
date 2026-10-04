@@ -380,10 +380,27 @@ func dockerfile(
 		"--mount=type=bind,target=/workspace/source,readonly",
 		"--mount=type=bind,from=kodex-install,source=install.sh,target=/run/kodex/install.sh,readonly",
 	}
-	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\n%s\nUSER root\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\n",
+	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\n%s\nUSER root\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\nFROM trusted-runtime AS kodex-tool-probe\nUSER root\nRUN --network=none --mount=type=bind,from=kodex-final-rootfs,source=/,target=/image,readonly [\"/usr/local/bin/kodex-agent-runner\",\"image-tool-inventory\",%q,%q,%q]\nFROM kodex-final-rootfs\nCOPY --from=kodex-tool-probe /tmp/kodex-tool-inventory.json /usr/share/kodex/tool-inventory.json\n",
 		frontendRepository, input.GetFrontendSha256(), trustedRuntimeRepository, trustedRuntimeDigest,
-		strings.TrimSpace(input.GetDockerfile()), strings.Join(mounts, " "), input.GetSpecSha256(),
-		input.GetRoleRuntimeContractSha256()))
+		finalRootStage(input.GetDockerfile()), strings.Join(mounts, " "), input.GetSpecSha256(),
+		input.GetRoleRuntimeContractSha256(), input.GetSpecSha256(), input.GetImmutableBuildSha256(), input.GetRoleRuntimeContractSha256()))
+}
+
+func finalRootStage(source string) string {
+	lines := strings.Split(strings.TrimSpace(source), "\n")
+	alias := "kodex-user-rootfs"
+	for index, line := range lines {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) >= 2 && strings.EqualFold(fields[0], "FROM") {
+			if len(fields) == 4 {
+				alias = fields[3]
+			} else {
+				lines[index] = "FROM " + fields[1] + " AS " + alias
+			}
+			break
+		}
+	}
+	return strings.Join(lines, "\n") + "\nFROM " + alias + " AS kodex-final-rootfs"
 }
 
 func validOwnerDockerfile(input *controlplanev1.RoleImageBuildInput) bool {
@@ -412,6 +429,9 @@ func validOwnerDockerfile(input *controlplanev1.RoleImageBuildInput) bool {
 				return false
 			}
 			foundFrom = true
+			if len(fields) == 4 && (strings.HasPrefix(strings.ToLower(fields[3]), "kodex-") || strings.EqualFold(fields[3], "trusted-runtime")) {
+				return false
+			}
 			continue
 		}
 		if !foundFrom {

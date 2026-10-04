@@ -4,8 +4,7 @@ SELECT artifact.id::text,
        recipe.ref,
        artifact.recipe_generation,
        artifact.promoted_reference,
-       artifact.manifest_digest,
-       artifact.specification
+       artifact.manifest_digest
 FROM control_plane.image_artifacts artifact
 JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
 WHERE artifact.organization_id = @organization_id::uuid

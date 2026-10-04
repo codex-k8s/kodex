@@ -1,5 +1,7 @@
 package entity
 
+import "github.com/codex-k8s/kodex/libs/go/runtimecontract"
+
 type AssistantRuntimeProfilePin struct {
 	Ref             string `json:"ref"`
 	Version         int64  `json:"version"`
@@ -41,4 +43,6 @@ type AssistantCurrentConfiguration struct {
 	SystemCoreRevision, SystemCoreInstructions, OwnerInstructions            string
 	OwnerInstructionsRevision                                                int64
 	TemplateVariables                                                        []TemplateVariable
+	ImageToolInventorySHA256                                                 string
+	ImageToolInventory                                                       *runtimecontract.ImageToolInventory
 }

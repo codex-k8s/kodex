@@ -377,7 +377,7 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 		AdmissionVerdict:   generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
 		PromotionState:     generated.RoleImageArtifactPromotionState(strings.TrimPrefix(input.GetPromotionState().String(), "IMAGE_PROMOTION_STATE_")),
 		PromotionRequested: input.GetPromotionRequested(),
-		Tools:              make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),
+		DeclaredTools:      make([]generated.RoleImageArtifactTool, 0, len(input.GetDeclaredTools())),
 	}
 	if value := input.GetPromotedReference(); value != "" {
 		result.PromotedReference = &value
@@ -395,8 +395,25 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 	if value := input.GetVulnerabilityEvidenceSha256(); value != "" {
 		result.VulnerabilityEvidenceSha256 = &value
 	}
-	for _, tool := range input.GetTools() {
-		result.Tools = append(result.Tools, generated.RoleImageArtifactTool{Name: tool.GetName(), Version: tool.GetVersion()})
+	for _, tool := range input.GetDeclaredTools() {
+		result.DeclaredTools = append(result.DeclaredTools, generated.RoleImageArtifactTool{Name: tool.GetName(), Version: tool.GetVersion()})
+	}
+	result.VerifiedToolInventory = publicImageToolInventory(input.GetVerifiedToolInventory())
+	return result
+}
+
+func publicImageToolInventory(input *controlplanev1.ImageToolInventory) generated.ImageToolInventory {
+	result := generated.ImageToolInventory{Status: generated.ImageToolInventoryStatusUNAVAILABLE, Platforms: []generated.ImagePlatformToolInventory{}}
+	if input == nil || input.GetStatus() != "VERIFIED" {
+		return result
+	}
+	result.Status, result.Sha256, result.ImageDigest, result.ProvenanceSha256 = generated.ImageToolInventoryStatusVERIFIED, input.GetSha256(), input.GetImageDigest(), input.GetProvenanceSha256()
+	for _, platform := range input.GetPlatforms() {
+		item := generated.ImagePlatformToolInventory{Platform: generated.ImagePlatformToolInventoryPlatform(platform.GetPlatform()), PlatformDigest: platform.GetPlatformDigest(), ManifestSha256: platform.GetManifestSha256(), Tools: []generated.ImageToolObservation{}}
+		for _, tool := range platform.GetTools() {
+			item.Tools = append(item.Tools, generated.ImageToolObservation{Name: generated.ImageToolObservationName(tool.GetName()), Status: generated.ImageToolObservationStatus(tool.GetStatus()), Path: tool.GetPath(), Version: tool.GetVersion(), Sha256: tool.GetSha256(), Required: tool.GetRequired()})
+		}
+		result.Platforms = append(result.Platforms, item)
 	}
 	return result
 }

@@ -581,13 +581,14 @@ func projectAssistantOperationParameters(input runtimecontract.RunnerInput, kind
 func assistantRuntimeConfigurationSchema(agentRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts"}, map[string]any{
 		"agentRef": agentRef, "runtimeProfileRef": assistantRuntimeProfileKeySchema(), "model": stringSchema(1, 128),
+		"webSearchMode":   enumSchema("disabled", "cached", "indexed", "live"),
 		"reasoningEffort": map[string]any{"type": "string", "minLength": 0, "maxLength": 64, "pattern": `^(?:[a-z][a-z0-9_-]{0,63})?$`}, "providerPolicyMode": enumSchema("FIXED", "LEAST_USED", "WEIGHTED"),
 		"providerAccounts": map[string]any{"type": "array", "minItems": 1, "maxItems": 128,
 			"items": objectSchema([]string{"accountRef", "weight"}, map[string]any{
 				"accountRef": opaqueRefSchema(), "weight": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 			})},
 	})
-	schema["description"] = "Prepare a reviewed assistant model configuration, not a TOML patch. Use exact refs from the server catalog. SYSTEM may configure itself or a project assistant; PROJECT may configure only itself. Empty reasoningEffort selects the eligible catalog default. FIXED requires one account; weights must be 1 unless policy is WEIGHTED. Control-plane verifies current catalog eligibility and assigns all versions and pins. Never include credentials or owner fields."
+	schema["description"] = "Prepare a reviewed assistant model configuration, not a TOML patch. Use exact refs from the server catalog. SYSTEM may configure itself or a project assistant; PROJECT may configure only itself. Empty reasoningEffort selects the eligible catalog default. Optional webSearchMode selects Codex 0.160.0 hosted search; omission preserves the published setting. Hosted search is separate from sandbox domain allowlists and does not grant shell egress. A configured mode does not prove a successful search call. FIXED requires one account; weights must be 1 unless policy is WEIGHTED. Control-plane verifies current catalog eligibility and assigns all versions and pins. Never include credentials or owner fields."
 	return schema
 }
 

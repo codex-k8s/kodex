@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+)
 
 // RoleImagePlatform задаёт одну точную целевую платформу образа роли.
 type RoleImagePlatform struct {
@@ -87,7 +91,9 @@ type ImageArtifact struct {
 	AdmissionRevision, RoleRuntimeContractRevision                                uint64
 	BuildAttempt                                                                  uint32
 	Platforms                                                                     []RoleImagePlatform
-	Tools                                                                         []RoleImageTool
+	DeclaredTools                                                                 []RoleImageTool
+	ToolInventorySHA256                                                           string
+	ToolInventory                                                                 *runtimecontract.ImageToolInventory
 	PromotedAt                                                                    *time.Time
 	CreatedAt, UpdatedAt                                                          time.Time
 }

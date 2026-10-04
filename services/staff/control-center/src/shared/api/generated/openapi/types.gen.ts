@@ -2439,9 +2439,85 @@ export type RoleImageArtifact = {
     promotionRequested: boolean;
     sbomSha256?: string;
     vulnerabilityEvidenceSha256?: string;
-    tools: Array<RoleImageArtifactTool>;
+    declaredTools: Array<RoleImageArtifactTool>;
+    verifiedToolInventory: ImageToolInventory;
     promotedAt?: Timestamp;
     promotionReceiptSha256?: string;
+};
+
+export type ImageToolInventory = {
+    status: 'VERIFIED' | 'UNAVAILABLE';
+    sha256: string;
+    imageDigest: string;
+    provenanceSha256: string;
+    platforms: Array<ImagePlatformToolInventory>;
+};
+
+export type ImagePlatformToolInventory = {
+    platform: 'linux/amd64' | 'linux/arm64';
+    platformDigest: string;
+    manifestSha256: string;
+    tools: [
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation
+    ];
+};
+
+export type ImageToolObservation = {
+    name: 'bash' | 'curl' | 'git' | 'gh' | 'jq' | 'yq' | 'ripgrep' | 'make' | 'just' | 'go' | 'goimports' | 'gofumpt' | 'golangci-lint' | 'staticcheck' | 'goose' | 'sqlc' | 'buf' | 'protoc' | 'protoc-gen-go' | 'protoc-gen-go-grpc' | 'grpcurl' | 'mockgen' | 'oapi-codegen' | 'node' | 'npm' | 'pnpm' | 'yarn' | 'typescript' | 'eslint' | 'prettier' | 'vite' | 'vue-tsc' | 'vitest' | 'playwright' | 'chromium' | 'playwright-mcp' | 'wscat' | 'codex' | 'corepack' | 'python3' | 'pip' | 'kubectl' | 'kustomize' | 'helm' | 'buildctl' | 'docker' | 'shellcheck' | 'hadolint' | 'govulncheck' | 'gitleaks';
+    required: boolean;
+    status: 'VERIFIED' | 'MISSING' | 'PROBE_FAILED';
+    path: string;
+    version: string;
+    sha256: string;
 };
 
 export type RoleImageRecipeCommandReceipt = {
