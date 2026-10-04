@@ -294,6 +294,17 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("assistant.planEditor.roleImageHistoricalSource");
   });
 
+  it("ограничивает высоту Dockerfile только во встроенном плане", () => {
+    expect(source).toContain('class="assistant-plan-dockerfile"');
+    expect(source).toContain(
+      ".assistant-plan-dockerfile :deep(.dockerfile-editor__viewport)",
+    );
+    expect(source).toContain("height: clamp(240px, 36dvh, 360px)");
+    expect(source).toContain("height: clamp(240px, 36dvh, 300px)");
+    expect(source).toContain(".assistant-plan-dockerfile :deep(.cm-scroller)");
+    expect(source).toMatch(/min-height: 0;\s+overflow: auto;/);
+  });
+
   it("проверяет схему подключения и не показывает ввод секрета в плане", () => {
     expect(source).toContain("CREATE_INTEGRATION_CONNECTION");
     expect(source).toContain("loadExactIntegrationDefinition");

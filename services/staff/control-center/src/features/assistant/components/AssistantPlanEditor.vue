@@ -2207,6 +2207,7 @@ function validationProblemLabel(problem: string): string {
                 </label>
                 <RoleImageDockerfileEditor
                   v-if="editable || fieldValue(operation, 'dockerfile')"
+                  class="assistant-plan-dockerfile"
                   :model-value="fieldValue(operation, 'dockerfile')"
                   :label="$t('roleImages.dockerfile')"
                   :validation-messages="
@@ -2576,6 +2577,22 @@ function validationProblemLabel(problem: string): string {
 </template>
 
 <style scoped>
+.assistant-plan-dockerfile :deep(.dockerfile-editor__viewport) {
+  min-height: 240px;
+}
+.assistant-plan-dockerfile :deep(.cm-editor) {
+  height: clamp(240px, 36dvh, 360px);
+  min-height: 240px;
+}
+.assistant-plan-dockerfile :deep(.cm-scroller) {
+  min-height: 0;
+  overflow: auto;
+}
+@media (max-width: 640px) {
+  .assistant-plan-dockerfile :deep(.cm-editor) {
+    height: clamp(240px, 36dvh, 300px);
+  }
+}
 .assistant-plan-editor {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;

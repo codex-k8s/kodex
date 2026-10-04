@@ -1569,3 +1569,37 @@ capabilities DropALL, никаких ручных chown/SQL для сущест�
 Codex race18.680s, controller/archive race1.165/1.097s, vet PASS. Root повтор
 и canonical image activation ещё в работе; actual resumed run SUCCESS
 пока NOT RUN и опубликованный FINAL не считается этим доказательством.
+
+04.10.2026 20:48 UTC, code checkpoint `d64a71f3dbdf21154072ea501a59aa64fd2d9b84`,
+frontend hot-reload tree поверх него:
+PASS — ROOT controller/archive .056/.029s, Codex4.584s; commit/pushd64,
+fresh trusted render8jfvD9 fingerprintfaba588effe43d585aa6b49fbdf0afe53504c3992f4f67379517de550ef9c440.
+Canonical supply-chain/runner/archive builds и apply stages завершены;
+archive worker16287257c42872eeb532bff54fe2c4cd0c5fdfe43edfacba1dfc3fc628eb6da6,
+runner498 binary45b880/provenance3a484b94e89be66dd6badb89ea1fde326435c269a8be6db18c2c1699483246e2.
+Host/Pod/host source equality CP image repair, archive controller и transcript
+PASS на clean d64; это mounted source proof, не весь application acceptance.
+PASS — normal SYSTEM proposal QA38, после смены каталога первый DRAFT
+закрыто INVALID/snapshot-conflict без recipe effect. Свежий QA38B
+run_waEeCBs8zJ_TRknoEN83OCU2 SUCCEEDED; normal Validate→Apply
+pln_SJWh5zveh21Crx25jJO0kfoN APPLIED/version3, recipe version3/generation2.
+Новый build imgbld_lZncJOmiKjpWRyWy0IShZznQ COMPLETED100%; actual
+admission/inventory38/promotion пока NOT RUN, сборка не объявляется допуском.
+FAIL — builder Pod UIDbf333060-0ddf-49cc-8b15-8b27dd313c7e не запустился:
+ImagePullBackOff; exact96e отсутствовал на scheduled server node, pull по
+registry.local.kodex получил no such host. Удаление именно96e через GC не
+доказано. Штатный exact OCI reimport/readback временно восстановил worker;
+это НЕ durable acceptance. В работе узкая TLS публикация собственного
+platform builder через прежнюю promotion boundary, без unsafe fallback.
+PASS — desktop live UPDATE plan screenshot compact2036 просмотрен;
+Dockerfile360px/internal scroll, кнопки доступны, horizontal overflow нет.
+ROOT30 layout tests .376s, detached32unit/lint/typecheck/build и2 synthetic
+desktop/mobile checks PASS; live mobile UPDATE пока NOT RUN. Общие большие
+редакторы не изменены: bounded height задан только inline assistant plan.
+PASS — QA36 перед продолжением owner ARCHIVED/DELETE_PVC SUCCEEDED; новый
+run_SiOBkwXOqLPebju95lehXeya same session ses_QQzu5ZZ1iOG0OAQqa9tzuR4x,
+RESTORE sat_0a1ba043-9bff-4cb0-9d9a-e7dfd9a24d0e SUCCEEDED/NONE.
+FAIL — runtime Pod UID266c6491-9322-4b90-b082-21b1b6c297e6 Failed во время
+инициализации, модель ещё не стартовала. Причина init в работе; SUCCESS
+продолжения не заявляется. Safe actual prompt capture INPUT_NOT_READY —
+NOT RUN, не доказательство отсутствия контекста. Checkbox2–15 OPEN.
