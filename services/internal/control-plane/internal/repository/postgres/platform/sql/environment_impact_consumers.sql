@@ -8,7 +8,11 @@ WITH eligible AS MATERIALIZED (
     LEFT JOIN control_plane.projects project ON project.id = agent.project_id AND project.lifecycle = 'ACTIVE'
     JOIN control_plane.runtime_environment_sets environment ON environment.id = binding.environment_set_id
     JOIN control_plane.organizations organization ON organization.id = environment.organization_id
-    JOIN control_plane.runtime_environment_versions revision ON revision.id = binding.environment_version_id
+    JOIN control_plane.runtime_environment_versions revision ON revision.id = CASE
+        WHEN binding.environment_version_id IS NULL AND environment.scope_kind='ORGANIZATION'
+          AND environment.project_id IS NULL AND agent.project_id IS NULL AND agent.system_key='system-assistant'
+        THEN environment.current_version_id ELSE binding.environment_version_id END
+      AND revision.environment_set_id=environment.id AND revision.organization_id=binding.organization_id
     LEFT JOIN control_plane.catalog_access_targets target
       ON target.organization_id = binding.organization_id AND target.kind = 'AGENT' AND target.id = agent.id
     WHERE binding.organization_id = @organization_id::uuid AND environment.ref = @environment_ref

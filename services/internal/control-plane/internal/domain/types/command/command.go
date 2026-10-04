@@ -262,6 +262,7 @@ type AssistantRoleImageRecipeInput struct {
 }
 type AssistantRoleImageUpdateInput struct {
 	ProjectRef, RecipeRef, Name string
+	SpecSHA256                  string
 	Environment                 entity.RoleEnvironmentSelection
 }
 type AgentBindingInput struct {

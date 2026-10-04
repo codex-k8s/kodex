@@ -91,6 +91,9 @@ func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 	if err != nil || view.Environment.ScopeKind != "ORGANIZATION" || view.Environment.OrganizationRef == "" || view.Environment.CurrentVersion.Image.ArtifactRef == "" {
 		t.Fatalf("exact organization bootstrap environment: %v", err)
 	}
+	t.Run("initial SYSTEM binding is selected and pinned by owner publication", func(t *testing.T) {
+		testInitialSystemEnvironmentPublication(t, ctx, repository, service, owner, s, assistant.Ref)
+	})
 	spec := entity.RuntimeEnvironmentDraftSpecification{Name: "Organization environment", ImageArtifactRef: view.Environment.CurrentVersion.Image.ArtifactRef,
 		Values: []entity.RuntimeEnvironmentValue{{Name: "MODE", Value: "safe"}}, Policy: runtimecontract.DefaultRuntimeEnvironmentPolicy()}
 	spec.Policy.Resources.WorkspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}

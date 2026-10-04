@@ -1762,3 +1762,28 @@ cnv_bzJIqB622JCONoMbExKA5XXd. Console чиста. За пределами пер
 автоматическое восстановление пока NOT SUPPORTED, новых polling/GET нет.
 Нативный applied plan screenshot просмотрен. Checkbox2–15 остаются OPEN;
 SYSTEM environment publish, PROJECT настройка и полный QA ещё не завершены.
+
+04.10.2026 23:12 UTC, интеграционный backend tree поверх941daeec:
+PASS — normal artifact imgart_1tUE9eMpo4JVkewavPZxyj9L exact manifest
+sha256:e0b3d4e50b252684bb0ff1e04c20c3d528ced1b7b8b009582cc3cfa01965eece:
+inventory VERIFIED, linux/amd64 required38/observation VERIFIED38, failed0.
+FAIL — тот же artifact admissionVerdictREJECTED/promotionStateREJECTED.
+Причина UNKNOWN: публичный DTO не отдаёт reason/counts; controller последние
+семь минут не имел log entries, завершённый scan Pod уже удалён. Inventory
+успех не доказывает отсутствие CVE/технического отказа/policy drift.
+Продвижение не форсировано. В работе closed diagnostic следующего штатного
+REQUEST_BUILD после durable evidence и owner record, без ослабления политики.
+PASS — PROJECT immutable-spec repair интегрирован: сохранённый прежний digest
+проверяется самостоятельно; новый серверный specSha256 закреплён в typed plan,
+edit/apply/OCC/replay. Последний isolated public Profile PG PASS28.464s,
+unit .047s/vet/format PASS. Общий Bootstrap+Profile был FAIL74.240s на отдельных
+старых fixtures; не скрыт и не назван green, read-only разбор в работе.
+PASS — initial SYSTEM NULL binding включён в owner impact только по canonical
+organization/system identity. Выбранная публикация даёт физический explicit pin;
+parent/version/OCC проверяются в publication-транзакции, generic rebind fallback
+не получает. Isolated Go1.26.6 orgENV PG PASS7.425s: selected/unselected,
+stale conflict, audit rollback, replay и неизменность config/policy/tools/secrets.
+Existing promotion+PROJECT impact PG PASS4.558s. ROOT integrated targeted unit
+Go1.26.6 PASS.093s и vet PASS. Actual SYSTEM publish ещё NOT RUN.
+Chrome own22 hard reload23:08:39, чужие вкладки не изменены.
+Checkbox2–15 остаются OPEN; полный QA/финальный dogfooding ещё NOT RUN.

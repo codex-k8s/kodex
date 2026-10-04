@@ -1277,19 +1277,20 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		result.Kind, result.Payload = command.CreateAssistantRoleImageRecipe, payload
 	case "UPDATE_ROLE_IMAGE_RECIPE":
-		if !onlyAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "dockerfile", "expectedVersion") ||
-			!hasAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "dockerfile", "expectedVersion") {
+		if !onlyAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "dockerfile", "specSha256", "expectedVersion") ||
+			!hasAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "dockerfile", "specSha256", "expectedVersion") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		expected, valid := assistantInt64(operation.Input, "expectedVersion")
 		dockerfile, dockerfileOK := operation.Input["dockerfile"].(string)
+		specSHA256, _ := operation.Input["specSha256"].(string)
 		payload := command.AssistantRoleImageUpdateInput{
 			ProjectRef: assistantString(operation.Input, "projectRef"), RecipeRef: assistantString(operation.Input, "recipeRef"),
-			Name: assistantString(operation.Input, "name"),
+			Name: assistantString(operation.Input, "name"), SpecSHA256: specSHA256,
 			Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey"),
 				Dockerfile: dockerfile},
 		}
-		if !valid || expected < 1 || !dockerfileOK || dockerfile == "" || len(dockerfile) > 64<<10 ||
+		if !valid || expected < 1 || !exactSHA256(payload.SpecSHA256) || !dockerfileOK || dockerfile == "" || len(dockerfile) > 64<<10 ||
 			payload.ProjectRef == "" || payload.RecipeRef == "" ||
 			payload.Name == "" || len(payload.Name) > 160 || payload.Environment.EnvironmentKey == "" || len(payload.Environment.EnvironmentKey) > 96 {
 			return command.Command{}, errs.ErrInvalid

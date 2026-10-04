@@ -23,6 +23,9 @@ var queryEnvironmentImpactTarget string
 //go:embed sql/environment_impact_consumers.sql
 var queryEnvironmentImpactConsumers string
 
+//go:embed sql/environment_impact_initial_system_binding.sql
+var queryEnvironmentImpactInitialSystemBinding string
+
 func (repository *Repository) environmentImpactTarget(ctx context.Context, tx pgx.Tx, current scope, ref, version string) (entity.RuntimeEnvironmentImpact, string, error) {
 	var result entity.RuntimeEnvironmentImpact
 	var projectRef, projectID, scopeKind string
@@ -101,6 +104,11 @@ func (repository *Repository) GetRuntimeEnvironmentImpact(ctx context.Context, p
 }
 
 func (repository *Repository) rebindRuntimeEnvironment(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
+	return repository.rebindRuntimeEnvironmentFromPublication(ctx, tx, current, input, "")
+}
+
+// Только owner publication передаёт exact предшественника из своего immutable impact plan.
+func (repository *Repository) rebindRuntimeEnvironmentFromPublication(ctx context.Context, tx pgx.Tx, current scope, input command.Command, publicationSourceRevision string) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.RuntimeEnvironmentRebindInput)
 	if !ok || payload.VersionRef == "" || input.Mutation.ExpectedVersion == nil || len(payload.Consumers) == 0 || len(payload.Consumers) > 100 {
 		return commandOutcome{}, errs.ErrInvalid
@@ -146,8 +154,25 @@ func (repository *Repository) rebindRuntimeEnvironment(ctx context.Context, tx p
 		}
 		binding := view.EnvironmentBinding
 		if view.AgentVersion != consumer.AgentVersion || binding.Ref != consumer.BindingRef || binding.Version != consumer.BindingVersion ||
-			binding.VersionRef != consumer.VersionRef || binding.EnvironmentRef != payload.EnvironmentRef {
+			binding.EnvironmentRef != payload.EnvironmentRef {
 			return commandOutcome{}, errs.ErrVersionMismatch
+		}
+		if binding.VersionRef != consumer.VersionRef {
+			initialSystemBinding := false
+			if publicationSourceRevision != "" && consumer.VersionRef == publicationSourceRevision && binding.VersionRef == payload.VersionRef {
+				err := tx.QueryRow(ctx, queryEnvironmentImpactInitialSystemBinding, pgx.StrictNamedArgs{
+					"organization_id": current.organizationID, "agent_ref": consumer.AgentRef,
+					"agent_version": consumer.AgentVersion, "binding_ref": consumer.BindingRef,
+					"binding_version": consumer.BindingVersion, "environment_ref": payload.EnvironmentRef,
+					"source_revision_ref": publicationSourceRevision, "target_revision_ref": payload.VersionRef,
+				}).Scan(&initialSystemBinding)
+				if err != nil {
+					return commandOutcome{}, errs.ErrUnavailable
+				}
+			}
+			if !initialSystemBinding {
+				return commandOutcome{}, errs.ErrVersionMismatch
+			}
 		}
 		nested := input
 		nested.Kind = command.BindAgentRuntimeEnvironment

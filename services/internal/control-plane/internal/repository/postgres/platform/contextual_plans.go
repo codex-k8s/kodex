@@ -176,7 +176,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			}
 			payload.Operations[index] = updated
 		case "UPDATE_ROLE_IMAGE_RECIPE":
-			updated, err := rehydrateEditedAssistantRoleImageUpdate(original, operation)
+			updated, err := repository.refreshEditedAssistantRoleImageUpdate(ctx, tx, scope, projectRef, original, operation, state == "STALE")
 			if err != nil {
 				return commandOutcome{}, err
 			}
@@ -193,7 +193,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 		// snapshot, сохранив только разрешённые пользовательские поля формы.
 		// Для обычного DRAFT прежний snapshot остаётся неизменным: скрытый rebase
 		// без явного конфликта владельцу не допускается.
-		if state == "STALE" && payload.Operations[index].ExpectedVersion != nil && !assistantConfigurationOperationType(operation.Type) {
+		if state == "STALE" && payload.Operations[index].ExpectedVersion != nil && !assistantConfigurationOperationType(operation.Type) && operation.Type != "UPDATE_ROLE_IMAGE_RECIPE" {
 			selected := payload.Operations[index].Selected
 			refreshed, refreshErr := repository.hydrateAssistantOperation(ctx, tx, scope, projectRef, payload.Operations[index])
 			if refreshErr != nil {

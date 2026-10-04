@@ -130,25 +130,23 @@ func (repository *Repository) assistantRoleImageUpdateInput(
 	if _, err := repository.managedRoleImageTarget(ctx, tx, current, input); err != nil {
 		return roleimagerepo.ManageInput{}, entity.RoleImageRecipe{}, err
 	}
-	baseline, err := repository.roleImageCatalogResolver(entity.RoleEnvironmentSelection{
-		EnvironmentKey: previous.Input.EnvironmentKey, PackageKeys: previous.Input.PackageKeys,
-		ToolKeys: previous.Input.ToolKeys, InstallationBlock: previous.Input.InstallationBlock,
-		Dockerfile: previous.Input.Dockerfile,
-	})
-	if err != nil || roleImageDigest(baseline) != roleImageDigest(previous.Input) {
+	// Проверяем сохранённую спецификацию, не пересобирая её новым каталогом.
+	// Новая спецификация отдельно закрепляется в подтверждаемом плане.
+	if roleimageservice.ValidateManagedRecipe(previous.ProjectRef, previous.RoleDefinitionRef, previous.Name, previous.Input) != nil ||
+		previous.SpecSHA256 != roleImageDigest(previous.Input) {
 		return roleimagerepo.ManageInput{}, entity.RoleImageRecipe{}, errs.ErrConflict
 	}
 	if input.Environment.EnvironmentKey == previous.Input.EnvironmentKey {
 		input.Environment.PackageKeys = append([]string(nil), previous.Input.PackageKeys...)
 		input.Environment.ToolKeys = append([]string(nil), previous.Input.ToolKeys...)
 		input.Environment.InstallationBlock = previous.Input.InstallationBlock
-		if input.Environment.Dockerfile == "" {
-			input.Environment.Dockerfile = previous.Input.Dockerfile
-		}
 	}
 	input.Recipe, err = repository.roleImageCatalogResolver(input.Environment)
 	if err != nil || roleimageservice.ValidateManagedRecipe(payload.ProjectRef, previous.RoleDefinitionRef, payload.Name, input.Recipe) != nil {
 		return roleimagerepo.ManageInput{}, entity.RoleImageRecipe{}, errs.ErrInvalid
+	}
+	if payload.SpecSHA256 != "" && (!exactSHA256(payload.SpecSHA256) || payload.SpecSHA256 != roleImageDigest(input.Recipe)) {
+		return roleimagerepo.ManageInput{}, entity.RoleImageRecipe{}, errs.ErrConflict
 	}
 	return input, previous, nil
 }
@@ -158,6 +156,9 @@ func (repository *Repository) updateAssistantRoleImage(
 ) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantRoleImageUpdateInput)
 	if !ok {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	if !exactSHA256(payload.SpecSHA256) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	managedInput, _, err := repository.assistantRoleImageUpdateInput(ctx, tx, current, input.Mutation, payload)
@@ -235,9 +236,10 @@ func (repository *Repository) hydrateAssistantRoleImageUpdate(
 	}
 	before := map[string]any{"projectRef": projectRef, "recipeRef": ref,
 		"name": previous.Name, "environmentKey": previous.Input.EnvironmentKey,
-		"dockerfile": previous.Input.Dockerfile}
+		"dockerfile": previous.Input.Dockerfile, "specSha256": previous.SpecSHA256}
 	after := cloneAssistantFields(before)
 	after["name"], after["environmentKey"], after["dockerfile"] = name, selection.EnvironmentKey, managedInput.Recipe.Dockerfile
+	after["specSha256"] = roleImageDigest(managedInput.Recipe)
 	if reflect.DeepEqual(before, after) {
 		return entity.AssistantPlanOperation{}, errs.ErrConflict
 	}
@@ -255,11 +257,16 @@ func (repository *Repository) assistantRoleImageUpdateSnapshotMatches(
 	if operation.ExpectedVersion == nil {
 		return false, nil
 	}
+	specSHA256, _ := operation.Parameters["specSha256"].(string)
+	if !exactSHA256(specSHA256) {
+		return false, errs.ErrInvalid
+	}
 	_, previous, err := repository.assistantRoleImageUpdateInput(ctx, tx, current,
 		value.Mutation{ExpectedVersion: operation.ExpectedVersion}, command.AssistantRoleImageUpdateInput{
 			ProjectRef: assistantString(operation.Parameters, "projectRef"),
 			RecipeRef:  assistantString(operation.Parameters, "recipeRef"),
 			Name:       assistantString(operation.Parameters, "name"),
+			SpecSHA256: specSHA256,
 			Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Parameters, "environmentKey"),
 				Dockerfile: assistantRoleImageDockerfile(operation.Parameters)},
 		})
@@ -268,7 +275,7 @@ func (repository *Repository) assistantRoleImageUpdateSnapshotMatches(
 	}
 	before := map[string]any{"projectRef": previous.ProjectRef, "recipeRef": previous.Ref,
 		"name": previous.Name, "environmentKey": previous.Input.EnvironmentKey,
-		"dockerfile": previous.Input.Dockerfile}
+		"dockerfile": previous.Input.Dockerfile, "specSha256": previous.SpecSHA256}
 	return *operation.ExpectedVersion == int64(previous.Version) &&
 		operation.Target.Version != nil && *operation.Target.Version == int64(previous.Version) &&
 		operation.Target.Name == previous.Name && reflect.DeepEqual(operation.Before, before) &&
@@ -281,10 +288,13 @@ func assistantRoleImageDockerfile(parameters map[string]any) string {
 }
 
 func rehydrateEditedAssistantRoleImageUpdate(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	specSHA256, _ := original.Parameters["specSha256"].(string)
 	if original.Type != "UPDATE_ROLE_IMAGE_RECIPE" || original.Key != edited.Key ||
 		original.Target.Kind != "ROLE_IMAGE_RECIPE" || original.Target.Ref == "" ||
 		original.ExpectedVersion == nil || edited.Parameters == nil ||
-		!onlyAssistantFields(edited.Parameters, "projectRef", "recipeRef", "name", "environmentKey", "dockerfile") ||
+		!onlyAssistantFields(edited.Parameters, "projectRef", "recipeRef", "name", "environmentKey", "dockerfile", "specSha256") ||
+		!exactSHA256(specSHA256) ||
+		!assistantJSONEqual(edited.Parameters["specSha256"], original.Parameters["specSha256"]) ||
 		assistantString(edited.Parameters, "projectRef") != assistantString(original.Parameters, "projectRef") ||
 		assistantString(edited.Parameters, "recipeRef") != original.Target.Ref {
 		return entity.AssistantPlanOperation{}, errs.ErrForbidden
@@ -306,4 +316,38 @@ func rehydrateEditedAssistantRoleImageUpdate(original, edited entity.AssistantPl
 	edited.Parameters = parameters
 	edited.ExpectedVersion = original.ExpectedVersion
 	return edited, nil
+}
+
+func (repository *Repository) refreshEditedAssistantRoleImageUpdate(ctx context.Context, tx pgx.Tx, current scope, projectRef string, original, edited entity.AssistantPlanOperation, refreshStale bool) (entity.AssistantPlanOperation, error) {
+	checked, err := rehydrateEditedAssistantRoleImageUpdate(original, edited)
+	if err != nil {
+		return edited, err
+	}
+	if !refreshStale {
+		frozen, err := normalizeAssistantOperation(original)
+		if err != nil {
+			return edited, err
+		}
+		matching, err := repository.assistantRoleImageUpdateSnapshotMatches(ctx, tx, current, frozen)
+		if err != nil {
+			return edited, err
+		}
+		if !matching {
+			return edited, errs.ErrConflict
+		}
+	}
+	checked.Parameters = map[string]any{}
+	for _, field := range []string{"projectRef", "recipeRef", "name", "environmentKey", "dockerfile"} {
+		checked.Parameters[field] = edited.Parameters[field]
+	}
+	refreshed, err := repository.hydrateAssistantRoleImageUpdate(ctx, tx, current, projectRef, checked)
+	if err != nil {
+		return edited, err
+	}
+	if refreshed.Target.Ref != original.Target.Ref || assistantString(refreshed.Parameters, "projectRef") != assistantString(original.Parameters, "projectRef") ||
+		!refreshStale && (!assistantJSONEqual(refreshed.Before, original.Before) || !assistantJSONEqual(refreshed.Target, original.Target) || !assistantJSONEqual(refreshed.ExpectedVersion, original.ExpectedVersion)) {
+		return edited, errs.ErrConflict
+	}
+	refreshed.Selected = edited.Selected
+	return refreshed, nil
 }

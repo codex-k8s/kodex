@@ -872,6 +872,11 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	imageUpdate := command.AssistantRoleImageUpdateInput{ProjectRef: environmentProjectRef,
 		RecipeRef: assistantRecipe.CreatedRefs[0], Name: "Assistant-managed image updated",
 		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion", Dockerfile: roleTemplate.Dockerfile + "\n# assistant update\n"}}
+	imageUpdateRecipe, err := roleCatalog.Resolve(imageUpdate.Environment)
+	if err != nil {
+		t.Fatalf("resolve confirmed assistant image update: %v", err)
+	}
+	imageUpdate.SpecSHA256 = roleImageDigest(imageUpdateRecipe)
 	imageTx, err := pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		t.Fatalf("open assistant image plan snapshot: %v", err)

@@ -20,6 +20,13 @@ Stale digest/pins возвращают version mismatch без частичны�
 audit или events. Успех сохраняет их в одной owner-транзакции; exact replay
 возвращает прежний receipt и не перепривязывает consumer повторно.
 
+Initial SYSTEM binding без физического version pin включается в owner impact
+по effective текущей ревизии только для канонического организационного помощника.
+После публикации выбранный consumer получает явный exact pin: прежний snapshot
+проверяется по неизменившимся agent/binding versions и exact parent новой ревизии.
+Это исключение принадлежит одной publication-транзакции; обычный rebind, PROJECT
+и другие агенты не получают NULL fallback либо обход OCC.
+
 Пустой результат claim не доказывает отсутствие изменений: истечение lease и
 terminal непригодного кандидата сохраняют audit и command receipt в той же
 транзакции. Только действительно неизменившийся idle poll может их пропустить.

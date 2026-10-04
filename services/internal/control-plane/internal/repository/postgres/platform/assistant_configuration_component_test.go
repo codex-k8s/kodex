@@ -541,6 +541,7 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatalf("preexisting manual draft superseded by prepare: %v", err)
 	}
 	if sourceScope == "PROJECT" {
+		testAssistantProjectImageTemplateSelection(t, ctx, r, service, owner, lease)
 		system, err := service.GetSystemAssistant(ctx, owner)
 		if err != nil {
 			t.Fatal(err)

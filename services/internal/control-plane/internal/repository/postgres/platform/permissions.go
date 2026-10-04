@@ -71,7 +71,13 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 			return errs.ErrInvalid
 		}
 		_, _, err := repository.assistantRoleImageUpdateInput(ctx, tx, current, input.Mutation, payload)
-		return err
+		if err != nil {
+			return err
+		}
+		if !exactSHA256(payload.SpecSHA256) {
+			return errs.ErrInvalid
+		}
+		return nil
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
 		_, ok := input.Payload.(command.ProjectLifecycleInput)
 		if !ok {
