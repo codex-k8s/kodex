@@ -36,6 +36,13 @@ fallback при ошибке защищённого транспорта. Сох
   минимальные ServiceAccount/RBAC; внутренние Service только ClusterIP;
 - TLS с hostname verification к внешним провайдерам и защита secret values.
 
+Каждый рабочий сервис самостоятельно разрешает exact DNS egress к
+`kube-system/kube-dns` по UDP/TCP53, если его рабочий путь использует имена
+Service. Такое правило не должно зависеть от issuer sidecar label: в
+`trusted-cluster` sidecar отсутствует, но DNS нужен тому же domain consumer.
+Readiness фонового controller подтверждает фактический owner RPC, а не только
+доступность Kubernetes API; отказ claim закрывает readiness до успешного цикла.
+
 Карта транспортного перехода (доменные события и переходы не меняются):
 
 | Инициатор | Источник полномочий и путь | Владелец и результат |

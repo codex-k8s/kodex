@@ -58,6 +58,34 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertNotIn("deployment stage", result.stderr)
         self.assertNotIn("not implemented", result.stderr)
 
+    def test_archive_dns_is_owned_by_controller_without_issuer(self):
+        policy = SCRIPT.parents[2] / "deploy/k8s/base/session-archive/networkpolicy.yaml"
+        result = subprocess.run(
+            ["yq", "-o=json", ".", str(policy)],
+            capture_output=True, text=True, timeout=5,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decoder = json.JSONDecoder()
+        remaining = result.stdout.lstrip()
+        documents = []
+        while remaining:
+            document, end = decoder.raw_decode(remaining)
+            documents.append(document)
+            remaining = remaining[end:].lstrip()
+        controller = next(item for item in documents if item["metadata"]["name"] == "session-archive-exact-paths")
+        self.assertEqual(controller["spec"]["podSelector"]["matchLabels"], {
+            "app.kubernetes.io/name": "session-archive",
+            "app.kubernetes.io/component": "archive-controller",
+        })
+        dns = [rule for rule in controller["spec"]["egress"] if any(port["port"] == 53 for port in rule["ports"])]
+        self.assertEqual(dns, [{
+            "to": [{
+                "namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
+                "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+            }],
+            "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}],
+        }])
+
     def test_supply_chain_seed_precedes_full_registry_readiness(self):
         source = SCRIPT.read_text()
         stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]

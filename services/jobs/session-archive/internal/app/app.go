@@ -16,9 +16,13 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/controller"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	"github.com/google/uuid"
+	"google.golang.org/grpc/status"
 )
 
 const issuerUID, issuerGID = 29001, 29000
+
+const archiveClaimFailureMessage = "session archive claim failed"
+const archiveRPCCodeAttribute = "rpc_code"
 
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	config, err := loadConfig()
@@ -78,8 +82,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	if err := technical.Listen(); err != nil {
 		return err
 	}
-	readiness.Set(true, "ready")
-	metrics.SetReady(true)
+	readiness.Set(false, "control_plane_unchecked")
+	metrics.SetReady(false)
 	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), runLoop(control, kubernetes, readiness, metrics, owned, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
@@ -122,9 +126,6 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 					readiness.Set(false, "kubernetes_unavailable")
 					metrics.SetReady(false)
 					logger.WarnContext(ctx, "session archive Kubernetes check failed", "error_class", "kubernetes_api")
-				} else {
-					readiness.Set(true, "ready")
-					metrics.SetReady(true)
 				}
 			}
 			if !kubernetesReady {
@@ -133,9 +134,10 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 				cycle, cancel := context.WithTimeout(ctx, config.RPCDeadline)
 				claimed, err := control.SessionArchive.ClaimSessionArchiveTasks(cycle, &controlplanev1.ClaimSessionArchiveTasksRequest{WorkloadInstance: config.InstanceID, Limit: 1})
 				cancel()
+				setArchiveClaimReadiness(readiness, metrics, err)
 				if err != nil {
 					owned.cycles.WithLabelValues("error").Inc()
-					logger.WarnContext(ctx, "session archive claim failed", "error_class", "control_plane")
+					logger.WarnContext(ctx, archiveClaimFailureMessage, "error_class", "control_plane", archiveRPCCodeAttribute, status.Code(err).String())
 				} else {
 					owned.cycles.WithLabelValues("success").Inc()
 					if len(claimed.GetTasks()) > 0 {
@@ -156,6 +158,17 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 			}
 		}
 	}
+}
+
+// Готовность подтверждает рабочий owner RPC, а не только Kubernetes API.
+func setArchiveClaimReadiness(readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, err error) {
+	if err != nil {
+		readiness.Set(false, "control_plane_unavailable")
+		metrics.SetReady(false)
+		return
+	}
+	readiness.Set(true, "ready")
+	metrics.SetReady(true)
 }
 
 func process(ctx context.Context, control *controlplaneclient.Client, kube *controller.Controller, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, config Config) error {

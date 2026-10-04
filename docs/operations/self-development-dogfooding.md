@@ -1084,3 +1084,22 @@ artifact.tools. API теперь разделяет declaredTools и verifiedToo
 Transient hot reload во время переноса Proto дал 503; после codegen CP снова
 запустился, однако новая inventory migration ещё требует canonical apply.
 До этого UI/live path не объявляется PASS.
+
+04.10.2026 15:14 UTC, tree поверх `fa163f2c93a1595772c2bd69b21d9c9e11d3aa96`:
+PASS — canonical fa163 render и точный control-plane-migrate применили новую
+inventory migration014. Source/contract/frontend consumer работа продолжается.
+PASS — applied plan UX: прежние формы и readback остаются mounted, но
+APPLIED записи свёрнуты native details; не применённые планы не скрыты.
+42 адресных frontend unit PASS 1.84 s. Actual desktop screenshot
+`/tmp/kodex-applied-plans-1511.png` просмотрен: три панели компактны,
+каждая высотой 80 px, горизонтального overflow нет, alerts отсутствуют.
+Рабочая вкладка обновлена; чужие вкладки не затронуты.
+FAIL — archive claims не проходили despite ready Pod: safe RPC-code
+DeadlineExceeded. Read-only nslookup из exact controller Pod подтвердил
+DNS blocked (10.43.0.10 connection refused). Рабочая NetworkPolicy не
+содержала DNS, а DNS issuer policy не выбирает trusted Pod без sidecar label.
+Исправлен только exact kube-system/kube-dns UDP/TCP53 egress; readiness
+controller теперь требует успешный owner claim, не только Kubernetes Check.
+11 закрытых deploy/DNS contract tests PASS .309 s; archive app unit PASS
+.034 s; safe code диагностика не выводит сырые ошибки/credentials.
+Canonical network apply и повторное live DNS/claim — ещё NOT RUN.

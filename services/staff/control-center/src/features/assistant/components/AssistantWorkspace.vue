@@ -34,6 +34,7 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import AssistantPlanRecord from "./AssistantPlanRecord.vue";
 import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
 import AssistantEnvironmentSettingsPanel from "@/features/assistant/components/AssistantEnvironmentSettingsPanel.vue";
 import SystemAssistantIntegrationGrantsPanel from "./SystemAssistantIntegrationGrantsPanel.vue";
@@ -2136,7 +2137,11 @@ onBeforeUnmount(() => {
                       )
                     }}
                   </button>
-                  <section v-if="turn.plan" class="assistant-plan-card">
+                  <AssistantPlanRecord
+                    v-if="turn.plan"
+                    :plan="turn.plan"
+                    :variant="planVariantNumber(turn.plan.ref)"
+                  >
                     <header>
                       <ListChecks :size="19" aria-hidden="true" />
                       <div>
@@ -2302,7 +2307,7 @@ onBeforeUnmount(() => {
                           : $t("assistant.openPlan")
                       }}
                     </button>
-                  </section>
+                  </AssistantPlanRecord>
                 </article>
               </template>
               <div
