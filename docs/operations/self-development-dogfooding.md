@@ -1180,3 +1180,37 @@ follow-current/pinned mode не выдумывается из недостающ
 Root78 frontend unit PASS4.04 s, полный typecheck PASS, naming unit .058 s.
 Actual visual новой timeline/binding, native resume, Context7 grants/calls и
 весь Workflow ещё OPEN; checkbox2–15 не закрыты по source/unit/Pod readiness.
+
+04.10.2026 16:19 UTC, source `e36b069eb15076cb3432de775475cf0a61cc8ac5`:
+PASS — source e36 зафиксирован и опубликован в той же bootstrap ветке.
+Fresh canonical render e36 завершился exit0, source fingerprint
+8325b7264f50d22283dd1fb107fdec875e302430a222f0d5e1ba341acb3a23d1.
+Runtime image остаётся exact2664; cache build проверил новый source и provenance
+928aa29aac76b1c1374ea5c7a48001c65f9b8922a7bf84a8cc0dd00d4c10415e.
+Immutable e36 release acceptance не заявляется: live manifest применён с ebd,
+а CP/gateway/frontend используют доказанный hot source mount.
+PASS — новый SYSTEM чат QA_FRESH_SYSTEM_30, run_M-VkF2JcRMIHyMKosXz21oIt,
+session ses_GnIyFX6QUBqx9hHbnHyNRPcW: SUCCEEDED, event sequence11.
+Actual runtime-turn-092a4516b56fdad4 input/prompt materialization: exact task и
+instructions совпали, harmless marker присутствует, gpt-6.1-sol/medium,
+USER_TEMPLATE и все7 platform slots подтверждены; managed MCP profiles0.
+ImageID всех трёх контейнеров exact2664. После завершения exec binary hash
+не получен (контейнер уже завершён); это не отдельный PASS binary readback.
+PASS — следующий реальный ход в ТОЙ ЖЕ session, QA_SYSTEM_GRANTS_31,
+run_FgBG8vtvj6JbjhpPPuyNcfAE, SUCCEEDED, sequence19; прежняя THREAD_BIND
+ошибка на продолжении не воспроизвелась. Prompt runtime-turn-29aed312a7b986f9
+подтверждает ту же session, новый turn/revision и все7 slots. Grant plan ещё
+не создан: запрос ошибочно требовал отсутствующий catalog selector; штатный
+resource search возвращает навигацию, версия назначается owner hydrate.
+Продолжается проверка через предложенную самим помощником страницу Context7.
+PASS — просмотрен `/tmp/kodex-fresh-system-30-1615.png`: USER справа,
+commentary/FINAL/tool calls слева, безопасные подробности свёрнуты,
+служебные стадии объединены под одним details. Console errors/warnings0.
+Полезное USER название сохранено после terminal; historical «готов» не
+переписан задним числом. Mobile ещё NOT RUN.
+FAIL — old run_RAHiuMuRQCzhZY_4R-6pd_pq остаётся RUNNING при QUEUED node.
+Owner audit доказывает исчерпание одной архивной задачи, но её привязка к
+этой session публичным read ещё не доказана; это не установленный root cause.
+До полного QA три исполнителя параллельно ведут bounded session readiness
+readback, собственный image/tools selector и компактные home running lists.
+Root сохраняет Chrome/actual AI/rollout authority. Checkbox2–15 OPEN.
