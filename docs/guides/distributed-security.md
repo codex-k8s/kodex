@@ -603,6 +603,12 @@ framing с завершающим chunk и сохранением trailers. За
 close-delimited ответ без close_notify, даже после записи всех payload bytes.
 Regression использует streaming upstream без Content-Length; HEAD, no-body
 status и WebSocket не получают искусственного body или chunked encoding.
+Протокол закреплённого provider SDK сверяется с его фактическим codegen и
+сериализацией, включая известные experimental response поля: их отсутствие
+в публичной schema не доказывает отсутствия в wire response. Допустимые
+метаданные проходят строгую bounded type/enum проверку и отбрасываются;
+account origin, environment paths или plugin IDs из такого ответа не
+назначают authority, workspace текущей попытки или сетевые grants.
 
 ## Многоуровневая межсервисная авторизация
 

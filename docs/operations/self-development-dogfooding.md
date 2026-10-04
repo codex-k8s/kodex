@@ -419,3 +419,33 @@ missing/wrong-type/over-limit закрыто отклоняются, значе�
 не менялась; account/updated по первичному SDK содержит только прежние поля.
 Полный Codex PASS (4.474 s), targeted PASS (0.015 s), race PASS (1.086 s),
 vet/diffcheck PASS. Новый runner activation и живой повтор пока NOT RUN.
+
+04.10.2026 09:47–09:51 UTC, checkpoint
+`e24e1bd3b384607ffbe4bf6141a25688d1aca5fc` и следующее hot-reload дерево:
+PASS — build runner с исправлением account/read: exact digest
+`sha256:7cc3f454b06e60a8ed24a308c0a853a49c961c0bc0160cabf7b22c0a95abc459`,
+binary SHA256 `355072fec31ecf19e1e99a5ffbe576f5119315a20c370dc6aad485e8b6191fb4`.
+Activation отложена до адресного исправления следующего SDK boundary:
+точная schema codegen установленного binary обнаружила новые известные
+thread/start и Thread metadata поля, отсутствующие в нашем allowlist.
+Никакие model/auth операции при codegen не выполнялись. Живой повтор NOT RUN.
+PASS — текст MODEL_REQUEST_RUNNING больше не обещает уже начавшийся inference:
+«Подготовка и выполнение запроса к модели», RU/EN. 23 frontend unit tests,
+scoped ESLint/Prettier, полный typecheck/build PASS (Vite 8.16 s; прежнее
+предупреждение о размере bundle сохранено). Chrome hot reload показывает
+новый текст, Console без ошибок. Полная самонастройка ещё NOT RUN.
+
+04.10.2026 09:54 UTC, финальное дерево перед следующим checkpoint:
+FAIL→PASS — thread/start и Thread fixture точного Codex 0.160.0 теперь
+принимают disabledPluginIds, originator, daybreakEnabled и environments.
+Проверяются только известные bounded типы, nullable/default semantics и
+точный состав environment metadata; значения отбрасываются и не меняют
+session/workspace/authority binding. Unknown/wrong-type/missing/bounds
+закрыто отклоняются. Positive start→started→read и 26 negative cases PASS;
+полный Codex unit PASS (4.451 s), targeted race PASS (1.102 s), format/diffcheck
+PASS. Initialize и TurnStart/Turn совпадают с exact installed schema;
+неподтверждённые новые notification methods не добавлены. Реальный ход после
+нового image activation ещё NOT RUN, чекбоксы этапов не закрыты.
+Chrome screenshot `/tmp/kodex-model-request-preparation-hot.png` проверен:
+локализованный нейтральный progress, сообщения агента слева, без наложений;
+старый terminal отказ сохранён в истории, не объявляется новым результатом.

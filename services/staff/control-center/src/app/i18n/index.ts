@@ -2198,7 +2198,7 @@ const ru = {
     },
     runtimeProgress: {
       workloadScheduled: "Задание передано исполнителю",
-      modelRequestRunning: "Модель обрабатывает запрос",
+      modelRequestRunning: "Подготовка и выполнение запроса к модели",
       providerUnavailable:
         "Провайдер модели временно недоступен. Ход завершён с ошибкой.",
     },
@@ -6626,7 +6626,7 @@ const en = {
     messagePhases: { USER: "Task", COMMENTARY: "Progress", FINAL: "Answer" },
     runtimeProgress: {
       workloadScheduled: "Task handed to the worker",
-      modelRequestRunning: "Model is processing the request",
+      modelRequestRunning: "Preparing and executing the model request",
       providerUnavailable:
         "The model provider is temporarily unavailable. The turn failed.",
     },

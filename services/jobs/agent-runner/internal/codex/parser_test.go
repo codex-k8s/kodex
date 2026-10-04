@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -223,6 +224,105 @@ func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 		"status":{"type":"idle"},"turns":[],"updatedAt":1}}`)
 	if err := state.bindThread(response, "codex", "/workspace", "never"); err != nil {
 		t.Fatalf("current app-server thread response was rejected: %v", err)
+	}
+}
+
+func codex160ThreadFixture(t *testing.T) map[string]any {
+	t.Helper()
+	return map[string]any{
+		"cliVersion": "0.160.0", "createdAt": 1, "cwd": "/workspace", "daybreakEnabled": nil,
+		"environments": []any{}, "ephemeral": false, "id": testThreadID, "modelProvider": "openai",
+		"originator": "kodex-agent-runner", "path": "/workspace/rollout.jsonl", "preview": "", "projectId": nil,
+		"sessionId": testThreadID, "source": "appServer", "status": map[string]any{"type": "idle"}, "turns": []any{}, "updatedAt": 1,
+	}
+}
+
+func marshalProtocolFixture(t *testing.T, value any) json.RawMessage {
+	t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal("marshal synthetic protocol fixture")
+	}
+	return encoded
+}
+
+func TestCodex160ThreadMetadataIsTypedAndDiscarded(t *testing.T) {
+	for _, nullable := range []bool{false, true} {
+		thread := codex160ThreadFixture(t)
+		if nullable {
+			thread["environments"], thread["originator"], thread["daybreakEnabled"] = nil, nil, nil
+		} else {
+			thread["daybreakEnabled"] = true
+			thread["environments"] = []any{map[string]any{"environmentId": "metadata-only", "cwd": "metadata-only-path", "runtimeWorkspaceRoots": []string{"metadata-only-root"}}}
+		}
+		state := newProtocolState(testThreadID)
+		response := map[string]any{"approvalPolicy": "never", "approvalsReviewer": "user", "cwd": "/workspace", "disabledPluginIds": []string{"metadata-only-plugin"}, "model": "codex", "modelProvider": "openai", "sandbox": map[string]any{"type": "readOnly"}, "thread": thread}
+		if err := state.bindThread(marshalProtocolFixture(t, response), "codex", "/workspace", "never"); err != nil {
+			t.Fatal("Codex 0.160.0 known typed metadata rejected")
+		}
+		if state.threadID != testThreadID || state.workspaceRoot != "/workspace" || state.threadPath != "/workspace/rollout.jsonl" {
+			t.Fatal("discarded metadata changed authoritative thread binding")
+		}
+		if err := state.notification("thread/started", marshalProtocolFixture(t, map[string]any{"thread": thread})); err != nil {
+			t.Fatal("Codex 0.160.0 thread started metadata rejected")
+		}
+		if err := state.bindThreadRead(marshalProtocolFixture(t, map[string]any{"thread": thread})); err != nil {
+			t.Fatal("Codex 0.160.0 thread read metadata rejected")
+		}
+		encoded := marshalProtocolFixture(t, state.result)
+		if bytes.Contains(encoded, []byte("metadata-only")) {
+			t.Fatal("discarded metadata leaked into provider result")
+		}
+	}
+}
+
+func TestCodex160ThreadMetadataRejectsWrongTypesBoundsAndUnknownFields(t *testing.T) {
+	const private = "private-metadata-sentinel"
+	for _, test := range []struct {
+		name, target, field string
+		value               any
+	}{
+		{"plugin null", "response", "disabledPluginIds", nil},
+		{"plugin object", "response", "disabledPluginIds", map[string]any{"private": private}},
+		{"plugin mixed type", "response", "disabledPluginIds", []any{private, 1}},
+		{"plugin null entry", "response", "disabledPluginIds", []any{nil}},
+		{"plugin count", "response", "disabledPluginIds", make([]string, 257)},
+		{"plugin size", "response", "disabledPluginIds", []string{strings.Repeat(private, 32)}},
+		{"daybreak number", "thread", "daybreakEnabled", 1},
+		{"daybreak string", "thread", "daybreakEnabled", private},
+		{"originator number", "thread", "originator", 1},
+		{"originator object", "thread", "originator", map[string]any{"private": private}},
+		{"originator size", "thread", "originator", strings.Repeat(private, 32)},
+		{"environment object", "thread", "environments", map[string]any{"private": private}},
+		{"environment null entry", "thread", "environments", []any{nil}},
+		{"environment count", "thread", "environments", make([]any, 65)},
+		{"environment missing fields", "thread", "environments", []any{map[string]any{"environmentId": private}}},
+		{"environment id type", "thread", "environments", []any{map[string]any{"environmentId": 1, "cwd": private, "runtimeWorkspaceRoots": []string{}}}},
+		{"environment id size", "thread", "environments", []any{map[string]any{"environmentId": strings.Repeat(private, 32), "cwd": private, "runtimeWorkspaceRoots": []string{}}}},
+		{"environment cwd type", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": nil, "runtimeWorkspaceRoots": []string{}}}},
+		{"environment cwd size", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": strings.Repeat(private, 200), "runtimeWorkspaceRoots": []string{}}}},
+		{"environment roots null", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": nil}}},
+		{"environment root type", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": []any{1}}}},
+		{"environment root count", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": make([]string, 257)}}},
+		{"environment root size", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": []string{strings.Repeat(private, 200)}}}},
+		{"environment unknown field", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": []string{}, private: private}}},
+		{"response unknown field", "response", private, private},
+		{"thread unknown field", "thread", private, private},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			thread := codex160ThreadFixture(t)
+			response := map[string]any{"approvalPolicy": "never", "approvalsReviewer": "user", "cwd": "/workspace", "disabledPluginIds": []string{}, "model": "codex", "modelProvider": "openai", "sandbox": map[string]any{"type": "readOnly"}, "thread": thread}
+			if test.target == "thread" {
+				thread[test.field] = test.value
+			} else {
+				response[test.field] = test.value
+			}
+			state := newProtocolState(testThreadID)
+			err := state.bindThread(marshalProtocolFixture(t, response), "codex", "/workspace", "never")
+			if err == nil || strings.Contains(err.Error(), private) || state.threadID != "" || state.workspaceRoot != "" || state.result.SessionID != "" {
+				t.Fatal("invalid metadata accepted, exposed private data or changed authoritative binding")
+			}
+		})
 	}
 }
 

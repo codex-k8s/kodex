@@ -226,10 +226,13 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 
 func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expectedWorkspace, expectedApproval string) error {
 	fields, err := decodeObject(raw, schema([]string{"approvalPolicy", "approvalsReviewer", "cwd", "model", "modelProvider", "sandbox", "thread"},
-		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "cwd", "initialTurnsPage", "instructionSources", "itemsBackwardsCursor",
+		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "cwd", "disabledPluginIds", "initialTurnsPage", "instructionSources", "itemsBackwardsCursor",
 		"model", "modelProvider", "multiAgentMode", "reasoningEffort", "runtimeWorkspaceRoots", "sandbox", "serviceTier", "thread", "turnsBackwardsCursor"))
 	if err != nil {
 		return errors.New("Codex app-server thread response is invalid")
+	}
+	if plugins, present := fields["disabledPluginIds"]; present && !validThreadMetadataStrings(plugins, 256, 512) {
+		return errors.New("Codex app-server thread plugin metadata is invalid")
 	}
 	model, modelErr := decodeBoundedString(fields["model"], 128)
 	cwd, cwdErr := decodeBoundedString(fields["cwd"], 4096)
@@ -267,11 +270,14 @@ func (state *protocolState) bindThreadRead(raw json.RawMessage) error {
 func parseThread(raw json.RawMessage) (string, string, error) {
 	fields, err := decodeObject(raw, schema([]string{"cliVersion", "createdAt", "cwd", "ephemeral", "id", "modelProvider",
 		"preview", "sessionId", "source", "status", "turns", "updatedAt"}, "agentNickname", "agentRole", "canAcceptDirectInput",
-		"cliVersion", "createdAt", "cwd", "ephemeral", "extra", "forkedFromId", "gitInfo", "historyMode", "id", "modelProvider",
-		"model", "name", "parentThreadId", "path", "preview", "projectId", "reasoningEffort", "recencyAt", "section",
+		"cliVersion", "createdAt", "cwd", "daybreakEnabled", "environments", "ephemeral", "extra", "forkedFromId", "gitInfo", "historyMode", "id", "modelProvider",
+		"model", "name", "originator", "parentThreadId", "path", "preview", "projectId", "reasoningEffort", "recencyAt", "section",
 		"sectionEnteredAt", "sessionId", "source", "status", "threadSource", "turns", "updatedAt"))
 	if err != nil {
 		return "", "", err
+	}
+	if !validThreadDiscardedMetadata(fields) {
+		return "", "", errors.New("Codex app-server thread metadata is invalid")
 	}
 	id, idErr := decodeBoundedString(fields["id"], 128)
 	sessionID, sessionErr := decodeBoundedString(fields["sessionId"], 128)
@@ -295,6 +301,55 @@ func parseThread(raw json.RawMessage) (string, string, error) {
 		}
 	}
 	return id, path, nil
+}
+
+// Метаданные rust-v0.160.0 проверяются по типам и отбрасываются: они не
+// назначают identity, authority, workspace или разрешения текущей attempt.
+func validThreadDiscardedMetadata(fields map[string]json.RawMessage) bool {
+	if value, present := fields["daybreakEnabled"]; present && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		var enabled bool
+		if strictDecode(value, &enabled) != nil {
+			return false
+		}
+	}
+	if value, present := fields["originator"]; present && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) && !validThreadMetadataString(value, 512) {
+		return false
+	}
+	value, present := fields["environments"]
+	if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return true
+	}
+	var environments []json.RawMessage
+	if len(value) > 1<<20 || len(bytes.TrimSpace(value)) == 0 || bytes.TrimSpace(value)[0] != '[' || strictDecode(value, &environments) != nil || len(environments) > 64 {
+		return false
+	}
+	for _, environment := range environments {
+		entry, err := decodeObject(environment, schema([]string{"cwd", "environmentId", "runtimeWorkspaceRoots"}, "cwd", "environmentId", "runtimeWorkspaceRoots"))
+		if err != nil || !validThreadMetadataString(entry["environmentId"], 512) || !validThreadMetadataString(entry["cwd"], 4096) || !validThreadMetadataStrings(entry["runtimeWorkspaceRoots"], 256, 4096) {
+			return false
+		}
+	}
+	return true
+}
+
+func validThreadMetadataString(raw json.RawMessage, maximum int) bool {
+	value := bytes.TrimSpace(raw)
+	var text string
+	return len(value) > 0 && value[0] == '"' && utf8.Valid(value) && strictDecode(value, &text) == nil && len(text) <= maximum
+}
+
+func validThreadMetadataStrings(raw json.RawMessage, maximumEntries, maximumBytes int) bool {
+	value := bytes.TrimSpace(raw)
+	var entries []json.RawMessage
+	if len(value) == 0 || len(value) > 1<<20 || value[0] != '[' || strictDecode(value, &entries) != nil || len(entries) > maximumEntries {
+		return false
+	}
+	for _, entry := range entries {
+		if !validThreadMetadataString(entry, maximumBytes) {
+			return false
+		}
+	}
+	return true
 }
 
 func (state *protocolState) bindTurn(raw json.RawMessage) error {

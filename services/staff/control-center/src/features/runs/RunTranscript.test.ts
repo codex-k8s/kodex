@@ -172,8 +172,8 @@ describe("RunTranscript: безопасный runtime text", () => {
         );
         expect(html).toContain(
           locale === "ru"
-            ? "Модель обрабатывает запрос"
-            : "Model is processing the request",
+            ? "Подготовка и выполнение запроса к модели"
+            : "Preparing and executing the model request",
         );
         expect(html).toContain(
           locale === "ru"
