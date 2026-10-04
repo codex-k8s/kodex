@@ -81,3 +81,31 @@ export function runtimeImageOption(
     throw new Error("Runtime image catalog identity is invalid");
   return { ...value, recipeRef: value.recipeRef, generation: value.generation };
 }
+
+export async function restoreRuntimeImageOption(
+  catalog: RuntimeImageCatalog,
+  scope: RuntimeResourceScope,
+  artifactRef: string,
+  signal: AbortSignal,
+): Promise<RuntimeImageOption> {
+  const visited = new Set<string>();
+  let cursor: string | undefined;
+  for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+    signal.throwIfAborted();
+    const page = await catalog.loadPage(scope, "", cursor, signal);
+    signal.throwIfAborted();
+    const option = page.items.find((item) => item.ref === artifactRef);
+    if (option) return runtimeImageOption(option);
+    if (!page.nextPageToken) break;
+    if (visited.has(page.nextPageToken))
+      throw new Error("Runtime image catalog returned a repeated cursor");
+    cursor = page.nextPageToken;
+    visited.add(cursor);
+  }
+  throw new AppProblem({
+    status: 409,
+    code: "IMAGE_ARTIFACT_NOT_CURRENT",
+    retryable: false,
+    kind: "conflict",
+  });
+}

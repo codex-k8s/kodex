@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen";
 import {
   assertPromotedRuntimeImage,
   runtimeImageOption,
+  restoreRuntimeImageOption,
+  type RuntimeImageCatalog,
   toolsForRuntimeImage,
 } from "./image-tools-selection";
 
@@ -93,5 +95,74 @@ describe("Выбор образа и проверенных инструмент
         generation: 3,
       } as Parameters<typeof runtimeImageOption>[0]),
     ).toMatchObject({ recipeRef: "imgrecipe_exact", generation: 3 });
+  });
+
+  it("восстанавливает выбор черновика из точного scoped каталога по курсору", async () => {
+    const option = {
+      ref: expected.artifactRef,
+      title: "Собственный образ",
+      recipeRef: expected.recipeRef,
+      generation: expected.recipeGeneration,
+    };
+    const loadPage = vi
+      .fn<RuntimeImageCatalog["loadPage"]>()
+      .mockResolvedValueOnce({ items: [], nextPageToken: "next" })
+      .mockResolvedValueOnce({ items: [option] });
+    const catalog = { loadPage } as unknown as RuntimeImageCatalog;
+    const scope = {
+      kind: "ORGANIZATION",
+      organizationRef: "org_alpha",
+    } as const;
+    const signal = new AbortController().signal;
+    await expect(
+      restoreRuntimeImageOption(catalog, scope, option.ref, signal),
+    ).resolves.toEqual(option);
+    expect(loadPage).toHaveBeenNthCalledWith(2, scope, "", "next", signal);
+  });
+
+  it("не восстанавливает отсутствующий образ и останавливает повтор курсора", async () => {
+    const scope = {
+      kind: "ORGANIZATION",
+      organizationRef: "org_alpha",
+    } as const;
+    const loadPage = vi
+      .fn<RuntimeImageCatalog["loadPage"]>()
+      .mockResolvedValue({ items: [] });
+    const catalog = { loadPage } as unknown as RuntimeImageCatalog;
+    await expect(
+      restoreRuntimeImageOption(
+        catalog,
+        scope,
+        "imgart_missing",
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "IMAGE_ARTIFACT_NOT_CURRENT" });
+    loadPage.mockResolvedValue({ items: [], nextPageToken: "same" });
+    await expect(
+      restoreRuntimeImageOption(
+        catalog,
+        scope,
+        "imgart_missing",
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("repeated cursor");
+  });
+
+  it("не принимает поздний ответ каталога после отмены", async () => {
+    const controller = new AbortController();
+    const loadPage = vi
+      .fn<RuntimeImageCatalog["loadPage"]>()
+      .mockImplementation(async () => {
+        controller.abort();
+        return { items: [] };
+      });
+    await expect(
+      restoreRuntimeImageOption(
+        { loadPage } as unknown as RuntimeImageCatalog,
+        { kind: "ORGANIZATION", organizationRef: "org_alpha" },
+        "imgart_exact",
+        controller.signal,
+      ),
+    ).rejects.toThrow();
   });
 });

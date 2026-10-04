@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.330
+version: 1.0.331
 updated: 2026-10-04
 ---
 
@@ -8211,3 +8211,45 @@ BuildKit уже имеет request 8 CPU/8 GiB и limit 24 CPU/64 GiB, увел�
 Первый render оптимизации закрылся SOURCE_DRIFT во время параллельного
 редактирования: apply не выполнялся. После завершения edits используется
 новый чистый checkpoint; этот отказ не выдается за успешный render.
+
+### 04.10.2026 — финальное применение и восстановление выбора после reload
+
+Чистый checkpoint `650f3215dc4930270d12edf6af24d8b62a79658d`:
+render `render-browser-fast-local.yaml` — PASS; repo-owned supply-chain и core
+control-plane apply — PASS. Deployment image-admission-controller Ready,
+фактический `IMAGE_ADMISSION_CONTROLLER_RECONCILE_INTERVAL=1s`. CP Ready,
+template catalog SHA-256
+`50156cd0e2f4347353a9a133e8ba62f6e6fbee1dcec132fa5aef8336f648e65c`.
+Host/Pod admission source hash вновь совпал с `7966…`; после startup записан
+`control-plane readiness restored`. Эти результаты относятся только к
+разрешённому локальному trusted-cluster, не к release acceptance.
+
+Hard reload выявил дополнительный UX-дефект: draft хранит собственный artifact,
+но selector восстанавливал название только из активного окружения и показывал
+placeholder. Исправлена общая форма SYSTEM/PROJECT: точный artifact разрешается
+через существующий scoped promoted catalog с bounded cursor traversal,
+AbortSignal и проверкой поколения запроса. При отсутствии доступного artifact
+форма закрыто показывает конфликт; opaque ref не используется вместо имени.
+Authority, admission, publication и активная конфигурация не меняются.
+
+Поверх чистого `650f…` адресная suite image-tools-selection — PASS:
+14 tests, включая восстановление следующей страницы, отсутствующий artifact,
+повтор cursor и отмену позднего результата. Native hard reload — PASS:
+селектор показывает название QA-образа, draft VALID, image ACCEPTED/PROMOTED,
+точные GET — 200, Console error/warn отсутствуют, overflow отсутствует.
+Скриншот `/tmp/kodex-assistant-image-resume-fixed.png` просмотрен.
+Последний диагностический срез gateway/admission logs пустой; сам по себе
+он не считается доказательством сценария.
+
+Уточнение ресурсов: лимиты 24 CPU/64 GiB принадлежат кластерному BuildKit;
+отдельный Docker buildx builder не имеет cgroup CPU/RAM limit. `--build-jobs 2`
+ограничивает число независимых локальных сборок, а не их суммарную память.
+Реальный speedup и peak memory тяжёлой параллельной сборки — NOT RUN;
+автоматическое увеличение реплик и ресурсов не выполнялось. Через Context7
+проверены Docker Buildx OCI exporter/load (`/docker/docs`) и Vue watcher
+async cleanup (`/websites/vuejs`).
+
+Новое решение владельца: после слияния текущего PR прочитать
+`.agents/full-qa-task.md`, выполнить анализ и остановиться до запуска следующей
+цели; представить план и открытые вопросы с вариантами выбора. Прежнее
+автоматическое создание следующей цели отменено этим решением.

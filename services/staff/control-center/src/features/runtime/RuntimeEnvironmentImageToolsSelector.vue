@@ -15,6 +15,7 @@ import RuntimeEnvironmentToolsEditor from "./RuntimeEnvironmentToolsEditor.vue";
 import {
   assertPromotedRuntimeImage,
   runtimeImageOption,
+  restoreRuntimeImageOption,
   toolsForRuntimeImage,
   type RuntimeImageCatalog,
   type RuntimeImageOption,
@@ -62,7 +63,7 @@ function invalidate(): void {
 }
 
 async function load(
-  option: RuntimeImageOption,
+  option: RuntimeImageOption | undefined,
   choosing: boolean,
 ): Promise<void> {
   invalidate();
@@ -71,6 +72,13 @@ async function load(
   const signal = controller.signal;
   loading.value = true;
   try {
+    option ??= await restoreRuntimeImageOption(
+      props.catalog,
+      props.resourceScope,
+      props.imageArtifactRef,
+      signal,
+    );
+    if (signal.aborted || current !== generation) return;
     const result = await props.catalog.loadArtifact(
       props.resourceScope,
       option.recipeRef,
@@ -131,7 +139,11 @@ watch(
     const image = props.currentImage;
     invalidate();
     selected.value = undefined;
-    if (!image || image.artifactRef !== props.imageArtifactRef) return;
+    if (!props.imageArtifactRef) return;
+    if (!image || image.artifactRef !== props.imageArtifactRef) {
+      void load(undefined, false);
+      return;
+    }
     const option: RuntimeImageOption = {
       ref: image.artifactRef,
       recipeRef: image.recipeRef,
