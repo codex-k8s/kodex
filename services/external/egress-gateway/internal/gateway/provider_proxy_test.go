@@ -71,6 +71,7 @@ func providerProxyFixture(t *testing.T, host string, access runtimecontract.Runt
 }
 
 func TestProviderPOSTIsIndependentOfUserReadOnlyAndPreservesSSE(t *testing.T) {
+	logs := captureProviderResponsesLogs(t)
 	access := runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessAllowlistReadOnly, Rules: []runtimecontract.RuntimeWebAccessRule{{DomainPattern: "example.org", Protocol: "HTTPS", Port: 443, HTTPMethods: []string{"GET"}}}}
 	certificate, roots := serverCertificateFixture(t, "api.openai.com")
 	_, client, _, dialer, done := providerProxyFixture(t, "api.openai.com", access, roots)
@@ -134,11 +135,13 @@ func TestProviderPOSTIsIndependentOfUserReadOnlyAndPreservesSSE(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("provider proxy did not join")
 	}
+	assertProviderResponsesEvents(t, logs.String(), "HTTP", "event=POLICY outcome=ALLOWED", "event=UPSTREAM outcome=RESPONSE status_class=2XX http_status=200", "event=UPSTREAM_BODY outcome=COMPLETED status_class=2XX http_status=200")
 }
 
 func TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade(t *testing.T) {
 	for _, boundary := range []string{"foreignCA", "foreignAccept"} {
 		t.Run(boundary, func(t *testing.T) {
+			logs := captureProviderResponsesLogs(t)
 			certificate, roots := serverCertificateFixture(t, "api.openai.com")
 			if boundary == "foreignCA" {
 				_, roots = serverCertificateFixture(t, "other.example")
@@ -172,6 +175,11 @@ func TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade(t *testing.T)
 					t.Fatal("rejected upstream did not join")
 				}
 			}
+			if boundary == "foreignCA" {
+				assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPSTREAM outcome=FAILED status_class=NONE http_status=NONE failure=TLS")
+			} else {
+				assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPGRADE outcome=REJECTED status_class=1XX http_status=101")
+			}
 		})
 	}
 }
@@ -179,6 +187,7 @@ func TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade(t *testing.T)
 func TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames(t *testing.T) {
 	for _, host := range []string{"api.openai.com", "chatgpt.com"} {
 		t.Run(host, func(t *testing.T) {
+			logs := captureProviderResponsesLogs(t)
 			certificate, roots := serverCertificateFixture(t, host)
 			_, client, _, dialer, done := providerProxyFixture(t, host, runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, roots)
 			path := "/v1/responses"
@@ -246,13 +255,15 @@ func TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames(t *testi
 			case <-time.After(time.Second):
 				t.Fatal("websocket pump did not join")
 			}
+			assertProviderResponsesEvents(t, logs.String(), "WSS", "event=POLICY outcome=ALLOWED", "event=UPSTREAM outcome=RESPONSE status_class=1XX http_status=101", "event=UPGRADE outcome=ACCEPTED status_class=1XX http_status=101", "event=PUMP outcome=CLOSED")
 		})
 	}
 }
 
 func TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial(t *testing.T) {
-	for _, mutation := range []string{"foreignpath", "wrongmethod", "protocol", "badkey", "foreignupgrade"} {
+	for _, mutation := range []string{"foreignpath", "wrongmethod", "protocol", "extensions", "badkey", "foreignupgrade"} {
 		t.Run(mutation, func(t *testing.T) {
+			logs := captureProviderResponsesLogs(t)
 			_, client, resolver, dialer, done := providerProxyFixture(t, "api.openai.com", runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, nil)
 			request, _ := http.NewRequest("GET", "https://api.openai.com/v1/responses", nil)
 			request.Header.Set("Connection", "Upgrade")
@@ -266,6 +277,8 @@ func TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial(t *testi
 				request.Method = "DELETE"
 			case "protocol":
 				request.Header.Set("Sec-WebSocket-Protocol", "foreign")
+			case "extensions":
+				request.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate")
 			case "badkey":
 				request.Header.Set("Sec-WebSocket-Key", "invalid")
 			case "foreignupgrade":
@@ -288,6 +301,52 @@ func TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial(t *testi
 			case <-time.After(time.Second):
 				t.Fatal("rejected provider proxy did not join")
 			}
+			if mutation == "foreignpath" {
+				if logs.Len() != 0 {
+					t.Fatal("unknown model route acquired diagnostics")
+				}
+			} else {
+				reason := map[string]string{"wrongmethod": "METHOD_PATH", "protocol": "WS_SUBPROTOCOL", "extensions": "WS_EXTENSIONS", "badkey": "WS_HANDSHAKE", "foreignupgrade": "WS_HANDSHAKE"}[mutation]
+				assertProviderResponsesEvents(t, logs.String(), "WSS", "event=POLICY outcome=DENIED status_class=NONE http_status=NONE failure="+reason)
+			}
 		})
 	}
+}
+
+func TestProviderResponsesRejectedUpgradePreservesHTTPResponse(t *testing.T) {
+	logs := captureProviderResponsesLogs(t)
+	certificate, roots := serverCertificateFixture(t, "api.openai.com")
+	_, client, _, dialer, done := providerProxyFixture(t, "api.openai.com", runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, roots)
+	upstreamDone := make(chan struct{})
+	go func() {
+		defer close(upstreamDone)
+		peer := <-dialer.peers
+		defer peer.Close()
+		upstream := tls.Server(peer, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}})
+		if _, err := http.ReadRequest(bufio.NewReader(upstream)); err != nil {
+			return
+		}
+		_, _ = io.WriteString(upstream, "HTTP/1.1 401 Unauthorized\r\nContent-Length: 9\r\nX-Private-Fixture: synthetic\r\n\r\nsynthetic")
+	}()
+	request := syntheticUpgradeRequest(t, "api.openai.com")
+	if err := request.Write(client.conn); err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.ReadResponse(client.reader, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil || response.StatusCode != 401 || string(body) != "synthetic" || response.Header.Get("X-Private-Fixture") != "synthetic" {
+		t.Fatal("rejected Upgrade changed upstream HTTP response")
+	}
+	for _, completed := range []<-chan struct{}{done, upstreamDone} {
+		select {
+		case <-completed:
+		case <-time.After(time.Second):
+			t.Fatal("rejected Upgrade did not join")
+		}
+	}
+	assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPSTREAM outcome=RESPONSE status_class=4XX http_status=401", "event=UPGRADE outcome=REJECTED status_class=4XX http_status=401", "event=UPSTREAM_BODY outcome=COMPLETED status_class=4XX http_status=401")
 }

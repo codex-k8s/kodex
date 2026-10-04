@@ -8,6 +8,7 @@ import {
   assistantTurnHasAuthoritativeActivity,
   activeTranscriptItemId,
   assistantTerminalTranscriptScopes,
+  assistantTranscriptReplacesWorkingFallback,
   presentRunTranscriptItems,
   type RunActivityItem,
   type PresentedRunEvent,
@@ -16,6 +17,7 @@ import type {
   AssistantTurn,
   AssistantConversation,
   Run,
+  RunEvent,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -611,6 +613,181 @@ describe("terminal receipt раньше terminal RunEvent", () => {
         turnRef: "trn_foreign",
       }),
     ).toEqual([]);
+  });
+
+  it.each(["SYSTEM", "PROJECT"] as const)(
+    "exact %s progress/COMMENTARY/tool заменяет working fallback, USER не заменяет",
+    (scope) => {
+      const pending: AssistantConversation = {
+        ...conversation,
+        assistantScope: scope,
+        assistantProfileRef: scope === "PROJECT" ? "asstp_example" : undefined,
+        turns: [{ ...user, state: "RUNNING", runVersion: ownedRun.version }],
+      };
+      const currentRun: Run = {
+        ...ownedRun,
+        assistantPin: {
+          ...required(ownedRun.assistantPin),
+          scope,
+          profileRef: pending.assistantProfileRef,
+        },
+      };
+      const replaces = (entries: RunEvent[]) =>
+        assistantTranscriptReplacesWorkingFallback(
+          pending,
+          "org_example",
+          currentRun,
+          [boundNode],
+          entries,
+        );
+      expect(replaces([])).toBe(false);
+      expect(
+        replaces([
+          {
+            ...progress,
+            message: {
+              ref: "msg_user",
+              phase: "USER",
+              revision: 1,
+              text: "Запрос",
+            },
+            messageKind: "USER_MESSAGE",
+          },
+        ]),
+      ).toBe(false);
+      expect(replaces([progress])).toBe(true);
+      expect(
+        replaces([
+          {
+            ...progress,
+            message: {
+              ref: "msg_comment",
+              phase: "COMMENTARY",
+              revision: 1,
+              text: "Проверяю",
+            },
+          },
+        ]),
+      ).toBe(true);
+      expect(
+        replaces([{ ...progress, type: "TURN_STARTED", messageKind: "STATE" }]),
+      ).toBe(true);
+      expect(
+        replaces([
+          {
+            ...progress,
+            type: "TOOL_CALL_RECORDED",
+            messageKind: "TOOL_CALL",
+            toolCall: {
+              ref: "call_example",
+              tool: "CODEX_SHELL",
+              state: "RUNNING",
+              revision: 1,
+              durationMs: 0,
+              safeParameters: {},
+              safeResult: "",
+              auditRef: "audit_example",
+            },
+          },
+        ]),
+      ).toBe(true);
+      expect(
+        replaces([
+          {
+            ...progress,
+            message: {
+              ref: "msg_final",
+              phase: "FINAL",
+              revision: 1,
+              text: "Готово",
+            },
+            nodeState: "SUCCEEDED",
+          },
+        ]),
+      ).toBe(true);
+    },
+  );
+
+  it("чужой/старый/unsigned progress и неподтверждённый owner read не suppress fallback нового хода", () => {
+    const pending: AssistantConversation = {
+      ...conversation,
+      turns: [{ ...user, runVersion: ownedRun.version, state: "RUNNING" }],
+    };
+    const check = (
+      candidate = pending,
+      currentRun = ownedRun,
+      currentNode = boundNode,
+      entries: RunEvent[] = [progress],
+      organizationRef: string | undefined = "org_example",
+    ) =>
+      assistantTranscriptReplacesWorkingFallback(
+        candidate,
+        organizationRef,
+        currentRun,
+        [currentNode],
+        entries,
+      );
+    for (const key of [
+      "runRef",
+      "nodeRef",
+      "sessionRef",
+      "turnRef",
+      "turnNumber",
+      "attempt",
+    ] as const) {
+      const execution = required(progress.execution);
+      expect(
+        check(pending, ownedRun, boundNode, [
+          {
+            ...progress,
+            execution: {
+              ...execution,
+              [key]: typeof execution[key] === "number" ? 2 : "foreign_ref",
+            },
+          },
+        ]),
+      ).toBe(false);
+    }
+    expect(
+      check(pending, ownedRun, boundNode, [
+        { ...progress, execution: undefined },
+      ]),
+    ).toBe(false);
+    expect(
+      check({
+        ...pending,
+        turns: [
+          { ...user, runRef: "run_newturn", runVersion: 1, state: "RUNNING" },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      check({
+        ...pending,
+        turns: [{ ...user, runVersion: 0, state: "RUNNING" }],
+      }),
+    ).toBe(false);
+    expect(
+      check({
+        ...pending,
+        turns: [{ ...user, runVersion: undefined, state: "RUNNING" }],
+      }),
+    ).toBe(false);
+    expect(check(pending, { ...ownedRun, version: 3 })).toBe(false);
+    expect(check({ ...pending, ref: "cnv_foreign" })).toBe(false);
+    expect(check(pending, ownedRun, { ...boundNode, attempt: 2 })).toBe(false);
+    expect(check(pending, ownedRun, boundNode, [progress], "org_foreign")).toBe(
+      false,
+    );
+    expect(
+      assistantTranscriptReplacesWorkingFallback(
+        pending,
+        undefined,
+        ownedRun,
+        [boundNode],
+        [progress],
+      ),
+    ).toBe(false);
   });
 });
 

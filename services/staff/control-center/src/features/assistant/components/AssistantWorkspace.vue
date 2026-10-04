@@ -89,6 +89,7 @@ import RunActivityView from "@/features/runs/RunActivityView.vue";
 import {
   assistantTurnHasAuthoritativeActivity,
   assistantTerminalTranscriptScopes,
+  assistantTranscriptReplacesWorkingFallback,
   isTranscriptNearBottom,
 } from "@/features/runs/run-activity";
 import { runtimeProgressKey } from "@/features/runs/runtime-text";
@@ -402,6 +403,21 @@ const assistantRuntimeState = computed(() =>
 const awaitingReply = computed(() =>
   assistantAwaitingReply(store.selectedConversation),
 );
+const showWorkingFallback = computed(() => {
+  if (!awaitingReply.value) return false;
+  const runRef = store.selectedConversation?.turns.at(-1)?.runRef;
+  const run = runRef ? platform.runs[runRef] : undefined;
+  const graph = run
+    ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
+    : undefined;
+  return !assistantTranscriptReplacesWorkingFallback(
+    store.selectedConversation,
+    platform.bootstrap?.organizationRef,
+    run,
+    graph?.nodes ?? [],
+    conversationRunEvents.value,
+  );
+});
 const providerAccountRequired = computed(
   () =>
     store.assistant !== undefined &&
@@ -2284,7 +2300,7 @@ onBeforeUnmount(() => {
                 </article>
               </template>
               <div
-                v-if="awaitingReply && !store.loading && !store.problem"
+                v-if="showWorkingFallback && !store.loading && !store.problem"
                 class="assistant-message assistant-message--typing"
                 role="status"
                 :aria-label="$t('assistant.working')"

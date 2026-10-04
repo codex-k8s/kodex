@@ -205,7 +205,9 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		return
 	}
 	route := providerDiscoveryRoute(request, target, access)
+	responsesDiagnostic := newProviderResponsesDiagnostic(request, target, access)
 	if !proxyRequestAllowed(request, target, access) {
+		responsesDiagnostic.policy(false, providerResponsesPolicyFailure(request, target, access))
 		if route != "" {
 			log.Printf(runtimeProxyProviderDiscoveryLog, route, "POLICY", "DENIED", "NONE", "NONE")
 		}
@@ -218,6 +220,9 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 	var tlsFailed atomic.Bool
 	if route != "" {
 		log.Printf(runtimeProxyProviderDiscoveryLog, route, "POLICY", "ALLOWED", "NONE", "NONE")
+	}
+	responsesDiagnostic.policy(true, "NONE")
+	if route != "" || responsesDiagnostic.enabled() {
 		upstream = upstream.WithContext(httptrace.WithClientTrace(upstream.Context(), &httptrace.ClientTrace{
 			TLSHandshakeDone: func(_ tls.ConnectionState, err error) { tlsFailed.Store(err != nil) },
 		}))
@@ -233,6 +238,7 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 	}
 	response, roundTripErr := transport.RoundTrip(upstream)
 	if roundTripErr != nil {
+		responsesDiagnostic.upstream(0, roundTripErr, tlsFailed.Load())
 		if route != "" {
 			log.Printf(runtimeProxyProviderDiscoveryLog, route, "UPSTREAM", "FAILED", "NONE", providerDiscoveryFailure(roundTripErr, tlsFailed.Load()))
 		}
@@ -241,18 +247,23 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		server.metrics.Connection("failed", "proxy", "upstream")
 		return
 	}
+	responsesDiagnostic.upstream(response.StatusCode, nil, false)
 	if route != "" {
 		log.Printf(runtimeProxyProviderDiscoveryLog, route, "UPSTREAM", "RESPONSE", providerDiscoveryStatusClass(response.StatusCode), "NONE")
 	}
 	if response.StatusCode == http.StatusSwitchingProtocols {
 		if !websocket || !validWebSocketResponse(response, request) {
+			responsesDiagnostic.upgrade("REJECTED", response.StatusCode)
 			_ = response.Body.Close()
 			writeProxyError(connection, http.StatusBadGateway, limits)
 			server.metrics.Connection("rejected", "proxy", "policy")
 			return
 		}
-		server.forwardWebSocket(connection, requests, response, limits)
+		server.forwardWebSocket(connection, requests, response, limits, responsesDiagnostic)
 		return
+	}
+	if websocket {
+		responsesDiagnostic.upgrade("REJECTED", response.StatusCode)
 	}
 	stripHopByHop(response.Header)
 	// Downstream TLS допускает только HTTP/1.1, независимо от upstream ALPN.
@@ -276,6 +287,7 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		writeErr = response.Write(connection)
 	}
 	if writeErr != nil {
+		responsesDiagnostic.body(response.StatusCode, writeErr)
 		if capture != nil {
 			capture.clear()
 		}
@@ -298,6 +310,7 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		capture.clear()
 	}
 	_ = response.Body.Close()
+	responsesDiagnostic.body(response.StatusCode, nil)
 	if route != "" {
 		log.Printf(runtimeProxyProviderDiscoveryLog, route, "UPSTREAM_BODY", "COMPLETED", providerDiscoveryStatusClass(response.StatusCode), "NONE")
 	}

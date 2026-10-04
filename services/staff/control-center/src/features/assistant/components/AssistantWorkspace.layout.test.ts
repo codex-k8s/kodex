@@ -45,6 +45,18 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("не дублирует exact активный transcript нижним working fallback", () => {
+    expect(template).toContain(
+      'v-if="showWorkingFallback && !store.loading && !store.problem"',
+    );
+    expect(source).toContain("assistantTranscriptReplacesWorkingFallback(");
+    expect(source).toContain(
+      "store.selectedConversation?.turns.at(-1)?.runRef",
+    );
+    expect(template).toContain(
+      "'assistant-composer__field--active': awaitingReply",
+    );
+  });
   it("объединяет owner-checked историю run в чат без отдельного cache и отпускает scoped subscriptions", () => {
     expect(source).toContain("Object.values(platform.events[runRef] ?? {})");
     expect(source).toContain("await platform.loadRun(runRef)");

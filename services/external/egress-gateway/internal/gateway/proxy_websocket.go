@@ -53,7 +53,7 @@ func validWebSocketResponse(response *http.Response, request *http.Request) bool
 
 // Upgraded stream имеет прежние CONNECT/host/SNI/CA проверки. Закрывается при
 // idle, остановке listener либо EOF любого направления; обе pump всегда joined.
-func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, response *http.Response, limits policy.Limits) {
+func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, response *http.Response, limits policy.Limits, diagnostic providerResponsesDiagnostic) {
 	upstream := response.Body.(io.ReadWriteCloser)
 	defer upstream.Close()
 	response.Body = nil
@@ -61,15 +61,20 @@ func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, re
 	response.Header.Del("Proxy-Authorization")
 	response.Header.Del("Proxy-Authenticate")
 	if client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))) != nil || response.Write(client) != nil {
+		diagnostic.upgrade("WRITE_FAILED", response.StatusCode)
 		return
 	}
+	diagnostic.upgrade("ACCEPTED", response.StatusCode)
 	_ = client.SetDeadline(time.Time{})
 	activity := make(chan struct{}, 1)
-	results := make(chan error, 2)
+	results := make(chan string, 2)
 	var closeOnce sync.Once
-	closeBoth := func() { closeOnce.Do(func() { _ = client.Close(); _ = upstream.Close() }) }
-	defer closeBoth()
-	pump := func(destination io.Writer, source io.Reader) {
+	reason := "UNKNOWN"
+	closeBoth := func(cause string) {
+		closeOnce.Do(func() { reason = cause; _ = client.Close(); _ = upstream.Close() })
+	}
+	defer closeBoth("UNKNOWN")
+	pump := func(destination io.Writer, source io.Reader, fromClient bool) {
 		buffer := make([]byte, 32<<10)
 		for {
 			n, err := source.Read(buffer)
@@ -78,39 +83,42 @@ func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, re
 				case activity <- struct{}{}:
 				default:
 				}
-				writeTimer := time.AfterFunc(duration(limits.WriteTimeoutMilliseconds), closeBoth)
+				writeTimer := time.AfterFunc(duration(limits.WriteTimeoutMilliseconds), func() { closeBoth("WRITE_FAILED") })
 				written, writeErr := destination.Write(buffer[:n])
 				writeTimer.Stop()
 				if writeErr != nil || written != n {
-					results <- io.ErrShortWrite
+					results <- "WRITE_FAILED"
 					return
 				}
 			}
 			if err != nil {
-				results <- err
+				results <- providerWebSocketReadFailure(err, fromClient)
 				return
 			}
 		}
 	}
-	go pump(upstream, reader)
-	go pump(client, upstream)
+	go pump(upstream, reader, true)
+	go pump(client, upstream, false)
 	timer := time.NewTimer(duration(limits.IdleTimeoutMilliseconds))
 	defer timer.Stop()
 	completed := 0
 	shutdown := server.context.Done()
 	for completed < 2 {
 		select {
-		case <-results:
+		case result := <-results:
 			completed++
-			closeBoth()
+			closeBoth(result)
 		case <-activity:
 			timer.Reset(duration(limits.IdleTimeoutMilliseconds))
 		case <-timer.C:
-			closeBoth()
+			closeBoth("IDLE")
 		case <-shutdown:
-			closeBoth()
+			closeBoth("SHUTDOWN")
 			shutdown = nil
 		}
 	}
+	// closeOnce сохраняет причину победившего закрытия, а join синхронизирует
+	// чтение: вторичный IO после closeBoth не подменяет write timeout.
+	diagnostic.pump(reason)
 	server.metrics.Connection("completed", "proxy", "none")
 }

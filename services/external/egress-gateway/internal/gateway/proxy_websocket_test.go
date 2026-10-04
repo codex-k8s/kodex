@@ -70,6 +70,7 @@ func TestProviderWebSocketRejectsUserWebUpgradeAndInvalidResponses(t *testing.T)
 func TestProviderWebSocketPumpClosesAndJoinsEveryBoundary(t *testing.T) {
 	for _, boundary := range []string{"idle", "shutdown", "clientEOF", "upstreamEOF", "blockedWrite"} {
 		t.Run(boundary, func(t *testing.T) {
+			logs := captureProviderResponsesLogs(t)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			client, consumer := net.Pipe()
@@ -84,7 +85,7 @@ func TestProviderWebSocketPumpClosesAndJoinsEveryBoundary(t *testing.T) {
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				server.forwardWebSocket(client, bufio.NewReader(client), syntheticUpgradeResponse(upstream), limits)
+				server.forwardWebSocket(client, bufio.NewReader(client), syntheticUpgradeResponse(upstream), limits, providerResponsesDiagnostic{mode: "WSS"})
 			}()
 			_ = consumer.SetReadDeadline(time.Now().Add(time.Second))
 			response, err := http.ReadResponse(bufio.NewReader(consumer), nil)
@@ -120,6 +121,8 @@ func TestProviderWebSocketPumpClosesAndJoinsEveryBoundary(t *testing.T) {
 			if _, err := producer.Read(make([]byte, 1)); err == nil {
 				t.Fatal("upstream survived terminal stream boundary")
 			}
+			want := map[string]string{"idle": "IDLE", "shutdown": "SHUTDOWN", "clientEOF": "CLIENT_EOF", "upstreamEOF": "UPSTREAM_EOF", "blockedWrite": "WRITE_FAILED"}[boundary]
+			assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPGRADE outcome=ACCEPTED", "event=PUMP outcome=CLOSED status_class=1XX http_status=101 failure="+want)
 		})
 	}
 }

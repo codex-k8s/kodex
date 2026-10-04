@@ -420,6 +420,87 @@ export function assistantTerminalTranscriptScopes(
   return [...new Set(keys)];
 }
 
+// Fallback нужен лишь до первого exact рабочего события последнего хода.
+// Событие другого параллельного run или UNSCOPED история его не заменяет.
+export function assistantTranscriptReplacesWorkingFallback(
+  conversation: AssistantConversation | undefined,
+  organizationRef: string | undefined,
+  run: Run | undefined,
+  nodes: readonly RunNode[],
+  events: readonly RunEvent[],
+): boolean {
+  const latest = conversation?.turns.at(-1);
+  if (
+    !conversation ||
+    !organizationRef ||
+    !run ||
+    !latest ||
+    latest.role === "SYSTEM_RECEIPT" ||
+    latest.runRef !== run.ref ||
+    !Number.isSafeInteger(latest.runVersion) ||
+    (latest.runVersion ?? 0) < run.version ||
+    run.source !== "SYSTEM_ASSISTANT" ||
+    run.target.type !== "SYSTEM_ASSISTANT"
+  )
+    return false;
+  try {
+    assertRunOwner(run, organizationRef);
+  } catch {
+    return false;
+  }
+  const pin = run.assistantPin;
+  if (
+    !pin ||
+    pin.conversationRef !== conversation.ref ||
+    pin.scope !== conversation.assistantScope ||
+    pin.assistantRef !== conversation.assistantRef ||
+    pin.projectRef !== conversation.projectRef ||
+    pin.profileRef !== conversation.assistantProfileRef
+  )
+    return false;
+  const anchors = conversation.turns.filter(
+    (turn) => turn.role === "USER" && turn.runRef === run.ref,
+  );
+  const anchor = anchors.length === 1 ? anchors[0] : undefined;
+  if (!anchor) return false;
+  const bound = events.filter((event) => {
+    const execution = event.execution;
+    if (
+      !executionKey(execution) ||
+      !execution ||
+      event.runRef !== run.ref ||
+      execution.runRef !== run.ref ||
+      execution.sessionRef !== run.sessionRef ||
+      execution.turnRef !== anchor.ref ||
+      execution.turnNumber !== anchor.sequence ||
+      execution.attempt !== run.attempt
+    )
+      return false;
+    return nodes.some(
+      (node) =>
+        node.ref === execution.nodeRef &&
+        node.runRef === run.ref &&
+        node.type === "AGENT_EXECUTION" &&
+        node.turnRef === anchor.ref &&
+        node.attempt === run.attempt &&
+        (node.agentRef === undefined || node.agentRef === pin.assistantRef),
+    );
+  });
+  const closed = assistantTerminalTranscriptScopes(
+    conversation,
+    organizationRef,
+    run,
+    nodes,
+    bound,
+  );
+  const items = buildRunTranscriptItems(bound);
+  return (
+    closed.length > 0 ||
+    activeTranscriptItemId(items, closed) !== null ||
+    items.some((item) => item.phase === "FINAL")
+  );
+}
+
 export function presentRunTranscriptItems(
   items: readonly RunActivityItem[],
   activeItemId: string | null = activeTranscriptItemId(items),

@@ -595,3 +595,41 @@ vet/format/diffcheck PASS. Живой повтор нового runner пока 
 overflow; terminal события догнали receipts, fallback-карточки исчезли.
 Chrome Console без ошибок; проверенные session/bootstrap/history/run запросы
 200. Скрин `/tmp/kodex-chat-no-service-binding-banner.png` просмотрен.
+
+04.10.2026 10:54–11:04 UTC, checkpoint
+`09c0f0b8b3a12ef076233f95cdb430e7bea9ef80`:
+PASS — clean runner build: image
+`sha256:c61e7f71db258f920fd72473d54c82897c483341de788ce706a36acc8477d982`,
+binary SHA256 `298045dbde73ce0c5b1f39cac91b22fb5f4c5e287837e9c416e4a1b43ed95546`,
+provenance SHA256 `13602b11917bce86c5089ba48f660a994ca89dda39b5adce7016120db5c64c93`.
+PASS — clean render, authority revision 1, fingerprint
+`3f1f84b6a5b479b4382abf58c10d721e127d54aa17871f3c468c69d32693a1b2`;
+selected core и supply-chain activation exit=0. Все три warm imageID и
+реальный Pod `runtime-turn-d3a29e967a34f9c1` совпадают с c61e7f.
+FAIL — четырнадцатый реальный ход `run_qtVCHu3gsVAxd9VuwkHUi99r`:
+11:03:03 UTC safe terminal FailureCode=provider_other_error. Ошибка разбора
+error notification не повторилась; кодек дошёл до валидного failed terminal.
+Account/read ALLOWED/2XX/COMPLETED/SCHEMA_OK_LIST; inference не PASS.
+Aggregate proxy counters содержат policy rejection и IO failures, но без
+exact model-route диагностики их нельзя отнести к этому ходу. Истинная причина
+provider error остаётся UNKNOWN; правила доступа не расширены наугад.
+FAIL — screenshot `/tmp/kodex-chat-compact-live-09c0f0b8.png` показал второй
+fallback «Kodex работает» под exact активным компактным сообщением. Исправление
+guard в работе; composer/Stop не должны потерять прежний awaitingReply.
+Во время hot reload был временный 504 загрузки; после hard reload Console
+без ошибок. Скрин промежуточного HMR reset не объявляется terminal UX PASS.
+
+04.10.2026 11:08 UTC, дерево после `09c0f0b8`:
+PASS — duplicate fallback guard: один exact активный transcript заменяет
+нижний индикатор, но не состояние composer/Stop. Foreign/unsigned/stale/
+parallel/UNSCOPED activity не скрывает fallback. FAIL→PASS layout regression;
+127 адресных frontend unit (2.12 s), typecheck/lint/format/diffcheck и build
+(7.32 s, прежнее предупреждение bundle) PASS.
+PASS — закрытая RESPONSES диагностика: HTTP/WSS policy reason, whitelist HTTP
+status, upgrade/body/pump outcome; никакие URL/headers/body/raw errors не
+пишутся. Policy/таймеры/framing/close+join сохранены. Full gateway unit на
+интегрированном дереве PASS (gateway 0.396 s); detached exact delta race ×3
+(6.613 s), vet/format/diffcheck PASS. Host/Pod helper SHA256 совпадают:
+`72b4fd09bcd760e02d80fe8dd7ef64eb0df171fdd89c2887902a8bb7d7dbdc34`.
+Gateway hot process стартовал после добавления helper; новая реальная
+диагностика и отсутствие двойного индикатора на активном ходе пока NOT RUN.
