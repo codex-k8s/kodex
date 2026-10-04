@@ -366,6 +366,12 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 		// геометрию путей для snapshot и restore.
 		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/workspace/.kodex/state"})
 	}
+	workerUID := int64(10002)
+	if task.Kind == "RESTORE" {
+		// Восстановленный rollout должен принадлежать runner: следующий capture
+		// проверяет его mode/group без CAP_CHOWN и не может менять чужой файл.
+		workerUID = 10001
+	}
 	container := corev1.Container{Name: "worker", Image: controller.config.WorkerImage, Args: []string{"worker"},
 		Env: []corev1.EnvVar{{Name: "DEPLOYMENT_ENVIRONMENT", Value: controller.config.Environment},
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_ENDPOINT", Value: controller.config.ObjectStorageEndpoint},
@@ -375,7 +381,7 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_USE_PATH_STYLE", Value: "true"},
 			{Name: "SESSION_ARCHIVE_WORKER_TIMEOUT", Value: controller.config.WorkerTimeout.String()}},
 		VolumeMounts: mounts, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile,
-		SecurityContext: restricted(10002)}
+		SecurityContext: restricted(workerUID)}
 	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
 		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
 		Spec: batchv1.JobSpec{BackoffLimit: &zero, ActiveDeadlineSeconds: &deadline, TTLSecondsAfterFinished: &ttl,

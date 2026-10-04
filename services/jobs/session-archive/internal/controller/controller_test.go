@@ -178,6 +178,39 @@ func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T)
 	}
 }
 
+func TestWorkerIdentityKeepsRestoredSourceOwnedByRunner(t *testing.T) {
+	t.Parallel()
+	controller, err := New(fake.NewSimpleClientset(), testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		kind string
+		uid  int64
+	}{{"SNAPSHOT", 10002}, {"RESTORE", 10001}, {"DELETE_OBJECT", 10002}, {"DELETE_PVC", 10002}} {
+		t.Run(scenario.kind, func(t *testing.T) {
+			job := controller.job("session-archive-test", model.Task{Kind: scenario.kind, PVCName: "runtime-session-0123456789abcdef"}, "pvc-uid")
+			pod := job.Spec.Template.Spec
+			security := pod.Containers[0].SecurityContext
+			if security == nil || security.RunAsUser == nil || *security.RunAsUser != scenario.uid ||
+				security.RunAsGroup == nil || *security.RunAsGroup != scenario.uid {
+				t.Fatalf("%s worker identity must be UID/GID %d", scenario.kind, scenario.uid)
+			}
+			if security.RunAsNonRoot == nil || !*security.RunAsNonRoot || security.AllowPrivilegeEscalation == nil || *security.AllowPrivilegeEscalation ||
+				security.ReadOnlyRootFilesystem == nil || !*security.ReadOnlyRootFilesystem || security.Privileged != nil && *security.Privileged ||
+				security.Capabilities == nil || len(security.Capabilities.Add) != 0 || len(security.Capabilities.Drop) != 1 || security.Capabilities.Drop[0] != "ALL" {
+				t.Fatal("worker identity change weakened the restricted security context")
+			}
+			if pod.SecurityContext.FSGroup == nil || *pod.SecurityContext.FSGroup != 29000 ||
+				pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken ||
+				len(pod.Containers[0].Command) != 0 || len(pod.Containers[0].Args) != 1 || pod.Containers[0].Args[0] != "worker" ||
+				job.Annotations[sourcePVCUIDAnnotation] != "pvc-uid" {
+				t.Fatal("worker lost its canonical volume, task entrypoint or source PVC binding")
+			}
+		})
+	}
+}
+
 func TestNewRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
 	t.Parallel()
 	config := testConfig()

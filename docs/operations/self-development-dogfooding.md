@@ -1275,3 +1275,21 @@ shape-only диагностикой UNKNOWN; событие названо WORKE
 Последний known worker: one line54, неизвестный prefix; actual cause UNKNOWN.
 Отдельный source defect RESTORE UID10002→runner UID10001 исправляется:
 это не установленная причина текущего SNAPSHOT. Full build ещё NOT RUN.
+
+04.10.2026 17:38 UTC, tree поверх `ea70fa0b34cade9a20700bc1bdc34200f8cce447`:
+FAIL — canonical full runner image собран, но проверка provenance остановила
+импорт с TAR_PATH_INVALID; image manifest6f2462b6e1abda05ec10f9eb2b8dc1907226a503ad532b55bcb801b542a602af.
+Новый digest не активирован; старый runtime pin сохранён. Причина исследуется
+отдельно, проверки traversal/links не ослабляются.
+PASS — RESTORE worker получает server-owned UID/GID10001; SNAPSHOT и
+DELETE сохраняют10002, non-root/ALL-drop/token-off/FSGroup29000 неизменны.
+Root archive .021s/controller .036s и capture .046s unit прошли.
+Detached kernel-fixture воспроизвела EPERM старого foreign-owned rollout и
+подтвердила capture нового: exact SHA/размер/путь, mode0640/group29000.
+Actual restore после нового deploy ещё NOT RUN; текущий SNAPSHOT failure
+этим изменением не объяснён. Protected readback подтверждает новую задачу
+sat_4cd53c8a-50bf-479b-b086-f3e88dead0d1, CLAIMED5/5, SNAPSHOTTING.
+Chrome reload: live attempt0/sequence1165, Console0, relevant bootstrap,
+session/ticket/graphs200; dialog и страница без горизонтального overflow.
+До полного QA параллельно работают три исполнителя: owner MCP health,
+provenance полного OCI и причинная диагностика archive. Checkbox2–15 OPEN.
