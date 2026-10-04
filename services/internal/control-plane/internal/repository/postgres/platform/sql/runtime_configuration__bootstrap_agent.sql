@@ -24,14 +24,14 @@ WITH policy AS (
     INSERT INTO control_plane.agent_config_overlay_versions
         (ref, organization_id, agent_id, version_number, state, content, digest,
          validation_errors, created_by, validated_at, published_at)
-    VALUES (@overlay_ref, @organization_id::uuid, @agent_id::uuid, 1, 'PUBLISHED', '',
-            'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    VALUES (@overlay_ref, @organization_id::uuid, @agent_id::uuid, 1, 'PUBLISHED', @overlay_content,
+            @overlay_digest,
             '[]'::jsonb, @created_by::uuid, clock_timestamp(), clock_timestamp())
     RETURNING id
 ), inserted_environment AS (
     INSERT INTO control_plane.runtime_environment_sets
-        (ref, organization_id, project_id, name, description, created_by)
-    VALUES (@environment_ref, @organization_id::uuid, NULLIF(@project_id, '')::uuid,
+        (ref, organization_id, scope_kind, project_id, name, description, created_by)
+    VALUES (@environment_ref, @organization_id::uuid, CASE WHEN @project_id = '' THEN 'ORGANIZATION' ELSE 'PROJECT' END, NULLIF(@project_id, '')::uuid,
             'i18n:DEFAULT_RUNTIME_ENVIRONMENT', 'i18n:DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION', @created_by::uuid)
     ON CONFLICT ON CONSTRAINT runtime_environment_sets_organization_id_project_id_name_key DO NOTHING
     RETURNING id, ref, current_version_id

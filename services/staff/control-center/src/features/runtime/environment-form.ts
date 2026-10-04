@@ -2,11 +2,12 @@ import type {
   RuntimeEnvironmentInput,
   RuntimeEnvironmentPolicy,
   RuntimeEnvironmentPolicyInput,
-  RuntimeKubernetesAccessKind,
   RuntimeNetworkDestination,
   RuntimeSecretBinding,
   RuntimeSecretDescriptor,
   RuntimeVolumeInput,
+  RuntimeWebAccessMode,
+  RuntimeWebAccessRule,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const variableName = /^[A-Z_][A-Z0-9_]{0,126}$/;
@@ -71,6 +72,28 @@ export const runtimeVolumeBounds = {
 } as const;
 
 export const runtimeEnvironmentCollectionLimit = 128;
+export const runtimeWebAccessModes = [
+  "NONE",
+  "ALLOWLIST_READ_ONLY",
+  "ALLOWLIST_FULL",
+  "FULL_PUBLIC",
+] as const satisfies readonly RuntimeWebAccessMode[];
+export const runtimeWebReadMethods = ["GET", "HEAD", "OPTIONS"] as const;
+export const runtimeWebWriteMethods = [
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+] as const;
+
+export function runtimeWebMethodsForMode(
+  mode: RuntimeWebAccessMode,
+): RuntimeWebAccessRule["httpMethods"] {
+  if (mode === "ALLOWLIST_READ_ONLY") return [...runtimeWebReadMethods];
+  if (mode === "ALLOWLIST_FULL")
+    return [...runtimeWebReadMethods, ...runtimeWebWriteMethods];
+  return [];
+}
 
 export function defaultRuntimeEnvironmentPolicy(): RuntimeEnvironmentPolicyInput {
   return {
@@ -84,6 +107,7 @@ export function defaultRuntimeEnvironmentPolicy(): RuntimeEnvironmentPolicyInput
     },
     volumes: [],
     networkDestinations: [...mandatoryRuntimeNetworkDestinations],
+    webAccess: { mode: "NONE", rules: [] },
     kubernetesAccess: "NONE",
   };
 }
@@ -98,27 +122,20 @@ export function editableRuntimeEnvironmentPolicy(
       kind,
       sizeMib,
     })),
-    networkDestinations: runtimeNetworkDestinations(
-      policy.kubernetesAccess.kind,
-    ),
-    kubernetesAccess: policy.kubernetesAccess.kind,
+    networkDestinations: runtimeNetworkDestinations(),
+    webAccess: {
+      mode: policy.network.webAccess.mode,
+      rules: policy.network.webAccess.rules.map((rule) => ({
+        ...rule,
+        httpMethods: [...rule.httpMethods],
+      })),
+    },
+    kubernetesAccess: "NONE",
   };
 }
 
-export function runtimeNetworkDestinations(
-  access: RuntimeKubernetesAccessKind,
-): RuntimeNetworkDestination[] {
-  return access === "READ_OWN_EXECUTION"
-    ? [...mandatoryRuntimeNetworkDestinations, "KUBERNETES_API"]
-    : [...mandatoryRuntimeNetworkDestinations];
-}
-
-export function setRuntimeKubernetesAccess(
-  policy: RuntimeEnvironmentPolicyInput,
-  access: RuntimeKubernetesAccessKind,
-): void {
-  policy.kubernetesAccess = access;
-  policy.networkDestinations = runtimeNetworkDestinations(access);
+export function runtimeNetworkDestinations(): RuntimeEnvironmentPolicyInput["networkDestinations"] {
+  return [...mandatoryRuntimeNetworkDestinations];
 }
 
 export function emptyRuntimeVolume(): RuntimeVolumeInput {
@@ -253,6 +270,15 @@ export function normalizeRuntimeEnvironmentInput(
         sizeMib: item.sizeMib,
       })),
       networkDestinations: [...input.policy.networkDestinations],
+      webAccess: {
+        mode: input.policy.webAccess.mode,
+        rules: input.policy.webAccess.rules.map((item) => ({
+          domainPattern: item.domainPattern.trim().toLowerCase(),
+          protocol: item.protocol,
+          port: item.port,
+          httpMethods: [...item.httpMethods].sort(),
+        })),
+      },
       kubernetesAccess: input.policy.kubernetesAccess,
     },
   };
@@ -365,11 +391,16 @@ function validateRuntimePolicy(
     );
   }
 
-  const expectedDestinations = runtimeNetworkDestinations(
-    policy.kubernetesAccess,
-  );
+  const requestedAccess: string = policy.kubernetesAccess;
+  if (requestedAccess !== "NONE")
+    problems.push({
+      field: "policy.kubernetesAccess",
+      message: "runtime.errors.kubernetesAccess",
+    });
+  const expectedDestinations = runtimeNetworkDestinations();
   if (
-    policy.networkDestinations.length !== expectedDestinations.length ||
+    (policy.networkDestinations as readonly string[]).length !==
+      expectedDestinations.length ||
     expectedDestinations.some(
       (destination) =>
         policy.networkDestinations.filter((item) => item === destination)
@@ -380,6 +411,96 @@ function validateRuntimePolicy(
       field: "policy.networkDestinations",
       message: "runtime.errors.networkDestinations",
     });
+
+  validateRuntimeWebAccess(
+    policy.webAccess.mode,
+    policy.webAccess.rules,
+    problems,
+  );
+}
+
+function validateRuntimeWebAccess(
+  mode: RuntimeWebAccessMode,
+  rules: readonly RuntimeWebAccessRule[],
+  problems: EnvironmentFormProblem[],
+): void {
+  if (!runtimeWebAccessModes.includes(mode)) {
+    problems.push({
+      field: "policy.webAccess.mode",
+      message: "runtime.errors.webAccessMode",
+    });
+    return;
+  }
+  if (mode === "NONE" || mode === "FULL_PUBLIC") {
+    if (rules.length)
+      problems.push({
+        field: "policy.webAccess.rules",
+        message: "runtime.errors.webAccessRulesForMode",
+      });
+    return;
+  }
+  if (!rules.length || rules.length > 64) {
+    problems.push({
+      field: "policy.webAccess.rules",
+      message: "runtime.errors.webAccessRulesRequired",
+    });
+    return;
+  }
+  const domainPattern =
+    /^(?:\*\*\.|\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+  const seen = new Set<string>();
+  for (const [index, rule] of rules.entries()) {
+    const domain = rule.domainPattern.trim().toLowerCase();
+    const hostname = domain.replace(/^\*\*?\./, "");
+    if (
+      !domainPattern.test(domain) ||
+      domain === "*" ||
+      isIPv4Literal(hostname)
+    )
+      problems.push({
+        field: `policy.webAccess.rules.${String(index)}.domainPattern`,
+        message: "runtime.errors.webAccessDomain",
+      });
+    if (seen.has(domain))
+      problems.push({
+        field: `policy.webAccess.rules.${String(index)}.domainPattern`,
+        message: "runtime.errors.webAccessDuplicateDomain",
+      });
+    seen.add(domain);
+    const allowed = new Set(runtimeWebMethodsForMode(mode));
+    const actual = [...rule.httpMethods].sort();
+    if (
+      !actual.length ||
+      new Set(actual).size !== actual.length ||
+      actual.some((method) => !allowed.has(method))
+    )
+      problems.push({
+        field: `policy.webAccess.rules.${String(index)}.httpMethods`,
+        message: "runtime.errors.webAccessMethods",
+      });
+  }
+}
+
+function isIPv4Literal(value: string): boolean {
+  const parts = value.split(".");
+  return (
+    parts.length === 4 &&
+    parts.every(
+      (part) =>
+        /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255,
+    )
+  );
+}
+
+export function emptyRuntimeWebAccessRule(
+  mode: RuntimeWebAccessMode,
+): RuntimeWebAccessRule {
+  return {
+    domainPattern: "",
+    protocol: "HTTPS",
+    port: 443,
+    httpMethods: runtimeWebMethodsForMode(mode),
+  };
 }
 
 function validateIntegerRange(

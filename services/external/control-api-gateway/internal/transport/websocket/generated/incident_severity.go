@@ -5,8 +5,8 @@ package generated
 type IncidentSeverity string
 
 const (
-	IncidentSeverityInfo IncidentSeverity = "INFO"
-	IncidentSeverityWarning IncidentSeverity = "WARNING"
-	IncidentSeverityError IncidentSeverity = "ERROR"
+	IncidentSeverityInfo     IncidentSeverity = "INFO"
+	IncidentSeverityWarning  IncidentSeverity = "WARNING"
+	IncidentSeverityError    IncidentSeverity = "ERROR"
 	IncidentSeverityCritical IncidentSeverity = "CRITICAL"
 )

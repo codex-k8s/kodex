@@ -22,12 +22,14 @@ const draftSpecBody = `{"name":"TYPE_Черновик","description":"i18n:ис�
 
 type environmentDraftRecorder struct {
 	grpc.ClientConnInterface
-	method   string
-	request  proto.Message
-	failure  error
-	empty    bool
-	bindings []*controlplanev1.RuntimeSecretBinding
-	mutate   func(*controlplanev1.RuntimeEnvironmentDraft)
+	method            string
+	request           proto.Message
+	failure           error
+	empty             bool
+	bindings          []*controlplanev1.RuntimeSecretBinding
+	mutate            func(*controlplanev1.RuntimeEnvironmentDraft)
+	organization      bool
+	mutateEnvironment func(*controlplanev1.RuntimeEnvironmentSet)
 }
 
 func (client *environmentDraftRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
@@ -38,11 +40,15 @@ func (client *environmentDraftRecorder) Invoke(_ context.Context, method string,
 	if client.empty {
 		return nil
 	}
-	draft := &controlplanev1.RuntimeEnvironmentDraft{Ref: "renvd_fixture01", ProjectRef: "prj_fixture01", Version: 4, State: "DRAFT",
+	draft := &controlplanev1.RuntimeEnvironmentDraft{ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", Ref: "renvd_fixture01", ProjectRef: "prj_fixture01", Version: 4, State: "DRAFT",
 		Specification: &controlplanev1.RuntimeEnvironmentDraftSpecification{Name: "TYPE_Черновик", Description: "i18n:исходный текст",
 			Values:         []*controlplanev1.RuntimeEnvironmentValue{{Name: "TEST", Value: "TYPE_не преобразовывать"}},
 			SecretBindings: client.bindings,
 		}}
+	if client.organization {
+		draft.ScopeKind = controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION
+		draft.ProjectRef = ""
+	}
 	if strings.HasSuffix(method, "/ValidateRuntimeEnvironmentDraft") {
 		draft.State, draft.Diagnostics = "INVALID", []string{"ENVIRONMENT_VALIDATION_FAILED"}
 	}
@@ -53,13 +59,20 @@ func (client *environmentDraftRecorder) Invoke(_ context.Context, method string,
 	if create, ok := request.(*controlplanev1.CreateRuntimeEnvironmentDraftRequest); ok {
 		draft.EnvironmentRef, draft.ExpectedEnvironmentVersion = create.GetEnvironmentRef(), create.GetExpectedEnvironmentVersion()
 	}
+	if create, ok := request.(*controlplanev1.CreateOrganizationRuntimeEnvironmentDraftRequest); ok {
+		draft.EnvironmentRef, draft.ExpectedEnvironmentVersion = create.GetEnvironmentRef(), create.GetExpectedEnvironmentVersion()
+	}
 	if strings.HasSuffix(method, "/PublishRuntimeEnvironmentDraft") {
 		draft.State, draft.PublishedEnvironmentRef = "PUBLISHED", "renv_fixture01"
 		draft.ValidationDigest = strings.Repeat("a", 64)
 		plan := revisionImpactFixture()
 		plan.Version, plan.State, plan.PublishedRevisionRef = 2, controlplanev1.RevisionImpactState_REVISION_IMPACT_STATE_APPLIED, "renvv_published01"
 		target.Set(target.Descriptor().Fields().ByName("plan"), protoreflect.ValueOfMessage(plan.ProtoReflect()))
-		target.Set(target.Descriptor().Fields().ByName("environment"), protoreflect.ValueOfMessage((&controlplanev1.RuntimeEnvironmentSet{Ref: draft.PublishedEnvironmentRef, ProjectRef: draft.ProjectRef, Version: 2, CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{Ref: plan.PublishedRevisionRef, Version: 1, Revision: 1, Digest: plan.TargetDigest}}).ProtoReflect()))
+		environment := &controlplanev1.RuntimeEnvironmentSet{ScopeKind: draft.ScopeKind, OrganizationRef: draft.OrganizationRef, Ref: draft.PublishedEnvironmentRef, ProjectRef: draft.ProjectRef, Version: 2, CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{Ref: plan.PublishedRevisionRef, Version: 1, Revision: 1, Digest: plan.TargetDigest}}
+		if client.mutateEnvironment != nil {
+			client.mutateEnvironment(environment)
+		}
+		target.Set(target.Descriptor().Fields().ByName("environment"), protoreflect.ValueOfMessage(environment.ProtoReflect()))
 	}
 	if client.mutate != nil {
 		client.mutate(draft)
@@ -128,7 +141,7 @@ func TestEnvironmentSecretRevisionRejectsInvalidNumbersBeforeRPC(t *testing.T) {
 func TestEnvironmentPublishedSecretDescriptorPreservesPin(t *testing.T) {
 	for _, revision := range []int64{0, -1, 7, maximumSafeJSONInteger, maximumSafeJSONInteger + 1} {
 		client := &catalogRPCRecorder{response: &controlplanev1.GetRuntimeEnvironmentSetResponse{Environment: &controlplanev1.RuntimeEnvironmentSet{
-			Ref: "renv_fixture01", Version: 3, CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{Ref: "renvv_fixture01", SecretDescriptors: []*controlplanev1.RuntimeSecretDescriptor{{
+			ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", ProjectRef: "prj_fixture01", Ref: "renv_fixture01", Version: 3, CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{Ref: "renvv_fixture01", SecretDescriptors: []*controlplanev1.RuntimeSecretDescriptor{{
 				Name: "API_TOKEN", SecretRef: "sec_fixture01", Revision: revision, Namespace: "internal-only-namespace", SecretName: "secret-fixture", SecretKey: "value", SecretUid: "uid-fixture", SecretResourceVersion: "9", ContentSha256: strings.Repeat("a", 64),
 			}}},
 		}}}
@@ -300,6 +313,7 @@ func TestEnvironmentDraftPolicyKeepsTypedResourceAndNetworkSettings(t *testing.T
 			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK,
 			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY,
 		}, KubernetesAccess: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE,
+		WebAccess: &controlplanev1.RuntimeWebAccess{Mode: controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE},
 	}
 	view, ok := environmentDraftPolicyView(input)
 	if !ok || view == nil {
@@ -335,9 +349,15 @@ func TestEnvironmentDraftRejectsUnknownPolicyEnumBeforeRPC(t *testing.T) {
 
 func TestRuntimeEnvironmentReadbackUsesOpenAPIEnums(t *testing.T) {
 	policy := &controlplanev1.RuntimeEnvironmentPolicy{
-		Resources:        &controlplanev1.RuntimeResourcePolicy{},
-		Volumes:          []*controlplanev1.RuntimeVolume{{Name: "scratch", Kind: controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK}},
-		Network:          &controlplanev1.RuntimeNetworkPolicy{Egress: []*controlplanev1.RuntimeNetworkEgress{{Destination: controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS}}},
+		Resources: &controlplanev1.RuntimeResourcePolicy{},
+		Volumes:   []*controlplanev1.RuntimeVolume{{Name: "scratch", Kind: controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK}},
+		Network: &controlplanev1.RuntimeNetworkPolicy{
+			Egress: []*controlplanev1.RuntimeNetworkEgress{{
+				Destination: controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS,
+				Protocol:    controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_TCP,
+			}},
+			WebAccess: &controlplanev1.RuntimeWebAccess{Mode: controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE},
+		},
 		KubernetesAccess: &controlplanev1.RuntimeKubernetesAccessProfile{Kind: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE},
 	}
 	value, err := messageMap(&controlplanev1.GetRuntimeEnvironmentSetResponse{Environment: &controlplanev1.RuntimeEnvironmentSet{CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{Policy: policy}}})
@@ -347,13 +367,17 @@ func TestRuntimeEnvironmentReadbackUsesOpenAPIEnums(t *testing.T) {
 	environment := value["environment"].(map[string]any)
 	version := environment["currentVersion"].(map[string]any)
 	policyView := version["policy"].(map[string]any)
+	network := policyView["network"].(map[string]any)
+	egress := network["egress"].([]any)[0].(map[string]any)
 	if policyView["kubernetesAccess"].(map[string]any)["kind"] != "NONE" ||
 		policyView["volumes"].([]any)[0].(map[string]any)["kind"] != "EPHEMERAL_DISK" ||
-		policyView["network"].(map[string]any)["egress"].([]any)[0].(map[string]any)["destination"] != "DNS" {
+		egress["destination"] != "DNS" ||
+		egress["protocol"] != "TCP" ||
+		network["webAccess"].(map[string]any)["mode"] != "NONE" {
 		t.Fatal("runtime environment enum was not normalized to OpenAPI")
 	}
 	encoded, _ := json.Marshal(value)
-	for _, forbidden := range []string{"RUNTIME_VOLUME_KIND_", "RUNTIME_NETWORK_DESTINATION_", "RUNTIME_KUBERNETES_ACCESS_KIND_"} {
+	for _, forbidden := range []string{"RUNTIME_VOLUME_KIND_", "RUNTIME_NETWORK_DESTINATION_", "RUNTIME_NETWORK_PROTOCOL_", "RUNTIME_WEB_ACCESS_MODE_", "RUNTIME_KUBERNETES_ACCESS_KIND_"} {
 		if strings.Contains(string(encoded), forbidden) {
 			t.Fatalf("Proto enum prefix leaked to HTTP readback: %s", forbidden)
 		}
@@ -368,5 +392,113 @@ func TestEnvironmentDraftMutationRequiresVersionBeforeRPC(t *testing.T) {
 	draftTestHandler(client).ServeHTTP(response, request)
 	if response.Code < 400 || client.request != nil {
 		t.Fatal("unversioned draft mutation reached RPC")
+	}
+}
+
+func TestOrganizationEnvironmentDraftUsesCanonicalOwnerAndSeparateVersionPins(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		client := &environmentDraftRecorder{organization: true}
+		body := `{"specification":` + draftSpecBody + `}`
+		if existing {
+			body = `{"environmentRef":"renv_fixture01","expectedEnvironmentVersion":7,"specification":` + draftSpecBody + `}`
+		}
+		w := httptest.NewRecorder()
+		draftTestHandler(client).ServeHTTP(w, managedTestRequest(http.MethodPost, "/api/v1/organization/runtime-environment-drafts", body))
+		input, ok := client.request.(*controlplanev1.CreateOrganizationRuntimeEnvironmentDraftRequest)
+		if w.Code != http.StatusCreated || !ok || client.method != controlplanev1.PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName || input.Mutation.GetExpectedVersion() != 0 || input.Mutation.IdempotencyKey != "managed-fixture-01" {
+			t.Fatalf("organization draft used another owner/version path: status=%d request=%v body=%s", w.Code, client.request, w.Body.String())
+		}
+		if existing && (input.EnvironmentRef != "renv_fixture01" || input.ExpectedEnvironmentVersion != 7) || !existing && (input.EnvironmentRef != "" || input.ExpectedEnvironmentVersion != 0) {
+			t.Fatal("draft OCC and environment pin were mixed")
+		}
+		if input.Specification.Name != "TYPE_Черновик" || input.Specification.Values[0].Value != "TYPE_не преобразовывать" {
+			t.Fatal("organization draft altered caller specification")
+		}
+		for _, field := range []protoreflect.Name{"project_ref", "organization_ref", "scope_kind", "actor_ref"} {
+			if input.ProtoReflect().Descriptor().Fields().ByName(field) != nil {
+				t.Fatalf("organization authority became payload: %s", field)
+			}
+		}
+		var result generated.RuntimeEnvironmentDraft
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || result.ScopeKind != generated.RuntimeResourceScopeKindORGANIZATION || result.OrganizationRef != "org_fixture01" || result.ProjectRef != "" || w.Header().Get("ETag") != `"4"` || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("organization scope/readback lost: status=%d body=%s", w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestEnvironmentDraftReadbackRejectsUnspecifiedAndMalformedScope(t *testing.T) {
+	for name, mutate := range map[string]func(*controlplanev1.RuntimeEnvironmentDraft){
+		"missing scope":           func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ScopeKind = 0 },
+		"unknown scope":           func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ScopeKind = 99 },
+		"missing organization":    func(d *controlplanev1.RuntimeEnvironmentDraft) { d.OrganizationRef = "" },
+		"project without locator": func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ProjectRef = "" },
+		"org carrying project": func(d *controlplanev1.RuntimeEnvironmentDraft) {
+			d.ScopeKind = controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := &environmentDraftRecorder{mutate: mutate}
+			w := httptest.NewRecorder()
+			draftTestHandler(client).ServeHTTP(w, managedTestRequest(http.MethodGet, "/api/v1/runtime-environment-drafts/renvd_fixture01", ""))
+			if w.Code != http.StatusBadGateway || strings.Contains(w.Body.String(), "renvd_fixture01") {
+				t.Fatalf("malformed scope escaped environment draft readback: %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestOrganizationEnvironmentDraftRejectsProjectAndMalformedOwnerResponse(t *testing.T) {
+	for name, mutate := range map[string]func(*controlplanev1.RuntimeEnvironmentDraft){
+		"missing scope":        func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ScopeKind = 0 },
+		"unknown scope":        func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ScopeKind = 99 },
+		"missing organization": func(d *controlplanev1.RuntimeEnvironmentDraft) { d.OrganizationRef = "" },
+		"org carrying project": func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ProjectRef = "prj_fixture01" },
+		"valid project tuple": func(d *controlplanev1.RuntimeEnvironmentDraft) {
+			d.ScopeKind = controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT
+			d.ProjectRef = "prj_fixture01"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := &environmentDraftRecorder{organization: true, mutate: mutate}
+			w := httptest.NewRecorder()
+			draftTestHandler(client).ServeHTTP(w, managedTestRequest(http.MethodPost, "/api/v1/organization/runtime-environment-drafts", `{"specification":`+draftSpecBody+`}`))
+			if w.Code != http.StatusBadGateway || strings.Contains(w.Body.String(), "renvd_fixture01") {
+				t.Fatalf("organization creation exposed project receipt: %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+	for _, authority := range []string{`"projectRef":"prj_fixture01"`, `"organizationRef":"org_other01"`, `"scopeKind":"PROJECT"`} {
+		client := &environmentDraftRecorder{organization: true}
+		w := httptest.NewRecorder()
+		draftTestHandler(client).ServeHTTP(w, managedTestRequest(http.MethodPost, "/api/v1/organization/runtime-environment-drafts", `{`+authority+`,"specification":`+draftSpecBody+`}`))
+		if w.Code != http.StatusBadRequest || client.request != nil {
+			t.Fatal("caller scope authority reached organization owner")
+		}
+	}
+}
+
+func TestEnvironmentPublicationRejectsCrossOrganizationAndMissingScope(t *testing.T) {
+	for _, organization := range []bool{false, true} {
+		control := &environmentDraftRecorder{organization: organization}
+		positive := httptest.NewRecorder()
+		draftTestHandler(control).ServeHTTP(positive, managedTestRequest(http.MethodPost, "/api/v1/runtime-environment-drafts/renvd_fixture01/publication", revisionImpactPublishBody))
+		if positive.Code != http.StatusOK || !strings.Contains(positive.Body.String(), `"organizationRef":"org_fixture01"`) {
+			t.Fatalf("exact scoped publication must remain usable: status=%d body=%s", positive.Code, positive.Body.String())
+		}
+		for name, mutate := range map[string]func(*controlplanev1.RuntimeEnvironmentSet){
+			"missing scope":        func(e *controlplanev1.RuntimeEnvironmentSet) { e.ScopeKind = 0 },
+			"unknown scope":        func(e *controlplanev1.RuntimeEnvironmentSet) { e.ScopeKind = 99 },
+			"missing organization": func(e *controlplanev1.RuntimeEnvironmentSet) { e.OrganizationRef = "" },
+			"foreign organization": func(e *controlplanev1.RuntimeEnvironmentSet) { e.OrganizationRef = "org_other01" },
+		} {
+			t.Run(map[bool]string{false: "project/", true: "organization/"}[organization]+name, func(t *testing.T) {
+				client := &environmentDraftRecorder{organization: organization, mutateEnvironment: mutate}
+				w := httptest.NewRecorder()
+				draftTestHandler(client).ServeHTTP(w, managedTestRequest(http.MethodPost, "/api/v1/runtime-environment-drafts/renvd_fixture01/publication", revisionImpactPublishBody))
+				if w.Code != http.StatusBadGateway || strings.Contains(w.Body.String(), "renv_fixture01") || strings.Contains(w.Body.String(), "org_other01") {
+					t.Fatalf("environment publication crossed scope/organization: status=%d body=%s", w.Code, w.Body.String())
+				}
+			})
+		}
 	}
 }

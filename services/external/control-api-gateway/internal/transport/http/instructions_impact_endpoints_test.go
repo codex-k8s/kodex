@@ -83,7 +83,7 @@ func TestPromptImpactSupportsUnchangedEntityAndGlobalAgent(t *testing.T) {
 	if !ok {
 		t.Fatal("first prompt publication rejected")
 	}
-	item := &cp.RevisionImpactItem{Ref: "item_fixture01", ConsumerKind: cp.RevisionImpactConsumerKind_REVISION_IMPACT_CONSUMER_KIND_AGENT_CONTINUATION, ConsumerRef: "agt_fixture01", ConsumerVersion: 3, BindingRef: "binding_fixture01", BindingVersion: 2, SourceRevisionRef: "ins_previous01", Outcome: cp.RevisionImpactOutcome_REVISION_IMPACT_OUTCOME_APPLIED, ResultRevisionRef: p.DraftRef, ResultBindingRef: "binding_fixture01", ResultBindingVersion: 3, ResultConsumerVersion: 3}
+	item := &cp.RevisionImpactItem{Ref: "item_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION, OrganizationRef: "org_fixture01", ConsumerKind: cp.RevisionImpactConsumerKind_REVISION_IMPACT_CONSUMER_KIND_AGENT_CONTINUATION, ConsumerRef: "agt_fixture01", ConsumerVersion: 3, BindingRef: "binding_fixture01", BindingVersion: 2, SourceRevisionRef: "ins_previous01", Outcome: cp.RevisionImpactOutcome_REVISION_IMPACT_OUTCOME_APPLIED, ResultRevisionRef: p.DraftRef, ResultBindingRef: "binding_fixture01", ResultBindingVersion: 3, ResultConsumerVersion: 3}
 	if _, ok := revisionImpactItemView(item, plan); !ok {
 		t.Fatal("owner binding-only change rejected")
 	}

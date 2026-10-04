@@ -164,6 +164,12 @@ func (repository *Repository) runtimeEnvironmentRead(
 		_ = tx.Rollback(ctx)
 		return scope, nil, entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
 	}
+	if item.ScopeKind == "ORGANIZATION" {
+		if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, scope, item.ScopeKind, item.ProjectRef); err != nil {
+			_ = tx.Rollback(ctx)
+			return scope, nil, entity.RuntimeEnvironmentSet{}, err
+		}
+	}
 	return scope, tx, item, nil
 }
 
@@ -197,6 +203,12 @@ func (repository *Repository) runtimeEnvironmentActions(
 	current scope,
 	item entity.RuntimeEnvironmentSet,
 ) ([]string, error) {
+	if item.ScopeKind == "ORGANIZATION" {
+		if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, item.ScopeKind, item.ProjectRef); err != nil {
+			return nil, err
+		}
+		return runtimeEnvironmentActions(item, true, false, false), nil
+	}
 	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
 	if err != nil {
 		return nil, err
@@ -226,16 +238,17 @@ func (repository *Repository) runtimeEnvironmentActions(
 }
 
 func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error) {
-	scope, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, "", err
-	}
 	before, err := versionCursor(filter.Page.Token)
 	if err != nil || filter.ResourceRef == "" {
 		return nil, "", errs.ErrInvalid
 	}
+	scope, tx, _, err := repository.runtimeEnvironmentRead(ctx, principal, filter.ResourceRef)
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	limit := boundedPage(filter.Page)
-	rows, err := repository.pool.Query(ctx, queryRuntimeConfigurationListEnvironmentVersions, pgx.StrictNamedArgs{
+	rows, err := tx.Query(ctx, queryRuntimeConfigurationListEnvironmentVersions, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "environment_ref": filter.ResourceRef, "before_version": before,
 		"platform_role": scope.role, "actor_id": scope.actorID, "page_size": limit + 1,
 	})
@@ -254,10 +267,14 @@ func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context
 	if rows.Err() != nil {
 		return nil, "", errs.ErrUnavailable
 	}
+	rows.Close()
 	next := ""
 	if len(items) > int(limit) {
 		items = items[:limit]
 		next = strconv.FormatInt(items[len(items)-1].Version, 10)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, "", errs.ErrUnavailable
 	}
 	return items, next, nil
 }
@@ -468,7 +485,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&view.Environment.CurrentVersion.Policy.ResourcesDigest, &view.Environment.CurrentVersion.Policy.VolumesDigest,
 		&view.Environment.CurrentVersion.Policy.NetworkDigest, &view.Environment.CurrentVersion.Policy.RBACDigest,
-		&view.Environment.CurrentVersion.Digest, &view.Environment.CurrentVersion.CreatedAt, &view.AgentVersion)
+		&view.Environment.CurrentVersion.Digest, &view.Environment.CurrentVersion.CreatedAt, &view.AgentVersion, &view.Environment.ScopeKind, &view.Environment.OrganizationRef)
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
@@ -491,7 +508,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
 	values, secrets := runtimeEnvironmentContract(view.Environment.CurrentVersion)
-	if view.Environment.CurrentVersion.Image.ArtifactRef != "" {
+	if view.Environment.CurrentVersion.Image.Reference != "" {
 		storedCore, storedDigest, digestErr := runtimeEnvironmentConfigurationDigests(values, secrets,
 			view.Environment.CurrentVersion.Image, view.Environment.CurrentVersion.Tools, view.Environment.CurrentVersion.Policy)
 		if digestErr != nil || storedCore != coreDigest || storedDigest != view.Environment.CurrentVersion.Digest {
@@ -545,7 +562,7 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 		&coreDigest, &rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&item.CurrentVersion.Policy.ResourcesDigest, &item.CurrentVersion.Policy.VolumesDigest,
 		&item.CurrentVersion.Policy.NetworkDigest, &item.CurrentVersion.Policy.RBACDigest,
-		&item.CurrentVersion.Digest, &item.CurrentVersion.CreatedAt)
+		&item.CurrentVersion.Digest, &item.CurrentVersion.CreatedAt, &item.ScopeKind, &item.OrganizationRef)
 	if err != nil {
 		return entity.RuntimeEnvironmentSet{}, err
 	}

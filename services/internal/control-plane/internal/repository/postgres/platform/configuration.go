@@ -933,6 +933,8 @@ func (repository *Repository) changeAssistant(ctx context.Context, tx pgx.Tx, sc
 		return repository.moveAssistantConversationToProject(ctx, tx, scope, input)
 	case command.AddAssistantTurn:
 		return repository.addAssistantTurnCommand(ctx, tx, scope, input)
+	case command.CancelAssistantTurn:
+		return repository.cancelAssistantTurnCommand(ctx, tx, scope, input)
 	case command.UpdateAssistantPlan:
 		return repository.updateAssistantPlanDraft(ctx, tx, scope, input)
 	case command.ValidateAssistantPlan:
@@ -966,7 +968,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 		projectID = nil
 	}
 	sessionRef, _ := newRef("ses")
-	assistant, err := repository.getAssistantTx(ctx, tx, scope)
+	assistant, err := repository.assistantForConversationCreation(ctx, tx, scope, payload)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -975,7 +977,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 		return commandOutcome{}, err
 	}
 	var sessionID string
-	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversationInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, providerAccountID, scope.actorID).Scan(&sessionID); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversationInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, providerAccountID, scope.actorID, assistant.Ref).Scan(&sessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if err := bindSessionModelCatalog(ctx, tx, scope.organizationID, sessionID, assistant.Ref); err != nil {
@@ -986,17 +988,22 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.expandAssistantContext(ctx, tx, scope, assistant, payload.ProjectRef, &resolvedContext); err != nil {
+		return commandOutcome{}, err
+	}
 	var item entity.AssistantConversation
 	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversationInsertAssistantConversationsRefProjectIdTitle,
 		ref, scope.organizationID, projectID, sessionID, scope.actorID,
 		resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
 		resolvedContext.EntityName, resolvedContext.EntityVersion, resolvedContext.AllowedOperations,
+		assistant.Scope, assistant.ID, assistant.ProfileRef,
 	).Scan(&item.Ref, &item.Title, &item.TitleSource, &item.TitleRevision, &item.State, &item.Version, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item.ProjectRef = payload.ProjectRef
 	item.SessionRef = sessionRef
 	item.Context = resolvedContext
+	assistant.projectConversation(&item)
 	return commandOutcome{result: command.Result{Conversation: &item}, projectID: stringValue(projectID), projectRef: payload.ProjectRef, resourceKind: "ASSISTANT_CONVERSATION", resourceRef: ref, summary: "i18n:ASSISTANT_CONVERSATION_CREATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
@@ -1030,13 +1037,33 @@ func (repository *Repository) resolveAssistantContext(ctx context.Context, tx pg
 }
 
 func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	return repository.addAssistantTurnWithAttachmentPolicy(ctx, tx, scope, input, false)
+}
+
+func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantTurnInput)
-	if !ok || payload.ConversationRef == "" || strings.TrimSpace(payload.Content) == "" {
+	if !ok || payload.ConversationRef == "" || strings.TrimSpace(payload.Content) == "" ||
+		!contains([]string{"QUEUE", "INTERRUPT_ACTIVE"}, payload.DeliveryMode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	var runtimeReady bool
-	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&runtimeReady); err != nil || !runtimeReady {
-		return commandOutcome{}, fmt.Errorf("read system assistant runtime readiness: %w", errs.ErrUnavailable)
+	identity, err := repository.conversationAssistantTx(ctx, tx, scope, payload.ConversationRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	candidate, err := repository.assistantForConversationCreation(ctx, tx, scope, command.AssistantConversationInput{
+		AssistantScope: identity.Scope, ProjectRef: identity.ProjectRef,
+	})
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if candidate.ID != identity.ID {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if identity.Scope == "SYSTEM" {
+		var runtimeReady bool
+		if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&runtimeReady); err != nil || !runtimeReady {
+			return commandOutcome{}, fmt.Errorf("read system assistant runtime readiness: %w", errs.ErrUnavailable)
+		}
 	}
 	var conversationID, sessionID, sessionRef string
 	var projectID, projectRef string
@@ -1051,11 +1078,14 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if input.Mutation.ExpectedVersion != nil && *input.Mutation.ExpectedVersion != version {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
-	assistant, err := repository.getAssistantTx(ctx, tx, scope)
-	if err != nil {
-		return commandOutcome{}, err
+	dispatchPriority := int16(0)
+	if payload.DeliveryMode == "INTERRUPT_ACTIVE" {
+		dispatchPriority = 1
+		if _, _, err := repository.cancelActiveAssistantRun(ctx, tx, scope, payload.ConversationRef, "Superseded by an immediate system assistant turn"); err != nil {
+			return commandOutcome{}, fmt.Errorf("interrupt active system assistant run: %w", err)
+		}
 	}
-	if err := validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, assistant.Ref); err != nil {
+	if err := validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, identity.Ref); err != nil {
 		return commandOutcome{}, err
 	}
 	requestedContext := storedContext
@@ -1066,8 +1096,11 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.expandAssistantContext(ctx, tx, scope, identity, projectRef, &resolvedContext); err != nil {
+		return commandOutcome{}, err
+	}
 	turnRef, _ := newRef("trn")
-	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "ASSISTANT_MESSAGE", false)
+	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "ASSISTANT_MESSAGE", reuseAttachmentSnapshot)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -1080,6 +1113,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertRunsRefProjectIdTargetType,
 		runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID,
 		resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
+		dispatchPriority, identity.Ref,
 	).Scan(&runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert system assistant run: %w", errs.ErrUnavailable)
 	}
@@ -1102,17 +1136,19 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		return commandOutcome{}, fmt.Errorf("advance system assistant session: %w", errs.ErrUnavailable)
 	}
 	nodeRef, _ := newRef("nod")
-	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertRunNodesRefRootRunIdType, nodeRef, scope.organizationID, runID, turnID, truncate(payload.Content, 1000)); err != nil {
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertRunNodesRefRootRunIdType, nodeRef, scope.organizationID, runID, turnID, truncate(payload.Content, 1000), identity.ID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert system assistant execution node: %w", errs.ErrUnavailable)
 	}
 	conversation := entity.AssistantConversation{
 		Ref: payload.ConversationRef, ProjectRef: projectRef, SessionRef: sessionRef,
 	}
+	identity.projectConversation(&conversation)
 	if err := tx.QueryRow(
 		ctx,
 		queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt,
 		conversationID, resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
 		resolvedContext.EntityName, resolvedContext.EntityVersion, resolvedContext.AllowedOperations,
+		payload.Content,
 	).Scan(
 		&conversation.Title,
 		&conversation.TitleSource,
@@ -1133,12 +1169,64 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "i18n:ASSISTANT_TURN_QUEUED", "RUNNING", "QUEUED"); err != nil {
 		return commandOutcome{}, err
 	}
-	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "COMPLETED", CreatedAt: time.Now().UTC()}}
-	assistant, err = repository.getAssistantTx(ctx, tx, scope)
+	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "QUEUED", RunRef: runRef, RunVersion: 1, CreatedAt: time.Now().UTC()}}
+	result := command.Result{Conversation: &conversation}
+	if identity.Scope == "SYSTEM" {
+		assistant, err := repository.getAssistantTx(ctx, tx, scope)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		result.Assistant = &assistant
+	}
+	return commandOutcome{result: result, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+}
+
+func (repository *Repository) cancelAssistantTurnCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.AssistantTurnCancellationInput)
+	if !ok || payload.ConversationRef == "" || input.Mutation.ExpectedVersion == nil {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	var conversationID, sessionID, sessionRef, projectID, projectRef string
+	var version int64
+	var context entity.AssistantContextDescriptor
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantConversationsOrganizationIdRefState, scope.organizationID, payload.ConversationRef).Scan(
+		&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &version,
+		&context.Route, &context.EntityKind, &context.EntityRef,
+	); err != nil {
+		return commandOutcome{}, fmt.Errorf("lock system assistant conversation: %w", errs.ErrNotFound)
+	}
+	if version != *input.Mutation.ExpectedVersion {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	runRef, cancelled, err := repository.cancelActiveAssistantRun(ctx, tx, scope, payload.ConversationRef, "Cancelled by the owner")
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Conversation: &conversation, Assistant: &assistant}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	result := command.Result{Runtime: map[string]any{"conversationRef": payload.ConversationRef, "runRef": runRef, "cancelled": cancelled}}
+	outcome := commandOutcome{result: result, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: payload.ConversationRef, summary: "i18n:ASSISTANT_TURN_CANCELLED"}
+	if cancelled {
+		outcome.platformEvent = "SYSTEM_ASSISTANT_CHANGED"
+	}
+	return outcome, nil
+}
+
+func (repository *Repository) cancelActiveAssistantRun(ctx context.Context, tx pgx.Tx, scope scope, conversationRef, reason string) (string, bool, error) {
+	var runRef string
+	var runVersion int64
+	err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectActiveRun, scope.organizationID, conversationRef).Scan(&runRef, &runVersion)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("resolve active system assistant run: %w", errs.ErrUnavailable)
+	}
+	if _, err := repository.changeRun(ctx, tx, scope, command.Command{
+		Kind: command.CancelRun, Mutation: value.Mutation{ExpectedVersion: &runVersion},
+		Payload: command.RunCommandInput{RunRef: runRef, Reason: reason},
+	}); err != nil {
+		return "", false, err
+	}
+	return runRef, true, nil
 }
 
 func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -1166,6 +1254,9 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.constrainAssistantPlanScope(ctx, tx, &scope, conversationRef, operations); err != nil {
+		return commandOutcome{}, err
+	}
 	effectTx, err := tx.Begin(ctx)
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -1178,6 +1269,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	created := []string{}
 	operationReceipts := []entity.AssistantPlanOperationReceipt{}
 	appliedAgentVersions := map[string]int64{}
+	appliedBindingPins := map[string]map[string]any{}
 	var projectID, projectRef string
 	for _, operation := range operations {
 		if !operation.Selected {
@@ -1186,6 +1278,9 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		agentVersionKey := assistantPlanAgentVersionKey(operation)
 		if version, carried := appliedAgentVersions[agentVersionKey]; carried {
 			operation = rebaseAssistantPlanAgentVersion(operation, version)
+		}
+		if pins, carried := appliedBindingPins[agentVersionKey]; carried && assistantProjectConfigurationOperation(operation) {
+			operation = carryAssistantPlanBindingPins(operation, pins)
 		}
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
@@ -1212,6 +1307,18 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			return commandOutcome{}, err
 		}
 		var outcome commandOutcome
+		if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
+			matching, matchErr := repository.systemAssistantImageSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+			matching, matchErr := repository.assistantRuntimeConfigurationSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if operation.Type == "UPDATE_WORKFLOW" {
 			var matching bool
 			matching, err = repository.assistantWorkflowUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
@@ -1233,8 +1340,19 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				err = errs.ErrConflict
 			}
 		}
+		if operation.Type == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+			var matching bool
+			matching, err = repository.assistantSystemInstructionsSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
-			err = repository.lockAssistantBindingEnvironment(ctx, operationEffectsTx, scope, conversationProjectRef,
+			bindingProjectRef := conversationProjectRef
+			if assistantProjectConfigurationOperation(operation) {
+				bindingProjectRef = assistantString(operation.Parameters, "projectRef")
+			}
+			err = repository.lockAssistantBindingEnvironment(ctx, operationEffectsTx, scope, bindingProjectRef,
 				assistantString(operation.Parameters, "environmentRef"))
 			if err == nil {
 				var matching bool
@@ -1305,10 +1423,16 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		if agentVersionKey != "" && outcome.result.Agent != nil && outcome.result.Agent.Ref == agentVersionKey && outcome.result.Agent.Version > 0 {
 			appliedAgentVersions[agentVersionKey] = outcome.result.Agent.Version
 		}
+		if view := outcome.result.RuntimeConfiguration; agentVersionKey != "" && view != nil && view.Configuration.AgentRef == agentVersionKey && view.AgentVersion > 0 {
+			appliedAgentVersions[agentVersionKey] = view.AgentVersion
+			if planned.Kind == command.BindAgentRuntimeEnvironment {
+				appliedBindingPins[agentVersionKey] = map[string]any{"runtimeEnvironmentBindingRef": view.EnvironmentBinding.Ref, "runtimeEnvironmentVersionRef": view.EnvironmentBinding.VersionRef, "runtimeEnvironmentDigest": view.Environment.CurrentVersion.Digest}
+			}
+		}
 		if outcome.projectID != "" {
 			projectID, projectRef = outcome.projectID, outcome.projectRef
 		}
-		auditRef, err := repository.auditAssistantOperation(ctx, operationEffectsTx, scope, outcome, operation.Type)
+		auditRef, err := repository.auditAssistantOperation(ctx, operationEffectsTx, scope, conversationRef, outcome, operation.Type)
 		if err != nil {
 			_ = operationEffectsTx.Rollback(ctx)
 			_ = effectTx.Rollback(ctx)
@@ -1328,11 +1452,13 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		_ = effectTx.Rollback(ctx)
 		return commandOutcome{}, fmt.Errorf("commit assistant plan operation effects: %w", errs.ErrConflict)
 	}
+	responseConversationProjectRef := conversationProjectRef
 	if conversationProjectRef == "" && assistantPlanCreatesSingleProject(operations) && projectID != "" && projectRef != "" {
 		if err := repository.promoteAssistantConversationProject(ctx, effectTx, scope, conversationRef, projectID, projectRef); err != nil {
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
+		responseConversationProjectRef = projectRef
 	}
 	if _, err := effectTx.Exec(ctx, queryConfigurationApplyassistantplancommandUpdateAssistantPlansStateVersionAppliedAt, planID); err != nil {
 		_ = effectTx.Rollback(ctx)
@@ -1350,8 +1476,8 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	plan := entity.AssistantPlan{Ref: payload.PlanRef, ConversationRef: conversationRef, ProjectRef: conversationProjectRef,
 		Summary: summary, State: "APPLIED", Version: version + 1, Revision: revision, ValidatedRevision: validatedRevision,
 		ContentDigest: digest, Operations: operations, AppliedAt: timePointer(time.Now().UTC())}
-	conversation := entity.AssistantConversation{Ref: conversationRef, ProjectRef: projectRef}
-	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt, CreatedRefs: created}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_APPLIED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	conversation := entity.AssistantConversation{Ref: conversationRef, ProjectRef: responseConversationProjectRef}
+	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt, CreatedRefs: created}, projectID: mustProjectID(ctx, tx, scope.organizationID, responseConversationProjectRef), projectRef: responseConversationProjectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_APPLIED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
 func assistantPlanCreatesSingleProject(operations []entity.AssistantPlanOperation) bool {
@@ -1411,12 +1537,12 @@ func assistantOperationConflict(operation entity.AssistantPlanOperation) (entity
 		Field: "version", Expected: valueOrNil(operation.ExpectedVersion), Actual: "CHANGED"}, "operation-version-conflict"
 }
 
-func (repository *Repository) auditAssistantOperation(ctx context.Context, tx pgx.Tx, scope scope, outcome commandOutcome, action string) (string, error) {
+func (repository *Repository) auditAssistantOperation(ctx context.Context, tx pgx.Tx, scope scope, conversationRef string, outcome commandOutcome, action string) (string, error) {
 	ref, err := newRef("aud")
 	if err != nil {
 		return "", err
 	}
-	tag, err := tx.Exec(ctx, queryConfigurationAuditassistantoperationInsertAuditEventsRefProjectIdAssistantAgentId, ref, scope.organizationID, nullUUID(outcome.projectID), scope.actorID, "system_assistant."+strings.ToLower(action), outcome.resourceKind, outcome.resourceRef, outcome.summary, "assistant-plan")
+	tag, err := tx.Exec(ctx, queryConfigurationAuditassistantoperationInsertAuditEventsRefProjectIdAssistantAgentId, ref, scope.organizationID, nullUUID(outcome.projectID), scope.actorID, "assistant."+strings.ToLower(action), outcome.resourceKind, outcome.resourceRef, outcome.summary, "assistant-plan", conversationRef)
 	if err != nil || tag.RowsAffected() != 1 {
 		return "", errs.ErrUnavailable
 	}

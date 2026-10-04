@@ -41,9 +41,10 @@ const runtimePolicy = {
     egress: [
       { destination: "DNS", protocol: "TCP", port: 53 },
       { destination: "DNS", protocol: "UDP", port: 53 },
-      { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8080 },
+      { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
       { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
     ],
+    webAccess: { mode: "NONE", rules: [] },
   },
   kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
   resourcesDigest: "1".repeat(64),
@@ -139,6 +140,8 @@ function view(model: string, version: number): AgentRuntimeConfigurationView {
       digest: "d".repeat(64),
     },
     environment: {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "environment_main",
       version,
       projectRef: "project_sales",

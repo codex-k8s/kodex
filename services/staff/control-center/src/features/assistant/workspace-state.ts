@@ -25,16 +25,22 @@ export function persistAssistantWorkspaceOpen(
   }
 }
 
-function conversationKey(projectRef?: string): string {
-  return `${assistantConversationKey}.${projectRef ?? "all"}`;
+function conversationKey(
+  projectRef: string | undefined,
+  assistantScope: "SYSTEM" | "PROJECT",
+): string {
+  return `${assistantConversationKey}.${assistantScope}.${projectRef ?? "all"}`;
 }
 
 export function restoreAssistantConversationRef(
   projectRef?: string,
   storage: WorkspaceStorage = window.sessionStorage,
+  assistantScope: "SYSTEM" | "PROJECT" = "SYSTEM",
 ): string | undefined {
   try {
-    return storage.getItem(conversationKey(projectRef)) || undefined;
+    return (
+      storage.getItem(conversationKey(projectRef, assistantScope)) || undefined
+    );
   } catch {
     return undefined;
   }
@@ -44,9 +50,13 @@ export function persistAssistantConversationRef(
   projectRef: string | undefined,
   conversationRef: string,
   storage: WorkspaceStorage = window.sessionStorage,
+  assistantScope: "SYSTEM" | "PROJECT" = "SYSTEM",
 ): void {
   try {
-    storage.setItem(conversationKey(projectRef), conversationRef);
+    storage.setItem(
+      conversationKey(projectRef, assistantScope),
+      conversationRef,
+    );
   } catch {
     // Недоступное session storage не должно блокировать выбор диалога.
   }

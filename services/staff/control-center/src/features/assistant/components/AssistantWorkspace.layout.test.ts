@@ -45,6 +45,36 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("подготовка настроек заполняет только черновик сообщения и не отправляет его", () => {
+    const helper = source.slice(
+      source.indexOf("function prepareAssistantSettings("),
+      source.indexOf("function handleAssistantLink("),
+    );
+    expect(helper).toContain("message.value.trim()");
+    expect(helper).toContain("suggestSetup(prompt)");
+    expect(helper).not.toContain("store.send(");
+    expect(helper).not.toContain("store.apply(");
+    expect(template).toContain("prepareAssistantSettings('IMAGE')");
+  });
+  it("открывает точный run сообщения после подтверждённого закрытия чата", () => {
+    expect(template).toContain('v-if="turn.runRef"');
+    expect(template).toContain("openAssistantTurnRun(turn.runRef)");
+    expect(source).toContain(
+      "const target = runPath(runRef, conversation.projectRef)",
+    );
+    expect(source).toContain("if (open.value) return;");
+  });
+  it("явно разделяет system/project настройки, черновики и отправку", () => {
+    expect(template).toContain('value="SYSTEM"');
+    expect(template).toContain('value="PROJECT"');
+    expect(source).toContain("store.assistantScope");
+    expect(source).toContain("projectAssistantCanRun");
+    expect(template).toContain("<AssistantProjectProfileSetup");
+    expect(source).toContain('if (store.assistantScope !== "SYSTEM") return;');
+    expect(source).toContain(
+      "params: { projectRef: profile.projectRef, agentRef: profile.agentRef }",
+    );
+  });
   it("сохраняет controls диалога в постоянном header", () => {
     const header = template.indexOf(
       '<header class="assistant-drawer__header">',

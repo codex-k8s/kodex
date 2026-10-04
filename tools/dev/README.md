@@ -58,7 +58,7 @@ python3 tools/dev/bootstrap-local-https.py \
   --ca-file /home/s/.local/state/kodex-local-trusted/kodex-local-ca.crt
 ```
 
-Helper разрешает только loopback Kubernetes API, проверяет локальные labels,
+Helper разрешает только точный IPv4 loopback Kubernetes API, проверяет локальные labels,
 совпадение CA с кластером и точные публичные ресурсы из render. Он применяет
 только сертификат и три ingress Control Center без force-conflicts; SSO уже
 должен иметь готовый сертификат. Через `sudo -n` устанавливается только
@@ -66,6 +66,11 @@ Helper разрешает только loopback Kubernetes API, проверяе
 обновляется системное доверие. Другой существующий CA не перезаписывается.
 Chrome получает доверие через NSS на общем этапе `bootstrap-cluster.sh`;
 после изменения доверия уже открытый браузер может потребовать перезапуска.
+Подготовка k3d явно привязывает Kubernetes API к выбранному IPv4 loopback
+на порту `6443`; публикация API на `0.0.0.0` не считается готовым локальным
+контуром. `--replace-owned` допускает пересоздание только точного k3d-кластера с ожидаемыми
+read-only mount и закрытым набором namespace; чужая namespace или workload в `default`
+закрыто запрещают замену.
 Тот же bootstrap устанавливает и проверяет точный repo-owned AppArmor-профиль
 `kodex-provider-runtime`, необходимый для внутреннего bubblewrap sandbox при
 включённом системном запрете unprivileged user namespaces. Отдельный безопасный

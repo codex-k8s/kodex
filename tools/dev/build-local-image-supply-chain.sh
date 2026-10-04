@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set +m
 
 fail() {
   printf 'Kodex local image supply-chain build failed: %s\n' "$*" >&2
@@ -7,25 +8,28 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --source-root <path> --state-directory <path> [--component all|image-admission|authority-security] [--context <exact-staging-context>]\n' "$0" >&2
+  printf 'Usage: %s --source-root <path> --state-directory <path> [--component all|image-admission|authority-security] [--context <exact-staging-context>] [--build-jobs 1..4]\n' "$0" >&2
 }
 
 source_root=""
 state_directory=""
 component=all
 context=""
+build_jobs=1
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --component) component=${2:-}; shift 2 ;;
     --context) context=${2:-}; shift 2 ;;
+    --build-jobs) build_jobs=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
 [[ "$component" == all || "$component" == image-admission || "$component" == authority-security ]] || fail 'component is invalid'
+[[ "$build_jobs" =~ ^[1-4]$ ]] || fail 'build jobs must be between 1 and 4'
 
 [[ "$source_root" == /* && -f "$source_root/tools/dev/Dockerfile.local-image-supply-chain" &&
   -f "$source_root/services/jobs/role-image-builder/Dockerfile" &&
@@ -33,18 +37,17 @@ done
   fail 'source root is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'state directory is invalid'
-for command_name in docker git jq k3s sha256sum sudo tar; do
+[[ -n "$context" && "$(kubectl config current-context)" == "$context" ]] ||
+  fail 'exact staging context is required'
+for command_name in docker git jq kubectl sha256sum tar flock setsid; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
-sudo -n k3s ctr version >/dev/null 2>&1 || fail 'local k3s containerd is unavailable'
-sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for local k3s image import'
 
 if [[ "$component" == authority-security ]]; then
-  [[ -n "$context" && "${context,,}" != *prod* &&
-    "$(sudo -n k3s kubectl --context "$context" config current-context)" == "$context" ]] ||
+  [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
     fail 'exact staging context is required'
-  sudo -n k3s kubectl --context "$context" get namespace kodex-system -o json | jq -e '
+  kubectl --context "$context" get namespace kodex-system -o json | jq -e '
     .metadata.labels."app.kubernetes.io/part-of" == "kodex" and
     .metadata.labels."kodex.dev/environment" == "staging"' >/dev/null || fail 'staging namespace is required'
   [[ "$state_directory" != "$source_root" && "$state_directory" != "$source_root/"* && ! -L "$state_directory" ]] ||
@@ -57,30 +60,66 @@ try {inspectSource(root);} catch {process.stderr.write('Exact clean application 
 JS
 fi
 
+install -d -m 0700 "$state_directory/cache/image-supply-chain"
+# Один writer защищает одинаковые cache keys и указатели от повторного запуска.
+exec {build_lock_fd}>"$state_directory/cache/image-supply-chain/build.lock"
+flock -n "$build_lock_fd" || fail 'another supply-chain build owns this state directory'
 builder=kodex-local-dev
 "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
 
-install -d -m 0700 "$state_directory/cache/image-supply-chain"
+build_work_directory=$(mktemp -d "$state_directory/cache/image-supply-chain/build.XXXXXXXX")
+declare -a build_pids=() build_names=() build_archives=() build_next_archives=() build_status_files=() build_logs=()
+declare -a image_names=() image_repositories=()
+cleanup_builds() {
+  local status=$? pid deadline running
+  trap - EXIT INT TERM
+  for pid in "${build_pids[@]}"; do
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  done
+  deadline=$((SECONDS + 3))
+  while ((${#build_pids[@]} > 0 && SECONDS < deadline)); do
+    running=false
+    for pid in "${build_pids[@]}"; do
+      if kill -0 -- "-$pid" 2>/dev/null; then running=true; fi
+    done
+    [[ "$running" == true ]] || break
+    sleep 0.1
+  done
+  for pid in "${build_pids[@]}"; do
+    kill -KILL -- "-$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  done
+  rm -rf -- "$build_work_directory"
+  return "$status"
+}
+trap cleanup_builds EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 source_revision=$(git -C "$source_root" rev-parse HEAD)
 [[ "$source_revision" =~ ^[a-f0-9]{40}$ ]] || fail 'source revision is invalid'
-input_digest=$(
-  tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
-    -C "$source_root" -cf - \
-	    tools/dev/Dockerfile.local-image-supply-chain \
-	    infra/dockerfile-frontend/Dockerfile \
-	    tools/render-image-admission-job.sh \
-    infra/admission-tools/Dockerfile \
-    services/jobs/role-image-builder \
-    services/internal/internal-rpc-authority \
-    libs/go |
-    sha256sum | awk '{print $1}'
-)
-[[ "$input_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'supply-chain input digest is invalid'
-if [[ "$component" == authority-security ]]; then
-  # VERSION/SOURCE_SHA входят в recipe: одинаковое дерево нового commit не
-  # должно возвращать старую versioned binary из прежнего cache key.
-  input_digest=$(printf '%s\n%s\n%s\n' "$input_digest" "$source_revision" "$component" | sha256sum | awk '{print $1}')
-fi
+compute_input_digest() {
+  local digest
+  digest=$(
+    tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+      -C "$source_root" -cf - \
+      tools/dev/Dockerfile.local-image-supply-chain \
+      infra/dockerfile-frontend/Dockerfile \
+      tools/render-image-admission-job.sh \
+      infra/admission-tools/Dockerfile \
+      services/jobs/role-image-builder \
+      services/internal/internal-rpc-authority \
+      libs/go |
+      sha256sum | awk '{print $1}'
+  ) || fail 'supply-chain inputs cannot be read'
+  [[ "$digest" =~ ^[a-f0-9]{64}$ ]] || fail 'supply-chain input digest is invalid'
+  if [[ "$component" == authority-security ]]; then
+    # VERSION/SOURCE_SHA входят в recipe: одинаковое дерево нового commit не
+    # должно возвращать старую versioned binary из прежнего cache key.
+    digest=$(printf '%s\n%s\n%s\n' "$digest" "$source_revision" "$component" | sha256sum | awk '{print $1}')
+  fi
+  printf '%s' "$digest"
+}
+input_digest=$(compute_input_digest)
 
 import_oci() {
   local archive=$1 tag=$2 repository=$3 manifest_digest exact_reference
@@ -91,33 +130,99 @@ import_oci() {
   [[ "$manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]] ||
     fail "OCI manifest digest is invalid: $repository"
   exact_reference="$repository@$manifest_digest"
-  sudo -n k3s ctr -n k8s.io images import \
-    --base-name "$repository" "$archive" >/dev/null
-  sudo -n k3s ctr -n k8s.io images tag --force \
-    "$tag" "$exact_reference" >/dev/null
+  "$source_root/tools/dev/import-local-image.sh" --context "$context" --archive "$archive" \
+    --repository "$repository" --tag "$tag" --exact-reference "$exact_reference" >/dev/null ||
+    fail "OCI digest readback failed: $repository"
   printf '%s' "$exact_reference"
+}
+
+wait_for_build() {
+  local index status
+  while :; do
+    for index in "${!build_pids[@]}"; do
+      if [[ ! -f "${build_status_files[$index]}" ]] && kill -0 "${build_pids[$index]}" 2>/dev/null; then
+        continue
+      fi
+      status=0
+      wait "${build_pids[$index]}" || status=$?
+      unset 'build_pids[index]'
+      cat -- "${build_logs[$index]}" >&2
+      ((status == 0)) || fail "OCI build failed: ${build_names[$index]} (exit $status)"
+      if [[ -n "${build_archives[$index]}" ]]; then
+        [[ -s "${build_next_archives[$index]}" ]] || fail "OCI archive was not produced: ${build_names[$index]}"
+      fi
+      return 0
+    done
+    sleep 0.1
+  done
+}
+
+start_build() {
+  local name=$1 archive=$2 next_archive=$3 index status_file log_file
+  shift 3
+  while ((${#build_pids[@]} >= build_jobs)); do wait_for_build; done
+  status_file="$build_work_directory/$name.status"
+  log_file="$build_work_directory/$name.log"
+  # Отдельная группа охватывает CLI, plugin и потомков; отмена не оставляет
+  # фоновые сборки. Completion-файл устраняет гонку wait -n с быстрым cache hit.
+  # Переменные этой программы раскрываются только внутри дочернего bash.
+  # shellcheck disable=SC2016
+  setsid --wait bash -c '
+    status_file=$1; shift
+    status=0
+    "$@" || status=$?
+    printf "%s\n" "$status" >"$status_file"
+    exit "$status"
+  ' kodex-local-build "$status_file" "$@" >"$log_file" 2>&1 &
+  index=${#build_names[@]}
+  build_pids[index]=$!
+  build_names+=("$name")
+  build_archives+=("$archive")
+  build_next_archives+=("$next_archive")
+  build_status_files+=("$status_file")
+  build_logs+=("$log_file")
 }
 
 build_target() {
   local name=$1 dockerfile=$2 target=$3 repository=$4
   shift 4
-  local tag archive next_archive exact_reference
+  local tag archive next_archive
+  image_names+=("$name")
+  image_repositories+=("$repository")
   tag="$repository:local-$input_digest"
   archive="$state_directory/cache/image-supply-chain/$name-$input_digest.oci.tar"
   if [[ ! -s "$archive" ]]; then
-    next_archive="$archive.next"
-    rm -f -- "$next_archive"
-    docker buildx build --builder "$builder" \
+    next_archive="$build_work_directory/$name.oci.tar"
+    start_build "$name" "$archive" "$next_archive" docker buildx build --builder "$builder" \
       --file "$source_root/$dockerfile" --target "$target" \
       --platform linux/amd64 --provenance=false --sbom=false \
       --tag "$tag" --output "type=oci,dest=$next_archive" \
       "$@" "$source_root"
-    [[ -s "$next_archive" ]] || fail "OCI archive was not produced: $name"
-    mv -- "$next_archive" "$archive"
   fi
-  exact_reference=$(import_oci "$archive" "$tag" "$repository")
-  printf '%s\n' "$exact_reference" >"$state_directory/$name-image"
-  chmod 0600 "$state_directory/$name-image"
+}
+
+import_targets() {
+  local index name repository exact_reference
+  # Ни один import/readback или новый указатель не предшествует общему barrier.
+  while ((${#build_pids[@]} > 0)); do wait_for_build; done
+  [[ "$(git -C "$source_root" rev-parse HEAD)" == "$source_revision" &&
+    "$(compute_input_digest)" == "$input_digest" ]] || fail 'source changed during supply-chain build'
+  for index in "${!build_archives[@]}"; do
+    [[ -z "${build_archives[$index]}" ]] ||
+      mv -- "${build_next_archives[$index]}" "${build_archives[$index]}"
+  done
+  for index in "${!image_names[@]}"; do
+    name=${image_names[$index]}
+    repository=${image_repositories[$index]}
+    exact_reference=$(import_oci "$state_directory/cache/image-supply-chain/$name-$input_digest.oci.tar" \
+      "$repository:local-$input_digest" "$repository")
+    printf '%s\n' "$exact_reference" >"$build_work_directory/$name-image"
+    chmod 0600 "$build_work_directory/$name-image"
+  done
+  # Все digest readback завершены до публикации первого указателя.
+  for name in "${image_names[@]}"; do
+    mv -- "$build_work_directory/$name-image" "$state_directory/$name-image"
+  done
 }
 
 # Узкая поставка security binaries не меняет policy или работающие workloads.
@@ -128,18 +233,14 @@ if [[ "$component" == authority-security ]]; then
   build_target image-admission tools/dev/Dockerfile.local-image-supply-chain \
     image-admission registry.local.kodex/kodex/image-admission \
     --build-arg "SOURCE_SHA=$source_revision"
-  for name in internal-rpc-authority image-admission; do
-    reference=$(<"$state_directory/$name-image")
-    sudo -n k3s ctr -n k8s.io images list --quiet | grep -Fx "$reference" >/dev/null ||
-      fail 'imported immutable image reference is absent'
-    sudo -n k3s ctr -n k8s.io content get "${reference#*@}" | sha256sum |
-      awk -v expected="${reference#*@sha256:}" '$1 == expected { found=1 } END { exit !found }' ||
-      fail 'imported image manifest digest mismatch'
-  done
+  import_targets
+  image_store_profile=single-host-k3s-image-store
+  [[ "$context" != k3d-* ]] || image_store_profile=multi-node-k3d-image-store
   jq -n --arg revision "$source_revision" \
     --arg authority "$(<"$state_directory/internal-rpc-authority-image")" \
     --arg admission "$(<"$state_directory/image-admission-image")" \
-    '{version:1,profile:"single-host-k3s-image-store",revision:$revision,authorityImage:$authority,imageAdmissionImage:$admission,digestReadback:true}' \
+    --arg profile "$image_store_profile" \
+    '{version:1,profile:$profile,revision:$revision,authorityImage:$authority,imageAdmissionImage:$admission,digestReadback:true}' \
     >"$state_directory/authority-security-images.json"
   chmod 0600 "$state_directory/authority-security-images.json"
   printf 'Authority security images imported with exact digest readback for source %s\n' "$source_revision"
@@ -151,6 +252,7 @@ if [[ "$component" == image-admission ]]; then
   build_target image-admission tools/dev/Dockerfile.local-image-supply-chain \
     image-admission registry.local.kodex/kodex/image-admission \
     --build-arg "SOURCE_SHA=$source_revision"
+  import_targets
   printf 'Kodex local image admission image is ready for source %s\n' "$source_revision"
   exit 0
 fi
@@ -169,10 +271,13 @@ build_target internal-rpc-authority services/internal/internal-rpc-authority/Doc
   --build-arg "VERSION=local-$source_revision"
 
 tools_tag="kodex-local/image-admission-tools:$input_digest"
-docker buildx build --builder "$builder" \
+# --load использует тот же builder, лимит и cancel/join barrier.
+start_build image-admission-tools-load "" "" docker buildx build --builder "$builder" \
   --file "$source_root/tools/dev/Dockerfile.local-image-supply-chain" \
   --target admission-tools --platform linux/amd64 --provenance=false --sbom=false \
   --build-arg "SOURCE_SHA=$source_revision" --tag "$tools_tag" --load "$source_root" >/dev/null
+
+import_targets
 printf '%s\n' "$tools_tag" >"$state_directory/image-supply-chain-tools-docker-tag"
 
 role_input_directory="$state_directory/cache/image-supply-chain/role-input-$source_revision"

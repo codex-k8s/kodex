@@ -7,41 +7,45 @@ import (
 )
 
 type PlatformCatalogSnapshot struct {
-	Projects                  []httpgenerated.Project                     `json:"projects,omitempty"`
-	TrashedProjects           []httpgenerated.Project                     `json:"trashedProjects,omitempty"`
+	OrganizationRecipes       []httpgenerated.RoleImageRecipe             `json:"organizationRecipes,omitzero"`
+	OrganizationRecipesPage   *PlatformPageCursor                         `json:"organizationRecipesPage,omitempty"`
+	OrganizationSecrets       []httpgenerated.RuntimeSecret               `json:"organizationSecrets,omitzero"`
+	OrganizationSecretsPage   *PlatformPageCursor                         `json:"organizationSecretsPage,omitempty"`
+	Projects                  []httpgenerated.Project                     `json:"projects,omitzero"`
+	TrashedProjects           []httpgenerated.Project                     `json:"trashedProjects,omitzero"`
 	TrashPage                 *PlatformPageCursor                         `json:"trashPage,omitempty"`
-	Agents                    []httpgenerated.Agent                       `json:"agents,omitempty"`
-	Workflows                 []httpgenerated.Workflow                    `json:"workflows,omitempty"`
-	Runs                      []httpgenerated.Run                         `json:"runs,omitempty"`
-	Gates                     []httpgenerated.OwnerGate                   `json:"gates,omitempty"`
+	Agents                    []httpgenerated.Agent                       `json:"agents,omitzero"`
+	Workflows                 []httpgenerated.Workflow                    `json:"workflows,omitzero"`
+	Runs                      []httpgenerated.Run                         `json:"runs,omitzero"`
+	Gates                     []httpgenerated.OwnerGate                   `json:"gates,omitzero"`
 	GatesPage                 *PlatformPageCursor                         `json:"gatesPage,omitempty"`
-	Artifacts                 []httpgenerated.Artifact                    `json:"artifacts,omitempty"`
-	Schedules                 []httpgenerated.Schedule                    `json:"schedules,omitempty"`
-	Definitions               []httpgenerated.IntegrationDefinition       `json:"definitions,omitempty"`
-	Connections               []httpgenerated.IntegrationConnection       `json:"connections,omitempty"`
-	Memberships               []httpgenerated.Membership                  `json:"memberships,omitempty"`
-	Permissions               []httpgenerated.PermissionDefinition        `json:"permissions,omitempty"`
-	AccessSubjects            []httpgenerated.AccessSubject               `json:"accessSubjects,omitempty"`
+	Artifacts                 []httpgenerated.Artifact                    `json:"artifacts,omitzero"`
+	Schedules                 []httpgenerated.Schedule                    `json:"schedules,omitzero"`
+	Definitions               []httpgenerated.IntegrationDefinition       `json:"definitions,omitzero"`
+	Connections               []httpgenerated.IntegrationConnection       `json:"connections,omitzero"`
+	Memberships               []httpgenerated.Membership                  `json:"memberships,omitzero"`
+	Permissions               []httpgenerated.PermissionDefinition        `json:"permissions,omitzero"`
+	AccessSubjects            []httpgenerated.AccessSubject               `json:"accessSubjects,omitzero"`
 	AccessSubjectsPage        *PlatformPageCursor                         `json:"accessSubjectsPage,omitempty"`
-	OidcGroups                []httpgenerated.OIDCGroup                   `json:"oidcGroups,omitempty"`
+	OidcGroups                []httpgenerated.OIDCGroup                   `json:"oidcGroups,omitzero"`
 	OidcGroupsPage            *PlatformPageCursor                         `json:"oidcGroupsPage,omitempty"`
-	AccessRoles               []httpgenerated.AccessRole                  `json:"accessRoles,omitempty"`
+	AccessRoles               []httpgenerated.AccessRole                  `json:"accessRoles,omitzero"`
 	AccessRolesPage           *PlatformPageCursor                         `json:"accessRolesPage,omitempty"`
-	AccessBindings            []httpgenerated.AccessBinding               `json:"accessBindings,omitempty"`
+	AccessBindings            []httpgenerated.AccessBinding               `json:"accessBindings,omitzero"`
 	AccessBindingsPage        *PlatformPageCursor                         `json:"accessBindingsPage,omitempty"`
-	Conversations             []httpgenerated.AssistantConversation       `json:"conversations,omitempty"`
-	Recipes                   []httpgenerated.RoleImageRecipe             `json:"recipes,omitempty"`
-	RoleEnvironments          []httpgenerated.RoleEnvironment             `json:"roleEnvironments,omitempty"`
-	Environments              []httpgenerated.RuntimeEnvironmentSet       `json:"environments,omitempty"`
-	Accounts                  []httpgenerated.ProviderAccount             `json:"accounts,omitempty"`
-	ProviderDefinitions       []httpgenerated.ProviderDefinition          `json:"providerDefinitions,omitempty"`
+	Conversations             []httpgenerated.AssistantConversation       `json:"conversations,omitzero"`
+	Recipes                   []httpgenerated.RoleImageRecipe             `json:"recipes,omitzero"`
+	RoleEnvironments          []httpgenerated.RoleEnvironment             `json:"roleEnvironments,omitzero"`
+	Environments              []httpgenerated.RuntimeEnvironmentSet       `json:"environments,omitzero"`
+	Accounts                  []httpgenerated.ProviderAccount             `json:"accounts,omitzero"`
+	ProviderDefinitions       []httpgenerated.ProviderDefinition          `json:"providerDefinitions,omitzero"`
 	ProviderDefinitionsPage   *PlatformPageCursor                         `json:"providerDefinitionsPage,omitempty"`
-	Secrets                   []httpgenerated.RuntimeSecret               `json:"secrets,omitempty"`
-	ManagedConfigurations     []httpgenerated.ManagedConfigurationSummary `json:"managedConfigurations,omitempty"`
-	ManagedConfigurationPages []PlatformManagedConfigurationPage          `json:"managedConfigurationPages,omitempty"`
-	Runtimes                  []httpgenerated.RuntimeSelection            `json:"runtimes,omitempty"`
+	Secrets                   []httpgenerated.RuntimeSecret               `json:"secrets,omitzero"`
+	ManagedConfigurations     []httpgenerated.ManagedConfigurationSummary `json:"managedConfigurations,omitzero"`
+	ManagedConfigurationPages []PlatformManagedConfigurationPage          `json:"managedConfigurationPages,omitzero"`
+	Runtimes                  []httpgenerated.RuntimeSelection            `json:"runtimes,omitzero"`
 	Page                      *PlatformPageCursor                         `json:"page,omitempty"`
-	NextActions               []httpgenerated.NextAction                  `json:"nextActions,omitempty"`
+	NextActions               []httpgenerated.NextAction                  `json:"nextActions,omitzero"`
 	Total                     *int64                                      `json:"total,omitempty"`
 	CoreReady                 bool                                        `json:"coreReady,omitempty"`
 }

@@ -158,6 +158,7 @@ type RuntimeEnvironmentVersion struct {
 }
 
 type RuntimeEnvironmentSet struct {
+	ScopeKind, OrganizationRef                string
 	Ref, ProjectRef, Name, Description, State string
 	Version                                   int64
 	CurrentVersion                            RuntimeEnvironmentVersion
@@ -379,6 +380,7 @@ type ProviderCredentialDescriptor struct {
 }
 
 type ProviderAccount struct {
+	MaximumConcurrentExecutions                                              int32
 	Usage                                                                    *ProviderAccountUsage
 	Deletion                                                                 *ProviderAccountDeletion
 	Verification                                                             *ProviderAccountVerification
@@ -396,6 +398,7 @@ type AgentAvatar struct {
 }
 
 type Agent struct {
+	AssistantBacked                                                   bool `json:"-"`
 	CurrentRunRef                                                     string
 	InstructionBinding                                                *AgentInstructionsBinding
 	Ref, ProjectRef, RoleDefinitionRef, RoleDefinitionName, SystemKey string
@@ -465,7 +468,10 @@ type WorkflowLaunchReadiness struct {
 	WorkflowVersion                                      int64
 }
 
-type RunTarget struct{ Type, Ref, Name string }
+type RunTarget struct {
+	Type, Ref, Name string
+	Version         int64
+}
 
 type TokenUsage struct {
 	TotalTokens           int64 `json:"total_tokens"`
@@ -485,6 +491,10 @@ func (usage TokenUsage) Valid() bool {
 		usage.ReasoningOutputTokens <= usage.OutputTokens
 }
 
+type AssistantRunPin struct {
+	Scope, OrganizationRef, ConversationRef, AssistantRef, ProjectRef, ProfileRef string
+}
+
 type Run struct {
 	Ref, ProjectRef, SessionRef, RootRunRef, ParentRunRef, RetryOfRunRef string
 	InputAttachmentSetRef                                                string
@@ -497,6 +507,7 @@ type Run struct {
 	Usage                                                                TokenUsage
 	ArtifactRefs, GateRefs, NextActions                                  []string
 	Incidents                                                            []Incident
+	AssistantPin                                                         *AssistantRunPin
 	CreatedAt                                                            time.Time
 	StartedAt, FinishedAt                                                *time.Time
 }
@@ -818,21 +829,30 @@ type AssistantPlanReceipt struct {
 }
 
 type AssistantTurn struct {
-	Ref, Actor, ActorName, Content, State, AttachmentSetRef string
-	Sequence                                                int64
-	CreatedAt                                               time.Time
-	CompletedAt                                             *time.Time
+	Ref, Actor, ActorName, Content, State, AttachmentSetRef, RunRef string
+	Sequence, RunVersion                                            int64
+	CreatedAt                                                       time.Time
+	CompletedAt                                                     *time.Time
 }
 
 type AssistantConversation struct {
-	Ref, Title, ProjectRef, SessionRef, State string
-	TitleSource                               string
-	Version, TitleRevision                    int64
-	Context                                   AssistantContextDescriptor
-	Turns                                     []AssistantTurn
-	Plans                                     []AssistantPlan
-	LatestPlan                                *AssistantPlan
-	CreatedAt, UpdatedAt                      time.Time
+	Ref, Title, ProjectRef, SessionRef, State         string
+	AssistantScope, AssistantRef, AssistantProfileRef string
+	TitleSource                                       string
+	Version, TitleRevision                            int64
+	Context                                           AssistantContextDescriptor
+	Turns                                             []AssistantTurn
+	Plans                                             []AssistantPlan
+	LatestPlan                                        *AssistantPlan
+	CreatedAt, UpdatedAt                              time.Time
+}
+
+// ProjectAssistantProfile закрепляет отдельного помощника за одним проектом.
+// Исполняемая конфигурация принадлежит AgentRef, а не копии системного профиля.
+type ProjectAssistantProfile struct {
+	Ref, ProjectRef, AgentRef, Name, State string
+	Version                                int64
+	CreatedAt, UpdatedAt                   time.Time
 }
 
 type SystemAssistant struct {

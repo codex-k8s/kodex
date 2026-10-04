@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { usePlatformStore } from "../../src/features/platform/store";
+import type { BootstrapState } from "../../src/shared/api/generated/openapi/types.gen";
+usePlatformStore().bootstrap = {
+  organizationRef: "org_synthetic",
+  platformRole: "OWNER",
+} as BootstrapState;
 import EnvironmentImpactDialog from "../../src/features/runtime/EnvironmentImpactDialog.vue";
 import SecretImpactDialog from "../../src/features/runtime/SecretImpactDialog.vue";
 import ConfigurationEditor from "../../src/features/managed-configurations/ConfigurationEditor.vue";
@@ -18,6 +24,8 @@ const initialPlanRef =
   new URLSearchParams(window.location.search).get("planRef") ?? undefined;
 const published = ref<RuntimeSecret>();
 const rotationSecret: RuntimeSecret = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "secret_rotation",
   projectRef: "project_rotation",
   version: 7,

@@ -111,7 +111,7 @@ func (repository *Repository) managedRoleImageTarget(ctx context.Context, tx pgx
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	set, err := repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: ref}, revisionservice.KindRoleImage, false)
+	set, err := repository.resolveManagedSetScope(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: ref}, revisionservice.KindRoleImage, false, input.ScopeKind)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,9 @@ func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context,
 		}
 		set.Archived = input.Action == "ARCHIVE"
 	}
-	if input.Action != "CREATE" && input.Action != "UPDATE" {
+	// RESTORE создаёт новую generation рецепта, поэтому для неё требуется
+	// новая immutable source revision, а не ссылка на прежнюю generation.
+	if input.Action != "CREATE" && input.Action != "UPDATE" && input.Action != "RESTORE" {
 		if result.Build != nil && set != nil {
 			_, err := tx.Exec(ctx, queryRoleImageManagedBuild, current.organizationID, result.Build.Ref)
 			if err != nil {
@@ -145,7 +147,13 @@ func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context,
 	}
 	recipe := result.Recipe
 	if set == nil {
-		created, err := repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ProjectRef: recipe.ProjectRef, Name: recipe.Name}, revisionservice.KindRoleImage, true)
+		var created managedSet
+		var err error
+		if recipe.ScopeKind == "ORGANIZATION" {
+			created, err = repository.createOrganizationRoleImageConfiguration(ctx, tx, current, recipe.Name)
+		} else {
+			created, err = repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ProjectRef: recipe.ProjectRef, Name: recipe.Name}, revisionservice.KindRoleImage, true)
+		}
 		if err != nil {
 			return err
 		}
@@ -196,6 +204,7 @@ func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context,
 func (repository *Repository) ConfigureRoleImageCatalog(catalog *roleimageservice.Catalog) {
 	repository.roleImageCatalogResolver = catalog.Resolve
 	repository.roleImageRecommendedSelection = catalog.RecommendedSelection
+	repository.roleImageCatalogEntries = catalog.List
 	repository.roleImageBootstrapCopySelection = catalog.CopyBootstrapSelection
 }
 
@@ -229,7 +238,7 @@ func (repository *Repository) publishSourceRoleImage(ctx context.Context, tx pgx
 	if repository.requireAccess(ctx, tx, current, "image.build", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: set.ProjectRef, ResourceKind: "PROJECT", ResourceRef: set.ProjectRef}) != nil {
 		return errs.ErrForbidden
 	}
-	input := roleimagerepo.ManageInput{Action: "CREATE", ProjectRef: set.ProjectRef, RoleDefinitionRef: roleRef, Name: name, Recipe: resolved, Environment: selection}
+	input := roleimagerepo.ManageInput{ScopeKind: "PROJECT", Action: "CREATE", ProjectRef: set.ProjectRef, RoleDefinitionRef: roleRef, Name: name, Recipe: resolved, Environment: selection}
 	var recipeRef, currentRole string
 	var recipeVersion int64
 	err = tx.QueryRow(ctx, queryRoleImageManagedReadRecipe, set.id, current.organizationID).Scan(&recipeRef, &recipeVersion, &currentRole)

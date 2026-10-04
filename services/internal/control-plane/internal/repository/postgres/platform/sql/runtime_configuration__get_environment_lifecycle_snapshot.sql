@@ -17,6 +17,7 @@ SELECT environment.ref,
        COALESCE(image_artifact.manifest_digest, ''),
        COALESCE(image_artifact.role_runtime_contract_revision, 0),
        COALESCE(image_artifact.role_runtime_contract_sha256, ''),
+       COALESCE(image_artifact.signature_identity = 'platform-owned-bootstrap', false),
        current_version.selected_tools,
        current_version.core_digest,
        current_version.resource_policy,
@@ -28,8 +29,11 @@ SELECT environment.ref,
        current_version.network_digest,
        current_version.rbac_digest,
        current_version.digest,
-       current_version.created_at
+       current_version.created_at,
+       environment.scope_kind,
+       organization.ref
 FROM control_plane.runtime_environment_sets environment
+JOIN control_plane.organizations organization ON organization.id = environment.organization_id
 JOIN control_plane.projects project ON project.id = environment.project_id
 JOIN control_plane.runtime_environment_versions current_version ON current_version.id = environment.current_version_id
 LEFT JOIN control_plane.image_artifacts image_artifact ON image_artifact.id = current_version.role_image_artifact_id

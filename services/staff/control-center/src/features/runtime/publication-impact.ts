@@ -7,6 +7,10 @@ import type {
 import { requestSignal } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/problem";
 import { readWithRetry } from "@/shared/api/read-retry";
+import {
+  validRuntimeResourceIdentity,
+  requireRuntimeOrganizationRef,
+} from "./resource-scope";
 
 const positive = (value: number) => Number.isSafeInteger(value) && value > 0;
 export function publicationPlanIdentity(plan: RevisionImpactPlan): string {
@@ -57,7 +61,9 @@ export function checkedPublicationPage(
   page: RevisionImpactPage,
   expected: RevisionImpactPlan,
   cursor?: string,
+  organizationRef?: string,
 ): RevisionImpactPage {
+  requireRuntimeOrganizationRef(organizationRef);
   checkedPublicationPlan(page.plan);
   if (
     publicationPlanIdentity(page.plan) !== publicationPlanIdentity(expected) ||
@@ -70,6 +76,9 @@ export function checkedPublicationPage(
     page.items.some(
       (item) =>
         !item.ref ||
+        !validRuntimeResourceIdentity(item, organizationRef) ||
+        (item.scopeKind === "ORGANIZATION" &&
+          !["AGENT", "AGENT_CONTINUATION"].includes(item.consumerKind)) ||
         !item.consumerRef ||
         !item.bindingRef ||
         !positive(item.consumerVersion) ||
@@ -113,6 +122,7 @@ export async function readPublicationImpact(
   query = "",
   pageToken?: string,
   pageSize = 40,
+  organizationRef?: string,
 ): Promise<RevisionImpactPage> {
   const page = (
     await readWithRetry(
@@ -133,12 +143,13 @@ export async function readPublicationImpact(
       signal,
     )
   ).data;
-  return checkedPublicationPage(page, plan, pageToken);
+  return checkedPublicationPage(page, plan, pageToken, organizationRef);
 }
 
 export async function restorePublicationImpact(
   planRef: string,
   signal: AbortSignal,
+  organizationRef?: string,
 ): Promise<RevisionImpactPage> {
   const page = (
     await readWithRetry(
@@ -157,7 +168,12 @@ export async function restorePublicationImpact(
   ).data;
   if (page.plan.ref !== planRef)
     throw new Error("Publication recovery reference mismatch");
-  return checkedPublicationPage(page, checkedPublicationPlan(page.plan));
+  return checkedPublicationPage(
+    page,
+    checkedPublicationPlan(page.plan),
+    undefined,
+    organizationRef,
+  );
 }
 
 export function publicationSelection(

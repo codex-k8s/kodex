@@ -2,6 +2,10 @@ INTERNAL:
   other: Internal error
 AUTOMATION_VARIABLE_NAME:
   other: Automation name
+PROJECT_ASSISTANT_ROLE:
+  other: Project assistant
+PROJECT_ASSISTANT_CREATED:
+  other: Project assistant created
 AUTOMATION_VARIABLE_TASK:
   other: Original automation task
 AUTOMATION_VARIABLE_SCHEDULED_AT:
@@ -200,6 +204,8 @@ ROLE_IMAGE_RECIPE_CHANGED:
   other: The role environment configuration was updated
 ROLE_IMAGE_BUILD_COMPLETED:
   other: The role environment image was built
+ROLE_IMAGE_BUILD_LEASE_EXPIRED:
+  other: The image build execution lease expired
 ROLE_IMAGE_PROMOTION_REQUESTED:
   other: Role environment image promotion requested
 ROLE_IMAGE_PROMOTED:
@@ -308,6 +314,8 @@ ASSISTANT_TURN_QUEUED:
   other: Assistant command queued
 ASSISTANT_TURN_ACCEPTED:
   other: Assistant command accepted
+ASSISTANT_TURN_CANCELLED:
+  other: Assistant turn stopped
 ASSISTANT_PLAN_APPLIED:
   other: Assistant plan applied
 ASSISTANT_PLAN_PROPOSED:

@@ -381,15 +381,27 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
     resources: { ...value.policy.resources },
     volumes: value.policy.volumes.map((item) => ({ ...item })),
     networkDestinations: [...value.policy.networkDestinations],
+    webAccess: {
+      mode: value.policy.webAccess.mode,
+      rules: value.policy.webAccess.rules.map((item) => ({
+        ...item,
+        httpMethods: [...item.httpMethods],
+      })),
+    },
     kubernetesAccess: value.policy.kubernetesAccess,
   };
 
-  if (selectedImage.value?.ref !== value.imageArtifactRef) {
-    selectedImage.value = {
-      ref: value.imageArtifactRef,
-      title: value.imageArtifactRef,
-      description: t("runtime.restoredImageSelection"),
-    };
+  if (
+    !value.imageArtifactRef ||
+    selectedImage.value?.ref !== value.imageArtifactRef
+  ) {
+    selectedImage.value = value.imageArtifactRef
+      ? {
+          ref: value.imageArtifactRef,
+          title: value.imageArtifactRef,
+          description: t("runtime.restoredImageSelection"),
+        }
+      : undefined;
     imageArtifact.value = undefined;
   }
 }
@@ -1649,16 +1661,6 @@ onBeforeUnmount(() => {
                       <dd>
                         {{ $t("runtime.denyByDefault") }} ·
                         {{ input.policy.networkDestinations.length }}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
-                      <dd>
-                        {{
-                          $t(
-                            `runtime.kubernetesAccessLabel.${input.policy.kubernetesAccess}`,
-                          )
-                        }}
                       </dd>
                     </div>
                   </dl>

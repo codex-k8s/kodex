@@ -1,10 +1,12 @@
 package platform
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
 func TestRuntimeEnvironmentAuthenticationIsFresh(t *testing.T) {
@@ -44,12 +46,23 @@ func privilegedRuntimeEnvironmentPolicy(t *testing.T) runtimecontract.RuntimeEnv
 			runtimecontract.RuntimeEgressDNS,
 			runtimecontract.RuntimeEgressProviderProxy,
 			runtimecontract.RuntimeEgressRuntimeCallback,
-			runtimecontract.RuntimeEgressKubernetesAPI,
 		},
-		KubernetesAccess: runtimecontract.RuntimeKubernetesAccessReadOwnExecution,
+		KubernetesAccess: runtimecontract.RuntimeKubernetesAccessNone,
+		WebAccess:        runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessFullPublic},
 	})
 	if err != nil {
 		t.Fatalf("build privileged runtime environment policy: %v", err)
 	}
 	return policy
+}
+
+func TestRuntimeEnvironmentAdmissionRejectsRetiredAccessBeforeAuthorization(t *testing.T) {
+	t.Parallel()
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicyWithoutDigests()
+	policy.KubernetesAccess.Kind = "UNSUPPORTED"
+	// nil repository/transaction доказывают отказ до обращения к authority и БД.
+	var repository *Repository
+	if _, err := repository.admitRuntimeEnvironmentPolicy(t.Context(), nil, scope{}, "", "", policy); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("retired policy admission error = %v", err)
+	}
 }

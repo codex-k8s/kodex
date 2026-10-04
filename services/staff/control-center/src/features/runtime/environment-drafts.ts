@@ -1,5 +1,10 @@
 import {
+  assertActiveRuntimeResourceIdentity,
+  runtimeResourceOwnerBoundary,
+} from "@/features/runtime/active-resource-owner";
+import {
   createRuntimeEnvironmentDraft,
+  createSystemRuntimeEnvironmentDraft,
   getRuntimeEnvironmentDraft,
   saveRuntimeEnvironmentDraft,
   validateRuntimeEnvironmentDraft,
@@ -22,18 +27,33 @@ import {
   publicationPlanIdentity,
   publicationSelection,
 } from "./publication-impact";
+import {
+  runtimeResourceAddressFromIdentity,
+  runtimeResourceAddressScope,
+  type RuntimeResourceAddress,
+} from "./resource-scope";
 
 export async function prepareEnvironmentPublication(
   draft: RuntimeEnvironmentDraft,
   signal: AbortSignal,
+  key?: string,
 ): Promise<RevisionImpactPlan> {
-  const fresh = await readEnvironmentDraft(draft.projectRef, draft.ref, signal);
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
+  const fresh = await readEnvironmentDraft(
+    runtimeResourceAddressFromIdentity(draft),
+    draft.ref,
+    signal,
+  );
   if (
     fresh.version !== draft.version ||
     fresh.state !== "VALID" ||
     !fresh.validationDigest
   )
     throw new Error("Environment draft changed before impact preparation");
+  owner.assert(fresh);
   const plan = checkedPublicationPlan(
     (
       await mutate(
@@ -44,9 +64,11 @@ export async function prepareEnvironmentPublication(
             signal: requestSignal(signal),
           }),
         fresh.version,
+        key,
       )
     ).data,
   );
+  owner.assertCurrent();
   if (
     plan.kind !== "RUNTIME_ENVIRONMENT" ||
     plan.draftRef !== fresh.ref ||
@@ -67,6 +89,10 @@ export async function publishEnvironmentDraft(
   signal: AbortSignal,
   key: string,
 ): Promise<RuntimeEnvironmentPublicationResult> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   if (
     plan.kind !== "RUNTIME_ENVIRONMENT" ||
     plan.draftRef !== draft.ref ||
@@ -86,7 +112,12 @@ export async function publishEnvironmentDraft(
       key,
     )
   ).data;
+  owner.assert(result.draft);
+  owner.assert(result.environment);
   checkedPublicationPlan(result.plan);
+  const scope = runtimeResourceAddressFromIdentity(draft);
+  assertActiveRuntimeResourceIdentity(scope, result.draft);
+  assertActiveRuntimeResourceIdentity(scope, result.environment);
   if (
     publicationPlanIdentity(result.plan) !== publicationPlanIdentity(plan) ||
     result.plan.state !== "APPLIED" ||
@@ -120,12 +151,11 @@ export function environmentDraftFingerprint(
 
 function readback(
   result: ApiReadback<RuntimeEnvironmentDraft>,
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   draftRef?: string,
 ): RuntimeEnvironmentDraft {
   const draft = result.data;
   if (
-    draft.projectRef !== projectRef ||
     (draftRef && draft.ref !== draftRef) ||
     !draft.ref ||
     result.etag !== etag(draft.version) ||
@@ -133,46 +163,84 @@ function readback(
     (draft.state === "PUBLISHED" && !draft.publishedEnvironmentRef)
   )
     throw new Error("Invalid runtime environment draft readback");
+  assertActiveRuntimeResourceIdentity(scope, draft);
   return draft;
 }
 export async function readEnvironmentDraft(
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   draftRef: string,
   signal: AbortSignal,
 ): Promise<RuntimeEnvironmentDraft> {
-  return readback(
-    await unwrap(
-      getRuntimeEnvironmentDraft({
-        path: { draftRef },
-        signal: requestSignal(signal),
-      }),
-    ),
-    projectRef,
-    draftRef,
-  );
-}
-export async function createEnvironmentDraft(
-  projectRef: string,
-  specification: RuntimeEnvironmentDraftSpecification,
-  signal: AbortSignal,
-  environment?: Pick<RuntimeEnvironmentSet, "ref" | "version">,
-): Promise<RuntimeEnvironmentDraft> {
-  const result = await mutate((headers) =>
-    createRuntimeEnvironmentDraft({
-      headers: { ...headers },
-      path: { projectRef },
-      body: {
-        specification,
-        ...(environment
-          ? {
-              environmentRef: environment.ref,
-              expectedEnvironmentVersion: environment.version,
-            }
-          : {}),
-      },
+  const owner = runtimeResourceOwnerBoundary(scope);
+  const result = await unwrap(
+    getRuntimeEnvironmentDraft({
+      path: { draftRef },
       signal: requestSignal(signal),
     }),
   );
+  owner.assert(result.data);
+  return readback(result, scope, draftRef);
+}
+export async function createEnvironmentDraft(
+  scope: RuntimeResourceAddress,
+  specification: RuntimeEnvironmentDraftSpecification,
+  signal: AbortSignal,
+  environment?: Pick<RuntimeEnvironmentSet, "ref" | "version">,
+  key?: string,
+): Promise<RuntimeEnvironmentDraft> {
+  const owner = runtimeResourceOwnerBoundary(scope);
+  const resolved = runtimeResourceAddressScope(scope);
+  const body = {
+    specification,
+    ...(environment
+      ? {
+          environmentRef: environment.ref,
+          expectedEnvironmentVersion: environment.version,
+        }
+      : {}),
+  };
+  if (resolved.kind === "ORGANIZATION") {
+    const result = await mutate(
+      (headers) =>
+        createSystemRuntimeEnvironmentDraft({
+          headers: { ...headers },
+          body,
+          signal: requestSignal(signal),
+        }),
+      undefined,
+      key,
+    );
+    owner.assert(result.data);
+    const draft = readback(result, scope);
+    if (
+      draft.state !== "DRAFT" ||
+      (draft.environmentRef || undefined) !== environment?.ref ||
+      draft.expectedEnvironmentVersion !== (environment?.version ?? 0)
+    )
+      throw new Error("Invalid runtime environment draft origin");
+    return draft;
+  }
+  const projectRef = resolved.projectRef;
+  const result = await mutate(
+    (headers) =>
+      createRuntimeEnvironmentDraft({
+        headers: { ...headers },
+        path: { projectRef },
+        body: {
+          specification,
+          ...(environment
+            ? {
+                environmentRef: environment.ref,
+                expectedEnvironmentVersion: environment.version,
+              }
+            : {}),
+        },
+        signal: requestSignal(signal),
+      }),
+    undefined,
+    key,
+  );
+  owner.assert(result.data);
   const draft = readback(result, projectRef);
   if (
     draft.state !== "DRAFT" ||
@@ -186,7 +254,12 @@ export async function saveEnvironmentDraft(
   draft: RuntimeEnvironmentDraft,
   specification: RuntimeEnvironmentDraftSpecification,
   signal: AbortSignal,
+  key?: string,
 ): Promise<RuntimeEnvironmentDraft> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   const result = await mutate(
     (headers) =>
       saveRuntimeEnvironmentDraft({
@@ -196,8 +269,14 @@ export async function saveEnvironmentDraft(
         signal: requestSignal(signal),
       }),
     draft.version,
+    key,
   );
-  const saved = readback(result, draft.projectRef, draft.ref);
+  owner.assert(result.data);
+  const saved = readback(
+    result,
+    runtimeResourceAddressFromIdentity(draft),
+    draft.ref,
+  );
   if (saved.state !== "DRAFT")
     throw new Error("Invalid runtime environment save state");
   return saved;
@@ -207,6 +286,10 @@ export async function transitionEnvironmentDraft(
   draft: RuntimeEnvironmentDraft,
   signal: AbortSignal,
 ): Promise<RuntimeEnvironmentDraft> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   const operation = {
     validate: validateRuntimeEnvironmentDraft,
     discard: discardRuntimeEnvironmentDraft,
@@ -220,7 +303,12 @@ export async function transitionEnvironmentDraft(
       }),
     draft.version,
   );
-  const saved = readback(result, draft.projectRef, draft.ref);
+  owner.assert(result.data);
+  const saved = readback(
+    result,
+    runtimeResourceAddressFromIdentity(draft),
+    draft.ref,
+  );
   if (
     !(action === "validate" ? ["VALID", "INVALID"] : ["DISCARDED"]).includes(
       saved.state,

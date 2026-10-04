@@ -25,6 +25,13 @@ func (repository *Repository) authorizeAssistantProjectMove(ctx context.Context,
 	if err != nil {
 		return assistantArchiveOwner{}, "", err
 	}
+	assistant, err := repository.conversationAssistantTx(ctx, tx, current, payload.ConversationRef)
+	if err != nil {
+		return assistantArchiveOwner{}, "", err
+	}
+	if assistant.Scope != "SYSTEM" {
+		return assistantArchiveOwner{}, "", errs.ErrConflict
+	}
 	if owner.conversation.ProjectRef != "" && owner.conversation.ProjectRef != payload.ProjectRef {
 		return assistantArchiveOwner{}, "", errs.ErrConflict
 	}

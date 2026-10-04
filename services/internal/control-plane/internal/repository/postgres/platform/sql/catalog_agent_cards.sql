@@ -1,6 +1,6 @@
 -- name: catalog_agent_cards :many
 WITH requested AS MATERIALIZED (
-    SELECT a.id,a.ref,a.organization_id,a.project_id
+    SELECT a.id,a.ref,a.organization_id,a.project_id,a.system_key
     FROM control_plane.agents a
     WHERE a.organization_id=@organization_id::uuid AND a.ref=ANY(@refs::text[])
       AND (@authority_project='' OR a.project_id=NULLIF(@authority_project,'')::uuid)
@@ -15,7 +15,10 @@ WITH requested AS MATERIALIZED (
       AND (@role IN ('OWNER','ADMINISTRATOR') OR control_plane.catalog_resource_visible(target.organization_id,@actor_id::uuid,'run.view',
           target.kind,target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp()))
 )
-SELECT requested.ref,COALESCE(activity.ref,'')
+SELECT requested.ref,COALESCE(activity.ref,''),COALESCE(requested.system_key,'')='system-assistant' OR EXISTS (
+    SELECT 1 FROM control_plane.project_assistant_profiles profile
+    WHERE profile.organization_id=requested.organization_id AND profile.agent_id=requested.id
+)
 FROM requested
 LEFT JOIN LATERAL (
     SELECT r.ref

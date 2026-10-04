@@ -7,6 +7,8 @@ import type {
   RuntimeSecretRebindSelection,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { usePlatformStore } from "@/features/platform/store";
+import { runtimeResourceIdentityKey } from "./resource-scope";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -18,6 +20,7 @@ import {
 } from "./revision-impact";
 const props = defineProps<{ secretRef: string; revision: number }>();
 const fieldPrefix = `secret-impact-${useId()}`;
+const platform = usePlatformStore();
 const emit = defineEmits<{ close: []; applied: [] }>();
 const impact = ref<RuntimeSecretImpact>();
 const impactGroups = ref<HTMLElement>();
@@ -47,12 +50,18 @@ const groups = computed(() => {
     RuntimeSecretRebindSelection & { key: string; projectRef: string }
   >();
   for (const row of impact.value?.consumers ?? []) {
-    const key = JSON.stringify([row.environmentRef, row.environmentVersionRef]);
+    const key = JSON.stringify([
+      runtimeResourceIdentityKey(row),
+      row.environmentRef,
+      row.environmentVersionRef,
+    ]);
     let group = result.get(key);
     if (!group) {
       group = {
         key,
         projectRef: row.projectRef,
+        scopeKind: row.scopeKind,
+        organizationRef: row.organizationRef,
         environmentRef: row.environmentRef,
         expectedEnvironmentVersion: row.environmentVersion,
         sourceVersionRef: row.environmentVersionRef,
@@ -90,6 +99,9 @@ function toggleEnvironment(group: RuntimeSecretRebindSelection): void {
       environmentRef: group.environmentRef,
       expectedEnvironmentVersion: group.expectedEnvironmentVersion,
       sourceVersionRef: group.sourceVersionRef,
+      scopeKind: group.scopeKind,
+      organizationRef: group.organizationRef,
+      projectRef: group.projectRef,
       consumers: [],
     });
   }
@@ -136,6 +148,7 @@ async function load(more = false): Promise<void> {
       active.signal,
       query.value,
       pageSize.value,
+      platform.bootstrap?.organizationRef,
     );
     if (current !== generation) return;
     if (more && previous?.nextPageToken) cursors.add(previous.nextPageToken);
@@ -158,6 +171,7 @@ async function load(more = false): Promise<void> {
         row.environmentRef,
         row.environmentVersionRef,
         row.consumer?.agentRef ?? null,
+        runtimeResourceIdentityKey(row),
       ]);
       if (
         seen.has(key) ||
@@ -165,7 +179,8 @@ async function load(more = false): Promise<void> {
           (other) =>
             other.environmentRef === row.environmentRef &&
             (other.environmentVersion !== row.environmentVersion ||
-              other.projectRef !== row.projectRef),
+              runtimeResourceIdentityKey(other) !==
+                runtimeResourceIdentityKey(row)),
         )
       )
         throw new Error("Inconsistent secret impact snapshot");
@@ -194,7 +209,11 @@ async function apply(): Promise<void> {
   busy.value = true;
   const current = generation;
   try {
-    const result = await applySecretRebind(impact.value, selections.value);
+    const result = await applySecretRebind(
+      impact.value,
+      selections.value,
+      platform.bootstrap?.organizationRef,
+    );
     if (current !== generation) return;
     receipt.value = result;
     selections.value = [];
@@ -298,7 +317,11 @@ useCursorInfiniteScroll({
               @change="toggleEnvironment(group)"
             /><span
               ><strong>{{ group.environmentRef }}</strong
-              ><small>{{ group.projectRef }}</small
+              ><small>{{
+                group.scopeKind === "ORGANIZATION"
+                  ? $t("assistant.settings.systemScope")
+                  : group.projectRef
+              }}</small
               ><code>{{ group.sourceVersionRef }}</code></span
             ></label
           >

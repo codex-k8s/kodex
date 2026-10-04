@@ -45,13 +45,16 @@ func (s *Server) GetRuntimeSecretDraftImpact(w http.ResponseWriter, r *http.Requ
 	}
 	result := generated.RuntimeSecretDraftImpactPage{Plan: plan, Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken(), Items: []generated.RuntimeSecretDraftImpactItem{}}
 	seen := map[string]bool{}
+	owner := ""
 	for _, input := range response.GetItems() {
 		item, valid := secretDraftImpactItemView(input, plan.State)
-		if !valid || seen[item.Ref] {
+		key := impactConsumerOwnerKey(item.Consumer.ScopeKind, item.Consumer.OrganizationRef, item.Consumer.ProjectRef)
+		if !valid || seen[item.Ref] || owner != "" && key != owner {
 			invalidSecretDraft(w)
 			return
 		}
 		seen[item.Ref] = true
+		owner = key
 		result.Items = append(result.Items, item)
 	}
 	writeJSON(w, http.StatusOK, result)

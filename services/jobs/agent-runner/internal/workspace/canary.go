@@ -20,6 +20,11 @@ import (
 
 type Denial struct{ Reason string }
 
+const (
+	canaryInitialPayload     = "kodex-workspace-create\n"
+	canaryReplacementPayload = "kodex-workspace-replace\n"
+)
+
 type ResultProvenance struct {
 	Schema                 string `json:"schema"`
 	RuntimeRevisionRef     string `json:"runtime_revision_ref"`
@@ -61,9 +66,7 @@ func RunCanary(ctx context.Context, root string, policy runtimecontract.RuntimeW
 	if err != nil {
 		return err
 	}
-	const initialPayload = "kodex-workspace-create\n"
-	const replacementPayload = "kodex-workspace-replace\n"
-	if !withinQuota(usage, files, int64(len(initialPayload)+len(replacementPayload)), policy) {
+	if !withinQuota(usage, files, int64(len(canaryInitialPayload)+len(canaryReplacementPayload)), policy) {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceQuotaExceeded}
 	}
 	directory, err := openDirectory(root, ".kodex/outbox")
@@ -71,6 +74,11 @@ func RunCanary(ctx context.Context, root string, policy runtimecontract.RuntimeW
 		return classify(err)
 	}
 	defer unix.Close(directory)
+	return runDirectoryCanary(ctx, directory)
+}
+
+// Проверяет только собственный nonce-каталог, не читая существующие файлы.
+func runDirectoryCanary(ctx context.Context, directory int) error {
 	nonce := make([]byte, 8)
 	if _, err := rand.Read(nonce); err != nil {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
@@ -96,7 +104,7 @@ func RunCanary(ctx context.Context, root string, policy runtimecontract.RuntimeW
 	if err != nil {
 		return classify(err)
 	}
-	if err = writeFull(file, []byte(initialPayload)); err == nil {
+	if err = writeFull(file, []byte(canaryInitialPayload)); err == nil {
 		err = unix.Fsync(file)
 	}
 	closeErr := unix.Close(file)
@@ -106,7 +114,7 @@ func RunCanary(ctx context.Context, root string, policy runtimecontract.RuntimeW
 	if closeErr != nil {
 		return classify(closeErr)
 	}
-	if err := verifyFile(nestedDirectory, current, initialPayload); err != nil {
+	if err := verifyFile(nestedDirectory, current, canaryInitialPayload); err != nil {
 		return err
 	}
 	if ctx.Err() != nil {
@@ -116,7 +124,7 @@ func RunCanary(ctx context.Context, root string, policy runtimecontract.RuntimeW
 	if err != nil {
 		return classify(err)
 	}
-	if err = writeFull(file, []byte(replacementPayload)); err == nil {
+	if err = writeFull(file, []byte(canaryReplacementPayload)); err == nil {
 		err = unix.Fsync(file)
 	}
 	closeErr = unix.Close(file)
@@ -129,7 +137,7 @@ func RunCanary(ctx context.Context, root string, policy runtimecontract.RuntimeW
 	if err = unix.Fsync(nestedDirectory); err != nil {
 		return classify(err)
 	}
-	if err := verifyFile(nestedDirectory, current, replacementPayload); err != nil {
+	if err := verifyFile(nestedDirectory, current, canaryReplacementPayload); err != nil {
 		return err
 	}
 	if ctx.Err() != nil {

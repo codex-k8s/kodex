@@ -9,12 +9,16 @@ JOIN control_plane.role_image_recipes recipe ON recipe.id=owner.recipe_id AND re
 JOIN control_plane.managed_role_image_builds mapped_build ON mapped_build.configuration_revision_id=revision.id
 JOIN control_plane.image_builds build ON build.id=mapped_build.build_id AND build.organization_id=recipe.organization_id
  AND build.recipe_id=recipe.id AND build.recipe_generation=mapping.recipe_generation
+ AND build.scope_kind=recipe.scope_kind AND build.project_id IS NOT DISTINCT FROM recipe.project_id
 JOIN control_plane.image_artifacts artifact ON artifact.build_id=build.id AND artifact.organization_id=recipe.organization_id
  AND artifact.recipe_id=recipe.id AND artifact.recipe_generation=mapping.recipe_generation
-JOIN control_plane.projects project ON project.id=recipe.project_id AND project.organization_id=recipe.organization_id
+ AND artifact.scope_kind=recipe.scope_kind AND artifact.project_id IS NOT DISTINCT FROM recipe.project_id
+LEFT JOIN control_plane.projects project ON project.id=recipe.project_id AND project.organization_id=recipe.organization_id
 WHERE revision.organization_id=@organization_id::uuid AND revision.configuration_set_id=@configuration_id::uuid
  AND revision.ref=@revision_ref AND revision.published_at IS NOT NULL
- AND recipe.state='ACTIVE' AND project.lifecycle='ACTIVE'
+ AND recipe.state='ACTIVE'
+ AND ((recipe.scope_kind='ORGANIZATION' AND recipe.project_id IS NULL)
+      OR (recipe.scope_kind='PROJECT' AND project.lifecycle='ACTIVE'))
  AND artifact.admission_state='ACCEPTED' AND artifact.promotion_state='PROMOTED'
  AND artifact.promoted_reference<>'' AND artifact.promoted_at IS NOT NULL
  AND artifact.admission_receipt_sha256<>'' AND artifact.promotion_readback_sha256<>''

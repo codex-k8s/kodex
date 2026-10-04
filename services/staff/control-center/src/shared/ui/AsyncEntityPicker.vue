@@ -646,23 +646,16 @@ watch(
             <span
               v-if="multiple && selectedIds.length"
               class="async-picker__selection"
+              :title="multipleSelectionLabel"
               ><strong>{{
                 $t("common.selectedCount", { count: selectedIds.length })
-              }}</strong
-              ><small v-if="multipleSelectionLabel">{{
-                multipleSelectionLabel
-              }}</small></span
+              }}</strong></span
             >
-            <span v-else-if="selectedOption" class="async-picker__selection"
-              ><strong>{{ selectedOption.title }}</strong
-              ><small
-                v-if="selectedOption.description || selectedOption.meta"
-                >{{
-                  [selectedOption.description, selectedOption.meta]
-                    .filter(Boolean)
-                    .join(" · ")
-                }}</small
-              ></span
+            <span
+              v-else-if="selectedOption"
+              class="async-picker__selection"
+              :title="selectedOption.title"
+              ><strong>{{ selectedOption.title }}</strong></span
             ><span v-else class="async-picker__placeholder">{{
               placeholder ?? triggerLabel
             }}</span
@@ -836,11 +829,12 @@ watch(
 .async-picker__trigger {
   display: flex;
   width: 100%;
-  min-height: 48px;
+  height: var(--control-height, 32px);
+  min-height: var(--control-height, 32px);
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 6px 9px;
   border: 1px solid var(--border-strong);
   border-radius: 7px;
   background: var(--surface);
@@ -867,16 +861,18 @@ watch(
   gap: 3px;
 }
 .async-picker__selection strong,
-.async-picker__selection small {
+.async-picker__placeholder {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.async-picker__selection small,
 .async-picker__placeholder,
 .async-picker__footer,
 .async-picker__option small {
   color: var(--text-secondary);
+}
+.async-picker__trigger > svg {
+  flex: 0 0 auto;
 }
 .async-picker__popover {
   display: flex;

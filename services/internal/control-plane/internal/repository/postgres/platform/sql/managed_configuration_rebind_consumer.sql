@@ -2,7 +2,7 @@
 INSERT INTO control_plane.managed_configuration_bindings
     (ref, organization_id, project_id, configuration_set_id, configuration_revision_id,
      configuration_kind, consumer_kind, consumer_ref, rebound_by)
-VALUES (@binding_ref, @organization_id::uuid, @project_id::uuid, @configuration_set_id::uuid,
+VALUES (@binding_ref, @organization_id::uuid, NULLIF(@project_id, '')::uuid, @configuration_set_id::uuid,
         @revision_id::uuid, @configuration_kind, @consumer_kind, @consumer_ref, @actor_id::uuid)
 ON CONFLICT (organization_id, configuration_kind, consumer_kind, consumer_ref) DO UPDATE
 SET project_id = EXCLUDED.project_id,

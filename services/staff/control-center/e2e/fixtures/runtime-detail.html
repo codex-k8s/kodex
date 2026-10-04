@@ -9,6 +9,7 @@
     <div id="app"></div>
     <script type="module">
       import { createApp, h } from "vue";
+      import { createPinia } from "pinia";
       import {
         createRouter,
         createMemoryHistory,
@@ -28,6 +29,7 @@
       await router.push("/");
       await router.isReady();
       createApp({ render: () => h(RouterView) })
+        .use(createPinia())
         .use(router)
         .use(i18n)
         .mount("#app");

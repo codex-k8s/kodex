@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createI18n } from "vue-i18n";
+import { createPinia, setActivePinia } from "pinia";
 import type { Ref } from "vue";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import type {
@@ -39,7 +40,9 @@ const plan: RevisionImpactPlan = {
 function item(ref: string, outcome: "PENDING" | "CONFLICT") {
   return {
     ref,
-    projectRef: "project",
+    projectRef: "project_synthetic",
+    scopeKind: "PROJECT" as const,
+    organizationRef: "org_synthetic",
     consumerKind: "AGENT" as const,
     consumerRef: `agent_${ref}`,
     consumerVersion: 1,
@@ -79,6 +82,7 @@ async function selection() {
 }
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   vi.clearAllMocks();
   cleanup.length = 0;
 });

@@ -68,6 +68,44 @@ func (server *Server) GetSystemAssistant(ctx context.Context, _ *controlplanev1.
 	return &controlplanev1.GetSystemAssistantResponse{Assistant: castAssistant(item)}, nil
 }
 
+func (server *Server) CreateProjectAssistant(ctx context.Context, request *controlplanev1.CreateProjectAssistantRequest) (*controlplanev1.CreateProjectAssistantResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_CreateProjectAssistant_FullMethodName,
+		command.CreateProjectAssistant, request.GetMutation(), command.ProjectAssistantInput{
+			ProjectRef: request.GetProjectRef(), Name: request.GetName(), Purpose: request.GetPurpose(), Instructions: request.GetInstructions(),
+		})
+	if err != nil {
+		return nil, err
+	}
+	if result.ProjectAssistant == nil {
+		return nil, status.Error(codes.Internal, "project assistant result is missing")
+	}
+	return &controlplanev1.CreateProjectAssistantResponse{Profile: castProjectAssistant(*result.ProjectAssistant)}, nil
+}
+
+func (server *Server) GetProjectAssistant(ctx context.Context, request *controlplanev1.GetProjectAssistantRequest) (*controlplanev1.GetProjectAssistantResponse, error) {
+	p, err := principal(ctx, controlplanev1.SystemAssistantService_GetProjectAssistant_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	item, err := server.service.GetProjectAssistant(ctx, p, request.GetProjectRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetProjectAssistantResponse{Profile: castProjectAssistant(item)}, nil
+}
+
+func castProjectAssistant(item entity.ProjectAssistantProfile) *controlplanev1.ProjectAssistantProfile {
+	return &controlplanev1.ProjectAssistantProfile{Ref: item.Ref, ProjectRef: item.ProjectRef, AgentRef: item.AgentRef,
+		Name: item.Name, State: item.State, Version: item.Version, CreatedAt: timestamp(item.CreatedAt), UpdatedAt: timestamp(item.UpdatedAt)}
+}
+
+func conversationScope(scope controlplanev1.AssistantScope) string {
+	if scope == controlplanev1.AssistantScope_ASSISTANT_SCOPE_SYSTEM || scope == controlplanev1.AssistantScope_ASSISTANT_SCOPE_PROJECT {
+		return strings.TrimPrefix(scope.String(), "ASSISTANT_SCOPE_")
+	}
+	return ""
+}
+
 func (server *Server) ListAssistantConversations(ctx context.Context, request *controlplanev1.ListAssistantConversationsRequest) (*controlplanev1.ListAssistantConversationsResponse, error) {
 	p, err := principal(ctx, controlplanev1.SystemAssistantService_ListAssistantConversations_FullMethodName)
 	if err != nil {
@@ -77,7 +115,13 @@ func (server *Server) ListAssistantConversations(ctx context.Context, request *c
 	if state == "UNSPECIFIED" {
 		state = "ACTIVE"
 	}
-	items, next, err := server.service.ListAssistantConversations(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), State: state, MatchAssistantLocalizedDefaultTitle: request.GetMatchLocalizedDefaultTitle(), Page: page(request.GetPage())})
+	if request.GetAssistantScope() != controlplanev1.AssistantScope_ASSISTANT_SCOPE_UNSPECIFIED && conversationScope(request.GetAssistantScope()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "assistant scope is invalid")
+	}
+	items, next, err := server.service.ListAssistantConversations(ctx, p, query.AssistantConversationFilter{
+		Filter:         query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), State: state, MatchAssistantLocalizedDefaultTitle: request.GetMatchLocalizedDefaultTitle(), Page: page(request.GetPage())},
+		AssistantScope: conversationScope(request.GetAssistantScope()), AssistantRef: request.GetAssistantRef(),
+	})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -89,7 +133,10 @@ func (server *Server) ListAssistantConversations(ctx context.Context, request *c
 }
 
 func (server *Server) CreateAssistantConversation(ctx context.Context, request *controlplanev1.CreateAssistantConversationRequest) (*controlplanev1.CreateAssistantConversationResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName, command.CreateAssistantConversation, request.GetMutation(), command.AssistantConversationInput{ProjectRef: request.GetProjectRef(), Context: assistantContext(request.GetContext())})
+	if conversationScope(request.GetAssistantScope()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "assistant scope is required")
+	}
+	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName, command.CreateAssistantConversation, request.GetMutation(), command.AssistantConversationInput{ProjectRef: request.GetProjectRef(), AssistantScope: conversationScope(request.GetAssistantScope()), Context: assistantContext(request.GetContext())})
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +153,11 @@ func (server *Server) UpdateAssistantConversationTitle(ctx context.Context, requ
 }
 
 func (server *Server) AddAssistantTurn(ctx context.Context, request *controlplanev1.AddAssistantTurnRequest) (*controlplanev1.AddAssistantTurnResponse, error) {
-	payload := command.AssistantTurnInput{ConversationRef: request.GetConversationRef(), Content: request.GetContent(), AttachmentSetRef: request.GetAttachmentSetRef()}
+	deliveryMode := strings.TrimPrefix(request.GetDeliveryMode().String(), "ASSISTANT_TURN_DELIVERY_MODE_")
+	if deliveryMode == "UNSPECIFIED" {
+		deliveryMode = "QUEUE"
+	}
+	payload := command.AssistantTurnInput{ConversationRef: request.GetConversationRef(), Content: request.GetContent(), AttachmentSetRef: request.GetAttachmentSetRef(), DeliveryMode: deliveryMode}
 	if request.GetContext() != nil {
 		context := assistantContext(request.GetContext())
 		payload.Context = &context
@@ -116,6 +167,20 @@ func (server *Server) AddAssistantTurn(ctx context.Context, request *controlplan
 		return nil, err
 	}
 	return &controlplanev1.AddAssistantTurnResponse{Conversation: castConversation(*result.Conversation), Assistant: castAssistant(*result.Assistant)}, nil
+}
+
+func (server *Server) CancelAssistantTurn(ctx context.Context, request *controlplanev1.CancelAssistantTurnRequest) (*controlplanev1.CancelAssistantTurnResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_CancelAssistantTurn_FullMethodName, command.CancelAssistantTurn, request.GetMutation(), command.AssistantTurnCancellationInput{ConversationRef: request.GetConversationRef()})
+	if err != nil {
+		return nil, err
+	}
+	conversationRef, _ := result.Runtime["conversationRef"].(string)
+	runRef, _ := result.Runtime["runRef"].(string)
+	cancelled, _ := result.Runtime["cancelled"].(bool)
+	if conversationRef == "" {
+		return nil, status.Error(codes.Internal, "assistant cancellation result is missing")
+	}
+	return &controlplanev1.CancelAssistantTurnResponse{ConversationRef: conversationRef, RunRef: runRef, Cancelled: cancelled}, nil
 }
 
 func (server *Server) ApplyAssistantPlan(ctx context.Context, request *controlplanev1.ApplyAssistantPlanRequest) (*controlplanev1.ApplyAssistantPlanResponse, error) {

@@ -86,8 +86,9 @@ func testRuntimeCandidateIsolationBatch(t *testing.T, ctx context.Context, repos
 	}
 	seedObservedCatalogFixture(t, ctx, repository, func(observation *platformrepo.ProviderModelCatalogObservation) {
 		if observation.AccountRef == accountRef {
-			// Меняем immutable catalog pin, сохраняя совместимость общего gpt-5 с другими fixtures.
-			observation.Models = append(observation.Models, platformrepo.ProviderModelCatalogRecord{ID: "claim-fresh-model"})
+			// Меняем возможности выбранной модели: добавление посторонней модели
+			// намеренно не отзывает server-owned capability pin gpt-5.
+			observation.Models[0].DefaultReasoningEffort = "low"
 		}
 	})
 	defer func() {

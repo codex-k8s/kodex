@@ -7,6 +7,7 @@ JOIN control_plane.runtime_secret_drafts d ON d.id=p.draft_id
 JOIN control_plane.runtime_secrets s ON s.id=d.secret_id
 LEFT JOIN control_plane.runtime_secret_draft_impact_items i ON i.plan_id=p.id
 WHERE p.organization_id=@organization_id::uuid AND p.actor_id=@actor_id::uuid
+AND p.owner_snapshot_revision=2
 AND ((@plan_ref<>'' AND p.ref=@plan_ref) OR (@idempotency_key<>'' AND p.idempotency_key=@idempotency_key)
 OR (@operation_id<>'' AND p.operation_id=NULLIF(@operation_id,'')::uuid))
 GROUP BY p.id,d.ref,s.ref;

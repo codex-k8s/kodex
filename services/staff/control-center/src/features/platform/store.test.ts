@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   Artifact,
+  BootstrapState,
   AuditEvent,
   IntegrationConnection,
   IntegrationDefinition,
@@ -18,6 +19,7 @@ import type {
   SearchResultPage,
 } from "@/shared/api/generated/openapi/types.gen";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
+import { resetOwnerRequests } from "@/shared/api/owner-lifetime";
 
 const listProjectsMock = vi.hoisted(() => vi.fn());
 const getOverviewMock = vi.hoisted(() => vi.fn());
@@ -358,8 +360,100 @@ function auditEvent(ref: string, occurredAt: string): AuditEvent {
 }
 
 describe("platform store", () => {
+  it("не принимает чужой assistant pin через RUN или overview realtime cache", async () => {
+    const store = usePlatformStore();
+    const invalid: Run = {
+      ...run(1),
+      source: "SYSTEM_ASSISTANT",
+      target: { ...run(1).target, type: "SYSTEM_ASSISTANT" },
+      assistantPin: {
+        scope: "PROJECT",
+        organizationRef: "org_foreign",
+        projectRef: "project_owner",
+        profileRef: "asstp_fixture",
+        conversationRef: "cnv_fixture",
+        assistantRef: "agent_owner",
+      },
+    };
+    expect(() =>
+      store.applyPlatformSnapshot("RUN", undefined, {
+        catalog: { runs: [invalid], gates: [] },
+      }),
+    ).toThrow("pin");
+    expect(() =>
+      store.applyPlatformSnapshot("AGENT", undefined, {
+        catalog: { agents: [] },
+        overview: {
+          overview: {
+            activeRuns: [invalid],
+            pendingGates: [],
+            recentArtifacts: [],
+          },
+        },
+      }),
+    ).toThrow("pin");
+    getOverviewMock.mockResolvedValue({
+      data: { activeRuns: [invalid], pendingGates: [], recentArtifacts: [] },
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    await store.loadOverview();
+    expect(store.problems.overview).toBeDefined();
+    expect(store.runs).toEqual({});
+    expect(store.overview).toBeUndefined();
+  });
+  it("не читает artifact без bootstrap и не кеширует чужой exact ref", async () => {
+    const store = usePlatformStore();
+    store.bootstrap = undefined;
+    await expect(store.readArtifact("art_expected")).rejects.toThrow("anchor");
+    expect(getArtifactMock).not.toHaveBeenCalled();
+    store.bootstrap = { organizationRef: "org_synthetic" } as BootstrapState;
+    getArtifactMock.mockResolvedValue({
+      data: artifact("art_foreign", "project_synthetic"),
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    await expect(store.readArtifact("art_expected")).rejects.toThrow(
+      "identity",
+    );
+    expect(store.artifacts).toEqual({});
+  });
+  it("не кеширует поздний artifact после смены owner lifetime", async () => {
+    const store = usePlatformStore();
+    store.bootstrap = { organizationRef: "org_synthetic" } as BootstrapState;
+    const value = artifact("art_expected", "project_synthetic");
+    let resolve!: (result: {
+      data: Artifact;
+      error: undefined;
+      request: Request;
+      response: Response;
+    }) => void;
+    getArtifactMock.mockReturnValue(
+      new Promise<{
+        data: Artifact;
+        error: undefined;
+        request: Request;
+        response: Response;
+      }>((ready) => {
+        resolve = ready;
+      }),
+    );
+    const reading = store.readArtifact(value.ref);
+    resetOwnerRequests();
+    resolve({
+      data: value,
+      error: undefined,
+      request: new Request("https://kodex.test/api/v1/artifacts/art_expected"),
+      response: new Response(null, { status: 200 }),
+    });
+    await expect(reading).rejects.toThrow("Owner context changed");
+    expect(store.artifacts).toEqual({});
+  });
   beforeEach(() => {
     setActivePinia(createPinia());
+    usePlatformStore().bootstrap = {
+      organizationRef: "org_synthetic",
+    } as BootstrapState;
     listProjectsMock.mockReset();
     getOverviewMock.mockReset();
     listOwnerGatesMock.mockReset().mockResolvedValue({
@@ -1060,7 +1154,7 @@ describe("platform store", () => {
     const retried = {
       ...run(3),
       ref: "run_retry000001",
-      rootRunRef: current.rootRunRef,
+      rootRunRef: "run_retry000001",
       sessionRef: "session_retry000001",
       state: "QUEUED" as const,
       attempt: 2,
@@ -1129,7 +1223,7 @@ describe("platform store", () => {
         response: new Response(null, { status: 201 }),
       });
     const input: RunInput = {
-      projectRef: created.projectRef,
+      projectRef: "project_sales",
       targetRef: created.target.ref,
       targetType: "AGENT",
       task: "Подготовь отчёт",
@@ -1342,6 +1436,7 @@ describe("platform store", () => {
     });
     const store = usePlatformStore();
 
+    store.bootstrap = { organizationRef: "org_synthetic" } as BootstrapState;
     await expect(store.readArtifact(active.ref)).resolves.toEqual(active);
     await expect(store.deleteProjectArtifact(active)).resolves.toEqual(deleted);
 

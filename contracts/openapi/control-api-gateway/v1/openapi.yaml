@@ -1846,6 +1846,38 @@ paths:
                 { schema: { $ref: "#/components/schemas/ProviderAccount" } },
             }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/provider-accounts/{providerAccountRef}/concurrency:
+    put:
+      tags: [Agents]
+      operationId: setProviderAccountConcurrency
+      parameters:
+        [
+          { $ref: "#/components/parameters/ProviderAccountRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  {
+                    $ref: "#/components/schemas/ProviderAccountConcurrencyInput",
+                  },
+              },
+          }
+      responses:
+        "200":
+          description: Лимит параллельных выполнений изменён без остановки активных ходов
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ProviderAccount" } },
+            }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/prompt-templates/catalog:
     get:
       tags: [Agents]
@@ -2206,6 +2238,41 @@ paths:
                     {
                       $ref: "#/components/schemas/RuntimeEnvironmentRebindResult",
                     },
+                },
+            }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/organization/runtime-environment-drafts:
+    post:
+      tags: [Agents]
+      operationId: createSystemRuntimeEnvironmentDraft
+      description: Организационный черновик помощника; owner/admin и область выводятся из проверенной сессии. Публикация требует validation, impact и отдельное подтверждение.
+      parameters:
+        [
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  {
+                    $ref: "#/components/schemas/RuntimeEnvironmentDraftCreateInput",
+                  },
+              },
+          }
+      responses:
+        "201":
+          description: Серверный черновик окружения; опубликованная ревизия не изменена
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/RuntimeEnvironmentDraft" },
                 },
             }
         default: { $ref: "#/components/responses/Problem" }
@@ -3153,6 +3220,210 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RoleEnvironmentPage" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/organization/role-image-recipes:
+    get:
+      tags: [RoleEnvironments]
+      operationId: listSystemRoleImageRecipes
+      parameters:
+        - name: query
+          in: query
+          description: Поиск владельца по имени рецепта; не более 128 UTF-8 bytes.
+          schema: { type: string, maxLength: 128 }
+        - name: state
+          in: query
+          schema: { type: string, enum: [ACTIVE, ARCHIVED] }
+        - { $ref: "#/components/parameters/PageSize" }
+        - { $ref: "#/components/parameters/PageToken" }
+      responses:
+        "200":
+          description: Окружения ролей Проекта
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleImageRecipePage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [RoleEnvironments]
+      operationId: createSystemRoleImageRecipe
+      parameters:
+        [
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleImageRecipeUpdateInput" }
+      responses:
+        "201":
+          description: Окружение роли создано
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleImageRecipe" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/role-image-recipes/{recipeRef}:
+    parameters:
+      - { $ref: "#/components/parameters/RecipeRef" }
+    get:
+      tags: [RoleEnvironments]
+      operationId: getSystemRoleImageRecipe
+      responses:
+        "200":
+          description: Окружение роли и история сборок
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleImageRecipeDetail" }
+        default: { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [RoleEnvironments]
+      operationId: updateSystemRoleImageRecipe
+      parameters:
+        [
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleImageRecipeUpdateInput" }
+      responses:
+        "200":
+          description: Окружение роли изменено
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleImageRecipe" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/role-image-recipes/{recipeRef}/commands:
+    post:
+      tags: [RoleEnvironments]
+      operationId: commandSystemRoleImageRecipe
+      parameters:
+        - { $ref: "#/components/parameters/RecipeRef" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleImageRecipeCommand" }
+      responses:
+        "200":
+          description: Команда окружения роли применена
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/RoleImageRecipeCommandReceipt" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/role-image-recipes/{recipeRef}/revisions:
+    get:
+      tags: [RoleEnvironments]
+      operationId: listSystemRoleImageRecipeRevisions
+      parameters:
+        [
+          { $ref: "#/components/parameters/RecipeRef" },
+          { $ref: "#/components/parameters/PageSize" },
+          { $ref: "#/components/parameters/PageToken" },
+        ]
+      responses:
+        "200":
+          description: Immutable recipe/build/promotion history
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    {
+                      $ref: "#/components/schemas/RoleImageRecipeRevisionPage",
+                    },
+                },
+            }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/role-image-recipes/{recipeRef}/promotion:
+    post:
+      tags: [RoleEnvironments]
+      operationId: promoteSystemRoleImage
+      parameters:
+        [
+          { $ref: "#/components/parameters/RecipeRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/RoleImagePromotionInput" },
+              },
+          }
+      responses:
+        "202":
+          description: Exact admitted artifact поставлен на promotion по совпавшему provenance digest
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/RoleImagePromotionReceipt" },
+                },
+            }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/runtime-secrets:
+    get:
+      tags: [RuntimeSecrets]
+      operationId: listSystemRuntimeSecrets
+      parameters:
+        [
+          { $ref: "#/components/parameters/Query" },
+          { $ref: "#/components/parameters/PageSize" },
+          { $ref: "#/components/parameters/PageToken" },
+        ]
+      responses:
+        "200":
+          description: Метаданные Runtime Secrets без значений
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeSecretPage" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/organization/runtime-secret-drafts:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: createSystemRuntimeSecretDraft
+      description: Сохранить зашифрованный черновик нового Secret без публикации; повтор неизвестного результата использует прежние Idempotency-Key и тело.
+      parameters:
+        [
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RuntimeSecretCreateInput" }
+      responses:
+        "201":
+          description: Черновик сохранён без активации Secret
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeSecretDraft" }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/projects/{projectRef}/role-image-recipes:
     parameters: [{ $ref: "#/components/parameters/ProjectRef" }]
@@ -4793,11 +5064,55 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SystemAssistant" }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/projects/{projectRef}/assistant:
+    parameters:
+      - { $ref: "#/components/parameters/ProjectRef" }
+    get:
+      tags: [Assistant]
+      operationId: getProjectAssistant
+      responses:
+        "200":
+          description: Собственный профиль помощника проекта
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectAssistantProfile" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Assistant]
+      operationId: createProjectAssistant
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, purpose, instructions]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                purpose: { type: string, minLength: 1, maxLength: 2000 }
+                instructions: { type: string, minLength: 1, maxLength: 32768 }
+      responses:
+        "201":
+          description: Профиль создан без копирования системных секретов или прав
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectAssistantProfile" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/assistant-conversations:
     get:
       tags: [Assistant]
       operationId: listAssistantConversations
       parameters:
+        - name: assistantScope
+          in: query
+          schema: { $ref: "#/components/schemas/AssistantScope" }
+        - name: assistantRef
+          in: query
+          schema: { $ref: "#/components/schemas/OpaqueRef" }
         - { $ref: "#/components/parameters/ProjectRefQuery" }
         - { $ref: "#/components/parameters/Query" }
         - { $ref: "#/components/parameters/PageSize" }
@@ -4838,7 +5153,9 @@ paths:
             schema:
               type: object
               additionalProperties: false
+              required: [assistantScope]
               properties:
+                assistantScope: { $ref: "#/components/schemas/AssistantScope" }
                 projectRef: { $ref: "#/components/schemas/OpaqueRef" }
                 context:
                   { $ref: "#/components/schemas/AssistantContextDescriptor" }
@@ -4982,6 +5299,10 @@ paths:
               required: [content]
               properties:
                 content: { type: string, minLength: 1, maxLength: 32768 }
+                deliveryMode:
+                  type: string
+                  enum: [QUEUE, INTERRUPT_ACTIVE]
+                  default: QUEUE
                 attachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
                 context:
                   { $ref: "#/components/schemas/AssistantContextDescriptor" }
@@ -4991,6 +5312,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AssistantConversation" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/assistant-conversations/{conversationRef}/active-turn/cancellation:
+    post:
+      tags: [Assistant]
+      operationId: cancelAssistantTurn
+      description: Атомарно находит и отменяет активный корневой Run выбранного диалога; переданный клиентом runRef не используется.
+      parameters:
+        [
+          { $ref: "#/components/parameters/ConversationRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      responses:
+        "200":
+          description: Активный ход отменён либо уже отсутствовал
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [conversationRef, runRef, cancelled]
+                properties:
+                  conversationRef: { $ref: "#/components/schemas/OpaqueRef" }
+                  runRef: { type: string }
+                  cancelled: { type: boolean }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/assistant-plans/{planRef}/application:
     post:
@@ -8157,6 +8504,12 @@ components:
       additionalProperties: false
       required: [kind]
       properties:
+        scopeKind:
+          allOf: [{ $ref: "#/components/schemas/RuntimeResourceScopeKind" }]
+          description: Обязателен для RUNTIME_SECRET_REVEAL; клиент задаёт только цель, владение проверяет CP. Запрещён для EMAIL_EFFECT_RECONCILIATION.
+        organizationRef:
+          allOf: [{ $ref: "#/components/schemas/OpaqueRef" }]
+          description: Точная организационная привязка RUNTIME_SECRET_REVEAL; сверяется с авторитетным чтением секрета до расходования elevation.
         kind:
           type: string
           enum: [RUNTIME_SECRET_REVEAL, EMAIL_EFFECT_RECONCILIATION]
@@ -8671,6 +9024,7 @@ components:
           APPLY_PLAN,
           RECOVER,
           CREATE_AGENT,
+          CREATE_PROJECT_ASSISTANT,
           CREATE_WORKFLOW,
           CREATE_RUN,
           CREATE_SCHEDULE,
@@ -8782,6 +9136,7 @@ components:
       additionalProperties: false
       required:
         [
+          organizationRef,
           initialized,
           onboardingComplete,
           webOnlyReady,
@@ -8792,6 +9147,7 @@ components:
           speechTranscription,
         ]
       properties:
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         initialized: { type: boolean }
         onboardingComplete: { type: boolean }
         webOnlyReady: { type: boolean }
@@ -9380,6 +9736,8 @@ components:
         [
           ref,
           projectRef,
+          scopeKind,
+          organizationRef,
           consumerKind,
           consumerRef,
           consumerVersion,
@@ -9393,7 +9751,9 @@ components:
         projectRef:
           type: string
           maxLength: 160
-          description: Пустая строка допустима только для организационного Agent или AGENT_CONTINUATION в плане PromptTemplate; область и права проверяет owner.
+          description: Пустая строка допустима только при явном ORGANIZATION для Agent или AGENT_CONTINUATION; область и права проверяет owner.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         consumerKind:
           {
             type: string,
@@ -9521,6 +9881,8 @@ components:
           sourceVersionRef,
           sourceVersionDigest,
           projectRef,
+          scopeKind,
+          organizationRef,
           outcome,
         ]
       properties:
@@ -9535,7 +9897,12 @@ components:
           }
         sourceVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
         sourceVersionDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Пусто только при явном ORGANIZATION; полный owner snapshot назначает сервер.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         consumer: { $ref: "#/components/schemas/RuntimeEnvironmentConsumer" }
         outcome:
           {
@@ -11566,11 +11933,16 @@ components:
       properties:
         prefix: { type: string, maxLength: 6 }
         suffix: { type: string, maxLength: 6 }
+    RuntimeResourceScopeKind:
+      type: string
+      enum: [ORGANIZATION, PROJECT]
     RuntimeSecret:
       type: object
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           projectRef,
@@ -11584,9 +11956,11 @@ components:
           nextActions,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
         valueType: { $ref: "#/components/schemas/RuntimeSecretValueType" }
@@ -11602,6 +11976,8 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           generation,
@@ -11618,6 +11994,8 @@ components:
           expiresAt,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -11633,7 +12011,7 @@ components:
             minimum: 1,
             maximum: 9007199254740991,
           }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         secretRef: { $ref: "#/components/schemas/OpaqueRef" }
         secretVersion:
           {
@@ -11937,13 +12315,48 @@ components:
       enum: [EPHEMERAL_DISK, EPHEMERAL_MEMORY]
     RuntimeNetworkDestination:
       type: string
-      enum: [DNS, RUNTIME_CALLBACK, PROVIDER_PROXY, KUBERNETES_API]
+      enum: [DNS, RUNTIME_CALLBACK, PROVIDER_PROXY]
     RuntimeNetworkProtocol:
       type: string
       enum: [TCP, UDP]
+    RuntimeWebAccessMode:
+      type: string
+      enum: [NONE, ALLOWLIST_READ_ONLY, ALLOWLIST_FULL, FULL_PUBLIC]
+    RuntimeWebAccessRule:
+      type: object
+      additionalProperties: false
+      required: [domainPattern, protocol, port, httpMethods]
+      properties:
+        domainPattern:
+          type: string
+          minLength: 3
+          maxLength: 253
+          pattern: '^(?:\*\*\.|\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$'
+        protocol: { type: string, enum: [HTTPS] }
+        port: { type: integer, format: int32, enum: [443] }
+        httpMethods:
+          type: array
+          minItems: 1
+          maxItems: 7
+          uniqueItems: true
+          items:
+            {
+              type: string,
+              enum: [GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE],
+            }
+    RuntimeWebAccess:
+      type: object
+      additionalProperties: false
+      required: [mode, rules]
+      properties:
+        mode: { $ref: "#/components/schemas/RuntimeWebAccessMode" }
+        rules:
+          type: array
+          maxItems: 64
+          items: { $ref: "#/components/schemas/RuntimeWebAccessRule" }
     RuntimeKubernetesAccessKind:
       type: string
-      enum: [NONE, READ_OWN_EXECUTION]
+      enum: [NONE]
     RuntimeResourcePolicy:
       type: object
       additionalProperties: false
@@ -11993,7 +12406,8 @@ components:
     RuntimeEnvironmentPolicyInput:
       type: object
       additionalProperties: false
-      required: [resources, volumes, networkDestinations, kubernetesAccess]
+      required:
+        [resources, volumes, networkDestinations, kubernetesAccess, webAccess]
       properties:
         resources: { $ref: "#/components/schemas/RuntimeResourcePolicy" }
         volumes:
@@ -12005,11 +12419,12 @@ components:
         networkDestinations:
           type: array
           minItems: 3
-          maxItems: 4
+          maxItems: 3
           uniqueItems: true
           items: { $ref: "#/components/schemas/RuntimeNetworkDestination" }
         kubernetesAccess:
           { $ref: "#/components/schemas/RuntimeKubernetesAccessKind" }
+        webAccess: { $ref: "#/components/schemas/RuntimeWebAccess" }
     RuntimeNetworkEgress:
       type: object
       additionalProperties: false
@@ -12021,16 +12436,17 @@ components:
     RuntimeNetworkPolicy:
       type: object
       additionalProperties: false
-      required: [denyByDefault, egress]
+      required: [denyByDefault, egress, webAccess]
       properties:
         denyByDefault: { type: boolean, enum: [true] }
         egress:
           {
             type: array,
             minItems: 4,
-            maxItems: 5,
+            maxItems: 4,
             items: { $ref: "#/components/schemas/RuntimeNetworkEgress" },
           }
+        webAccess: { $ref: "#/components/schemas/RuntimeWebAccess" }
     RuntimeKubernetesAccessProfile:
       type: object
       additionalProperties: false
@@ -12072,6 +12488,8 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           projectRef,
@@ -12085,9 +12503,11 @@ components:
           nextActions,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
         state: { type: string, enum: [ACTIVE, DISABLED, DELETED] }
@@ -12138,6 +12558,8 @@ components:
           environmentVersion,
           environmentVersionRef,
           projectRef,
+          scopeKind,
+          organizationRef,
           secretRevisions,
         ]
       properties:
@@ -12150,7 +12572,12 @@ components:
             maximum: 9007199254740991,
           }
         environmentVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Пусто только для ORGANIZATION; PROJECT требует точный projectRef владельца окружения.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         secretRevisions:
           {
             type: array,
@@ -12219,6 +12646,9 @@ components:
           expectedEnvironmentVersion,
           sourceVersionRef,
           consumers,
+          scopeKind,
+          organizationRef,
+          projectRef,
         ]
       properties:
         environmentRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -12230,6 +12660,12 @@ components:
             maximum: 9007199254740991,
           }
         sourceVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Полный ожидаемый owner snapshot окружения; не источник полномочий. Пусто только для ORGANIZATION.
         consumers:
           {
             type: array,
@@ -12251,7 +12687,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [environmentRef, environmentVersion, projectRef, versionRef, digest]
+        [environmentRef, environmentVersion, projectRef, scopeKind, organizationRef, versionRef, digest]
       properties:
         environmentRef: { $ref: "#/components/schemas/OpaqueRef" }
         environmentVersion:
@@ -12261,7 +12697,12 @@ components:
             minimum: 1,
             maximum: 9007199254740991,
           }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Пусто только для ORGANIZATION; PROJECT требует точный projectRef владельца окружения.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         versionRef: { $ref: "#/components/schemas/OpaqueRef" }
         digest: { type: string, pattern: "^[a-f0-9]{64}$" }
     RuntimeSecretRebindResult:
@@ -12457,6 +12898,8 @@ components:
           bindingVersion,
           versionRef,
           projectRef,
+          scopeKind,
+          organizationRef,
         ]
       properties:
         agentRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -12478,7 +12921,12 @@ components:
         versionRef:
           allOf: [{ $ref: "#/components/schemas/OpaqueRef" }]
           description: Прежняя версия окружения в binding; не целевая версия из path.
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Пусто только при явном ORGANIZATION. Полный scope/org/project назначает owner, request не выдаёт полномочий.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
     RuntimeEnvironmentImpact:
       type: object
       additionalProperties: false
@@ -12591,6 +13039,8 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           projectRef,
@@ -12600,6 +13050,8 @@ components:
           diagnostics,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -12608,7 +13060,7 @@ components:
             minimum: 1,
             maximum: 9007199254740991,
           }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         environmentRef: { $ref: "#/components/schemas/OpaqueRef" }
         expectedEnvironmentVersion:
           {
@@ -12660,7 +13112,11 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
-        imageArtifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        imageArtifactRef:
+          description: Точный admitted/promoted artifact выбранной области. Пустое значение означает незавершённый черновик и не разрешает публикацию или подстановку платформенного образа.
+          type: string
+          maxLength: 128
+          pattern: "^$|^[A-Za-z0-9_-]{8,128}$"
         tools:
           {
             type: array,
@@ -13577,6 +14033,8 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
           ref,
           version,
           projectRef,
@@ -13592,9 +14050,11 @@ components:
           nextActions,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         roleDefinitionRef: { $ref: "#/components/schemas/OpaqueRef" }
         name: { type: string, minLength: 1, maxLength: 160 }
         state: { type: string, enum: [ACTIVE, ARCHIVED] }
@@ -13654,6 +14114,9 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
+          projectRef,
           ref,
           version,
           recipeRef,
@@ -13666,6 +14129,9 @@ components:
           updatedAt,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         recipeRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -13774,6 +14240,9 @@ components:
       additionalProperties: false
       required:
         [
+          scopeKind,
+          organizationRef,
+          projectRef,
           ref,
           version,
           recipeRef,
@@ -13787,6 +14256,9 @@ components:
           tools,
         ]
       properties:
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 96 }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         recipeRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -14245,7 +14717,7 @@ components:
       additionalProperties: false
       required: [type, ref, displayName, version]
       properties:
-        type: { type: string, enum: [AGENT, WORKFLOW] }
+        type: { type: string, enum: [AGENT, WORKFLOW, SYSTEM_ASSISTANT] }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         displayName: { type: string, maxLength: 160 }
         version: { type: integer, format: int64, minimum: 1 }
@@ -14277,7 +14749,6 @@ components:
         [
           ref,
           version,
-          projectRef,
           sessionRef,
           rootRunRef,
           target,
@@ -14300,6 +14771,7 @@ components:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantPin: { $ref: "#/components/schemas/AssistantRunPin" }
         sessionRef: { $ref: "#/components/schemas/OpaqueRef" }
         rootRunRef: { $ref: "#/components/schemas/OpaqueRef" }
         parentRunRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -14370,6 +14842,42 @@ components:
             maxItems: 100,
             items: { $ref: "#/components/schemas/Incident" },
           }
+      oneOf:
+        - required: [projectRef]
+          properties:
+            target:
+              properties:
+                type: { enum: [AGENT, WORKFLOW] }
+          not: { required: [assistantPin] }
+        - required: [assistantPin]
+          properties:
+            source: { type: string, enum: [SYSTEM_ASSISTANT] }
+            target:
+              properties:
+                type: { type: string, enum: [SYSTEM_ASSISTANT] }
+          description: |
+            Ход помощника содержит назначаемую сервером привязку. PROJECT
+            требует projectRef и profileRef; SYSTEM без проекта не выдаёт
+            пустую строку projectRef. Gateway сверяет pin с Run.target/project.
+    AssistantRunPin:
+      type: object
+      additionalProperties: false
+      description: |
+        Серверная read-only identity точного диалога, организации и помощника;
+        не является authority и не принимается mutation-командами.
+      required: [scope, organizationRef, conversationRef, assistantRef]
+      properties:
+        scope: { type: string, enum: [SYSTEM, PROJECT] }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        conversationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        profileRef: { $ref: "#/components/schemas/OpaqueRef" }
+      oneOf:
+        - properties: { scope: { type: string, enum: [SYSTEM] } }
+          not: { required: [profileRef] }
+        - required: [projectRef, profileRef]
+          properties: { scope: { type: string, enum: [PROJECT] } }
     RunNode:
       type: object
       additionalProperties: false
@@ -15572,6 +16080,7 @@ components:
           state,
           enabled,
           ready,
+          maximumConcurrentExecutions,
           nextActions,
           createdAt,
           updatedAt,
@@ -15616,6 +16125,8 @@ components:
           }
         enabled: { type: boolean }
         ready: { type: boolean }
+        maximumConcurrentExecutions:
+          { type: integer, format: int32, minimum: 1, maximum: 256 }
         usage: { $ref: "#/components/schemas/ProviderAccountUsage" }
         authorization: { $ref: "#/components/schemas/ProviderAuthorization" }
         deletion: { $ref: "#/components/schemas/ProviderAccountDeletion" }
@@ -15625,6 +16136,13 @@ components:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         updatedAt: { $ref: "#/components/schemas/Timestamp" }
+    ProviderAccountConcurrencyInput:
+      type: object
+      additionalProperties: false
+      required: [maximumConcurrentExecutions]
+      properties:
+        maximumConcurrentExecutions:
+          { type: integer, format: int32, minimum: 1, maximum: 256 }
     ProviderAccountDeletion:
       type: object
       additionalProperties: false
@@ -17026,6 +17544,7 @@ components:
                 CREATE_PROJECT,
                 CREATE_PROJECT_FILE,
                 CREATE_AGENT,
+                CREATE_PROJECT_ASSISTANT,
                 CREATE_WORKFLOW,
                 UPDATE_WORKFLOW,
                 CHANGE_CAPABILITY,
@@ -17047,6 +17566,10 @@ components:
                 BIND_AGENT_RUNTIME_ENVIRONMENT,
                 CREATE_ROLE_IMAGE_RECIPE,
                 UPDATE_ROLE_IMAGE_RECIPE,
+                UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS,
+                CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+                UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+                PREPARE_ASSISTANT_RUNTIME_CONFIGURATION,
               ],
           }
         action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, EXECUTE] }
@@ -17133,13 +17656,35 @@ components:
         sequence: { type: integer, format: int64, minimum: 1 }
         role: { type: string, enum: [USER, ASSISTANT, SYSTEM_RECEIPT] }
         content: { type: string, maxLength: 32768 }
-        state: { type: string, enum: [QUEUED, RUNNING, COMPLETED, FAILED] }
+        state:
+          {
+            type: string,
+            enum: [QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED],
+          }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runVersion: { type: integer, format: int64, minimum: 1 }
         plan: { $ref: "#/components/schemas/AssistantPlan" }
         attachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
     AssistantConversationState:
       type: string
       enum: [ACTIVE, CLOSED, ARCHIVED]
+    AssistantScope:
+      type: string
+      enum: [SYSTEM, PROJECT]
+    ProjectAssistantProfile:
+      type: object
+      additionalProperties: false
+      required: [ref, projectRef, agentRef, name, state, version, createdAt, updatedAt]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        agentRef: { $ref: "#/components/schemas/OpaqueRef" }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        state: { type: string, enum: [ACTIVE, DISABLED, ARCHIVED] }
+        version: { type: integer, format: int64, minimum: 1 }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+        updatedAt: { $ref: "#/components/schemas/Timestamp" }
     AssistantConversation:
       type: object
       additionalProperties: false
@@ -17154,12 +17699,17 @@ components:
           turns,
           updatedAt,
           state,
+          assistantScope,
+          assistantRef,
         ]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         title: { type: string, maxLength: 160 }
         state: { $ref: "#/components/schemas/AssistantConversationState" }
+        assistantScope: { $ref: "#/components/schemas/AssistantScope" }
+        assistantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantProfileRef: { $ref: "#/components/schemas/OpaqueRef" }
         titleSource:
           { type: string, enum: [SERVER_DEFAULT, AGENT_PROPOSED, USER_EDITED] }
         titleRevision: { type: integer, format: int64, minimum: 1 }
@@ -17193,6 +17743,7 @@ components:
                   CREATE_PROJECT,
                   CREATE_PROJECT_FILE,
                   CREATE_AGENT,
+                  CREATE_PROJECT_ASSISTANT,
                   CREATE_WORKFLOW,
                   UPDATE_WORKFLOW,
                   CHANGE_CAPABILITY,
@@ -17211,9 +17762,13 @@ components:
                   CREATE_INSTRUCTION_DRAFT,
                   CREATE_RUNTIME_ENVIRONMENT_DRAFT,
                   PREPARE_RUNTIME_ENVIRONMENT_REVISION,
+                  UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS,
                   BIND_AGENT_RUNTIME_ENVIRONMENT,
                   CREATE_ROLE_IMAGE_RECIPE,
                   UPDATE_ROLE_IMAGE_RECIPE,
+                  CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+                  UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+                  PREPARE_ASSISTANT_RUNTIME_CONFIGURATION,
                 ],
             }
     AssistantPlanReceipt:

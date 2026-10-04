@@ -18,6 +18,8 @@ for (const width of [390, 2900]) {
     let saveKey = "";
     let saveInput: unknown;
     const secret: RuntimeSecret = {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "secret_rotation",
       projectRef: "project_rotation",
       version: 8,
@@ -31,6 +33,8 @@ for (const width of [390, 2900]) {
       updatedAt: "2026-09-05T00:00:00Z",
     };
     let draft: RuntimeSecretDraft = {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "draft_rotation",
       version: 1,
       generation: 4,
@@ -154,6 +158,8 @@ for (const width of [390, 2900]) {
               (outcome, index) => ({
                 ref: `item_rotation_${String(index)}`,
                 consumer: {
+                  scopeKind: "PROJECT",
+                  organizationRef: "org_synthetic",
                   environmentRef: `environment_rotation_${String(index)}`,
                   environmentVersion: 9,
                   environmentVersionRef: `version_rotation_${String(index)}`,
@@ -248,14 +254,9 @@ for (const width of [390, 2900]) {
         exact: true,
       })
       .click();
-    await expect(
-      dialog.getByRole("button", {
-        name: "Повторить исходный запрос",
-        exact: true,
-      }),
-    ).toBeVisible();
+    await expect(dialog).toContainText("PUBLISHED");
+    await expect(dialog).toContainText("published_environment_rotation");
     await expect(page).toHaveURL(/planRef=plan_rotation/);
-    page.on("dialog", (value) => value.accept());
     await page.reload();
     dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("PUBLISHED");

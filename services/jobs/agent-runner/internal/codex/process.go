@@ -382,7 +382,7 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 	command.Dir = input.WorkspaceRoot
 	command.Env = appServerEnvironment(input, mcpProxyToken)
 	if command.Env == nil {
-		return nil, errors.New("runtime Secret projection is unavailable")
+		return nil, errors.New("runtime environment projection is unavailable")
 	}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	return startAppServerCommand(command, nil)
@@ -450,22 +450,30 @@ func startAppServerCommand(command *exec.Cmd, readerGate <-chan struct{}) (*appS
 }
 
 func appServerEnvironment(input model.Input, mcpProxyToken string) []string {
+	transport, err := runtimeTransportEnvironment()
+	if err != nil {
+		return nil
+	}
 	environment := []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome,
 		"CODEX_HOME=" + input.CodexHome, "KODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
 	for _, item := range input.EnvironmentValues {
+		if !runtimecontract.ValidRuntimeEnvironmentName(item.Name) {
+			return nil
+		}
 		environment = append(environment, item.Name+"="+item.Value)
 	}
 	for _, item := range input.SecretProjections {
+		if !runtimecontract.ValidRuntimeEnvironmentName(item.Name) {
+			return nil
+		}
 		value, present := os.LookupEnv(item.Name)
 		if !present {
 			return nil
 		}
 		environment = append(environment, item.Name+"="+value)
 	}
-	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"} {
-		if value, ok := os.LookupEnv(name); ok && value != "" {
-			environment = append(environment, name+"="+value)
-		}
+	for _, name := range runtimeTransportEnvironmentNames {
+		environment = append(environment, name+"="+transport[name])
 	}
 	return environment
 }

@@ -16,7 +16,12 @@ usage() {
     '  [--state-directory <path>] [--cluster-marker <root-owned-path>]' \
     '  [--profile web-only|web-with-mattermost]' \
     '  [--security-profile protected|trusted-cluster]' \
-    '  [--management-surfaces all|control-center]' \
+    '  [--management-surfaces all|control-center-grafana|control-center]' \
+    '  [--cert-manager-mode managed|existing] [--ingress-mode managed|existing]' \
+    '  [--api-endpoint-mode managed|existing]' \
+    '  [--provider-sandbox-mode managed|existing|disabled]' \
+    '  [--local-ca-certificate-file <path> --local-ca-private-key-file <path>]' \
+    '  [--trust-store browser|system-and-browser]' \
     '  [--expected-sha <40-hex-commit>] [--component-manifest <private-path>]' >&2
 }
 
@@ -47,8 +52,15 @@ cluster_marker=""
 expected_sha=""
 component_manifest=""
 requested_profile=""
-management_surfaces=all
+management_surfaces=control-center-grafana
 security_profile=protected
+cert_manager_mode=${KODEX_DEV_CERT_MANAGER_MODE:-managed}
+ingress_mode=${KODEX_DEV_INGRESS_MODE:-managed}
+api_endpoint_ownership=${KODEX_DEV_API_ENDPOINT_MODE:-managed}
+provider_sandbox_mode=${KODEX_DEV_PROVIDER_SANDBOX_MODE:-managed}
+local_ca_certificate_file=${KODEX_DEV_LOCAL_CA_CERTIFICATE_FILE:-}
+local_ca_private_key_file=${KODEX_DEV_LOCAL_CA_PRIVATE_KEY_FILE:-}
+trust_store=${KODEX_DEV_TRUST_STORE:-browser}
 while (($# > 0)); do
   case "$1" in
     --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
@@ -62,13 +74,28 @@ while (($# > 0)); do
     --profile) requested_profile=${2:-}; shift 2 ;;
     --security-profile) security_profile=${2:-}; shift 2 ;;
     --management-surfaces) management_surfaces=${2:-}; shift 2 ;;
+    --cert-manager-mode) cert_manager_mode=${2:-}; shift 2 ;;
+    --ingress-mode) ingress_mode=${2:-}; shift 2 ;;
+    --api-endpoint-mode) api_endpoint_ownership=${2:-}; shift 2 ;;
+    --provider-sandbox-mode) provider_sandbox_mode=${2:-}; shift 2 ;;
+    --local-ca-certificate-file) local_ca_certificate_file=${2:-}; shift 2 ;;
+    --local-ca-private-key-file) local_ca_private_key_file=${2:-}; shift 2 ;;
+    --trust-store) trust_store=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 case "$command_name" in up|identity|status|smoke|e2e|down) ;; *) usage; fail 'command is invalid' ;; esac
-case "$management_surfaces" in all|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
+case "$management_surfaces" in all|control-center-grafana|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
 case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
+case "$cert_manager_mode" in managed|existing) ;; *) fail 'cert-manager mode is invalid' ;; esac
+case "$ingress_mode" in managed|existing) ;; *) fail 'ingress mode is invalid' ;; esac
+case "$api_endpoint_ownership" in managed|existing) ;; *) fail 'API endpoint mode is invalid' ;; esac
+case "$provider_sandbox_mode" in managed|existing|disabled) ;; *) fail 'provider sandbox mode is invalid' ;; esac
+case "$trust_store" in browser|system-and-browser) ;; *) fail 'trust store mode is invalid' ;; esac
+if [[ "$provider_sandbox_mode" == disabled && "$security_profile" != trusted-cluster ]]; then
+  fail 'disabled provider sandbox is restricted to trusted-cluster development'
+fi
 if [[ -n "$component_manifest" ]]; then
   [[ "$command_name" == status || "$command_name" == smoke || "$command_name" == e2e ]] || fail 'component manifest is restricted to application readback and acceptance'
   [[ "$component_manifest" == /* && -f "$component_manifest" && ! -L "$component_manifest" ]] || fail 'component manifest is absent or unsafe'
@@ -78,6 +105,12 @@ fi
   fail 'state directory must be an exact safe absolute path'
 case "$requested_profile" in ''|web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
 deployment_profile=${requested_profile:-web-only}
+if [[ "$command_name" != down && -f "$state_directory/render.yaml" &&
+  ! -L "$state_directory/render.yaml" ]]; then
+  "$repository_root/tools/dev/install-user-render-tools.sh" --mode readback \
+    --state-directory "$state_directory" >/dev/null
+  export PATH="$state_directory/tools/bin:$PATH"
+fi
 if [[ "$command_name" != down ]]; then
   deployment_profile=$("$repository_root/tools/dev/resolve-local-profile.sh" \
     "$requested_profile" "$state_directory/render.yaml")
@@ -204,10 +237,17 @@ fi
 
 api_endpoint_mode=readback
 [[ "$command_name" == up || "$command_name" == identity ]] && api_endpoint_mode=apply
-"$repository_root/tools/dev/configure-local-api-endpoint.sh" \
-  --context "$context" --mode "$api_endpoint_mode"
+if [[ "$api_endpoint_ownership" == managed ]]; then
+  "$repository_root/tools/dev/configure-local-api-endpoint.sh" \
+    --context "$context" --mode "$api_endpoint_mode"
+fi
 
 install -d -m 0700 "$state_directory" "$state_directory/cache" "$state_directory/inputs"
+"$repository_root/tools/dev/install-user-render-tools.sh" --mode apply \
+  --state-directory "$state_directory" >/dev/null
+"$repository_root/tools/dev/install-user-material-tools.sh" --mode apply \
+  --state-directory "$state_directory" >/dev/null
+export PATH="$state_directory/tools/bin:$PATH"
 
 read_authority_snapshot_revision() {
   local encoded compact payload revision
@@ -489,10 +529,15 @@ commit_local_authority_source_state() {
 endpoint_ip=${KODEX_DEV_ENDPOINT_IP:-127.0.0.1}
 [[ "$endpoint_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail 'KODEX_DEV_ENDPOINT_IP must use IPv4'
-if [[ "$endpoint_ip" != 127.0.0.1 ]]; then
-  ip -4 -o address show | awk '{print $4}' | cut -d/ -f1 | grep -Fxq "$endpoint_ip" ||
-    fail 'KODEX_DEV_ENDPOINT_IP is not assigned to this host'
-fi
+ip -4 route get "$endpoint_ip" 2>/dev/null |
+  awk -v endpoint="$endpoint_ip" '
+    $1 == "local" && $2 == endpoint {
+      for (field = 3; field <= NF; field++) {
+        if ($field == "dev" && $(field + 1) == "lo") found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' || fail 'KODEX_DEV_ENDPOINT_IP is not local to this host'
 dns_suffix=${endpoint_ip//./.}.nip.io
 public_host=${KODEX_DEV_PUBLIC_HOST:-control.$dns_suffix}
 oidc_host=${KODEX_DEV_OIDC_HOST:-sso.$dns_suffix}
@@ -515,6 +560,7 @@ node_extra_ca_file="$state_directory/kodex-local-ca.crt"
 # Локальный bootstrap устанавливает и проверяет этот профиль до render.
 # Пустой профиль оставил бы provider-runtime без разрешённого userns sandbox.
 provider_apparmor_profile=${KODEX_DEV_PROVIDER_APPARMOR_PROFILE:-kodex-provider-runtime}
+[[ "$provider_sandbox_mode" != disabled ]] || provider_apparmor_profile=""
 [[ -z "$provider_apparmor_profile" || "$provider_apparmor_profile" == kodex-provider-runtime ]] ||
   fail 'KODEX_DEV_PROVIDER_APPARMOR_PROFILE is not approved'
 if [[ "$tls_mode" == public-acme ]]; then
@@ -525,12 +571,25 @@ if [[ "$tls_mode" == public-acme ]]; then
   oidc_ca_file=/etc/ssl/certs/ca-certificates.crt
   node_extra_ca_file=""
 fi
+if [[ "$tls_mode" == local-ca ]] && ! command -v certutil >/dev/null 2>&1; then
+  "$repository_root/tools/dev/install-user-nss-tools.sh" --mode apply \
+    --state-directory "$state_directory" >/dev/null
+fi
+if [[ "$tls_mode" == local-ca ]]; then
+  export PATH="$state_directory/tools/bin:$PATH"
+fi
 keycloak_origin_arguments=(
   --management-surfaces "$management_surfaces"
   --public-origin "https://$public_host"
   --grafana-origin "https://$grafana_host"
   --headlamp-origin "https://$headlamp_host"
 )
+keycloak_smtp_config_file=${KODEX_DEV_KEYCLOAK_SMTP_CONFIG_FILE:-}
+if [[ -n "$keycloak_smtp_config_file" ]]; then
+  [[ "$keycloak_smtp_config_file" == /* && -f "$keycloak_smtp_config_file" &&
+    ! -L "$keycloak_smtp_config_file" ]] || fail 'Keycloak SMTP configuration file is invalid'
+  keycloak_origin_arguments+=(--smtp-config-file "$keycloak_smtp_config_file")
+fi
 
 credentials_file="$state_directory/credentials.env"
 bash "$repository_root/tools/dev/prepare-local-credentials.sh" "$credentials_file"
@@ -539,10 +598,24 @@ source "$credentials_file"
 
 cluster_mode=readback
 [[ "$command_name" == up || "$command_name" == identity ]] && cluster_mode=apply
-"$repository_root/tools/dev/bootstrap-cluster.sh" --context "$context" \
-  --mode "$cluster_mode" --state-directory "$state_directory" \
-  --tls-mode "$tls_mode" --acme-email "$acme_email" \
-  --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer"
+bootstrap_arguments=(
+  --context "$context"
+  --mode "$cluster_mode"
+  --state-directory "$state_directory"
+  --tls-mode "$tls_mode"
+  --acme-email "$acme_email"
+  --ingress-class "$ingress_class"
+  --cluster-issuer "$cluster_issuer"
+  --cert-manager-mode "$cert_manager_mode"
+  --ingress-mode "$ingress_mode"
+  --provider-sandbox-mode "$provider_sandbox_mode"
+  --trust-store "$trust_store"
+)
+[[ -z "$local_ca_certificate_file" ]] ||
+  bootstrap_arguments+=(--local-ca-certificate-file "$local_ca_certificate_file")
+[[ -z "$local_ca_private_key_file" ]] ||
+  bootstrap_arguments+=(--local-ca-private-key-file "$local_ca_private_key_file")
+"$repository_root/tools/dev/bootstrap-cluster.sh" "${bootstrap_arguments[@]}"
 
 if [[ "$cluster_mode" == apply && "$tls_mode" == local-ca &&
   "$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')" == 'https://127.0.0.1:6443' ]]; then
@@ -573,9 +646,9 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     e2e_start_fingerprint=$(jq -r '.currentContentSHA256' "$source_evidence")
     if [[ -z "$component_manifest" ]]; then
       "$repository_root/tools/dev/build-local-session-archive.sh" \
-        --source-root "$repository_root" --state-directory "$state_directory"
+        --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
       "$repository_root/tools/dev/build-local-stt.sh" \
-        --source-root "$repository_root" --state-directory "$state_directory"
+        --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
     fi
   fi
   if [[ -z "$component_manifest" ]]; then
@@ -695,11 +768,6 @@ material_action=$("$repository_root/tools/dev/reconcile-local-material.sh" --con
   --state-directory "$state_directory" --mode reconcile)
 printf 'Kodex local material action: %s\n' "$material_action"
 
-kubectl create namespace kodex-system --dry-run=client -o yaml |
-  kubectl apply --server-side --field-manager=kodex-local-dev -f - >/dev/null
-kubectl label namespace kodex-system app.kubernetes.io/part-of=kodex \
-  kodex.dev/environment=staging kodex.dev/local-profile=hot-reload --overwrite >/dev/null
-
 if [[ ! -d "$material_directory" ]]; then
   draft_recovery_directory="$state_directory/draft-key-recovery"
   [[ ! -L "$draft_recovery_directory" ]] || fail 'draft recovery directory is invalid'
@@ -724,6 +792,11 @@ if [[ ! -d "$material_directory" ]]; then
   "$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
     --state-directory "$state_directory" --mode checkpoint >/dev/null
 fi
+
+kubectl create namespace kodex-system --dry-run=client -o yaml |
+  kubectl apply --server-side --field-manager=kodex-local-dev -f - >/dev/null
+kubectl label namespace kodex-system app.kubernetes.io/part-of=kodex \
+  kodex.dev/environment=staging kodex.dev/local-profile=hot-reload --overwrite >/dev/null
 
 if [[ ! -d "$material_directory/identity" ]]; then
   for input in admin-username admin-password owner-username owner-email owner-password; do
@@ -768,7 +841,8 @@ if [[ "$command_name" == identity ]]; then
 fi
 
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
-  --context "$context" --material-directory "$material_directory"
+  --context "$context" --material-directory "$material_directory" \
+  --security-profile "$security_profile"
 default_provider_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"
 provider_auth=${KODEX_LOCAL_PROVIDER_AUTH_FILE:-${KODEX_DEV_PROVIDER_AUTH_FILE:-$default_provider_auth}}
 provider_mode=configured
@@ -801,22 +875,22 @@ fi
   --promoted-pull-host "$promoted_pull_host"
 
 "$repository_root/tools/dev/build-local-runner.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 runner_image=$(<"$state_directory/agent-runner-image")
 "$repository_root/tools/dev/build-local-session-archive.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 session_archive_image=$(<"$state_directory/session-archive-image")
 "$repository_root/tools/dev/build-local-stt.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 stt_hot_reload_image=$(<"$state_directory/stt-hot-reload-image")
 "$repository_root/tools/dev/build-local-integration.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 integration_hot_reload_image=$(<"$state_directory/integration-hot-reload-image")
 "$repository_root/tools/dev/build-local-backup-controller.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 backup_controller_image=$(<"$state_directory/backup-controller-image")
 "$repository_root/tools/dev/build-local-image-supply-chain.sh" \
-  --source-root "$repository_root" --state-directory "$state_directory"
+  --source-root "$repository_root" --state-directory "$state_directory" --context "$context"
 role_image_builder_image=$(<"$state_directory/role-image-builder-image")
 image_admission_image=$(<"$state_directory/image-admission-image")
 image_admission_tools_image=$(<"$state_directory/image-admission-tools-image")
@@ -887,7 +961,7 @@ bash "$repository_root/tools/dev/prepare-local-integration-fixture.sh" \
   --state-directory "$state_directory" --mode commit >/dev/null
 record_source_provenance_evidence "$state_directory/source-provenance-up.json" up
 if [[ "$security_profile" == trusted-cluster ]]; then
-  for stage in data network migrate core; do
+  for stage in data network migrate supply-chain core; do
     "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
       --render "$state_directory/render.yaml" --state-directory "$state_directory" \
       --tls-mode "$tls_mode" --security-profile "$security_profile" --stage "$stage"
@@ -899,8 +973,12 @@ else
 fi
 commit_local_authority_source_state
 
+node "$repository_root/tools/dev/reconcile-local-proxy-session-store.mjs" \
+  --context "$context" --mode apply
+
 management_surface_arguments=(
   --context "$context"
+  --management-surfaces "$management_surfaces"
   --oidc-issuer "https://$oidc_host/realms/kodex"
   --oidc-connect-address sso.identity.svc.cluster.local:443
   --oidc-target-port 8443
@@ -915,6 +993,9 @@ management_surface_arguments=(
   --kubernetes-api-endpoint-cidrs "$api_endpoint_ip/32"
   --kubernetes-api-endpoint-ports "$api_endpoint_port"
 )
+if [[ "$tls_mode" == local-ca ]]; then
+  management_surface_arguments+=(--oidc-ca-file "$oidc_ca_file")
+fi
 "$repository_root/infra/management-surfaces/bootstrap.sh" \
   --mode reconcile "${management_surface_arguments[@]}"
 

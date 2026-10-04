@@ -24,7 +24,11 @@ MODULES = (
     "services/external/interaction-gateway",
 )
 REPOSITORY = "github.com/codex-k8s/kodex"
-ORIGINS = ("https://github.com/codex-k8s/kodex.git", "git@github.com:codex-k8s/kodex.git")
+ORIGINS = (
+    "https://github.com/codex-k8s/kodex",
+    "https://github.com/codex-k8s/kodex.git",
+    "git@github.com:codex-k8s/kodex.git",
+)
 GO_VERSION = "go1.26.6"
 
 

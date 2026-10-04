@@ -263,14 +263,14 @@ onUnmounted(() => {
   min-width: 0;
 }
 .audit-search input {
-  min-height: 42px;
+  min-height: var(--control-height);
 }
 .audit-project-filter :deep(.async-picker__trigger) {
-  min-height: 42px;
+  min-height: var(--control-height);
 }
 .audit-technical-filter {
   display: inline-flex;
-  min-height: 42px;
+  min-height: var(--control-height);
   align-items: center;
   gap: 8px;
   color: var(--muted);

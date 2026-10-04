@@ -3,14 +3,15 @@ WITH current_agent AS (
     SELECT agent.role_definition_id
     FROM control_plane.agents agent
     WHERE agent.organization_id = @organization_id::uuid
-      AND agent.project_id = @project_id::uuid
+      AND agent.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
       AND agent.id = @agent_id::uuid
 ), changed_recipe AS (
     INSERT INTO control_plane.role_image_recipes
-        (ref, organization_id, project_id, role_definition_id, name, state, specification,
+        (ref, organization_id, project_id, scope_kind, role_definition_id, name, state, specification,
          generation, spec_sha256, policy_revision, policy_sha256,
          role_runtime_contract_revision, role_runtime_contract_sha256, created_by)
-    SELECT @recipe_ref, @organization_id::uuid, @project_id::uuid,
+    SELECT @recipe_ref, @organization_id::uuid, NULLIF(@project_id, '')::uuid,
+           CASE WHEN @project_id = '' THEN 'ORGANIZATION' ELSE 'PROJECT' END,
            current_agent.role_definition_id, 'i18n:SYSTEM_BASE_ROLE_IMAGE', 'ACTIVE',
            @specification, 1, @spec_sha256, @policy_revision, @policy_sha256,
            @contract_revision, @contract_sha256, @created_by::uuid
@@ -46,7 +47,7 @@ WITH current_agent AS (
     FROM control_plane.role_image_recipes existing
     JOIN current_agent ON current_agent.role_definition_id = existing.role_definition_id
     WHERE existing.organization_id = @organization_id::uuid
-      AND existing.project_id = @project_id::uuid
+      AND existing.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
       AND existing.name = 'i18n:SYSTEM_BASE_ROLE_IMAGE'
       AND existing.state = 'ACTIVE'
       AND NOT EXISTS (SELECT 1 FROM changed_recipe)
@@ -57,7 +58,7 @@ WITH current_agent AS (
     FROM control_plane.image_artifacts artifact
     JOIN recipe ON recipe.id = artifact.recipe_id
     WHERE artifact.organization_id = @organization_id::uuid
-      AND artifact.project_id = @project_id::uuid
+      AND artifact.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
       AND artifact.recipe_generation = recipe.generation
       AND artifact.manifest_digest = @manifest_digest
       AND artifact.promoted_reference = @image_reference

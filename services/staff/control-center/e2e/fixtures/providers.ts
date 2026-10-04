@@ -49,6 +49,7 @@ export async function installProviderFixture(page: Page) {
         const account: ProviderAccount = {
           ref: `pacc_synthetic_${String(accounts.length)}`,
           version: 1,
+          maximumConcurrentExecutions: 10,
           definitionKey: input.definitionKey,
           name: input.name,
           externalAccountMasked: "",

@@ -37,6 +37,8 @@ export async function checkRoleImageCatalog(page: Page, projectRef: string) {
     },
   );
   const recipes: RoleImageRecipe[] = Array.from({ length: 8 }, (_, index) => ({
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     sourceAvailable: true,
     ref: `image_synthetic_${String(index)}`,
     projectRef,
@@ -147,6 +149,9 @@ export async function checkRoleImageHistory(
   recipe: RoleImageRecipe,
 ) {
   const builds: RoleImageBuild[] = Array.from({ length: 8 }, (_, index) => ({
+    projectRef: recipe.projectRef,
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     sourceAvailable: true,
     ref: `build_synthetic_${String(index)}`,
     version: 1,

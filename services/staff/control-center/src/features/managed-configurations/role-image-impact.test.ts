@@ -33,14 +33,24 @@ const page: RoleImageImpactPage = {
       environmentVersion: 4,
       sourceVersionRef: "source",
       sourceVersionDigest: "source-digest",
-      projectRef: "project",
+      projectRef: "project_synthetic",
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       outcome: "PENDING",
     },
   ],
   nextPageToken: "next",
 };
+it("system image impact отличает явный ORG от пустого неподтверждённого project", () => {
+  const original = page.items[0];
+  if (!original) throw new Error("Synthetic impact item is missing");
+  const owned = { ...original, scopeKind: "ORGANIZATION" as const, projectRef: "" };
+  expect(checkedImagePage({ ...page, items: [owned] }, plan, undefined, "org_synthetic").items).toEqual([owned]);
+  expect(() => checkedImagePage({ ...page, items: [{ ...owned, scopeKind: "PROJECT" }] }, plan, undefined, "org_synthetic")).toThrow();
+  expect(() => checkedImagePage({ ...page, items: [{ ...owned, organizationRef: "org_foreign" }] }, plan, undefined, "org_synthetic")).toThrow();
+});
 it("сохраняет Environment без Agent и независимый owner count", () => {
-  const result = checkedImagePage(page, plan);
+  const result = checkedImagePage(page, plan, undefined, "org_synthetic");
   expect(result.plan.total).toBe(3);
   expect(result.total).toBe(1);
   expect(result.items[0]?.consumer).toBeUndefined();
@@ -53,10 +63,17 @@ it("отклоняет смену admission/build/source и повтор cursor"
     { configurationVersion: 3 },
   ])
     expect(() =>
-      checkedImagePage({ ...page, plan: { ...plan, ...changed } }, plan),
+      checkedImagePage(
+        { ...page, plan: { ...plan, ...changed } },
+        plan,
+        undefined,
+        "org_synthetic",
+      ),
     ).toThrow();
-  expect(() => checkedImagePage(page, plan, "next")).toThrow();
-  expect(() => checkedImagePage({ ...page, total: 4 }, plan)).toThrow();
+  expect(() => checkedImagePage(page, plan, "next", "org_synthetic")).toThrow();
+  expect(() =>
+    checkedImagePage({ ...page, total: 4 }, plan, undefined, "org_synthetic"),
+  ).toThrow();
 });
 it("восстанавливает APPLIED план с отдельным конфликтом, сбрасывает старый cursor", () => {
   const applied: RoleImageImpactPage = {
@@ -64,8 +81,13 @@ it("восстанавливает APPLIED план с отдельным кон
     plan: { ...plan, version: 2, state: "APPLIED" },
     items: page.items.map((item) => ({ ...item, outcome: "CONFLICT" })),
   };
-  expect(checkedImagePage(applied, plan).items[0]?.outcome).toBe("CONFLICT");
-  expect(() => checkedImagePage(applied, plan, "old")).toThrow();
+  expect(
+    checkedImagePage(applied, plan, undefined, "org_synthetic").items[0]
+      ?.outcome,
+  ).toBe("CONFLICT");
+  expect(() =>
+    checkedImagePage(applied, plan, "old", "org_synthetic"),
+  ).toThrow();
 });
 it("проверяет фактическую новую Environment revision для APPLIED", () => {
   const applied: RoleImageImpactPage = {
@@ -78,7 +100,8 @@ it("проверяет фактическую новую Environment revision д
     })),
   };
   expect(
-    checkedImagePage(applied, plan).items[0]?.resultEnvironmentVersionRef,
+    checkedImagePage(applied, plan, undefined, "org_synthetic").items[0]
+      ?.resultEnvironmentVersionRef,
   ).toBe("new-version");
   expect(() =>
     checkedImagePage(
@@ -90,6 +113,8 @@ it("проверяет фактическую новую Environment revision д
         })),
       },
       plan,
+      undefined,
+      "org_synthetic",
     ),
   ).toThrow();
 });

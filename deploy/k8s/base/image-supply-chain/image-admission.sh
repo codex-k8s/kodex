@@ -97,6 +97,9 @@ load_owner_claim() {
   wait_for_file owner-claim.json
   jq -e --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" '
     . as $claim |
+    (.organizationRef | test("^org_[A-Za-z0-9_-]{8,88}$")) and
+    ((.scopeKind == "ORGANIZATION" and .projectRef == "") or
+      (.scopeKind == "PROJECT" and (.projectRef | test("^prj_[A-Za-z0-9_-]{8,88}$")))) and
     (.artifactId | type == "string" and length > 0) and
     (.version | type == "number" and . > 0) and
     (.fence | type == "number" and . > 0) and
@@ -126,8 +129,14 @@ load_owner_claim() {
     .policyRevision == $policy and .policySHA256 == $policy_sha and
     ($claim.stagingReference | endswith("@" + $claim.manifestDigest))
   ' /work/owner-claim.json >/dev/null || fail "owner admission claim is invalid"
+  owner_scope_kind=$(jq -er .scopeKind /work/owner-claim.json)
+  owner_organization_ref=$(jq -er .organizationRef /work/owner-claim.json)
+  owner_project_ref=$(jq -r .projectRef /work/owner-claim.json)
   artifact_id=$(jq -er .artifactId /work/owner-claim.json)
   source_ref=$(jq -er .stagingReference /work/owner-claim.json)
+  owner_scope_kind=$(jq -er .scopeKind /work/owner-claim.json)
+  owner_organization_ref=$(jq -er .organizationRef /work/owner-claim.json)
+  owner_project_ref=$(jq -r .projectRef /work/owner-claim.json)
   image_digest=$(jq -er .manifestDigest /work/owner-claim.json)
   spec_sha256=$(jq -er .specSHA256 /work/owner-claim.json)
   immutable_build_sha256=$(jq -er .immutableBuildSHA256 /work/owner-claim.json)
@@ -168,8 +177,10 @@ write_technical_rejection() {
   jq -Sjc -n --arg build_type "$EXPECTED_BUILD_TYPE" --arg builder_id "$EXPECTED_BUILDER_ID" \
     --arg immutable "$immutable_build_sha256" --arg manifest "$image_digest" \
     --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" \
-    --arg schema "kodex.dev/image-provenance-binding/v1" --arg spec "$spec_sha256" \
-    '{buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
+    --arg schema "kodex.dev/image-provenance-binding/v2" --arg spec "$spec_sha256" \
+    --arg scope "$owner_scope_kind" --arg organization "$owner_organization_ref" --arg project "$owner_project_ref" \
+    '{scopeKind:$scope,organizationRef:$organization,projectRef:$project,
+      buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
       manifestDigest:$manifest,policyRevision:$policy,policySHA256:$policy_sha,
       schema:$schema,specSHA256:$spec}' >/work/provenance.json
   jq -Sjc -n --arg phase "$admission_phase" --arg reason "$reason" \
@@ -191,6 +202,9 @@ load_promotion_claim() {
   wait_for_file owner-promotion.json
   jq -e '
     . as $claim |
+    (.organizationRef | test("^org_[A-Za-z0-9_-]{8,88}$")) and
+    ((.scopeKind == "ORGANIZATION" and .projectRef == "") or
+      (.scopeKind == "PROJECT" and (.projectRef | test("^prj_[A-Za-z0-9_-]{8,88}$")))) and
     (.artifactId | type == "string" and length > 0) and
     (.version | type == "number" and . > 0) and
     ((.claim | type == "string" and length > 0) or
@@ -204,6 +218,9 @@ load_promotion_claim() {
     (.admissionReceiptOCIManifestDigest | test("^sha256:[a-f0-9]{64}$")) and
     ($claim.stagingReference | endswith("@" + $claim.manifestDigest))
   ' /work/owner-promotion.json >/dev/null || fail "owner promotion claim is invalid"
+  owner_scope_kind=$(jq -er .scopeKind /work/owner-promotion.json)
+  owner_organization_ref=$(jq -er .organizationRef /work/owner-promotion.json)
+  owner_project_ref=$(jq -r .projectRef /work/owner-promotion.json)
   artifact_id=$(jq -er .artifactId /work/owner-promotion.json)
   source_ref=$(jq -er .stagingReference /work/owner-promotion.json)
   image_digest=$(jq -er .manifestDigest /work/owner-promotion.json)
@@ -303,7 +320,7 @@ evidence_entries() {
   cat <<'EOF'
 image-digest.subject|application/vnd.kodex.image-digest.v1+text
 image-digest.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-provenance.json|application/vnd.kodex.provenance-binding.v1+json
+provenance.json|application/vnd.kodex.provenance-binding.v2+json
 provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
@@ -435,8 +452,10 @@ verify_recovered_evidence() {
     [ "$(sha256sum "$evidence_directory/vulnerability.json" | awk '{print $1}')" = "$(jq -er .vulnerabilityEvidenceSHA256 "$receipt")" ] ||
     fail "durable admission evidence hash mismatch"
   jq -e --arg image "$expected_image" --argjson policy "$expected_policy_revision" \
-    --arg policy_sha "$expected_policy_sha256" '
-    .schema == "kodex.dev/image-provenance-binding/v1" and .manifestDigest == $image and
+    --arg policy_sha "$expected_policy_sha256" --arg scope "$owner_scope_kind" \
+    --arg organization "$owner_organization_ref" --arg project "$owner_project_ref" '
+    .scopeKind == $scope and .organizationRef == $organization and .projectRef == $project and
+    .schema == "kodex.dev/image-provenance-binding/v2" and .manifestDigest == $image and
     .policyRevision == $policy and .policySHA256 == $policy_sha
   ' "$evidence_directory/provenance.json" >/dev/null || fail "durable provenance binding mismatch"
   jq -e 'type == "array" and length > 0' "$evidence_directory/native-provenance.json" >/dev/null ||
@@ -611,8 +630,10 @@ verify_image_and_provenance() {
   jq -Sjc -n --arg build_type "$EXPECTED_BUILD_TYPE" --arg builder_id "$EXPECTED_BUILDER_ID" \
     --arg immutable "$immutable_build_sha256" --arg manifest "$image_digest" \
     --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" \
-    --arg schema "kodex.dev/image-provenance-binding/v1" --arg spec "$spec_sha256" \
-    '{buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
+    --arg schema "kodex.dev/image-provenance-binding/v2" --arg spec "$spec_sha256" \
+    --arg scope "$owner_scope_kind" --arg organization "$owner_organization_ref" --arg project "$owner_project_ref" \
+    '{scopeKind:$scope,organizationRef:$organization,projectRef:$project,
+      buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
       manifestDigest:$manifest,policyRevision:$policy,policySHA256:$policy_sha,
       schema:$schema,specSHA256:$spec}' >/work/provenance.binding.json
   cp /work/provenance.binding.json /work/provenance.json
@@ -627,7 +648,10 @@ if [ "${1:-}" = validate-runtime-config ]; then
 fi
 
 if [ "${1:-}" = validate-evidence-recovery ]; then
-  [ "$#" -eq 11 ] || fail "evidence recovery fixture is invalid"
+  [ "$#" -eq 14 ] || fail "evidence recovery fixture is invalid"
+  owner_scope_kind=${12}
+  owner_organization_ref=${13}
+  owner_project_ref=${14}
   artifact_id=$2
   image_digest=$3
   promotion_receipt=$4
@@ -648,7 +672,10 @@ if [ "${1:-}" = validate-evidence-recovery ]; then
 fi
 
 if [ "${1:-}" = validate-evidence ]; then
-  [ "$#" -eq 10 ] || fail "evidence fixture is invalid"
+  [ "$#" -eq 13 ] || fail "evidence fixture is invalid"
+  owner_scope_kind=${11}
+  owner_organization_ref=${12}
+  owner_project_ref=${13}
   artifact_id=$2
   image_digest=$3
   promotion_receipt=$4

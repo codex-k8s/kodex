@@ -14,6 +14,7 @@ type RuntimeEnvironmentDraftSpecification struct {
 }
 
 type RuntimeEnvironmentDraft struct {
+	ScopeKind, OrganizationRef                                                        string
 	BaseVersionRef                                                                    string
 	BaseRevision                                                                      int64
 	SavedAt                                                                           time.Time

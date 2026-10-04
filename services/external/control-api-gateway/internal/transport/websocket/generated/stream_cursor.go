@@ -4,6 +4,6 @@ package generated
 
 type StreamCursor struct {
 	StreamKind StreamKind `json:"streamKind"`
-	StreamRef string `json:"streamRef"`
-	Cursor int64 `json:"cursor"`
+	StreamRef  string     `json:"streamRef"`
+	Cursor     int64      `json:"cursor"`
 }

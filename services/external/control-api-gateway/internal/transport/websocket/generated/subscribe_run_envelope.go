@@ -3,8 +3,8 @@
 package generated
 
 type SubscribeRunEnvelope struct {
-	Type string `json:"type"`
-	RequestRef string `json:"requestRef"`
-	RunRef string `json:"runRef"`
-	AfterSequence int64 `json:"afterSequence"`
+	Type          string `json:"type"`
+	RequestRef    string `json:"requestRef"`
+	RunRef        string `json:"runRef"`
+	AfterSequence int64  `json:"afterSequence"`
 }

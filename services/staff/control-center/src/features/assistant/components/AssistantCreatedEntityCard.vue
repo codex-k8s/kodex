@@ -4,7 +4,11 @@ import { computed, ref, watch } from "vue";
 import { assistantCreatedEntityTarget } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { requestSignal } from "@/shared/api/client";
-import { getAgent, getProject } from "@/shared/api/generated/openapi/sdk.gen";
+import {
+  getAgent,
+  getProject,
+  getProjectAssistant,
+} from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   Agent,
   AssistantPlan,
@@ -20,7 +24,7 @@ const target = computed(() =>
 );
 const cachedEntity = computed<Project | Agent | undefined>(() => {
   const current = target.value;
-  if (!current) return undefined;
+  if (!current || current.kind === "PROJECT_ASSISTANT") return undefined;
   return current.kind === "PROJECT"
     ? platform.projects[current.resourceRef]
     : platform.agents[current.resourceRef];
@@ -43,7 +47,8 @@ const state = computed(() => {
 });
 const destination = computed(() => {
   const current = target.value;
-  if (!current) return undefined;
+  const confirmed = entity.value;
+  if (!current || !confirmed) return undefined;
   return current.kind === "PROJECT"
     ? {
         name: "project",
@@ -54,7 +59,7 @@ const destination = computed(() => {
         name: "agent",
         params: {
           projectRef: current.projectRef,
-          agentRef: current.resourceRef,
+          agentRef: confirmed.ref,
         },
         query: { assistantForm: "1" },
       };
@@ -80,7 +85,25 @@ watch(
     refresh = async () => {
       if (controller.signal.aborted) return;
       loading.value = true;
+      if (value.kind === "PROJECT_ASSISTANT") entity.value = undefined;
       try {
+        let resourceRef = value.resourceRef;
+        if (value.kind === "PROJECT_ASSISTANT") {
+          const profile = (
+            await unwrap(
+              getProjectAssistant({
+                path: { projectRef: value.projectRef },
+                signal: requestSignal(controller.signal),
+              }),
+            )
+          ).data;
+          if (
+            profile.ref !== value.resourceRef ||
+            profile.projectRef !== value.projectRef
+          )
+            throw new Error("Assistant profile readback mismatch");
+          resourceRef = profile.agentRef;
+        }
         const next =
           value.kind === "PROJECT"
             ? (
@@ -94,7 +117,7 @@ watch(
             : (
                 await unwrap(
                   getAgent({
-                    path: { agentRef: value.resourceRef },
+                    path: { agentRef: resourceRef },
                     signal: requestSignal(controller.signal),
                   }),
                 )
@@ -102,8 +125,8 @@ watch(
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
         if (controller.signal.aborted) return;
         if (
-          next.ref !== value.resourceRef ||
-          (value.kind === "AGENT" &&
+          next.ref !== resourceRef ||
+          (value.kind !== "PROJECT" &&
             (!("projectRef" in next) || next.projectRef !== value.projectRef))
         )
           throw new Error("Assistant entity readback mismatch");

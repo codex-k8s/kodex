@@ -259,7 +259,8 @@ func castRuntimeEnvironmentPolicy(value runtimecontract.RuntimeEnvironmentPolicy
 			MemoryRequestMib: value.Resources.MemoryRequestMiB, MemoryLimitMib: value.Resources.MemoryLimitMiB,
 			EphemeralStorageRequestMib: value.Resources.EphemeralStorageRequestMiB,
 			EphemeralStorageLimitMib:   value.Resources.EphemeralStorageLimitMiB,
-		}, Network: &controlplanev1.RuntimeNetworkPolicy{DenyByDefault: value.Network.DenyByDefault},
+		}, Network: &controlplanev1.RuntimeNetworkPolicy{DenyByDefault: value.Network.DenyByDefault,
+			WebAccess: &controlplanev1.RuntimeWebAccess{Mode: castRuntimeWebAccessMode(value.Network.WebAccess.Mode)}},
 		KubernetesAccess: &controlplanev1.RuntimeKubernetesAccessProfile{
 			Kind: castRuntimeKubernetesAccessKind(value.KubernetesAccess.Kind), Namespace: value.KubernetesAccess.Namespace,
 		}, ResourcesDigest: value.ResourcesDigest, VolumesDigest: value.VolumesDigest,
@@ -275,7 +276,27 @@ func castRuntimeEnvironmentPolicy(value runtimecontract.RuntimeEnvironmentPolicy
 			Destination: castRuntimeNetworkDestination(egress.Destination), Protocol: castRuntimeNetworkProtocol(egress.Protocol), Port: egress.Port,
 		})
 	}
+	for _, rule := range value.Network.WebAccess.Rules {
+		result.Network.WebAccess.Rules = append(result.Network.WebAccess.Rules, &controlplanev1.RuntimeWebAccessRule{
+			DomainPattern: rule.DomainPattern, Protocol: rule.Protocol, Port: rule.Port, HttpMethods: append([]string(nil), rule.HTTPMethods...),
+		})
+	}
 	return result
+}
+
+func castRuntimeWebAccessMode(value string) controlplanev1.RuntimeWebAccessMode {
+	switch value {
+	case runtimecontract.RuntimeWebAccessNone:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_NONE
+	case runtimecontract.RuntimeWebAccessAllowlistReadOnly:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY
+	case runtimecontract.RuntimeWebAccessAllowlistFull:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL
+	case runtimecontract.RuntimeWebAccessFullPublic:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC
+	default:
+		return controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_UNSPECIFIED
+	}
 }
 
 func castRuntimeVolumeKind(value string) controlplanev1.RuntimeVolumeKind {
@@ -293,8 +314,6 @@ func castRuntimeNetworkDestination(value string) controlplanev1.RuntimeNetworkDe
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK
 	case runtimecontract.RuntimeEgressProviderProxy:
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY
-	case runtimecontract.RuntimeEgressKubernetesAPI:
-		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API
 	default:
 		return controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_UNSPECIFIED
 	}
@@ -308,13 +327,14 @@ func castRuntimeNetworkProtocol(value string) controlplanev1.RuntimeNetworkProto
 }
 
 func castRuntimeKubernetesAccessKind(value string) controlplanev1.RuntimeKubernetesAccessKind {
-	if value == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
-		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION
+	if value != runtimecontract.RuntimeKubernetesAccessNone {
+		return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED
 	}
 	return controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE
 }
 func castRuntimeEnvironment(value entity.RuntimeEnvironmentSet) *controlplanev1.RuntimeEnvironmentSet {
 	return &controlplanev1.RuntimeEnvironmentSet{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef,
+		ScopeKind: roleImageScopeKind(value.ScopeKind), OrganizationRef: value.OrganizationRef,
 		Name: value.Name, Description: value.Description, State: value.State,
 		CurrentVersion: castRuntimeEnvironmentVersion(value.CurrentVersion), UpdatedAt: timestamp(value.UpdatedAt),
 		Ready: value.Ready, ReadinessBlockers: value.ReadinessBlockers, NextActions: nextActions(value.NextActions)}
@@ -447,9 +467,11 @@ func castWorkflow(value entity.Workflow) *controlplanev1.Workflow {
 	return result
 }
 func castRunTarget(value entity.RunTarget) *controlplanev1.RunTarget {
-	target := &controlplanev1.RunTarget{DisplayName: value.Name}
+	target := &controlplanev1.RunTarget{DisplayName: value.Name, TargetVersion: value.Version}
 	if value.Type == "WORKFLOW" {
 		target.Target = &controlplanev1.RunTarget_WorkflowRef{WorkflowRef: value.Ref}
+	} else if value.Type == "SYSTEM_ASSISTANT" {
+		target.Target = &controlplanev1.RunTarget_SystemAssistantRef{SystemAssistantRef: value.Ref}
 	} else {
 		target.Target = &controlplanev1.RunTarget_AgentRef{AgentRef: value.Ref}
 	}
@@ -468,6 +490,13 @@ func castRun(value entity.Run) *controlplanev1.Run {
 	result := &controlplanev1.Run{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, SessionRef: value.SessionRef, RootRunRef: value.RootRunRef, ParentRunRef: value.ParentRunRef, RetryOfRunRef: value.RetryOfRunRef, Target: castRunTarget(value.Target), Title: value.Title, TitleSource: value.TitleSource, ActivitySummary: value.ActivitySummary, InputSummary: value.Task, State: runState(value.State), Source: runSource(value.Source), Initiator: &controlplanev1.UserSummary{DisplayName: value.InitiatorName}, Attempt: value.Attempt, GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), InputAttachmentSetRef: value.InputAttachmentSetRef, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
 	for _, incident := range value.Incidents {
 		result.Incidents = append(result.Incidents, castIncident(incident))
+	}
+	if pin := value.AssistantPin; pin != nil {
+		result.AssistantPin = &controlplanev1.AssistantRunPin{
+			Scope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+pin.Scope]), OrganizationRef: pin.OrganizationRef,
+			ConversationRef: pin.ConversationRef, AssistantRef: pin.AssistantRef,
+			ProjectRef: pin.ProjectRef, ProfileRef: pin.ProfileRef,
+		}
 	}
 	return result
 }
@@ -659,7 +688,7 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 func assistantPlanOperationTitle(operation entity.AssistantPlanOperation) string {
 	field := ""
 	switch operation.Type {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":
 		field = "name"
 	case "CREATE_PROJECT_FILE":
 		field = "fileName"
@@ -696,6 +725,8 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 	}
 	result := &controlplanev1.AssistantConversation{Ref: value.Ref, Version: value.Version, Title: value.Title,
 		TitleSource: value.TitleSource, TitleRevision: value.TitleRevision, ProjectRef: value.ProjectRef,
+		AssistantScope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+value.AssistantScope]),
+		AssistantRef:   value.AssistantRef, AssistantProfileRef: value.AssistantProfileRef,
 		Context: context, UpdatedAt: timestamp(value.UpdatedAt), State: controlplanev1.AssistantConversationState(controlplanev1.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+value.State])}
 	nextSequence := int64(1)
 	plans := value.Plans
@@ -708,7 +739,7 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: plan.Ref, Sequence: sequence, Role: "ASSISTANT", Content: plan.Summary, State: "COMPLETED", Plan: castPlan(plan), CreatedAt: timestamp(plan.CreatedAt)})
 	}
 	for _, turn := range value.Turns {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, CreatedAt: timestamp(turn.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, RunRef: turn.RunRef, RunVersion: turn.RunVersion, CreatedAt: timestamp(turn.CreatedAt)})
 		if turn.Sequence >= nextSequence {
 			nextSequence = turn.Sequence + 1
 		}
@@ -777,7 +808,7 @@ func castIncident(value entity.Incident) *controlplanev1.Incident {
 }
 
 func castBootstrap(value repository.BootstrapState) *controlplanev1.BootstrapState {
-	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions),
+	return &controlplanev1.BootstrapState{OrganizationRef: value.OrganizationRef, Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions),
 		SpeechTranscription: &controlplanev1.SpeechTranscriptionAvailability{Eligible: value.SpeechTranscription.Eligible, Available: false, Reason: value.SpeechTranscription.Reason}}
 }
 

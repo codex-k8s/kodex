@@ -297,7 +297,13 @@ function generateGoSchema(name, schema) {
   const required = new Set(schema.required ?? []);
   const fields = Object.entries(schema.properties)
     .map(([propertyName, property]) => {
-      const optional = required.has(propertyName) ? "" : ",omitempty";
+      // Пустой массив означает авторитетный пустой каталог, nil — отсутствие
+      // поля. omitempty склеивает эти состояния и ломает scoped rejoin.
+      const optional = required.has(propertyName)
+        ? ""
+        : property.type === "array" && !property["x-go-optional-pointer"]
+          ? ",omitzero"
+          : ",omitempty";
       return `\t${fieldName(propertyName)} ${goType(property, required.has(propertyName))} \`json:${JSON.stringify(`${propertyName}${optional}`)}\``;
     })
     .join("\n");

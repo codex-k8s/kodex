@@ -13,6 +13,10 @@ import { useSessionStore } from "@/features/session/store";
 import { idempotencyKey } from "@/shared/api/mutation";
 import type { RuntimeSecret } from "./model";
 import { readRuntimeSecret } from "./api";
+import {
+  runtimeResourceAddressFromIdentity,
+  type RuntimeResourceAddress,
+} from "@/features/runtime/resource-scope";
 import type { AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -34,8 +38,12 @@ import {
 
 const props = defineProps<{
   draft: RuntimeSecretDraft;
+  resourceScope?: RuntimeResourceAddress;
   initialPlanRef?: string;
 }>();
+const resourceScope = computed(
+  () => props.resourceScope ?? runtimeResourceAddressFromIdentity(props.draft),
+);
 const fieldPrefix = `runtime-secret-draft-impact-${useId()}`;
 const emit = defineEmits<{
   published: [draft: RuntimeSecretDraft, secret: RuntimeSecret];
@@ -47,7 +55,7 @@ const { t } = useI18n();
 async function reauthenticate(): Promise<void> {
   try {
     await useSessionStore().beginRuntimeSecretDraftReauth({
-      projectRef: props.draft.projectRef,
+      projectRef: resourceScope.value,
       target: "draft",
       targetRef: props.draft.ref,
     });
@@ -109,7 +117,14 @@ async function selectAvailable(): Promise<void> {
     AbortSignal.timeout(15_000),
   ]);
   let current = query.value.trim()
-    ? await readDraftImpact(plan.value, signal)
+    ? await readDraftImpact(
+        plan.value,
+        signal,
+        "",
+        undefined,
+        40,
+        props.draft.organizationRef,
+      )
     : page.value;
   const expectedTotal = current.total;
   const refs = new Set<string>();
@@ -141,6 +156,8 @@ async function selectAvailable(): Promise<void> {
       signal,
       "",
       current.nextPageToken,
+      40,
+      props.draft.organizationRef,
     );
   }
   throw new Error("Secret draft default selection page limit exceeded");
@@ -157,6 +174,7 @@ async function load(more = false): Promise<void> {
     query.value,
     more ? before?.nextPageToken : undefined,
     impactPageSize.value,
+    props.draft.organizationRef,
   );
   if (disposed) return;
   if (more && before) {
@@ -188,7 +206,7 @@ async function prepare(): Promise<void> {
       controller?.abort();
       controller = new AbortController();
       const current = await readSecretDraft(
-        props.draft.projectRef,
+        resourceScope.value,
         props.draft.ref,
         controller.signal,
       );
@@ -229,7 +247,7 @@ async function refresh(more = false): Promise<void> {
       controller?.abort();
       controller = new AbortController();
       const current = await readSecretDraft(
-        props.draft.projectRef,
+        resourceScope.value,
         props.draft.ref,
         controller.signal,
       );
@@ -238,7 +256,7 @@ async function refresh(more = false): Promise<void> {
         throw new Error("Secret draft publication recovery is not terminal");
       const secret = await readRuntimeSecret(
         current.secretRef,
-        current.projectRef,
+        resourceScope.value,
         controller.signal,
       );
       if (isActive()) {
@@ -277,7 +295,7 @@ async function publish(replace = true): Promise<void> {
       controller?.abort();
       controller = new AbortController();
       const current = await readSecretDraft(
-        props.draft.projectRef,
+        resourceScope.value,
         props.draft.ref,
         controller.signal,
       );
@@ -324,7 +342,7 @@ async function publish(replace = true): Promise<void> {
       ) {
         try {
           const current = await readSecretDraft(
-            props.draft.projectRef,
+            resourceScope.value,
             props.draft.ref,
             new AbortController().signal,
           );
@@ -336,7 +354,7 @@ async function publish(replace = true): Promise<void> {
           ) {
             const secret = await readRuntimeSecret(
               current.secretRef,
-              current.projectRef,
+              resourceScope.value,
               new AbortController().signal,
             );
             if (isActive()) {

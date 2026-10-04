@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"net"
 	"regexp"
 	"sort"
 	"strconv"
@@ -18,14 +19,26 @@ const (
 	RuntimeEgressDNS             = "DNS"
 	RuntimeEgressRuntimeCallback = "RUNTIME_CALLBACK"
 	RuntimeEgressProviderProxy   = "PROVIDER_PROXY"
-	RuntimeEgressKubernetesAPI   = "KUBERNETES_API"
 
 	RuntimeProtocolTCP = "TCP"
 	RuntimeProtocolUDP = "UDP"
 
-	RuntimeKubernetesAccessNone             = "NONE"
-	RuntimeKubernetesAccessReadOwnExecution = "READ_OWN_EXECUTION"
-	RuntimeKubernetesNamespace              = "kodex-runtime"
+	RuntimeWebAccessNone              = "NONE"
+	RuntimeWebAccessAllowlistReadOnly = "ALLOWLIST_READ_ONLY"
+	RuntimeWebAccessAllowlistFull     = "ALLOWLIST_FULL"
+	RuntimeWebAccessFullPublic        = "FULL_PUBLIC"
+	RuntimeWebProtocolHTTPS           = "HTTPS"
+
+	RuntimeHTTPMethodGet     = "GET"
+	RuntimeHTTPMethodHead    = "HEAD"
+	RuntimeHTTPMethodOptions = "OPTIONS"
+	RuntimeHTTPMethodPost    = "POST"
+	RuntimeHTTPMethodPut     = "PUT"
+	RuntimeHTTPMethodPatch   = "PATCH"
+	RuntimeHTTPMethodDelete  = "DELETE"
+
+	RuntimeKubernetesAccessNone = "NONE"
+	RuntimeKubernetesNamespace  = "kodex-runtime"
 )
 
 var runtimeVolumeNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}[a-z0-9]$|^[a-z]$`)
@@ -62,13 +75,29 @@ type RuntimeNetworkEgress struct {
 	Port        int32  `json:"port"`
 }
 
+// RuntimeWebAccessRule задаёт доступ к публичному HTTPS endpoint. Scoped
+// wildcard не равен глобальному wildcard: *.example.com разрешает только один
+// уровень, **.example.com — apex и любое число поддоменов.
+type RuntimeWebAccessRule struct {
+	DomainPattern string   `json:"domain_pattern"`
+	Protocol      string   `json:"protocol"`
+	Port          int32    `json:"port"`
+	HTTPMethods   []string `json:"http_methods"`
+}
+
+type RuntimeWebAccess struct {
+	Mode  string                 `json:"mode"`
+	Rules []RuntimeWebAccessRule `json:"rules"`
+}
+
 type RuntimeNetworkPolicy struct {
 	DenyByDefault bool                   `json:"deny_by_default"`
 	Egress        []RuntimeNetworkEgress `json:"egress"`
+	WebAccess     RuntimeWebAccess       `json:"web_access"`
 }
 
-// RuntimeKubernetesAccessProfile является environment-level выбором. Exact
-// resourceNames и ServiceAccount назначаются сервером для каждой execution.
+// RuntimeKubernetesAccessProfile фиксирует отсутствие Kubernetes-прав.
+// ServiceAccount назначается сервером и не получает token mount или RBAC.
 type RuntimeKubernetesAccessProfile struct {
 	Kind      string `json:"kind"`
 	Namespace string `json:"namespace"`
@@ -103,6 +132,7 @@ type RuntimeEnvironmentPolicyInput struct {
 	Resources           RuntimeResourcePolicy `json:"resources"`
 	Volumes             []RuntimeVolume       `json:"volumes"`
 	NetworkDestinations []string              `json:"network_destinations"`
+	WebAccess           RuntimeWebAccess      `json:"web_access"`
 	KubernetesAccess    string                `json:"kubernetes_access"`
 }
 
@@ -116,9 +146,9 @@ func DefaultRuntimeEnvironmentPolicy() RuntimeEnvironmentPolicy {
 		Network: RuntimeNetworkPolicy{DenyByDefault: true, Egress: []RuntimeNetworkEgress{
 			{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolTCP, Port: 53},
 			{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolUDP, Port: 53},
-			{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8080},
+			{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8084},
 			{Destination: RuntimeEgressRuntimeCallback, Protocol: RuntimeProtocolTCP, Port: 8444},
-		}},
+		}, WebAccess: RuntimeWebAccess{Mode: RuntimeWebAccessNone, Rules: []RuntimeWebAccessRule{}}},
 		KubernetesAccess: RuntimeKubernetesAccessProfile{Kind: RuntimeKubernetesAccessNone, Namespace: RuntimeKubernetesNamespace},
 	}
 	normalized, _ := NormalizeRuntimeEnvironmentPolicy(policy)
@@ -144,7 +174,10 @@ func NormalizeRuntimeEnvironmentPolicy(input RuntimeEnvironmentPolicy) (RuntimeE
 	if err := validateRuntimeVolumes(volumes); err != nil {
 		return RuntimeEnvironmentPolicy{}, err
 	}
-	network := RuntimeNetworkPolicy{DenyByDefault: input.Network.DenyByDefault, Egress: append([]RuntimeNetworkEgress(nil), input.Network.Egress...)}
+	network := RuntimeNetworkPolicy{DenyByDefault: input.Network.DenyByDefault, Egress: append([]RuntimeNetworkEgress{}, input.Network.Egress...), WebAccess: RuntimeWebAccess{Mode: input.Network.WebAccess.Mode, Rules: append([]RuntimeWebAccessRule{}, input.Network.WebAccess.Rules...)}}
+	if network.WebAccess.Mode == "" {
+		network.WebAccess.Mode = RuntimeWebAccessNone
+	}
 	sort.Slice(network.Egress, func(left, right int) bool {
 		if network.Egress[left].Destination != network.Egress[right].Destination {
 			return network.Egress[left].Destination < network.Egress[right].Destination
@@ -154,14 +187,25 @@ func NormalizeRuntimeEnvironmentPolicy(input RuntimeEnvironmentPolicy) (RuntimeE
 		}
 		return network.Egress[left].Port < network.Egress[right].Port
 	})
+	for index := range network.WebAccess.Rules {
+		network.WebAccess.Rules[index].DomainPattern = strings.ToLower(strings.TrimSpace(network.WebAccess.Rules[index].DomainPattern))
+		network.WebAccess.Rules[index].Protocol = strings.ToUpper(strings.TrimSpace(network.WebAccess.Rules[index].Protocol))
+		for methodIndex := range network.WebAccess.Rules[index].HTTPMethods {
+			network.WebAccess.Rules[index].HTTPMethods[methodIndex] = strings.ToUpper(strings.TrimSpace(network.WebAccess.Rules[index].HTTPMethods[methodIndex]))
+		}
+		sort.Strings(network.WebAccess.Rules[index].HTTPMethods)
+	}
+	sort.Slice(network.WebAccess.Rules, func(left, right int) bool {
+		return network.WebAccess.Rules[left].DomainPattern < network.WebAccess.Rules[right].DomainPattern
+	})
 	access := input.KubernetesAccess
 	if access.Namespace == "" {
 		access.Namespace = RuntimeKubernetesNamespace
 	}
-	if err := validateRuntimeNetwork(network, access); err != nil {
+	if err := validateRuntimeNetwork(network); err != nil {
 		return RuntimeEnvironmentPolicy{}, err
 	}
-	if !containsString([]string{RuntimeKubernetesAccessNone, RuntimeKubernetesAccessReadOwnExecution}, access.Kind) || access.Namespace != RuntimeKubernetesNamespace {
+	if access.Kind != RuntimeKubernetesAccessNone || access.Namespace != RuntimeKubernetesNamespace {
 		return RuntimeEnvironmentPolicy{}, errors.New("runtime Kubernetes access profile is invalid")
 	}
 	result := RuntimeEnvironmentPolicy{Resources: input.Resources, Volumes: volumes, Network: network, KubernetesAccess: access}
@@ -178,20 +222,20 @@ func DefaultRuntimeEnvironmentPolicyWithoutDigests() RuntimeEnvironmentPolicy {
 		Network: RuntimeNetworkPolicy{DenyByDefault: true, Egress: []RuntimeNetworkEgress{
 			{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolTCP, Port: 53},
 			{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolUDP, Port: 53},
-			{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8080},
+			{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8084},
 			{Destination: RuntimeEgressRuntimeCallback, Protocol: RuntimeProtocolTCP, Port: 8444},
-		}},
+		}, WebAccess: RuntimeWebAccess{Mode: RuntimeWebAccessNone, Rules: []RuntimeWebAccessRule{}}},
 		KubernetesAccess: RuntimeKubernetesAccessProfile{Kind: RuntimeKubernetesAccessNone, Namespace: RuntimeKubernetesNamespace},
 	}
 }
 
 func RuntimeEnvironmentPolicyFromInput(input RuntimeEnvironmentPolicyInput) (RuntimeEnvironmentPolicy, error) {
+	if input.KubernetesAccess != RuntimeKubernetesAccessNone {
+		return RuntimeEnvironmentPolicy{}, errors.New("runtime Kubernetes access is not supported")
+	}
 	access := RuntimeKubernetesAccessProfile{Kind: input.KubernetesAccess, Namespace: RuntimeKubernetesNamespace}
 	required := map[string]struct{}{
 		RuntimeEgressDNS: {}, RuntimeEgressProviderProxy: {}, RuntimeEgressRuntimeCallback: {},
-	}
-	if access.Kind == RuntimeKubernetesAccessReadOwnExecution {
-		required[RuntimeEgressKubernetesAPI] = struct{}{}
 	}
 	if len(input.NetworkDestinations) != len(required) {
 		return RuntimeEnvironmentPolicy{}, errors.New("runtime network destination set is invalid")
@@ -208,15 +252,12 @@ func RuntimeEnvironmentPolicyFromInput(input RuntimeEnvironmentPolicyInput) (Run
 	egress := []RuntimeNetworkEgress{
 		{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolTCP, Port: 53},
 		{Destination: RuntimeEgressDNS, Protocol: RuntimeProtocolUDP, Port: 53},
-		{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8080},
+		{Destination: RuntimeEgressProviderProxy, Protocol: RuntimeProtocolTCP, Port: 8084},
 		{Destination: RuntimeEgressRuntimeCallback, Protocol: RuntimeProtocolTCP, Port: 8444},
-	}
-	if access.Kind == RuntimeKubernetesAccessReadOwnExecution {
-		egress = append(egress, RuntimeNetworkEgress{Destination: RuntimeEgressKubernetesAPI, Protocol: RuntimeProtocolTCP, Port: 443})
 	}
 	return NormalizeRuntimeEnvironmentPolicy(RuntimeEnvironmentPolicy{
 		Resources: input.Resources, Volumes: input.Volumes,
-		Network: RuntimeNetworkPolicy{DenyByDefault: true, Egress: egress}, KubernetesAccess: access,
+		Network: RuntimeNetworkPolicy{DenyByDefault: true, Egress: egress, WebAccess: input.WebAccess}, KubernetesAccess: access,
 	})
 }
 
@@ -236,11 +277,6 @@ func RuntimeKubernetesAccessForExecution(profile RuntimeKubernetesAccessProfile,
 	switch profile.Kind {
 	case RuntimeKubernetesAccessNone:
 		result.ServiceAccountName = serviceAccountName
-	case RuntimeKubernetesAccessReadOwnExecution:
-		result.Rules = []RuntimeKubernetesRule{
-			{APIGroup: "", Resource: "pods", Verbs: []string{"get"}, ResourceNames: []string{podName}},
-			{APIGroup: "", Resource: "pods/log", Verbs: []string{"get"}, ResourceNames: []string{podName}},
-		}
 	default:
 		return RuntimeKubernetesAccess{}, errors.New("runtime Kubernetes access profile is invalid")
 	}
@@ -307,16 +343,13 @@ func validateRuntimeVolumes(values []RuntimeVolume) error {
 	return nil
 }
 
-func validateRuntimeNetwork(value RuntimeNetworkPolicy, access RuntimeKubernetesAccessProfile) error {
-	if !value.DenyByDefault || len(value.Egress) < 4 || len(value.Egress) > 5 {
+func validateRuntimeNetwork(value RuntimeNetworkPolicy) error {
+	if !value.DenyByDefault || len(value.Egress) != 4 {
 		return errors.New("runtime network policy must be deny-by-default")
 	}
 	required := map[string]struct{}{
 		RuntimeEgressDNS + "|TCP|53": {}, RuntimeEgressDNS + "|UDP|53": {},
-		RuntimeEgressProviderProxy + "|TCP|8080": {}, RuntimeEgressRuntimeCallback + "|TCP|8444": {},
-	}
-	if access.Kind == RuntimeKubernetesAccessReadOwnExecution {
-		required[RuntimeEgressKubernetesAPI+"|TCP|443"] = struct{}{}
+		RuntimeEgressProviderProxy + "|TCP|8084": {}, RuntimeEgressRuntimeCallback + "|TCP|8444": {},
 	}
 	if len(value.Egress) != len(required) {
 		return errors.New("runtime network policy destination set is invalid")
@@ -331,7 +364,73 @@ func validateRuntimeNetwork(value RuntimeNetworkPolicy, access RuntimeKubernetes
 	if len(required) != 0 {
 		return errors.New("runtime network policy is incomplete")
 	}
+	return validateRuntimeWebAccess(value.WebAccess)
+}
+
+func validateRuntimeWebAccess(value RuntimeWebAccess) error {
+	if !containsString([]string{RuntimeWebAccessNone, RuntimeWebAccessAllowlistReadOnly, RuntimeWebAccessAllowlistFull, RuntimeWebAccessFullPublic}, value.Mode) {
+		return errors.New("runtime web access mode is invalid")
+	}
+	if value.Mode == RuntimeWebAccessNone || value.Mode == RuntimeWebAccessFullPublic {
+		if len(value.Rules) != 0 {
+			return errors.New("runtime web access rules are invalid for selected mode")
+		}
+		return nil
+	}
+	if len(value.Rules) == 0 || len(value.Rules) > 64 {
+		return errors.New("runtime web access allowlist is invalid")
+	}
+	previous := ""
+	for _, rule := range value.Rules {
+		if !validRuntimeDomainPattern(rule.DomainPattern) || rule.Protocol != RuntimeWebProtocolHTTPS || rule.Port != 443 || rule.DomainPattern == previous {
+			return errors.New("runtime web access rule is invalid")
+		}
+		allowed := runtimeWebAccessMethods(value.Mode)
+		if len(rule.HTTPMethods) == 0 || len(rule.HTTPMethods) > len(allowed) {
+			return errors.New("runtime web access method set is invalid")
+		}
+		previousMethod := ""
+		for _, method := range rule.HTTPMethods {
+			if method == previousMethod || !containsString(allowed, method) {
+				return errors.New("runtime web access method set is invalid")
+			}
+			previousMethod = method
+		}
+		previous = rule.DomainPattern
+	}
 	return nil
+}
+
+func runtimeWebAccessMethods(mode string) []string {
+	if mode == RuntimeWebAccessAllowlistReadOnly {
+		return []string{RuntimeHTTPMethodGet, RuntimeHTTPMethodHead, RuntimeHTTPMethodOptions}
+	}
+	return []string{RuntimeHTTPMethodDelete, RuntimeHTTPMethodGet, RuntimeHTTPMethodHead, RuntimeHTTPMethodOptions, RuntimeHTTPMethodPatch, RuntimeHTTPMethodPost, RuntimeHTTPMethodPut}
+}
+
+func validRuntimeDomainPattern(value string) bool {
+	if value == "" || value == "*" || len(value) > 253 || strings.ContainsAny(value, "/:@ \\") {
+		return false
+	}
+	host := value
+	if strings.HasPrefix(host, "**.") {
+		host = strings.TrimPrefix(host, "**.")
+	} else if strings.HasPrefix(host, "*.") {
+		host = strings.TrimPrefix(host, "*.")
+	}
+	if strings.Contains(host, "*") || net.ParseIP(host) != nil || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") {
+		return false
+	}
+	labels := strings.Split(host, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if !validDNSLabelContract(label) {
+			return false
+		}
+	}
+	return true
 }
 
 func digestRuntimeResources(value RuntimeResourcePolicy) string {
@@ -349,9 +448,14 @@ func digestRuntimeVolumes(values []RuntimeVolume) string {
 }
 
 func digestRuntimeNetwork(value RuntimeNetworkPolicy) string {
-	parts := []string{"network-v1", strconv.FormatBool(value.DenyByDefault)}
+	parts := []string{"network-v2", strconv.FormatBool(value.DenyByDefault)}
 	for _, item := range value.Egress {
 		parts = append(parts, item.Destination, item.Protocol, strconv.FormatInt(int64(item.Port), 10))
+	}
+	parts = append(parts, value.WebAccess.Mode)
+	for _, rule := range value.WebAccess.Rules {
+		parts = append(parts, rule.DomainPattern, rule.Protocol, strconv.FormatInt(int64(rule.Port), 10))
+		parts = append(parts, rule.HTTPMethods...)
 	}
 	return digestParts(parts...)
 }

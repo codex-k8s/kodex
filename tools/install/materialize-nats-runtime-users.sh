@@ -7,21 +7,24 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --context <context> --material-directory <path>\n' "$0" >&2
+  printf 'Usage: %s --context <context> --material-directory <path> [--security-profile protected|trusted-cluster]\n' "$0" >&2
 }
 
 context=""
 material_directory=""
+security_profile=protected
 while (($# > 0)); do
   case "$1" in
     --context) context="${2:-}"; shift 2 ;;
     --material-directory) material_directory="${2:-}"; shift 2 ;;
+    --security-profile) security_profile="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
 [[ -n "$context" ]] || fail 'context is required'
+case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
 [[ "$material_directory" == /* && -d "$material_directory" && ! -L "$material_directory" ]] ||
   fail 'material directory is invalid'
 for command_name in awk base64 find install jq kubectl mktemp nsc rmdir sha256sum; do
@@ -81,17 +84,24 @@ kubectl create namespace kodex-system --dry-run=client -o yaml |
 apply_secret() {
   local name=$1
   shift
-  kubectl -n kodex-system create secret generic "$name" "$@" --dry-run=client -o yaml |
+  kubectl -n kodex-system create secret generic "$name" "$@" --dry-run=client -o json |
+    jq --arg profile "$security_profile" '
+      .metadata.labels["app.kubernetes.io/part-of"]="kodex" |
+      .metadata.labels["kodex.dev/security-profile"]=$profile
+    ' |
     kubectl apply --server-side --force-conflicts --field-manager=kodex-install -f - >/dev/null
 }
 
 apply_secret_if_changed() {
   local name=$1
   shift
-  local specification key file actual_count changed=false
+  local specification key file actual_count ownership changed=false
   actual_count=$(kubectl -n kodex-system get secret "$name" -o json 2>/dev/null |
     jq -er '.data | length') || actual_count=-1
   [[ "$actual_count" == "$#" ]] || changed=true
+  ownership=$(kubectl -n kodex-system get secret "$name" -o json 2>/dev/null |
+    jq -r '[.metadata.labels["app.kubernetes.io/part-of"] // "", .metadata.labels["kodex.dev/security-profile"] // ""] | join("/")') || ownership=/
+  [[ "$ownership" == "kodex/$security_profile" ]] || changed=true
   for specification in "$@"; do
     key=${specification%%=*}
     file=${specification#*=}
@@ -132,6 +142,10 @@ for contract in \
   actual=$(kubectl -n kodex-system get secret "$name" -o json |
     jq -er '.data | keys | sort | join(",")')
   [[ "$actual" == "$expected" ]] || fail "Kubernetes Secret key readback mismatch: $name"
+  kubectl -n kodex-system get secret "$name" -o json | jq -e --arg profile "$security_profile" '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/security-profile"] == $profile
+  ' >/dev/null || fail "Kubernetes Secret ownership readback mismatch: $name"
 done
 
 for mapping in \

@@ -4,6 +4,7 @@ package connect
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
+
+const maximumCredentialBytes = 24 << 10
 
 // Reason — закрытый набор причин отказа CONNECT parser.
 type Reason string
@@ -54,7 +57,17 @@ type Request struct {
 
 // Parse bounded-читает request, проверяет authority/Host и сохраняет reader для ClientHello.
 func Parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows func(string, int) bool) (Request, *bufio.Reader, error) {
-	if connection == nil || maximumBytes < 1024 || timeout <= 0 || allows == nil {
+	return parse(connection, maximumBytes, timeout, allows, nil)
+}
+
+// ParseAuthenticated принимает только Basic credential служебного runtime
+// proxy. Credential передаётся проверяющей policy и не сохраняется в Request.
+func ParseAuthenticated(connection net.Conn, maximumBytes int, timeout time.Duration, allows func(string, int, string) bool) (Request, *bufio.Reader, error) {
+	return parse(connection, maximumBytes, timeout, nil, allows)
+}
+
+func parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows func(string, int) bool, allowsAuthenticated func(string, int, string) bool) (Request, *bufio.Reader, error) {
+	if connection == nil || maximumBytes < 1024 || timeout <= 0 || (allows == nil) == (allowsAuthenticated == nil) {
 		return Request{}, nil, &Error{Reason: ReasonMalformed}
 	}
 	if err := connection.SetReadDeadline(time.Now().Add(timeout)); err != nil {
@@ -90,6 +103,8 @@ func Parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows 
 	}
 	headerCount := 0
 	hostCount := 0
+	credentialCount := 0
+	credential := ""
 	var hostTarget Target
 	for {
 		line, lineErr := readLine(reader, &total, maximumBytes)
@@ -128,7 +143,16 @@ func Parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows 
 			}
 		case "content-length", "transfer-encoding", "expect":
 			return Request{}, nil, &Error{Reason: ReasonBody}
-		case "authorization", "proxy-authorization", "cookie":
+		case "proxy-authorization":
+			if allowsAuthenticated == nil {
+				return Request{}, nil, &Error{Reason: ReasonCredentials}
+			}
+			credentialCount++
+			credential, err = parseProxyCredential(value)
+			if credentialCount != 1 || err != nil {
+				return Request{}, nil, &Error{Reason: ReasonCredentials}
+			}
+		case "authorization", "cookie":
 			return Request{}, nil, &Error{Reason: ReasonCredentials}
 		}
 	}
@@ -138,10 +162,29 @@ func Parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows 
 	if reader.Buffered() != 0 {
 		return Request{}, nil, &Error{Reason: ReasonBody}
 	}
-	if request.Kind == KindConnect && !allows(request.Target.Hostname, request.Target.Port) {
-		return Request{}, nil, &Error{Reason: ReasonPolicy}
+	if request.Kind == KindConnect {
+		if allows != nil && !allows(request.Target.Hostname, request.Target.Port) ||
+			allowsAuthenticated != nil && (credentialCount != 1 || !allowsAuthenticated(request.Target.Hostname, request.Target.Port, credential)) {
+			return Request{}, nil, &Error{Reason: ReasonPolicy}
+		}
 	}
 	return request, reader, nil
+}
+
+func parseProxyCredential(value string) (string, error) {
+	const prefix = "Basic "
+	if !strings.HasPrefix(value, prefix) {
+		return "", errors.New("proxy credential is invalid")
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(value, prefix))
+	if err != nil || len(decoded) < len("kodex:")+1 || len(decoded) > maximumCredentialBytes || !bytes.HasPrefix(decoded, []byte("kodex:")) {
+		return "", errors.New("proxy credential is invalid")
+	}
+	credential := string(decoded[len("kodex:"):])
+	if strings.TrimSpace(credential) != credential || credential == "" {
+		return "", errors.New("proxy credential is invalid")
+	}
+	return credential, nil
 }
 
 func parseAuthority(value string) (Target, error) {

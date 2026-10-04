@@ -78,15 +78,22 @@ func (r *Repository) authorizeRoleImageImpact(ctx context.Context, tx pgx.Tx, s 
 		if err != nil {
 			return err
 		}
+		if _, _, err := r.roleImageImpactAccess(ctx, tx, s, row); err != nil {
+			return err
+		}
 		if row.public.ConfigurationRef != payload.ConfigurationRef || row.public.RevisionRef != payload.RevisionRef || row.public.Digest != payload.ImpactDigest {
 			return errs.ErrConflict
 		}
-		_, _, err = r.roleImageImpactAccess(ctx, tx, s, row)
-		return err
+		return nil
 	}
-	set, err := r.resolveManagedSet(ctx, tx, s, payload, revisionservice.KindRoleImage, false)
+	set, err := r.resolveRoleImageImpactSet(ctx, tx, s, payload)
 	if err != nil {
 		return err
+	}
+	if set.ProjectRef == "" {
+		if err := r.requireOrganizationRoleImageAccess(ctx, tx, s); err != nil {
+			return err
+		}
 	}
 	if err = r.requireManagedSetAccess(ctx, tx, s, set, "project.manage", "organization.manage"); err != nil {
 		return errs.ErrNotFound
@@ -150,7 +157,7 @@ func (r *Repository) prepareRoleImageImpact(ctx context.Context, tx pgx.Tx, s sc
 	for rows.Next() {
 		item := entity.RoleImageImpactItem{Outcome: "PENDING"}
 		if rows.Scan(&item.EnvironmentRef, &item.EnvironmentVersion, &item.SourceVersionRef, &item.SourceVersionDigest,
-			&item.Consumer.ProjectRef, &item.Consumer.AgentRef, &item.Consumer.AgentVersion, &item.Consumer.BindingRef, &item.Consumer.BindingVersion) != nil {
+			&item.Consumer.ProjectRef, &item.Consumer.AgentRef, &item.Consumer.AgentVersion, &item.Consumer.BindingRef, &item.Consumer.BindingVersion, &item.Consumer.ScopeKind, &item.Consumer.OrganizationRef) != nil {
 			rows.Close()
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -237,6 +244,9 @@ func (r *Repository) roleImageImpactItems(ctx context.Context, tx pgx.Tx, id str
 		if rows.Scan(&ref, &raw, &outcome, &environment, &binding, &version) != nil || json.Unmarshal(raw, &item) != nil || item.Ref != ref || len(items) >= maximumRoleImageImpactItems {
 			return nil, errs.ErrUnavailable
 		}
+		if !validRuntimeOwnerSnapshot(item.Consumer.ScopeKind, item.Consumer.OrganizationRef, item.Consumer.ProjectRef) {
+			return nil, errs.ErrNotFound
+		}
 		item.Outcome, item.ResultEnvironmentVersionRef, item.ResultBindingRef, item.ResultBindingVersion = outcome, environment, binding, version
 		items = append(items, item)
 	}
@@ -247,9 +257,14 @@ func (r *Repository) roleImageImpactItems(ctx context.Context, tx pgx.Tx, id str
 }
 
 func (r *Repository) roleImageImpactAccess(ctx context.Context, tx pgx.Tx, s scope, row roleImageImpactRow) (managedSet, lockedManagedRevision, error) {
-	set, err := r.resolveManagedSet(ctx, tx, s, command.ManagedConfigurationInput{ConfigurationRef: row.public.ConfigurationRef}, revisionservice.KindRoleImage, false)
+	set, err := r.resolveRoleImageImpactSet(ctx, tx, s, command.ManagedConfigurationInput{ConfigurationRef: row.public.ConfigurationRef})
 	if err != nil {
 		return set, lockedManagedRevision{}, err
+	}
+	if set.ProjectRef == "" {
+		if err := r.requireOrganizationRoleImageAccess(ctx, tx, s); err != nil {
+			return set, lockedManagedRevision{}, err
+		}
 	}
 	if err = r.requireManagedSetAccess(ctx, tx, s, set, "project.manage", "organization.manage"); err != nil {
 		return set, lockedManagedRevision{}, errs.ErrNotFound
@@ -325,7 +340,11 @@ func (r *Repository) GetRoleImageImpactPlan(ctx context.Context, p value.Princip
 			return result, err
 		}
 		if item.Consumer.AgentRef != "" {
-			if err = r.requireAccess(ctx, tx, s, "agent.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: item.Consumer.AgentRef}); err != nil {
+			environment, ownerErr := r.getRuntimeEnvironmentTx(ctx, tx, s, item.EnvironmentRef)
+			if ownerErr != nil {
+				return result, ownerErr
+			}
+			if err = r.authorizeRuntimeEnvironmentConsumers(ctx, tx, s, environment, []entity.RuntimeEnvironmentConsumer{item.Consumer}); err != nil {
 				if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) {
 					continue
 				}

@@ -86,7 +86,7 @@ func TestSessionElevationIsSealedAndRenewalDoesNotExtendIt(t *testing.T) {
 	}
 	store.now = func() time.Time { return now }
 	elevation := &Elevation{
-		Kind: ElevationKindRuntimeSecretReveal, ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(90 * time.Second).Unix(),
+		Kind: ElevationKindRuntimeSecretReveal, ScopeKind: "PROJECT", OrganizationRef: "org_fixture01", ProjectRef: "project_sales", SecretRef: "secret_main", ExpiresAt: now.Add(90 * time.Second).Unix(),
 	}
 	claims, encoded, _, err := store.IssueWithElevation(uuid.NewString(), uuid.NewString(), uuid.NewString(), 2, "header.payload.signature", now.Add(time.Hour), elevation)
 	if err != nil {

@@ -3,10 +3,10 @@
 package generated
 
 type SessionProblemEnvelope struct {
-	Type string `json:"type"`
-	RequestRef string `json:"requestRef"`
-	Status int `json:"status"`
-	Code ProblemCode `json:"code"`
-	Title string `json:"title"`
-	Retryable bool `json:"retryable"`
+	Type       string      `json:"type"`
+	RequestRef string      `json:"requestRef"`
+	Status     int         `json:"status"`
+	Code       ProblemCode `json:"code"`
+	Title      string      `json:"title"`
+	Retryable  bool        `json:"retryable"`
 }

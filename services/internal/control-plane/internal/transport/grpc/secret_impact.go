@@ -21,9 +21,10 @@ func (server *Server) GetRuntimeSecretImpact(ctx context.Context, request *contr
 	response := &controlplanev1.GetRuntimeSecretImpactResponse{SecretRef: result.SecretRef, SecretVersion: result.SecretVersion, TargetRevision: result.TargetRevision, Total: result.Total,
 		Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}}
 	for _, item := range result.Consumers {
-		consumer := &controlplanev1.RuntimeSecretImpactConsumer{EnvironmentRef: item.EnvironmentRef, EnvironmentVersion: item.EnvironmentVersion, EnvironmentVersionRef: item.EnvironmentVersionRef, SecretRevisions: item.SecretRevisions}
+		consumer := &controlplanev1.RuntimeSecretImpactConsumer{EnvironmentRef: item.EnvironmentRef, EnvironmentVersion: item.EnvironmentVersion, EnvironmentVersionRef: item.EnvironmentVersionRef, SecretRevisions: item.SecretRevisions,
+			ScopeKind: roleImageScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef, ProjectRef: item.ProjectRef}
 		c := item.Consumer
-		consumer.Consumer = &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: c.AgentRef, AgentVersion: c.AgentVersion, BindingRef: c.BindingRef, BindingVersion: c.BindingVersion, VersionRef: c.VersionRef, ProjectRef: c.ProjectRef}
+		consumer.Consumer = castRuntimeEnvironmentConsumer(c)
 		response.Consumers = append(response.Consumers, consumer)
 	}
 	return response, nil
@@ -32,9 +33,10 @@ func (server *Server) GetRuntimeSecretImpact(ctx context.Context, request *contr
 func (server *Server) RebindRuntimeSecret(ctx context.Context, request *controlplanev1.RebindRuntimeSecretRequest) (*controlplanev1.RebindRuntimeSecretResponse, error) {
 	input := command.RuntimeSecretRebindInput{SecretRef: request.GetSecretRef(), Revision: request.GetRevision()}
 	for _, item := range request.GetSelections() {
-		selection := entity.RuntimeSecretRebindSelection{EnvironmentRef: item.GetEnvironmentRef(), ExpectedEnvironmentVersion: item.GetExpectedEnvironmentVersion(), SourceVersionRef: item.GetSourceVersionRef()}
+		selection := entity.RuntimeSecretRebindSelection{EnvironmentRef: item.GetEnvironmentRef(), ExpectedEnvironmentVersion: item.GetExpectedEnvironmentVersion(), SourceVersionRef: item.GetSourceVersionRef(),
+			ScopeKind: runtimeResourceScopeName(item.GetScopeKind()), OrganizationRef: item.GetOrganizationRef(), ProjectRef: item.GetProjectRef()}
 		for _, c := range item.GetConsumers() {
-			selection.Consumers = append(selection.Consumers, entity.RuntimeEnvironmentConsumer{AgentRef: c.GetAgentRef(), AgentVersion: c.GetAgentVersion(), BindingRef: c.GetBindingRef(), BindingVersion: c.GetBindingVersion(), VersionRef: c.GetVersionRef(), ProjectRef: c.GetProjectRef()})
+			selection.Consumers = append(selection.Consumers, runtimeEnvironmentConsumerInput(c))
 		}
 		input.Selections = append(input.Selections, selection)
 	}

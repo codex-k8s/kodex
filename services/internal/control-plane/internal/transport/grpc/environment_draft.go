@@ -33,12 +33,25 @@ func (server *Server) CreateRuntimeEnvironmentDraft(ctx context.Context, request
 		return nil, transportError(errs.ErrInvalid)
 	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
-		command.CreateRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{ProjectRef: request.GetProjectRef(),
+		command.CreateRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{ScopeKind: "PROJECT", ProjectRef: request.GetProjectRef(),
 			EnvironmentRef: request.GetEnvironmentRef(), ExpectedEnvironmentVersion: request.GetExpectedEnvironmentVersion(), Specification: spec})
 	if err != nil {
 		return nil, err
 	}
 	return &controlplanev1.CreateRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
+}
+func (server *Server) CreateOrganizationRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.CreateOrganizationRuntimeEnvironmentDraftRequest) (*controlplanev1.CreateOrganizationRuntimeEnvironmentDraftResponse, error) {
+	spec, err := domainEnvironmentDraftSpecification(request.GetSpecification())
+	if err != nil {
+		return nil, transportError(errs.ErrInvalid)
+	}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName,
+		command.CreateOrganizationRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{ScopeKind: "ORGANIZATION",
+			EnvironmentRef: request.GetEnvironmentRef(), ExpectedEnvironmentVersion: request.GetExpectedEnvironmentVersion(), Specification: spec})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.CreateOrganizationRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft)}, nil
 }
 func (server *Server) SaveRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.SaveRuntimeEnvironmentDraftRequest) (*controlplanev1.SaveRuntimeEnvironmentDraftResponse, error) {
 	spec, err := domainEnvironmentDraftSpecification(request.GetSpecification())
@@ -116,7 +129,7 @@ func castEnvironmentDraft(input *entity.RuntimeEnvironmentDraft) *controlplanev1
 	specification := &controlplanev1.RuntimeEnvironmentDraftSpecification{Name: spec.Name, Description: spec.Description, ImageArtifactRef: spec.ImageArtifactRef}
 	if !reflect.DeepEqual(spec.Policy, runtimecontract.RuntimeEnvironmentPolicy{}) {
 		policy := castRuntimeEnvironmentPolicy(spec.Policy)
-		specification.Policy = &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: policy.Resources, KubernetesAccess: policy.KubernetesAccess.Kind}
+		specification.Policy = &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: policy.Resources, KubernetesAccess: policy.KubernetesAccess.Kind, WebAccess: policy.Network.WebAccess}
 		for _, volume := range policy.Volumes {
 			specification.Policy.Volumes = append(specification.Policy.Volumes, &controlplanev1.RuntimeVolumeInput{Name: volume.Name, Kind: volume.Kind, SizeMib: volume.SizeMib})
 		}
@@ -140,6 +153,7 @@ func castEnvironmentDraft(input *entity.RuntimeEnvironmentDraft) *controlplanev1
 		savedAt = timestamppb.New(input.SavedAt)
 	}
 	return &controlplanev1.RuntimeEnvironmentDraft{Ref: input.Ref, Version: input.Version, ProjectRef: input.ProjectRef,
+		ScopeKind: roleImageScopeKind(input.ScopeKind), OrganizationRef: input.OrganizationRef,
 		BaseVersionRef: input.BaseVersionRef, BaseRevision: input.BaseRevision, SavedAt: savedAt,
 		EnvironmentRef: input.EnvironmentRef, ExpectedEnvironmentVersion: input.ExpectedEnvironmentVersion, State: input.State,
 		Specification: specification, ValidationDigest: input.ValidationDigest, Diagnostics: input.Diagnostics, PublishedEnvironmentRef: input.PublishedEnvironmentRef}

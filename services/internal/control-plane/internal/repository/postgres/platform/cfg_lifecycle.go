@@ -51,7 +51,20 @@ func (repository *Repository) projectCFGActions(ctx context.Context, tx pgx.Tx, 
 	if set == nil || (set.Kind != "ROLE_IMAGE" && set.Kind != "INTEGRATION_DEFINITION") {
 		return nil
 	}
-	resolved, err := repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: set.Ref}, set.Kind, false)
+	var resolved managedSet
+	var err error
+	if set.Kind == "ROLE_IMAGE" {
+		_, scopeKind, _, ownerErr := repository.roleImageConfigurationOwner(ctx, tx, current, set.Ref)
+		if ownerErr != nil && !errors.Is(ownerErr, errs.ErrNotFound) {
+			return ownerErr
+		}
+		if ownerErr == nil && scopeKind == "ORGANIZATION" {
+			// ORG source изменяется только специализированными recipe-командами.
+			set.NextActions = []string{}
+			return nil
+		}
+	}
+	resolved, err = repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: set.Ref}, set.Kind, false)
 	if err != nil {
 		return err
 	}
@@ -82,7 +95,13 @@ func (repository *Repository) refreshCFGReceipt(ctx context.Context, tx pgx.Tx, 
 	if result.ManagedConfiguration == nil || (result.ManagedConfiguration.Kind != "ROLE_IMAGE" && result.ManagedConfiguration.Kind != "INTEGRATION_DEFINITION") {
 		return nil
 	}
-	set, err := repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: result.ManagedConfiguration.Ref}, result.ManagedConfiguration.Kind, false)
+	var set managedSet
+	var err error
+	if result.ManagedConfiguration.Kind == "ROLE_IMAGE" && result.RoleImageImpactPlan != nil {
+		set, err = repository.resolveRoleImageImpactSet(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: result.ManagedConfiguration.Ref})
+	} else {
+		set, err = repository.resolveManagedSet(ctx, tx, current, command.ManagedConfigurationInput{ConfigurationRef: result.ManagedConfiguration.Ref}, result.ManagedConfiguration.Kind, false)
+	}
 	if err != nil {
 		return err
 	}
@@ -292,7 +311,7 @@ func (repository *Repository) archiveCFG(ctx context.Context, tx pgx.Tx, current
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if err == nil {
-			result, _, _, applyErr := repository.applyRoleImageManage(ctx, tx, current, roleimagerepo.ManageInput{Action: "ARCHIVE", RecipeRef: recipeRef, ProjectRef: set.ProjectRef, Mutation: value.Mutation{ExpectedVersion: &version}})
+			result, _, _, applyErr := repository.applyRoleImageManage(ctx, tx, current, roleimagerepo.ManageInput{ScopeKind: "PROJECT", Action: "ARCHIVE", RecipeRef: recipeRef, ProjectRef: set.ProjectRef, Mutation: value.Mutation{ExpectedVersion: &version}})
 			err = applyErr
 			if err != nil {
 				return commandOutcome{}, err

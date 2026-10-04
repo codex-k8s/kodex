@@ -3,6 +3,7 @@ package entity
 import "time"
 
 type RuntimeSecretDraft struct {
+	ScopeKind, OrganizationRef                                      string
 	Ref, ProjectRef, SecretRef, Name, Description, ValueType, State string
 	Version, Generation, PublishedRevision, SecretVersion           int64
 	CreatedAt, UpdatedAt, ExpiresAt                                 time.Time

@@ -43,7 +43,7 @@ func (client *identityEnvironmentRecorder) Invoke(_ context.Context, method stri
 		output = &controlplanev1.RevokeInteractionIdentityResponse{Identity: identity}
 	case strings.HasSuffix(method, "/GetRuntimeEnvironmentImpact"):
 		output = &controlplanev1.GetRuntimeEnvironmentImpactResponse{EnvironmentRef: "env_fixture01", EnvironmentVersion: 3, TargetVersionRef: "ever_fixture02", TargetDigest: strings.Repeat("b", 64),
-			Consumers: []*controlplanev1.RuntimeEnvironmentConsumer{{AgentRef: "agt_fixture01", AgentVersion: 5, BindingRef: "bind_fixture01", BindingVersion: 2, VersionRef: "ever_fixture01", ProjectRef: "prj_fixture01"}}, Total: 1, Page: &controlplanev1.PageInfo{NextPageToken: "next-fixture"}}
+			Consumers: []*controlplanev1.RuntimeEnvironmentConsumer{{AgentRef: "agt_fixture01", AgentVersion: 5, BindingRef: "bind_fixture01", BindingVersion: 2, VersionRef: "ever_fixture01", ProjectRef: "prj_fixture01", ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01"}}, Total: 1, Page: &controlplanev1.PageInfo{NextPageToken: "next-fixture"}}
 	case strings.HasSuffix(method, "/RebindRuntimeEnvironment"):
 		output = &controlplanev1.RebindRuntimeEnvironmentResponse{Bindings: []*controlplanev1.AgentRuntimeEnvironmentBinding{{Ref: "bind_fixture01", Version: 3, AgentRef: "agt_fixture01", EnvironmentRef: "env_fixture01", VersionRef: "ever_fixture02", Digest: strings.Repeat("b", 64)}}}
 	default:
@@ -64,7 +64,7 @@ func identityBindBody() string {
 	return `{"externalTeamRef":"team-fixture","externalChannelRef":"channel-fixture","externalUserDigest":"` + strings.Repeat("a", 64) + `","subjectRef":"sub_fixture01"}`
 }
 
-const environmentRebindBody = `{"consumers":[{"agentRef":"agt_fixture01","agentVersion":5,"bindingRef":"bind_fixture01","bindingVersion":2,"versionRef":"ever_fixture01","projectRef":"prj_fixture01"}]}`
+const environmentRebindBody = `{"consumers":[{"agentRef":"agt_fixture01","agentVersion":5,"bindingRef":"bind_fixture01","bindingVersion":2,"versionRef":"ever_fixture01","projectRef":"prj_fixture01","scopeKind":"PROJECT","organizationRef":"org_fixture01"}]}`
 const identityCollectionPath = "/api/v1/integration-connections/conn_fixture01/interaction-identities"
 const environmentVersionPath = "/api/v1/runtime-environments/env_fixture01/versions/ever_fixture02"
 

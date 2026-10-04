@@ -109,17 +109,7 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 	}
 	var purpose *boundary.SessionPurpose
 	if body != nil && body.Purpose != nil {
-		secretRef := ""
-		if body.Purpose.SecretRef != nil {
-			secretRef = *body.Purpose.SecretRef
-		}
-		purpose = &boundary.SessionPurpose{
-			Kind: string(body.Purpose.Kind), ProjectRef: stringValue(body.Purpose.ProjectRef), SecretRef: secretRef,
-			ReceiptRef: stringValue(body.Purpose.ReceiptRef), ReceiptDigest: stringValue(body.Purpose.ReceiptDigest),
-		}
-		if body.Purpose.ReceiptVersion != nil {
-			purpose.ReceiptVersion = *body.Purpose.ReceiptVersion
-		}
+		purpose = sessionPurposeMap(body.Purpose)
 	}
 	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer, purpose)
 	if err != nil {
@@ -625,6 +615,14 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 	switch field.Kind() {
 	case protoreflect.EnumKind:
+		if field.Enum().FullName() == "controlplane.v1.RuntimeResourceScopeKind" {
+			name, ok := value.(string)
+			kind := runtimeResourceScopeKind(name)
+			if !ok || !kind.Valid() {
+				return nil, errors.New("public runtime resource scope is invalid")
+			}
+			return string(kind), nil
+		}
 		if prefix, ok := runtimeEnvironmentEnumPrefixes[field.Enum().FullName()]; ok {
 			name, valid := value.(string)
 			item := field.Enum().Values().ByName(protoreflect.Name(name))
@@ -677,6 +675,8 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 var runtimeEnvironmentEnumPrefixes = map[protoreflect.FullName]string{
 	"controlplane.v1.RuntimeVolumeKind":           "RUNTIME_VOLUME_KIND_",
 	"controlplane.v1.RuntimeNetworkDestination":   "RUNTIME_NETWORK_DESTINATION_",
+	"controlplane.v1.RuntimeNetworkProtocol":      "RUNTIME_NETWORK_PROTOCOL_",
+	"controlplane.v1.RuntimeWebAccessMode":        "RUNTIME_WEB_ACCESS_MODE_",
 	"controlplane.v1.RuntimeKubernetesAccessKind": "RUNTIME_KUBERNETES_ACCESS_KIND_",
 }
 
@@ -707,6 +707,17 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 			LocalizeSafeErrors(item, localize)
 		}
 	case map[string]any:
+		// AssistantRunPin содержит literal identity, а не enum-подобные
+		// пользовательские строки. Нормализуется только его closed scope.
+		_, pinConversation := current["conversationRef"]
+		_, pinAssistant := current["assistantRef"]
+		_, pinOrganization := current["organizationRef"]
+		if pinConversation && pinAssistant && pinOrganization {
+			if text, ok := current["scope"].(string); ok {
+				current["scope"] = normalizeEnum(text)
+			}
+			return
+		}
 		for key, item := range current {
 			if key == "integrationIntent" {
 				continue
@@ -733,7 +744,7 @@ var enumPrefixes = []string{
 	"RUN_EVENT_ACTOR_KIND_", "RUN_EVENT_MESSAGE_KIND_", "RUN_TOOL_CALL_STATE_",
 	"OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "ARTIFACT_LIFECYCLE_STATE_",
 	"ATTACHMENT_SET_STATE_", "ATTACHMENT_SET_PURPOSE_",
-	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_", "ASSISTANT_CONVERSATION_STATE_",
+	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_", "ASSISTANT_CONVERSATION_STATE_", "ASSISTANT_SCOPE_",
 	"PROVIDER_ACCOUNT_STATE_", "PROVIDER_AUTHORIZATION_METHOD_", "PROVIDER_AUTHORIZATION_STATE_",
 	"PROVIDER_ACCOUNT_DELETION_STATE_", "PROVIDER_ACCOUNT_VERIFICATION_STATE_", "PROVIDER_ACCOUNT_VERIFICATION_SCOPE_", "PROVIDER_ACCOUNT_BLOCKER_KIND_", "PROVIDER_ACCOUNT_QUEUED_WORK_OUTCOME_",
 	"PROVIDER_ACCOUNT_USAGE_PURPOSE_", "PROVIDER_USAGE_STATE_", "PROVIDER_USAGE_REASON_", "PROVIDER_USAGE_REMEDIATION_", "PROVIDER_HEALTH_SCOPE_",
@@ -814,6 +825,7 @@ func normalize(value any) {
 			}
 			delete(current, "agentRef")
 			delete(current, "workflowRef")
+			delete(current, "systemAssistantRef")
 		}
 		if _, isWorkflow := current["publishedVersion"]; isWorkflow {
 			flattenWorkflow(current)
@@ -955,18 +967,25 @@ func requiredCollectionKeys(value map[string]any) []string {
 }
 
 func target(value map[string]any) (string, any, bool) {
-	// RunTarget является закрытым oneof с двумя собственными scalar-полями.
+	// RunTarget является закрытым oneof с тремя собственными scalar-полями.
 	// RunNode, WorkflowStep и grant тоже имеют agentRef, поэтому неизвестный
 	// ключ закрыто исключает такую map из target-нормализации.
 	for key := range value {
 		switch key {
-		case "agentRef", "workflowRef", "displayName", "targetVersion":
+		case "agentRef", "workflowRef", "systemAssistantRef", "displayName", "targetVersion":
 		default:
 			return "", nil, false
 		}
 	}
 	agentRef, hasAgent := value["agentRef"]
 	workflowRef, hasWorkflow := value["workflowRef"]
+	systemRef, hasSystem := value["systemAssistantRef"]
+	if hasSystem {
+		if hasAgent || hasWorkflow {
+			return "", nil, false
+		}
+		return "SYSTEM_ASSISTANT", systemRef, true
+	}
 	if hasAgent == hasWorkflow {
 		return "", nil, false
 	}

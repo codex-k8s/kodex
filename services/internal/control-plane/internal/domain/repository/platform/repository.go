@@ -110,6 +110,7 @@ type WorkerGrantInput struct {
 }
 
 type RuntimeSecretPrepareInput struct {
+	ScopeKind                                                                        string
 	Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
 	Mutation                                                                         value.Mutation
 }
@@ -339,6 +340,7 @@ type Repository interface {
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)
 	SearchAssistantResources(context.Context, value.Principal, string, string, int64, string) ([]entity.SearchResult, bool, error)
 	ListAssistantIntegrationDefinitions(context.Context, value.Principal, string, string, int64, string, int32) ([]entity.AssistantIntegrationDefinition, int32, error)
+	ListAssistantConfigurationCatalog(context.Context, value.Principal, string, string, int64, entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error)
 	SearchExecutionFiles(context.Context, value.Principal, query.ExecutionFileContext, string, query.Page) (entity.ExecutionFilePage, error)
 	GetExecutionFileMetadata(context.Context, value.Principal, query.ExecutionFileContext, query.ExecutionFileRef) (entity.ExecutionFileMetadata, error)
 	PreviewExecutionFile(context.Context, value.Principal, query.ExecutionFileContext, query.ExecutionFileRef, int32) (entity.ExecutionFilePreview, error)
@@ -355,7 +357,8 @@ type Repository interface {
 	ListIntegrationGrantCapabilityCandidates(context.Context, value.Principal, query.IntegrationCandidates) (entity.IntegrationCapabilityCandidates, error)
 	GetIntegrationConnection(context.Context, value.Principal, string) (entity.IntegrationConnection, error)
 	GetSystemAssistant(context.Context, value.Principal) (entity.SystemAssistant, error)
-	ListAssistantConversations(context.Context, value.Principal, query.Filter) ([]entity.AssistantConversation, string, error)
+	GetProjectAssistant(context.Context, value.Principal, string) (entity.ProjectAssistantProfile, error)
+	ListAssistantConversations(context.Context, value.Principal, query.AssistantConversationFilter) ([]entity.AssistantConversation, string, error)
 	GetAdministration(context.Context, value.Principal) (Administration, error)
 	ListAuditEvents(context.Context, value.Principal, query.Filter) ([]entity.AuditEvent, string, error)
 	ListPermissionRegistry(context.Context, value.Principal) ([]entity.PermissionDefinition, error)

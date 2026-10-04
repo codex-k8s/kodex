@@ -23,7 +23,6 @@ export interface EnvironmentCapability {
     | "verifiedTools"
     | "resources"
     | "networkPolicy"
-    | "kubernetesRbac"
     | "effectivePolicy"
     | "secretLifecycle"
     | "secretReveal"
@@ -46,7 +45,6 @@ export const runtimeEnvironmentCapabilities: readonly EnvironmentCapability[] =
     { key: "verifiedTools", state: "AVAILABLE" },
     { key: "resources", state: "AVAILABLE" },
     { key: "networkPolicy", state: "AVAILABLE" },
-    { key: "kubernetesRbac", state: "AVAILABLE" },
     { key: "effectivePolicy", state: "AVAILABLE" },
     { key: "secretLifecycle", state: "AVAILABLE" },
     { key: "secretReveal", state: "AVAILABLE" },

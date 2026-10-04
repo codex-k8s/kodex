@@ -125,7 +125,7 @@ func TestEmailReconciliationRequiresExactElevation(t *testing.T) {
 		{"wrong-version", func(f *emailHTTPFixture) { f.store.claims.Elevation.ReceiptVersion = 2 }},
 		{"wrong-digest", func(f *emailHTTPFixture) { f.store.claims.Elevation.ReceiptDigest = strings.Repeat("b", 64) }},
 		{"secret-purpose", func(f *emailHTTPFixture) {
-			f.store.claims.Elevation = &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ProjectRef: "prj_fixture01", SecretRef: "sec_fixture01", ExpiresAt: time.Now().Add(time.Minute).Unix()}
+			f.store.claims.Elevation = &session.Elevation{Kind: session.ElevationKindRuntimeSecretReveal, ScopeKind: "PROJECT", OrganizationRef: "org_fixture01", ProjectRef: "prj_fixture01", SecretRef: "sec_fixture01", ExpiresAt: time.Now().Add(time.Minute).Unix()}
 		}},
 		{"mixed-project", func(f *emailHTTPFixture) { f.store.claims.Elevation.ProjectRef = "prj_fixture01" }},
 		{"mixed-secret", func(f *emailHTTPFixture) { f.store.claims.Elevation.SecretRef = "sec_fixture01" }},

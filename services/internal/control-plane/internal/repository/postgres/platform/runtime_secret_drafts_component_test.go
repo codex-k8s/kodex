@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"testing"
 	"time"
@@ -15,6 +16,9 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
+
+//go:embed testdata/sql/secret_draft_recovery_observe.sql
+var querySecretDraftRecoveryObserve string
 
 func testRuntimeSecretDraftLifecycle(t *testing.T, ctx context.Context, r *Repository) {
 	t.Helper()
@@ -201,10 +205,43 @@ func testRuntimeSecretDraftLifecycle(t *testing.T, ctx context.Context, r *Repos
 		t.Fatalf("published ciphertext cleanup: %v", err)
 	}
 	stale := owner
-	legacyRecovery := runtimeSecretSystemPrincipal(t, ctx, r, "platform.runtime-secrets.operations.recover")
-	legacyResult, err := s.RecoverRuntimeSecretMaterialization(ctx, legacyRecovery, repoport.RuntimeSecretRecoveryInput{OperationRef: retry.OperationRef, Materialization: *materialization})
-	if err != nil || legacyResult.Action != "KEEP" || legacyResult.Secret == nil {
-		t.Fatalf("legacy scan lost D6 published revision: %+v %v", legacyResult, err)
+	immediateRecovery := runtimeSecretSystemPrincipal(t, ctx, r, "platform.runtime-secrets.operations.recover")
+	if _, err := s.RecoverRuntimeSecretMaterialization(ctx, immediateRecovery, repoport.RuntimeSecretRecoveryInput{OperationRef: retry.OperationRef, Materialization: *materialization}); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("draft operation crossed immediate owner recovery route: %v", err)
+	}
+	draftRecovery := runtimeSecretSystemPrincipal(t, ctx, r, "platform.runtime-secret-drafts.operations.recover")
+	listed, _, err = s.ListRuntimeSecretDraftRecovery(ctx, draftRecovery, query.Page{Size: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundPublished := false
+	for _, candidate := range listed {
+		if candidate.OperationRef == retry.OperationRef {
+			foundPublished = true
+		}
+	}
+	if !foundPublished {
+		t.Fatal("finished publish disappeared from dedicated retained revision sweep")
+	}
+	observe := func() (time.Time, int64) {
+		t.Helper()
+		var updated time.Time
+		var audits int64
+		if err := r.pool.QueryRow(ctx, querySecretDraftRecoveryObserve, retry.OperationRef).Scan(&updated, &audits); err != nil {
+			t.Fatal(err)
+		}
+		return updated, audits
+	}
+	beforeUpdated, beforeAudits := observe()
+	for range 3 {
+		retainedResult, err := finish(retry, "RECOVER", nil, materialization)
+		if err != nil || retainedResult.MaterializationAction != "KEEP" || !retainedResult.Completed {
+			t.Fatalf("dedicated fenced recovery lost published revision: %+v %v", retainedResult, err)
+		}
+	}
+	afterUpdated, afterAudits := observe()
+	if !beforeUpdated.Equal(afterUpdated) || beforeAudits != afterAudits {
+		t.Fatal("settled KEEP sweep rewrote owner state or appended audit")
 	}
 	revokeReceipt, err := s.PrepareRuntimeSecretOperation(ctx, runtimeSecretOwnerPrincipal(owner, "secret.revoke"), repoport.RuntimeSecretPrepareInput{Kind: "REVOKE", SecretRef: published.Secret.Ref, Mutation: value.Mutation{IdempotencyKey: "draft-published-revoke", ExpectedVersion: &published.Secret.Version}})
 	if err != nil {
@@ -217,9 +254,42 @@ func testRuntimeSecretDraftLifecycle(t *testing.T, ctx context.Context, r *Repos
 	if _, err := s.CompleteRuntimeSecretOperation(ctx, runtimeSecretSystemPrincipal(t, ctx, r, "platform.runtime-secrets.operations.complete"), repoport.RuntimeSecretCompleteInput{OperationRef: revokeReceipt.OperationRef, ClaimantID: "draft-revoke", ClaimGeneration: revokeClaim.ClaimGeneration}); err != nil {
 		t.Fatal(err)
 	}
-	legacyResult, err = s.RecoverRuntimeSecretMaterialization(ctx, legacyRecovery, repoport.RuntimeSecretRecoveryInput{OperationRef: retry.OperationRef, Materialization: *materialization})
-	if err != nil || legacyResult.Action != "DELETE" {
-		t.Fatalf("legacy scan retained revoked D6 revision: %+v %v", legacyResult, err)
+	retiredResult, err := finish(retry, "RECOVER", nil, materialization)
+	if err != nil || retiredResult.MaterializationAction != "DELETE" {
+		t.Fatalf("dedicated recovery retained revoked published revision: %+v %v", retiredResult, err)
+	}
+	// До exact cleanup ACK retirement остаётся в owner recovery list.
+	listed, _, err = s.ListRuntimeSecretDraftRecovery(ctx, draftRecovery, query.Page{Size: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundRetired := false
+	for _, candidate := range listed {
+		if candidate.OperationRef == retry.OperationRef {
+			foundRetired = true
+		}
+	}
+	if !foundRetired {
+		t.Fatal("lost cleanup ACK removed retired materialization work")
+	}
+	if _, err := finish(retry, "CLEANUP", encrypted, nil); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale ciphertext ACK cleared later retirement intent: %v", err)
+	}
+	repeatedRetirement, err := finish(retry, "RECOVER", nil, materialization)
+	if err != nil || repeatedRetirement.MaterializationAction != "DELETE" {
+		t.Fatalf("lost ACK retirement did not preserve exact delete intent: %+v %v", repeatedRetirement, err)
+	}
+	if _, err := finish(retry, "CLEANUP", nil, materialization); err != nil {
+		t.Fatal(err)
+	}
+	listed, _, err = s.ListRuntimeSecretDraftRecovery(ctx, draftRecovery, query.Page{Size: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range listed {
+		if candidate.OperationRef == retry.OperationRef {
+			t.Fatal("ACKed retired revision remained in periodic retained sweep")
+		}
 	}
 	stale.CredentialAuthenticatedAt = time.Now().Add(-6 * time.Minute)
 	if _, err := s.PrepareRuntimeSecretDraft(ctx, stale, input); !errors.Is(err, errs.ErrFreshAuthenticationRequired) {

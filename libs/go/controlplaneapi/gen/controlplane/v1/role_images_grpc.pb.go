@@ -19,21 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RoleImageService_ListRoleEnvironments_FullMethodName           = "/controlplane.v1.RoleImageService/ListRoleEnvironments"
-	RoleImageService_ListRoleImageRecipes_FullMethodName           = "/controlplane.v1.RoleImageService/ListRoleImageRecipes"
-	RoleImageService_GetRoleImageRecipe_FullMethodName             = "/controlplane.v1.RoleImageService/GetRoleImageRecipe"
-	RoleImageService_ManageRoleImageRecipe_FullMethodName          = "/controlplane.v1.RoleImageService/ManageRoleImageRecipe"
-	RoleImageService_ClaimImageBuild_FullMethodName                = "/controlplane.v1.RoleImageService/ClaimImageBuild"
-	RoleImageService_RenewImageBuild_FullMethodName                = "/controlplane.v1.RoleImageService/RenewImageBuild"
-	RoleImageService_ReportImageBuildProgress_FullMethodName       = "/controlplane.v1.RoleImageService/ReportImageBuildProgress"
-	RoleImageService_CompleteImageBuild_FullMethodName             = "/controlplane.v1.RoleImageService/CompleteImageBuild"
-	RoleImageService_FailImageBuild_FullMethodName                 = "/controlplane.v1.RoleImageService/FailImageBuild"
-	RoleImageService_GetImageSupplyWorkAvailability_FullMethodName = "/controlplane.v1.RoleImageService/GetImageSupplyWorkAvailability"
-	RoleImageService_ClaimImageAdmission_FullMethodName            = "/controlplane.v1.RoleImageService/ClaimImageAdmission"
-	RoleImageService_RecordImageAdmission_FullMethodName           = "/controlplane.v1.RoleImageService/RecordImageAdmission"
-	RoleImageService_ClaimImagePromotion_FullMethodName            = "/controlplane.v1.RoleImageService/ClaimImagePromotion"
-	RoleImageService_AuthorizeImagePromotion_FullMethodName        = "/controlplane.v1.RoleImageService/AuthorizeImagePromotion"
-	RoleImageService_CompleteImagePromotion_FullMethodName         = "/controlplane.v1.RoleImageService/CompleteImagePromotion"
+	RoleImageService_ListRoleEnvironments_FullMethodName                     = "/controlplane.v1.RoleImageService/ListRoleEnvironments"
+	RoleImageService_ListRoleImageRecipes_FullMethodName                     = "/controlplane.v1.RoleImageService/ListRoleImageRecipes"
+	RoleImageService_GetRoleImageRecipe_FullMethodName                       = "/controlplane.v1.RoleImageService/GetRoleImageRecipe"
+	RoleImageService_ManageRoleImageRecipe_FullMethodName                    = "/controlplane.v1.RoleImageService/ManageRoleImageRecipe"
+	RoleImageService_ListOrganizationRoleImageRecipes_FullMethodName         = "/controlplane.v1.RoleImageService/ListOrganizationRoleImageRecipes"
+	RoleImageService_GetOrganizationRoleImageRecipe_FullMethodName           = "/controlplane.v1.RoleImageService/GetOrganizationRoleImageRecipe"
+	RoleImageService_ListOrganizationRoleImageRecipeRevisions_FullMethodName = "/controlplane.v1.RoleImageService/ListOrganizationRoleImageRecipeRevisions"
+	RoleImageService_ManageOrganizationRoleImageRecipe_FullMethodName        = "/controlplane.v1.RoleImageService/ManageOrganizationRoleImageRecipe"
+	RoleImageService_RequestOrganizationRoleImagePromotion_FullMethodName    = "/controlplane.v1.RoleImageService/RequestOrganizationRoleImagePromotion"
+	RoleImageService_ClaimImageBuild_FullMethodName                          = "/controlplane.v1.RoleImageService/ClaimImageBuild"
+	RoleImageService_RenewImageBuild_FullMethodName                          = "/controlplane.v1.RoleImageService/RenewImageBuild"
+	RoleImageService_ReportImageBuildProgress_FullMethodName                 = "/controlplane.v1.RoleImageService/ReportImageBuildProgress"
+	RoleImageService_CompleteImageBuild_FullMethodName                       = "/controlplane.v1.RoleImageService/CompleteImageBuild"
+	RoleImageService_FailImageBuild_FullMethodName                           = "/controlplane.v1.RoleImageService/FailImageBuild"
+	RoleImageService_GetImageSupplyWorkAvailability_FullMethodName           = "/controlplane.v1.RoleImageService/GetImageSupplyWorkAvailability"
+	RoleImageService_ClaimImageAdmission_FullMethodName                      = "/controlplane.v1.RoleImageService/ClaimImageAdmission"
+	RoleImageService_RecordImageAdmission_FullMethodName                     = "/controlplane.v1.RoleImageService/RecordImageAdmission"
+	RoleImageService_ClaimImagePromotion_FullMethodName                      = "/controlplane.v1.RoleImageService/ClaimImagePromotion"
+	RoleImageService_AuthorizeImagePromotion_FullMethodName                  = "/controlplane.v1.RoleImageService/AuthorizeImagePromotion"
+	RoleImageService_CompleteImagePromotion_FullMethodName                   = "/controlplane.v1.RoleImageService/CompleteImagePromotion"
 )
 
 // RoleImageServiceClient is the client API for RoleImageService service.
@@ -47,6 +52,13 @@ type RoleImageServiceClient interface {
 	ListRoleImageRecipes(ctx context.Context, in *ListRoleImageRecipesRequest, opts ...grpc.CallOption) (*ListRoleImageRecipesResponse, error)
 	GetRoleImageRecipe(ctx context.Context, in *GetRoleImageRecipeRequest, opts ...grpc.CallOption) (*GetRoleImageRecipeResponse, error)
 	ManageRoleImageRecipe(ctx context.Context, in *ManageRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageRoleImageRecipeResponse, error)
+	// Организационная область назначается сервером. Project/role locators не
+	// принимаются; права владельца проверяются до version и receipt replay.
+	ListOrganizationRoleImageRecipes(ctx context.Context, in *ListOrganizationRoleImageRecipesRequest, opts ...grpc.CallOption) (*ListOrganizationRoleImageRecipesResponse, error)
+	GetOrganizationRoleImageRecipe(ctx context.Context, in *GetOrganizationRoleImageRecipeRequest, opts ...grpc.CallOption) (*GetOrganizationRoleImageRecipeResponse, error)
+	ListOrganizationRoleImageRecipeRevisions(ctx context.Context, in *ListOrganizationRoleImageRecipeRevisionsRequest, opts ...grpc.CallOption) (*ListOrganizationRoleImageRecipeRevisionsResponse, error)
+	ManageOrganizationRoleImageRecipe(ctx context.Context, in *ManageOrganizationRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageOrganizationRoleImageRecipeResponse, error)
+	RequestOrganizationRoleImagePromotion(ctx context.Context, in *RequestOrganizationRoleImagePromotionRequest, opts ...grpc.CallOption) (*RequestOrganizationRoleImagePromotionResponse, error)
 	ClaimImageBuild(ctx context.Context, in *ClaimImageBuildRequest, opts ...grpc.CallOption) (*ClaimImageBuildResponse, error)
 	RenewImageBuild(ctx context.Context, in *RenewImageBuildRequest, opts ...grpc.CallOption) (*RenewImageBuildResponse, error)
 	ReportImageBuildProgress(ctx context.Context, in *ReportImageBuildProgressRequest, opts ...grpc.CallOption) (*ReportImageBuildProgressResponse, error)
@@ -102,6 +114,56 @@ func (c *roleImageServiceClient) ManageRoleImageRecipe(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageRoleImageRecipeResponse)
 	err := c.cc.Invoke(ctx, RoleImageService_ManageRoleImageRecipe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) ListOrganizationRoleImageRecipes(ctx context.Context, in *ListOrganizationRoleImageRecipesRequest, opts ...grpc.CallOption) (*ListOrganizationRoleImageRecipesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrganizationRoleImageRecipesResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_ListOrganizationRoleImageRecipes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) GetOrganizationRoleImageRecipe(ctx context.Context, in *GetOrganizationRoleImageRecipeRequest, opts ...grpc.CallOption) (*GetOrganizationRoleImageRecipeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOrganizationRoleImageRecipeResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_GetOrganizationRoleImageRecipe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) ListOrganizationRoleImageRecipeRevisions(ctx context.Context, in *ListOrganizationRoleImageRecipeRevisionsRequest, opts ...grpc.CallOption) (*ListOrganizationRoleImageRecipeRevisionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrganizationRoleImageRecipeRevisionsResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_ListOrganizationRoleImageRecipeRevisions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) ManageOrganizationRoleImageRecipe(ctx context.Context, in *ManageOrganizationRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageOrganizationRoleImageRecipeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageOrganizationRoleImageRecipeResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_ManageOrganizationRoleImageRecipe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) RequestOrganizationRoleImagePromotion(ctx context.Context, in *RequestOrganizationRoleImagePromotionRequest, opts ...grpc.CallOption) (*RequestOrganizationRoleImagePromotionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RequestOrganizationRoleImagePromotionResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_RequestOrganizationRoleImagePromotion_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +291,13 @@ type RoleImageServiceServer interface {
 	ListRoleImageRecipes(context.Context, *ListRoleImageRecipesRequest) (*ListRoleImageRecipesResponse, error)
 	GetRoleImageRecipe(context.Context, *GetRoleImageRecipeRequest) (*GetRoleImageRecipeResponse, error)
 	ManageRoleImageRecipe(context.Context, *ManageRoleImageRecipeRequest) (*ManageRoleImageRecipeResponse, error)
+	// Организационная область назначается сервером. Project/role locators не
+	// принимаются; права владельца проверяются до version и receipt replay.
+	ListOrganizationRoleImageRecipes(context.Context, *ListOrganizationRoleImageRecipesRequest) (*ListOrganizationRoleImageRecipesResponse, error)
+	GetOrganizationRoleImageRecipe(context.Context, *GetOrganizationRoleImageRecipeRequest) (*GetOrganizationRoleImageRecipeResponse, error)
+	ListOrganizationRoleImageRecipeRevisions(context.Context, *ListOrganizationRoleImageRecipeRevisionsRequest) (*ListOrganizationRoleImageRecipeRevisionsResponse, error)
+	ManageOrganizationRoleImageRecipe(context.Context, *ManageOrganizationRoleImageRecipeRequest) (*ManageOrganizationRoleImageRecipeResponse, error)
+	RequestOrganizationRoleImagePromotion(context.Context, *RequestOrganizationRoleImagePromotionRequest) (*RequestOrganizationRoleImagePromotionResponse, error)
 	ClaimImageBuild(context.Context, *ClaimImageBuildRequest) (*ClaimImageBuildResponse, error)
 	RenewImageBuild(context.Context, *RenewImageBuildRequest) (*RenewImageBuildResponse, error)
 	ReportImageBuildProgress(context.Context, *ReportImageBuildProgressRequest) (*ReportImageBuildProgressResponse, error)
@@ -261,6 +330,21 @@ func (UnimplementedRoleImageServiceServer) GetRoleImageRecipe(context.Context, *
 }
 func (UnimplementedRoleImageServiceServer) ManageRoleImageRecipe(context.Context, *ManageRoleImageRecipeRequest) (*ManageRoleImageRecipeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageRoleImageRecipe not implemented")
+}
+func (UnimplementedRoleImageServiceServer) ListOrganizationRoleImageRecipes(context.Context, *ListOrganizationRoleImageRecipesRequest) (*ListOrganizationRoleImageRecipesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrganizationRoleImageRecipes not implemented")
+}
+func (UnimplementedRoleImageServiceServer) GetOrganizationRoleImageRecipe(context.Context, *GetOrganizationRoleImageRecipeRequest) (*GetOrganizationRoleImageRecipeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOrganizationRoleImageRecipe not implemented")
+}
+func (UnimplementedRoleImageServiceServer) ListOrganizationRoleImageRecipeRevisions(context.Context, *ListOrganizationRoleImageRecipeRevisionsRequest) (*ListOrganizationRoleImageRecipeRevisionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrganizationRoleImageRecipeRevisions not implemented")
+}
+func (UnimplementedRoleImageServiceServer) ManageOrganizationRoleImageRecipe(context.Context, *ManageOrganizationRoleImageRecipeRequest) (*ManageOrganizationRoleImageRecipeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageOrganizationRoleImageRecipe not implemented")
+}
+func (UnimplementedRoleImageServiceServer) RequestOrganizationRoleImagePromotion(context.Context, *RequestOrganizationRoleImagePromotionRequest) (*RequestOrganizationRoleImagePromotionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RequestOrganizationRoleImagePromotion not implemented")
 }
 func (UnimplementedRoleImageServiceServer) ClaimImageBuild(context.Context, *ClaimImageBuildRequest) (*ClaimImageBuildResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimImageBuild not implemented")
@@ -384,6 +468,96 @@ func _RoleImageService_ManageRoleImageRecipe_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RoleImageServiceServer).ManageRoleImageRecipe(ctx, req.(*ManageRoleImageRecipeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_ListOrganizationRoleImageRecipes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrganizationRoleImageRecipesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).ListOrganizationRoleImageRecipes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_ListOrganizationRoleImageRecipes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).ListOrganizationRoleImageRecipes(ctx, req.(*ListOrganizationRoleImageRecipesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_GetOrganizationRoleImageRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOrganizationRoleImageRecipeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).GetOrganizationRoleImageRecipe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_GetOrganizationRoleImageRecipe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).GetOrganizationRoleImageRecipe(ctx, req.(*GetOrganizationRoleImageRecipeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_ListOrganizationRoleImageRecipeRevisions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrganizationRoleImageRecipeRevisionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).ListOrganizationRoleImageRecipeRevisions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_ListOrganizationRoleImageRecipeRevisions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).ListOrganizationRoleImageRecipeRevisions(ctx, req.(*ListOrganizationRoleImageRecipeRevisionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_ManageOrganizationRoleImageRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageOrganizationRoleImageRecipeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).ManageOrganizationRoleImageRecipe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_ManageOrganizationRoleImageRecipe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).ManageOrganizationRoleImageRecipe(ctx, req.(*ManageOrganizationRoleImageRecipeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_RequestOrganizationRoleImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestOrganizationRoleImagePromotionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).RequestOrganizationRoleImagePromotion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_RequestOrganizationRoleImagePromotion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).RequestOrganizationRoleImagePromotion(ctx, req.(*RequestOrganizationRoleImagePromotionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -608,6 +782,26 @@ var RoleImageService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ManageRoleImageRecipe",
 			Handler:    _RoleImageService_ManageRoleImageRecipe_Handler,
+		},
+		{
+			MethodName: "ListOrganizationRoleImageRecipes",
+			Handler:    _RoleImageService_ListOrganizationRoleImageRecipes_Handler,
+		},
+		{
+			MethodName: "GetOrganizationRoleImageRecipe",
+			Handler:    _RoleImageService_GetOrganizationRoleImageRecipe_Handler,
+		},
+		{
+			MethodName: "ListOrganizationRoleImageRecipeRevisions",
+			Handler:    _RoleImageService_ListOrganizationRoleImageRecipeRevisions_Handler,
+		},
+		{
+			MethodName: "ManageOrganizationRoleImageRecipe",
+			Handler:    _RoleImageService_ManageOrganizationRoleImageRecipe_Handler,
+		},
+		{
+			MethodName: "RequestOrganizationRoleImagePromotion",
+			Handler:    _RoleImageService_RequestOrganizationRoleImagePromotion_Handler,
 		},
 		{
 			MethodName: "ClaimImageBuild",

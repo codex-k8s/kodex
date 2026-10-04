@@ -19,7 +19,7 @@ WHERE request.organization_id = @organization_id::uuid
   AND request.id = @promotion_request_id::uuid
   AND request.state = 'PROMOTED'
 	AND request.organization_id = artifact.organization_id
-	AND request.project_id = artifact.project_id
+	AND request.project_id IS NOT DISTINCT FROM artifact.project_id
 	AND request.recipe_id = artifact.recipe_id
   AND artifact.id = @image_artifact_id::uuid
   AND artifact.promotion_state = 'PROMOTED'
@@ -32,7 +32,7 @@ WHERE request.organization_id = @organization_id::uuid
   AND artifact.manifest_digest = request.manifest_digest
 	AND artifact.specification->>'SourceSHA256' = @source_sha256
 	AND recipe.organization_id = request.organization_id
-	AND recipe.project_id = request.project_id
+	AND recipe.project_id IS NOT DISTINCT FROM request.project_id
   AND recipe.active_image_artifact_id = artifact.id
 	AND recipe.version = artifact.recipe_version + 1
 	AND recipe.generation = artifact.recipe_generation

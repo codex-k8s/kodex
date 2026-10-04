@@ -100,6 +100,7 @@ const (
 	PlatformQueryService_ValidatePromptTemplate_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ValidatePromptTemplate"
 	PlatformQueryService_PreviewPromptTemplate_FullMethodName                    = "/controlplane.v1.PlatformQueryService/PreviewPromptTemplate"
 	PlatformQueryService_ListRuntimeSecrets_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets"
+	PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListOrganizationRuntimeSecrets"
 	PlatformQueryService_GetRuntimeSecret_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetRuntimeSecret"
 	PlatformQueryService_ListManagedConfigurationHistory_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationHistory"
 	PlatformQueryService_ListManagedConfigurations_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListManagedConfigurations"
@@ -202,6 +203,7 @@ type PlatformQueryServiceClient interface {
 	ValidatePromptTemplate(ctx context.Context, in *ValidatePromptTemplateRequest, opts ...grpc.CallOption) (*ValidatePromptTemplateResponse, error)
 	PreviewPromptTemplate(ctx context.Context, in *PreviewPromptTemplateRequest, opts ...grpc.CallOption) (*PreviewPromptTemplateResponse, error)
 	ListRuntimeSecrets(ctx context.Context, in *ListRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListRuntimeSecretsResponse, error)
+	ListOrganizationRuntimeSecrets(ctx context.Context, in *ListOrganizationRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListOrganizationRuntimeSecretsResponse, error)
 	GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error)
 	ListManagedConfigurationHistory(ctx context.Context, in *ListManagedConfigurationHistoryRequest, opts ...grpc.CallOption) (*ListManagedConfigurationHistoryResponse, error)
 	ListManagedConfigurations(ctx context.Context, in *ListManagedConfigurationsRequest, opts ...grpc.CallOption) (*ListManagedConfigurationsResponse, error)
@@ -1035,6 +1037,16 @@ func (c *platformQueryServiceClient) ListRuntimeSecrets(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) ListOrganizationRuntimeSecrets(ctx context.Context, in *ListOrganizationRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListOrganizationRuntimeSecretsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrganizationRuntimeSecretsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetRuntimeSecretResponse)
@@ -1252,6 +1264,7 @@ type PlatformQueryServiceServer interface {
 	ValidatePromptTemplate(context.Context, *ValidatePromptTemplateRequest) (*ValidatePromptTemplateResponse, error)
 	PreviewPromptTemplate(context.Context, *PreviewPromptTemplateRequest) (*PreviewPromptTemplateResponse, error)
 	ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error)
+	ListOrganizationRuntimeSecrets(context.Context, *ListOrganizationRuntimeSecretsRequest) (*ListOrganizationRuntimeSecretsResponse, error)
 	GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error)
 	ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error)
 	ListManagedConfigurations(context.Context, *ListManagedConfigurationsRequest) (*ListManagedConfigurationsResponse, error)
@@ -1517,6 +1530,9 @@ func (UnimplementedPlatformQueryServiceServer) PreviewPromptTemplate(context.Con
 }
 func (UnimplementedPlatformQueryServiceServer) ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSecrets not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListOrganizationRuntimeSecrets(context.Context, *ListOrganizationRuntimeSecretsRequest) (*ListOrganizationRuntimeSecretsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrganizationRuntimeSecrets not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecret not implemented")
@@ -3036,6 +3052,24 @@ func _PlatformQueryService_ListRuntimeSecrets_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_ListOrganizationRuntimeSecrets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrganizationRuntimeSecretsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListOrganizationRuntimeSecrets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListOrganizationRuntimeSecrets(ctx, req.(*ListOrganizationRuntimeSecretsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_GetRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRuntimeSecretRequest)
 	if err := dec(in); err != nil {
@@ -3602,6 +3636,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_ListRuntimeSecrets_Handler,
 		},
 		{
+			MethodName: "ListOrganizationRuntimeSecrets",
+			Handler:    _PlatformQueryService_ListOrganizationRuntimeSecrets_Handler,
+		},
+		{
 			MethodName: "GetRuntimeSecret",
 			Handler:    _PlatformQueryService_GetRuntimeSecret_Handler,
 		},
@@ -3668,6 +3706,7 @@ const (
 	PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName           = "/controlplane.v1.PlatformCommandService/UnbindEmailMailboxConfiguration"
 	PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName           = "/controlplane.v1.PlatformCommandService/PrepareRuntimeSecretDraftImpact"
 	PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/PrepareSaveRuntimeSecretDraft"
+	PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_FullMethodName     = "/controlplane.v1.PlatformCommandService/PrepareOrganizationRuntimeSecretDraft"
 	PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PrepareValidateRuntimeSecretDraft"
 	PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/PreparePublishRuntimeSecretDraft"
 	PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/PrepareDiscardRuntimeSecretDraft"
@@ -3700,6 +3739,7 @@ const (
 	PlatformCommandService_BindAgentMemoryRecord_FullMethodName                     = "/controlplane.v1.PlatformCommandService/BindAgentMemoryRecord"
 	PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UnbindAgentMemoryRecord"
 	PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentDraft"
+	PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName = "/controlplane.v1.PlatformCommandService/CreateOrganizationRuntimeEnvironmentDraft"
 	PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/SaveRuntimeEnvironmentDraft"
 	PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateRuntimeEnvironmentDraft"
 	PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentDraft"
@@ -3770,6 +3810,7 @@ const (
 	PlatformCommandService_DeleteProviderAccount_FullMethodName                     = "/controlplane.v1.PlatformCommandService/DeleteProviderAccount"
 	PlatformCommandService_CancelProviderAccountQueuedWork_FullMethodName           = "/controlplane.v1.PlatformCommandService/CancelProviderAccountQueuedWork"
 	PlatformCommandService_SetProviderAccountEnabled_FullMethodName                 = "/controlplane.v1.PlatformCommandService/SetProviderAccountEnabled"
+	PlatformCommandService_SetProviderAccountConcurrency_FullMethodName             = "/controlplane.v1.PlatformCommandService/SetProviderAccountConcurrency"
 	PlatformCommandService_CreateIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
 	PlatformCommandService_UpdateIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/UpdateIntegrationConnection"
 	PlatformCommandService_DeleteIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/DeleteIntegrationConnection"
@@ -3843,6 +3884,7 @@ type PlatformCommandServiceClient interface {
 	UnbindEmailMailboxConfiguration(ctx context.Context, in *UnbindEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*UnbindEmailMailboxConfigurationResponse, error)
 	PrepareRuntimeSecretDraftImpact(ctx context.Context, in *PrepareRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*PrepareRuntimeSecretDraftImpactResponse, error)
 	PrepareSaveRuntimeSecretDraft(ctx context.Context, in *PrepareSaveRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareSaveRuntimeSecretDraftResponse, error)
+	PrepareOrganizationRuntimeSecretDraft(ctx context.Context, in *PrepareOrganizationRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareOrganizationRuntimeSecretDraftResponse, error)
 	PrepareValidateRuntimeSecretDraft(ctx context.Context, in *PrepareValidateRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareValidateRuntimeSecretDraftResponse, error)
 	PreparePublishRuntimeSecretDraft(ctx context.Context, in *PreparePublishRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PreparePublishRuntimeSecretDraftResponse, error)
 	PrepareDiscardRuntimeSecretDraft(ctx context.Context, in *PrepareDiscardRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareDiscardRuntimeSecretDraftResponse, error)
@@ -3875,6 +3917,7 @@ type PlatformCommandServiceClient interface {
 	BindAgentMemoryRecord(ctx context.Context, in *BindAgentMemoryRecordRequest, opts ...grpc.CallOption) (*BindAgentMemoryRecordResponse, error)
 	UnbindAgentMemoryRecord(ctx context.Context, in *UnbindAgentMemoryRecordRequest, opts ...grpc.CallOption) (*UnbindAgentMemoryRecordResponse, error)
 	CreateRuntimeEnvironmentDraft(ctx context.Context, in *CreateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateRuntimeEnvironmentDraftResponse, error)
+	CreateOrganizationRuntimeEnvironmentDraft(ctx context.Context, in *CreateOrganizationRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateOrganizationRuntimeEnvironmentDraftResponse, error)
 	SaveRuntimeEnvironmentDraft(ctx context.Context, in *SaveRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*SaveRuntimeEnvironmentDraftResponse, error)
 	ValidateRuntimeEnvironmentDraft(ctx context.Context, in *ValidateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*ValidateRuntimeEnvironmentDraftResponse, error)
 	PublishRuntimeEnvironmentDraft(ctx context.Context, in *PublishRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentDraftResponse, error)
@@ -3950,6 +3993,7 @@ type PlatformCommandServiceClient interface {
 	DeleteProviderAccount(ctx context.Context, in *DeleteProviderAccountRequest, opts ...grpc.CallOption) (*DeleteProviderAccountResponse, error)
 	CancelProviderAccountQueuedWork(ctx context.Context, in *CancelProviderAccountQueuedWorkRequest, opts ...grpc.CallOption) (*CancelProviderAccountQueuedWorkResponse, error)
 	SetProviderAccountEnabled(ctx context.Context, in *SetProviderAccountEnabledRequest, opts ...grpc.CallOption) (*SetProviderAccountEnabledResponse, error)
+	SetProviderAccountConcurrency(ctx context.Context, in *SetProviderAccountConcurrencyRequest, opts ...grpc.CallOption) (*SetProviderAccountConcurrencyResponse, error)
 	CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error)
 	UpdateIntegrationConnection(ctx context.Context, in *UpdateIntegrationConnectionRequest, opts ...grpc.CallOption) (*UpdateIntegrationConnectionResponse, error)
 	DeleteIntegrationConnection(ctx context.Context, in *DeleteIntegrationConnectionRequest, opts ...grpc.CallOption) (*DeleteIntegrationConnectionResponse, error)
@@ -4102,6 +4146,16 @@ func (c *platformCommandServiceClient) PrepareSaveRuntimeSecretDraft(ctx context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PrepareSaveRuntimeSecretDraftResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareOrganizationRuntimeSecretDraft(ctx context.Context, in *PrepareOrganizationRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareOrganizationRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareOrganizationRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4422,6 +4476,16 @@ func (c *platformCommandServiceClient) CreateRuntimeEnvironmentDraft(ctx context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateRuntimeEnvironmentDraftResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateOrganizationRuntimeEnvironmentDraft(ctx context.Context, in *CreateOrganizationRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateOrganizationRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateOrganizationRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5146,6 +5210,16 @@ func (c *platformCommandServiceClient) SetProviderAccountEnabled(ctx context.Con
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) SetProviderAccountConcurrency(ctx context.Context, in *SetProviderAccountConcurrencyRequest, opts ...grpc.CallOption) (*SetProviderAccountConcurrencyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetProviderAccountConcurrencyResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SetProviderAccountConcurrency_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateIntegrationConnectionResponse)
@@ -5739,6 +5813,7 @@ type PlatformCommandServiceServer interface {
 	UnbindEmailMailboxConfiguration(context.Context, *UnbindEmailMailboxConfigurationRequest) (*UnbindEmailMailboxConfigurationResponse, error)
 	PrepareRuntimeSecretDraftImpact(context.Context, *PrepareRuntimeSecretDraftImpactRequest) (*PrepareRuntimeSecretDraftImpactResponse, error)
 	PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error)
+	PrepareOrganizationRuntimeSecretDraft(context.Context, *PrepareOrganizationRuntimeSecretDraftRequest) (*PrepareOrganizationRuntimeSecretDraftResponse, error)
 	PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error)
 	PreparePublishRuntimeSecretDraft(context.Context, *PreparePublishRuntimeSecretDraftRequest) (*PreparePublishRuntimeSecretDraftResponse, error)
 	PrepareDiscardRuntimeSecretDraft(context.Context, *PrepareDiscardRuntimeSecretDraftRequest) (*PrepareDiscardRuntimeSecretDraftResponse, error)
@@ -5771,6 +5846,7 @@ type PlatformCommandServiceServer interface {
 	BindAgentMemoryRecord(context.Context, *BindAgentMemoryRecordRequest) (*BindAgentMemoryRecordResponse, error)
 	UnbindAgentMemoryRecord(context.Context, *UnbindAgentMemoryRecordRequest) (*UnbindAgentMemoryRecordResponse, error)
 	CreateRuntimeEnvironmentDraft(context.Context, *CreateRuntimeEnvironmentDraftRequest) (*CreateRuntimeEnvironmentDraftResponse, error)
+	CreateOrganizationRuntimeEnvironmentDraft(context.Context, *CreateOrganizationRuntimeEnvironmentDraftRequest) (*CreateOrganizationRuntimeEnvironmentDraftResponse, error)
 	SaveRuntimeEnvironmentDraft(context.Context, *SaveRuntimeEnvironmentDraftRequest) (*SaveRuntimeEnvironmentDraftResponse, error)
 	ValidateRuntimeEnvironmentDraft(context.Context, *ValidateRuntimeEnvironmentDraftRequest) (*ValidateRuntimeEnvironmentDraftResponse, error)
 	PublishRuntimeEnvironmentDraft(context.Context, *PublishRuntimeEnvironmentDraftRequest) (*PublishRuntimeEnvironmentDraftResponse, error)
@@ -5846,6 +5922,7 @@ type PlatformCommandServiceServer interface {
 	DeleteProviderAccount(context.Context, *DeleteProviderAccountRequest) (*DeleteProviderAccountResponse, error)
 	CancelProviderAccountQueuedWork(context.Context, *CancelProviderAccountQueuedWorkRequest) (*CancelProviderAccountQueuedWorkResponse, error)
 	SetProviderAccountEnabled(context.Context, *SetProviderAccountEnabledRequest) (*SetProviderAccountEnabledResponse, error)
+	SetProviderAccountConcurrency(context.Context, *SetProviderAccountConcurrencyRequest) (*SetProviderAccountConcurrencyResponse, error)
 	CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error)
 	UpdateIntegrationConnection(context.Context, *UpdateIntegrationConnectionRequest) (*UpdateIntegrationConnectionResponse, error)
 	DeleteIntegrationConnection(context.Context, *DeleteIntegrationConnectionRequest) (*DeleteIntegrationConnectionResponse, error)
@@ -5940,6 +6017,9 @@ func (UnimplementedPlatformCommandServiceServer) PrepareRuntimeSecretDraftImpact
 }
 func (UnimplementedPlatformCommandServiceServer) PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareSaveRuntimeSecretDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareOrganizationRuntimeSecretDraft(context.Context, *PrepareOrganizationRuntimeSecretDraftRequest) (*PrepareOrganizationRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareOrganizationRuntimeSecretDraft not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareValidateRuntimeSecretDraft not implemented")
@@ -6036,6 +6116,9 @@ func (UnimplementedPlatformCommandServiceServer) UnbindAgentMemoryRecord(context
 }
 func (UnimplementedPlatformCommandServiceServer) CreateRuntimeEnvironmentDraft(context.Context, *CreateRuntimeEnvironmentDraftRequest) (*CreateRuntimeEnvironmentDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateOrganizationRuntimeEnvironmentDraft(context.Context, *CreateOrganizationRuntimeEnvironmentDraftRequest) (*CreateOrganizationRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateOrganizationRuntimeEnvironmentDraft not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) SaveRuntimeEnvironmentDraft(context.Context, *SaveRuntimeEnvironmentDraftRequest) (*SaveRuntimeEnvironmentDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveRuntimeEnvironmentDraft not implemented")
@@ -6246,6 +6329,9 @@ func (UnimplementedPlatformCommandServiceServer) CancelProviderAccountQueuedWork
 }
 func (UnimplementedPlatformCommandServiceServer) SetProviderAccountEnabled(context.Context, *SetProviderAccountEnabledRequest) (*SetProviderAccountEnabledResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetProviderAccountEnabled not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SetProviderAccountConcurrency(context.Context, *SetProviderAccountConcurrencyRequest) (*SetProviderAccountConcurrencyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetProviderAccountConcurrency not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateIntegrationConnection not implemented")
@@ -6601,6 +6687,24 @@ func _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler(srv interface
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).PrepareSaveRuntimeSecretDraft(ctx, req.(*PrepareSaveRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareOrganizationRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareOrganizationRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareOrganizationRuntimeSecretDraft(ctx, req.(*PrepareOrganizationRuntimeSecretDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -7177,6 +7281,24 @@ func _PlatformCommandService_CreateRuntimeEnvironmentDraft_Handler(srv interface
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).CreateRuntimeEnvironmentDraft(ctx, req.(*CreateRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOrganizationRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateOrganizationRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateOrganizationRuntimeEnvironmentDraft(ctx, req.(*CreateOrganizationRuntimeEnvironmentDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -8401,6 +8523,24 @@ func _PlatformCommandService_SetProviderAccountEnabled_Handler(srv interface{}, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_SetProviderAccountConcurrency_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetProviderAccountConcurrencyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SetProviderAccountConcurrency(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SetProviderAccountConcurrency_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SetProviderAccountConcurrency(ctx, req.(*SetProviderAccountConcurrencyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_CreateIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
@@ -9489,6 +9629,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler,
 		},
 		{
+			MethodName: "PrepareOrganizationRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_Handler,
+		},
+		{
 			MethodName: "PrepareValidateRuntimeSecretDraft",
 			Handler:    _PlatformCommandService_PrepareValidateRuntimeSecretDraft_Handler,
 		},
@@ -9615,6 +9759,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateRuntimeEnvironmentDraft",
 			Handler:    _PlatformCommandService_CreateRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "CreateOrganizationRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_CreateOrganizationRuntimeEnvironmentDraft_Handler,
 		},
 		{
 			MethodName: "SaveRuntimeEnvironmentDraft",
@@ -9879,6 +10027,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetProviderAccountEnabled",
 			Handler:    _PlatformCommandService_SetProviderAccountEnabled_Handler,
+		},
+		{
+			MethodName: "SetProviderAccountConcurrency",
+			Handler:    _PlatformCommandService_SetProviderAccountConcurrency_Handler,
 		},
 		{
 			MethodName: "CreateIntegrationConnection",
@@ -11404,6 +11556,8 @@ var RuntimeSecretWorkService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	SystemAssistantService_GetSystemAssistant_FullMethodName                 = "/controlplane.v1.SystemAssistantService/GetSystemAssistant"
+	SystemAssistantService_CreateProjectAssistant_FullMethodName             = "/controlplane.v1.SystemAssistantService/CreateProjectAssistant"
+	SystemAssistantService_GetProjectAssistant_FullMethodName                = "/controlplane.v1.SystemAssistantService/GetProjectAssistant"
 	SystemAssistantService_ListAssistantConversations_FullMethodName         = "/controlplane.v1.SystemAssistantService/ListAssistantConversations"
 	SystemAssistantService_CreateAssistantConversation_FullMethodName        = "/controlplane.v1.SystemAssistantService/CreateAssistantConversation"
 	SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName   = "/controlplane.v1.SystemAssistantService/UpdateAssistantConversationTitle"
@@ -11412,6 +11566,7 @@ const (
 	SystemAssistantService_PurgeAssistantConversation_FullMethodName         = "/controlplane.v1.SystemAssistantService/PurgeAssistantConversation"
 	SystemAssistantService_MoveAssistantConversationToProject_FullMethodName = "/controlplane.v1.SystemAssistantService/MoveAssistantConversationToProject"
 	SystemAssistantService_AddAssistantTurn_FullMethodName                   = "/controlplane.v1.SystemAssistantService/AddAssistantTurn"
+	SystemAssistantService_CancelAssistantTurn_FullMethodName                = "/controlplane.v1.SystemAssistantService/CancelAssistantTurn"
 	SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName           = "/controlplane.v1.SystemAssistantService/UpdateAssistantPlanDraft"
 	SystemAssistantService_ValidateAssistantPlan_FullMethodName              = "/controlplane.v1.SystemAssistantService/ValidateAssistantPlan"
 	SystemAssistantService_ApplyAssistantPlan_FullMethodName                 = "/controlplane.v1.SystemAssistantService/ApplyAssistantPlan"
@@ -11425,6 +11580,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SystemAssistantServiceClient interface {
 	GetSystemAssistant(ctx context.Context, in *GetSystemAssistantRequest, opts ...grpc.CallOption) (*GetSystemAssistantResponse, error)
+	CreateProjectAssistant(ctx context.Context, in *CreateProjectAssistantRequest, opts ...grpc.CallOption) (*CreateProjectAssistantResponse, error)
+	GetProjectAssistant(ctx context.Context, in *GetProjectAssistantRequest, opts ...grpc.CallOption) (*GetProjectAssistantResponse, error)
 	ListAssistantConversations(ctx context.Context, in *ListAssistantConversationsRequest, opts ...grpc.CallOption) (*ListAssistantConversationsResponse, error)
 	CreateAssistantConversation(ctx context.Context, in *CreateAssistantConversationRequest, opts ...grpc.CallOption) (*CreateAssistantConversationResponse, error)
 	UpdateAssistantConversationTitle(ctx context.Context, in *UpdateAssistantConversationTitleRequest, opts ...grpc.CallOption) (*UpdateAssistantConversationTitleResponse, error)
@@ -11433,6 +11590,7 @@ type SystemAssistantServiceClient interface {
 	PurgeAssistantConversation(ctx context.Context, in *PurgeAssistantConversationRequest, opts ...grpc.CallOption) (*PurgeAssistantConversationResponse, error)
 	MoveAssistantConversationToProject(ctx context.Context, in *MoveAssistantConversationToProjectRequest, opts ...grpc.CallOption) (*MoveAssistantConversationToProjectResponse, error)
 	AddAssistantTurn(ctx context.Context, in *AddAssistantTurnRequest, opts ...grpc.CallOption) (*AddAssistantTurnResponse, error)
+	CancelAssistantTurn(ctx context.Context, in *CancelAssistantTurnRequest, opts ...grpc.CallOption) (*CancelAssistantTurnResponse, error)
 	UpdateAssistantPlanDraft(ctx context.Context, in *UpdateAssistantPlanDraftRequest, opts ...grpc.CallOption) (*UpdateAssistantPlanDraftResponse, error)
 	ValidateAssistantPlan(ctx context.Context, in *ValidateAssistantPlanRequest, opts ...grpc.CallOption) (*ValidateAssistantPlanResponse, error)
 	ApplyAssistantPlan(ctx context.Context, in *ApplyAssistantPlanRequest, opts ...grpc.CallOption) (*ApplyAssistantPlanResponse, error)
@@ -11453,6 +11611,26 @@ func (c *systemAssistantServiceClient) GetSystemAssistant(ctx context.Context, i
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSystemAssistantResponse)
 	err := c.cc.Invoke(ctx, SystemAssistantService_GetSystemAssistant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) CreateProjectAssistant(ctx context.Context, in *CreateProjectAssistantRequest, opts ...grpc.CallOption) (*CreateProjectAssistantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateProjectAssistantResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_CreateProjectAssistant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) GetProjectAssistant(ctx context.Context, in *GetProjectAssistantRequest, opts ...grpc.CallOption) (*GetProjectAssistantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetProjectAssistantResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_GetProjectAssistant_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -11539,6 +11717,16 @@ func (c *systemAssistantServiceClient) AddAssistantTurn(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *systemAssistantServiceClient) CancelAssistantTurn(ctx context.Context, in *CancelAssistantTurnRequest, opts ...grpc.CallOption) (*CancelAssistantTurnResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelAssistantTurnResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_CancelAssistantTurn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *systemAssistantServiceClient) UpdateAssistantPlanDraft(ctx context.Context, in *UpdateAssistantPlanDraftRequest, opts ...grpc.CallOption) (*UpdateAssistantPlanDraftResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateAssistantPlanDraftResponse)
@@ -11604,6 +11792,8 @@ func (c *systemAssistantServiceClient) RecoverSystemAssistant(ctx context.Contex
 // for forward compatibility.
 type SystemAssistantServiceServer interface {
 	GetSystemAssistant(context.Context, *GetSystemAssistantRequest) (*GetSystemAssistantResponse, error)
+	CreateProjectAssistant(context.Context, *CreateProjectAssistantRequest) (*CreateProjectAssistantResponse, error)
+	GetProjectAssistant(context.Context, *GetProjectAssistantRequest) (*GetProjectAssistantResponse, error)
 	ListAssistantConversations(context.Context, *ListAssistantConversationsRequest) (*ListAssistantConversationsResponse, error)
 	CreateAssistantConversation(context.Context, *CreateAssistantConversationRequest) (*CreateAssistantConversationResponse, error)
 	UpdateAssistantConversationTitle(context.Context, *UpdateAssistantConversationTitleRequest) (*UpdateAssistantConversationTitleResponse, error)
@@ -11612,6 +11802,7 @@ type SystemAssistantServiceServer interface {
 	PurgeAssistantConversation(context.Context, *PurgeAssistantConversationRequest) (*PurgeAssistantConversationResponse, error)
 	MoveAssistantConversationToProject(context.Context, *MoveAssistantConversationToProjectRequest) (*MoveAssistantConversationToProjectResponse, error)
 	AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error)
+	CancelAssistantTurn(context.Context, *CancelAssistantTurnRequest) (*CancelAssistantTurnResponse, error)
 	UpdateAssistantPlanDraft(context.Context, *UpdateAssistantPlanDraftRequest) (*UpdateAssistantPlanDraftResponse, error)
 	ValidateAssistantPlan(context.Context, *ValidateAssistantPlanRequest) (*ValidateAssistantPlanResponse, error)
 	ApplyAssistantPlan(context.Context, *ApplyAssistantPlanRequest) (*ApplyAssistantPlanResponse, error)
@@ -11630,6 +11821,12 @@ type UnimplementedSystemAssistantServiceServer struct{}
 
 func (UnimplementedSystemAssistantServiceServer) GetSystemAssistant(context.Context, *GetSystemAssistantRequest) (*GetSystemAssistantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSystemAssistant not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) CreateProjectAssistant(context.Context, *CreateProjectAssistantRequest) (*CreateProjectAssistantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateProjectAssistant not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) GetProjectAssistant(context.Context, *GetProjectAssistantRequest) (*GetProjectAssistantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProjectAssistant not implemented")
 }
 func (UnimplementedSystemAssistantServiceServer) ListAssistantConversations(context.Context, *ListAssistantConversationsRequest) (*ListAssistantConversationsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAssistantConversations not implemented")
@@ -11654,6 +11851,9 @@ func (UnimplementedSystemAssistantServiceServer) MoveAssistantConversationToProj
 }
 func (UnimplementedSystemAssistantServiceServer) AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddAssistantTurn not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) CancelAssistantTurn(context.Context, *CancelAssistantTurnRequest) (*CancelAssistantTurnResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelAssistantTurn not implemented")
 }
 func (UnimplementedSystemAssistantServiceServer) UpdateAssistantPlanDraft(context.Context, *UpdateAssistantPlanDraftRequest) (*UpdateAssistantPlanDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateAssistantPlanDraft not implemented")
@@ -11709,6 +11909,42 @@ func _SystemAssistantService_GetSystemAssistant_Handler(srv interface{}, ctx con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SystemAssistantServiceServer).GetSystemAssistant(ctx, req.(*GetSystemAssistantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_CreateProjectAssistant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateProjectAssistantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).CreateProjectAssistant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_CreateProjectAssistant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).CreateProjectAssistant(ctx, req.(*CreateProjectAssistantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_GetProjectAssistant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProjectAssistantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).GetProjectAssistant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_GetProjectAssistant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).GetProjectAssistant(ctx, req.(*GetProjectAssistantRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -11857,6 +12093,24 @@ func _SystemAssistantService_AddAssistantTurn_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SystemAssistantService_CancelAssistantTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelAssistantTurnRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).CancelAssistantTurn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_CancelAssistantTurn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).CancelAssistantTurn(ctx, req.(*CancelAssistantTurnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SystemAssistantService_UpdateAssistantPlanDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdateAssistantPlanDraftRequest)
 	if err := dec(in); err != nil {
@@ -11977,6 +12231,14 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SystemAssistantService_GetSystemAssistant_Handler,
 		},
 		{
+			MethodName: "CreateProjectAssistant",
+			Handler:    _SystemAssistantService_CreateProjectAssistant_Handler,
+		},
+		{
+			MethodName: "GetProjectAssistant",
+			Handler:    _SystemAssistantService_GetProjectAssistant_Handler,
+		},
+		{
 			MethodName: "ListAssistantConversations",
 			Handler:    _SystemAssistantService_ListAssistantConversations_Handler,
 		},
@@ -12007,6 +12269,10 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddAssistantTurn",
 			Handler:    _SystemAssistantService_AddAssistantTurn_Handler,
+		},
+		{
+			MethodName: "CancelAssistantTurn",
+			Handler:    _SystemAssistantService_CancelAssistantTurn_Handler,
 		},
 		{
 			MethodName: "UpdateAssistantPlanDraft",

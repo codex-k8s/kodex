@@ -132,7 +132,7 @@ func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderA
 		Deletion: castProviderAccountDeletion(value.Deletion), Verification: castProviderAccountVerification(value.Verification),
 		Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
 		ExternalAccountMasked: value.ExternalAccountMasked, State: providerAccountState(value.State),
-		Enabled: value.Enabled, Ready: value.Ready, NextActions: nextActions(value.NextActions),
+		Enabled: value.Enabled, Ready: value.Ready, MaximumConcurrentExecutions: value.MaximumConcurrentExecutions, NextActions: nextActions(value.NextActions),
 		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), SafeStatusReason: value.SafeStatusReason,
 	}
 	if value.Authorization != nil {

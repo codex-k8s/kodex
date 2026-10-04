@@ -7,6 +7,14 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
 
+// Область назначает владелец состояния из проверенного actor context.
+// Неопределённая область и несовместимый project locator закрыто отклоняются.
+enum RuntimeResourceScopeKind {
+  RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED = 0;
+  RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION = 1;
+  RUNTIME_RESOURCE_SCOPE_KIND_PROJECT = 2;
+}
+
 // Control-plane является единственным владельцем web-first предметной модели.
 // Actor, organization и permissions поступают только из проверенного transport
 // context и никогда не выбираются полями этих запросов.
@@ -95,6 +103,7 @@ service PlatformQueryService {
   rpc ValidatePromptTemplate(ValidatePromptTemplateRequest) returns (ValidatePromptTemplateResponse);
   rpc PreviewPromptTemplate(PreviewPromptTemplateRequest) returns (PreviewPromptTemplateResponse);
   rpc ListRuntimeSecrets(ListRuntimeSecretsRequest) returns (ListRuntimeSecretsResponse);
+  rpc ListOrganizationRuntimeSecrets(ListOrganizationRuntimeSecretsRequest) returns (ListOrganizationRuntimeSecretsResponse);
   rpc GetRuntimeSecret(GetRuntimeSecretRequest) returns (GetRuntimeSecretResponse);
   rpc ListManagedConfigurationHistory(ListManagedConfigurationHistoryRequest) returns (ListManagedConfigurationHistoryResponse);
   rpc ListManagedConfigurations(ListManagedConfigurationsRequest) returns (ListManagedConfigurationsResponse);
@@ -120,6 +129,7 @@ service PlatformCommandService {
   rpc UnbindEmailMailboxConfiguration(UnbindEmailMailboxConfigurationRequest) returns (UnbindEmailMailboxConfigurationResponse);
   rpc PrepareRuntimeSecretDraftImpact(PrepareRuntimeSecretDraftImpactRequest) returns (PrepareRuntimeSecretDraftImpactResponse);
   rpc PrepareSaveRuntimeSecretDraft(PrepareSaveRuntimeSecretDraftRequest) returns (PrepareSaveRuntimeSecretDraftResponse);
+  rpc PrepareOrganizationRuntimeSecretDraft(PrepareOrganizationRuntimeSecretDraftRequest) returns (PrepareOrganizationRuntimeSecretDraftResponse);
   rpc PrepareValidateRuntimeSecretDraft(PrepareValidateRuntimeSecretDraftRequest) returns (PrepareValidateRuntimeSecretDraftResponse);
   rpc PreparePublishRuntimeSecretDraft(PreparePublishRuntimeSecretDraftRequest) returns (PreparePublishRuntimeSecretDraftResponse);
   rpc PrepareDiscardRuntimeSecretDraft(PrepareDiscardRuntimeSecretDraftRequest) returns (PrepareDiscardRuntimeSecretDraftResponse);
@@ -152,6 +162,7 @@ service PlatformCommandService {
   rpc BindAgentMemoryRecord(BindAgentMemoryRecordRequest) returns (BindAgentMemoryRecordResponse);
   rpc UnbindAgentMemoryRecord(UnbindAgentMemoryRecordRequest) returns (UnbindAgentMemoryRecordResponse);
   rpc CreateRuntimeEnvironmentDraft(CreateRuntimeEnvironmentDraftRequest) returns (CreateRuntimeEnvironmentDraftResponse);
+  rpc CreateOrganizationRuntimeEnvironmentDraft(CreateOrganizationRuntimeEnvironmentDraftRequest) returns (CreateOrganizationRuntimeEnvironmentDraftResponse);
   rpc SaveRuntimeEnvironmentDraft(SaveRuntimeEnvironmentDraftRequest) returns (SaveRuntimeEnvironmentDraftResponse);
   rpc ValidateRuntimeEnvironmentDraft(ValidateRuntimeEnvironmentDraftRequest) returns (ValidateRuntimeEnvironmentDraftResponse);
   rpc PublishRuntimeEnvironmentDraft(PublishRuntimeEnvironmentDraftRequest) returns (PublishRuntimeEnvironmentDraftResponse);
@@ -227,6 +238,7 @@ service PlatformCommandService {
   rpc DeleteProviderAccount(DeleteProviderAccountRequest) returns (DeleteProviderAccountResponse);
   rpc CancelProviderAccountQueuedWork(CancelProviderAccountQueuedWorkRequest) returns (CancelProviderAccountQueuedWorkResponse);
   rpc SetProviderAccountEnabled(SetProviderAccountEnabledRequest) returns (SetProviderAccountEnabledResponse);
+  rpc SetProviderAccountConcurrency(SetProviderAccountConcurrencyRequest) returns (SetProviderAccountConcurrencyResponse);
   rpc CreateIntegrationConnection(CreateIntegrationConnectionRequest) returns (CreateIntegrationConnectionResponse);
   rpc UpdateIntegrationConnection(UpdateIntegrationConnectionRequest) returns (UpdateIntegrationConnectionResponse);
   rpc DeleteIntegrationConnection(DeleteIntegrationConnectionRequest) returns (DeleteIntegrationConnectionResponse);
@@ -332,6 +344,8 @@ service RuntimeSecretWorkService {
 
 service SystemAssistantService {
   rpc GetSystemAssistant(GetSystemAssistantRequest) returns (GetSystemAssistantResponse);
+  rpc CreateProjectAssistant(CreateProjectAssistantRequest) returns (CreateProjectAssistantResponse);
+  rpc GetProjectAssistant(GetProjectAssistantRequest) returns (GetProjectAssistantResponse);
   rpc ListAssistantConversations(ListAssistantConversationsRequest) returns (ListAssistantConversationsResponse);
   rpc CreateAssistantConversation(CreateAssistantConversationRequest) returns (CreateAssistantConversationResponse);
   rpc UpdateAssistantConversationTitle(UpdateAssistantConversationTitleRequest) returns (UpdateAssistantConversationTitleResponse);
@@ -340,6 +354,7 @@ service SystemAssistantService {
   rpc PurgeAssistantConversation(PurgeAssistantConversationRequest) returns (PurgeAssistantConversationResponse);
   rpc MoveAssistantConversationToProject(MoveAssistantConversationToProjectRequest) returns (MoveAssistantConversationToProjectResponse);
   rpc AddAssistantTurn(AddAssistantTurnRequest) returns (AddAssistantTurnResponse);
+  rpc CancelAssistantTurn(CancelAssistantTurnRequest) returns (CancelAssistantTurnResponse);
   rpc UpdateAssistantPlanDraft(UpdateAssistantPlanDraftRequest) returns (UpdateAssistantPlanDraftResponse);
   rpc ValidateAssistantPlan(ValidateAssistantPlanRequest) returns (ValidateAssistantPlanResponse);
   rpc ApplyAssistantPlan(ApplyAssistantPlanRequest) returns (ApplyAssistantPlanResponse);
@@ -518,6 +533,7 @@ enum NextAction {
   NEXT_ACTION_REQUEST_BUILD = 40;
   NEXT_ACTION_PURGE = 41;
   NEXT_ACTION_CANCEL_BUILD = 42;
+  NEXT_ACTION_CREATE_PROJECT_ASSISTANT = 43;
 }
 
 enum EntityLifecycle {
@@ -980,6 +996,8 @@ message RunTarget {
   oneof target {
     string agent_ref = 1;
     string workflow_ref = 2;
+    // Отдельная identity assistant turn, не маскируется обычным AGENT.
+    string system_assistant_ref = 5;
   }
   string display_name = 3;
   int64 target_version = 4;
@@ -996,6 +1014,23 @@ message TokenUsage {
   int64 output_tokens = 5;
   int64 reasoning_output_tokens = 6;
   int64 model_context_window = 7;
+}
+
+// AssistantRunPin — серверная read-only привязка хода к точному диалогу и
+// помощнику. Не является grant и не принимается mutation-командами.
+message AssistantRunPin {
+  // SYSTEM либо PROJECT из persisted conversation, unknown/none отклоняются.
+  AssistantScope scope = 1;
+  // Организация выводится из owner boundary запуска, не из клиентского payload.
+  string organization_ref = 2;
+  // Диалог разрешается по exact organization/session/assistant identity.
+  string conversation_ref = 3;
+  // Точный agent должен совпадать с Run.target.ref и session target.
+  string assistant_ref = 4;
+  // Проект — exact context проекта Run, отсутствует у системного хода без проекта.
+  string project_ref = 5;
+  // PROJECT требует exact profile того же project/agent; SYSTEM запрещает поле.
+  string profile_ref = 6;
 }
 
 message Run {
@@ -1039,6 +1074,9 @@ message Run {
   string title_source = 30;
   string activity_summary = 31;
   string input_attachment_set_ref = 32;
+  // Только SYSTEM_ASSISTANT target с SYSTEM_ASSISTANT source; server-owned
+  // conversation pin различает системную и проектную конфигурации помощника.
+  AssistantRunPin assistant_pin = 33;
 }
 
 message RunNode {
@@ -1501,6 +1539,16 @@ message AssistantPlanOperation {
     TYPE_UPDATE_SCHEDULE = 23;
     // Создать проверенный текстовый файл Проекта через подтверждаемый план помощника.
     TYPE_CREATE_PROJECT_FILE = 24;
+    // Изменить owner-инструкции системного помощника по точной версии.
+    TYPE_UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS = 25;
+    // Подготовить отдельного помощника проекта без копирования системных grants.
+    TYPE_CREATE_PROJECT_ASSISTANT = 26;
+    // Подготовить собственный организационный образ системного помощника.
+    TYPE_CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE = 27;
+    // Подготовить новую сборку его организационного рецепта по exact version.
+    TYPE_UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE = 28;
+    // Подготовить подтверждаемую атомарную настройку модели, аккаунтов и reasoning помощника.
+    TYPE_PREPARE_ASSISTANT_RUNTIME_CONFIGURATION = 29;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -1603,6 +1651,14 @@ message AssistantTurn {
   AssistantPlan plan = 6;
   google.protobuf.Timestamp created_at = 7;
   string attachment_set_ref = 8;
+  string run_ref = 9;
+  int64 run_version = 10;
+}
+
+enum AssistantTurnDeliveryMode {
+  ASSISTANT_TURN_DELIVERY_MODE_UNSPECIFIED = 0;
+  ASSISTANT_TURN_DELIVERY_MODE_QUEUE = 1;
+  ASSISTANT_TURN_DELIVERY_MODE_INTERRUPT_ACTIVE = 2;
 }
 
 enum AssistantConversationState {
@@ -1610,6 +1666,25 @@ enum AssistantConversationState {
   ASSISTANT_CONVERSATION_STATE_ACTIVE = 1;
   ASSISTANT_CONVERSATION_STATE_CLOSED = 2;
   ASSISTANT_CONVERSATION_STATE_ARCHIVED = 3;
+}
+
+// Область профиля независима от проекта контекста системного диалога.
+enum AssistantScope {
+  ASSISTANT_SCOPE_UNSPECIFIED = 0;
+  ASSISTANT_SCOPE_NONE = 1;
+  ASSISTANT_SCOPE_SYSTEM = 2;
+  ASSISTANT_SCOPE_PROJECT = 3;
+}
+
+message ProjectAssistantProfile {
+  string ref = 1;
+  string project_ref = 2;
+  string agent_ref = 3;
+  string name = 4;
+  string state = 5;
+  int64 version = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
 }
 
 message AssistantConversation {
@@ -1623,6 +1698,9 @@ message AssistantConversation {
   int64 title_revision = 8;
   AssistantContextDescriptor context = 9;
   AssistantConversationState state = 10;
+  AssistantScope assistant_scope = 11;
+  string assistant_ref = 12;
+  string assistant_profile_ref = 13;
 }
 
 message SystemAssistant {
@@ -1679,6 +1757,7 @@ message BootstrapState {
   repeated NextAction next_actions = 6;
   PlatformRole platform_role = 7;
   SpeechTranscriptionAvailability speech_transcription = 8;
+  string organization_ref = 9;
 }
 
 message SpeechTranscriptionAvailability {
@@ -1778,12 +1857,68 @@ message SearchAssistantResourcesRequest {
   bool integration_definition_catalog = 5;
   string definition_query = 6;
   int32 definition_offset = 7;
+  // Отдельный read-only каталог конфигурации помощника; несовместим с другими режимами.
+  AssistantConfigurationCatalogRequest assistant_configuration_catalog = 8;
 }
 message SearchAssistantResourcesResponse {
   repeated SearchResult results = 1;
   bool truncated = 2;
   repeated AssistantIntegrationDefinition definitions = 3;
   int32 next_definition_offset = 4;
+  AssistantConfigurationCatalogResponse assistant_configuration_catalog = 5;
+}
+
+enum AssistantConfigurationCatalogKind {
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_UNSPECIFIED = 0;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_ASSISTANTS = 1;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_RUNTIME_PROFILES = 2;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_PROVIDER_ACCOUNTS = 3;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_MODELS = 4;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_IMAGE_RECIPES = 5;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS = 6;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_ENVIRONMENTS = 7;
+}
+
+message AssistantConfigurationCatalogRequest {
+  AssistantConfigurationCatalogKind kind = 1;
+  // Это locator; полномочия и scope разрешает сервер из состояния и lease.
+  string assistant_ref = 2;
+  string query = 3;
+  int32 offset = 4;
+  string account_ref = 5;
+  string runtime_profile_ref = 6;
+}
+
+message AssistantConfigurationCatalogEntry {
+  string ref = 1;
+  string name = 2;
+  string provider = 3;
+  string model = 4;
+  int64 version = 5;
+  int64 recipe_generation = 6;
+  string reference = 7;
+  string manifest_digest = 8;
+  string catalog_revision = 9;
+  string catalog_digest = 10;
+  repeated string reasoning_efforts = 11;
+  string default_reasoning_effort = 12;
+  string scope_kind = 13;
+  string organization_ref = 14;
+  string project_ref = 15;
+  string assistant_profile_ref = 16;
+  // Только ASSISTANTS: locator опубликованного окружения; не источник прав.
+  string runtime_environment_ref = 17;
+}
+
+message AssistantConfigurationCatalogResponse {
+  AssistantConfigurationCatalogKind kind = 1;
+  string assistant_ref = 2;
+  string scope_kind = 3;
+  string organization_ref = 4;
+  string project_ref = 5;
+  string assistant_profile_ref = 6;
+  repeated AssistantConfigurationCatalogEntry entries = 7;
+  int32 next_offset = 8;
 }
 
 enum VFSNodeKind {
@@ -2780,12 +2915,30 @@ message GetSystemAssistantRequest {}
 message GetSystemAssistantResponse {
   SystemAssistant assistant = 1;
 }
+message CreateProjectAssistantRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string purpose = 4;
+  string instructions = 5;
+}
+message CreateProjectAssistantResponse {
+  ProjectAssistantProfile profile = 1;
+}
+message GetProjectAssistantRequest {
+  string project_ref = 1;
+}
+message GetProjectAssistantResponse {
+  ProjectAssistantProfile profile = 1;
+}
 message ListAssistantConversationsRequest {
   PageRequest page = 1;
   string project_ref = 2;
   string query = 3;
   AssistantConversationState state = 4;
   bool match_localized_default_title = 5;
+  AssistantScope assistant_scope = 6;
+  string assistant_ref = 7;
 }
 message ListAssistantConversationsResponse {
   repeated AssistantConversation conversations = 1;
@@ -2797,6 +2950,7 @@ message CreateAssistantConversationRequest {
   reserved "title";
   string project_ref = 3;
   AssistantContextDescriptor context = 4;
+  AssistantScope assistant_scope = 5;
 }
 message CreateAssistantConversationResponse {
   AssistantConversation conversation = 1;
@@ -2846,10 +3000,20 @@ message AddAssistantTurnRequest {
   reserved "artifact_refs";
   string attachment_set_ref = 5;
   AssistantContextDescriptor context = 6;
+  AssistantTurnDeliveryMode delivery_mode = 7;
 }
 message AddAssistantTurnResponse {
   AssistantConversation conversation = 1;
   SystemAssistant assistant = 2;
+}
+message CancelAssistantTurnRequest {
+  MutationContext mutation = 1;
+  string conversation_ref = 2;
+}
+message CancelAssistantTurnResponse {
+  string conversation_ref = 1;
+  string run_ref = 2;
+  bool cancelled = 3;
 }
 message UpdateAssistantPlanDraftRequest {
   MutationContext mutation = 1;
@@ -2998,7 +3162,7 @@ message RuntimeRevisionSnapshot {
   repeated Artifact artifacts = 13;
   string input_digest = 14;
   string revision_digest = 15;
-  bool system_assistant = 16;
+  AssistantScope assistant_scope = 16;
   repeated DelegationTarget delegation_targets = 17;
   string callback_edge_ref = 18;
   repeated SessionContextMessage session_context = 19;
@@ -3065,6 +3229,7 @@ message RuntimeRevisionSnapshot {
   string prompt_service_template_revision = 74;
   string prompt_service_template_digest = 75;
   string prompt_target_kind = 76;
+  string assistant_profile_ref = 77;
 }
 
 enum RuntimeFilePurpose {
@@ -4311,6 +4476,8 @@ message RuntimeSecretDraft {
   google.protobuf.Timestamp expires_at = 13;
   // Текущая owner version Secret из того же read/lock, включая PROVISIONING.
   int64 secret_version = 14;
+  RuntimeResourceScopeKind scope_kind = 15;
+  string organization_ref = 16;
 }
 
 // Внутренний exact readback immutable ciphertext; не выдаётся browser.
@@ -4517,6 +4684,8 @@ message RuntimeSecret {
   string namespace = 12;
   RuntimeSecretRevisionDescriptor current_revision_descriptor = 13;
   repeated NextAction next_actions = 14;
+  RuntimeResourceScopeKind scope_kind = 15;
+  string organization_ref = 16;
 }
 
 message ListRuntimeSecretsRequest {
@@ -4527,6 +4696,25 @@ message ListRuntimeSecretsRequest {
 message ListRuntimeSecretsResponse {
   repeated RuntimeSecret secrets = 1;
   PageInfo page = 2;
+}
+message ListOrganizationRuntimeSecretsRequest {
+  string query = 1;
+  PageRequest page = 2;
+}
+message ListOrganizationRuntimeSecretsResponse {
+  repeated RuntimeSecret secrets = 1;
+  PageInfo page = 2;
+}
+// Создаёт только организационный draft. Org/actor назначает сервер.
+message PrepareOrganizationRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string name = 2;
+  string description = 3;
+  RuntimeSecretValueType value_type = 4;
+  string expected_content_sha256 = 5;
+}
+message PrepareOrganizationRuntimeSecretDraftResponse {
+  RuntimeSecretDraftOperationReceipt operation = 1;
 }
 message GetRuntimeSecretRequest {
   string secret_ref = 1;
@@ -4630,6 +4818,8 @@ message ConsumeRuntimeSecretOperationResponse {
   google.protobuf.Timestamp lease_deadline = 14;
   string expected_content_sha256 = 15;
   repeated RuntimeSecretRevisionDescriptor revision_descriptors = 16;
+  RuntimeResourceScopeKind scope_kind = 17;
+  string organization_ref = 18;
 }
 
 message RuntimeSecretRevisionDescriptor {
@@ -4759,6 +4949,8 @@ message RuntimeEnvironmentDraft {
   string base_version_ref = 11;
   int64 base_revision = 12;
   google.protobuf.Timestamp saved_at = 13;
+  RuntimeResourceScopeKind scope_kind = 14;
+  string organization_ref = 15;
 }
 message GetRuntimeEnvironmentDraftRequest {
   string draft_ref = 1;
@@ -4774,6 +4966,15 @@ message CreateRuntimeEnvironmentDraftRequest {
   RuntimeEnvironmentDraftSpecification specification = 5;
 }
 message CreateRuntimeEnvironmentDraftResponse {
+  RuntimeEnvironmentDraft draft = 1;
+}
+message CreateOrganizationRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  int64 expected_environment_version = 3;
+  RuntimeEnvironmentDraftSpecification specification = 4;
+}
+message CreateOrganizationRuntimeEnvironmentDraftResponse {
   RuntimeEnvironmentDraft draft = 1;
 }
 message SaveRuntimeEnvironmentDraftRequest {
@@ -4851,6 +5052,8 @@ message RuntimeEnvironmentConsumer {
   int64 binding_version = 4;
   string version_ref = 5;
   string project_ref = 6;
+  RuntimeResourceScopeKind scope_kind = 7;
+  string organization_ref = 8;
 }
 message GetRuntimeEnvironmentImpactRequest {
   string environment_ref = 1;
@@ -5014,6 +5217,9 @@ message RuntimeSecretImpactConsumer {
   string environment_version_ref = 3;
   repeated int64 secret_revisions = 4;
   RuntimeEnvironmentConsumer consumer = 5;
+  RuntimeResourceScopeKind scope_kind = 6;
+  string organization_ref = 7;
+  string project_ref = 8;
 }
 message GetRuntimeSecretImpactRequest {
   string secret_ref = 1;
@@ -5034,6 +5240,10 @@ message RuntimeSecretRebindSelection {
   int64 expected_environment_version = 2;
   string source_version_ref = 3;
   repeated RuntimeEnvironmentConsumer consumers = 4;
+  // Полный ожидаемый owner snapshot, не источник полномочий.
+  RuntimeResourceScopeKind scope_kind = 5;
+  string organization_ref = 6;
+  string project_ref = 7;
 }
 message RebindRuntimeSecretRequest {
   MutationContext mutation = 1;
@@ -5092,7 +5302,6 @@ enum RuntimeNetworkDestination {
   RUNTIME_NETWORK_DESTINATION_DNS = 1;
   RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK = 2;
   RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY = 3;
-  RUNTIME_NETWORK_DESTINATION_KUBERNETES_API = 4;
 }
 
 enum RuntimeNetworkProtocol {
@@ -5101,10 +5310,17 @@ enum RuntimeNetworkProtocol {
   RUNTIME_NETWORK_PROTOCOL_UDP = 2;
 }
 
+enum RuntimeWebAccessMode {
+  RUNTIME_WEB_ACCESS_MODE_UNSPECIFIED = 0;
+  RUNTIME_WEB_ACCESS_MODE_NONE = 1;
+  RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_READ_ONLY = 2;
+  RUNTIME_WEB_ACCESS_MODE_ALLOWLIST_FULL = 3;
+  RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC = 4;
+}
+
 enum RuntimeKubernetesAccessKind {
   RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED = 0;
   RUNTIME_KUBERNETES_ACCESS_KIND_NONE = 1;
-  RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION = 2;
 }
 
 message RuntimeResourcePolicy {
@@ -5134,6 +5350,7 @@ message RuntimeEnvironmentPolicyInput {
   repeated RuntimeVolumeInput volumes = 2;
   repeated RuntimeNetworkDestination network_destinations = 3;
   RuntimeKubernetesAccessKind kubernetes_access = 4;
+  RuntimeWebAccess web_access = 5;
 }
 
 message RuntimeNetworkEgress {
@@ -5145,6 +5362,19 @@ message RuntimeNetworkEgress {
 message RuntimeNetworkPolicy {
   bool deny_by_default = 1;
   repeated RuntimeNetworkEgress egress = 2;
+  RuntimeWebAccess web_access = 3;
+}
+
+message RuntimeWebAccessRule {
+  string domain_pattern = 1;
+  string protocol = 2;
+  int32 port = 3;
+  repeated string http_methods = 4;
+}
+
+message RuntimeWebAccess {
+  RuntimeWebAccessMode mode = 1;
+  repeated RuntimeWebAccessRule rules = 2;
 }
 
 message RuntimeKubernetesAccessProfile {
@@ -5204,6 +5434,8 @@ message RuntimeEnvironmentSet {
   bool ready = 9;
   repeated string readiness_blockers = 10;
   repeated NextAction next_actions = 11;
+  RuntimeResourceScopeKind scope_kind = 12;
+  string organization_ref = 13;
 }
 
 message RuntimeEnvironmentReadiness {
@@ -5467,6 +5699,7 @@ message ProviderAccount {
   ProviderAccountUsage usage = 14;
   ProviderAccountDeletion deletion = 15;
   ProviderAccountVerification verification = 16;
+  int32 maximum_concurrent_executions = 17;
 }
 
 enum ProviderAccountBlockerKind {
@@ -5769,6 +6002,15 @@ message CancelProviderAccountQueuedWorkResponse {
   ProviderAccount account = 1;
   repeated ProviderAccountQueuedWorkResult outcomes = 2;
 }
+message SetProviderAccountConcurrencyRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+  int32 maximum_concurrent_executions = 3;
+}
+message SetProviderAccountConcurrencyResponse {
+  ProviderAccount account = 1;
+}
+
 message SetProviderAccountEnabledRequest {
   MutationContext mutation = 1;
   string account_ref = 2;
@@ -6385,6 +6627,8 @@ message RevisionImpactItem {
   string result_binding_ref = 11;
   int64 result_binding_version = 12;
   int64 result_consumer_version = 13;
+  RuntimeResourceScopeKind scope_kind = 14;
+  string organization_ref = 15;
 }
 message PrepareEnvironmentDraftImpactRequest {
   MutationContext mutation = 1;

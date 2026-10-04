@@ -93,16 +93,44 @@ filter_render() {
   printf '%s' "$output"
 }
 
+canonical_runtime_admission_specs() {
+  # Утверждённые Kubernetes v1 defaults, не удаление отличающихся live полей.
+  jq -scS 'map(
+    if .matchConstraints != null then
+      .matchConstraints |= (
+        .matchPolicy //= "Equivalent" |
+        .namespaceSelector //= {} | .objectSelector //= {} |
+        (.resourceRules[]?, .excludeResourceRules[]?) |= (.scope //= "*")
+      )
+    elif .matchResources != null then
+      .matchResources |= (
+        .matchPolicy //= "Equivalent" |
+        .namespaceSelector //= {} | .objectSelector //= {} |
+        (.resourceRules[]?, .excludeResourceRules[]?) |= (.scope //= "*")
+      )
+    else . end
+  )'
+}
+
 # CP владеет поколением OpenAPI egress-policy. Локальный apply Deployment
 # сохраняет его exact live-поля вместо попытки вернуть bootstrap generation 1.
 preserve_live_egress_projection() {
-  local output=$1 live="$temporary_directory/egress-live.json" updated="$temporary_directory/egress-updated.yaml"
-  if [[ "$(yq -N -r 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") | .metadata.name' "$output")" != egress-gateway ]]; then
-    return
-  fi
+  local output=$1 live="$temporary_directory/egress-live.json" \
+    live_service="$temporary_directory/egress-service-live.json" \
+    live_network_policy="$temporary_directory/egress-network-policy-live.json" \
+    updated="$temporary_directory/egress-updated.yaml"
+  local projection_targets
+  projection_targets=$(yq -N -r '
+    select(
+      (.kind == "Deployment" and .metadata.name == "egress-gateway") or
+      (.kind == "Service" and .metadata.name == "egress-gateway-openapi") or
+      (.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-integration-destinations")
+    ) | .metadata.name
+  ' "$output")
+  [[ -n "$projection_targets" ]] || return 0
   kubectl -n "$namespace" get deployment/egress-gateway --ignore-not-found -o json >"$live" ||
     fail 'local egress Deployment discovery failed'
-  [[ -s "$live" ]] || return
+  [[ -s "$live" ]] || return 0
   jq -e '
     .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
     .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
@@ -130,7 +158,30 @@ preserve_live_egress_projection() {
   actual_digest=$(kubectl -n "$namespace" get "configmap/$policy_name" -o json |
     jq -j '.data["integration-policy.json"]' | sha256sum | awk '{print $1}')
   [[ "$actual_digest" == "$expected_digest" ]] || fail 'live egress policy digest changed'
-  yq -N -o=json -I=0 '.' "$output" | jq -s --slurpfile live "$live" '
+  kubectl -n "$namespace" get service/egress-gateway-openapi -o json >"$live_service" ||
+    fail 'local egress Service discovery failed'
+  kubectl -n "$namespace" get networkpolicy/egress-gateway-integration-destinations -o json >"$live_network_policy" ||
+    fail 'local egress NetworkPolicy discovery failed'
+  jq -e --arg generation "$(jq -r '.spec.template.metadata.annotations["kodex.dev/integration-egress-generation"]' "$live")" '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    .spec.selector["app.kubernetes.io/name"] == "egress-gateway" and
+    .spec.selector["app.kubernetes.io/component"] == "platform-egress" and
+    .spec.selector["kodex.dev/integration-egress-generation"] == $generation
+  ' "$live_service" >/dev/null || fail 'live egress Service projection is not exact'
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    .spec.podSelector.matchLabels["app.kubernetes.io/name"] == "egress-gateway" and
+    .spec.podSelector.matchLabels["app.kubernetes.io/component"] == "platform-egress" and
+    ((.spec | has("egress") | not) or (.spec.egress | type == "array"))
+  ' "$live_network_policy" >/dev/null || fail 'live egress NetworkPolicy projection is not exact'
+  yq -N -o=json -I=0 '.' "$output" | jq -s \
+    --slurpfile live "$live" \
+    --slurpfile liveService "$live_service" \
+    --slurpfile liveNetworkPolicy "$live_network_policy" '
     ($live[0].spec.template) as $template |
     ($template.spec.containers[] | select(.name == "egress-gateway") |
       .env[] | select(.name == "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST")) as $policyEnv |
@@ -146,6 +197,13 @@ preserve_live_egress_projection() {
         .env |= map(if .name == "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST" then $policyEnv else . end)
       else . end) |
       .spec.template.spec.volumes |= map(if .name == "integration-policy" then $policyVolume else . end)
+    elif .kind == "Service" and .metadata.name == "egress-gateway-openapi" then
+      .spec.selector = $liveService[0].spec.selector
+    elif .kind == "NetworkPolicy" and .metadata.name == "egress-gateway-integration-destinations" then
+      # Kubernetes canonicalizes an empty deny-all egress list by omitting the
+      # field from live JSON. Restore the equivalent explicit list expected by
+      # the rendered manifest instead of writing null back into the resource.
+      .spec.egress = ($liveNetworkPolicy[0].spec.egress // [])
     else . end
   ' | yq -p=json -P >"$updated" || fail 'local egress projection preservation failed'
   # JSON→YAML roundtrip не должен превращать строковые env вроде "off" в bool.
@@ -157,14 +215,46 @@ preserve_live_egress_projection() {
   mv -- "$updated" "$output"
 }
 
+# Старые локальные запуски меняли cache-volume обычным kubectl patch, поэтому
+# поле оставалось у случайного field manager и блокировало следующий trusted
+# render после переноса state directory. Забираем только exact hostPath после
+# проверки принадлежности Deployment локальному профилю.
+reconcile_frontend_cache_field_ownership() {
+  local output=$1 desired live
+  desired=$(yq -N -r '
+    select(.kind == "Deployment" and .metadata.name == "staff-control-center") |
+    .spec.template.spec.volumes[] | select(.name == "dev-node-modules") | .hostPath.path
+  ' "$output")
+  [[ -n "$desired" ]] || return 0
+  [[ "$desired" == "$state_directory"/cache/frontend-v1/*/node_modules ]] ||
+    fail 'rendered frontend cache path is outside the trusted local state directory'
+  live=$(kubectl -n "$namespace" get deployment/staff-control-center --ignore-not-found -o json) ||
+    fail 'local frontend Deployment discovery failed'
+  [[ -n "$live" ]] || return 0
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster"
+  ' <<<"$live" >/dev/null || fail 'live frontend Deployment is not owned by the trusted local profile'
+  jq -n --arg path "$desired" '{
+    apiVersion:"apps/v1",
+    kind:"Deployment",
+    metadata:{name:"staff-control-center",namespace:"kodex-system"},
+    spec:{template:{spec:{volumes:[{
+      name:"dev-node-modules",
+      hostPath:{path:$path,type:"Directory"}
+    }]}}}
+  }' | kubectl apply --server-side --force-conflicts \
+    --field-manager=kodex-local-cache-migration -f - >/dev/null
+}
+
 apply_render() {
   local name=$1 expression=$2 output
   output=$(filter_render "$name" "$expression")
   if [[ "$security_profile" == trusted-cluster ]]; then
     verify_local_resource_ownership "$output"
-    if [[ "$stage" == core ]]; then
-      preserve_live_egress_projection "$output"
-    fi
+    preserve_live_egress_projection "$output"
+    reconcile_frontend_cache_field_ownership "$output"
     kubectl apply --server-side --field-manager=kodex-local-dev -f "$output" >/dev/null
     return
   fi
@@ -225,25 +315,17 @@ readback_local_frontend_transport() {
     .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
       "kodex-system-control-api-gateway@kubernetescrd"
   ' >/dev/null || fail 'local Control API Service transport readback failed'
-  kubectl -n "$namespace" get ingress/staff-control-center-api -o json | jq -e \
-    --arg tls_mode "$tls_mode" '
+  kubectl -n "$namespace" get ingress/staff-control-center-api -o json | jq -e '
     .spec.rules[0].http.paths == [{
       path:"/api/v1",pathType:"Prefix",
       backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
     }] and
-    (if $tls_mode == "public-acme" then
-      .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-        "kodex-system-oauth2-control-center-auth@kubernetescrd"
-    else
-      (.metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] // "") == ""
-    end)
-  ' >/dev/null || fail 'local Control API direct Ingress readback failed'
-  kubectl -n "$namespace" get ingress/staff-control-center -o json | jq -e \
-    --arg tls_mode "$tls_mode" '
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      (if $tls_mode == "public-acme" then
-        "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
-      else "kodex-system-staff-control-center-retry@kubernetescrd" end)
+      "kodex-system-oauth2-control-center-auth@kubernetescrd"
+  ' >/dev/null || fail 'local Control API direct Ingress readback failed'
+  kubectl -n "$namespace" get ingress/staff-control-center -o json | jq -e '
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
   ' >/dev/null || fail 'local frontend middleware Ingress readback failed'
   kubectl -n "$namespace" get middleware.traefik.io/staff-control-center-retry -o json | jq -e '
     .spec.retry == {attempts:4,initialInterval:"100ms"}
@@ -452,6 +534,56 @@ wait_job() {
     kubectl -n "$namespace" logs "job/$name" --all-containers --tail=200 >&2 || true
   fi
   fail "local Job timed out: $name"
+}
+
+bootstrap_clamav_database() {
+  local output="$temporary_directory/clamav-db-bootstrap.yaml" digest name state
+  # shellcheck disable=SC2016 # $job is a yq variable, not a shell variable.
+  yq 'select(.kind == "CronJob" and .metadata.name == "clamav-db-updater") |
+    .spec.jobTemplate as $job |
+    {
+      "apiVersion":"batch/v1",
+      "kind":"Job",
+      "metadata":($job.metadata // {}),
+      "spec":$job.spec
+    } |
+    .metadata.namespace = "kodex-system"
+  ' "$render" >"$output"
+  [[ -s "$output" ]] || fail 'ClamAV bootstrap Job source is absent'
+  digest=$(sha256sum "$output" | awk '{print $1}')
+  name="clamav-db-bootstrap-${digest:0:12}"
+  JOB_NAME="$name" JOB_INPUT_DIGEST="$digest" yq -i '
+    .metadata.name = strenv(JOB_NAME) |
+    .metadata.labels."app.kubernetes.io/part-of" = "kodex" |
+    .metadata.labels."kodex.dev/local-profile" = "hot-reload" |
+    .metadata.labels."kodex.dev/security-profile" = "trusted-cluster" |
+    .metadata.labels."kodex.dev/clamav-bootstrap" = "true" |
+    .metadata.annotations."kodex.dev/job-input-sha256" = strenv(JOB_INPUT_DIGEST)
+  ' "$output"
+  state=$(kubectl -n "$namespace" get "job/$name" --ignore-not-found -o json) ||
+    fail 'ClamAV bootstrap Job discovery failed'
+  if [[ -n "$state" ]]; then
+    jq -e '
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+      .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+      .metadata.labels["kodex.dev/clamav-bootstrap"] == "true"
+    ' <<<"$state" >/dev/null || fail 'ClamAV bootstrap Job ownership mismatch'
+    if jq -e 'any(.status.conditions[]?; .type == "Complete" and .status == "True")' \
+      <<<"$state" >/dev/null; then
+      return 0
+    fi
+    if jq -e 'any(.status.conditions[]?; .type == "Failed" and .status == "True")' \
+      <<<"$state" >/dev/null; then
+      kubectl -n "$namespace" delete "job/$name" --wait=true --timeout=2m >/dev/null ||
+        fail 'failed ClamAV bootstrap Job cleanup failed'
+    fi
+  fi
+  if ! kubectl -n "$namespace" get "job/$name" >/dev/null 2>&1; then
+    verify_local_resource_ownership "$output"
+    kubectl apply --server-side --field-manager=kodex-local-dev -f "$output" >/dev/null
+  fi
+  wait_job "$name"
 }
 
 verify_email_projection_generation() {
@@ -1119,7 +1251,19 @@ wait_stable_workloads() {
 readback_local_image_supply_chain() {
   local expected_policy actual_policy policy_resource controller workloads expected_deployments
   local expected_digest actual_digest catalog_expected_digest catalog_actual_digest
+  local expected_admission_configuration actual_admission_configuration
   local target_registry promoted_pull_host resource name
+  expected_admission_configuration=$(yq -o=json -I=0 '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-image-admission") | .data
+  ' "$render" | jq -cS '.')
+  [[ -n "$expected_admission_configuration" && "$expected_admission_configuration" != null ]] ||
+    fail 'rendered image admission runtime configuration is absent'
+  actual_admission_configuration=$(kubectl -n "$namespace" get \
+    configmap/kodex-image-admission -o json | jq -cS '.data') ||
+    fail 'live image admission runtime configuration is absent'
+  [[ "$actual_admission_configuration" == "$expected_admission_configuration" ]] ||
+    fail 'live image admission runtime configuration readback mismatch'
   expected_policy=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
       .metadata.name == "kodex-image-admission-policy") | .data
@@ -1274,6 +1418,7 @@ readback_local_image_supply_chain() {
 if [[ "$security_profile" == trusted-cluster ]]; then
   python3 - "$render" "$script_directory" "$context" <<'PY'
 import json
+import ipaddress
 import os
 from pathlib import Path
 import subprocess
@@ -1286,7 +1431,12 @@ import trusted_cluster_render
 config = json.loads(subprocess.check_output(['kubectl', '--context', sys.argv[3],
                                             'config', 'view', '--minify', '-o', 'json']))
 server = urlsplit(config['clusters'][0]['cluster']['server'])
-if server.scheme != 'https' or server.hostname != '127.0.0.1':
+try:
+    api_address = ipaddress.ip_address(server.hostname or '')
+except ValueError:
+    api_address = None
+if (server.scheme != 'https' or api_address is None or
+        api_address.version != 4 or not api_address.is_loopback):
     raise SystemExit('Local trusted deployment requires loopback Kubernetes API')
 resources = [obj for obj in yaml.safe_load_all(open(sys.argv[1])) if obj]
 trusted_cluster_render.verify(resources, 'trusted-cluster')
@@ -1308,6 +1458,7 @@ PY
     apply_render admission-parameters 'select(.kind == "ConfigMap")'
     apply_render foundation '
       select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
+        .kind != "CronJob" and
         .kind != "Secret" and .kind != "CustomResourceDefinition" and .kind != "Namespace")
     '
     ensure_email_projection_secret
@@ -1421,6 +1572,13 @@ PY
   fi
   if [[ "$stage" == supply-chain ]]; then
     if [[ "$mode" == apply ]]; then
+      # Materialization policy обновляется до нового controller: hot reload
+      # не должен создавать Pod по новому layout при прежней admission policy.
+      apply_render runtime-materialization-admission '
+        select((.kind == "ValidatingAdmissionPolicy" or
+                .kind == "ValidatingAdmissionPolicyBinding") and
+          (.metadata.name | test("^runtime-(execution-ticket-exact-projection|execution-service-account|execution-rbac|execution-network-policy|revision-exact-configmap-projection|role-pod-exact-secret-projection)$")))
+      '
       "$script_directory/configure-local-node-registry.sh" --mode apply \
         --context "$context" --material-directory "$state_directory/material" \
         --promoted-pull-host "$(yq -N -r '
@@ -1431,6 +1589,12 @@ PY
       ensure_seed_secrets
       pause_local_image_admission_controller
       cleanup_local_image_admission_runs
+      # Claim/scan/sign/admit/promote читают общий скрипт и policy-фильтры:
+      # новый builder не должен обслуживаться прежней схемой provenance.
+      apply_render image-admission-runtime-configuration '
+        select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+          .metadata.name == "kodex-image-admission")
+      '
       reconcile_local_immutable_image_admission_policy
       apply_render image-admission-owner-intent '
         select(
@@ -1452,6 +1616,12 @@ PY
       apply_render role-environment-catalog '
         select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments")
       '
+      # Новый builder читает exact toolchain из ConfigMap уже при старте.
+      # Прежний digest нельзя оставлять до ожидания Ready новой binary.
+      apply_render supply-chain-builder-configuration '
+        select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+          .metadata.name == "role-image-builder-runtime")
+      '
       apply_render buildkit-workload '
         select(.kind == "Deployment" and .metadata.name == "kodex-buildkit")
       '
@@ -1463,6 +1633,23 @@ PY
       '
       image_admission_controller_restore_replicas=""
     fi
+    for admission_name in runtime-execution-ticket-exact-projection \
+      runtime-execution-service-account runtime-execution-rbac \
+      runtime-execution-network-policy runtime-revision-exact-configmap-projection \
+      runtime-role-pod-exact-secret-projection; do
+      for admission_kind in ValidatingAdmissionPolicy ValidatingAdmissionPolicyBinding; do
+        expected_admission=$(ADMISSION_KIND="$admission_kind" ADMISSION_NAME="$admission_name" \
+          yq -o=json -I=0 'select(.kind == strenv(ADMISSION_KIND) and
+            .metadata.name == strenv(ADMISSION_NAME)) | .spec' "$render" | canonical_runtime_admission_specs)
+        [[ "$(jq -r length <<<"$expected_admission")" == 1 ]] ||
+          fail 'runtime materialization admission registry is incomplete'
+        actual_admission=$(kubectl get "$admission_kind/$admission_name" -o json | \
+          jq -c .spec | canonical_runtime_admission_specs) ||
+          fail 'runtime materialization admission readback failed'
+        [[ "$actual_admission" == "$expected_admission" ]] ||
+          fail 'runtime materialization admission readback mismatch'
+      done
+    done
     for workload in kodex-image-registry-pull kodex-image-registry-push \
       kodex-image-registry-promotion kodex-image-registry-staging-read \
       kodex-image-registry-evidence kodex-buildkit image-admission-controller \
@@ -1541,6 +1728,52 @@ PY
   fi
   if [[ "$stage" == core ]]; then
     if [[ "$mode" == apply ]]; then
+      if [[ -z "$selected_workload" || "$selected_workload" == control-plane ]]; then
+        # Каталог должен быть применён до старта CP, не только в supply-chain:
+        # процесс загружает его при запуске и не перечитывает projected volume.
+        apply_render core-role-environment-catalog '
+          select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+            .metadata.name == "kodex-role-environments")
+        '
+      fi
+      # Точечный rollout должен сначала получить свои source-bound настройки.
+      # CA, секреты и конфигурации других компонентов здесь не публикуются.
+      case "$selected_workload" in
+        "")
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              (.metadata.name == "control-plane-runtime" or
+               .metadata.name == "secret-broker-runtime" or
+               .metadata.name == "kodex-platform-endpoints" or
+               (.metadata.name | test("^staff-control-center-runtime-[a-z0-9]+$"))))
+          '
+          ;;
+        control-plane)
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              (.metadata.name == "control-plane-runtime" or
+               .metadata.name == "kodex-platform-endpoints"))
+          '
+          ;;
+        secret-broker)
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              .metadata.name == "secret-broker-runtime")
+          '
+          ;;
+        control-api-gateway)
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              .metadata.name == "kodex-platform-endpoints")
+          '
+          ;;
+        staff-control-center)
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              (.metadata.name | test("^staff-control-center-runtime-[a-z0-9]+$")))
+          '
+          ;;
+      esac
       if [[ -z "$selected_workload" || "$selected_workload" == clamav-db-updater ]]; then
         apply_render clamav-db-updater-foundation '
           select((.kind == "ServiceAccount" and .metadata.name == "clamav-db-updater") or
@@ -1558,6 +1791,9 @@ PY
         apply_render clamav-egress-workload '
           select(.kind == "Deployment" and .metadata.name == "clamav-egress-gateway")
         '
+        kubectl -n "$namespace" rollout status deployment/clamav-egress-gateway --timeout=5m >/dev/null ||
+          fail 'ClamAV egress gateway is unavailable before database bootstrap'
+        bootstrap_clamav_database
         apply_render clamav-db-updater-schedule '
           select(.kind == "CronJob" and .metadata.name == "clamav-db-updater")
         '
@@ -1597,7 +1833,7 @@ PY
       else
       apply_render core-applications '
         select(.kind == "Deployment" and
-          (.metadata.name | test("^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge)$")))
+          (.metadata.name | test("^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge)$")))
       '
       fi
     fi
@@ -1633,6 +1869,7 @@ if [[ "$mode" == apply ]]; then
   reconcile_local_mutable_configmaps
   apply_render foundation '
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
+      .kind != "CronJob" and
       .kind != "Secret" and .kind != "CustomResourceDefinition")
   '
   cleanup_local_frontend_transport

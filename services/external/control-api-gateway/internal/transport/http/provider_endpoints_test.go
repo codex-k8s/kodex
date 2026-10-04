@@ -20,6 +20,7 @@ type providerCommandStub struct {
 	verify      *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest
 	reauthorize *controlplanev1.ReauthorizeProviderAccountDeviceCodeRequest
 	delete      *controlplanev1.DeleteProviderAccountRequest
+	concurrency *controlplanev1.SetProviderAccountConcurrencyRequest
 	account     func() *controlplanev1.ProviderAccount
 }
 
@@ -28,6 +29,43 @@ func (stub *providerCommandStub) replyAccount() *controlplanev1.ProviderAccount 
 		return stub.account()
 	}
 	return providerTestAccount()
+}
+
+func (stub *providerCommandStub) SetProviderAccountConcurrency(_ context.Context, request *controlplanev1.SetProviderAccountConcurrencyRequest, _ ...grpc.CallOption) (*controlplanev1.SetProviderAccountConcurrencyResponse, error) {
+	stub.concurrency = request
+	account := stub.replyAccount()
+	account.MaximumConcurrentExecutions = request.MaximumConcurrentExecutions
+	return &controlplanev1.SetProviderAccountConcurrencyResponse{Account: account}, nil
+}
+
+func TestProviderConcurrencyMappingRequiresExactVersionAndBounds(t *testing.T) {
+	stub := &providerCommandStub{}
+	server := &Server{control: &controlplaneclient.Client{Command: stub}}
+	params := generated.SetProviderAccountConcurrencyParams{IfMatch: `"4"`, IdempotencyKey: "provider-concurrency-01"}
+	response := httptest.NewRecorder()
+	server.SetProviderAccountConcurrency(response, httptest.NewRequest(http.MethodPut, "/", strings.NewReader(`{"maximumConcurrentExecutions":10}`)), "pacc_primary01", params)
+	if response.Code != http.StatusOK || stub.concurrency.GetAccountRef() != "pacc_primary01" || stub.concurrency.GetMaximumConcurrentExecutions() != 10 || stub.concurrency.GetMutation().GetExpectedVersion() != 4 || stub.concurrency.GetMutation().GetIdempotencyKey() != params.IdempotencyKey {
+		t.Fatal("concurrency mapping lost account, limit, version or idempotency")
+	}
+	var account generated.ProviderAccount
+	if json.Unmarshal(response.Body.Bytes(), &account) != nil || account.MaximumConcurrentExecutions != 10 {
+		t.Fatal("concurrency response lost configured limit")
+	}
+	for _, body := range []string{`{}`, `{"maximumConcurrentExecutions":0}`, `{"maximumConcurrentExecutions":257}`, `{"maximumConcurrentExecutions":1.5}`} {
+		stub.concurrency = nil
+		response := httptest.NewRecorder()
+		server.SetProviderAccountConcurrency(response, httptest.NewRequest(http.MethodPut, "/", strings.NewReader(body)), "pacc_primary01", params)
+		if response.Code != http.StatusBadRequest || stub.concurrency != nil {
+			t.Fatal("invalid limit reached control-plane")
+		}
+	}
+	params.IfMatch = ""
+	stub.concurrency = nil
+	response = httptest.NewRecorder()
+	server.SetProviderAccountConcurrency(response, httptest.NewRequest(http.MethodPut, "/", strings.NewReader(`{"maximumConcurrentExecutions":10}`)), "pacc_primary01", params)
+	if response.Code < 400 || stub.concurrency != nil {
+		t.Fatal("unversioned settings reached control-plane")
+	}
 }
 
 func (stub *providerCommandStub) VerifyProviderAccountDeviceAuthorization(_ context.Context, request *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest, _ ...grpc.CallOption) (*controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse, error) {

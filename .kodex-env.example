@@ -41,6 +41,9 @@ KODEX_OIDC_POD_COMPONENT=identity-provider
 KODEX_OIDC_TARGET_PORT=8443
 KODEX_GRAFANA_HOST=grafana.kodex.example.com
 KODEX_HEADLAMP_HOST=headlamp.kodex.example.com
+# all устанавливает Grafana и Headlamp; control-center-grafana исключает
+# Headlamp; control-center оставляет только защищённый вход в Control Center.
+KODEX_MANAGEMENT_SURFACES=all
 KODEX_REGISTRY_HOST=registry.kodex.example.com
 KODEX_PROMOTED_PULL_HOST=images.kodex.example.com
 
@@ -59,6 +62,9 @@ KODEX_KEYCLOAK_ADMIN_INITIAL_PASSWORD=replace-with-at-least-20-characters
 KODEX_OWNER_USERNAME=owner
 KODEX_OWNER_EMAIL=owner@example.com
 KODEX_OWNER_INITIAL_PASSWORD=replace-with-another-20-character-password
+# Необязательный приватный JSON-файл SMTP. Пароль указывается отдельным
+# приватным файлом внутри JSON, а не значением в env или репозитории.
+KODEX_KEYCLOAK_SMTP_CONFIG_FILE=
 
 # GitHub PAT с repository administration и Actions runner scopes.
 KODEX_GITHUB_ARC_TOKEN=github_pat_replace_me

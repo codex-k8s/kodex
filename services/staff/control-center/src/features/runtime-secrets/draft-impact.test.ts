@@ -1,3 +1,4 @@
+import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
 import { beforeEach, expect, it, vi } from "vitest";
 import type {
   RuntimeSecretDraft,
@@ -31,8 +32,10 @@ import {
   publishSecretDraft,
 } from "./draft-impact";
 const draft: RuntimeSecretDraft = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "draft",
-  projectRef: "project",
+  projectRef: "project_synthetic",
   secretRef: "secret",
   version: 2,
   secretVersion: 1,
@@ -70,13 +73,66 @@ const page: RuntimeSecretDraftImpactPage = {
         environmentRef: "environment",
         environmentVersionRef: "revision",
         environmentVersion: 2,
-        projectRef: "project",
+        projectRef: "project_synthetic",
+        scopeKind: "PROJECT",
+        organizationRef: "org_synthetic",
         secretRevisions: [],
       },
     },
   ],
 };
 beforeEach(() => vi.clearAllMocks());
+it("системный draft impact сохраняет bindingless environment и отклоняет unknown/чужой owner", async () => {
+  const original = page.items[0];
+  if (!original) throw new Error("Synthetic impact item is missing");
+  const owned = {
+    ...original,
+    consumer: {
+      ...original.consumer,
+      scopeKind: "ORGANIZATION" as const,
+      projectRef: "",
+    },
+  };
+  sdk.getRuntimeSecretDraftImpact.mockResolvedValue({
+    data: { ...page, items: [owned] },
+    response: new Response(),
+  });
+  await expect(
+    readDraftImpact(
+      plan,
+      new AbortController().signal,
+      "",
+      undefined,
+      40,
+      "org_synthetic",
+    ),
+  ).resolves.toMatchObject({ items: [owned] });
+  for (const change of [
+    { scopeKind: undefined },
+    { scopeKind: "UNSPECIFIED" },
+    { organizationRef: "org_foreign" },
+    { scopeKind: "PROJECT" },
+    { projectRef: "project_foreign" },
+  ]) {
+    sdk.getRuntimeSecretDraftImpact.mockResolvedValue({
+      data: {
+        ...page,
+        items: [{ ...owned, consumer: { ...owned.consumer, ...change } }],
+      },
+      response: new Response(),
+    });
+    await expect(
+      readDraftImpact(
+        plan,
+        new AbortController().signal,
+        "",
+        undefined,
+        40,
+        "org_synthetic",
+      ),
+    ).rejects.toThrow("mismatch");
+  }
+});
 it("разделяет immutable total плана и текущую eligibility выдачи, сохраняет environment-only", async () => {
   sdk.getRuntimeSecretDraftImpact.mockResolvedValue({
     data: page,
@@ -88,6 +144,8 @@ it("разделяет immutable total плана и текущую eligibility 
     controller.signal,
     " env ",
     "cursor",
+    undefined,
+    "org_synthetic",
   );
   expect(result.plan.total).toBe(3);
   expect(result.total).toBe(1);
@@ -109,7 +167,14 @@ it("отклоняет чужие pins, подмену digest, повтор curs
       response: new Response(),
     });
     await expect(
-      readDraftImpact(plan, new AbortController().signal, "", "cursor"),
+      readDraftImpact(
+        plan,
+        new AbortController().signal,
+        "",
+        "cursor",
+        undefined,
+        "org_synthetic",
+      ),
     ).rejects.toThrow();
   }
 });
@@ -118,8 +183,10 @@ it("публикует explicit empty selection с точными OCC/key и п�
     data: {
       draft: { ...draft, state: "PUBLISHED", version: 3, publishedRevision: 1 },
       secret: {
+        scopeKind: "PROJECT",
+        organizationRef: "org_synthetic",
         ref: "secret",
-        projectRef: "project",
+        projectRef: "project_synthetic",
         version: 2,
         name: "TOKEN",
         description: "",
@@ -165,10 +232,19 @@ it("выдаёт APPLIED результаты с новой environment revision
     data: applied,
     response: new Response(),
   });
-  const result = await readDraftImpact(plan, new AbortController().signal);
+  const result = await readDraftImpact(
+    plan,
+    new AbortController().signal,
+    undefined,
+    undefined,
+    undefined,
+    "org_synthetic",
+  );
   expect(result.items.map((item) => item.outcome)).toEqual([
     "APPLIED",
     "FORBIDDEN",
     "CONFLICT",
   ]);
 });
+
+beforeEach(() => initializeRuntimeOwnerFixture("org_synthetic"));

@@ -22,6 +22,10 @@ func (r *Repository) publishRoleImageEnvironment(ctx context.Context, tx pgx.Tx,
 	if err != nil {
 		return empty, err
 	}
+	if err := matchRuntimeOwnerSnapshot(environment.ScopeKind, environment.OrganizationRef, environment.ProjectRef,
+		item.Consumer.ScopeKind, item.Consumer.OrganizationRef, item.Consumer.ProjectRef); err != nil {
+		return empty, err
+	}
 	if environment.Version != expected {
 		return empty, errs.ErrVersionMismatch
 	}

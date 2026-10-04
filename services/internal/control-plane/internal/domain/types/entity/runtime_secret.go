@@ -8,6 +8,7 @@ type RuntimeSecretDisplayHint struct {
 }
 
 type RuntimeSecret struct {
+	ScopeKind, OrganizationRef                                      string
 	Ref, ProjectRef, Name, Description, ValueType, State, Namespace string
 	Version, CurrentRevision                                        int64
 	DisplayHint                                                     *RuntimeSecretDisplayHint
@@ -17,6 +18,7 @@ type RuntimeSecret struct {
 }
 
 type RuntimeSecretOperation struct {
+	ScopeKind, OrganizationRef                                     string
 	Ref, Kind, ProjectRef, SecretRef, Name, Description, ValueType string
 	Namespace, SecretKey, ExpectedContentSHA256                    string
 	TargetRevision, ClaimGeneration                                int64

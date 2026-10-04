@@ -3,12 +3,16 @@ import { computed, ref } from "vue";
 
 import {
   appendTurn,
+  cancelAssistantTurn,
   archiveConversation,
   applyPlanDraft,
   createConversation,
   moveConversationToProject,
   purgeConversation,
   readAssistant,
+  readProjectAssistant,
+  readProjectAssistantAgent,
+  createProjectAssistantProfile,
   readConversations,
   rejectPlanDraft,
   renameConversation,
@@ -25,6 +29,9 @@ import type {
   AssistantPlanOperationInput,
   AssistantPlanReceipt,
   SystemAssistant,
+  ProjectAssistantProfile,
+  Agent,
+  AssistantScope,
   ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -47,6 +54,14 @@ function mergeConversation(
 
 export const useAssistantStore = defineStore("assistant-workspace", () => {
   const assistant = ref<SystemAssistant>();
+  const assistantScope = ref<AssistantScope>("SYSTEM");
+  const projectAssistant = ref<ProjectAssistantProfile>();
+  const projectAssistantAgent = ref<Agent>();
+  const activeAssistantRef = computed(() =>
+    assistantScope.value === "PROJECT"
+      ? projectAssistant.value?.agentRef
+      : assistant.value?.ref,
+  );
   const conversations = ref<AssistantConversation[]>([]);
   const selectedRef = ref<string>();
   const context = ref<AssistantContextDescriptor>();
@@ -57,6 +72,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   const receipt = ref<AssistantPlanReceipt>();
   let generation = 0;
   let controller: AbortController | undefined;
+  let profileController: AbortController | undefined;
+  let profileReadGeneration = 0;
   const nextPageToken = ref<string>();
   const loadingMore = ref(false);
   const historyProblem = ref<AppProblem>();
@@ -68,6 +85,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   function cancelReads(): void {
     clearTimeout(searchTimer);
     controller?.abort();
+    profileController?.abort();
+    profileReadGeneration += 1;
     generation += 1;
     loading.value = false;
     loadingMore.value = false;
@@ -79,10 +98,27 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   ): void {
     if (scope && page.items.some((item) => item.projectRef !== scope))
       throw new Error("Assistant history project scope mismatch");
+    if (page.items.some((item) => !matchesAssistantPin(item)))
+      throw new Error("Assistant history assistant scope mismatch");
     if (page.items.some((item) => item.state !== historyState.value))
       throw new Error("Assistant history state mismatch");
     if (page.nextPageToken && historyCursors.has(page.nextPageToken))
       throw new Error("Assistant history cursor repeated");
+  }
+
+  function matchesAssistantPin(value: AssistantConversation): boolean {
+    if (
+      value.assistantScope !== assistantScope.value ||
+      (activeAssistantRef.value &&
+        value.assistantRef !== activeAssistantRef.value)
+    )
+      return false;
+    return assistantScope.value === "PROJECT"
+      ? Boolean(
+          projectAssistant.value &&
+          value.assistantProfileRef === projectAssistant.value.ref,
+        )
+      : value.assistantProfileRef === undefined;
   }
 
   const selectedConversation = computed(() =>
@@ -107,6 +143,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     const filter = {
       query: historyQuery.value,
       state: historyState.value,
+      assistantScope: assistantScope.value,
+      ...(activeAssistantRef.value
+        ? { assistantRef: activeAssistantRef.value }
+        : {}),
     };
     return historyPageSize.value
       ? readConversations(
@@ -139,6 +179,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     nextContext: AssistantContextDescriptor,
     nextProjectRef?: string,
     select = true,
+    nextAssistantScope: AssistantScope = nextProjectRef
+      ? assistantScope.value
+      : "SYSTEM",
   ): Promise<void> {
     cancelReads();
     const current = ++generation;
@@ -147,12 +190,21 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         (typeof window !== "undefined" &&
         !historyQuery.value &&
         historyState.value === "ACTIVE"
-          ? restoreAssistantConversationRef(nextProjectRef)
+          ? restoreAssistantConversationRef(
+              nextProjectRef,
+              undefined,
+              nextAssistantScope,
+            )
           : undefined)
       : undefined;
-    if (projectRef.value !== nextProjectRef) {
+    if (
+      projectRef.value !== nextProjectRef ||
+      assistantScope.value !== nextAssistantScope
+    ) {
       conversations.value = [];
       selectedRef.value = undefined;
+      projectAssistant.value = undefined;
+      projectAssistantAgent.value = undefined;
     }
     controller = new AbortController();
     const signal = controller.signal;
@@ -161,9 +213,29 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     historyCursors.clear();
     context.value = nextContext;
     projectRef.value = nextProjectRef;
+    assistantScope.value = nextAssistantScope;
     loading.value = true;
     problem.value = undefined;
     try {
+      if (nextAssistantScope === "PROJECT") {
+        if (!nextProjectRef)
+          throw new Error("Project assistant requires a project context");
+        try {
+          const profile = await readProjectAssistant(nextProjectRef, signal);
+          const agent = await readProjectAssistantAgent(profile, signal);
+          if (current !== generation) return;
+          projectAssistant.value = profile;
+          projectAssistantAgent.value = agent;
+        } catch (error) {
+          if (current !== generation) return;
+          if (asProblem(error).status !== 404) throw error;
+          projectAssistant.value = undefined;
+          projectAssistantAgent.value = undefined;
+          conversations.value = [];
+          selectedRef.value = undefined;
+          return;
+        }
+      }
       const [assistantValue, firstPage] = await Promise.all([
         assistant.value
           ? Promise.resolve(assistant.value)
@@ -171,6 +243,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         readHistory(nextProjectRef, undefined, signal),
       ]);
       if (current !== generation) return;
+      assistant.value = assistantValue;
       checkPage(firstPage, nextProjectRef);
       const conversationValues = [...firstPage.items];
       let page = firstPage;
@@ -349,7 +422,11 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           projectRef.value,
           cursor,
           signal,
-          { state: "ARCHIVED" },
+          {
+            state: "ARCHIVED",
+            assistantScope: assistantScope.value,
+            assistantRef: activeAssistantRef.value,
+          },
           historyPageSize.value ?? 40,
         );
         for (const item of page.items) all.set(item.ref, item);
@@ -391,12 +468,16 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     const projectChanged = projectRef.value !== nextProjectRef;
     context.value = nextContext;
     projectRef.value = nextProjectRef;
+    if (!nextProjectRef && assistantScope.value === "PROJECT")
+      assistantScope.value = "SYSTEM";
     if (projectChanged) {
       cancelReads();
       conversations.value = [];
       nextPageToken.value = undefined;
       historyCursors.clear();
       selectedRef.value = undefined;
+      projectAssistant.value = undefined;
+      projectAssistantAgent.value = undefined;
       return;
     }
     selectMatchingConversation();
@@ -406,13 +487,14 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     // Mutation авторитетнее чтения, которое началось до него.
     cancelReads();
     controller = undefined;
+    const currentGeneration = generation;
     busy.value = true;
     problem.value = undefined;
     try {
       return await operation();
     } catch (error) {
       const normalized = asProblem(error);
-      problem.value = normalized;
+      if (currentGeneration === generation) problem.value = normalized;
       throw normalized;
     } finally {
       busy.value = false;
@@ -424,6 +506,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     select = true,
     authoritativeTurns = false,
   ): AssistantConversation {
+    if (!matchesAssistantPin(value))
+      throw new Error("Assistant conversation scope mismatch");
     const index = conversations.value.findIndex(
       (item) => item.ref === value.ref,
     );
@@ -446,9 +530,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   ): void {
     if (projectRef.value !== sourceProjectRef) return;
     if (assistantValue) assistant.value = assistantValue;
-    const visible = sourceProjectRef
+    const scoped = sourceProjectRef
       ? values.filter((value) => value.projectRef === sourceProjectRef)
       : values;
+    const visible = scoped.filter(matchesAssistantPin);
     const previousByRef = new Map(
       conversations.value.map((conversation) => [
         conversation.ref,
@@ -463,7 +548,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       return previous;
     });
     conversations.value.splice(0, conversations.value.length, ...reconciled);
-    nextPageToken.value = sourceNextPageToken;
+    // Курсор общего cache-снимка не относится к отдельно фильтрованной
+    // истории помощника. PROJECT продолжает собственный авторитетный cursor.
+    if (assistantScope.value === "SYSTEM")
+      nextPageToken.value = sourceNextPageToken;
     selectMatchingConversation();
   }
 
@@ -480,7 +568,17 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     const currentContext = context.value;
     if (!currentContext) throw new Error("Assistant context is unavailable");
     return runMutation(async () => {
-      const value = await createConversation(currentContext, projectRef.value);
+      const value = await createConversation(
+        currentContext,
+        projectRef.value,
+        assistantScope.value,
+      );
+      if (
+        value.assistantScope !== assistantScope.value ||
+        (activeAssistantRef.value &&
+          value.assistantRef !== activeAssistantRef.value)
+      )
+        throw new Error("Created assistant conversation scope mismatch");
       if (historyQuery.value || historyState.value !== "ACTIVE") {
         conversations.value = [];
         nextPageToken.value = undefined;
@@ -508,6 +606,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   async function send(
     content: string,
     attachmentSetRef?: string,
+    deliveryMode: "QUEUE" | "INTERRUPT_ACTIVE" = "QUEUE",
   ): Promise<void> {
     const normalized = content.trim();
     if (!normalized) return;
@@ -523,6 +622,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         conversation = await createConversation(
           context.value,
           projectRef.value,
+          assistantScope.value,
         );
         upsertConversation(conversation);
       }
@@ -533,9 +633,33 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
             normalized,
             context.value,
             attachmentSetRef,
+            deliveryMode,
           )
-        : await appendTurn(conversation, normalized, context.value);
+        : await appendTurn(
+            conversation,
+            normalized,
+            context.value,
+            undefined,
+            deliveryMode,
+          );
       upsertConversation(appended);
+    });
+  }
+
+  async function stopActiveTurn(): Promise<void> {
+    const conversation = selectedConversation.value;
+    if (!conversation) return;
+    await runMutation(async () => {
+      const runRef = await cancelAssistantTurn(conversation);
+      upsertConversation({
+        ...conversation,
+        turns: conversation.turns.map((turn) =>
+          turn.runRef === runRef &&
+          (turn.state === "QUEUED" || turn.state === "RUNNING")
+            ? { ...turn, state: "CANCELLED" }
+            : turn,
+        ),
+      });
     });
   }
 
@@ -589,8 +713,93 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     receipt.value = undefined;
   }
 
+  async function selectAssistantScope(scope: AssistantScope): Promise<void> {
+    if (
+      busy.value ||
+      !context.value ||
+      (scope === "PROJECT" && !projectRef.value)
+    )
+      return;
+    await load(context.value, projectRef.value, true, scope);
+  }
+
+  async function invalidateProjectAssistantFromRealtime(
+    sourceProjectRef?: string,
+  ): Promise<void> {
+    if (
+      assistantScope.value !== "PROJECT" ||
+      !sourceProjectRef ||
+      projectRef.value !== sourceProjectRef
+    )
+      return;
+    profileController?.abort();
+    profileController = new AbortController();
+    const signal = profileController.signal;
+    const currentGeneration = generation;
+    const currentProfileRead = ++profileReadGeneration;
+    const isCurrent = () =>
+      !signal.aborted &&
+      currentGeneration === generation &&
+      currentProfileRead === profileReadGeneration &&
+      projectRef.value === sourceProjectRef &&
+      assistantScope.value === "PROJECT";
+    projectAssistantAgent.value = undefined;
+    try {
+      const profile = await readProjectAssistant(sourceProjectRef, signal);
+      const agent = await readProjectAssistantAgent(profile, signal);
+      if (!isCurrent()) return;
+      projectAssistant.value = profile;
+      projectAssistantAgent.value = agent;
+    } catch (error) {
+      if (!isCurrent()) return;
+      projectAssistant.value = undefined;
+      projectAssistantAgent.value = undefined;
+      conversations.value = [];
+      selectedRef.value = undefined;
+      nextPageToken.value = undefined;
+      if (asProblem(error).status !== 404) problem.value = asProblem(error);
+    }
+  }
+
+  async function createProjectProfile(input: {
+    name: string;
+    purpose: string;
+    instructions: string;
+  }): Promise<void> {
+    const targetProject = projectRef.value;
+    const targetContext = context.value;
+    if (
+      !targetProject ||
+      !targetContext ||
+      assistantScope.value !== "PROJECT" ||
+      busy.value
+    )
+      return;
+    const isCurrentProfileScope = () =>
+      projectRef.value === targetProject && assistantScope.value === "PROJECT";
+    await runMutation(async () => {
+      const profile = await createProjectAssistantProfile(targetProject, input);
+      if (
+        projectRef.value !== targetProject ||
+        assistantScope.value !== "PROJECT"
+      )
+        return;
+      projectAssistant.value = profile;
+      const agent = await readProjectAssistantAgent(profile);
+      if (isCurrentProfileScope()) projectAssistantAgent.value = agent;
+    });
+    if (isCurrentProfileScope()) await load(targetContext, targetProject);
+  }
+
   return {
     assistant,
+    assistantScope,
+    projectAssistant,
+    projectAssistantAgent,
+    activeAssistantRef,
+    selectAssistantScope,
+    createProjectProfile,
+    invalidateProjectAssistantFromRealtime,
     conversations,
     selectedRef,
     context,
@@ -622,6 +831,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     startConversation,
     changeTitle,
     send,
+    stopActiveTurn,
     saveDraft,
     validate,
     apply,

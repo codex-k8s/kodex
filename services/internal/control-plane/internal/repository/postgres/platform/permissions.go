@@ -21,12 +21,42 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.RetryRun:
+		if handled, err := repository.authorizeAssistantRetry(ctx, tx, current, input); handled {
+			return err
+		}
+	case command.SetProviderAccountConcurrency:
+		permission, target, err := repository.commandAccessTarget(ctx, tx, current, input)
+		if err != nil {
+			return err
+		}
+		if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
+			return errs.ErrNotFound
+		}
+		if current.role != "OWNER" && current.role != "ADMINISTRATOR" {
+			return errs.ErrForbidden
+		}
+		return nil
 	case command.CreateAssistantRoleImageRecipe:
 		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
 		if !ok {
 			return errs.ErrInvalid
 		}
 		return repository.authorizeAssistantRoleImage(ctx, tx, current, payload)
+	case command.CreateSystemAssistantRoleImageRecipe, command.UpdateSystemAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.SystemAssistantRoleImageInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		_, err := repository.authorizeSystemAssistantImage(ctx, tx, current, payload, input.Kind == command.UpdateSystemAssistantRoleImageRecipe)
+		return err
+	case command.PublishAssistantRuntimeConfig:
+		payload, ok := input.Payload.(command.AssistantRuntimeConfigurationInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		_, err := repository.authorizeAssistantRuntimeConfiguration(ctx, tx, current, payload)
+		return err
 	case command.UpdateAssistantRoleImageRecipe:
 		payload, ok := input.Payload.(command.AssistantRoleImageUpdateInput)
 		if !ok {
@@ -106,11 +136,20 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	if permission == "" {
 		return errs.ErrNotFound
 	}
-	if input.Kind == command.ResolveOwnerGate && current.authorityProjectID != "" && current.authorityProjectID != target.projectID {
+	// Project-signed bearer не получает глобальный lifecycle Run, даже если
+	// actor имеет OWNER. Boundary проверяется до OCC и idempotency receipt.
+	if (input.Kind == command.ResolveOwnerGate || input.Kind == command.CancelRun || input.Kind == command.RetryRun) && current.authorityProjectID != "" && current.authorityProjectID != target.projectID {
 		return errs.ErrNotFound
 	}
 	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 		return errs.ErrNotFound
+	}
+	if input.Kind == command.ArchiveAgent {
+		payload, ok := input.Payload.(command.AgentInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		return repository.rejectAssistantAgentArchive(ctx, tx, current, payload.Ref)
 	}
 	if input.Kind == command.CreateAgent {
 		payload, ok := input.Payload.(command.AgentInput)
@@ -168,6 +207,15 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 
 func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, resolvedAccessTarget, error) {
 	organization := resolvedAccessTarget{scope: organizationTarget(current.organizationRef)}
+	if input.Kind == command.RecoverAssistant {
+		if _, ok := input.Payload.(struct{}); !ok {
+			return "", resolvedAccessTarget{}, errs.ErrInvalid
+		}
+		if current.authorityProjectID != "" {
+			return "", resolvedAccessTarget{}, errs.ErrForbidden
+		}
+		return "organization.manage", organization, nil
+	}
 	switch payload := input.Payload.(type) {
 	case command.InteractionIdentityInput:
 		if current.authorityProjectID != "" {
@@ -201,6 +249,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.Ref, payload.ProjectRef)
+	case command.ProjectAssistantInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 	case command.AgentAvatarInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.AgentBindingInput:
@@ -210,7 +260,7 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 	case command.ConfigOverlayInput:
 		return repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", payload.AgentRef)
 	case command.RuntimeEnvironmentBindingInput:
-		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+		return repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", payload.AgentRef)
 	case command.RuntimeEnvironmentRebindInput:
 		lookup := current
 		lookup.role = "OWNER"
@@ -218,17 +268,23 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return "", resolvedAccessTarget{}, err
 		}
-		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
-	case command.RuntimeSecretRebindInput:
-		for _, selection := range payload.Selections {
-			if _, _, err := repository.environmentImpactTarget(ctx, tx, current, selection.EnvironmentRef, selection.SourceVersionRef); err != nil {
+		if err := repository.authorizeRuntimeEnvironmentConsumers(ctx, tx, current, environment, payload.Consumers); err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		if environment.ScopeKind == "ORGANIZATION" {
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, environment.ScopeKind, environment.ProjectRef); err != nil {
 				return "", resolvedAccessTarget{}, err
 			}
-			for _, consumer := range selection.Consumers {
-				if err := repository.requireAccess(ctx, tx, current, "agent.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: consumer.AgentRef}); err != nil {
-					return "", resolvedAccessTarget{}, err
-				}
-			}
+			return "organization.manage", organization, nil
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
+	case command.RuntimeSecretRebindInput:
+		secret, err := repository.authorizeRuntimeSecretSelections(ctx, tx, current, payload.SecretRef, payload.Revision, payload.Selections)
+		if err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		if secret.scopeKind == "ORGANIZATION" {
+			return "secret.rotate", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "secret.rotate", "SECRET", payload.SecretRef, "")
 	case command.RuntimeEnvironmentLifecycleInput:
@@ -239,6 +295,9 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, permission, "RUNTIME_ENVIRONMENT", payload.EnvironmentRef, "")
 	case command.RuntimeEnvironmentInput:
 		if input.Kind == command.CreateRuntimeEnvironment {
+			if payload.ScopeKind == "ORGANIZATION" {
+				return "", resolvedAccessTarget{}, errs.ErrInvalid
+			}
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		if payload.Ref == "" {
@@ -250,15 +309,45 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return "", resolvedAccessTarget{}, err
 		}
+		if environment.ScopeKind == "ORGANIZATION" {
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, environment.ScopeKind, environment.ProjectRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			return "organization.manage", organization, nil
+		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
 	case command.RuntimeEnvironmentDraftInput:
 		projectRef := payload.ProjectRef
-		if input.Kind != command.CreateRuntimeEnvironmentDraft {
+		scopeKind := "PROJECT"
+		if input.Kind == command.CreateOrganizationRuntimeEnvironmentDraft {
+			scopeKind = "ORGANIZATION"
+			if projectRef != "" {
+				return "", resolvedAccessTarget{}, errs.ErrInvalid
+			}
+		} else if input.Kind != command.CreateRuntimeEnvironmentDraft {
 			draft, err := scanEnvironmentDraft(tx.QueryRow(ctx, queryEnvironmentDraftGet, current.organizationID, payload.DraftRef))
 			if err != nil {
 				return "", resolvedAccessTarget{}, err
 			}
 			projectRef = draft.ProjectRef
+			scopeKind = draft.ScopeKind
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, scopeKind, projectRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			if input.Kind == command.ValidateRuntimeEnvironmentDraft || input.Kind == command.PublishRuntimeEnvironmentDraft || input.Kind == command.PrepareEnvironmentDraftImpact {
+				if _, err := repository.admitRuntimeEnvironmentPolicy(ctx, tx, current, projectRef, draft.EnvironmentRef, draft.Specification.Policy); errors.Is(err, errs.ErrFreshAuthenticationRequired) || errors.Is(err, errs.ErrForbidden) || errors.Is(err, errs.ErrNotFound) {
+					return "", resolvedAccessTarget{}, err
+				}
+			}
+		}
+		if scopeKind == "ORGANIZATION" {
+			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, scopeKind, projectRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			return "organization.manage", organization, nil
+		}
+		if scopeKind != "PROJECT" {
+			return "", resolvedAccessTarget{}, errs.ErrNotFound
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
 	case command.MemoryRecordInput:
@@ -402,8 +491,17 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "organization.view", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", payload.ProjectRef, payload.ProjectRef)
-	case command.AssistantTurnInput, command.AssistantConversationTitleInput,
-		command.AssistantPlanInput, command.AssistantPlanDraftInput, command.AssistantInstructionsInput:
+	case command.AssistantTurnInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "agent.launch")
+	case command.AssistantTurnCancellationInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "agent.launch")
+	case command.AssistantConversationTitleInput:
+		return repository.assistantCommandTarget(ctx, tx, current, payload.ConversationRef, "", "project.view")
+	case command.AssistantPlanInput:
+		return repository.assistantCommandTarget(ctx, tx, current, "", payload.PlanRef, "project.manage")
+	case command.AssistantPlanDraftInput:
+		return repository.assistantCommandTarget(ctx, tx, current, "", payload.PlanRef, "project.manage")
+	case command.AssistantInstructionsInput:
 		return "organization.manage", organization, nil
 	case command.ManagedConfigurationInput:
 		if input.Kind == command.CreateSystemSTTDraft {

@@ -12,6 +12,7 @@ import (
 )
 
 func (repository *Repository) RequestPromotion(ctx context.Context, input roleimagerepo.PromotionRequestInput) (entity.RoleImagePromotionReceipt, error) {
+	input.ScopeKind = "PROJECT"
 	return retryRoleImageTransaction(ctx, func() (entity.RoleImagePromotionReceipt, error) {
 		return repository.requestPromotion(ctx, input)
 	})
@@ -30,8 +31,13 @@ func (repository *Repository) requestPromotion(ctx context.Context, input roleim
 		return entity.RoleImagePromotionReceipt{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if input.ScopeKind == "ORGANIZATION" {
+		if err := repository.requireOrganizationRoleImageAccess(ctx, tx, current); err != nil {
+			return entity.RoleImagePromotionReceipt{}, err
+		}
+	}
 
-	target, err := repository.resolveRoleImageAccessTarget(ctx, tx, current, input.RecipeRef, "")
+	target, err := repository.resolveScopedRoleImageAccessTarget(ctx, tx, current, input.RecipeRef, "", input.ScopeKind)
 	if err != nil {
 		return entity.RoleImagePromotionReceipt{}, err
 	}

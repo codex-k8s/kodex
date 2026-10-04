@@ -27,14 +27,16 @@ func (server *Server) GetRuntimeEnvironmentImpact(w http.ResponseWriter, r *http
 	result := generated.RuntimeEnvironmentImpact{EnvironmentRef: environmentRef, EnvironmentVersion: response.GetEnvironmentVersion(), TargetVersionRef: versionRef,
 		TargetDigest: response.GetTargetDigest(), Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken(), Consumers: []generated.RuntimeEnvironmentConsumer{}}
 	seen := make(map[string]bool)
+	owner := ""
 	for _, consumer := range response.GetConsumers() {
-		item := generated.RuntimeEnvironmentConsumer{AgentRef: consumer.GetAgentRef(), AgentVersion: consumer.GetAgentVersion(), BindingRef: consumer.GetBindingRef(),
-			BindingVersion: consumer.GetBindingVersion(), VersionRef: consumer.GetVersionRef(), ProjectRef: consumer.GetProjectRef()}
-		if !validEnvironmentConsumer(item) || seen[item.AgentRef] {
+		item := environmentConsumerView(consumer)
+		key := impactConsumerOwnerKey(item.ScopeKind, item.OrganizationRef, item.ProjectRef)
+		if !validEnvironmentConsumer(item) || seen[item.AgentRef] || owner != "" && key != owner {
 			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
 		seen[item.AgentRef] = true
+		owner = key
 		result.Consumers = append(result.Consumers, item)
 	}
 	w.Header().Set("ETag", "\""+strconv.FormatInt(result.EnvironmentVersion, 10)+"\"")
@@ -56,15 +58,19 @@ func (server *Server) RebindRuntimeEnvironment(w http.ResponseWriter, r *http.Re
 	}
 	input := &controlplanev1.RebindRuntimeEnvironmentRequest{Mutation: mutation, EnvironmentRef: environmentRef, VersionRef: versionRef}
 	selected := make(map[string]generated.RuntimeEnvironmentConsumer, len(body.Consumers))
+	owner := ""
 	for _, item := range body.Consumers {
 		_, duplicate := selected[item.AgentRef]
-		if !validEnvironmentConsumer(item) || duplicate {
+		key := impactConsumerOwnerKey(item.ScopeKind, item.OrganizationRef, item.ProjectRef)
+		if !validEnvironmentConsumer(item) || duplicate || owner != "" && key != owner {
 			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 			return
 		}
 		selected[item.AgentRef] = item
+		owner = key
 		input.Consumers = append(input.Consumers, &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: item.AgentRef, AgentVersion: item.AgentVersion, BindingRef: item.BindingRef,
-			BindingVersion: item.BindingVersion, VersionRef: item.VersionRef, ProjectRef: item.ProjectRef})
+			BindingVersion: item.BindingVersion, VersionRef: item.VersionRef, ProjectRef: item.ProjectRef,
+			ScopeKind: consumerScopeProto(item.ScopeKind), OrganizationRef: item.OrganizationRef})
 	}
 	response, err := server.control.Command.RebindRuntimeEnvironment(r.Context(), input)
 	if err != nil {
@@ -91,6 +97,20 @@ func (server *Server) RebindRuntimeEnvironment(w http.ResponseWriter, r *http.Re
 }
 
 func validEnvironmentConsumer(item generated.RuntimeEnvironmentConsumer) bool {
-	return opaqueHTTPReference.MatchString(item.AgentRef) && opaqueHTTPReference.MatchString(item.BindingRef) && opaqueHTTPReference.MatchString(item.VersionRef) && opaqueHTTPReference.MatchString(item.ProjectRef) &&
+	return validRuntimeResourceScope(item.ScopeKind, item.OrganizationRef, item.ProjectRef) && opaqueHTTPReference.MatchString(item.AgentRef) && opaqueHTTPReference.MatchString(item.BindingRef) && opaqueHTTPReference.MatchString(item.VersionRef) &&
 		item.AgentVersion >= 1 && item.AgentVersion <= maximumSafeJSONInteger && item.BindingVersion >= 1 && item.BindingVersion <= maximumSafeJSONInteger
+}
+
+func environmentConsumerView(item *controlplanev1.RuntimeEnvironmentConsumer) generated.RuntimeEnvironmentConsumer {
+	return generated.RuntimeEnvironmentConsumer{AgentRef: item.GetAgentRef(), AgentVersion: item.GetAgentVersion(), BindingRef: item.GetBindingRef(),
+		BindingVersion: item.GetBindingVersion(), VersionRef: item.GetVersionRef(), ProjectRef: item.GetProjectRef(),
+		ScopeKind: runtimeResourceScopeKind(item.GetScopeKind().String()), OrganizationRef: item.GetOrganizationRef()}
+}
+
+func consumerScopeProto(kind generated.RuntimeResourceScopeKind) controlplanev1.RuntimeResourceScopeKind {
+	return controlplanev1.RuntimeResourceScopeKind(controlplanev1.RuntimeResourceScopeKind_value["RUNTIME_RESOURCE_SCOPE_KIND_"+string(kind)])
+}
+
+func impactConsumerOwnerKey(kind generated.RuntimeResourceScopeKind, organizationRef, projectRef string) string {
+	return string(kind) + "/" + organizationRef + "/" + projectRef
 }

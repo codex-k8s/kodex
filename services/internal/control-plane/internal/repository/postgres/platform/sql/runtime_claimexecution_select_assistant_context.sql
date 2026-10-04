@@ -7,7 +7,11 @@ SELECT CASE WHEN EXISTS (SELECT 1 FROM control_plane.runs candidate
         'entityRef',run.assistant_context_entity_ref,
         'entityName',context.entity_name,
         'entityVersion',context.entity_version,
-        'allowedOperations',context.allowed_operations
+        'allowedOperations',context.allowed_operations || CASE
+          WHEN control_plane.assistant_project_profile_creation_allowed(run.organization_id,
+            run.initiated_by,conversation.project_id,conversation.assistant_scope,run.assistant_context_entity_kind)
+            THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[]
+          ELSE '{}'::text[] END
     )
     FROM control_plane.runs run
     JOIN control_plane.assistant_conversations conversation

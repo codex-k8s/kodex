@@ -12,8 +12,8 @@ import {
 import RuntimeEnvironmentPolicyFields from "@/features/runtime/RuntimeEnvironmentPolicyFields.vue";
 import type {
   RuntimeEnvironmentPolicyInput,
-  RuntimeNetworkDestination,
   RuntimeVolumeInput,
+  RuntimeWebAccess,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const props = defineProps<{
@@ -50,6 +50,7 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
       "resources",
       "volumes",
       "networkDestinations",
+      "webAccess",
       "kubernetesAccess",
     ])
   )
@@ -89,20 +90,24 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
       sizeMib: volume.sizeMib,
     });
   }
-  const allowed = [
-    "DNS",
-    "PROVIDER_PROXY",
-    "RUNTIME_CALLBACK",
-    "KUBERNETES_API",
-  ];
+  const allowed = ["DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"];
   if (
     !Array.isArray(value.networkDestinations) ||
-    value.networkDestinations.length > 4 ||
+    value.networkDestinations.length !== 3 ||
     value.networkDestinations.some(
       (item) => typeof item !== "string" || !allowed.includes(item),
     ) ||
-    (value.kubernetesAccess !== "NONE" &&
-      value.kubernetesAccess !== "READ_OWN_EXECUTION")
+    value.kubernetesAccess !== "NONE"
+  )
+    return undefined;
+  const webAccess = value.webAccess;
+  if (!record(webAccess)) return undefined;
+  const typedWebAccess = webAccess as RuntimeWebAccess;
+  if (
+    !["NONE", "ALLOWLIST_READ_ONLY", "ALLOWLIST_FULL", "FULL_PUBLIC"].includes(
+      typedWebAccess.mode,
+    ) ||
+    !Array.isArray(typedWebAccess.rules)
   )
     return undefined;
   return {
@@ -117,7 +122,14 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
     },
     volumes,
     networkDestinations:
-      value.networkDestinations as RuntimeNetworkDestination[],
+      value.networkDestinations as RuntimeEnvironmentPolicyInput["networkDestinations"],
+    webAccess: {
+      mode: typedWebAccess.mode,
+      rules: typedWebAccess.rules.map((rule) => ({
+        ...rule,
+        httpMethods: [...rule.httpMethods],
+      })),
+    },
     kubernetesAccess: value.kubernetesAccess,
   };
 }
@@ -173,12 +185,6 @@ function update(value: RuntimeEnvironmentPolicyInput): void {
       :disabled="disabled || !policy"
       @update:policy="update"
     />
-    <p
-      v-if="policy?.kubernetesAccess === 'READ_OWN_EXECUTION'"
-      class="assistant-plan-friendly__hint"
-    >
-      {{ $t("assistant.planEditor.environmentPolicyFreshAuthentication") }}
-    </p>
     <p
       v-for="problem in problems"
       :key="problem"

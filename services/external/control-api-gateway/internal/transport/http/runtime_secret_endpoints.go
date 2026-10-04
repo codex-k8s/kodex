@@ -29,6 +29,12 @@ func (server *Server) ListRuntimeSecrets(writer http.ResponseWriter, request *ht
 		writeRPCProblem(writer, err)
 		return
 	}
+	for _, secret := range response.GetSecrets() {
+		if secret == nil || secret.GetScopeKind() != controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT || secret.GetProjectRef() != projectRef {
+			invalidSecretDraft(writer)
+			return
+		}
+	}
 	writeRuntimeSecretPage(writer, response)
 }
 
@@ -39,11 +45,13 @@ func writeRuntimeSecretPage(writer http.ResponseWriter, response *controlplanev1
 		return
 	}
 	page := generated.RuntimeSecretPage{Items: make([]generated.RuntimeSecret, 0, len(response.GetSecrets())), NextPageToken: response.GetPage().GetNextPageToken()}
+	organizationRef := ""
 	for _, item := range response.GetSecrets() {
-		if item == nil {
+		if item == nil || !validRuntimeResourceScope(runtimeResourceScopeKind(item.GetScopeKind().String()), item.GetOrganizationRef(), item.GetProjectRef()) || organizationRef != "" && organizationRef != item.GetOrganizationRef() {
 			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
+		organizationRef = item.GetOrganizationRef()
 		page.Items = append(page.Items, castControlPlaneRuntimeSecret(item))
 	}
 	writeJSON(writer, http.StatusOK, page)
@@ -56,7 +64,7 @@ func (server *Server) GetRuntimeSecret(writer http.ResponseWriter, request *http
 		writeRPCProblem(writer, err)
 		return
 	}
-	if response.GetSecret() == nil {
+	if response.GetSecret() == nil || response.GetSecret().GetRef() != secretRef || !validRuntimeResourceScope(runtimeResourceScopeKind(response.GetSecret().GetScopeKind().String()), response.GetSecret().GetOrganizationRef(), response.GetSecret().GetProjectRef()) {
 		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
@@ -92,6 +100,10 @@ func (server *Server) CreateRuntimeSecret(writer http.ResponseWriter, request *h
 		return
 	}
 	operation := prepared.GetOperation()
+	if terminal := operation.GetTerminalSecret(); terminal != nil && (terminal.GetScopeKind() != controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT || terminal.GetProjectRef() != projectRef) {
+		invalidSecretDraft(writer)
+		return
+	}
 	if writeTerminalRuntimeSecretOperation(writer, http.StatusCreated, operation) {
 		return
 	}
@@ -105,7 +117,12 @@ func (server *Server) CreateRuntimeSecret(writer http.ResponseWriter, request *h
 		return
 	}
 	setRuntimeSecretHeaders(writer)
-	writeJSON(writer, http.StatusCreated, castRuntimeSecretMetadata(response.GetSecret()))
+	metadata := castRuntimeSecretMetadata(response.GetSecret())
+	if metadata.ScopeKind != generated.RuntimeResourceScopeKindPROJECT || metadata.ProjectRef != projectRef || !validRuntimeResourceScope(metadata.ScopeKind, metadata.OrganizationRef, metadata.ProjectRef) {
+		invalidSecretDraft(writer)
+		return
+	}
+	writeJSON(writer, http.StatusCreated, metadata)
 }
 
 func (server *Server) RotateRuntimeSecret(writer http.ResponseWriter, request *http.Request, secretRef generated.SecretRef, parameters generated.RotateRuntimeSecretParams) {
@@ -145,7 +162,7 @@ func (server *Server) RotateRuntimeSecret(writer http.ResponseWriter, request *h
 		return
 	}
 	setRuntimeSecretHeaders(writer)
-	writeJSON(writer, http.StatusOK, castRuntimeSecretMetadata(response.GetSecret()))
+	writeRuntimeSecretMetadata(writer, response.GetSecret(), secretRef)
 }
 
 func (server *Server) RevealRuntimeSecret(writer http.ResponseWriter, request *http.Request, secretRef generated.SecretRef, parameters generated.RevealRuntimeSecretParams) {
@@ -154,12 +171,19 @@ func (server *Server) RevealRuntimeSecret(writer http.ResponseWriter, request *h
 	if !ok {
 		return
 	}
-	projectRef, ok := boundary.ProjectReferenceFromContext(request.Context())
-	if !ok {
+	metadata, err := server.control.Query.GetRuntimeSecret(request.Context(), &controlplanev1.GetRuntimeSecretRequest{SecretRef: secretRef})
+	if err != nil {
+		writeRPCProblem(writer, err)
+		return
+	}
+	secret := metadata.GetSecret()
+	scopeKind := runtimeResourceScopeKind(secret.GetScopeKind().String())
+	projectRef, projectScoped := boundary.ProjectReferenceFromContext(request.Context())
+	if secret.GetRef() != secretRef || !validRuntimeResourceScope(scopeKind, secret.GetOrganizationRef(), secret.GetProjectRef()) || scopeKind == generated.RuntimeResourceScopeKindORGANIZATION && projectScoped || scopeKind == generated.RuntimeResourceScopeKindPROJECT && (!projectScoped || projectRef != secret.GetProjectRef()) {
 		writeLocalProblem(writer, http.StatusForbidden, "FRESH_AUTHENTICATION_REQUIRED", false)
 		return
 	}
-	if err := server.boundary.ConsumeRuntimeSecretReveal(request.Context(), writer, projectRef, secretRef); err != nil {
+	if err := server.boundary.ConsumeRuntimeSecretReveal(request.Context(), writer, string(scopeKind), secret.GetOrganizationRef(), secret.GetProjectRef(), secretRef); err != nil {
 		if errors.Is(err, boundary.ErrElevationUnavailable) {
 			writeLocalProblem(writer, http.StatusServiceUnavailable, "UNAVAILABLE", false)
 		} else {
@@ -223,7 +247,16 @@ func (server *Server) RevokeRuntimeSecret(writer http.ResponseWriter, request *h
 		return
 	}
 	setRuntimeSecretHeaders(writer)
-	writeJSON(writer, http.StatusOK, castRuntimeSecretMetadata(response.GetSecret()))
+	writeRuntimeSecretMetadata(writer, response.GetSecret(), secretRef)
+}
+
+func writeRuntimeSecretMetadata(writer http.ResponseWriter, value *secretbrokerv1.RuntimeSecretMetadata, secretRef string) {
+	metadata := castRuntimeSecretMetadata(value)
+	if metadata.Ref != secretRef || !validRuntimeResourceScope(metadata.ScopeKind, metadata.OrganizationRef, metadata.ProjectRef) {
+		invalidSecretDraft(writer)
+		return
+	}
+	writeJSON(writer, http.StatusOK, metadata)
 }
 
 func decodeRuntimeSecretValue(writer http.ResponseWriter, valueType controlplanev1.RuntimeSecretValueType, encoded string) ([]byte, bool) {
@@ -252,7 +285,7 @@ func decodeRuntimeSecretValue(writer http.ResponseWriter, valueType controlplane
 
 func castRuntimeSecretMetadata(value *secretbrokerv1.RuntimeSecretMetadata) generated.RuntimeSecret {
 	result := generated.RuntimeSecret{
-		Ref: value.GetSecretRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
+		Ref: value.GetSecretRef(), ScopeKind: runtimeResourceScopeKind(value.GetScopeKind().String()), OrganizationRef: value.GetOrganizationRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
 		ValueType: generated.RuntimeSecretValueType(runtimeSecretValueTypeName(value.GetValueType())),
 		State:     generated.RuntimeSecretState(runtimeSecretStatusName(value.GetStatus())), Version: value.GetVersion(), CurrentRevision: int64(value.GetRevision()),
 		CreatedAt: runtimeSecretTime(value.GetCreatedAt()), UpdatedAt: runtimeSecretTime(value.GetUpdatedAt()),
@@ -266,7 +299,7 @@ func castRuntimeSecretMetadata(value *secretbrokerv1.RuntimeSecretMetadata) gene
 
 func castControlPlaneRuntimeSecret(value *controlplanev1.RuntimeSecret) generated.RuntimeSecret {
 	result := generated.RuntimeSecret{
-		Ref: value.GetRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
+		Ref: value.GetRef(), ScopeKind: runtimeResourceScopeKind(value.GetScopeKind().String()), OrganizationRef: value.GetOrganizationRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
 		ValueType: generated.RuntimeSecretValueType(runtimeSecretValueTypeName(value.GetValueType())), State: generated.RuntimeSecretState(value.GetState()),
 		Version: value.GetVersion(), CurrentRevision: value.GetCurrentRevision(), CreatedAt: runtimeSecretTime(value.GetCreatedAt()), UpdatedAt: runtimeSecretTime(value.GetUpdatedAt()),
 		NextActions: make([]generated.NextAction, 0, len(value.GetNextActions())),
@@ -289,6 +322,10 @@ func writeTerminalRuntimeSecretOperation(writer http.ResponseWriter, status int,
 		return false
 	}
 	if secret := operation.GetTerminalSecret(); operation.GetState() == controlplanev1.RuntimeSecretOperationState_RUNTIME_SECRET_OPERATION_STATE_COMPLETED && secret != nil {
+		if !validRuntimeResourceScope(runtimeResourceScopeKind(secret.GetScopeKind().String()), secret.GetOrganizationRef(), secret.GetProjectRef()) {
+			invalidSecretDraft(writer)
+			return true
+		}
 		setRuntimeSecretHeaders(writer)
 		writeJSON(writer, status, castControlPlaneRuntimeSecret(secret))
 		return true

@@ -65,7 +65,7 @@ WHERE project.name='Role image promotion' AND image.promotion_state='PROMOTED' A
 		}
 		view := bound.RuntimeConfiguration
 		b := view.EnvironmentBinding
-		consumers = append(consumers, entity.RuntimeEnvironmentConsumer{AgentRef: agent.Ref, AgentVersion: view.AgentVersion, BindingRef: b.Ref, BindingVersion: b.Version, VersionRef: b.VersionRef, ProjectRef: projectRef})
+		consumers = append(consumers, entity.RuntimeEnvironmentConsumer{AgentRef: agent.Ref, AgentVersion: view.AgentVersion, BindingRef: b.Ref, BindingVersion: b.Version, VersionRef: b.VersionRef, ProjectRef: projectRef, ScopeKind: environment.ScopeKind, OrganizationRef: environment.OrganizationRef})
 	}
 	rotated := completeRuntimeSecretRotate(t, ctx, service, runtimeSecretOwnerPrincipal(owner, "secret.rotate"), consume, complete, secret, runtimeSecretHashB, "secret-impact-rotate")
 	if _, err := service.PrepareRuntimeSecretOperation(ctx, runtimeSecretOwnerPrincipal(owner, "secret.revoke"), platformrepo.RuntimeSecretPrepareInput{
@@ -100,7 +100,7 @@ WHERE project.name='Role image promotion' AND image.promotion_state='PROMOTED' A
 	if err != nil || filtered.Total != 1 || len(filtered.Consumers) != 1 || filtered.NextPageToken != "" {
 		t.Fatalf("secret impact SQL search: total=%d err=%v", filtered.Total, err)
 	}
-	selection := entity.RuntimeSecretRebindSelection{EnvironmentRef: environment.Ref, ExpectedEnvironmentVersion: environment.Version, SourceVersionRef: environment.CurrentVersion.Ref, Consumers: append([]entity.RuntimeEnvironmentConsumer(nil), consumers...)}
+	selection := entity.RuntimeSecretRebindSelection{EnvironmentRef: environment.Ref, ExpectedEnvironmentVersion: environment.Version, SourceVersionRef: environment.CurrentVersion.Ref, Consumers: append([]entity.RuntimeEnvironmentConsumer(nil), consumers...), ScopeKind: environment.ScopeKind, OrganizationRef: environment.OrganizationRef, ProjectRef: environment.ProjectRef}
 	selection.Consumers[1].BindingVersion++
 	rebind := command.Command{Kind: command.RebindRuntimeSecret, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "secret-impact-stale-batch", ExpectedVersion: &rotated.Version},
 		Payload: command.RuntimeSecretRebindInput{SecretRef: secret.Ref, Revision: rotated.CurrentRevision, Selections: []entity.RuntimeSecretRebindSelection{selection}}}

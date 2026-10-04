@@ -1,12 +1,12 @@
 -- name: role_images_get_build_input :one
-SELECT recipe.ref, build.project_id::text, project.ref,
+SELECT recipe.ref, COALESCE(build.project_id::text, ''), COALESCE(project.ref, ''),
        build.recipe_version, build.recipe_generation, build.spec_sha256,
        build.specification, build.immutable_build_sha256,
        recipe.policy_revision, recipe.policy_sha256,
-       recipe.role_runtime_contract_revision, recipe.role_runtime_contract_sha256
+       recipe.role_runtime_contract_revision, recipe.role_runtime_contract_sha256, recipe.scope_kind, (SELECT ref FROM control_plane.organizations WHERE id = recipe.organization_id)
 FROM control_plane.image_builds build
 JOIN control_plane.role_image_recipes recipe ON recipe.id = build.recipe_id
-JOIN control_plane.projects project ON project.id = build.project_id
+LEFT JOIN control_plane.projects project ON project.id = build.project_id
 WHERE build.organization_id = $1::uuid
   AND build.id = $2::uuid
   AND recipe.state = 'ACTIVE'

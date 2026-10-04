@@ -33,7 +33,7 @@ func assistantResourceSearchTool() map[string]any {
 const maximumAssistantSearchResults = 10
 
 func (server *Server) findPlatformResources(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.SystemAssistant || !onlyKeys(arguments, "query") || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
+	if !input.IsAssistant() || !onlyKeys(arguments, "query") || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
 		return nil, errors.New("assistant resource search is not available")
 	}
 	query, ok := arguments["query"].(string)
@@ -49,7 +49,7 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 	if err != nil {
 		return nil, err
 	}
-	if len(response.GetResults()) > maximumAssistantSearchResults {
+	if response == nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 || len(response.GetResults()) > maximumAssistantSearchResults {
 		return nil, errors.New("assistant resource search result is invalid")
 	}
 	items := make([]map[string]any, 0, len(response.GetResults()))

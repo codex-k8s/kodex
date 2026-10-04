@@ -6,6 +6,7 @@ import { useI18n } from "vue-i18n";
 
 import type { RunGraphNodeData } from "@/features/runs/run-graph-flow";
 import type { RunNode } from "@/shared/api/generated/openapi/types.gen";
+import { runNodePresentationKey } from "@/features/runs/run-owner";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 defineProps<NodeProps<RunGraphNodeData>>();
@@ -67,7 +68,7 @@ function nodeIcon(type: RunNode["type"]): Component {
         {{
           data.retryAttempt
             ? t("runs.graphRunAttempt", { attempt: data.retryAttempt })
-            : t(`runs.nodeTypes.${data.node.type}`)
+            : t(runNodePresentationKey(data.executionLabel, data.node.type))
         }}
       </span>
       <StatusBadge :state="data.node.state" />
@@ -75,8 +76,19 @@ function nodeIcon(type: RunNode["type"]): Component {
     <strong class="run-node__title" :title="data.node.displayName">
       {{ data.node.displayName }}
     </strong>
-    <span class="run-node__role" :title="data.node.role">
-      {{ data.node.role || t(`runs.nodeTypes.${data.node.type}`) }}
+    <span
+      class="run-node__role"
+      :title="
+        data.executionLabel === 'ASSISTANT' || data.executionLabel === 'SESSION'
+          ? t(runNodePresentationKey(data.executionLabel, data.node.type))
+          : data.node.role
+      "
+    >
+      {{
+        data.executionLabel === "ASSISTANT" || data.executionLabel === "SESSION"
+          ? t(runNodePresentationKey(data.executionLabel, data.node.type))
+          : data.node.role || t(`runs.nodeTypes.${data.node.type}`)
+      }}
     </span>
     <span
       class="run-node__progress"

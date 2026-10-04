@@ -436,12 +436,12 @@ func (boundary *Boundary) sessionElevation(principal oidcauth.Principal, purpose
 	window := freshAuthenticationWindow
 	switch purpose.Kind {
 	case session.ElevationKindRuntimeSecretReveal:
-		if !validOpaqueReference(purpose.ProjectRef) || !validOpaqueReference(purpose.SecretRef) ||
+		if !session.ValidRuntimeSecretBinding(purpose.ScopeKind, purpose.OrganizationRef, purpose.ProjectRef, purpose.SecretRef) ||
 			purpose.ReceiptRef != "" || purpose.ReceiptVersion != 0 || purpose.ReceiptDigest != "" {
 			return nil, ErrSessionPurposeInvalid
 		}
 	case session.ElevationKindEmailReconciliation:
-		if purpose.ProjectRef != "" || purpose.SecretRef != "" || !session.ValidEmailReceiptBinding(purpose.ReceiptRef, purpose.ReceiptVersion, purpose.ReceiptDigest) {
+		if purpose.ProjectRef != "" || purpose.SecretRef != "" || purpose.ScopeKind != "" || purpose.OrganizationRef != "" || !session.ValidEmailReceiptBinding(purpose.ReceiptRef, purpose.ReceiptVersion, purpose.ReceiptDigest) {
 			return nil, ErrSessionPurposeInvalid
 		}
 		window = emailFreshAuthenticationWindow
@@ -467,18 +467,19 @@ func (boundary *Boundary) sessionElevation(principal oidcauth.Principal, purpose
 		elevationExpiry = principal.ExpiresAt.UTC()
 	}
 	return &session.Elevation{
-		Kind: purpose.Kind, ProjectRef: purpose.ProjectRef, SecretRef: purpose.SecretRef,
+		Kind: purpose.Kind, ScopeKind: purpose.ScopeKind, OrganizationRef: purpose.OrganizationRef, ProjectRef: purpose.ProjectRef, SecretRef: purpose.SecretRef,
 		ReceiptRef: purpose.ReceiptRef, ReceiptVersion: purpose.ReceiptVersion, ReceiptDigest: purpose.ReceiptDigest, ExpiresAt: elevationExpiry.Unix(),
 	}, nil
 }
 
 // ConsumeRuntimeSecretReveal атомарно расходует elevation и заменяет
 // отозванную purpose-session обычной browser session без повышения полномочий.
-func (boundary *Boundary) ConsumeRuntimeSecretReveal(ctx context.Context, writer http.ResponseWriter, projectRef, secretRef string) error {
+func (boundary *Boundary) ConsumeRuntimeSecretReveal(ctx context.Context, writer http.ResponseWriter, scopeKind, organizationRef, projectRef, secretRef string) error {
 	identity, identityOK := IdentityFromContext(ctx)
 	authenticated, sessionOK := ctx.Value(authenticatedSessionContextKey{}).(authenticatedSession)
 	if !identityOK || !sessionOK || identity.Elevation == nil ||
 		identity.Elevation.Kind != session.ElevationKindRuntimeSecretReveal ||
+		!session.ValidRuntimeSecretBinding(scopeKind, organizationRef, projectRef, secretRef) || identity.Elevation.ScopeKind != scopeKind || identity.Elevation.OrganizationRef != organizationRef ||
 		identity.Elevation.ProjectRef != projectRef || identity.Elevation.SecretRef != secretRef ||
 		!boundary.now().UTC().Before(time.Unix(identity.Elevation.ExpiresAt, 0).UTC()) {
 		return ErrElevationRequired
@@ -491,6 +492,7 @@ func (boundary *Boundary) ConsumeEmailReconciliation(ctx context.Context, writer
 	authenticated, sessionOK := ctx.Value(authenticatedSessionContextKey{}).(authenticatedSession)
 	if !identityOK || !sessionOK || identity.Elevation == nil ||
 		identity.Elevation.Kind != session.ElevationKindEmailReconciliation ||
+		identity.Elevation.ScopeKind != "" || identity.Elevation.OrganizationRef != "" ||
 		identity.Elevation.ProjectRef != "" || identity.Elevation.SecretRef != "" ||
 		identity.Elevation.ReceiptRef != receiptRef || identity.Elevation.ReceiptVersion != version || identity.Elevation.ReceiptDigest != digest ||
 		!session.ValidEmailReceiptBinding(receiptRef, version, digest) ||

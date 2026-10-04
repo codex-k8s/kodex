@@ -73,6 +73,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if json.Unmarshal(storedPayload, &result) != nil {
 			return command.Result{}, errs.ErrConflict
 		}
+		if err := repository.validateImpactOwnerReceipt(ctx, tx, scope, input, result); err != nil {
+			return command.Result{}, err
+		}
 		if err := repository.refreshMemoryReceipt(ctx, tx, scope, &result); err != nil {
 			return command.Result{}, err
 		}
@@ -279,17 +282,23 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeMembership(ctx, tx, scope, input)
 	case command.CreateAgent:
 		return repository.createAgent(ctx, tx, scope, input.Payload)
+	case command.CreateProjectAssistant:
+		return repository.createProjectAssistant(ctx, tx, scope, input)
 	case command.CreateAssistantRoleImageRecipe:
 		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
 		if !ok {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		return repository.createAssistantRoleImage(ctx, tx, scope, payload)
+	case command.CreateSystemAssistantRoleImageRecipe, command.UpdateSystemAssistantRoleImageRecipe:
+		return repository.applySystemAssistantImage(ctx, tx, scope, input)
+	case command.PublishAssistantRuntimeConfig:
+		return repository.publishAssistantRuntimeConfiguration(ctx, tx, scope, input)
 	case command.UpdateAssistantRoleImageRecipe:
 		return repository.updateAssistantRoleImage(ctx, tx, scope, input)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
-	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
+	case command.CreateRuntimeEnvironmentDraft, command.CreateOrganizationRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
 		command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft:
 		return repository.changeRuntimeEnvironmentDraft(ctx, tx, scope, input)
 	case command.PrepareEnvironmentDraftImpact:
@@ -337,14 +346,14 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule:
 		return repository.changeSchedule(ctx, tx, scope, input)
 	case command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
-		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled:
+		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled, command.SetProviderAccountConcurrency:
 		return repository.changeProviderAccount(ctx, tx, scope, input)
 	case command.CreateConnection, command.UpdateConnection, command.DeleteConnection, command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.ConfigureEmailCredential:
 		return repository.configureEmailCredential(ctx, tx, scope, input)
-	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn,
+	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn, command.CancelAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)
@@ -954,6 +963,9 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.ArchiveAgent:
+		if err := repository.rejectAssistantAgentArchive(ctx, tx, scope, payload.Ref); err != nil {
+			return commandOutcome{}, err
+		}
 		err := tx.QueryRow(ctx, queryCommandsChangeagentArchiveAgent, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrConflict
@@ -2158,6 +2170,9 @@ func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("read run snapshot: %w", err)
 	}
+	if err := attachRunAssistantPin(ctx, tx, scope, &run); err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	graph := entity.RunGraph{RunRef: run.RootRunRef, Revision: run.GraphRevision, Sequence: run.EventSequence}
 	rows, err := tx.Query(ctx, queryCommandsReadrungraphtxSelectRunNodesOrganizationIdRootRunIdRef, scope.organizationID, runRef)
 	if err != nil {
@@ -2291,10 +2306,10 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		}
 		rows.Close()
 	}
-	var runID, rootRunID, projectID, projectRef, state string
+	var runID, rootRunID, projectID, projectRef, state, targetType string
 	var version int64
 	var attempt int32
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsOrganizationIdRef, scope.organizationID, payload.RunRef).Scan(&runID, &rootRunID, &projectID, &projectRef, &state, &version, &attempt); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsOrganizationIdRef, scope.organizationID, payload.RunRef).Scan(&runID, &rootRunID, &projectID, &projectRef, &state, &version, &attempt, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {
@@ -2370,12 +2385,16 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: projectRef, resourceKind: "RUN", resourceRef: payload.RunRef, summary: "i18n:RUN_CANCELLED"}, nil
+		platformEvent := ""
+		if targetType == "SYSTEM_ASSISTANT" {
+			platformEvent = "SYSTEM_ASSISTANT_CHANGED"
+		}
+		return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: projectRef, resourceKind: "RUN", resourceRef: payload.RunRef, summary: "i18n:RUN_CANCELLED", platformEvent: platformEvent}, nil
 	}
 	if !contains([]string{"FAILED", "CANCELLED"}, state) {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	var targetType, targetRef, title, titleSource, task, sessionRef, source string
+	var targetRef, title, titleSource, task, sessionRef, source string
 	var raw []byte
 	var attachmentSetRef, attachmentPurpose string
 	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &titleSource, &task, &sessionRef, &source, &raw, &attachmentSetRef, &attachmentPurpose); err != nil {
@@ -2386,26 +2405,41 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: boundedRunTitle(title), TitleSource: titleSource, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
-	outcome, err := repository.launchRunWithAttachmentPolicy(ctx, tx, scope, nested, true)
+	var outcome commandOutcome
+	var err error
+	if targetType == "SYSTEM_ASSISTANT" {
+		outcome, err = repository.retryAssistantRun(ctx, tx, scope, input, runID)
+	} else {
+		outcome, err = repository.launchRunWithAttachmentPolicy(ctx, tx, scope, nested, true)
+	}
 	if err != nil {
 		return commandOutcome{}, err
 	}
 	var newRunID, newRootID, newRootNodeID, oldRootNodeID string
 	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsRef, outcome.result.Run.Ref).Scan(&newRunID, &newRootID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("read retry run identity: %w", errs.ErrUnavailable)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunsRetryOfRunIdAttempt, newRunID, runID, attempt+1); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("link retry run attempt: %w", errs.ErrUnavailable)
 	}
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	if targetType == "SYSTEM_ASSISTANT" {
+		if err := tx.QueryRow(ctx, queryAssistantRetryRootNode, scope.organizationID, rootRunID).Scan(&oldRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("read prior assistant retry node: %w", errs.ErrUnavailable)
+		}
+		if err := tx.QueryRow(ctx, queryAssistantRetryRootNode, scope.organizationID, newRootID).Scan(&newRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("read new assistant retry node: %w", errs.ErrUnavailable)
+		}
+	} else {
+		if err := tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("read prior retry root node: %w", errs.ErrUnavailable)
+		}
+		if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID); err != nil {
+			return commandOutcome{}, fmt.Errorf("read new retry root node: %w", errs.ErrUnavailable)
+		}
 	}
 	edgeRef, _ := newRef("edg")
 	if _, err := tx.Exec(ctx, queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, oldRootNodeID, newRootNodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("insert retry lineage edge: %w", errs.ErrUnavailable)
 	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "i18n:RUN_RETRY_CREATED", "QUEUED", ""); err != nil {
 		return commandOutcome{}, err

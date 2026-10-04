@@ -26,7 +26,12 @@ import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
+import {
+  hydrateRunArtifacts,
+  runArtifactReferences,
+} from "@/features/runs/run-artifacts";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
+import { runNodeExecutionLabels } from "@/features/runs/run-owner";
 import {
   presentRuntimeText,
   runtimeProgressKey,
@@ -39,7 +44,9 @@ import {
 import type {
   Artifact,
   OwnerGate,
+  Run,
   RunEvent,
+  RunGraph,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem, asProblem } from "@/shared/api/problem";
@@ -122,6 +129,13 @@ const sessionGraph = computed(() =>
     : undefined,
 );
 const allRunNodes = computed(() => presentedGraph.value?.nodes ?? []);
+const nodeExecutionLabels = computed(() =>
+  runNodeExecutionLabels(
+    allRunNodes.value,
+    platform.runs,
+    platform.bootstrap?.organizationRef,
+  ),
+);
 const sessionOwnership = computed(() =>
   indexRunSessionOwnership(allRunNodes.value),
 );
@@ -193,10 +207,21 @@ const openGateList = computed(() =>
   gateList.value.filter((gate) => gate.state === "OPEN"),
 );
 const artifactList = computed(() =>
-  Object.values(platform.artifacts).filter(
-    (a) => a.runRef === runRef.value || a.runRef === run.value?.rootRunRef,
+  Object.values(platform.artifacts).filter((artifact) =>
+    artifactRefs.value.has(artifact.ref),
   ),
 );
+const artifactRefs = computed(
+  () =>
+    new Set(
+      run.value && graph.value
+        ? runArtifactReferences(run.value, graph.value)
+        : [],
+    ),
+);
+let artifactController: AbortController | undefined;
+let artifactHydrationKey: string | undefined;
+let artifactHydrationPromise: Promise<void> | undefined;
 const incidentList = computed(() => run.value?.incidents ?? []);
 const selectedRef = ref<string>();
 const openedStreamRef = ref<string>();
@@ -271,6 +296,7 @@ function mutationCurrent(generation: number, ref: string): boolean {
 }
 const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
+const artifactProblem = ref<AppProblem>();
 const activityOpen = ref(false);
 const activityNodeRef = ref<string>();
 const activityDrawer = ref<HTMLElement>();
@@ -286,7 +312,8 @@ const fatalLoadProblem = computed(() =>
 );
 const refreshProblem = computed(() =>
   hasAuthoritativeSnapshot.value
-    ? (platform.problems.run ??
+    ? (artifactProblem.value ??
+      platform.problems.run ??
       platform.problems.gates ??
       platform.problems.artifacts)
     : undefined,
@@ -313,18 +340,66 @@ watch(
   { immediate: true },
 );
 
+async function hydrateSnapshotArtifacts(
+  snapshot: Run,
+  snapshotGraph: RunGraph,
+  missingOnly = false,
+): Promise<void> {
+  const refs = runArtifactReferences(snapshot, snapshotGraph).filter(
+    (ref) => !missingOnly || !platform.artifacts[ref],
+  );
+  if (!refs.length) return;
+  const key = `${snapshot.ref}:${refs.join(",")}`;
+  if (artifactHydrationKey === key && artifactHydrationPromise)
+    return artifactHydrationPromise;
+  artifactController?.abort();
+  const controller = new AbortController();
+  artifactController = controller;
+  artifactHydrationKey = key;
+  artifactProblem.value = undefined;
+  const reading = hydrateRunArtifacts(
+    refs,
+    (artifactRef) =>
+      platform.readArtifact(
+        artifactRef,
+        controller.signal,
+        snapshot.projectRef,
+      ),
+    controller.signal,
+  );
+  artifactHydrationPromise = reading;
+  try {
+    await reading;
+  } catch (error) {
+    if (runRef.value === snapshot.ref && !controller.signal.aborted)
+      artifactProblem.value = asProblem(error);
+    controller.abort();
+    throw error;
+  } finally {
+    if (artifactHydrationPromise === reading) {
+      artifactHydrationPromise = undefined;
+      artifactHydrationKey = undefined;
+    }
+  }
+}
+
 async function refreshAuthoritativeState(ref: string): Promise<void> {
+  if (!platform.bootstrap) await platform.loadBootstrap();
+  if (runRef.value !== ref) return;
   await platform.loadRun(ref);
   if (runRef.value !== ref) return;
   if (platform.problems.run) throw platform.problems.run;
   const snapshot = platform.runs[ref];
   if (!snapshot) return;
+  const snapshotGraph =
+    platform.graphs[snapshot.rootRunRef] ?? platform.graphs[ref];
+  if (!snapshotGraph) throw new Error("Run artifact graph is unavailable");
   await Promise.all([
     platform.loadGates(snapshot.projectRef, snapshot.rootRunRef),
-    platform.loadArtifacts(snapshot.projectRef),
+    hydrateSnapshotArtifacts(snapshot, snapshotGraph),
   ]);
   if (runRef.value !== ref) return;
-  const relatedProblem = platform.problems.gates ?? platform.problems.artifacts;
+  const relatedProblem = platform.problems.gates;
   if (relatedProblem) throw relatedProblem;
 }
 const refreshScheduler = createRunRefreshScheduler(refreshAuthoritativeState, {
@@ -580,12 +655,29 @@ watch(refreshKey, (next) => {
   void refreshScheduler.request(runRef.value);
 });
 watch(
+  () =>
+    `${run.value?.ref ?? ""}:${[...artifactRefs.value].join(",")}:${
+      [...artifactRefs.value].some((ref) => !platform.artifacts[ref])
+        ? "missing"
+        : "ready"
+    }`,
+  () => {
+    if (!run.value || !graph.value) return;
+    // Rejoin и новые ссылки графа читают точные артефакты, без общего каталога.
+    void hydrateSnapshotArtifacts(run.value, graph.value, true).catch(() => {
+      // Ошибка показана локально; следующая авторитетная ревизия может повторить чтение.
+    });
+  },
+);
+watch(
   () => openGateList.value.length,
   (count) => {
     if (count === 0) gateDialogOpen.value = false;
   },
 );
 watch(runRef, async (next, previous) => {
+  artifactController?.abort();
+  artifactProblem.value = undefined;
   mutationGeneration++;
   busy.value = false;
   problem.value = undefined;
@@ -612,6 +704,7 @@ onMounted(async () => {
   if (runRef.value === initialRef) openCurrentStream();
 });
 onBeforeUnmount(() => {
+  artifactController?.abort();
   mutationGeneration++;
   refreshScheduler.dispose();
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
@@ -642,7 +735,11 @@ onBeforeUnmount(() => {
       >
         {{ $t("runs.cancel") }}</button
       ><button
-        v-if="run?.state === 'FAILED' && failedDiagnosticNodes.length > 0"
+        v-if="
+          run?.state === 'FAILED' &&
+          run.target.type !== 'SYSTEM_ASSISTANT' &&
+          failedDiagnosticNodes.length > 0
+        "
         class="button"
         type="button"
         :disabled="busy"
@@ -770,6 +867,7 @@ onBeforeUnmount(() => {
                 :selected-ref="selectedNode?.ref"
                 :future-node-refs="futureNodeRefs"
                 :active-node-refs="activeNodeRefs"
+                :execution-labels="nodeExecutionLabels"
                 @select="select"
                 @details="openNodeDetails"
               />
@@ -923,6 +1021,7 @@ onBeforeUnmount(() => {
             :project-ref="routeProjectRef ?? run.projectRef"
             :run="selectedRun"
             :agent="selectedAgent"
+            :execution-label="nodeExecutionLabels[selectedNode.ref]"
             @close="nodeInspectorOpen = false"
             @activity="openNodeActivity"
             @details="openSelectedDetails"
@@ -985,6 +1084,7 @@ onBeforeUnmount(() => {
           :events="eventList"
           :artifacts="artifactList"
           :agent="selectedAgent"
+          :execution-label="nodeExecutionLabels[selectedNode.ref]"
           @close="nodeDetailsOpen = false"
           @download="downloadArtifact"
         />

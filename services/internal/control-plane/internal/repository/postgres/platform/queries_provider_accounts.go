@@ -3,6 +3,8 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/provider_accounts__set_concurrency.sql
+	queryProviderAccountsSetConcurrency string
 	//go:embed sql/provider_accounts_create.sql
 	queryProviderAccountsCreate string
 	//go:embed sql/provider_accounts_lock.sql

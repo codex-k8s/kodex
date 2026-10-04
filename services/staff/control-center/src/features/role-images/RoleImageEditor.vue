@@ -42,11 +42,27 @@ import { useServerMessage } from "@/shared/ui/server-message";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { requestConfirmation } from "@/shared/ui/confirmation";
+import { requireRuntimeOrganizationRef } from "@/features/runtime/resource-scope";
+import {
+  roleImageScopeKey,
+  roleImageCatalogPath,
+  assertRoleImageResourceIdentity,
+  type RoleImageResourceScope,
+} from "./resource-scope";
 
 const props = defineProps<{
-  projectRef: string;
+  projectRef?: string;
+  organizationScope?: Extract<RoleImageResourceScope, object>;
   recipeRef?: string;
 }>();
+const resourceScope = computed<RoleImageResourceScope>(() => {
+  if (props.organizationScope) return props.organizationScope;
+  if (!props.projectRef)
+    throw new Error("Role image editor project scope is unavailable");
+  return props.projectRef;
+});
+const scopeKey = computed(() => roleImageScopeKey(resourceScope.value));
+const catalogPath = computed(() => roleImageCatalogPath(resourceScope.value));
 const { t } = useI18n();
 const localizeServerMessage = useServerMessage();
 const router = useRouter();
@@ -73,7 +89,9 @@ function toggleBuildSource(ref: string, event: Event): void {
 const confirmationAction = ref<"ARCHIVE" | "RESTORE">();
 const copyOpen = ref(false);
 const copySource = computed(() =>
-  recipe.value ? recipeCopySource(recipe.value) : undefined,
+  recipe.value && !props.organizationScope
+    ? recipeCopySource(recipe.value)
+    : undefined,
 );
 function copied(configuration: ManagedConfiguration): void {
   copyOpen.value = false;
@@ -83,9 +101,20 @@ function copied(configuration: ManagedConfiguration): void {
     query: { projectRef: configuration.projectRef },
   });
 }
-const recipe = computed(() =>
-  props.recipeRef ? store.recipes[props.recipeRef] : undefined,
-);
+const recipe = computed(() => {
+  const value = props.recipeRef ? store.recipes[props.recipeRef] : undefined;
+  if (!value) return undefined;
+  try {
+    assertRoleImageResourceIdentity(
+      resourceScope.value,
+      value,
+      requireRuntimeOrganizationRef(platform.bootstrap?.organizationRef),
+    );
+    return value;
+  } catch {
+    return undefined;
+  }
+});
 const recipeDisplayName = computed(() =>
   recipe.value ? localizeServerMessage(recipe.value.name) : t("roleImages.new"),
 );
@@ -102,7 +131,7 @@ const sourceVisible = computed(() =>
   recipe.value
     ? recipe.value.sourceAvailable &&
       typeof recipe.value.environment.dockerfile === "string"
-    : !props.recipeRef && store.createAllowed[props.projectRef] === true,
+    : !props.recipeRef && store.createAllowed[scopeKey.value] === true,
 );
 const builds = computed(() =>
   props.recipeRef ? (store.builds[props.recipeRef] ?? []) : [],
@@ -132,7 +161,7 @@ useCursorInfiniteScroll({
   loadMore: () =>
     recipe.value &&
     store.loadMoreRevisions(
-      props.projectRef,
+      resourceScope.value,
       recipe.value.ref,
       revisionPageSize.value,
     ),
@@ -172,12 +201,13 @@ const canSave = computed(
   () =>
     sourceVisible.value &&
     name.value.trim().length > 0 &&
-    Boolean(roleDefinitionRef.value) &&
+    (Boolean(props.organizationScope) || Boolean(roleDefinitionRef.value)) &&
     Boolean(selectedEnvironment.value?.available) &&
     dockerfileMessages.value.length === 0 &&
     (!recipe.value || recipe.value.nextActions.includes("UPDATE")),
 );
 const roleLabel = computed(() => {
+  if (props.organizationScope) return t("assistant.settings.systemScope");
   const ref = recipe.value?.roleDefinitionRef ?? roleDefinitionRef.value;
   if (!ref) return t("roleImages.chooseRole");
   return (
@@ -206,17 +236,22 @@ function sync(): void {
 async function load(): Promise<void> {
   const current = ++loadGeneration;
   const tasks: Promise<void>[] = [
-    store.loadSupportingCatalogs(props.projectRef, {
-      agents: Object.values(platform.agents).filter(
-        (agent) => agent.projectRef === props.projectRef,
-      ),
-      environments: Object.values(platform.roleEnvironments),
-    }),
+    store.loadSupportingCatalogs(
+      resourceScope.value,
+      props.organizationScope
+        ? undefined
+        : {
+            agents: Object.values(platform.agents).filter(
+              (agent) => agent.projectRef === props.projectRef,
+            ),
+            environments: Object.values(platform.roleEnvironments),
+          },
+    ),
   ];
   if (props.recipeRef)
     tasks.push(
       store.loadDetail(
-        props.projectRef,
+        resourceScope.value,
         props.recipeRef,
         true,
         revisionPageSize.value,
@@ -259,22 +294,23 @@ async function save(): Promise<void> {
   };
   try {
     if (recipe.value) {
-      await store.update(props.projectRef, recipe.value, {
+      await store.update(resourceScope.value, recipe.value, {
         name: name.value.trim(),
         environment: selection,
       });
       sync();
       return;
     }
-    const created = await store.create(props.projectRef, {
-      roleDefinitionRef: roleDefinitionRef.value,
+    const created = await store.create(resourceScope.value, {
+      ...(!props.organizationScope
+        ? { roleDefinitionRef: roleDefinitionRef.value }
+        : {}),
       name: name.value.trim(),
       environment: selection,
     });
     await router.replace({
-      name: "role-image",
-      params: { projectRef: props.projectRef, recipeRef: created.ref },
-      query: route.query.assistantForm === "1" ? { assistantForm: "1" } : {},
+      path: `${catalogPath.value}/${encodeURIComponent(created.ref)}`,
+      query: route.query,
     });
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
@@ -286,7 +322,7 @@ async function runCommand(
 ): Promise<void> {
   if (!recipe.value || store.mutating || hasLocalChanges.value) return;
   try {
-    await store.command(props.projectRef, recipe.value, action);
+    await store.command(resourceScope.value, recipe.value, action);
     confirmationAction.value = undefined;
     sync();
   } catch {
@@ -312,7 +348,7 @@ async function cancelCurrentBuild(): Promise<void> {
     return;
   try {
     await store.command(
-      props.projectRef,
+      resourceScope.value,
       recipe.value,
       "CANCEL_BUILD",
       current.ref,
@@ -338,7 +374,7 @@ async function promote(): Promise<void> {
     return;
   if (!canPromoteRoleImage(recipe.value, artifact.value)) return;
   try {
-    await store.promote(props.projectRef, recipe.value, artifact.value);
+    await store.promote(resourceScope.value, recipe.value, artifact.value);
     sync();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
@@ -356,7 +392,7 @@ watch(
   { flush: "sync" },
 );
 watch(
-  () => [props.projectRef, props.recipeRef],
+  () => [scopeKey.value, props.recipeRef],
   () => {
     void load();
   },
@@ -365,7 +401,7 @@ watch(
   () => platform.roleImageRealtimeRevision,
   async () => {
     const current = ++loadGeneration;
-    const projectRef = props.projectRef;
+    const projectRef = resourceScope.value;
     const recipeRef = props.recipeRef;
     if (disposed || !recipeRef) return;
     await store.loadDetail(projectRef, recipeRef, false);
@@ -428,7 +464,7 @@ onBeforeUnmount(() => {
             {{ t("managed.copy") }}
           </button>
           <RouterLink
-            v-if="recipe.managedLineage?.configurationRef"
+            v-if="!organizationScope && recipe.managedLineage?.configurationRef"
             class="button"
             :to="{
               name: 'configuration',
@@ -604,7 +640,7 @@ onBeforeUnmount(() => {
                   :readonly="!!recipe && !recipe.nextActions.includes('UPDATE')"
                 />
               </label>
-              <label class="field">
+              <label v-if="!organizationScope" class="field">
                 <span>{{ t("roleImages.role") }}</span>
                 <select
                   v-model="roleDefinitionRef"
@@ -993,7 +1029,15 @@ onBeforeUnmount(() => {
             <ul v-if="dependencies.length" class="dependency-list">
               <li v-for="environment in dependencies" :key="environment.ref">
                 <RouterLink
+                  v-if="projectRef"
                   :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(environment.ref)}`"
+                >
+                  {{ environment.name }}
+                </RouterLink>
+                <RouterLink
+                  v-else
+                  class="button"
+                  to="/organization/assistant/environment"
                 >
                   {{ environment.name }}
                 </RouterLink>
@@ -1002,11 +1046,19 @@ onBeforeUnmount(() => {
             </ul>
             <p v-else>{{ t("roleImages.noEnvironmentDependencies") }}</p>
             <RouterLink
+              v-if="projectRef"
               class="button"
               :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
             >
               <PackageCheck :size="16" aria-hidden="true" />
               {{ t("roleImages.openEnvironments") }}
+            </RouterLink>
+            <RouterLink
+              v-else
+              class="button"
+              to="/organization/assistant/environment"
+            >
+              {{ t("assistant.settings.title") }}
             </RouterLink>
           </section>
         </aside>

@@ -41,6 +41,7 @@ type RoleEnvironmentSelection struct {
 }
 
 type RoleImageRecipe struct {
+	ScopeKind, OrganizationRef                                       string
 	SourceAvailable                                                  bool
 	ManagedLineage                                                   *RoleImageManagedLineage
 	Ref, ProjectRef, RoleDefinitionRef, Name, State                  string
@@ -53,6 +54,7 @@ type RoleImageRecipe struct {
 }
 
 type ImageBuild struct {
+	ScopeKind, OrganizationRef, ProjectRef                                string
 	SourceAvailable                                                       bool
 	ConfigurationRevisionRef                                              string
 	Ref, RecipeRef, SpecSHA256, Stage, StagingReference, ManifestDigest   string
@@ -71,6 +73,7 @@ type RoleImageManagedLineage struct {
 }
 
 type ImageArtifact struct {
+	ScopeKind, OrganizationRef, ProjectRef                                        string
 	Ref, RecipeRef, SpecSHA256, BuildRef, StagingReference, ManifestDigest        string
 	ImmutableBuildSHA256, ProvenanceSHA256, BaseImageDigest, SourceSHA256         string
 	ContextSHA256, BuilderSHA256, FrontendSHA256, ToolchainSHA256                 string
@@ -90,6 +93,7 @@ type ImageArtifact struct {
 }
 
 type RoleImageBuildInput struct {
+	ScopeKind, OrganizationRef, ProjectRef                                       string
 	RecipeRef, SpecSHA256, BaseImageReference, BaseImageDigest                   string
 	SourceRef, SourceRevision, SourceSHA256, ContextRef, ContextSHA256           string
 	BuilderSHA256, FrontendSHA256, InstallationBlock, ToolchainSHA256            string

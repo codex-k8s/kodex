@@ -10,7 +10,7 @@ func TestRuntimeGrantSnapshotOwnerDigestMatchesWireFixture(t *testing.T) {
 	want := stringMap(values, "revisionDigest")
 	got, err := runtimeRevisionDigestFromSnapshot(values)
 	if err != nil || got != want {
-		t.Fatalf("owner snapshot digest does not match complete wire fixture: err=%v", err)
+		t.Fatalf("owner snapshot digest does not match complete wire fixture: got=%s want=%s err=%v", got, want, err)
 	}
 	for _, key := range []string{"definitionVersion", "definitionDigest", "operation", "inputSchema", "inputSchemaSha256"} {
 		t.Run(key, func(t *testing.T) {

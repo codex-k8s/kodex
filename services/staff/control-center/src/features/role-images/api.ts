@@ -1,3 +1,7 @@
+import {
+  assertActiveRuntimeResourceIdentity,
+  runtimeResourceOwnerBoundary,
+} from "@/features/runtime/active-resource-owner";
 import { requestSignal } from "@/shared/api/client";
 import {
   commandRoleImageRecipe,
@@ -11,6 +15,15 @@ import {
   promoteRoleImage,
   queryEffectiveAccess,
   updateRoleImageRecipe,
+  listSystemRoleImageRecipes,
+  getSystemRoleImageRecipe,
+  listSystemRoleImageRecipeRevisions,
+  createSystemRoleImageRecipe,
+  updateSystemRoleImageRecipe,
+  commandSystemRoleImageRecipe,
+  promoteSystemRoleImage,
+  getSystemAssistant,
+  getAgentRuntimeConfiguration,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   RoleEnvironment,
@@ -27,6 +40,10 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { csrfToken, mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
+import {
+  roleImageRuntimeScope,
+  type RoleImageResourceScope,
+} from "./resource-scope";
 
 export interface RoleDefinitionOption {
   ref: string;
@@ -103,7 +120,7 @@ function versionedHeaders(headers: MutationHeaders): {
 }
 
 export async function loadRoleImagePage(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
   filter: {
@@ -113,100 +130,251 @@ export async function loadRoleImagePage(
   } = {},
   pageSize = 20,
 ): Promise<RoleImageRecipePage> {
+  const owner = runtimeResourceOwnerBoundary(scope);
   if (new TextEncoder().encode(filter.query ?? "").length > 128)
     throw new Error("Role image query exceeds 128 UTF-8 bytes");
-  return (
-    await unwrap(
-      listRoleImageRecipes({
-        path: { projectRef },
-        query: {
-          pageSize,
-          ...(pageToken ? { pageToken } : {}),
-          ...filter,
-        },
-        signal,
-      }),
-    )
-  ).data;
+  const resolved = roleImageRuntimeScope(scope);
+  const query = { pageSize, ...(pageToken ? { pageToken } : {}), ...filter };
+  if (resolved.kind === "ORGANIZATION")
+    return checkedRoleImageReadback(
+      owner,
+      (await unwrap(listSystemRoleImageRecipes({ query, signal }))).data,
+      (value) => value.items,
+    );
+  const projectRef = resolved.projectRef;
+  return checkedRoleImageReadback(
+    owner,
+    (
+      await unwrap(
+        listRoleImageRecipes({
+          path: { projectRef },
+          query: {
+            pageSize,
+            ...(pageToken ? { pageToken } : {}),
+            ...filter,
+          },
+          signal,
+        }),
+      )
+    ).data,
+    (value) => value.items,
+  );
 }
 
 export async function loadRoleImageDetail(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipeRef: string,
   signal: AbortSignal = requestSignal(),
 ): Promise<RoleImageRecipeDetail> {
-  return (
-    await unwrap(
-      getRoleImageRecipe({
-        path: { projectRef, recipeRef },
-        signal,
-      }),
-    )
-  ).data;
+  const owner = runtimeResourceOwnerBoundary(scope);
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return checkedRoleImageReadback(
+      owner,
+      (await unwrap(getSystemRoleImageRecipe({ path: { recipeRef }, signal })))
+        .data,
+      (value) => [
+        value.recipe,
+        ...value.builds,
+        ...(value.activeArtifact ? [value.activeArtifact] : []),
+        ...(value.promotionCandidate ? [value.promotionCandidate] : []),
+      ],
+    );
+  const projectRef = resolved.projectRef;
+  return checkedRoleImageReadback(
+    owner,
+    (
+      await unwrap(
+        getRoleImageRecipe({
+          path: { projectRef, recipeRef },
+          signal,
+        }),
+      )
+    ).data,
+    (value) => [
+      value.recipe,
+      ...value.builds,
+      ...(value.activeArtifact ? [value.activeArtifact] : []),
+      ...(value.promotionCandidate ? [value.promotionCandidate] : []),
+    ],
+  );
 }
 
 export async function loadRoleImageRevisionPage(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipeRef: string,
   pageToken?: string,
   pageSize = 40,
 ): Promise<RoleImageRecipeRevisionPage> {
-  return (
-    await unwrap(
-      listRoleImageRecipeRevisions({
-        path: { projectRef, recipeRef },
-        query: {
-          pageSize,
-          ...(pageToken ? { pageToken } : {}),
-        },
-        signal: requestSignal(),
-      }),
-    )
-  ).data;
+  const owner = runtimeResourceOwnerBoundary(scope);
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return checkedRoleImageReadback(
+      owner,
+      (
+        await unwrap(
+          listSystemRoleImageRecipeRevisions({
+            path: { recipeRef },
+            query: { pageSize, ...(pageToken ? { pageToken } : {}) },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+      () => [],
+    );
+  const projectRef = resolved.projectRef;
+  return checkedRoleImageReadback(
+    owner,
+    (
+      await unwrap(
+        listRoleImageRecipeRevisions({
+          path: { projectRef, recipeRef },
+          query: {
+            pageSize,
+            ...(pageToken ? { pageToken } : {}),
+          },
+          signal: requestSignal(),
+        }),
+      )
+    ).data,
+    () => [],
+  );
 }
 
 export async function createRoleImage(
-  projectRef: string,
-  input: RoleImageRecipeCreateInput,
+  scope: RoleImageResourceScope,
+  input: Omit<RoleImageRecipeCreateInput, "roleDefinitionRef"> & {
+    roleDefinitionRef?: string;
+  },
 ): Promise<RoleImageRecipe> {
-  return (
-    await mutate((headers) =>
-      createRoleImageRecipe({
-        path: { projectRef },
-        body: input,
-        headers: {
-          "Idempotency-Key": headers["Idempotency-Key"],
-          "X-CSRF-Token": headers["X-CSRF-Token"],
-        },
-        signal: requestSignal(),
-      }),
-    )
-  ).data;
+  const owner = runtimeResourceOwnerBoundary(scope);
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return checkedRoleImageReadback(
+      owner,
+      (
+        await mutate((headers) =>
+          createSystemRoleImageRecipe({
+            body: { name: input.name, environment: input.environment },
+            headers: {
+              "Idempotency-Key": headers["Idempotency-Key"],
+              "X-CSRF-Token": headers["X-CSRF-Token"],
+            },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+      (value) => [value],
+    );
+  if (!input.roleDefinitionRef)
+    throw new Error("Project role definition is required");
+  const projectRef = resolved.projectRef;
+  const body: RoleImageRecipeCreateInput = {
+    ...input,
+    roleDefinitionRef: input.roleDefinitionRef,
+  };
+  return checkedRoleImageReadback(
+    owner,
+    (
+      await mutate((headers) =>
+        createRoleImageRecipe({
+          path: { projectRef },
+          body,
+          headers: {
+            "Idempotency-Key": headers["Idempotency-Key"],
+            "X-CSRF-Token": headers["X-CSRF-Token"],
+          },
+          signal: requestSignal(),
+        }),
+      )
+    ).data,
+    (value) => [value],
+  );
 }
 
 export async function updateRoleImage(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipe: RoleImageRecipe,
   input: RoleImageRecipeUpdateInput,
 ): Promise<RoleImageRecipe> {
-  return (
-    await mutate(
-      (headers) =>
-        updateRoleImageRecipe({
-          path: { projectRef, recipeRef: recipe.ref },
-          body: input,
-          headers: versionedHeaders(headers),
-          signal: requestSignal(),
-        }),
-      recipe.version,
-    )
-  ).data;
+  const owner = runtimeResourceOwnerBoundary(scope);
+  owner.assert(recipe);
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return checkedRoleImageReadback(
+      owner,
+      (
+        await mutate(
+          (headers) =>
+            updateSystemRoleImageRecipe({
+              path: { recipeRef: recipe.ref },
+              body: input,
+              headers: versionedHeaders(headers),
+              signal: requestSignal(),
+            }),
+          recipe.version,
+        )
+      ).data,
+      (value) => [value],
+    );
+  const projectRef = resolved.projectRef;
+  return checkedRoleImageReadback(
+    owner,
+    (
+      await mutate(
+        (headers) =>
+          updateRoleImageRecipe({
+            path: { projectRef, recipeRef: recipe.ref },
+            body: input,
+            headers: versionedHeaders(headers),
+            signal: requestSignal(),
+          }),
+        recipe.version,
+      )
+    ).data,
+    (value) => [value],
+  );
 }
 
 export async function loadRoleImageDependencies(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   imageArtifactRef: string,
 ): Promise<RuntimeEnvironmentSet[]> {
+  const owner = runtimeResourceOwnerBoundary(scope);
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION") {
+    const assistant = (
+      await unwrap(getSystemAssistant({ signal: requestSignal() }))
+    ).data;
+    if (!assistant.ref)
+      throw new Error("System assistant locator is unavailable");
+    const configuration = (
+      await unwrap(
+        getAgentRuntimeConfiguration({
+          path: { agentRef: assistant.ref },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+    if (
+      configuration.configuration.agentRef !== assistant.ref ||
+      configuration.environmentBinding.agentRef !== assistant.ref ||
+      configuration.environmentBinding.environmentRef !==
+        configuration.environment.ref
+    )
+      throw new Error("System assistant runtime locator mismatch");
+    const environment = configuration.environment;
+    owner.assert(environment);
+    assertActiveRuntimeResourceIdentity(
+      scope,
+      environment,
+      resolved.organizationRef,
+    );
+    if (environment.currentVersion.image.artifactRef !== imageArtifactRef)
+      return [];
+    return [environment];
+  }
+  const projectRef = resolved.projectRef;
   const result: RuntimeEnvironmentSet[] = [];
   const visitedTokens = new Set<string>();
   let pageToken: string | undefined;
@@ -223,6 +391,8 @@ export async function loadRoleImageDependencies(
         }),
       )
     ).data;
+    owner.assertCurrent();
+    for (const environment of page.items) owner.assert(environment);
     result.push(
       ...page.items.filter(
         (environment) =>
@@ -288,41 +458,106 @@ export async function loadRoleDefinitionOptions(
 }
 
 export async function commandRoleImage(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipe: RoleImageRecipe,
   action: RoleImageRecipeCommand["action"],
   buildRef?: string,
 ): Promise<RoleImageRecipeCommandReceipt> {
-  return (
-    await mutate(
-      (headers) =>
-        commandRoleImageRecipe({
-          path: { projectRef, recipeRef: recipe.ref },
-          body: { action, ...(buildRef ? { buildRef } : {}) },
-          headers: versionedHeaders(headers),
-          signal: requestSignal(),
-        }),
-      recipe.version,
-    )
-  ).data;
+  const owner = runtimeResourceOwnerBoundary(scope);
+  owner.assert(recipe);
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return checkedRoleImageReadback(
+      owner,
+      (
+        await mutate(
+          (headers) =>
+            commandSystemRoleImageRecipe({
+              path: { recipeRef: recipe.ref },
+              body: { action, ...(buildRef ? { buildRef } : {}) },
+              headers: versionedHeaders(headers),
+              signal: requestSignal(),
+            }),
+          recipe.version,
+        )
+      ).data,
+      (value) => [
+        value.recipe,
+        ...(value.imageBuild ? [value.imageBuild] : []),
+      ],
+    );
+  const projectRef = resolved.projectRef;
+  return checkedRoleImageReadback(
+    owner,
+    (
+      await mutate(
+        (headers) =>
+          commandRoleImageRecipe({
+            path: { projectRef, recipeRef: recipe.ref },
+            body: { action, ...(buildRef ? { buildRef } : {}) },
+            headers: versionedHeaders(headers),
+            signal: requestSignal(),
+          }),
+        recipe.version,
+      )
+    ).data,
+    (value) => [value.recipe, ...(value.imageBuild ? [value.imageBuild] : [])],
+  );
 }
 
 export async function promoteRoleImageArtifact(
-  projectRef: string,
+  scope: RoleImageResourceScope,
   recipe: RoleImageRecipe,
   imageArtifactRef: string,
   expectedProvenanceSha256: string,
 ): Promise<RoleImagePromotionReceipt> {
-  return (
-    await mutate(
-      (headers) =>
-        promoteRoleImage({
-          path: { projectRef, recipeRef: recipe.ref },
-          body: { imageArtifactRef, expectedProvenanceSha256 },
-          headers: versionedHeaders(headers),
-          signal: requestSignal(),
-        }),
-      recipe.version,
-    )
-  ).data;
+  const owner = runtimeResourceOwnerBoundary(scope);
+  owner.assert(recipe);
+  const resolved = roleImageRuntimeScope(scope);
+  if (resolved.kind === "ORGANIZATION")
+    return checkedRoleImageReadback(
+      owner,
+      (
+        await mutate(
+          (headers) =>
+            promoteSystemRoleImage({
+              path: { recipeRef: recipe.ref },
+              body: { imageArtifactRef, expectedProvenanceSha256 },
+              headers: versionedHeaders(headers),
+              signal: requestSignal(),
+            }),
+          recipe.version,
+        )
+      ).data,
+      () => [],
+    );
+  const projectRef = resolved.projectRef;
+  return checkedRoleImageReadback(
+    owner,
+    (
+      await mutate(
+        (headers) =>
+          promoteRoleImage({
+            path: { projectRef, recipeRef: recipe.ref },
+            body: { imageArtifactRef, expectedProvenanceSha256 },
+            headers: versionedHeaders(headers),
+            signal: requestSignal(),
+          }),
+        recipe.version,
+      )
+    ).data,
+    () => [],
+  );
+}
+
+function checkedRoleImageReadback<T>(
+  owner: ReturnType<typeof runtimeResourceOwnerBoundary>,
+  value: T,
+  resources: (
+    value: T,
+  ) => import("@/features/runtime/resource-scope").RuntimeScopedResourceIdentity[],
+): T {
+  owner.assertCurrent();
+  for (const resource of resources(value)) owner.assert(resource);
+  return value;
 }

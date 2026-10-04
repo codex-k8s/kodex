@@ -1,6 +1,10 @@
 package value
 
-import "time"
+import (
+	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimesecret"
+)
 
 type DraftOperation string
 
@@ -13,6 +17,8 @@ const (
 
 // SecretDraft содержит только публичную metadata владельца.
 type SecretDraft struct {
+	ScopeKind                                                       runtimesecret.ScopeKind
+	OrganizationRef                                                 string
 	Ref, ProjectRef, SecretRef, Name, Description, ValueType, State string
 	Version, Generation, PublishedRevision, SecretVersion           int64
 	CreatedAt, UpdatedAt, ExpiresAt                                 time.Time
@@ -45,6 +51,8 @@ type DraftMaterialization struct {
 
 // PublishedSecret намеренно не переносит display hint из старого immediate API.
 type PublishedSecret struct {
+	ScopeKind                                             runtimesecret.ScopeKind
+	OrganizationRef                                       string
 	Ref, ProjectRef, Name, Description, ValueType, Status string
 	Version, Revision                                     int64
 	CreatedAt, UpdatedAt                                  time.Time

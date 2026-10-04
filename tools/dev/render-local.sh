@@ -212,7 +212,7 @@ done
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 [[ "$repository_root" == "$source_root" ]] || fail 'source root must match the current worktree'
 lock_file="$repository_root/tools/dev/components.lock.json"
-runtime_contract_file="$repository_root/contracts/runtime-controller/v7/agent-runner-input.schema.json"
+runtime_contract_file="$repository_root/contracts/runtime-controller/v8/agent-runner-input.schema.json"
 runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
 [[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
   "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
@@ -530,6 +530,33 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
         "role-environments.documents.local-unavailable" |
       to_json
     )
+  )
+' "$render"
+
+# CP читает каталог один раз при запуске. Изменение mutable ConfigMap должно
+# менять Pod template, даже если сама конфигурация процесса не изменилась.
+role_environment_catalog=$(yq -r '
+  select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+    .metadata.name == "kodex-role-environments") | .data."catalog.json"
+' "$render")
+[[ -n "$role_environment_catalog" && "$role_environment_catalog" != null ]] ||
+  fail 'local role environment catalog is absent'
+role_environment_catalog_digest=$(printf '%s' "$role_environment_catalog" | sha256sum | awk '{print $1}')
+ROLE_ENVIRONMENT_CATALOG_DIGEST="$role_environment_catalog_digest" yq -i '
+  with(select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "control-plane");
+    .spec.template.metadata.annotations."kodex.dev/role-environment-catalog-sha256" =
+      strenv(ROLE_ENVIRONMENT_CATALOG_DIGEST)
+  )
+' "$render"
+
+# Локальный координатор быстрее замечает завершение Job, не меняя число
+# одновременно допущенных workspace и production retry/readiness бюджеты.
+yq -i '
+  with(select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "image-admission-controller");
+    (.spec.template.spec.containers[] | select(.name == "image-admission-controller") |
+      .env[] | select(.name == "IMAGE_ADMISSION_CONTROLLER_RECONCILE_INTERVAL").value) = "1s"
   )
 ' "$render"
 
@@ -1032,18 +1059,14 @@ yq -i '
   )
 ' "$render"
 
-frontend_middlewares=kodex-system-staff-control-center-retry@kubernetescrd
-api_middlewares=""
+frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
+api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
 frontend_bootstrap_digest=$(
   sha256sum "$source_root/services/staff/control-center/vite.config.ts" \
     "$source_root/tools/dev/run-frontend.sh" |
     awk '{print $1}' | sha256sum | awk '{print $1}'
 )
 [[ "$frontend_bootstrap_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'frontend bootstrap digest is invalid'
-if [[ "$tls_mode" == public-acme ]]; then
-  frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
-  api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
-fi
 NODE_IMAGE="$node_image" FRONTEND_CACHE="$frontend_cache" \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
 SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" \
@@ -1327,7 +1350,7 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center"
 "$repository_root/tools/dev/verify-local-integration-render.sh" "$output" "$integration_hot_reload_image"
 "$repository_root/tools/dev/verify-local-email-render.sh" "$output"
 "$repository_root/tools/dev/verify-local-profile-render.sh" "$output" "$deployment_profile"
-yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
+yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[];
     .kind == "ServersTransport" and .metadata.name == "control-api-gateway" and
     .metadata.namespace == "kodex-system" and
@@ -1342,9 +1365,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];
     .kind == "Ingress" and .metadata.name == "staff-control-center-api" and
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      (if $tls_mode == "public-acme" then
-        "kodex-system-oauth2-control-center-auth@kubernetescrd"
-      else "" end) and
+      "kodex-system-oauth2-control-center-auth@kubernetescrd" and
     .spec.rules[0].http.paths == [{
       path:"/api/v1",pathType:"Prefix",
       backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
@@ -1352,9 +1373,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];
     .kind == "Ingress" and .metadata.name == "staff-control-center" and
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      (if $tls_mode == "public-acme" then
-        "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
-      else "kodex-system-staff-control-center-retry@kubernetescrd" end)) and
+      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd") and
   any(.[];
     .kind == "Middleware" and .metadata.name == "staff-control-center-retry" and
     .metadata.namespace == "kodex-system" and

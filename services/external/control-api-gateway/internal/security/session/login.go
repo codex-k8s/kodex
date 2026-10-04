@@ -22,12 +22,14 @@ import (
 const loginLifetime = 5 * time.Minute
 
 type LoginPurpose struct {
-	Kind           string
-	ProjectRef     string
-	SecretRef      string
-	ReceiptRef     string
-	ReceiptVersion int64
-	ReceiptDigest  string
+	Kind            string
+	ScopeKind       string
+	OrganizationRef string
+	ProjectRef      string
+	SecretRef       string
+	ReceiptRef      string
+	ReceiptVersion  int64
+	ReceiptDigest   string
 }
 
 type LoginProvider interface {
@@ -208,9 +210,9 @@ func validLoginPurpose(p *LoginPurpose) bool {
 	}
 	switch p.Kind {
 	case ElevationKindRuntimeSecretReveal:
-		return validOpaqueReference(p.ProjectRef) && validOpaqueReference(p.SecretRef) && p.ReceiptRef == "" && p.ReceiptVersion == 0 && p.ReceiptDigest == ""
+		return ValidRuntimeSecretBinding(p.ScopeKind, p.OrganizationRef, p.ProjectRef, p.SecretRef) && p.ReceiptRef == "" && p.ReceiptVersion == 0 && p.ReceiptDigest == ""
 	case ElevationKindEmailReconciliation:
-		return ValidEmailReceiptBinding(p.ReceiptRef, p.ReceiptVersion, p.ReceiptDigest) && p.ProjectRef == "" && p.SecretRef == ""
+		return ValidEmailReceiptBinding(p.ReceiptRef, p.ReceiptVersion, p.ReceiptDigest) && p.ProjectRef == "" && p.SecretRef == "" && p.ScopeKind == "" && p.OrganizationRef == ""
 	default:
 		return false
 	}

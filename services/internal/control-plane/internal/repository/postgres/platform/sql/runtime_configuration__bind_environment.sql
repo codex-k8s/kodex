@@ -8,7 +8,8 @@ WITH resolved AS (
      AND ((@version_ref = '' AND revision.id = environment.current_version_id) OR revision.ref = @version_ref)
     WHERE environment.organization_id = @organization_id::uuid
       AND environment.ref = @environment_ref
-      AND environment.project_id = @project_id::uuid
+      AND ((@project_id <> '' AND environment.project_id = @project_id::uuid)
+        OR (@project_id = '' AND environment.project_id IS NULL))
       AND environment.state = 'ACTIVE'
 ), updated AS (
     UPDATE control_plane.agent_runtime_environment_bindings binding

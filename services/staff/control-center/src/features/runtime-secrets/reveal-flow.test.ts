@@ -13,6 +13,7 @@ describe("runtime secret reveal flow", () => {
     );
 
     const result = await executeRuntimeSecretReveal({
+      organizationRef: "org_synthetic",
       projectRef: "project_sales",
       secretRef: "secret_main",
       session: {
@@ -25,6 +26,7 @@ describe("runtime secret reveal flow", () => {
 
     expect(result).toEqual({ kind: "reauthentication-started" });
     expect(beginRuntimeSecretRevealReauth).toHaveBeenCalledWith({
+      organizationRef: "org_synthetic",
       projectRef: "project_sales",
       secretRef: "secret_main",
     });
@@ -38,6 +40,7 @@ describe("runtime secret reveal flow", () => {
     );
 
     const result = await executeRuntimeSecretReveal({
+      organizationRef: "org_synthetic",
       projectRef: "project_sales",
       secretRef: "secret_main",
       session: {
@@ -64,6 +67,7 @@ describe("runtime secret reveal flow", () => {
     );
     await expect(
       executeRuntimeSecretReveal({
+        organizationRef: "org_synthetic",
         projectRef: "project_sales",
         secretRef: "secret_main",
         session: {

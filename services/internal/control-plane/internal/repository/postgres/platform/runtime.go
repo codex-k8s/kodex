@@ -336,6 +336,7 @@ type claimableExecution struct {
 	providerSecretName, providerSecretUID, providerSecretResourceVersion                         string
 	providerCredentialSHA256, instructionRef, instructionDigest, instructions                    string
 	turnRef, stableKey, callbackEdgeRef, turnID, agentID                                         string
+	assistantProfileRef                                                                          string
 	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef                   string
 	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest               string
 	roleRuntimeContractSHA256                                                                    string
@@ -379,8 +380,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, err
 	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
-		scope.organizationID, payload.Limit, repository.roleImages.DefaultImageReference,
-		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractRevision,
+		scope.organizationID, payload.Limit, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
 	if err != nil {
 		return commandOutcome{}, fmt.Errorf("select claimable executions: %v: %w", err, errs.ErrUnavailable)
@@ -405,6 +405,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.inputAttachmentSetRef, &candidate.inputAttachmentSetManifestDigest, &candidate.inputAttachmentContext,
 			&candidate.rawAttachmentSets, &candidate.rawArtifacts,
 			&candidate.attempt, &candidate.generation, &candidate.turnRef, &candidate.stableKey,
+			&candidate.assistantProfileRef,
 			&candidate.rawIntegrationGrants, &candidate.rawDelegationTargets, &candidate.callbackEdgeRef,
 			&candidate.rawSessionContext, &candidate.turnID, &candidate.agentID,
 			&candidate.roleDefinitionID, &candidate.roleDefinitionRef, &candidate.roleImageRecipeID,
@@ -789,6 +790,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				"organizationRef": candidate.organizationRef, "runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
 				"turnRef": turnRef, "attempt": attempt, "task": task,
 				"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
+				"assistantScope": string(runtimeAssistantScope(stableKey)), "assistantProfileRef": candidate.assistantProfileRef,
 				"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
 				"runtimeModel": model, "effectiveReasoningEffort": effectiveEffort, "reasoningMode": reasoningMode, "instructionRef": instructionRef,
 				"providerAccountRef":               providerAccountRef,
@@ -912,7 +914,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				WorkloadInstance: payload.WorkloadInstance, LeaseRef: leaseRef, Fence: fence,
 				Generation: int64(generation), RuntimeRevisionRef: revisionRef, RuntimeRevisionDigest: revisionDigestHex,
 				SessionRef: sessionRef, TurnRef: turnRef, Attempt: int64(attempt), InputDigest: inputDigestHex,
-				SystemAssistant: projectRef == "",
+				SystemAssistant: runtimeAssistantScope(stableKey) == runtimecontract.AssistantScopeSystem,
 			}); err != nil {
 				return commandOutcome{}, err
 			}
@@ -1145,6 +1147,17 @@ func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
 	return policy
 }
 
+func runtimeAssistantScope(stableKey string) runtimecontract.AssistantScope {
+	switch stableKey {
+	case "system-assistant":
+		return runtimecontract.AssistantScopeSystem
+	case "project-assistant":
+		return runtimecontract.AssistantScopeProject
+	default:
+		return runtimecontract.AssistantScopeNone
+	}
+}
+
 func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 	profileRevision := stringMap(values, "profileRevision")
 	if profileRevision == "" {
@@ -1169,7 +1182,8 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		SystemSTTConfigurationRevisionRef: stringMap(values, "systemSTTConfigurationRevisionRef"),
 		SystemSTTConfigurationVersion:     runtimeRevisionMapInt64(values, "systemSTTConfigurationVersion"),
 		SystemSTTConfigurationDigest:      stringMap(values, "systemSTTConfigurationDigest"),
-		SystemAssistant:                   stringMap(values, "stableKey") == "system-assistant",
+		AssistantScope:                    runtimecontract.AssistantScope(stringMap(values, "assistantScope")),
+		AssistantProfileRef:               stringMap(values, "assistantProfileRef"),
 		Instructions:                      stringMap(values, "instructions"), Task: stringMap(values, "task"),
 		AttachmentSetRef: stringMap(values, "attachmentSetRef"), AttachmentSetManifestDigest: stringMap(values, "attachmentSetManifestDigest"),
 		AttachmentContext: stringMap(values, "attachmentContext"), Capabilities: runtimeRevisionStringSlice(values["capabilities"]),

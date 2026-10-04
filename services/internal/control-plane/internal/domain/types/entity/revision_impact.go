@@ -12,6 +12,7 @@ type RevisionImpactPlan struct {
 
 type RevisionImpactItem struct {
 	Ref, ProjectRef, ConsumerKind, ConsumerRef  string
+	ScopeKind, OrganizationRef                  string
 	ConsumerVersion                             int64
 	BindingRef                                  string
 	BindingVersion                              int64

@@ -36,10 +36,193 @@ function assistantAppliedResourceRef(
   return matching[0].resourceRef;
 }
 
+const projectAssistantOperationTypes = [
+  "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+  "CREATE_INSTRUCTION_DRAFT",
+  "BIND_AGENT_RUNTIME_ENVIRONMENT",
+] as const;
+const projectAssistantOwnerKeys = [
+  "projectAssistantRef",
+  "assistantScope",
+  "scopeKind",
+  "organizationRef",
+  "projectRef",
+  "assistantProfileRef",
+  "agentVersion",
+  "runtimeEnvironmentBindingRef",
+  "runtimeEnvironmentVersionRef",
+  "runtimeEnvironmentDigest",
+] as const;
+
+export function hasAssistantProjectHelperLocator(
+  operation: Pick<
+    AssistantPlanOperationInput,
+    "parameters" | "before" | "after"
+  >,
+): boolean {
+  return [operation.parameters, operation.before, operation.after].some(
+    (value) =>
+      [
+        "projectAssistantRef",
+        "assistantProfileRef",
+        "assistantScope",
+        "runtimeEnvironmentBindingRef",
+        "runtimeEnvironmentVersionRef",
+        "runtimeEnvironmentDigest",
+      ].some((key) => Object.hasOwn(value, key)),
+  );
+}
+
+export function assistantProjectHelperScope(
+  _plan: Pick<AssistantPlan, "projectRef">,
+  operation: AssistantPlanOperationInput,
+  organizationRef: string | undefined,
+): { projectRef: string; agentRef: string; profileRef: string } | undefined {
+  const { parameters, before, after, target } = operation;
+  const opaque = (value: unknown): value is string =>
+    typeof value === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(value);
+  if (
+    !organizationRef ||
+    !opaque(organizationRef) ||
+    !projectAssistantOperationTypes.some((type) => type === operation.type) ||
+    operation.action !== "UPDATE" ||
+    parameters.organizationRef !== organizationRef ||
+    parameters.scopeKind !== "PROJECT" ||
+    parameters.assistantScope !== "PROJECT" ||
+    !opaque(parameters.projectAssistantRef) ||
+    !opaque(parameters.projectRef) ||
+    !opaque(parameters.assistantProfileRef) ||
+    projectAssistantOwnerKeys.some(
+      (key) =>
+        parameters[key] !== before[key] || parameters[key] !== after[key],
+    ) ||
+    [parameters, before, after].some((value) =>
+      Object.hasOwn(value, "systemAssistantRef"),
+    ) ||
+    !Number.isSafeInteger(parameters.agentVersion) ||
+    (parameters.agentVersion as number) < 1 ||
+    !opaque(parameters.runtimeEnvironmentBindingRef) ||
+    !opaque(parameters.runtimeEnvironmentVersionRef) ||
+    typeof parameters.runtimeEnvironmentDigest !== "string" ||
+    !/^[a-f0-9]{64}$/.test(parameters.runtimeEnvironmentDigest) ||
+    !Number.isSafeInteger(target.version) ||
+    (target.version ?? 0) < 1 ||
+    target.version !== operation.expectedVersion
+  )
+    return;
+  if (operation.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION") {
+    if (
+      target.kind !== "ENVIRONMENT" ||
+      !opaque(target.ref) ||
+      target.ref !== parameters.environmentRef ||
+      target.ref !== before.environmentRef ||
+      target.ref !== after.environmentRef
+    )
+      return;
+  } else if (
+    target.kind !== "AGENT" ||
+    target.ref !== parameters.projectAssistantRef ||
+    target.version !== parameters.agentVersion ||
+    parameters.agentRef !== target.ref ||
+    before.agentRef !== target.ref ||
+    (operation.type === "CREATE_INSTRUCTION_DRAFT" &&
+      after.agentRef !== target.ref)
+  )
+    return;
+  return {
+    projectRef: parameters.projectRef,
+    agentRef: parameters.projectAssistantRef,
+    profileRef: parameters.assistantProfileRef,
+  };
+}
+
+export function assistantOperationProjectRef(
+  plan: Pick<AssistantPlan, "projectRef">,
+  operation: AssistantPlanOperationInput,
+  organizationRef?: string,
+): string | undefined {
+  return hasAssistantProjectHelperLocator(operation)
+    ? assistantProjectHelperScope(plan, operation, organizationRef)?.projectRef
+    : plan.projectRef;
+}
+
+export function editableAssistantOperationProjectRef(
+  plan: AssistantPlan,
+  operation: EditablePlanOperation,
+  organizationRef?: string,
+): string | undefined {
+  try {
+    const current = operationInputs([operation])[0];
+    const original = plan.operations.find(
+      (value) => value.ref === operation.value.ref,
+    );
+    if (!current || !original) return;
+    if (
+      !hasAssistantProjectHelperLocator(current) &&
+      !hasAssistantProjectHelperLocator(original)
+    )
+      return plan.projectRef;
+    if (
+      projectAssistantOwnerKeys.some(
+        (key) =>
+          current.parameters[key] !== original.parameters[key] ||
+          current.before[key] !== original.before[key] ||
+          current.after[key] !== original.after[key],
+      ) ||
+      current.target.ref !== original.target.ref ||
+      current.target.kind !== original.target.kind ||
+      current.target.version !== original.target.version ||
+      current.expectedVersion !== original.expectedVersion
+    )
+      return;
+    return assistantOperationProjectRef(plan, current, organizationRef);
+  } catch {
+    return;
+  }
+}
+
 export function assistantRoleImageBuildTarget(
   plan: AssistantPlan,
   operationRef: string,
-): { projectRef: string; recipeRef: string } | undefined {
+  organizationRef?: string,
+):
+  | { projectRef: string; recipeRef: string; resourceScope?: never }
+  | {
+      resourceScope: { kind: "ORGANIZATION"; organizationRef: string };
+      recipeRef: string;
+      projectRef?: never;
+    }
+  | undefined {
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  if (
+    operation?.type === "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" ||
+    operation?.type === "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+  ) {
+    const recipeRef = assistantAppliedResourceRef(
+      plan,
+      operationRef,
+      operation.type,
+      "ROLE_IMAGE_RECIPE",
+    );
+    if (
+      !recipeRef ||
+      !organizationRef ||
+      !systemAssistantImageOperationScope(operation, organizationRef) ||
+      operation.action !==
+        (operation.type === "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+          ? "CREATE"
+          : "UPDATE") ||
+      (operation.type === "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" &&
+        (recipeRef !== operation.target.ref ||
+          operation.parameters.recipeRef !== recipeRef ||
+          operation.target.version !== operation.expectedVersion))
+    )
+      return;
+    return {
+      resourceScope: { kind: "ORGANIZATION", organizationRef },
+      recipeRef,
+    };
+  }
   const createdRef = assistantAppliedResourceRef(
     plan,
     operationRef,
@@ -52,7 +235,6 @@ export function assistantRoleImageBuildTarget(
     "UPDATE_ROLE_IMAGE_RECIPE",
     "ROLE_IMAGE_RECIPE",
   );
-  const operation = plan.operations.find((item) => item.ref === operationRef);
   const recipeRef =
     createdRef ||
     (updatedRef === operation?.target.ref ? updatedRef : undefined);
@@ -61,9 +243,30 @@ export function assistantRoleImageBuildTarget(
     : undefined;
 }
 
+export function systemAssistantImageOperationScope(
+  operation: Pick<AssistantPlanOperation, "parameters" | "after">,
+  organizationRef: string | undefined,
+): boolean {
+  const { parameters, after } = operation;
+  return Boolean(
+    organizationRef &&
+    /^[A-Za-z0-9_-]{8,128}$/.test(organizationRef) &&
+    parameters.scopeKind === "ORGANIZATION" &&
+    after.scopeKind === "ORGANIZATION" &&
+    parameters.organizationRef === organizationRef &&
+    after.organizationRef === organizationRef &&
+    typeof parameters.systemAssistantRef === "string" &&
+    /^[A-Za-z0-9_-]{8,128}$/.test(parameters.systemAssistantRef) &&
+    after.systemAssistantRef === parameters.systemAssistantRef &&
+    !Object.hasOwn(parameters, "projectRef") &&
+    !Object.hasOwn(after, "projectRef"),
+  );
+}
+
 export function assistantEnvironmentDraftTarget(
   plan: AssistantPlan,
   operationRef: string,
+  organizationRef?: string,
 ): { projectRef: string; draftRef: string } | undefined {
   const createdRef = assistantAppliedResourceRef(
     plan,
@@ -78,9 +281,35 @@ export function assistantEnvironmentDraftTarget(
     "ENVIRONMENT",
   );
   const draftRef = createdRef || revisedRef;
-  return plan.projectRef && draftRef
-    ? { projectRef: plan.projectRef, draftRef }
+  const operation = plan.operations.find((value) => value.ref === operationRef);
+  const projectRef = operation
+    ? assistantOperationProjectRef(plan, operation, organizationRef)
     : undefined;
+  return projectRef && draftRef ? { projectRef, draftRef } : undefined;
+}
+export function assistantSystemEnvironmentDraftTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+):
+  | { draftRef: string; environmentRef: string; assistantRef: string }
+  | undefined {
+  const draftRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+    "ENVIRONMENT",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const assistantRef = operation?.parameters.systemAssistantRef;
+  if (
+    !draftRef ||
+    (operation && hasAssistantProjectHelperLocator(operation)) ||
+    typeof assistantRef !== "string" ||
+    !/^[A-Za-z0-9_-]{8,128}$/.test(assistantRef) ||
+    !operation?.target.ref
+  )
+    return;
+  return { draftRef, environmentRef: operation.target.ref, assistantRef };
 }
 
 export function assistantCreatedProjectFileTarget(
@@ -101,6 +330,7 @@ export function assistantCreatedProjectFileTarget(
 export function assistantAgentEnvironmentBindingTarget(
   plan: AssistantPlan,
   operationRef: string,
+  organizationRef?: string,
 ):
   | {
       projectRef: string;
@@ -118,12 +348,35 @@ export function assistantAgentEnvironmentBindingTarget(
   const operation = plan.operations.find((item) => item.ref === operationRef);
   const environmentRef = operation?.after.environmentRef;
   const versionRef = operation?.after.versionRef;
-  return plan.projectRef &&
+  const projectRef = operation
+    ? assistantOperationProjectRef(plan, operation, organizationRef)
+    : undefined;
+  return projectRef &&
     agentRef &&
     operation?.target.ref === agentRef &&
     typeof environmentRef === "string" &&
     typeof versionRef === "string"
-    ? { projectRef: plan.projectRef, agentRef, environmentRef, versionRef }
+    ? { projectRef, agentRef, environmentRef, versionRef }
+    : undefined;
+}
+
+export function assistantInstructionDraftTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+  organizationRef?: string,
+): { projectRef: string; agentRef: string } | undefined {
+  const agentRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_INSTRUCTION_DRAFT",
+    "AGENT",
+  );
+  const operation = plan.operations.find((value) => value.ref === operationRef);
+  const projectRef = operation
+    ? assistantOperationProjectRef(plan, operation, organizationRef)
+    : undefined;
+  return projectRef && agentRef && operation?.target.ref === agentRef
+    ? { projectRef, agentRef }
     : undefined;
 }
 
@@ -211,9 +464,28 @@ export function assistantCreatedEntityTarget(
   plan: AssistantPlan,
   operationRef: string,
 ):
-  | { kind: "PROJECT" | "AGENT"; projectRef: string; resourceRef: string }
+  | {
+      kind: "PROJECT" | "AGENT" | "PROJECT_ASSISTANT";
+      projectRef: string;
+      resourceRef: string;
+    }
   | undefined {
   const operation = plan.operations.find((item) => item.ref === operationRef);
+  if (operation?.type === "CREATE_PROJECT_ASSISTANT") {
+    const profileRef = assistantAppliedResourceRef(
+      plan,
+      operationRef,
+      "CREATE_PROJECT_ASSISTANT",
+      "PROJECT_ASSISTANT",
+    );
+    return plan.projectRef && profileRef
+      ? {
+          kind: "PROJECT_ASSISTANT",
+          projectRef: plan.projectRef,
+          resourceRef: profileRef,
+        }
+      : undefined;
+  }
   if (
     operation?.type === "CREATE_PROJECT" ||
     operation?.type === "UPDATE_PROJECT"
@@ -279,8 +551,10 @@ export type FriendlyPlanOperationType =
   | "CREATE_PROJECT_FILE"
   | "UPDATE_PROJECT"
   | "CREATE_AGENT"
+  | "CREATE_PROJECT_ASSISTANT"
   | "UPDATE_AGENT"
   | "CREATE_INSTRUCTION_DRAFT"
+  | "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
   | "CHANGE_CAPABILITY"
   | "CHANGE_INTEGRATION_GRANT"
   | "CREATE_WORKFLOW"
@@ -292,6 +566,9 @@ export type FriendlyPlanOperationType =
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
   | "CREATE_ROLE_IMAGE_RECIPE"
   | "UPDATE_ROLE_IMAGE_RECIPE"
+  | "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+  | "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+  | "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
   | "CREATE_INTEGRATION_CONNECTION"
   | "UPDATE_INTEGRATION_CONNECTION"
   | "TEST_INTEGRATION_CONNECTION"
@@ -328,35 +605,44 @@ export function friendlyPlanOperationType(
     return operation.value.action === "EXECUTE" ? operationType : undefined;
   }
   const expectedKind =
-    operation.value.type === "CREATE_PROJECT_FILE"
-      ? "ARTIFACT"
-      : operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
-          operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
-        ? "ROLE_IMAGE_RECIPE"
-        : operation.value.type === "PUBLISH_INTEGRATION_DEFINITION"
-          ? "INTEGRATION_DEFINITION"
-          : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
-              operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
-              operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
-              operation.value.type === "CHANGE_INTEGRATION_GRANT"
-            ? "INTEGRATION_CONNECTION"
-            : operation.value.type === "CREATE_WORKFLOW" ||
-                operation.value.type === "UPDATE_WORKFLOW" ||
-                operation.value.type === "ARCHIVE_WORKFLOW"
-              ? "WORKFLOW"
-              : operation.value.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-                ? "ENVIRONMENT"
-                : operation.value.type === "CREATE_SCHEDULE" ||
-                    operation.value.type === "UPDATE_SCHEDULE"
-                  ? "SCHEDULE"
-                  : operation.value.type.endsWith("PROJECT")
-                    ? "PROJECT"
-                    : operation.value.type ===
-                        "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-                      ? "RUNTIME_ENVIRONMENT_DRAFT"
-                      : "AGENT";
+    operation.value.type === "CREATE_PROJECT_ASSISTANT"
+      ? "PROJECT_ASSISTANT"
+      : operation.value.type === "CREATE_PROJECT_FILE"
+        ? "ARTIFACT"
+        : operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
+            operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE" ||
+            operation.value.type ===
+              "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" ||
+            operation.value.type === "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+          ? "ROLE_IMAGE_RECIPE"
+          : operation.value.type === "PUBLISH_INTEGRATION_DEFINITION"
+            ? "INTEGRATION_DEFINITION"
+            : operation.value.type === "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+              ? "SYSTEM_ASSISTANT"
+              : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+                  operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
+                  operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
+                  operation.value.type === "CHANGE_INTEGRATION_GRANT"
+                ? "INTEGRATION_CONNECTION"
+                : operation.value.type === "CREATE_WORKFLOW" ||
+                    operation.value.type === "UPDATE_WORKFLOW" ||
+                    operation.value.type === "ARCHIVE_WORKFLOW"
+                  ? "WORKFLOW"
+                  : operation.value.type ===
+                      "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+                    ? "ENVIRONMENT"
+                    : operation.value.type === "CREATE_SCHEDULE" ||
+                        operation.value.type === "UPDATE_SCHEDULE"
+                      ? "SCHEDULE"
+                      : operation.value.type.endsWith("PROJECT")
+                        ? "PROJECT"
+                        : operation.value.type ===
+                            "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                          ? "RUNTIME_ENVIRONMENT_DRAFT"
+                          : "AGENT";
   const expectedAction =
-    operation.value.type === "CREATE_INSTRUCTION_DRAFT"
+    operation.value.type === "CREATE_INSTRUCTION_DRAFT" ||
+    operation.value.type === "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
       ? "UPDATE"
       : operation.value.type === "ARCHIVE_AGENT" ||
           operation.value.type === "ARCHIVE_WORKFLOW"

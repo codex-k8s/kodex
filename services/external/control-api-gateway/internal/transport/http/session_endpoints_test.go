@@ -82,7 +82,7 @@ func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 		wantElevated    int
 	}{
 		{name: "normal login", wantStatus: http.StatusNoContent, wantNormal: 1},
-		{name: "fresh reveal", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","projectRef":"project_sales","secretRef":"secret_main"}}`, authenticatedAt: now.Add(-30 * time.Second), wantStatus: http.StatusNoContent, wantElevated: 1},
+		{name: "fresh reveal", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","scopeKind":"PROJECT","organizationRef":"org_fixture01","projectRef":"project_sales","secretRef":"secret_main"}}`, authenticatedAt: now.Add(-30 * time.Second), wantStatus: http.StatusNoContent, wantElevated: 1},
 		{name: "fresh email", body: emailPurpose, authenticatedAt: now.Add(-4 * time.Minute), wantStatus: http.StatusNoContent, wantElevated: 1},
 		{name: "stale email", body: emailPurpose, authenticatedAt: now.Add(-5 * time.Minute), wantStatus: http.StatusForbidden},
 		{name: "mixed email project", body: strings.Replace(emailPurpose, `"receiptRef":`, `"projectRef":"prj_fixture01","receiptRef":`, 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
@@ -90,8 +90,8 @@ func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 		{name: "missing email version", body: strings.Replace(emailPurpose, `"receiptVersion":3,`, "", 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
 		{name: "null email version", body: strings.Replace(emailPurpose, `"receiptVersion":3`, `"receiptVersion":null`, 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
 		{name: "unsafe email version", body: strings.Replace(emailPurpose, `"receiptVersion":3`, `"receiptVersion":9007199254740992`, 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
-		{name: "stale auth_time", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","projectRef":"project_sales","secretRef":"secret_main"}}`, authenticatedAt: now.Add(-3 * time.Minute), wantStatus: http.StatusForbidden},
-		{name: "unknown purpose field", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","projectRef":"project_sales","secretRef":"secret_main","extra":true}}`, authenticatedAt: now, wantStatus: http.StatusBadRequest},
+		{name: "stale auth_time", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","scopeKind":"PROJECT","organizationRef":"org_fixture01","projectRef":"project_sales","secretRef":"secret_main"}}`, authenticatedAt: now.Add(-3 * time.Minute), wantStatus: http.StatusForbidden},
+		{name: "unknown purpose field", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","scopeKind":"PROJECT","organizationRef":"org_fixture01","projectRef":"project_sales","secretRef":"secret_main","extra":true}}`, authenticatedAt: now, wantStatus: http.StatusBadRequest},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := &ownerSessionStoreStub{now: now}

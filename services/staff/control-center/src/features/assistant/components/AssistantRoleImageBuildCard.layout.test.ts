@@ -25,10 +25,13 @@ describe("AssistantRoleImageBuildCard", () => {
     expect(source).toContain("roleImages.retryPending");
     expect(source).toContain('current.nextActions.includes("CANCEL_BUILD")');
     expect(source).toMatch(
-      /commandRoleImage\(\s*exact\.projectRef,\s*current,\s*"CANCEL_BUILD",\s*build\.value\.ref,?\s*\)/,
+      /commandRoleImage\(\s*exact\.resourceScope \?\? exact\.projectRef,\s*current,\s*"CANCEL_BUILD",\s*build\.value\.ref,?\s*\)/,
     );
     expect(source).toContain("assistant.roleImageBuild.stopConfirm");
     expect(source).toContain("onCleanup");
+    expect(source).toContain("platform.organizationRoleImageRealtimeRevision");
+    expect(source).toContain('name: "system-role-image"');
+    expect(source).toContain("if (target.value !== exact) return;");
   });
 
   it("показывает допуск и публикует только текущий допущенный артефакт один раз", () => {

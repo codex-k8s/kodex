@@ -8,9 +8,12 @@ import {
   safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
 import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
-import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  RuntimeEnvironmentPolicy,
+  RuntimeEnvironmentSet,
+} from "@/shared/api/generated/openapi/types.gen";
 
-function effectivePolicy() {
+function effectivePolicy(): RuntimeEnvironmentPolicy {
   return {
     resources: defaultRuntimeEnvironmentPolicy().resources,
     volumes: [],
@@ -22,7 +25,7 @@ function effectivePolicy() {
         {
           destination: "PROVIDER_PROXY" as const,
           protocol: "TCP" as const,
-          port: 8080,
+          port: 8084,
         },
         {
           destination: "RUNTIME_CALLBACK" as const,
@@ -30,6 +33,7 @@ function effectivePolicy() {
           port: 8444,
         },
       ],
+      webAccess: { mode: "NONE" as const, rules: [] },
     },
     kubernetesAccess: {
       kind: "NONE" as const,
@@ -57,7 +61,6 @@ describe("runtime environment capabilities", () => {
       verifiedTools: "AVAILABLE",
       resources: "AVAILABLE",
       networkPolicy: "AVAILABLE",
-      kubernetesRbac: "AVAILABLE",
       effectivePolicy: "AVAILABLE",
       secretLifecycle: "AVAILABLE",
       secretReveal: "AVAILABLE",
@@ -76,6 +79,8 @@ describe("runtime environment capabilities", () => {
       policy: defaultRuntimeEnvironmentPolicy(),
     };
     const environment = {
+      scopeKind: "PROJECT" as const,
+      organizationRef: "org_synthetic",
       ref: "environment_docs",
       version: 3,
       projectRef: "project_main",

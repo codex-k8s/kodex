@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   completeOwnerAuthorization: vi.fn(),
   getOwnerSession: vi.fn(),
   getBootstrapState: vi.fn(),
+  getRuntimeSecret: vi.fn(),
   deleteOwnerSession: vi.fn(),
   renewOwnerSession: vi.fn(),
 }));
@@ -74,7 +75,18 @@ beforeEach(() => {
   api.getOwnerSession.mockImplementation(() =>
     Promise.resolve({ data: metadata() }),
   );
-  api.getBootstrapState.mockResolvedValue({ data: {}, etag: '"7"' });
+  api.getBootstrapState.mockResolvedValue({
+    data: { organizationRef: "org_synthetic" },
+    etag: '"7"',
+  });
+  api.getRuntimeSecret.mockResolvedValue({
+    data: {
+      ref: "secret_main",
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
+      projectRef: "project_sales",
+    },
+  });
   api.renewOwnerSession.mockImplementation(() => {
     version++;
     return Promise.resolve({ data: metadata() });
@@ -416,6 +428,7 @@ describe("BFF session lifecycle", () => {
   test("связывает fresh Reveal purpose с точным секретом и расходует local intent один раз", async () => {
     const session = useSessionStore();
     await session.beginRuntimeSecretRevealReauth({
+      organizationRef: "org_synthetic",
       projectRef: "project_sales",
       secretRef: "secret_main",
     });
@@ -425,6 +438,8 @@ describe("BFF session lifecycle", () => {
           freshAuthentication: true,
           purpose: {
             kind: "RUNTIME_SECRET_REVEAL",
+            scopeKind: "PROJECT",
+            organizationRef: "org_synthetic",
             projectRef: "project_sales",
             secretRef: "secret_main",
           },
@@ -437,11 +452,95 @@ describe("BFF session lifecycle", () => {
       returnPath: "/projects/project_sales/secrets",
     });
     expect(
-      session.consumePendingRuntimeSecretReveal("project_sales", "secret_main"),
+      session.consumePendingRuntimeSecretReveal(
+        "project_sales",
+        "secret_main",
+        "org_synthetic",
+      ),
     ).toBe(true);
     expect(
-      session.consumePendingRuntimeSecretReveal("project_sales", "secret_main"),
+      session.consumePendingRuntimeSecretReveal(
+        "project_sales",
+        "secret_main",
+        "org_synthetic",
+      ),
     ).toBe(false);
+  });
+  test("ORG Reveal не переносит projectRef и расходуется только в той же организации", async () => {
+    const scope = {
+      kind: "ORGANIZATION",
+      organizationRef: "org_synthetic",
+    } as const;
+    api.getRuntimeSecret.mockResolvedValue({
+      data: {
+        ref: "secret_main",
+        scopeKind: "ORGANIZATION",
+        organizationRef: scope.organizationRef,
+        projectRef: "",
+      },
+    });
+    const session = useSessionStore();
+    await session.beginRuntimeSecretRevealReauth({
+      projectRef: scope,
+      organizationRef: scope.organizationRef,
+      secretRef: "secret_main",
+    });
+    expect(api.beginOwnerAuthorization).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: {
+          freshAuthentication: true,
+          purpose: {
+            kind: "RUNTIME_SECRET_REVEAL",
+            scopeKind: "ORGANIZATION",
+            organizationRef: scope.organizationRef,
+            secretRef: "secret_main",
+          },
+        },
+      }),
+    );
+    callback();
+    await session.completeLogin();
+    expect(
+      session.consumePendingRuntimeSecretReveal(
+        scope,
+        "secret_main",
+        "org_foreign",
+      ),
+    ).toBe(false);
+    expect(
+      session.consumePendingRuntimeSecretReveal(
+        scope,
+        "secret_main",
+        scope.organizationRef,
+      ),
+    ).toBe(true);
+    expect(
+      session.consumePendingRuntimeSecretReveal(
+        scope,
+        "secret_main",
+        scope.organizationRef,
+      ),
+    ).toBe(false);
+  });
+  test("Reveal отклоняет чужой authoritative owner tuple до fresh-login", async () => {
+    api.getRuntimeSecret.mockResolvedValue({
+      data: {
+        ref: "secret_main",
+        scopeKind: "PROJECT",
+        organizationRef: "org_foreign",
+        projectRef: "project_sales",
+      },
+    });
+    const session = useSessionStore();
+    await expect(
+      session.beginRuntimeSecretRevealReauth({
+        projectRef: "project_sales",
+        organizationRef: "org_synthetic",
+        secretRef: "secret_main",
+      }),
+    ).rejects.toThrow("scope mismatch");
+    expect(api.beginOwnerAuthorization).not.toHaveBeenCalled();
+    expect(values.has(intentKey)).toBe(false);
   });
   test("сохраняет receipt-bound Email purpose и после расхода читает metadata", async () => {
     const input = {
@@ -504,12 +603,14 @@ describe("BFF session lifecycle", () => {
       session.hasPendingRuntimeSecretReveal(
         "project_sales",
         "environment_main",
+        "org_synthetic",
       ),
     ).toBe(false);
   });
   test("не исполняет callback с подменённым return path", async () => {
     const session = useSessionStore();
     await session.beginRuntimeSecretRevealReauth({
+      organizationRef: "org_synthetic",
       projectRef: "project_sales",
       secretRef: "secret_main",
     });

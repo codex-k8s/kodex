@@ -391,6 +391,26 @@ components:
       type: object
       additionalProperties: false
       properties:
+        organizationRecipes:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.RoleImageRecipe
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: RoleImageRecipe
+            x-typescript-import: ../openapi/types.gen
+        organizationRecipesPage: { $ref: "#/components/schemas/PlatformPageCursor" }
+        organizationSecrets:
+          type: array
+          items:
+            type: object
+            x-go-type: httpgenerated.RuntimeSecret
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: RuntimeSecret
+            x-typescript-import: ../openapi/types.gen
+        organizationSecretsPage: { $ref: "#/components/schemas/PlatformPageCursor" }
         projects:
           type: array
           items: &project_projection

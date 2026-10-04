@@ -23,6 +23,8 @@ function storage(): Storage {
   };
 }
 const draft: RuntimeEnvironmentDraft = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "draft_synthetic",
   version: 1,
   projectRef: "project_synthetic",

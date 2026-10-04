@@ -1,3 +1,10 @@
+import {
+  parseRuntimeResourceScope,
+  runtimeResourceAddressScope,
+  runtimeResourceScopeKey,
+  type RuntimeResourceAddress,
+  type RuntimeResourceScope,
+} from "@/features/runtime/resource-scope";
 const opaqueReferencePattern = /^[A-Za-z0-9_-]{8,128}$/;
 const challengeReferencePattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -16,14 +23,23 @@ interface ReauthIntentBase {
   readonly version: 1;
 }
 
-export interface RuntimeSecretRevealIntent extends ReauthIntentBase {
+export interface RuntimeSecretRevealIntent extends Omit<
+  ReauthIntentBase,
+  "projectRef"
+> {
   readonly action: "reveal";
   readonly kind: "runtime-secret";
   readonly secretRef: string;
+  readonly resourceScope: RuntimeResourceScope;
+  readonly organizationRef: string;
 }
 
-export interface RuntimeSecretDraftIntent extends ReauthIntentBase {
+export interface RuntimeSecretDraftIntent extends Omit<
+  ReauthIntentBase,
+  "projectRef"
+> {
   readonly kind: "runtime-secret-draft";
+  readonly resourceScope: RuntimeResourceScope;
   readonly surface?: "assistant";
   readonly target: "create" | "draft" | "secret";
   readonly targetRef?: string;
@@ -36,6 +52,85 @@ export interface RuntimeEnvironmentPolicyIntent extends ReauthIntentBase {
   readonly kind: "runtime-environment-policy";
   readonly operation: RuntimeEnvironmentPolicyOperation;
   readonly surface?: "assistant";
+}
+export interface OrganizationAssistantEnvironmentIntent extends Omit<
+  ReauthIntentBase,
+  "projectRef"
+> {
+  readonly kind: "organization-assistant-environment";
+  readonly organizationRef: string;
+  readonly agentRef: string;
+  readonly environmentRef: string;
+  readonly draftRef: string;
+  readonly draftVersion: number;
+}
+export function createOrganizationAssistantEnvironmentIntent(
+  input: Pick<
+    OrganizationAssistantEnvironmentIntent,
+    | "organizationRef"
+    | "agentRef"
+    | "environmentRef"
+    | "draftRef"
+    | "draftVersion"
+  >,
+  now = Date.now(),
+): OrganizationAssistantEnvironmentIntent {
+  return parseOrganizationAssistantEnvironmentIntent(
+    {
+      ...input,
+      kind: "organization-assistant-environment",
+      version: 1,
+      challengeRef: crypto.randomUUID(),
+      issuedAt: now,
+      returnPath: `/organization/assistant/environment?draftRef=${encodeURIComponent(input.draftRef)}`,
+    },
+    now,
+  );
+}
+export function parseOrganizationAssistantEnvironmentIntent(
+  value: unknown,
+  now = Date.now(),
+): OrganizationAssistantEnvironmentIntent {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "kind",
+      "version",
+      "challengeRef",
+      "issuedAt",
+      "returnPath",
+      "organizationRef",
+      "agentRef",
+      "environmentRef",
+      "draftRef",
+      "draftVersion",
+    ]) ||
+    value.kind !== "organization-assistant-environment" ||
+    value.version !== 1 ||
+    typeof value.challengeRef !== "string" ||
+    !challengeReferencePattern.test(value.challengeRef) ||
+    typeof value.issuedAt !== "number" ||
+    !Number.isSafeInteger(value.issuedAt) ||
+    value.issuedAt > now + allowedFutureSkewMs ||
+    now - value.issuedAt > intentLifetimeMs ||
+    ![
+      value.organizationRef,
+      value.agentRef,
+      value.environmentRef,
+      value.draftRef,
+    ].every(
+      (ref) => typeof ref === "string" && opaqueReferencePattern.test(ref),
+    ) ||
+    typeof value.draftVersion !== "number" ||
+    !Number.isSafeInteger(value.draftVersion) ||
+    value.draftVersion < 1 ||
+    value.returnPath !==
+      `/organization/assistant/environment?draftRef=${encodeURIComponent(String(value.draftRef))}`
+  )
+    throw new Error(
+      "Invalid organization assistant environment reauthentication intent",
+    );
+  return value as unknown as OrganizationAssistantEnvironmentIntent;
 }
 export interface EmailReconciliationIntent extends Omit<
   ReauthIntentBase,
@@ -129,6 +224,7 @@ export type ReauthIntent =
   | RuntimeSecretRevealIntent
   | RuntimeSecretDraftIntent
   | RuntimeEnvironmentPolicyIntent
+  | OrganizationAssistantEnvironmentIntent
   | EmailReconciliationIntent;
 export type OidcIntent = { readonly kind: "login" } | ReauthIntent;
 
@@ -202,16 +298,31 @@ function sameIntent(left: ReauthIntent, right: ReauthIntent): boolean {
     left.returnPath !== right.returnPath
   )
     return false;
+  if (
+    left.kind === "organization-assistant-environment" &&
+    right.kind === "organization-assistant-environment"
+  )
+    return (
+      left.organizationRef === right.organizationRef &&
+      left.agentRef === right.agentRef &&
+      left.environmentRef === right.environmentRef &&
+      left.draftRef === right.draftRef &&
+      left.draftVersion === right.draftVersion
+    );
   if (left.kind === "runtime-secret" && right.kind === "runtime-secret")
     return (
-      left.secretRef === right.secretRef && left.projectRef === right.projectRef
+      left.secretRef === right.secretRef &&
+      left.organizationRef === right.organizationRef &&
+      runtimeResourceScopeKey(left.resourceScope) ===
+        runtimeResourceScopeKey(right.resourceScope)
     );
   if (
     left.kind === "runtime-secret-draft" &&
     right.kind === "runtime-secret-draft"
   )
     return (
-      left.projectRef === right.projectRef &&
+      runtimeResourceScopeKey(left.resourceScope) ===
+        runtimeResourceScopeKey(right.resourceScope) &&
       left.surface === right.surface &&
       left.target === right.target &&
       left.targetRef === right.targetRef
@@ -241,12 +352,18 @@ function sameIntent(left: ReauthIntent, right: ReauthIntent): boolean {
 }
 
 export function createRuntimeSecretRevealIntent(
-  projectRef: string,
+  address: RuntimeResourceAddress,
   secretRef: string,
+  organizationRef: string,
   now = Date.now(),
 ): RuntimeSecretRevealIntent {
-  if (!opaqueReferencePattern.test(projectRef))
-    throw new Error("OIDC re-auth project reference is invalid");
+  const resourceScope = runtimeResourceAddressScope(address);
+  if (
+    !opaqueReferencePattern.test(organizationRef) ||
+    (resourceScope.kind === "ORGANIZATION" &&
+      resourceScope.organizationRef !== organizationRef)
+  )
+    throw new Error("OIDC re-auth organization reference is invalid");
   if (!opaqueReferencePattern.test(secretRef))
     throw new Error("OIDC re-auth secret reference is invalid");
   return {
@@ -254,30 +371,41 @@ export function createRuntimeSecretRevealIntent(
     challengeRef: globalThis.crypto.randomUUID(),
     issuedAt: now,
     kind: "runtime-secret",
-    projectRef,
-    returnPath: runtimeSecretsPath(projectRef),
+    resourceScope,
+    organizationRef,
+    returnPath:
+      resourceScope.kind === "PROJECT"
+        ? runtimeSecretsPath(resourceScope.projectRef)
+        : "/organization/secrets",
     secretRef,
     version: 1,
   };
 }
 
 function runtimeSecretDraftPath(
-  projectRef: string,
+  resourceScope: RuntimeResourceScope,
   target: RuntimeSecretDraftIntent["target"],
   targetRef?: string,
   surface?: RuntimeSecretDraftIntent["surface"],
   assistantReturnPath?: string,
 ): string {
   if (surface === "assistant") {
-    const projectPath = `/projects/${encodeURIComponent(projectRef)}`;
+    const projectPath =
+      resourceScope.kind === "PROJECT"
+        ? `/projects/${encodeURIComponent(resourceScope.projectRef)}`
+        : "/organization/secrets";
     const candidate = assistantReturnPath ?? projectPath;
     if (!candidate.startsWith("/") || candidate.startsWith("//"))
       throw new Error("OIDC re-auth assistant return path is invalid");
     const parsed = new URL(candidate, "https://kodex.invalid");
     if (
       parsed.origin !== "https://kodex.invalid" ||
-      (parsed.pathname !== projectPath &&
-        !parsed.pathname.startsWith(`${projectPath}/`))
+      (resourceScope.kind === "PROJECT"
+        ? parsed.pathname !== projectPath &&
+          !parsed.pathname.startsWith(`${projectPath}/`)
+        : !/^\/(?:$|onboarding(?:\/|$)|organization(?:\/|$)|projects(?:\/|$))/.test(
+            parsed.pathname,
+          ))
     )
       throw new Error("OIDC re-auth assistant return path is invalid");
     parsed.hash = "";
@@ -289,21 +417,24 @@ function runtimeSecretDraftPath(
     else parsed.searchParams.set("assistantSecretDraftRef", targetRef ?? "");
     return `${parsed.pathname}${parsed.search}`;
   }
-  const path = runtimeSecretsPath(projectRef);
+  const path =
+    resourceScope.kind === "PROJECT"
+      ? runtimeSecretsPath(resourceScope.projectRef)
+      : "/organization/secrets";
   if (target === "create") return `${path}?secretCreateAfterReauth=1`;
   return `${path}?${target === "draft" ? "draftRef" : "secretRef"}=${encodeURIComponent(targetRef ?? "")}`;
 }
 
 export function createRuntimeSecretDraftIntent(
-  projectRef: string,
+  scope: RuntimeResourceAddress,
   target: RuntimeSecretDraftIntent["target"],
   targetRef?: string,
   now = Date.now(),
   surface?: RuntimeSecretDraftIntent["surface"],
   assistantReturnPath?: string,
 ): RuntimeSecretDraftIntent {
+  const resourceScope = runtimeResourceAddressScope(scope);
   if (
-    !opaqueReferencePattern.test(projectRef) ||
     (target === "create" && targetRef !== undefined) ||
     (surface !== "assistant" && assistantReturnPath !== undefined) ||
     (surface === "assistant" && target === "secret") ||
@@ -316,9 +447,9 @@ export function createRuntimeSecretDraftIntent(
     challengeRef: globalThis.crypto.randomUUID(),
     issuedAt: now,
     kind: "runtime-secret-draft",
-    projectRef,
+    resourceScope,
     returnPath: runtimeSecretDraftPath(
-      projectRef,
+      resourceScope,
       target,
       targetRef,
       surface,
@@ -336,6 +467,7 @@ export function parseRuntimeSecretDraftIntent(
   now = Date.now(),
 ): RuntimeSecretDraftIntent {
   if (!isRecord(value)) throw new Error("OIDC re-auth state shape is invalid");
+  const resourceScope = parseRuntimeResourceScope(value.resourceScope);
   const hasRef = Object.hasOwn(value, "targetRef");
   const hasSurface = Object.hasOwn(value, "surface");
   if (
@@ -343,14 +475,21 @@ export function parseRuntimeSecretDraftIntent(
       "challengeRef",
       "issuedAt",
       "kind",
-      "projectRef",
+      "resourceScope",
       "returnPath",
       ...(hasSurface ? ["surface"] : []),
       "target",
       ...(hasRef ? ["targetRef"] : []),
       "version",
     ]) ||
-    !validBase(value, now) ||
+    value.version !== 1 ||
+    typeof value.challengeRef !== "string" ||
+    !challengeReferencePattern.test(value.challengeRef) ||
+    typeof value.issuedAt !== "number" ||
+    !Number.isSafeInteger(value.issuedAt) ||
+    value.issuedAt > now + allowedFutureSkewMs ||
+    now - value.issuedAt > intentLifetimeMs ||
+    typeof value.returnPath !== "string" ||
     value.kind !== "runtime-secret-draft" ||
     (value.target !== "create" &&
       value.target !== "draft" &&
@@ -363,7 +502,7 @@ export function parseRuntimeSecretDraftIntent(
         !opaqueReferencePattern.test(value.targetRef))) ||
     value.returnPath !==
       runtimeSecretDraftPath(
-        value.projectRef,
+        resourceScope,
         value.target,
         typeof value.targetRef === "string" ? value.targetRef : undefined,
         value.surface === "assistant" ? "assistant" : undefined,
@@ -371,7 +510,7 @@ export function parseRuntimeSecretDraftIntent(
       )
   )
     throw new Error("OIDC re-auth state is invalid or expired");
-  return value as unknown as RuntimeSecretDraftIntent;
+  return { ...value, resourceScope } as unknown as RuntimeSecretDraftIntent;
 }
 
 export function createRuntimeEnvironmentPolicyIntent(
@@ -416,7 +555,8 @@ export function parseRuntimeSecretRevealIntent(
     "challengeRef",
     "issuedAt",
     "kind",
-    "projectRef",
+    "resourceScope",
+    "organizationRef",
     "returnPath",
     "secretRef",
     "version",
@@ -424,14 +564,31 @@ export function parseRuntimeSecretRevealIntent(
   if (!isRecord(value) || !hasExactKeys(value, expectedKeys))
     throw new Error("OIDC re-auth state shape is invalid");
   if (
-    !validBase(value, now) ||
+    value.version !== 1 ||
+    typeof value.challengeRef !== "string" ||
+    !challengeReferencePattern.test(value.challengeRef) ||
+    typeof value.issuedAt !== "number" ||
+    !Number.isSafeInteger(value.issuedAt) ||
+    value.issuedAt > now + allowedFutureSkewMs ||
+    now - value.issuedAt > intentLifetimeMs ||
+    typeof value.organizationRef !== "string" ||
+    !opaqueReferencePattern.test(value.organizationRef) ||
     value.action !== "reveal" ||
     value.kind !== "runtime-secret" ||
     typeof value.secretRef !== "string" ||
-    !opaqueReferencePattern.test(value.secretRef) ||
-    value.returnPath !== runtimeSecretsPath(value.projectRef)
+    !opaqueReferencePattern.test(value.secretRef)
   )
     throw new Error("OIDC re-auth state is invalid or expired");
+  const scope = parseRuntimeResourceScope(value.resourceScope);
+  if (
+    (scope.kind === "ORGANIZATION" &&
+      scope.organizationRef !== value.organizationRef) ||
+    value.returnPath !==
+      (scope.kind === "PROJECT"
+        ? runtimeSecretsPath(scope.projectRef)
+        : "/organization/secrets")
+  )
+    throw new Error("OIDC re-auth state is invalid: secret scope mismatch");
   return value as unknown as RuntimeSecretRevealIntent;
 }
 
@@ -481,6 +638,8 @@ function parseReauthIntent(value: unknown, now: number): ReauthIntent {
   if (!isRecord(value)) throw new Error("OIDC re-auth state shape is invalid");
   if (value.kind === "runtime-secret")
     return parseRuntimeSecretRevealIntent(value, now);
+  if (value.kind === "organization-assistant-environment")
+    return parseOrganizationAssistantEnvironmentIntent(value, now);
   if (value.kind === "runtime-secret-draft")
     return parseRuntimeSecretDraftIntent(value, now);
   if (value.kind === "runtime-environment-policy")

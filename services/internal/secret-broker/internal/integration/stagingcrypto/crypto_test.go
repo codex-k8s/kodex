@@ -55,7 +55,7 @@ func cryptoFixture(t *testing.T) (*Cipher, *testKeys, value.SecretDraftBinding, 
 	}
 	plaintext := []byte("synthetic draft value")
 	digest := sha256.Sum256(plaintext)
-	binding := value.SecretDraftBinding{ProjectRef: "prj_fixture", SecretRef: "sec_fixture", DraftRef: "drf_fixture", DraftGeneration: 1, ValueType: "STRING", ContentSHA256: hex.EncodeToString(digest[:])}
+	binding := value.SecretDraftBinding{ScopeKind: "PROJECT", OrganizationRef: "org_fixture", ProjectRef: "prj_fixture", SecretRef: "sec_fixture", DraftRef: "drf_fixture", DraftGeneration: 1, ValueType: "STRING", ContentSHA256: hex.EncodeToString(digest[:])}
 	return crypt, keys, binding, plaintext
 }
 
@@ -89,12 +89,14 @@ func TestCipherBindsEveryOwnerFieldAndKeyGeneration(t *testing.T) {
 		t.Fatal("fixture encryption failed")
 	}
 	cases := map[string]func(*value.SecretDraftBinding){
-		"project":    func(b *value.SecretDraftBinding) { b.ProjectRef = "prj_foreign" },
-		"secret":     func(b *value.SecretDraftBinding) { b.SecretRef = "sec_foreign" },
-		"draft":      func(b *value.SecretDraftBinding) { b.DraftRef = "drf_foreign" },
-		"generation": func(b *value.SecretDraftBinding) { b.DraftGeneration++ },
-		"type":       func(b *value.SecretDraftBinding) { b.ValueType = "BINARY" },
-		"digest":     func(b *value.SecretDraftBinding) { b.ContentSHA256 = strings.Repeat("0", 64) },
+		"organization": func(b *value.SecretDraftBinding) { b.OrganizationRef = "org_foreign" },
+		"scope":        func(b *value.SecretDraftBinding) { b.ScopeKind = "ORGANIZATION"; b.ProjectRef = "" },
+		"project":      func(b *value.SecretDraftBinding) { b.ProjectRef = "prj_foreign" },
+		"secret":       func(b *value.SecretDraftBinding) { b.SecretRef = "sec_foreign" },
+		"draft":        func(b *value.SecretDraftBinding) { b.DraftRef = "drf_foreign" },
+		"generation":   func(b *value.SecretDraftBinding) { b.DraftGeneration++ },
+		"type":         func(b *value.SecretDraftBinding) { b.ValueType = "BINARY" },
+		"digest":       func(b *value.SecretDraftBinding) { b.ContentSHA256 = strings.Repeat("0", 64) },
 	}
 	for name, change := range cases {
 		t.Run(name, func(t *testing.T) {

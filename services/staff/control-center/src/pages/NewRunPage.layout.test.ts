@@ -28,7 +28,7 @@ describe("NewRunPage layout", () => {
   it("выравнивает Запустить и Отмена одной layout-группой", () => {
     expect(template).toContain('class="launch-summary__actions"');
     expect(source).toContain(".launch-summary__actions .button");
-    expect(source).toContain("min-height: 46px");
+    expect(source).toContain("min-height: var(--control-height)");
   });
 
   it("очистка цели также убирает её старое имя из сводки запуска", () => {

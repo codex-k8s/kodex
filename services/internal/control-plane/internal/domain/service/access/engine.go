@@ -47,22 +47,22 @@ var definitions = []entity.PermissionDefinition{
 	permission("agent.avatar.manage", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"AGENT"}, false),
 	permission("integration.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
 	permission("integration.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
-	permission("image.build", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "ROLE_IMAGE"}, false),
+	permission("image.build", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "PROJECT", "ROLE_IMAGE"}, false),
 	permission("image.source.view", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "PROJECT", "ROLE_IMAGE"}, false),
 	permission("image.source.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "PROJECT", "ROLE_IMAGE"}, false),
 	permission("image.promote", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ROLE_IMAGE"}, false),
-	permission("environment.privileged.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "RUNTIME_ENVIRONMENT"}, false),
+	permission("environment.privileged.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "PROJECT", "RUNTIME_ENVIRONMENT"}, false),
 	permission("runtime.environment.disable", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUNTIME_ENVIRONMENT"}, false),
 	permission("runtime.environment.delete", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUNTIME_ENVIRONMENT"}, false),
 	permission("provider.account.view", "READ", []string{"ORGANIZATION", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROVIDER_ACCOUNT"}, false),
 	permission("provider.account.manage", "ADMIN", []string{"ORGANIZATION", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROVIDER_ACCOUNT"}, false),
 	permission("provider.account.authorize", "ADMIN", []string{"ORGANIZATION", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROVIDER_ACCOUNT"}, false),
 	permission("provider.account.revoke", "ADMIN", []string{"ORGANIZATION", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROVIDER_ACCOUNT"}, false),
-	permission("secret.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "SECRET"}, false),
-	permission("secret.create", "WRITE", []string{"ORGANIZATION", "PROJECT"}, []string{"PROJECT"}, false),
-	permission("secret.rotate", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SECRET"}, false),
-	permission("secret.revoke", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SECRET"}, false),
-	permission("secret.reveal", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SECRET"}, false),
+	permission("secret.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "PROJECT", "SECRET"}, false),
+	permission("secret.create", "WRITE", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT"}, false),
+	permission("secret.rotate", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "SECRET"}, false),
+	permission("secret.revoke", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "SECRET"}, false),
+	permission("secret.reveal", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "SECRET"}, false),
 	permission("audit.view", "READ", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT"}, false),
 }
 
@@ -153,6 +153,7 @@ func ValidateScope(scope entity.AccessScope) error {
 		}
 	case "RESOURCE_INSTANCE":
 		organizationScoped := scope.ResourceKind == "INTEGRATION" || scope.ResourceKind == "PROVIDER_ACCOUNT" ||
+			(scope.ResourceKind == "ROLE_IMAGE" || scope.ResourceKind == "SECRET" || scope.ResourceKind == "RUNTIME_ENVIRONMENT") && scope.ProjectRef == "" ||
 			(scope.ResourceKind == "ARTIFACT" || scope.ResourceKind == "RUN") && scope.ProjectRef == ""
 		if scope.ResourceKind == "" || scope.ResourceKind == "ORGANIZATION" || scope.ResourceRef == "" ||
 			!knownResourceKind(scope.ResourceKind) || organizationScoped && scope.ProjectRef != "" ||

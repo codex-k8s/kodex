@@ -2,6 +2,7 @@ import type { RouteLocationNormalizedLoaded } from "vue-router";
 
 import type {
   Agent,
+  AssistantPlanOperation,
   AssistantContextDescriptor,
   Project,
   RoleImageRecipe,
@@ -28,11 +29,17 @@ export const assistantContextOperations = [
   "UPDATE_PROJECT",
   "UPDATE_AGENT",
   "CREATE_AGENT",
+  "CREATE_PROJECT_ASSISTANT",
+  "CREATE_INSTRUCTION_DRAFT",
+  "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS",
   "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
   "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
   "BIND_AGENT_RUNTIME_ENVIRONMENT",
   "CREATE_ROLE_IMAGE_RECIPE",
   "UPDATE_ROLE_IMAGE_RECIPE",
+  "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE",
+  "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE",
+  "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION",
   "CREATE_WORKFLOW",
   "UPDATE_WORKFLOW",
   "CHANGE_CAPABILITY",
@@ -46,7 +53,7 @@ export const assistantContextOperations = [
   "TEST_INTEGRATION_CONNECTION",
   "ARCHIVE_AGENT",
   "ARCHIVE_WORKFLOW",
-] as const;
+] as const satisfies readonly AssistantPlanOperation["type"][];
 
 export function readableContextKind(kind: string) {
   return (

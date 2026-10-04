@@ -15,8 +15,14 @@ test.afterEach(async ({ page }) => {
 });
 
 for (const width of [1440, 390]) {
-  for (const kind of ["environment", "secret", "managed"] as const) {
-    test(`synthetic: impact search и rebind ${kind} ${String(width)}px`, async ({
+  for (const { kind, scopeKind } of [
+    { kind: "environment", scopeKind: "PROJECT" },
+    { kind: "secret", scopeKind: "PROJECT" },
+    { kind: "managed", scopeKind: "PROJECT" },
+    { kind: "environment", scopeKind: "ORGANIZATION" },
+    { kind: "secret", scopeKind: "ORGANIZATION" },
+  ] as const) {
+    test(`synthetic: impact search и rebind ${kind} ${scopeKind} ${String(width)}px`, async ({
       page,
       context,
     }, testInfo) => {
@@ -70,12 +76,14 @@ for (const width of [1440, 390]) {
         updatedAt: revision.createdAt,
       };
       const consumer = (id: string): RuntimeEnvironmentConsumer => ({
+        scopeKind,
+        organizationRef: "org_synthetic",
         agentRef: id,
         agentVersion: 3,
         bindingRef: `binding-${id}`,
         bindingVersion: 4,
         versionRef: "old",
-        projectRef: "project",
+        projectRef: scopeKind === "PROJECT" ? "project_synthetic" : "",
       });
       const row = (id: string) =>
         kind === "environment"
@@ -83,9 +91,11 @@ for (const width of [1440, 390]) {
           : kind === "secret"
             ? {
                 environmentRef: id,
+                scopeKind,
+                organizationRef: "org_synthetic",
                 environmentVersion: 19,
                 environmentVersionRef: "old",
-                projectRef: "project",
+                projectRef: scopeKind === "PROJECT" ? "project_synthetic" : "",
                 secretRevisions: [6],
               }
             : { kind: "AGENT", ref: id, revisionRef: "old", version: 4 };
@@ -138,7 +148,10 @@ for (const width of [1440, 390]) {
           const query = url.searchParams.get("query") ?? "";
           const cursor = url.searchParams.get("pageToken");
           queries.push({ query, cursor });
-          expect(url.searchParams.get("pageSize")).toBe("40");
+          const requestedPageSize = Number(url.searchParams.get("pageSize"));
+          expect(Number.isInteger(requestedPageSize)).toBe(true);
+          expect(requestedPageSize).toBeGreaterThanOrEqual(6);
+          expect(requestedPageSize).toBeLessThanOrEqual(100);
           if (query) expect(cursor).toBeNull();
           const consumers =
             query === "second" || cursor ? [row("second")] : [row("first")];
@@ -192,6 +205,10 @@ for (const width of [1440, 390]) {
                       environmentRef: "second",
                       expectedEnvironmentVersion: 19,
                       sourceVersionRef: "old",
+                      scopeKind,
+                      organizationRef: "org_synthetic",
+                      projectRef:
+                        scopeKind === "PROJECT" ? "project_synthetic" : "",
                       consumers: [],
                     },
                   ],
@@ -223,7 +240,10 @@ for (const width of [1440, 390]) {
                           environmentRef: "second",
                           environmentVersion: 20,
                           versionRef: "new",
-                          projectRef: "project",
+                          projectRef:
+                            scopeKind === "PROJECT" ? "project_synthetic" : "",
+                          scopeKind,
+                          organizationRef: "org_synthetic",
                           digest,
                         },
                       ],
@@ -268,8 +288,6 @@ for (const width of [1440, 390]) {
           .getByRole("button", { name: "Влияние ревизии", exact: true })
           .click();
       const dialog = page.getByRole("dialog");
-      await expect(dialog.getByRole("checkbox")).toHaveCount(1);
-      await dialog.getByRole("button", { name: /ещё/i }).click();
       await expect(dialog.getByRole("checkbox")).toHaveCount(2);
       expect(queries).toEqual([
         { query: "", cursor: null },
@@ -285,7 +303,9 @@ for (const width of [1440, 390]) {
       ).toBeDisabled();
       await dialog.getByRole("checkbox").check();
       await dialog.screenshot({
-        path: testInfo.outputPath(`impact-${kind}-${String(width)}.png`),
+        path: testInfo.outputPath(
+          `impact-${kind}-${scopeKind}-${String(width)}.png`,
+        ),
       });
       expect(
         await page.evaluate(

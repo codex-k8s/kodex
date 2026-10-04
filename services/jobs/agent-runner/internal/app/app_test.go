@@ -377,7 +377,7 @@ func TestMaterializedInstructionsRejectUnpromisedNames(t *testing.T) {
 }
 
 func TestSystemAssistantCompletionDoesNotCreateProjectArtifact(t *testing.T) {
-	artifacts, err := completionArtifacts(model.Input{SystemAssistant: true}, "Configuration plan proposed.")
+	artifacts, err := completionArtifacts(model.Input{AssistantScope: runtimecontract.AssistantScopeSystem}, "Configuration plan proposed.")
 	if err != nil {
 		t.Fatalf("completionArtifacts() error = %v", err)
 	}

@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -19,6 +20,16 @@ type buildClaimReceipt struct {
 	Fence               uint64
 	AuthorityGeneration uint64
 	LeaseExpiresAt      time.Time
+}
+
+type buildExpiryOutcome struct {
+	BuildRef string
+	Version  uint64
+	Stage    string
+}
+
+type buildExpiryReceipt struct {
+	Changes []buildExpiryOutcome
 }
 
 type admissionClaimReceipt struct {
@@ -45,6 +56,12 @@ type promotionAuthorizationReceipt struct {
 }
 
 func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Principal, key string) (entity.ImageBuildClaim, error) {
+	return retryRoleImageTransaction(ctx, func() (entity.ImageBuildClaim, error) {
+		return repository.claimBuild(ctx, principal, key)
+	})
+}
+
+func (repository *Repository) claimBuild(ctx context.Context, principal value.Principal, key string) (entity.ImageBuildClaim, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.ImageBuildClaim{}, err
@@ -56,21 +73,39 @@ func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Pr
 		return entity.ImageBuildClaim{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var replay buildClaimReceipt
-	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation, key, intent, &replay); receiptErr != nil {
+	if err := repository.lockRoleImageIdempotency(ctx, tx, current, operation, key); err != nil {
+		return entity.ImageBuildClaim{}, err
+	}
+	if replay, expiryOnly, found, receiptErr := repository.loadBuildClaimOutcome(ctx, tx, current, operation, key, intent); receiptErr != nil {
 		return entity.ImageBuildClaim{}, receiptErr
 	} else if found {
 		if err := committed(tx, ctx); err != nil {
 			return entity.ImageBuildClaim{}, err
 		}
+		if expiryOnly {
+			return entity.ImageBuildClaim{}, errs.ErrNotFound
+		}
 		return repository.buildClaimFromReceipt(replay), nil
 	}
 	var buildID, buildRef, recipeID, stage string
+	expired, err := repository.expireRoleImageBuilds(ctx, tx, current)
+	if err != nil {
+		return entity.ImageBuildClaim{}, err
+	}
 	var version, fence uint64
 	var attempt, maximumAttempts uint32
 	err = tx.QueryRow(ctx, queryRoleImagesClaimBuildCandidate, current.organizationID).Scan(
 		&buildID, &buildRef, &version, &attempt, &maximumAttempts, &fence, &recipeID, &stage)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if len(expired) > 0 {
+			if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, key, intent,
+				"IMAGE_BUILD_EXPIRY_OUTCOME", buildExpiryReceipt{Changes: expired}); err != nil {
+				return entity.ImageBuildClaim{}, err
+			}
+			if err := committed(tx, ctx); err != nil {
+				return entity.ImageBuildClaim{}, err
+			}
+		}
 		return entity.ImageBuildClaim{}, errs.ErrNotFound
 	}
 	if err != nil {
@@ -100,7 +135,8 @@ func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Pr
 		&recipe.Ref, &projectID, &recipe.ProjectRef,
 		&recipe.Version, &recipe.Generation, &recipe.SpecSHA256,
 		&specification, &immutable, &recipe.PolicyRevision, &recipe.PolicySHA256,
-		&recipe.RoleRuntimeContractRevision, &recipe.RoleRuntimeContractSHA256)
+		&recipe.RoleRuntimeContractRevision, &recipe.RoleRuntimeContractSHA256,
+		&recipe.ScopeKind, &recipe.OrganizationRef)
 	if err != nil || decodeJSON(specification, &recipe.Input) != nil {
 		return entity.ImageBuildClaim{}, errs.ErrConflict
 	}
@@ -126,6 +162,85 @@ func (repository *Repository) ClaimBuild(ctx context.Context, principal value.Pr
 		return entity.ImageBuildClaim{}, err
 	}
 	return repository.buildClaimFromReceipt(receipt), nil
+}
+
+// Lease expiry закрывает прежний token/generation и увеличивает fence в той же
+// owner-транзакции, что durable event и новая attempt. При исчерпании бюджета
+// terminal DEAD_LETTER фиксируется даже когда нового claim уже нет.
+func (repository *Repository) expireRoleImageBuilds(ctx context.Context, tx pgx.Tx, current scope) ([]buildExpiryOutcome, error) {
+	rows, err := tx.Query(ctx, queryRoleImagesExpireBuilds, current.organizationID)
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	var expired []lockedBuild
+	for rows.Next() {
+		var build lockedBuild
+		if err := rows.Scan(&build.Build.Ref, &build.Build.RecipeRef, &build.Build.Version, &build.Build.Stage, &build.ProjectID, &build.Build.ScopeKind); err != nil {
+			rows.Close()
+			return nil, errs.ErrUnavailable
+		}
+		expired = append(expired, build)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	outcomes := make([]buildExpiryOutcome, 0, len(expired))
+	for _, build := range expired {
+		if err := repository.auditRoleImage(ctx, tx, current, build.ProjectID,
+			"platform.role-images.builds.expire", "IMAGE_BUILD", build.Build.Ref,
+			"i18n:ROLE_IMAGE_BUILD_LEASE_EXPIRED"); err != nil {
+			return nil, err
+		}
+		if err := repository.emitRoleImageBuildChanged(ctx, tx, current, build); err != nil {
+			return nil, err
+		}
+		outcomes = append(outcomes, buildExpiryOutcome{BuildRef: build.Build.Ref, Version: build.Build.Version, Stage: build.Build.Stage})
+	}
+	return outcomes, nil
+}
+
+// Вид сохранённого результата закрепляет отсутствие нового claim; пустой Build
+// не используется как неявный переключатель протокола или источник полномочий.
+func (repository *Repository) loadBuildClaimOutcome(ctx context.Context, tx pgx.Tx, current scope,
+	operation, key, intent string,
+) (buildClaimReceipt, bool, bool, error) {
+	var storedIntent, responseType string
+	var payload []byte
+	err := tx.QueryRow(ctx, queryRoleImagesClaimOutcomeReceipt, current.organizationID,
+		current.actorID, operation, key).Scan(&storedIntent, &responseType, &payload)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return buildClaimReceipt{}, false, false, nil
+	}
+	if err != nil {
+		return buildClaimReceipt{}, false, false, errs.ErrUnavailable
+	}
+	if storedIntent != intent {
+		return buildClaimReceipt{}, false, false, errs.ErrIdempotencyReuse
+	}
+	switch responseType {
+	case "IMAGE_BUILD_CLAIM":
+		var receipt buildClaimReceipt
+		if json.Unmarshal(payload, &receipt) != nil || receipt.Build.Ref == "" || receipt.Build.Attempt == 0 ||
+			receipt.Fence == 0 || receipt.LeaseExpiresAt.IsZero() {
+			return buildClaimReceipt{}, false, false, errs.ErrConflict
+		}
+		return receipt, false, true, nil
+	case "IMAGE_BUILD_EXPIRY_OUTCOME":
+		var receipt buildExpiryReceipt
+		if json.Unmarshal(payload, &receipt) != nil || len(receipt.Changes) == 0 || len(receipt.Changes) > 32 {
+			return buildClaimReceipt{}, false, false, errs.ErrConflict
+		}
+		for _, change := range receipt.Changes {
+			if change.BuildRef == "" || change.Version == 0 || !contains([]string{"EXPIRED", "DEAD_LETTER"}, change.Stage) {
+				return buildClaimReceipt{}, false, false, errs.ErrConflict
+			}
+		}
+		return buildClaimReceipt{}, true, true, nil
+	default:
+		return buildClaimReceipt{}, false, false, errs.ErrConflict
+	}
 }
 
 func (repository *Repository) buildClaimFromReceipt(receipt buildClaimReceipt) entity.ImageBuildClaim {
@@ -167,6 +282,7 @@ func (repository *Repository) RenewBuild(ctx context.Context, input roleimagerep
 	locked.Build.LeaseExpiresAt, locked.Build.LeaseTokenSHA256 = &expiresAt, tokenDigest(token)
 	receipt := buildClaimReceipt{Build: locked.Build,
 		Input: newRoleImageBuildInput(entity.RoleImageRecipe{Ref: locked.Build.RecipeRef,
+			ScopeKind: locked.Build.ScopeKind, OrganizationRef: locked.Build.OrganizationRef, ProjectRef: locked.Build.ProjectRef,
 			Version: locked.Build.RecipeVersion, Generation: locked.Build.RecipeGeneration,
 			SpecSHA256: locked.Build.SpecSHA256, Input: locked.Specification,
 			PolicyRevision: locked.PolicyRevision, PolicySHA256: locked.PolicySHA256,
@@ -360,7 +476,8 @@ func (repository *Repository) beginBuildMutation(ctx context.Context, input role
 
 func (repository *Repository) emitRoleImageBuildChanged(ctx context.Context, tx pgx.Tx, current scope, locked lockedBuild) error {
 	projectRef := projectRefByID(ctx, tx, locked.ProjectID)
-	if projectRef == "" || locked.Build.RecipeRef == "" || locked.Build.Version == 0 {
+	if (locked.Build.ScopeKind != "PROJECT" && locked.Build.ScopeKind != "ORGANIZATION") ||
+		(locked.Build.ScopeKind == "PROJECT" && projectRef == "") || locked.Build.RecipeRef == "" || locked.Build.Version == 0 {
 		return errs.ErrUnavailable
 	}
 	return repository.emitPlatformEventSnapshot(ctx, tx, current, "ROLE_IMAGE_RECIPE_CHANGED",

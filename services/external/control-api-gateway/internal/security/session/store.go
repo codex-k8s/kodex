@@ -63,13 +63,15 @@ type Claims struct {
 // Elevation связывает короткоживущее полномочие с точной чувствительной операцией.
 // Одноразовость обеспечивается авторитетным server-owned store по SessionID.
 type Elevation struct {
-	Kind           string `json:"kind"`
-	ProjectRef     string `json:"project_ref,omitempty"`
-	SecretRef      string `json:"secret_ref,omitempty"`
-	ReceiptRef     string `json:"receipt_ref,omitempty"`
-	ReceiptVersion int64  `json:"receipt_version,omitempty"`
-	ReceiptDigest  string `json:"receipt_digest,omitempty"`
-	ExpiresAt      int64  `json:"expires_at"`
+	Kind            string `json:"kind"`
+	ScopeKind       string `json:"scope_kind,omitempty"`
+	OrganizationRef string `json:"organization_ref,omitempty"`
+	ProjectRef      string `json:"project_ref,omitempty"`
+	SecretRef       string `json:"secret_ref,omitempty"`
+	ReceiptRef      string `json:"receipt_ref,omitempty"`
+	ReceiptVersion  int64  `json:"receipt_version,omitempty"`
+	ReceiptDigest   string `json:"receipt_digest,omitempty"`
+	ExpiresAt       int64  `json:"expires_at"`
 }
 
 func New(config Config) (*Store, error) {
@@ -201,10 +203,24 @@ func validElevation(value *Elevation, now, sessionExpiry time.Time) bool {
 	}
 	switch value.Kind {
 	case ElevationKindRuntimeSecretReveal:
-		return validOpaqueReference(value.ProjectRef) && validOpaqueReference(value.SecretRef) &&
+		return ValidRuntimeSecretBinding(value.ScopeKind, value.OrganizationRef, value.ProjectRef, value.SecretRef) &&
 			value.ReceiptRef == "" && value.ReceiptVersion == 0 && value.ReceiptDigest == ""
 	case ElevationKindEmailReconciliation:
-		return value.ProjectRef == "" && value.SecretRef == "" && ValidEmailReceiptBinding(value.ReceiptRef, value.ReceiptVersion, value.ReceiptDigest)
+		return value.ProjectRef == "" && value.SecretRef == "" && value.ScopeKind == "" && value.OrganizationRef == "" && ValidEmailReceiptBinding(value.ReceiptRef, value.ReceiptVersion, value.ReceiptDigest)
+	default:
+		return false
+	}
+}
+
+func ValidRuntimeSecretBinding(kind, organizationRef, projectRef, secretRef string) bool {
+	if !validOpaqueReference(organizationRef) || !validOpaqueReference(secretRef) {
+		return false
+	}
+	switch kind {
+	case "ORGANIZATION":
+		return projectRef == ""
+	case "PROJECT":
+		return validOpaqueReference(projectRef)
 	default:
 		return false
 	}

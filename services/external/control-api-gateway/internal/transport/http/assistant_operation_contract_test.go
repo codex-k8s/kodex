@@ -1,11 +1,41 @@
 package httptransport
 
 import (
+	"strings"
 	"testing"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
+
+func TestAssistantOperationRegistryRoundTripsEveryOwnerOperation(t *testing.T) {
+	for number, name := range cp.AssistantPlanOperation_Type_name {
+		if number == 0 {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			op := strings.TrimPrefix(name, "TYPE_")
+			if !generated.AssistantPlanOperationType(op).Valid() || !generated.AssistantContextDescriptorAllowedOperations(op).Valid() {
+				t.Fatal("owner operation is absent from the closed HTTP contract")
+			}
+			context := assistantContextInput(&generated.AssistantContextDescriptor{
+				Route: "/", EntityKind: "SYSTEM_ASSISTANT", EntityRef: "agt_fixture01",
+				AllowedOperations: []generated.AssistantContextDescriptorAllowedOperations{generated.AssistantContextDescriptorAllowedOperations(op)},
+			})
+			if len(context.AllowedOperations) != 1 || context.AllowedOperations[0] != cp.AssistantPlanOperation_Type(number) {
+				t.Fatal("operation identity changed before owner resolution")
+			}
+			operation := assistantPlanOperationsInput([]generated.AssistantPlanOperationInput{{Type: generated.AssistantPlanOperationType(op)}})
+			if len(operation) != 1 || operation[0].GetType() != cp.AssistantPlanOperation_Type(number) {
+				t.Fatal("operation identity changed at the request boundary")
+			}
+			plan, err := messageMap(&cp.AssistantPlanOperation{Type: cp.AssistantPlanOperation_Type(number)})
+			if err != nil || plan["type"] != op {
+				t.Fatal("operation identity changed at the plan response boundary")
+			}
+		})
+	}
+}
 
 func TestAssistantUpdateProjectOperationContract(t *testing.T) {
 	if !generated.AssistantPlanOperationType("UPDATE_PROJECT").Valid() || !generated.AssistantContextDescriptorAllowedOperations("UPDATE_PROJECT").Valid() {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
 
 import {
   commandRoleImage,
@@ -46,6 +47,8 @@ function response<T>(data: T) {
 }
 
 const recipe: RoleImageRecipe = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   sourceAvailable: true,
   ref: "image_1",
   version: 3,
@@ -66,6 +69,7 @@ const recipe: RoleImageRecipe = {
 
 describe("role image API adapter", () => {
   beforeEach(() => {
+    initializeRuntimeOwnerFixture("org_synthetic");
     vi.clearAllMocks();
     mutation.mutate.mockImplementation(
       async (request: (headers: Record<string, string>) => Promise<unknown>) =>
@@ -345,12 +349,18 @@ describe("role image API adapter", () => {
         items: [
           {
             ref: "environment_1",
+            scopeKind: "PROJECT",
+            organizationRef: "org_synthetic",
+            projectRef: "project_1",
             currentVersion: {
               image: { artifactRef: "imgart_target" },
             },
           },
           {
             ref: "environment_2",
+            scopeKind: "PROJECT",
+            organizationRef: "org_synthetic",
+            projectRef: "project_1",
             currentVersion: {
               image: { artifactRef: "imgart_other" },
             },

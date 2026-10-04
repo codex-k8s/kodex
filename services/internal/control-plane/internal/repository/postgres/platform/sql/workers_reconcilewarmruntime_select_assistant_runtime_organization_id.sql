@@ -56,7 +56,14 @@ SELECT a.ref,
        runtime_environment.resources_digest,
        runtime_environment.volumes_digest,
        runtime_environment.network_digest,
-       runtime_environment.rbac_digest
+       runtime_environment.rbac_digest,
+       image_artifact.ref,
+       image_recipe.ref,
+       image_artifact.recipe_generation,
+       image_artifact.promoted_reference,
+       image_artifact.manifest_digest,
+       image_artifact.role_runtime_contract_revision,
+       image_artifact.role_runtime_contract_sha256
 FROM control_plane.assistant_runtime ar
 JOIN control_plane.agents a ON a.id = ar.agent_id
 JOIN control_plane.sessions session ON session.ref = ar.system_session_ref
@@ -85,6 +92,19 @@ JOIN control_plane.runtime_environment_sets environment_set
  AND environment_set.state = 'ACTIVE'
 JOIN control_plane.runtime_environment_versions runtime_environment
   ON runtime_environment.id = environment_set.current_version_id
+JOIN control_plane.image_artifacts image_artifact
+  ON image_artifact.id = runtime_environment.role_image_artifact_id
+ AND image_artifact.organization_id = runtime_environment.organization_id
+ AND image_artifact.project_id IS NOT DISTINCT FROM environment_set.project_id
+ AND image_artifact.admission_state = 'ACCEPTED'
+ AND image_artifact.promotion_state = 'PROMOTED'
+ AND image_artifact.role_runtime_contract_revision = $2
+ AND image_artifact.role_runtime_contract_sha256 = $3
+JOIN control_plane.role_image_recipes image_recipe
+  ON image_recipe.id = image_artifact.recipe_id
+ AND image_recipe.organization_id = image_artifact.organization_id
+ AND image_recipe.project_id IS NOT DISTINCT FROM environment_set.project_id
+ AND image_recipe.state = 'ACTIVE'
 JOIN control_plane.runtime_profiles profile
   ON profile.stable_key = runtime_config.runtime_profile_key
  AND profile.provider = runtime_config.provider
@@ -92,4 +112,6 @@ JOIN control_plane.provider_definitions runtime_provider_definition
   ON runtime_provider_definition.stable_key = runtime_config.provider
  AND runtime_provider_definition.stable_key = provider_account.definition_key
 WHERE ar.organization_id = $1::uuid
+  AND environment_set.organization_id = ar.organization_id
+  AND environment_set.project_id IS NOT DISTINCT FROM a.project_id
 FOR UPDATE

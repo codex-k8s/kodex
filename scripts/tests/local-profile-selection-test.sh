@@ -8,6 +8,11 @@ fail() {
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 resolver="$root/tools/dev/resolve-local-profile.sh"
+render_tool_line=$(grep -n 'install-user-render-tools.sh.*--mode readback' "$root/dev.sh" | cut -d: -f1)
+profile_resolver_line=$(grep -n 'deployment_profile=.*resolve-local-profile.sh' "$root/dev.sh" | cut -d: -f1)
+[[ "$render_tool_line" =~ ^[0-9]+$ && "$profile_resolver_line" =~ ^[0-9]+$ &&
+  "$render_tool_line" -lt "$profile_resolver_line" ]] ||
+  fail 'private render tools are not verified before stored profile resolution'
 temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
 render="$temporary/render.yaml"

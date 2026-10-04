@@ -2,6 +2,12 @@ package platform
 
 import _ "embed"
 
+//go:embed sql/role_images_expire_builds.sql
+var queryRoleImagesExpireBuilds string
+
+//go:embed sql/role_images_claim_outcome_receipt.sql
+var queryRoleImagesClaimOutcomeReceipt string
+
 var (
 	//go:embed sql/role_images_list_recipes.sql
 	queryRoleImagesListRecipes string

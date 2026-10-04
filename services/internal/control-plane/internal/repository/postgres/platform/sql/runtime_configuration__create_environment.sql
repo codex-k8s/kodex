@@ -1,8 +1,8 @@
 -- name: runtime_configuration__create_environment :one
 WITH inserted_environment AS (
     INSERT INTO control_plane.runtime_environment_sets
-        (ref, organization_id, project_id, name, description, created_by)
-    VALUES (@environment_ref, @organization_id::uuid, @project_id::uuid, @name, @description, @created_by::uuid)
+        (ref, organization_id, scope_kind, project_id, name, description, created_by)
+    VALUES (@environment_ref, @organization_id::uuid, @scope_kind, NULLIF(@project_id,'')::uuid, @name, @description, @created_by::uuid)
     RETURNING id, ref
 ), inserted_version AS (
     INSERT INTO control_plane.runtime_environment_versions

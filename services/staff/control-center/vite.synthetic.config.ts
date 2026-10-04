@@ -10,6 +10,15 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        assistantRetry: fileURLToPath(
+          new URL("./e2e/fixtures/assistant-retry.html", import.meta.url),
+        ),
+        assistantConcurrency: fileURLToPath(
+          new URL("./e2e/fixtures/assistant-concurrency.html", import.meta.url),
+        ),
+        assistantEnvironment: fileURLToPath(
+          new URL("./e2e/fixtures/assistant-environment.html", import.meta.url),
+        ),
         uiPopulated: fileURLToPath(
           new URL("./e2e/fixtures/ui-populated.html", import.meta.url),
         ),

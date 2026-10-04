@@ -19,6 +19,8 @@
       import { loadRuntimeConfig } from "../../src/shared/config/runtime";
       import { configureApiClient } from "../../src/shared/api/client";
       import { resetOwnerRequests } from "../../src/shared/api/owner-lifetime";
+      import { useProvidersStore } from "../../src/features/providers/store";
+      import { useRealtimeStore } from "../../src/features/realtime/store";
       import "../../src/app/styles/base.css";
       import ImpactFixture from "./ImpactFixture.vue";
       await loadRuntimeConfig();
@@ -29,11 +31,14 @@
         routes: [{ path: "/", component: ImpactFixture }],
       });
       await router.push("/");
-      createApp(RouterView)
-        .use(createPinia())
-        .use(router)
-        .use(i18n)
-        .mount("#app");
+      const pinia = createPinia();
+      // Приложение передаёт готовый initial snapshot; isolated fixture воспроизводит
+      // эту границу через mocked API до подключения workspace.
+      if (new URLSearchParams(location.search).get("kind") === "provider")
+        await useProvidersStore(pinia).load();
+      createApp(RouterView).use(pinia).use(router).use(i18n).mount("#app");
+      if (new URLSearchParams(location.search).get("realtime") === "1")
+        useRealtimeStore(pinia).openPlatform();
     </script>
   </body>
 </html>

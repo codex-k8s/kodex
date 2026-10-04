@@ -283,7 +283,7 @@ spec:
             rule.to[0].podSelector.matchLabels['app.kubernetes.io/name'] == 'runtime-controller' &&
             rule.to[0].podSelector.matchLabels['app.kubernetes.io/component'] == 'internal-controller' &&
             !has(rule.to[0].ipBlock)) ||
-           (rule.ports[0].port == 8080 &&
+           (rule.ports[0].port == 8084 &&
             rule.ports[0].protocol == 'TCP' &&
             has(rule.to[0].namespaceSelector) &&
             size(rule.to[0].namespaceSelector.matchLabels) == 1 &&
@@ -305,7 +305,7 @@ spec:
           rule.ports[0].port == 53 && rule.ports[0].protocol == 'TCP')) == 1 &&
         size(object.spec.egress.filter(rule,
           rule.ports[0].port == 53 && rule.ports[0].protocol == 'UDP')) == 1 &&
-        size(object.spec.egress.filter(rule, rule.ports[0].port == 8080)) == 1 &&
+        size(object.spec.egress.filter(rule, rule.ports[0].port == 8084)) == 1 &&
         size(object.spec.egress.filter(rule, rule.ports[0].port == 8444)) == 1 &&
         size(object.spec.egress.filter(rule, rule.ports[0].port == 443)) <= 1
       message: execution NetworkPolicy contains a wildcard or unsupported egress rule
@@ -591,29 +591,29 @@ spec:
           'RuntimeDefault'
       message: managed role Pod container securityContext is invalid
     - expression: >-
-        size(variables.roleContainers[0].resources.requests) == 3 &&
-        size(variables.roleContainers[0].resources.limits) == 3 &&
-        quantity(string(variables.roleContainers[0].resources.requests.cpu)).compareTo(quantity('100m')) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests.cpu)).compareTo(quantity('8')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits.cpu)).compareTo(
-          quantity(string(variables.roleContainers[0].resources.requests.cpu))) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits.cpu)).compareTo(quantity('16')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests.memory)).compareTo(quantity('128Mi')) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests.memory)).compareTo(quantity('32Gi')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits.memory)).compareTo(
-          quantity(string(variables.roleContainers[0].resources.requests.memory))) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits.memory)).compareTo(quantity('64Gi')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage'])).compareTo(
+        size(variables.providerContainers[0].resources.requests) == 3 &&
+        size(variables.providerContainers[0].resources.limits) == 3 &&
+        quantity(string(variables.providerContainers[0].resources.requests.cpu)).compareTo(quantity('100m')) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.requests.cpu)).compareTo(quantity('8')) <= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits.cpu)).compareTo(
+          quantity(string(variables.providerContainers[0].resources.requests.cpu))) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits.cpu)).compareTo(quantity('16')) <= 0 &&
+        quantity(string(variables.providerContainers[0].resources.requests.memory)).compareTo(quantity('128Mi')) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.requests.memory)).compareTo(quantity('32Gi')) <= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits.memory)).compareTo(
+          quantity(string(variables.providerContainers[0].resources.requests.memory))) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits.memory)).compareTo(quantity('64Gi')) <= 0 &&
+        quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage'])).compareTo(
           quantity('256Mi')) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage'])).compareTo(
+        quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage'])).compareTo(
           quantity('20Gi')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits['ephemeral-storage'])).compareTo(
-          quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage']))) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits['ephemeral-storage'])).compareTo(
+        quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage'])).compareTo(
+          quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage']))) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage'])).compareTo(
           quantity('100Gi')) <= 0
       message: managed role Pod resources are outside the approved policy
     - expression: >-
-        [variables.providerContainers[0], variables.relayContainers[0],
+        [variables.roleContainers[0], variables.relayContainers[0],
           object.spec.initContainers[1]].all(container,
           size(container.resources.requests) == 2 &&
           size(container.resources.limits) == 2 &&
@@ -726,7 +726,7 @@ spec:
           item.value == object.metadata.labels['kodex.dev/environment'])) == 1
       message: provider credential relay server-owned environment is invalid
     - expression: >-
-        size(variables.providerContainers[0].env) <= 135 &&
+        size(variables.providerContainers[0].env) <= 140 &&
         variables.providerContainers[0].env.all(item,
           size(variables.providerContainers[0].env.filter(other,
             other.name == item.name)) == 1) &&
@@ -737,11 +737,19 @@ spec:
           item.value == '/workspace/.kodex/state/codex-home' &&
           !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
-          item.name == 'HTTPS_PROXY' && item.value ==
-            'http://egress-gateway.kodex-system.svc:8080' && !has(item.valueFrom))) == 1 &&
+          item.name == 'HTTPS_PROXY' &&
+            item.value.matches('^http://kodex:[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+@egress-gateway\\.kodex-system\\.svc:8084$') &&
+            !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
-          item.name == 'HTTP_PROXY' && item.value ==
-            'http://egress-gateway.kodex-system.svc:8080' && !has(item.valueFrom))) == 1 &&
+          item.name == 'HTTP_PROXY' &&
+            item.value.matches('^http://kodex:[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+@egress-gateway\\.kodex-system\\.svc:8084$') &&
+            !has(item.valueFrom))) == 1 &&
+        ['SSL_CERT_FILE', 'CURL_CA_BUNDLE', 'REQUESTS_CA_BUNDLE',
+         'NODE_EXTRA_CA_CERTS', 'GIT_SSL_CAINFO'].all(name,
+          size(variables.providerContainers[0].env.filter(item,
+            item.name == name &&
+            item.value == '/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt' &&
+            !has(item.valueFrom))) == 1) &&
         size(variables.providerContainers[0].env.filter(item,
           item.name == 'NO_PROXY' && item.value == '127.0.0.1,localhost' &&
           !has(item.valueFrom))) == 1 &&
@@ -756,12 +764,16 @@ spec:
     - expression: >-
         variables.providerContainers[0].env.all(item,
           item.name in ['HOME', 'CODEX_HOME', 'HTTPS_PROXY', 'HTTP_PROXY',
-            'NO_PROXY', 'OTEL_SDK_DISABLED', 'DEPLOYMENT_ENVIRONMENT'] ||
+            'SSL_CERT_FILE', 'CURL_CA_BUNDLE', 'REQUESTS_CA_BUNDLE',
+            'NODE_EXTRA_CA_CERTS', 'GIT_SSL_CAINFO', 'NO_PROXY',
+            'OTEL_SDK_DISABLED', 'DEPLOYMENT_ENVIRONMENT'] ||
           (item.name.matches('^[A-Z_][A-Z0-9_]{0,126}$') &&
            !['KODEX_', 'CODEX_', 'OPENAI_', 'OTEL_', 'AWS_', 'AZURE_',
              'GOOGLE_', 'KUBERNETES_'].exists(prefix, item.name.startsWith(prefix)) &&
            !(item.name in ['PATH', 'PWD', 'SHELL', 'USER', 'LOGNAME',
-             'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR']) &&
+             'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'ALL_PROXY',
+             'NODE_TLS_REJECT_UNAUTHORIZED', 'GIT_SSL_NO_VERIFY',
+             'PYTHONHTTPSVERIFY', 'CURL_SSL_BACKEND']) &&
            ((has(item.valueFrom) && has(item.valueFrom.secretKeyRef)) ||
             (!has(item.valueFrom) && size(item.value) <= 8192))))
       message: provider runtime contains an unsupported environment variable
@@ -787,7 +799,7 @@ spec:
         object.spec.volumes.all(volume,
           volume.name in ['session', 'workspace', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca',
-            'callback-client', 'provider-auth', 'provider-socket', 'tmp',
+            'callback-client', 'provider-auth', 'runtime-egress-ca', 'runtime-egress-trust', 'provider-socket', 'tmp',
             'provider-tmp', 'provider-credential-relay', 'kube-api-access'] ||
           (volume.name.matches('^environment-[a-f0-9]{16}$') &&
            has(volume.emptyDir) && !has(volume.hostPath) &&
@@ -829,6 +841,14 @@ spec:
            volume.secret.secretName == object.metadata.annotations['runtime.kodex.dev/credential-projection-name']) &&
           !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
           !has(volume.configMap) && !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
+        size(object.spec.volumes.filter(volume,
+          volume.name == 'runtime-egress-ca' && has(volume.secret) &&
+          volume.secret.secretName == 'runtime-egress-proxy-ca' &&
+          volume.secret.defaultMode == 288 && size(volume.secret.items) == 1 &&
+          volume.secret.items[0].key == 'ca.crt' &&
+          volume.secret.items[0].path == 'ca.crt' &&
+          !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
+          !has(volume.configMap) && !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
         ['workspace', 'vfs-input', 'vfs-knowledge'].all(name,
           size(object.spec.volumes.filter(volume,
             volume.name == name && has(volume.emptyDir) &&
@@ -856,6 +876,13 @@ spec:
             !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
             !has(volume.secret) && !has(volume.configMap) &&
             !has(volume.projected))) == 1)
+        &&
+        size(object.spec.volumes.filter(volume,
+          volume.name == 'runtime-egress-trust' && has(volume.emptyDir) &&
+          quantity(string(volume.emptyDir.sizeLimit)).compareTo(quantity('2Mi')) == 0 &&
+          (!has(volume.emptyDir.medium) || volume.emptyDir.medium == '') &&
+          !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
+          !has(volume.secret) && !has(volume.configMap) && !has(volume.projected))) == 1
       message: managed role Pod system volume source is invalid
     - expression: >-
         variables.allContainers.all(container,
@@ -863,6 +890,25 @@ spec:
             !mount.name.matches('^environment-[a-f0-9]{16}$') ||
             mount.mountPath.startsWith('/workspace/.kodex/volumes/')))
       message: runtime environment volume mount path is outside the closed workspace catalog
+    - expression: >-
+        variables.allContainers.all(container,
+          !has(container.volumeMounts) || container.volumeMounts.all(mount,
+            !mount.name.matches('^environment-[a-f0-9]{16}$') ||
+            (container.name in ['role-runtime', 'provider-runtime'] &&
+             !has(mount.subPath) && !has(mount.subPathExpr) &&
+             !has(mount.mountPropagation) &&
+             (!has(mount.readOnly) || mount.readOnly == false)))) &&
+        object.spec.volumes.filter(volume,
+          volume.name.matches('^environment-[a-f0-9]{16}$')).all(volume,
+          size(variables.roleContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)) == 1 &&
+          size(variables.providerContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)) == 1 &&
+          variables.roleContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)[0].mountPath ==
+          variables.providerContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)[0].mountPath)
+      message: runtime environment volumes must have exact shared driver and executor mounts
     - expression: >-
         variables.allContainers.all(container,
           !has(container.volumeMounts) || container.volumeMounts.all(mount,
@@ -876,7 +922,8 @@ spec:
         variables.providerContainers[0].volumeMounts.all(mount,
           mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'provider-auth', 'provider-socket',
-            'provider-credential-relay', 'provider-tmp']) &&
+            'provider-credential-relay', 'provider-tmp', 'runtime-egress-trust'] ||
+          mount.name.matches('^environment-[a-f0-9]{16}$')) &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'workspace' && mount.mountPath == '/workspace' &&
           (!has(mount.readOnly) || mount.readOnly == false))) == 1 &&
@@ -915,6 +962,12 @@ spec:
           mount.mountPath == '/run/kodex/provider-credential-relay')) == 1 &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'provider-tmp' && mount.mountPath == '/tmp')) == 1 &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-egress-trust' &&
+          mount.mountPath == '/var/run/config/kodex/runtime/egress-trust' &&
+          has(mount.readOnly) && mount.readOnly == true &&
+          !has(mount.subPath) && !has(mount.subPathExpr) &&
+          !has(mount.mountPropagation))) == 1 &&
         variables.roleContainers[0].volumeMounts.all(mount,
           mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
@@ -974,7 +1027,7 @@ spec:
         object.spec.initContainers[1].volumeMounts.all(mount,
           mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
-            'tmp']) &&
+            'runtime-egress-ca', 'runtime-egress-trust', 'tmp']) &&
         ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context'].all(name,
           size(object.spec.initContainers[1].volumeMounts.filter(mount,
             mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&
@@ -1004,6 +1057,18 @@ spec:
           mount.name == 'callback-client' &&
           mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
           has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
+          mount.name == 'runtime-egress-ca' &&
+          mount.mountPath == '/var/run/config/kodex/runtime/egress-ca' &&
+          has(mount.readOnly) && mount.readOnly == true &&
+          !has(mount.subPath) && !has(mount.subPathExpr) &&
+          !has(mount.mountPropagation))) == 1 &&
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
+          mount.name == 'runtime-egress-trust' &&
+          mount.mountPath == '/var/run/config/kodex/runtime/egress-trust' &&
+          (!has(mount.readOnly) || mount.readOnly == false) &&
+          !has(mount.subPath) && !has(mount.subPathExpr) &&
+          !has(mount.mountPropagation))) == 1 &&
         size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'tmp' && mount.mountPath == '/tmp')) == 1
       message: managed role Pod authority mount boundary is invalid

@@ -43,7 +43,7 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	created, err := repository.Manage(ctx, roleimagerepo.ManageInput{
 		Principal: roleImageOwner, Action: "CREATE", ProjectRef: project.Ref, RoleDefinitionRef: agent.RoleDefinitionRef,
 		Name: "Application RBAC image", Mutation: roleImageTestMutation("role-image-access-create", "CREATE", nil),
-		Recipe: entity.RoleImageRecipeInput{Dockerfile: "FROM scratch\n# source boundary fixture\n", InstallationBlock: "# private installation fixture"},
+		Recipe: entity.RoleImageRecipeInput{EnvironmentKey: "promotion", Dockerfile: "FROM scratch\n# source boundary fixture\n", InstallationBlock: "# private installation fixture"},
 	})
 	if err != nil || created.Recipe.Ref == "" || created.Build == nil {
 		t.Fatalf("owner create role image: result=%#v err=%v", created, err)
@@ -210,7 +210,7 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 
 	updated, err := repository.Manage(ctx, roleimagerepo.ManageInput{
 		Principal: roleImageCandidate, Action: "UPDATE", ProjectRef: project.Ref, RecipeRef: current.Ref,
-		Name: "Updated application RBAC image", Mutation: roleImageTestMutation("role-image-access-update", "UPDATE", &wrongProjectVersion),
+		Name: "Updated application RBAC image", Recipe: current.Input, Mutation: roleImageTestMutation("role-image-access-update", "UPDATE", &wrongProjectVersion),
 	})
 	if err != nil || updated.Recipe.Version <= current.Version {
 		t.Fatalf("exact builder update failed: result=%#v err=%v", updated, err)
@@ -230,6 +230,17 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	})
 	if err != nil || restored.Recipe.State != "ACTIVE" {
 		t.Fatalf("exact builder restore failed: result=%#v err=%v", restored, err)
+	}
+	if restored.Build == nil || restored.Build.ConfigurationRevisionRef == "" || restored.Build.ConfigurationRevisionRef == created.Build.ConfigurationRevisionRef {
+		t.Fatal("project restoration did not assign a fresh source revision")
+	}
+	assertManagedRoleImageBuild(t, ctx, repository, restored.Recipe, *restored.Build)
+	restoredReplay, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: roleImageCandidate, Action: "RESTORE", ProjectRef: project.Ref, RecipeRef: current.Ref,
+		Mutation: roleImageTestMutation("role-image-access-restore", "RESTORE", &restoreVersion),
+	})
+	if err != nil || restoredReplay.Build == nil || restoredReplay.Recipe.Generation != restored.Recipe.Generation || restoredReplay.Build.ConfigurationRevisionRef != restored.Build.ConfigurationRevisionRef {
+		t.Fatalf("project restoration replay changed immutable source: %v", err)
 	}
 	buildVersion := int64(restored.Recipe.Version)
 	requested, err := repository.Manage(ctx, roleimagerepo.ManageInput{
@@ -275,6 +286,7 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	}); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("a new cancellation accepted an already terminal build: %v", err)
 	}
+	testRestoredProjectRoleImageImpact(t, ctx, repository, service, owner, roleImageOwner, restored.Recipe)
 	if _, err := service.Execute(ctx, command.Command{Kind: command.RevokeAccessBinding, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "role-image-source-revoke", ExpectedVersion: &sourceBinding.Version},
 		Payload:  command.AccessBindingInput{BindingRef: sourceBinding.Ref}}); err != nil {

@@ -32,9 +32,10 @@ func (server *Server) GetRuntimeSecretDraftImpact(ctx context.Context, request *
 	response := &cp.GetRuntimeSecretDraftImpactResponse{Plan: castDraftImpactPlan(result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
 	for _, item := range result.Items {
 		c := item.Consumer
-		consumer := &cp.RuntimeSecretImpactConsumer{EnvironmentRef: c.EnvironmentRef, EnvironmentVersion: c.EnvironmentVersion, EnvironmentVersionRef: c.EnvironmentVersionRef, SecretRevisions: c.SecretRevisions}
+		consumer := &cp.RuntimeSecretImpactConsumer{EnvironmentRef: c.EnvironmentRef, EnvironmentVersion: c.EnvironmentVersion, EnvironmentVersionRef: c.EnvironmentVersionRef, SecretRevisions: c.SecretRevisions,
+			ScopeKind: roleImageScopeKind(c.ScopeKind), OrganizationRef: c.OrganizationRef, ProjectRef: c.ProjectRef}
 		a := c.Consumer
-		consumer.Consumer = &cp.RuntimeEnvironmentConsumer{AgentRef: a.AgentRef, AgentVersion: a.AgentVersion, BindingRef: a.BindingRef, BindingVersion: a.BindingVersion, VersionRef: a.VersionRef, ProjectRef: a.ProjectRef}
+		consumer.Consumer = castRuntimeEnvironmentConsumer(a)
 		response.Items = append(response.Items, &cp.RuntimeSecretDraftImpactItem{Ref: item.Ref, Consumer: consumer, Outcome: cp.RuntimeSecretDraftImpactOutcome(cp.RuntimeSecretDraftImpactOutcome_value["RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_"+item.Outcome]), ResultEnvironmentVersionRef: item.ResultEnvironmentVersionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion})
 	}
 	return response, nil

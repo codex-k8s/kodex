@@ -28,7 +28,7 @@ func readPromptImpactConsumers(ctx context.Context, tx pgx.Tx, s scope, set mana
 	for rows.Next() {
 		var item entity.RevisionImpactItem
 		item.Outcome = "PENDING"
-		if rows.Scan(&item.ProjectRef, &item.ConsumerKind, &item.ConsumerRef, &item.ConsumerVersion, &item.BindingRef, &item.BindingVersion, &item.SourceRevisionRef) != nil {
+		if rows.Scan(&item.ProjectRef, &item.ConsumerKind, &item.ConsumerRef, &item.ConsumerVersion, &item.BindingRef, &item.BindingVersion, &item.SourceRevisionRef, &item.ScopeKind, &item.OrganizationRef) != nil {
 			return nil, errs.ErrUnavailable
 		}
 		items = append(items, item)

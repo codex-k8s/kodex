@@ -218,7 +218,7 @@ func validateRequest(bound model.Input, payload request) (model.Input, error) {
 		}
 		return turn, nil
 	}
-	if bound.Mode != runtimecontract.RunnerModeWarm || !bound.SystemAssistant || !turn.SystemAssistant ||
+	if bound.Mode != runtimecontract.RunnerModeWarm || !bound.IsSystemAssistant() || !turn.IsSystemAssistant() ||
 		bound.WorkloadInstance != turn.WorkloadInstance || bound.CallbackURL != turn.CallbackURL ||
 		bound.CallbackTLS != turn.CallbackTLS || bound.ExecutionTicketFile != turn.ExecutionTicketFile {
 		return model.Input{}, errors.New("provider credential relay warm binding is invalid")

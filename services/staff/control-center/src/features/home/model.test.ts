@@ -15,7 +15,7 @@ import type {
 function run(
   ref: string,
   state: Run["state"],
-  options: Partial<Run> = {},
+  options: Partial<Omit<Run, "source" | "target" | "assistantPin">> = {},
 ): Run {
   return {
     ref,

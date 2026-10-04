@@ -15,6 +15,14 @@ service RoleImageService {
   rpc GetRoleImageRecipe(GetRoleImageRecipeRequest) returns (GetRoleImageRecipeResponse);
   rpc ManageRoleImageRecipe(ManageRoleImageRecipeRequest) returns (ManageRoleImageRecipeResponse);
 
+  // Организационная область назначается сервером. Project/role locators не
+  // принимаются; права владельца проверяются до version и receipt replay.
+  rpc ListOrganizationRoleImageRecipes(ListOrganizationRoleImageRecipesRequest) returns (ListOrganizationRoleImageRecipesResponse);
+  rpc GetOrganizationRoleImageRecipe(GetOrganizationRoleImageRecipeRequest) returns (GetOrganizationRoleImageRecipeResponse);
+  rpc ListOrganizationRoleImageRecipeRevisions(ListOrganizationRoleImageRecipeRevisionsRequest) returns (ListOrganizationRoleImageRecipeRevisionsResponse);
+  rpc ManageOrganizationRoleImageRecipe(ManageOrganizationRoleImageRecipeRequest) returns (ManageOrganizationRoleImageRecipeResponse);
+  rpc RequestOrganizationRoleImagePromotion(RequestOrganizationRoleImagePromotionRequest) returns (RequestOrganizationRoleImagePromotionResponse);
+
   rpc ClaimImageBuild(ClaimImageBuildRequest) returns (ClaimImageBuildResponse);
   rpc RenewImageBuild(RenewImageBuildRequest) returns (RenewImageBuildResponse);
   rpc ReportImageBuildProgress(ReportImageBuildProgressRequest) returns (ReportImageBuildProgressResponse);
@@ -33,6 +41,16 @@ message RoleImagePlatform {
   string os = 1;
   string architecture = 2;
   string variant = 3;
+}
+
+message ListOrganizationRoleImageRecipeRevisionsRequest {
+  string recipe_ref = 1;
+  PageRequest page = 2;
+}
+
+message ListOrganizationRoleImageRecipeRevisionsResponse {
+  repeated RoleImageRecipeRevision revisions = 1;
+  PageInfo page = 2;
 }
 
 message RoleImagePackage {
@@ -124,6 +142,8 @@ message RoleImageRecipe {
   string project_ref = 19;
   RoleImageManagedLineage managed_lineage = 20;
   bool source_available = 21;
+  RuntimeResourceScopeKind scope_kind = 22;
+  string organization_ref = 23;
 }
 
 message RoleImageManagedLineage {
@@ -178,6 +198,9 @@ message ImageBuild {
   string dockerfile = 21;
   string configuration_revision_ref = 22;
   bool source_available = 23;
+  RuntimeResourceScopeKind scope_kind = 24;
+  string organization_ref = 25;
+  string project_ref = 26;
 }
 
 enum ImageAdmissionVerdict {
@@ -236,6 +259,9 @@ message ImageArtifact {
   repeated RoleImageTool tools = 38;
   ImagePromotionState promotion_state = 39;
   bool promotion_requested = 40;
+  RuntimeResourceScopeKind scope_kind = 41;
+  string organization_ref = 42;
+  string project_ref = 43;
 }
 
 enum RoleImageRecipeAction {
@@ -293,6 +319,49 @@ message ManageRoleImageRecipeResponse {
   bool reused = 4;
 }
 
+message ListOrganizationRoleImageRecipesRequest {
+  PageRequest page = 1;
+  string query = 2;
+  string state = 3;
+}
+message ListOrganizationRoleImageRecipesResponse {
+  repeated RoleImageRecipe recipes = 1;
+  PageInfo page = 2;
+  int64 total = 3;
+}
+message GetOrganizationRoleImageRecipeRequest {
+  string recipe_ref = 1;
+}
+message GetOrganizationRoleImageRecipeResponse {
+  RoleImageRecipe recipe = 1;
+  repeated ImageBuild builds = 2;
+  ImageArtifact active_artifact = 3;
+  ImageArtifact promotion_candidate = 4;
+}
+message ManageOrganizationRoleImageRecipeRequest {
+  MutationContext mutation = 1;
+  RoleImageRecipeAction action = 2;
+  string recipe_ref = 3;
+  string name = 4;
+  RoleEnvironmentSelection environment = 5;
+  string build_ref = 6;
+}
+message ManageOrganizationRoleImageRecipeResponse {
+  RoleImageRecipe recipe = 1;
+  ImageBuild image_build = 2;
+  ImageArtifact image_artifact = 3;
+  bool reused = 4;
+}
+message RequestOrganizationRoleImagePromotionRequest {
+  MutationContext mutation = 1;
+  string recipe_ref = 2;
+  string image_artifact_ref = 3;
+  string expected_provenance_sha256 = 4;
+}
+message RequestOrganizationRoleImagePromotionResponse {
+  RoleImagePromotionReceipt receipt = 1;
+}
+
 message RoleImageBuildInput {
   string recipe_ref = 1;
   uint64 recipe_version = 2;
@@ -318,6 +387,9 @@ message RoleImageBuildInput {
   uint64 role_runtime_contract_revision = 22;
   string role_runtime_contract_sha256 = 23;
   string dockerfile = 24;
+  RuntimeResourceScopeKind scope_kind = 25;
+  string organization_ref = 26;
+  string project_ref = 27;
 }
 
 message ClaimImageBuildRequest {

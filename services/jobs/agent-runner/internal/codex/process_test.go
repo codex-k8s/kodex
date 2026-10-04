@@ -380,15 +380,13 @@ func TestClassifyAccountReadResponse(t *testing.T) {
 }
 
 func TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy(t *testing.T) {
-	t.Setenv("HTTP_PROXY", "http://egress-gateway:8080")
-	t.Setenv("HTTPS_PROXY", "http://egress-gateway:8080")
-	t.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	setRuntimeTransportFixture(t)
 	t.Setenv("UNRELATED_SECRET", "must-not-be-forwarded")
 
 	environment := appServerEnvironment(model.Input{CodexHome: "/workspace/.kodex"}, "mcp-token")
 	for _, expected := range []string{
-		"HTTP_PROXY=http://egress-gateway:8080",
-		"HTTPS_PROXY=http://egress-gateway:8080",
+		"HTTP_PROXY=" + syntheticRuntimeProxy,
+		"HTTPS_PROXY=" + syntheticRuntimeProxy,
 		"NO_PROXY=127.0.0.1,localhost",
 	} {
 		if !slices.Contains(environment, expected) {
@@ -419,7 +417,7 @@ func TestRawProviderResponseNotificationsRemainSuppressed(t *testing.T) {
 }
 
 func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
-	input := model.Input{SystemAssistant: true}
+	input := model.Input{AssistantScope: runtimecontract.AssistantScopeSystem}
 	input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{})
 	input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{})
 	actual := RequiredMCPToolNames(input)

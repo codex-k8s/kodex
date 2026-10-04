@@ -7,7 +7,6 @@ import {
   emptySecretBinding,
   normalizeRuntimeEnvironmentInput,
   runtimeEnvironmentCollectionLimit,
-  setRuntimeKubernetesAccess,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 
@@ -127,7 +126,7 @@ describe("runtime environment form", () => {
     ]);
   });
 
-  it("создаёт безопасную policy по умолчанию и связывает Kubernetes API с scoped RBAC", () => {
+  it("создаёт безопасную policy без доступа к Kubernetes", () => {
     const policy = defaultRuntimeEnvironmentPolicy();
 
     expect(policy).toEqual({
@@ -141,17 +140,10 @@ describe("runtime environment form", () => {
       },
       volumes: [],
       networkDestinations: ["DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"],
+      webAccess: { mode: "NONE", rules: [] },
       kubernetesAccess: "NONE",
     });
 
-    setRuntimeKubernetesAccess(policy, "READ_OWN_EXECUTION");
-    expect(policy.networkDestinations).toEqual([
-      "DNS",
-      "PROVIDER_PROXY",
-      "RUNTIME_CALLBACK",
-      "KUBERNETES_API",
-    ]);
-    setRuntimeKubernetesAccess(policy, "NONE");
     expect(policy.networkDestinations).not.toContain("KUBERNETES_API");
   });
 
@@ -172,13 +164,13 @@ describe("runtime environment form", () => {
           egress: [
             { destination: "DNS", protocol: "TCP", port: 53 },
             { destination: "DNS", protocol: "UDP", port: 53 },
-            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8080 },
+            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
             { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
-            { destination: "KUBERNETES_API", protocol: "TCP", port: 443 },
           ],
+          webAccess: { mode: "NONE", rules: [] },
         },
         kubernetesAccess: {
-          kind: "READ_OWN_EXECUTION",
+          kind: "NONE",
           namespace: "kodex-runtime",
         },
         resourcesDigest: "a".repeat(64),
@@ -195,14 +187,32 @@ describe("runtime environment form", () => {
           sizeMib: 2048,
         },
       ],
-      networkDestinations: [
-        "DNS",
-        "PROVIDER_PROXY",
-        "RUNTIME_CALLBACK",
-        "KUBERNETES_API",
-      ],
-      kubernetesAccess: "READ_OWN_EXECUTION",
+      networkDestinations: ["DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"],
+      webAccess: { mode: "NONE", rules: [] },
+      kubernetesAccess: "NONE",
     });
+  });
+
+  it("закрыто отклоняет подставленные старые Kubernetes-права", () => {
+    const policy = defaultRuntimeEnvironmentPolicy();
+    Object.assign(policy, { kubernetesAccess: "UNSUPPORTED" });
+    policy.networkDestinations.push("DNS");
+    expect(
+      validateEnvironmentInput({
+        name: "Среда",
+        description: "",
+        imageArtifactRef: "imgart_test",
+        tools: [],
+        values: [],
+        secretBindings: [],
+        policy,
+      }).map((problem) => problem.message),
+    ).toEqual(
+      expect.arrayContaining([
+        "runtime.errors.kubernetesAccess",
+        "runtime.errors.networkDestinations",
+      ]),
+    );
   });
 
   it("закрыто отклоняет policy вне admission ranges и несогласованную сеть", () => {
@@ -215,7 +225,7 @@ describe("runtime environment form", () => {
       { name: "tmp", kind: "EPHEMERAL_MEMORY", sizeMib: 8 },
       { name: "tmp", kind: "EPHEMERAL_DISK", sizeMib: 1024 },
     ];
-    policy.networkDestinations.push("KUBERNETES_API");
+    policy.networkDestinations.push("DNS");
 
     const problems = validateEnvironmentInput({
       name: "Окружение",
@@ -242,6 +252,60 @@ describe("runtime environment form", () => {
         "runtime.errors.networkDestinations",
       ]),
     );
+  });
+
+  it("разрешает только доменные allowlist-шаблоны и отклоняет wildcard и IP", () => {
+    const input = {
+      name: "Окружение",
+      description: "",
+      imageArtifactRef: "imgart_main",
+      tools: [],
+      values: [],
+      secretBindings: [],
+      policy: defaultRuntimeEnvironmentPolicy(),
+    };
+    input.policy.webAccess = {
+      mode: "ALLOWLIST_READ_ONLY",
+      rules: [
+        {
+          domainPattern: "api.example.com",
+          protocol: "HTTPS",
+          port: 443,
+          httpMethods: ["GET", "HEAD", "OPTIONS"],
+        },
+      ],
+    };
+
+    expect(validateEnvironmentInput(input)).toEqual([]);
+    const rule = input.policy.webAccess.rules[0];
+    expect(rule).toBeDefined();
+    if (!rule) return;
+    for (const accepted of ["*.example.com", "**.example.com"]) {
+      rule.domainPattern = accepted;
+      expect(validateEnvironmentInput(input)).toEqual([]);
+    }
+    for (const rejected of ["*", "127.0.0.1"]) {
+      rule.domainPattern = rejected;
+      expect(
+        validateEnvironmentInput(input).map((problem) => problem.message),
+      ).toContain("runtime.errors.webAccessDomain");
+    }
+
+    rule.domainPattern = "api.example.com";
+    rule.httpMethods = ["GET"];
+    expect(validateEnvironmentInput(input)).toEqual([]);
+    rule.httpMethods = [];
+    expect(
+      validateEnvironmentInput(input).map((problem) => problem.message),
+    ).toContain("runtime.errors.webAccessMethods");
+    rule.httpMethods = ["GET", "GET"];
+    expect(
+      validateEnvironmentInput(input).map((problem) => problem.message),
+    ).toContain("runtime.errors.webAccessMethods");
+    rule.httpMethods = ["POST"];
+    expect(
+      validateEnvironmentInput(input).map((problem) => problem.message),
+    ).toContain("runtime.errors.webAccessMethods");
   });
 
   it("фиксирует единый ограниченный размер редактируемых коллекций", () => {

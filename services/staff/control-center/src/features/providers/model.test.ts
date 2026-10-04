@@ -22,6 +22,7 @@ function account(overrides: Partial<ProviderAccount> = {}): ProviderAccount {
     state: "AUTHORIZED",
     enabled: true,
     ready: true,
+    maximumConcurrentExecutions: 10,
     nextActions: ["DISABLE", "REVOKE"],
     createdAt: "2026-08-30T08:00:00Z",
     updatedAt: "2026-08-30T08:00:00Z",

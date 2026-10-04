@@ -30,12 +30,14 @@ type secretDraftRecorder struct {
 	failure       error
 	mutateReceipt func(*cp.RuntimeSecretDraftOperationReceipt)
 	mutateDraft   func(*sb.RuntimeSecretDraftMetadata)
+	mutateSecret  func(*sb.RuntimeSecretMetadata)
+	organization  bool
 	notReady      bool
 }
 
 func draftFixture() *cp.RuntimeSecretDraft {
 	now := time.Date(2026, 9, 5, 1, 0, 0, 0, time.UTC)
-	return &cp.RuntimeSecretDraft{Ref: "sdft_fixture01", ProjectRef: "prj_fixture01", SecretRef: "sec_fixture01", SecretVersion: 4, Version: 3, Generation: 1, Name: "Fixture", Description: "", ValueType: cp.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_DRAFT, CreatedAt: timestamppb.New(now), UpdatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(time.Hour))}
+	return &cp.RuntimeSecretDraft{ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", Ref: "sdft_fixture01", ProjectRef: "prj_fixture01", SecretRef: "sec_fixture01", SecretVersion: 4, Version: 3, Generation: 1, Name: "Fixture", Description: "", ValueType: cp.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_DRAFT, CreatedAt: timestamppb.New(now), UpdatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(time.Hour))}
 }
 
 func (c *secretDraftRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
@@ -45,6 +47,10 @@ func (c *secretDraftRecorder) Invoke(_ context.Context, method string, request, 
 		return c.failure
 	}
 	draft := draftFixture()
+	if c.organization {
+		draft.ScopeKind = cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION
+		draft.ProjectRef = ""
+	}
 	target := cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_DRAFT
 	if strings.Contains(method, "Validate") {
 		target = cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_VALID
@@ -56,7 +62,7 @@ func (c *secretDraftRecorder) Invoke(_ context.Context, method string, request, 
 	if strings.Contains(method, "Discard") {
 		target = cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_DISCARDED
 	}
-	secret := &cp.RuntimeSecret{Ref: draft.SecretRef, ProjectRef: draft.ProjectRef, Version: 4, Name: draft.Name, Description: draft.Description, ValueType: draft.ValueType, State: "ACTIVE", CurrentRevision: 2, CreatedAt: draft.CreatedAt, UpdatedAt: draft.UpdatedAt}
+	secret := &cp.RuntimeSecret{ScopeKind: draft.ScopeKind, OrganizationRef: draft.OrganizationRef, Ref: draft.SecretRef, ProjectRef: draft.ProjectRef, Version: 4, Name: draft.Name, Description: draft.Description, ValueType: draft.ValueType, State: "ACTIVE", CurrentRevision: 2, CreatedAt: draft.CreatedAt, UpdatedAt: draft.UpdatedAt}
 	if target == cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_PUBLISHED {
 		secret.Version = 8
 	}
@@ -86,6 +92,8 @@ func (c *secretDraftRecorder) Invoke(_ context.Context, method string, request, 
 			c.mutateReceipt(op)
 		}
 		switch out := response.(type) {
+		case *cp.PrepareOrganizationRuntimeSecretDraftResponse:
+			out.Operation = op
 		case *cp.PrepareSaveRuntimeSecretDraftResponse:
 			out.Operation = op
 		case *cp.PrepareValidateRuntimeSecretDraftResponse:
@@ -110,7 +118,7 @@ func (c *secretDraftRecorder) Invoke(_ context.Context, method string, request, 
 		out.Ready = !c.notReady
 		return nil
 	}
-	meta := &sb.RuntimeSecretDraftMetadata{Ref: draft.Ref, Version: draft.Version + 1, Generation: draft.Generation, ProjectRef: draft.ProjectRef, SecretRef: draft.SecretRef, SecretVersion: draft.SecretVersion, Name: draft.Name, Description: draft.Description, ValueType: sb.RuntimeSecretValueType(draft.ValueType), State: sb.RuntimeSecretDraftState(target), CreatedAt: draft.CreatedAt, UpdatedAt: draft.UpdatedAt, ExpiresAt: draft.ExpiresAt}
+	meta := &sb.RuntimeSecretDraftMetadata{ScopeKind: sb.RuntimeResourceScopeKind(draft.ScopeKind), OrganizationRef: draft.OrganizationRef, Ref: draft.Ref, Version: draft.Version + 1, Generation: draft.Generation, ProjectRef: draft.ProjectRef, SecretRef: draft.SecretRef, SecretVersion: draft.SecretVersion, Name: draft.Name, Description: draft.Description, ValueType: sb.RuntimeSecretValueType(draft.ValueType), State: sb.RuntimeSecretDraftState(target), CreatedAt: draft.CreatedAt, UpdatedAt: draft.UpdatedAt, ExpiresAt: draft.ExpiresAt}
 	if target == cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_DISCARDED {
 		meta.Version = draft.Version
 	}
@@ -131,7 +139,10 @@ func (c *secretDraftRecorder) Invoke(_ context.Context, method string, request, 
 		out.Draft = meta
 	case *sb.PublishSecretDraftResponse:
 		out.Draft = meta
-		out.Secret = &sb.RuntimeSecretMetadata{SecretRef: secret.Ref, ProjectRef: secret.ProjectRef, Version: secret.Version, Name: secret.Name, ValueType: sb.RuntimeSecretValueType(secret.ValueType), Status: sb.RuntimeSecretStatus_RUNTIME_SECRET_STATUS_ACTIVE, Revision: uint64(secret.CurrentRevision), CreatedAt: secret.CreatedAt, UpdatedAt: secret.UpdatedAt}
+		out.Secret = &sb.RuntimeSecretMetadata{ScopeKind: sb.RuntimeResourceScopeKind(secret.ScopeKind), OrganizationRef: secret.OrganizationRef, SecretRef: secret.Ref, ProjectRef: secret.ProjectRef, Version: secret.Version, Name: secret.Name, ValueType: sb.RuntimeSecretValueType(secret.ValueType), Status: sb.RuntimeSecretStatus_RUNTIME_SECRET_STATUS_ACTIVE, Revision: uint64(secret.CurrentRevision), CreatedAt: secret.CreatedAt, UpdatedAt: secret.UpdatedAt}
+		if c.mutateSecret != nil {
+			c.mutateSecret(out.Secret)
+		}
 	}
 	return nil
 }

@@ -10,12 +10,14 @@ import (
 )
 
 type Filter struct {
+	ScopeKind                     string
 	ProjectRef, RoleDefinitionRef string
 	Query, State                  string
 	Page                          query.Page
 }
 
 type ManageInput struct {
+	ScopeKind               string
 	Principal               value.Principal
 	Mutation                value.Mutation
 	Action                  string
@@ -87,6 +89,7 @@ type PromotionCompleteInput struct {
 }
 
 type PromotionRequestInput struct {
+	ScopeKind                                        string
 	Principal                                        value.Principal
 	Mutation                                         value.Mutation
 	RecipeRef, ArtifactRef, ExpectedProvenanceSHA256 string
@@ -98,10 +101,15 @@ type SupplyWorkAvailability struct {
 }
 
 type Repository interface {
+	ListOrganizationRevisions(context.Context, value.Principal, string, query.Page) ([]entity.RoleImageRecipeRevision, string, error)
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	List(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, int64, error)
 	Get(context.Context, value.Principal, string) (Detail, error)
 	Manage(context.Context, ManageInput) (ManageResult, error)
+	ListOrganization(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, int64, error)
+	GetOrganization(context.Context, value.Principal, string) (Detail, error)
+	ManageOrganization(context.Context, ManageInput) (ManageResult, error)
+	RequestOrganizationPromotion(context.Context, PromotionRequestInput) (entity.RoleImagePromotionReceipt, error)
 	ClaimBuild(context.Context, value.Principal, string) (entity.ImageBuildClaim, error)
 	RenewBuild(context.Context, BuildLeaseInput) (entity.ImageBuildClaim, error)
 	ReportBuildProgress(context.Context, BuildProgressInput) (entity.ImageBuild, error)

@@ -117,6 +117,7 @@ spec:
             - {name: callback-client-ca, mountPath: /var/run/config/kodex/runtime-controller/callback-client, readOnly: true}
             - {name: otel-ca, mountPath: /var/run/config/kodex/runtime-controller/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/runtime-controller/observability, readOnly: true}
+            - {name: egress-signing, mountPath: /var/run/secrets/kodex/runtime-controller/egress-signing, readOnly: true}
       volumes:
         - name: artifact-spool
           emptyDir: {sizeLimit: 2Gi}
@@ -144,3 +145,5 @@ spec:
           configMap: {name: kodex-otel-ca, defaultMode: 0440}
         - name: sentry-dsn
           secret: {secretName: kodex-sentry, defaultMode: 0440}
+        - name: egress-signing
+          secret: {secretName: runtime-egress-signing, defaultMode: 0440}

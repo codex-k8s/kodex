@@ -3,10 +3,10 @@
 package generated
 
 type RunEventEnvelope struct {
-	Type string `json:"type"`
-	RequestRef string `json:"requestRef"`
-	StreamKind string `json:"streamKind"`
-	StreamRef string `json:"streamRef"`
-	Cursor int64 `json:"cursor"`
-	Event RunEvent `json:"event"`
+	Type       string   `json:"type"`
+	RequestRef string   `json:"requestRef"`
+	StreamKind string   `json:"streamKind"`
+	StreamRef  string   `json:"streamRef"`
+	Cursor     int64    `json:"cursor"`
+	Event      RunEvent `json:"event"`
 }

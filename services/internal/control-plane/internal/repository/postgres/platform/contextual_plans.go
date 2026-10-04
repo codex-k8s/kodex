@@ -82,6 +82,9 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	if len(payload.Operations) != len(current) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	if err := repository.constrainAssistantPlanScope(ctx, tx, &scope, conversationRef, payload.Operations); err != nil {
+		return commandOutcome{}, err
+	}
 	currentByKey := make(map[string]entity.AssistantPlanOperation, len(current))
 	for _, operation := range current {
 		currentByKey[operation.Key] = operation
@@ -91,7 +94,21 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 		if !exists || original.Type != operation.Type {
 			return commandOutcome{}, errs.ErrForbidden
 		}
+		if assistantProjectConfigurationOperation(original) {
+			updated, err := repository.refreshProjectAssistantConfiguration(ctx, tx, scope, original, operation, state == "STALE")
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+			continue
+		}
 		switch operation.Type {
+		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+			updated, err := repository.rehydrateEditedAssistantConfiguration(ctx, tx, scope, original, operation, state == "STALE")
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		case "BIND_AGENT_RUNTIME_ENVIRONMENT":
 			updated, err := repository.rehydrateEditedAssistantBinding(ctx, tx, scope, projectRef, original, operation)
 			if err != nil {
@@ -134,6 +151,12 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 				return commandOutcome{}, err
 			}
 			payload.Operations[index] = updated
+		case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+			updated, err := rehydrateEditedAssistantSystemInstructions(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		case "UPDATE_INTEGRATION_CONNECTION":
 			updated, err := rehydrateEditedAssistantConnection(original, operation)
 			if err != nil {
@@ -170,7 +193,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 		// snapshot, сохранив только разрешённые пользовательские поля формы.
 		// Для обычного DRAFT прежний snapshot остаётся неизменным: скрытый rebase
 		// без явного конфликта владельцу не допускается.
-		if state == "STALE" && payload.Operations[index].ExpectedVersion != nil {
+		if state == "STALE" && payload.Operations[index].ExpectedVersion != nil && !assistantConfigurationOperationType(operation.Type) {
 			selected := payload.Operations[index].Selected
 			refreshed, refreshErr := repository.hydrateAssistantOperation(ctx, tx, scope, projectRef, payload.Operations[index])
 			if refreshErr != nil {
@@ -210,6 +233,15 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 }
 
 func assistantPlanAgentVersionKey(operation entity.AssistantPlanOperation) string {
+	if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
+		return assistantString(operation.Parameters, "systemAssistantRef")
+	}
+	if assistantProjectConfigurationOperation(operation) {
+		return assistantString(operation.Parameters, "projectAssistantRef")
+	}
+	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+		return assistantString(operation.Parameters, "agentRef")
+	}
 	switch operation.Type {
 	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		if operation.Target.Kind == "AGENT" && operation.Target.Ref != "" {
@@ -221,6 +253,18 @@ func assistantPlanAgentVersionKey(operation entity.AssistantPlanOperation) strin
 
 func rebaseAssistantPlanAgentVersion(operation entity.AssistantPlanOperation, version int64) entity.AssistantPlanOperation {
 	if version < 1 || assistantPlanAgentVersionKey(operation) == "" {
+		return operation
+	}
+	operation.Input = cloneAssistantFields(operation.Input)
+	operation.Parameters = cloneAssistantFields(operation.Parameters)
+	operation.Before = cloneAssistantFields(operation.Before)
+	operation.After = cloneAssistantFields(operation.After)
+	for _, fields := range []map[string]any{operation.Input, operation.Parameters, operation.Before, operation.After} {
+		if _, exists := fields["agentVersion"]; exists {
+			fields["agentVersion"] = version
+		}
+	}
+	if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 		return operation
 	}
 	expectedVersion, targetVersion := version, version
@@ -287,6 +331,9 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.constrainAssistantPlanScope(ctx, tx, &scope, conversationRef, operations); err != nil {
+		return commandOutcome{}, err
+	}
 	problems := make([]string, 0)
 	for index, operation := range operations {
 		if !operation.Selected {
@@ -339,6 +386,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 				continue
 			}
 		}
+		if operation.Type == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+			matching, snapshotErr := repository.assistantSystemInstructionsSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
 		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
 			matching, snapshotErr := repository.assistantAgentBindingSnapshotMatches(ctx, tx, scope, projectRef, operation)
 			if snapshotErr != nil || !matching {
@@ -369,6 +423,20 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		}
 		if operation.Type == "UPDATE_ROLE_IMAGE_RECIPE" {
 			matching, snapshotErr := repository.assistantRoleImageUpdateSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
+			matching, snapshotErr := repository.systemAssistantImageSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+			matching, snapshotErr := repository.assistantRuntimeConfigurationSnapshotMatches(ctx, tx, scope, operation)
 			if snapshotErr != nil || !matching {
 				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
 				continue
@@ -486,6 +554,18 @@ func (repository *Repository) validateAssistantLaunchReadiness(
 }
 
 func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx.Tx, scope scope, operation entity.AssistantPlanOperation) (int64, bool, error) {
+	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+		target, err := repository.assistantConfigurationTarget(ctx, tx, scope, operation.Target.Ref)
+		return target.version, true, err
+	}
+	if operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
+		_, err := repository.resolveScopedRoleImageAccessTarget(ctx, tx, scope, operation.Target.Ref, "", "ORGANIZATION")
+		if err != nil {
+			return 0, true, err
+		}
+		detail, err := repository.getRoleImageRecipe(ctx, tx, scope, operation.Target.Ref, true, false)
+		return int64(detail.Recipe.Version), true, err
+	}
 	if operation.ExpectedVersion == nil {
 		return 0, false, nil
 	}
@@ -504,6 +584,15 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 		kind, ref = "WORKFLOW", operation.Target.Ref
 	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
 		kind, ref = "ENVIRONMENT", operation.Target.Ref
+	case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+		assistant, err := repository.getAssistantTx(ctx, tx, scope)
+		if err != nil {
+			return 0, true, err
+		}
+		if assistant.Ref != operation.Target.Ref {
+			return 0, true, errs.ErrNotFound
+		}
+		return assistant.Version, true, nil
 	case "CHANGE_INTEGRATION_GRANT", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION":
 		kind, ref = "INTEGRATION_CONNECTION", assistantString(operation.Input, "connectionRef")
 	case "UPDATE_SCHEDULE":

@@ -9,6 +9,7 @@ import {
 const props = defineProps<{
   operation: EditablePlanOperation;
   disabled: boolean;
+  helperApplied?: boolean;
 }>();
 const fieldPrefix = `assistant-environment-${useId()}`;
 const emit = defineEmits<{
@@ -36,6 +37,9 @@ const valid = computed(
     (stringField("imageArtifactRef") === "" ||
       /^imgart_[A-Za-z0-9_-]+$/.test(stringField("imageArtifactRef"))),
 );
+const systemAssistantEnvironment = computed(
+  () => stringField("systemAssistantRef").length > 0,
+);
 watch(valid, (value) => emit("valid", value), { immediate: true });
 
 function changeText(key: string, event: Event): void {
@@ -46,8 +50,14 @@ function changeText(key: string, event: Event): void {
 
 <template>
   <div class="assistant-environment-revision">
-    <p class="assistant-plan-friendly__hint">
-      {{ $t("assistant.planEditor.environmentRevisionBoundary") }}
+    <p v-if="!helperApplied" class="assistant-plan-friendly__hint">
+      {{
+        $t(
+          systemAssistantEnvironment
+            ? "assistant.planEditor.systemEnvironmentBoundary"
+            : "assistant.planEditor.environmentRevisionBoundary",
+        )
+      }}
     </p>
     <label class="field">
       <span>{{ $t("assistant.planEditor.entityName") }}</span>
@@ -75,7 +85,17 @@ function changeText(key: string, event: Event): void {
     <p v-if="!valid" class="field-error" role="alert">
       {{ $t("assistant.planEditor.environmentRevisionNotReady") }}
     </p>
-    <p>{{ $t("assistant.planEditor.environmentRevisionNextSteps") }}</p>
+    <p>
+      {{
+        $t(
+          helperApplied
+            ? "assistant.planEditor.helperEnvironmentDraftPrepared"
+            : systemAssistantEnvironment
+              ? "assistant.planEditor.systemEnvironmentNextSteps"
+              : "assistant.planEditor.environmentRevisionNextSteps",
+        )
+      }}
+    </p>
   </div>
 </template>
 

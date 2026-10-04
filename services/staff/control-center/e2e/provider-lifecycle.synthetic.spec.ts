@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 import type {
   ProviderAccount,
   ProviderAccountBlocker,
@@ -9,6 +9,7 @@ async function install(page: Page, failedDeletion = false) {
   let account: ProviderAccount = {
     ref: "pacc_lifecycle",
     version: 7,
+    maximumConcurrentExecutions: 10,
     definitionKey: "openai-codex",
     name: "Учётная запись проверки",
     externalAccountMasked: "fixture",
@@ -105,6 +106,78 @@ async function install(page: Page, failedDeletion = false) {
   const failures: string[] = [];
   let receipt: ProviderAccountQueuedWorkCancellation | undefined;
   let verificationReads = 0;
+  let sessionSocket: WebSocketRoute | undefined;
+  let sessionRequestRef = "";
+  let platformCursor = 0;
+  const providerDefinition = {
+    key: "openai-codex",
+    name: "OpenAI",
+    description: "Fixture",
+    authorizationMethods: ["DEVICE_CODE"],
+    modelIds: [],
+    defaultModelId: "",
+    available: true,
+    ready: true,
+    readinessBlockers: [],
+  };
+  function sendProviderSnapshot(mode: "BOOTSTRAP" | "DELTA"): void {
+    sessionSocket?.send(
+      JSON.stringify({
+        type: "PLATFORM_SNAPSHOT",
+        requestRef: sessionRequestRef,
+        streamKind: "PLATFORM",
+        streamRef: "PLATFORM",
+        cursor: platformCursor,
+        mode,
+        kind: "PROVIDER_ACCOUNT",
+        ...(mode === "DELTA" ? { eventName: "PROVIDER_ACCOUNT_CHANGED" } : {}),
+        snapshot: {
+          catalog: {
+            accounts: [account],
+            page: { total: 1 },
+            nextActions: [],
+            providerDefinitions: [providerDefinition],
+            providerDefinitionsPage: { total: 1 },
+            runtimes: [],
+          },
+        },
+      }),
+    );
+  }
+  await page.routeWebSocket(
+    "wss://kodex.test/api/v1/session/stream**",
+    (socket) => {
+      sessionSocket = socket;
+      socket.onMessage((message) => {
+        const envelope = JSON.parse(String(message)) as {
+          type: string;
+          requestRef: string;
+        };
+        expect(envelope.type).toBe("SESSION_RESUME");
+        sessionRequestRef = envelope.requestRef;
+        sendProviderSnapshot("BOOTSTRAP");
+        socket.send(
+          JSON.stringify({
+            type: "PLATFORM_READY",
+            requestRef: sessionRequestRef,
+            streamKind: "PLATFORM",
+            streamRef: "PLATFORM",
+            cursor: 0,
+            availableKinds: ["PROVIDER_ACCOUNT"],
+          }),
+        );
+        socket.send(
+          JSON.stringify({
+            type: "SESSION_READY",
+            requestRef: sessionRequestRef,
+            streams: [
+              { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+            ],
+          }),
+        );
+      });
+    },
+  );
   await page.context().addCookies([
     {
       name: "__Host-kodex-csrf",
@@ -129,7 +202,7 @@ async function install(page: Page, failedDeletion = false) {
           revision: "0".repeat(64),
           environment: "synthetic",
           apiBaseUrl: "/",
-          realtimeUrl: "/api/v1",
+          realtimeUrl: "https://kodex.test/api/v1",
           requestTimeoutMs: 10000,
           oidc: {
             authority: "https://identity.invalid",
@@ -139,6 +212,12 @@ async function install(page: Page, failedDeletion = false) {
             scope: "openid",
           },
         },
+      });
+      return;
+    }
+    if (url.pathname === "/api/v1/session/ticket") {
+      await route.fulfill({
+        json: { ticket: "t".repeat(43), expiresAt: "2099-01-01T00:00:00Z" },
       });
       return;
     }
@@ -338,6 +417,23 @@ async function install(page: Page, failedDeletion = false) {
     writes,
     failures,
     verificationReads: () => verificationReads,
+    realtimeReady: () => Boolean(sessionRequestRef),
+    completeVerification: () => {
+      if (!account.verification || !sessionRequestRef)
+        throw new Error("Provider realtime verification fixture is not ready");
+      account = {
+        ...account,
+        version: account.version + 1,
+        verification: {
+          ...account.verification,
+          state: "VERIFIED",
+          completedAt: "2026-09-06T00:01:00Z",
+          safeReason: "CREDENTIAL_REACHABILITY_VERIFIED",
+        },
+      };
+      platformCursor += 1;
+      sendProviderSnapshot("DELTA");
+    },
     allowDeletion: () => {
       account = { ...account, version: 8, nextActions: ["DELETE"] };
     },
@@ -460,7 +556,8 @@ for (const width of [390, 2900]) {
   }) => {
     const fixture = await install(page);
     await page.setViewportSize({ width, height: 900 });
-    await page.goto("/e2e/fixtures/impact.html?kind=provider");
+    await page.goto("/e2e/fixtures/impact.html?kind=provider&realtime=1");
+    await expect.poll(() => fixture.realtimeReady()).toBe(true);
     await page
       .getByRole("button", { name: "Проверить сейчас", exact: true })
       .click();
@@ -469,9 +566,15 @@ for (const width of [390, 2900]) {
       exact: true,
     });
     await expect(
+      dialog.getByText("Проверка текущих учётных данных запрошена", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    fixture.completeVerification();
+    await expect(
       dialog.getByText("Доступность каталога подтверждена", { exact: true }),
     ).toBeVisible({ timeout: 10000 });
-    expect(fixture.verificationReads()).toBe(1);
+    expect(fixture.verificationReads()).toBe(0);
     expect(fixture.writes).toHaveLength(1);
     await dialog
       .getByRole("button", { name: "Переавторизовать", exact: true })

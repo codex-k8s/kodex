@@ -63,8 +63,9 @@ SELECT config.ref,
        environment_version.rbac_digest,
        environment_version.digest,
        environment_version.created_at,
-       agent.version
+       agent.version, environment.scope_kind, organization.ref
 FROM control_plane.agents agent
+JOIN control_plane.organizations organization ON organization.id = agent.organization_id
 LEFT JOIN control_plane.projects project ON project.id = agent.project_id
 JOIN control_plane.agent_runtime_config_versions config ON config.id = agent.current_runtime_config_id
 JOIN control_plane.provider_account_policy_versions policy ON policy.id = config.provider_account_policy_id
@@ -79,7 +80,7 @@ LEFT JOIN LATERAL (
 JOIN control_plane.agent_runtime_environment_bindings binding ON binding.agent_id = agent.id
 JOIN control_plane.runtime_environment_sets environment ON environment.id = binding.environment_set_id
 JOIN control_plane.runtime_environment_versions environment_version ON environment_version.id =
-    CASE WHEN agent.project_id IS NULL AND agent.system_key = 'system-assistant'
+    CASE WHEN agent.project_id IS NULL AND agent.system_key = 'system-assistant' AND binding.environment_version_id IS NULL
          THEN environment.current_version_id ELSE binding.environment_version_id END
 LEFT JOIN control_plane.image_artifacts image_artifact ON image_artifact.id = environment_version.role_image_artifact_id
 LEFT JOIN control_plane.role_image_recipes image_recipe ON image_recipe.id = image_artifact.recipe_id

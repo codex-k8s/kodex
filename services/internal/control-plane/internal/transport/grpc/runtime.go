@@ -3,7 +3,9 @@ package grpc
 import (
 	"context"
 	"io"
+	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -82,7 +84,8 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	if agentRef == "" {
 		agentRef = mapString(values, "assistantRef")
 	}
-	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), OrganizationRef: mapString(values, "organizationRef"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), CodexSessionId: mapString(values, "codexSessionID"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
+	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), OrganizationRef: mapString(values, "organizationRef"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), CodexSessionId: mapString(values, "codexSessionID"),
+		AssistantScope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+mapString(values, "assistantScope")]), AssistantProfileRef: mapString(values, "assistantProfileRef")}
 	result.RoleDefinitionRef = mapString(values, "roleDefinitionRef")
 	result.EffectiveReasoningEffort = mapString(values, "effectiveReasoningEffort")
 	result.ReasoningMode = controlplanev1.RuntimeReasoningMode(controlplanev1.RuntimeReasoningMode_value["RUNTIME_REASONING_MODE_"+mapString(values, "reasoningMode")])
@@ -336,6 +339,21 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 	if err != nil {
 		return nil, err
 	}
+	if catalog := request.GetAssistantConfigurationCatalog(); catalog != nil {
+		if request.GetQuery() != "" || request.GetIntegrationDefinitionCatalog() || request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		kind := strings.TrimPrefix(catalog.GetKind().String(), "ASSISTANT_CONFIGURATION_CATALOG_KIND_")
+		result, err := server.service.ListAssistantConfigurationCatalog(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: catalog.GetAssistantRef(), Query: catalog.GetQuery(), Offset: catalog.GetOffset(), AccountRef: catalog.GetAccountRef(), RuntimeProfileRef: catalog.GetRuntimeProfileRef()})
+		if err != nil {
+			return nil, transportError(err)
+		}
+		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
+		for _, entry := range result.Entries {
+			response.Entries = append(response.Entries, &controlplanev1.AssistantConfigurationCatalogEntry{Ref: entry.Ref, Name: entry.Name, Provider: entry.Provider, Model: entry.Model, Version: entry.Version, RecipeGeneration: entry.RecipeGeneration, Reference: entry.Reference, ManifestDigest: entry.ManifestDigest, CatalogRevision: entry.CatalogRevision, CatalogDigest: entry.CatalogDigest, ReasoningEfforts: entry.ReasoningEfforts, DefaultReasoningEffort: entry.DefaultReasoningEffort, ScopeKind: entry.ScopeKind, OrganizationRef: entry.OrganizationRef, ProjectRef: entry.ProjectRef, AssistantProfileRef: entry.AssistantProfileRef, RuntimeEnvironmentRef: entry.RuntimeEnvironmentRef})
+		}
+		return &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}, nil
+	}
 	if request.GetIntegrationDefinitionCatalog() {
 		if request.GetQuery() != "" {
 			return nil, transportError(errs.ErrInvalid)
@@ -523,6 +541,7 @@ func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *control
 	}
 	assistant, desired, required, err := server.service.ReconcileWarmRuntime(ctx, p, request.GetWorkloadInstance())
 	if err != nil {
+		slog.WarnContext(ctx, "warm runtime reconciliation rejected", "error", err)
 		return nil, transportError(err)
 	}
 	return &controlplanev1.ReconcileWarmRuntimeResponse{Assistant: castAssistant(assistant), DesiredRevision: castRuntimeRevision(desired), MaterializationRequired: required}, nil

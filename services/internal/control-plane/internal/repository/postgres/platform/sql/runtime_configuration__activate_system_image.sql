@@ -11,11 +11,11 @@ SET active_image_artifact_id = artifact.id,
     END
 FROM control_plane.image_artifacts artifact
 WHERE recipe.organization_id = @organization_id::uuid
-  AND recipe.project_id = @project_id::uuid
+  AND recipe.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
   AND recipe.ref = @recipe_ref
   AND recipe.state = 'ACTIVE'
   AND artifact.organization_id = recipe.organization_id
-  AND artifact.project_id = recipe.project_id
+  AND artifact.project_id IS NOT DISTINCT FROM recipe.project_id
   AND artifact.recipe_id = recipe.id
   AND artifact.id = @artifact_id::uuid
   AND artifact.ref = @artifact_ref

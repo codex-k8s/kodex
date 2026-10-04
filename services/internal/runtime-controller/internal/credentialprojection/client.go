@@ -99,7 +99,7 @@ func (client *Client) Materialize(ctx context.Context, input runtimecontract.Run
 	if client == nil || client.api == nil || input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil {
 		return Projection{}, errors.New("runtime credential projection input is invalid")
 	}
-	if input.SystemAssistant && input.ProjectRef == "" {
+	if input.IsSystemAssistant() {
 		response, err := client.api.MaterializeSystemAssistantCredentials(ctx, &secretbrokerv1.MaterializeSystemAssistantCredentialsRequest{Execution: materializeRequest(input)})
 		if err != nil {
 			return Projection{}, materializationRPCError("materialize assistant credential projection", err)
@@ -135,7 +135,7 @@ func materializeRequest(input runtimecontract.RunnerInput) *secretbrokerv1.Mater
 func MaterializationRequestDigest(input runtimecontract.RunnerInput) (string, error) {
 	execution := materializeRequest(input)
 	var request proto.Message = execution
-	if input.SystemAssistant && input.ProjectRef == "" {
+	if input.IsSystemAssistant() {
 		request = &secretbrokerv1.MaterializeSystemAssistantCredentialsRequest{Execution: execution}
 	}
 	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(request)

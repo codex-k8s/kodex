@@ -38,7 +38,7 @@ SELECT
       AND request.manifest_digest = artifact.manifest_digest
       AND request.receipt_sha256 ~ '^[a-f0-9]{64}$'
       AND recipe.organization_id = artifact.organization_id
-      AND recipe.project_id = artifact.project_id
+      AND recipe.project_id IS NOT DISTINCT FROM artifact.project_id
       AND recipe.state = 'ACTIVE'
       AND recipe.version = artifact.recipe_version
       AND recipe.generation = artifact.recipe_generation

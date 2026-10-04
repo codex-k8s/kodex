@@ -70,6 +70,11 @@ func (r *Repository) secretDraftImpactItems(ctx context.Context, tx pgx.Tx, id s
 		if rows.Scan(&item.Ref, &raw, &item.Outcome, &item.ResultEnvironmentVersionRef, &item.ResultBindingRef, &item.ResultBindingVersion) != nil || json.Unmarshal(raw, &item.Consumer) != nil || len(result) >= maximumSecretDraftImpactItems {
 			return nil, errs.ErrUnavailable
 		}
+		consumer := item.Consumer
+		if !validRuntimeOwnerSnapshot(consumer.ScopeKind, consumer.OrganizationRef, consumer.ProjectRef) ||
+			consumer.Consumer.ScopeKind != consumer.ScopeKind || consumer.Consumer.OrganizationRef != consumer.OrganizationRef || consumer.Consumer.ProjectRef != consumer.ProjectRef {
+			return nil, errs.ErrNotFound
+		}
 		result = append(result, item)
 	}
 	if rows.Err() != nil {
@@ -133,7 +138,7 @@ func (r *Repository) PrepareRuntimeSecretDraftImpact(ctx context.Context, p valu
 		var key string
 		var item entity.RuntimeSecretDraftImpactItem
 		c := &item.Consumer
-		if rows.Scan(&key, &c.EnvironmentRef, &c.EnvironmentVersion, &c.EnvironmentVersionRef, &c.SecretRevisions, &c.Consumer.AgentRef, &c.Consumer.AgentVersion, &c.Consumer.BindingRef, &c.Consumer.BindingVersion, &c.Consumer.ProjectRef, &total) != nil {
+		if rows.Scan(&key, &c.EnvironmentRef, &c.EnvironmentVersion, &c.EnvironmentVersionRef, &c.SecretRevisions, &c.Consumer.AgentRef, &c.Consumer.AgentVersion, &c.Consumer.BindingRef, &c.Consumer.BindingVersion, &c.ProjectRef, &c.ScopeKind, &c.OrganizationRef, &total) != nil {
 			rows.Close()
 			return empty, errs.ErrUnavailable
 		}
@@ -144,6 +149,7 @@ func (r *Repository) PrepareRuntimeSecretDraftImpact(ctx context.Context, p valu
 				return empty, errs.ErrUnavailable
 			}
 			c.Consumer.VersionRef = c.EnvironmentVersionRef
+			c.Consumer.ScopeKind, c.Consumer.OrganizationRef, c.Consumer.ProjectRef = c.ScopeKind, c.OrganizationRef, c.ProjectRef
 			item.Outcome = "PENDING"
 			items = append(items, item)
 		}
@@ -230,11 +236,21 @@ func (r *Repository) GetRuntimeSecretDraftImpact(ctx context.Context, p value.Pr
 	limit := boundedPage(page)
 	for _, item := range items {
 		c := item.Consumer
-		if r.requireAccess(ctx, tx, s, "project.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: c.Consumer.ProjectRef}) != nil {
-			continue
+		environment, err := r.getRuntimeEnvironmentTx(ctx, tx, s, c.EnvironmentRef)
+		if err == nil {
+			err = r.requireRuntimeEnvironmentOwnerAccess(ctx, tx, s, environment.ScopeKind, environment.ProjectRef)
 		}
-		if c.Consumer.AgentRef != "" && r.requireAccess(ctx, tx, s, "agent.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: c.Consumer.AgentRef}) != nil {
-			continue
+		if err == nil {
+			err = matchRuntimeOwnerSnapshot(environment.ScopeKind, environment.OrganizationRef, environment.ProjectRef, c.ScopeKind, c.OrganizationRef, c.ProjectRef)
+		}
+		if err == nil && c.Consumer.AgentRef != "" {
+			err = r.authorizeRuntimeEnvironmentConsumers(ctx, tx, s, environment, []entity.RuntimeEnvironmentConsumer{c.Consumer})
+		}
+		if err != nil {
+			if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) {
+				continue
+			}
+			return result, err
 		}
 		if search != "" && !strings.Contains(strings.ToLower(c.EnvironmentRef+" "+c.Consumer.AgentRef+" "+c.Consumer.ProjectRef), strings.ToLower(strings.TrimSpace(search))) {
 			continue

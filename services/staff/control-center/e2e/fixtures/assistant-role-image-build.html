@@ -9,6 +9,7 @@
     <div id="app"></div>
     <script type="module">
       import { createApp } from "vue";
+      import { createPinia } from "pinia";
       import { createMemoryHistory, createRouter } from "vue-router";
       import { i18n } from "../../src/app/i18n/index";
       import { configureApiClient } from "../../src/shared/api/client";
@@ -22,6 +23,11 @@
         history: createMemoryHistory(),
         routes: [
           {
+            path: "/organization/role-images/:recipeRef",
+            name: "system-role-image",
+            component: AssistantRoleImageBuildFixture,
+          },
+          {
             path: "/projects/:projectRef/role-images/:recipeRef",
             name: "role-image",
             component: AssistantRoleImageBuildFixture,
@@ -29,6 +35,7 @@
         ],
       });
       createApp(AssistantRoleImageBuildFixture)
+        .use(createPinia())
         .use(router)
         .use(i18n)
         .mount("#app");

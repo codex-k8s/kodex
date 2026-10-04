@@ -38,8 +38,8 @@ func (repository *Repository) secretImpactTarget(ctx context.Context, tx pgx.Tx,
 	if revision < 0 {
 		return result, "", errs.ErrInvalid
 	}
-	var projectRef, projectID string
-	err := tx.QueryRow(ctx, querySecretImpactTarget, current.organizationID, ref, revision).Scan(&result.SecretRef, &result.SecretVersion, &result.TargetRevision, &projectRef, &projectID)
+	var projectRef, projectID, scopeKind, organizationRef string
+	err := tx.QueryRow(ctx, querySecretImpactTarget, current.organizationID, ref, revision).Scan(&result.SecretRef, &result.SecretVersion, &result.TargetRevision, &projectRef, &projectID, &scopeKind, &organizationRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, "", errs.ErrNotFound
 	}
@@ -48,6 +48,15 @@ func (repository *Repository) secretImpactTarget(ctx context.Context, tx pgx.Tx,
 	}
 	if current.authorityProjectID != "" && current.authorityProjectID != projectID {
 		return result, "", errs.ErrForbidden
+	}
+	if organizationRef != current.organizationRef || !validRuntimeOwnerSnapshot(scopeKind, organizationRef, projectRef) {
+		return result, "", errs.ErrNotFound
+	}
+	if scopeKind == "ORGANIZATION" {
+		if err := repository.requireOrganizationRuntimeResourceAccess(ctx, tx, current, "secret.rotate"); err != nil {
+			return result, "", err
+		}
+		return result, projectRef, nil
 	}
 	if err := repository.requireAccess(ctx, tx, current, "secret.rotate", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "SECRET", ResourceRef: ref}); err != nil {
 		return result, "", err
@@ -91,12 +100,13 @@ func (repository *Repository) GetRuntimeSecretImpact(ctx context.Context, princi
 		var item entity.RuntimeSecretImpactConsumer
 		var key string
 		if err := rows.Scan(&key, &item.EnvironmentRef, &item.EnvironmentVersion, &item.EnvironmentVersionRef, &item.SecretRevisions,
-			&item.Consumer.AgentRef, &item.Consumer.AgentVersion, &item.Consumer.BindingRef, &item.Consumer.BindingVersion, &item.Consumer.ProjectRef, &result.Total); err != nil {
+			&item.Consumer.AgentRef, &item.Consumer.AgentVersion, &item.Consumer.BindingRef, &item.Consumer.BindingVersion, &item.ProjectRef, &item.ScopeKind, &item.OrganizationRef, &result.Total); err != nil {
 			rows.Close()
 			return result, errs.ErrUnavailable
 		}
 		if key != "" {
 			item.Consumer.VersionRef = item.EnvironmentVersionRef
+			item.Consumer.ScopeKind, item.Consumer.OrganizationRef, item.Consumer.ProjectRef = item.ScopeKind, item.OrganizationRef, item.ProjectRef
 			result.Consumers = append(result.Consumers, item)
 			cursors = append(cursors, key)
 		}
@@ -120,16 +130,16 @@ func (repository *Repository) rebindRuntimeSecret(ctx context.Context, tx pgx.Tx
 	if !ok || payload.Revision < 1 || input.Mutation.ExpectedVersion == nil || len(payload.Selections) < 1 || len(payload.Selections) > 32 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	secret, err := repository.lockRuntimeSecret(ctx, tx, current.organizationID, payload.SecretRef)
+	secret, err := repository.authorizeRuntimeSecretSelections(ctx, tx, current, payload.SecretRef, payload.Revision, payload.Selections)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	target, projectRef, err := repository.secretImpactTarget(ctx, tx, current, payload.SecretRef, payload.Revision)
 	if err != nil {
 		return commandOutcome{}, err
 	}
 	if secret.version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
-	}
-	target, projectRef, err := repository.secretImpactTarget(ctx, tx, current, payload.SecretRef, payload.Revision)
-	if err != nil {
-		return commandOutcome{}, err
 	}
 	selections := append([]entity.RuntimeSecretRebindSelection(nil), payload.Selections...)
 	sort.Slice(selections, func(i, j int) bool { return selections[i].EnvironmentRef < selections[j].EnvironmentRef })
@@ -153,6 +163,13 @@ func (repository *Repository) rebindRuntimeSecret(ctx context.Context, tx pgx.Tx
 		environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, lookup, selection.EnvironmentRef)
 		if err != nil {
 			return commandOutcome{}, err
+		}
+		if err := matchRuntimeOwnerSnapshot(environment.ScopeKind, environment.OrganizationRef, environment.ProjectRef,
+			selection.ScopeKind, selection.OrganizationRef, selection.ProjectRef); err != nil {
+			return commandOutcome{}, err
+		}
+		if environment.ScopeKind != secret.scopeKind || environment.OrganizationRef != secret.organizationRef || environment.ProjectRef != secret.projectRef {
+			return commandOutcome{}, errs.ErrNotFound
 		}
 		if environment.Version != selection.ExpectedEnvironmentVersion {
 			return commandOutcome{}, errs.ErrVersionMismatch

@@ -33,6 +33,7 @@ export async function installEnvironmentFixture(
     },
     volumes: [],
     networkDestinations: ["DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"],
+    webAccess: { mode: "NONE", rules: [] },
     kubernetesAccess: "NONE",
   };
   const empty: RuntimeEnvironmentDraftSpecification = {
@@ -44,6 +45,8 @@ export async function installEnvironmentFixture(
     secretBindings: [],
   };
   let draft: RuntimeEnvironmentDraft = {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref: "draft_synthetic_environment",
     projectRef,
     version: 1,
@@ -64,6 +67,8 @@ export async function installEnvironmentFixture(
     },
   };
   const environment: RuntimeEnvironmentSet = {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref: "environment_synthetic",
     projectRef,
     version: 1,
@@ -93,7 +98,16 @@ export async function installEnvironmentFixture(
       policy: {
         resources: policy.resources,
         volumes: [],
-        network: { denyByDefault: true, egress: [] },
+        network: {
+          denyByDefault: true,
+          egress: [
+            { destination: "DNS", protocol: "TCP", port: 53 },
+            { destination: "DNS", protocol: "UDP", port: 53 },
+            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
+            { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
+          ],
+          webAccess: { mode: "NONE", rules: [] },
+        },
         kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
         resourcesDigest: digest,
         volumesDigest: digest,
@@ -104,6 +118,8 @@ export async function installEnvironmentFixture(
   };
   const recipe: RoleImageRecipeDetail = {
     recipe: {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       sourceAvailable: true,
       ref: "recipe_synthetic_image",
       projectRef,
@@ -123,6 +139,9 @@ export async function installEnvironmentFixture(
     },
     builds: [],
     activeArtifact: {
+      projectRef,
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "artifact_synthetic_image",
       version: 1,
       recipeRef: "recipe_synthetic_image",
@@ -137,6 +156,8 @@ export async function installEnvironmentFixture(
     },
   };
   const consumer: RuntimeEnvironmentConsumer = {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     agentRef: "agent_impact_synthetic",
     agentVersion: 3,
     bindingRef: "binding_impact_synthetic",

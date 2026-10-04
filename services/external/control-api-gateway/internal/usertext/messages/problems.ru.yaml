@@ -1,5 +1,9 @@
 AUTOMATION_VARIABLE_NAME:
   other: Название Автоматизации
+PROJECT_ASSISTANT_ROLE:
+  other: Помощник Проекта
+PROJECT_ASSISTANT_CREATED:
+  other: Помощник Проекта создан
 AUTOMATION_VARIABLE_TASK:
   other: Исходная задача Автоматизации
 AUTOMATION_VARIABLE_SCHEDULED_AT:
@@ -200,6 +204,8 @@ ROLE_IMAGE_RECIPE_CHANGED:
   other: Конфигурация среды роли обновлена
 ROLE_IMAGE_BUILD_COMPLETED:
   other: Образ среды роли собран
+ROLE_IMAGE_BUILD_LEASE_EXPIRED:
+  other: Срок выполнения сборки образа истёк
 ROLE_IMAGE_PROMOTION_REQUESTED:
   other: Продвижение образа среды роли запрошено
 ROLE_IMAGE_PROMOTED:
@@ -308,6 +314,8 @@ ASSISTANT_TURN_QUEUED:
   other: Команда помощнику поставлена в очередь
 ASSISTANT_TURN_ACCEPTED:
   other: Команда помощнику принята
+ASSISTANT_TURN_CANCELLED:
+  other: Ход помощника остановлен
 ASSISTANT_PLAN_APPLIED:
   other: План помощника применён
 ASSISTANT_PLAN_PROPOSED:

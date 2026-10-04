@@ -69,7 +69,7 @@ func TestRetryRunForwardsFreshOwnerDenialOnEveryExactReplay(t *testing.T) {
 		}
 	}
 	for _, actions := range [][]cp.NextAction{nil, {cp.NextAction_NEXT_ACTION_OPEN}, {cp.NextAction_NEXT_ACTION_OPEN, cp.NextAction_NEXT_ACTION_RETRY}} {
-		value, err := messageMap(&cp.Run{Ref: "run_fixture01", NextActions: actions})
+		value, err := messageMap(&cp.Run{Ref: "run_fixture01", ProjectRef: "prj_fixture01", Target: targetProto("AGENT", "agt_fixture01"), NextActions: actions})
 		if err != nil || len(value["nextActions"].([]any)) != len(actions) {
 			t.Fatal("run view invented retry authority")
 		}

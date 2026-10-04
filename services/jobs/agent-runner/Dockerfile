@@ -29,7 +29,7 @@ RUN mkdir -p /out/kodex-protected \
 # последним stage этого Dockerfile и не зависит от local-runtime.
 FROM docker.io/library/node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS local-codex-cli
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.153.4
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0
 
 RUN set -eu; \
 	npm install --global "${KODEX_CODEX_PACKAGE}"; \
@@ -47,9 +47,11 @@ RUN set -eu; \
 
 FROM docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS local-runtime
 
+# Явное включение libpcre2 обновляет уже установленную в pinned base библиотеку:
+# иначе установка новых инструментов оставляет её прежнюю уязвимую версию.
 RUN set -eu; \
 	apt-get update; \
-	apt-get install -y --no-install-recommends bubblewrap ca-certificates git openssh-client tini; \
+	apt-get install -y --no-install-recommends bubblewrap ca-certificates git libpcre2-8-0 openssh-client tini; \
 	groupadd --gid 10001 kodex; \
 	useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin kodex; \
 	mkdir -p /home/kodex /workspace /codex-home /run/secrets/kodex/runtime/provider; \
@@ -119,7 +121,7 @@ FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd51144464
 
 ENV GOTOOLCHAIN=local
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.153.4
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0
 ARG GH_CLI_VERSION=2.95.0
 ARG KUBECTL_VERSION=v1.36.2
 ARG HELM_VERSION=v4.2.1
@@ -168,6 +170,7 @@ RUN set -eu; \
 		git \
 		jq \
 		less \
+		libpcre2-8-0 \
 		make \
 		netcat-openbsd \
 		openssl \

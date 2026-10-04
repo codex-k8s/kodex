@@ -30,7 +30,7 @@ func (server *Server) GetRoleImageImpactPlan(ctx context.Context, request *cp.Ge
 	for _, item := range result.Items {
 		response.Items = append(response.Items, &cp.RoleImageImpactItem{Ref: item.Ref, EnvironmentRef: item.EnvironmentRef, EnvironmentVersion: item.EnvironmentVersion,
 			SourceVersionRef: item.SourceVersionRef, SourceVersionDigest: item.SourceVersionDigest,
-			Consumer: &cp.RuntimeEnvironmentConsumer{AgentRef: item.Consumer.AgentRef, AgentVersion: item.Consumer.AgentVersion, BindingRef: item.Consumer.BindingRef, BindingVersion: item.Consumer.BindingVersion, VersionRef: item.Consumer.VersionRef, ProjectRef: item.Consumer.ProjectRef},
+			Consumer: castRuntimeEnvironmentConsumer(item.Consumer),
 			Outcome:  cp.RoleImageImpactOutcome(cp.RoleImageImpactOutcome_value["ROLE_IMAGE_IMPACT_OUTCOME_"+item.Outcome]), ResultEnvironmentVersionRef: item.ResultEnvironmentVersionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion})
 	}
 	return response, nil

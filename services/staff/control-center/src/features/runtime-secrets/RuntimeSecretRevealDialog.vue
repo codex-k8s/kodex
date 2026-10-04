@@ -7,6 +7,7 @@ import type { RuntimeSecret, RuntimeSecretValueType } from "./model";
 import { canRuntimeSecretAction, maskedSecretHint } from "./model";
 import { executeRuntimeSecretReveal } from "./reveal-flow";
 import { useSessionStore } from "@/features/session/store";
+import { runtimeResourceAddressFromIdentity } from "@/features/runtime/resource-scope";
 import type { AppProblem } from "@/shared/api/problem";
 import { asProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -26,8 +27,9 @@ const revealed = ref(false);
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
 const revealPending = computed(() =>
   session.hasPendingRuntimeSecretReveal(
-    props.secret.projectRef,
+    runtimeResourceAddressFromIdentity(props.secret),
     props.secret.ref,
+    props.secret.organizationRef,
   ),
 );
 const canReveal = computed(() =>
@@ -55,10 +57,16 @@ async function reveal(): Promise<void> {
   busy.value = true;
   try {
     const flow = await executeRuntimeSecretReveal({
-      projectRef: props.secret.projectRef,
+      projectRef: runtimeResourceAddressFromIdentity(props.secret),
+      organizationRef: props.secret.organizationRef,
       secretRef: props.secret.ref,
       session,
-      reveal: revealRuntimeSecret,
+      reveal: (secretRef) =>
+        revealRuntimeSecret(
+          secretRef,
+          runtimeResourceAddressFromIdentity(props.secret),
+          props.secret.organizationRef,
+        ),
     });
     if (flow.kind === "reauthentication-started") return;
     const result = flow.value;

@@ -29,7 +29,7 @@ func TestAssistantCatalogDiscoversExactIntegrationDefinitionWithoutCredential(t 
 		CapabilityKeys:      []string{"https_json.resource.read"},
 	}}}}
 	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
-	input := runtimecontract.RunnerInput{SystemAssistant: true, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 4}
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 4}
 	result, err := server.configurationCatalog(t.Context(), input, map[string]any{"operation_types": []any{}, "definition_query": " https-json "})
 	if err != nil {
 		t.Fatal(err)
@@ -54,14 +54,14 @@ func TestAssistantCatalogDiscoversExactIntegrationDefinitionWithoutCredential(t 
 }
 
 func TestAssistantCatalogRejectsUnboundOrMalformedDefinitionLookup(t *testing.T) {
-	input := runtimecontract.RunnerInput{SystemAssistant: true, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 4}
+	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, LeaseRef: "lse_current123", LeaseFence: "private-fence", LeaseGeneration: 4}
 	for _, test := range []struct {
 		name      string
 		input     runtimecontract.RunnerInput
 		arguments map[string]any
 	}{
 		{"ordinary agent", runtimecontract.RunnerInput{LeaseRef: input.LeaseRef, LeaseFence: input.LeaseFence, LeaseGeneration: 4}, map[string]any{"definition_query": "https"}},
-		{"missing fence", runtimecontract.RunnerInput{SystemAssistant: true, LeaseRef: input.LeaseRef, LeaseGeneration: 4}, map[string]any{"definition_query": "https"}},
+		{"missing fence", runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, LeaseRef: input.LeaseRef, LeaseGeneration: 4}, map[string]any{"definition_query": "https"}},
 		{"offset without query", input, map[string]any{"definition_offset": float64(10)}},
 		{"negative offset", input, map[string]any{"definition_query": "https", "definition_offset": float64(-1)}},
 		{"fractional offset", input, map[string]any{"definition_query": "https", "definition_offset": 1.5}},

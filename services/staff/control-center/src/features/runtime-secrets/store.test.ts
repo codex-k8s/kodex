@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from "pinia";
+import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeSecret, RuntimeSecretPage } from "./model";
@@ -17,8 +17,12 @@ vi.mock("@/shared/api/client", () => ({
 }));
 
 import { useRuntimeSecretsStore } from "./store";
+import { usePlatformStore } from "@/features/platform/store";
+import type { BootstrapState } from "@/shared/api/generated/openapi/types.gen";
 
 const secret: RuntimeSecret = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   ref: "secret_main",
   version: 3,
   projectRef: "project_sales",
@@ -46,10 +50,40 @@ function deferred<T>(): {
 
 describe("runtime secrets store", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    initializeRuntimeOwnerFixture("org_synthetic");
     vi.resetAllMocks();
     api.normalizeRuntimeSecretProblem.mockImplementation((error) => error);
     api.readRuntimeSecret.mockResolvedValue(secret);
+  });
+  it("не принимает PROJECT catalog без bootstrap или с foreign owner", () => {
+    const store = useRuntimeSecretsStore();
+    store.prepareRealtimeScope(secret.projectRef);
+    expect(() =>
+      store.applySnapshot(secret.projectRef, [
+        { ...secret, organizationRef: "org_foreign" },
+      ]),
+    ).toThrow();
+    usePlatformStore().bootstrap = undefined;
+    expect(() => store.applySnapshot(secret.projectRef, [secret])).toThrow(
+      "anchor",
+    );
+    expect(store.items).toEqual([]);
+  });
+  it("сбрасывает cache и не принимает позднюю страницу после owner flip", async () => {
+    const pending = deferred<RuntimeSecretPage>();
+    api.loadRuntimeSecretPage.mockReturnValue(pending.promise);
+    const store = useRuntimeSecretsStore();
+    const request = store.load(secret.projectRef);
+    usePlatformStore().bootstrap = {
+      organizationRef: "org_foreign",
+    } as BootstrapState;
+    pending.resolve({
+      items: [{ ...secret, organizationRef: "org_foreign" }],
+      nextPageToken: "",
+    });
+    await request;
+    expect(store.items).toEqual([]);
+    expect(store.nextPageToken).toBe("");
   });
 
   it("не позволяет устаревшему поиску перезаписать новый", async () => {

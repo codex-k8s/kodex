@@ -4,6 +4,7 @@ package imageowner
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -19,7 +20,20 @@ type Config struct {
 	Promotion                                                                  bool
 }
 
+func scopeName(scope controlplanev1.RuntimeResourceScopeKind) string {
+	switch scope {
+	case controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION,
+		controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT:
+		return strings.TrimPrefix(scope.String(), "RUNTIME_RESOURCE_SCOPE_KIND_")
+	default:
+		return ""
+	}
+}
+
 type Claim struct {
+	ScopeKind                   string    `json:"scopeKind"`
+	OrganizationRef             string    `json:"organizationRef"`
+	ProjectRef                  string    `json:"projectRef"`
 	ArtifactID                  string    `json:"artifactId"`
 	Version                     uint64    `json:"version"`
 	Fence                       uint64    `json:"fence"`
@@ -57,6 +71,9 @@ type AdmissionEvidence struct {
 }
 
 type Promotion struct {
+	ScopeKind                         string    `json:"scopeKind"`
+	OrganizationRef                   string    `json:"organizationRef"`
+	ProjectRef                        string    `json:"projectRef"`
 	ArtifactID                        string    `json:"artifactId"`
 	Version                           uint64    `json:"version"`
 	Claim                             string    `json:"claim"`
@@ -126,6 +143,7 @@ func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 		platforms = append(platforms, value)
 	}
 	return Claim{ArtifactID: artifact.GetRef(), Version: artifact.GetVersion(), Fence: response.GetFence(),
+		ScopeKind: scopeName(artifact.GetScopeKind()), OrganizationRef: artifact.GetOrganizationRef(), ProjectRef: artifact.GetProjectRef(),
 		ClaimToken: response.GetClaimToken(), ExpiresAt: response.GetClaimExpiresAt().AsTime(),
 		RecipeID: artifact.GetRecipeRef(), RecipeVersion: artifact.GetRecipeVersion(), RecipeGeneration: artifact.GetRecipeGeneration(),
 		SpecSHA256: artifact.GetSpecSha256(), BuildID: artifact.GetBuildRef(), BuildVersion: artifact.GetBuildVersion(),
@@ -183,6 +201,7 @@ func (client *Client) ClaimPromotion(ctx context.Context, key string) (Promotion
 		return Promotion{}, errors.New("image promotion claim is incomplete")
 	}
 	return Promotion{ArtifactID: artifact.GetRef(), Version: artifact.GetVersion(),
+		ScopeKind: scopeName(artifact.GetScopeKind()), OrganizationRef: artifact.GetOrganizationRef(), ProjectRef: artifact.GetProjectRef(),
 		Claim: response.GetPromotionClaim(), Fence: response.GetFence(),
 		ExpiresAt: response.GetClaimExpiresAt().AsTime(), StagingReference: artifact.GetStagingReference(),
 		ManifestDigest: artifact.GetManifestDigest(), AdmissionRevision: artifact.GetAdmissionRevision(),

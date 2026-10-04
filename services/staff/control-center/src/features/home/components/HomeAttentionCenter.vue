@@ -73,7 +73,8 @@ const projectNames = computed(
   () => new Map(props.projects.map((project) => [project.ref, project.name])),
 );
 
-function projectName(projectRef: string): string {
+function projectName(projectRef: string | undefined): string {
+  if (!projectRef) return t("assistant.settings.systemScope");
   return projectNames.value.get(projectRef) ?? t("common.unavailable");
 }
 

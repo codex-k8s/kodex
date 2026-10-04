@@ -12,6 +12,11 @@ import type {
 import { requestSignal } from "@/shared/api/client";
 import { etag, mutate } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
+import {
+  requireRuntimeOrganizationRef,
+  validRuntimeResourceIdentity,
+  runtimeResourceIdentityKey,
+} from "@/features/runtime/resource-scope";
 
 export function roleImagePlanIdentity(plan: RoleImageImpactPlan): string {
   return JSON.stringify([
@@ -94,7 +99,9 @@ export function checkedImagePage(
   page: RoleImageImpactPage,
   expected: RoleImageImpactPlan,
   cursor?: string,
+  organizationRef?: string,
 ): RoleImageImpactPage {
+  requireRuntimeOrganizationRef(organizationRef);
   checkedPlan(page.plan);
   if (
     roleImagePlanIdentity(page.plan) !== roleImagePlanIdentity(expected) ||
@@ -108,13 +115,15 @@ export function checkedImagePage(
       (item) =>
         !item.ref ||
         !item.environmentRef ||
-        !item.projectRef ||
+        !validRuntimeResourceIdentity(item, organizationRef) ||
         !item.sourceVersionRef ||
         !item.sourceVersionDigest ||
         !Number.isSafeInteger(item.environmentVersion) ||
         item.environmentVersion <= 0 ||
         (item.consumer &&
-          (item.consumer.projectRef !== item.projectRef ||
+          (!validRuntimeResourceIdentity(item.consumer, organizationRef) ||
+            runtimeResourceIdentityKey(item.consumer) !==
+              runtimeResourceIdentityKey(item) ||
             item.consumer.versionRef !== item.sourceVersionRef)) ||
         ![
           "PENDING",
@@ -147,6 +156,7 @@ export async function readImageImpact(
   query = "",
   pageToken?: string,
   pageSize = 40,
+  organizationRef?: string,
 ): Promise<RoleImageImpactPage> {
   return checkedImagePage(
     (
@@ -165,11 +175,13 @@ export async function readImageImpact(
     ).data,
     plan,
     pageToken,
+    organizationRef,
   );
 }
 export async function restoreImageImpact(
   planRef: string,
   signal: AbortSignal,
+  organizationRef?: string,
 ): Promise<RoleImageImpactPage> {
   const page = (
     await unwrap(
@@ -183,7 +195,12 @@ export async function restoreImageImpact(
   ).data;
   if (page.plan.ref !== planRef)
     throw new Error("Role image recovery reference mismatch");
-  return checkedImagePage(page, checkedPlan(page.plan));
+  return checkedImagePage(
+    page,
+    checkedPlan(page.plan),
+    undefined,
+    organizationRef,
+  );
 }
 export function imageImpactSelection(
   plan: RoleImageImpactPlan,

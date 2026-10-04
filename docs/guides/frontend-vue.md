@@ -4,8 +4,8 @@ title: PWA на Vue и TypeScript
 type: guide
 status: approved
 owner: developer
-version: 1.2.3
-updated: 2026-09-09
+version: 1.2.4
+updated: 2026-10-04
 ---
 
 # PWA на Vue и TypeScript
@@ -114,6 +114,12 @@ Feature:
 
 При изменении OpenAPI сначала меняется источник контракта, затем запускается
 codegen, после чего адаптируется handwritten boundary.
+
+Realtime snapshot различает отсутствующий каталог и авторитетный пустой массив
+`[]`. Codegen и wire-сериализация обязаны сохранять это различие после
+decode/encode; тест проверяет все optional collections, а не только непустой
+fixture. Frontend не восстанавливает отсутствующее обязательное поле
+неявным fallback, иначе потеря формы wire скрывает ошибку rejoin или scope.
 
 ## State и конкурентность
 

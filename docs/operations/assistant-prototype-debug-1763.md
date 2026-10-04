@@ -4,14 +4,14 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.311
-updated: 2026-09-29
+version: 1.0.331
+updated: 2026-10-04
 ---
 
 # Совместная отладка прототипа
 
-Область: локальный `trusted-cluster`, единственный клон
-`/home/s/projects/matter-codex`, эпик #1763, текущие Issue #1784 и PR #1785.
+Область: локальный `trusted-cluster`, единственный обслуживаемый клон
+`/home/s/projects/kodex`, эпик #1763, текущие Issue #1789 и Draft PR #1790.
 Это рабочий журнал, а не доказательство приёмки. Слияние PR — только по
 отдельной команде владельца; staging и production не затрагиваются.
 
@@ -6826,3 +6826,1430 @@ GitHub checks не считается `PASS`.
   STT, повторная device-code авторизация и восстановление после reboot в
   соответствии с решением владельца в эту отмашку не входят. PR остаётся
   Draft и не сливается без отдельной команды.
+
+## 3 октября: первичная настройка и компактные поля, PR #1790
+
+- [x] Первичная настройка заменена шестью понятными шагами: модель, проект,
+      образ, секреты и окружение, сотрудники и процессы, автоматизации и запуск.
+      У каждого шага есть штатные формы и переход к помощнику с подготовленным
+      сообщением; сообщение не отправляется автоматически.
+- [x] Без подключённого аккаунта показана причина недоступности модели, а не
+      выдуманное восстановление помощника. После авторизации готовность обновляется
+      из текущего состояния; показаны русские и английские тексты.
+- [x] Выбранный проект и этап сохраняются в пределах пользователя и вкладки.
+      Возврат из формы сотрудника после обновления без кэша сохраняет нужный шаг.
+      Выбор проекта использует штатный селектор с поиском и загрузкой по курсору.
+- [x] Новый проект не отправляется в пустые селекторы образа и окружения:
+      объяснено создание базовых настроек вместе с первым сотрудником. Для своего
+      образа сначала нужна роль сотрудника; для первого запуска — готовый исполнитель.
+      Завершение остаётся недоступным до готового сотрудника и успешного запуска.
+- [x] Общая высота обычных полей, закрытых селекторов и кнопок — 32 px.
+      Из закрытого селектора убраны нижние описания; подробности сохранены в
+      выпадающих списках. Также уплотнены фильтры сотрудников, файлов, автоматизаций,
+      решений, аудита и каталога переменных; выбор прошлой сессии приведён к тому же виду.
+- [x] Пустой черновик окружения больше не показывает ложное восстановление и
+      загрузку отсутствующего образа; добавлен регрессионный тест.
+- [x] Локально в Pod выполнены адресные frontend unit-проверки: 9 файлов,
+      125 тестов; lint, typecheck, форматирование и production build прошли.
+      Build сохраняет предупреждение о размере общих chunks; это не ошибка сборки.
+- [x] Chrome MCP: создание временного проекта вручную, переходы базовой настройки,
+      открытие и отмена формы сотрудника, возврат после обновления без кэша,
+      форма запуска без отправки, подготовка и удаление неотправленного текста
+      помощника. Console error/warn пуста, финальные XHR/fetch — 2xx.
+      Снимки: `/tmp/kodex-compact-environment.png`, `/tmp/kodex-compact-run.png`,
+      `/tmp/kodex-onboarding-final-project.png`. Горизонтального переполнения нет;
+      видимые обычные поля, селекторы и кнопки измерены как 32 px.
+- [x] Исходники `/home/s/projects/kodex` обслуживаются через текущие read-only
+      hostPath mounts и hot reload. SHA256 компонента настройки и общего селектора
+      совпадают на хосте и в frontend Pod. В stdout бэка за окно проверки нет записей;
+      это не самостоятельное доказательство успешности серверных сценариев.
+- [x] Временный проект после проверки перемещён в корзину штатной командой;
+      необратимая очистка не выполнялась, срок восстановления — 30 дней.
+- [ ] Реальный запуск ИИ, ответы помощника, STT и повторная device-code
+      авторизация — `NOT RUN`: оставлены владельцу. Эти проверки являются отладкой
+      разрешённого локального стенда, а не staging/production приёмкой.
+
+## 03.10.2026 — gpt-6.1-sol, помощник и свободное завершение настройки
+
+Решение владельца: модель по умолчанию `gpt-6.1-sol`, reasoning `medium`.
+Второй шаг — системный помощник; завершение не требует всех остальных шагов.
+
+- [x] Семь шагов, отдельный переход к существующим настройкам Kodex,
+      подтверждаемое «Настрою остальное позже», постоянный пункт бокового меню
+      для владельца/администратора, RU/EN. Галочки отражают готовность, а не
+      фиктивное прохождение после завершения.
+- [x] Каталог API дополнен подтверждённой моделью и усилиями
+      `low|medium|high|xhigh|max`; `none` не добавлен. Проверены официальная
+      страница модели OpenAI и Context7 `/openai/codex` для `model/list`.
+- [x] Runtime default изменяется отдельной forward-only migration только для
+      прежнего `builtin-safe-runtime`. Существующие immutable настройки
+      сотрудников и снимки выполняемых/terminal задач не переписываются.
+      Новая конфигурация gpt-6.1-sol получает канонический overlay `medium`.
+      Каталог провайдера предпочитает доступный platform default; если его нет,
+      сохраняется авторитетный default провайдера. Недоступная модель не выдаётся
+      за доступную.
+- [x] Карта: owner UI → существующая COMPLETE_ONBOARDING с server nextActions →
+      gateway → control-plane owner transaction → installation, receipt/audit и
+      SYSTEM_ASSISTANT_CHANGED → bootstrap/realtime. Повтор сохраняет прежний
+      onboarding timestamp. Навигация к настройкам сама ничего не создаёт и не
+      запускает. Cancel/Delete/Retry/leases/grants текущих задач не меняются;
+      новая RuntimeRevision следующего хода разрешает новую конфигурацию штатно.
+- [x] Frontend: 61 тест, ESLint, typecheck, production build; Go: providercredential,
+      control-plane app и platform unit; host-hardening contract — PASS.
+      Go suites повторены с закреплённым Go 1.26.6; agent-runner/codex — PASS.
+- [x] Пересобран и применён pinned Codex CLI 0.160.0. Фактический подписочный
+      каталог возвращает gpt-6.1-sol; API и подписочный picker не смешиваются.
+      Offline wire: девять API-моделей, 49 explicit selections и внешний
+      синтетический token wire — PASS, сеть отключена, turn/start не выполнялся.
+- [x] Migration применена репозиторным deploy-local; runtime-selections readback:
+      builtin-safe-runtime / gpt-6.1-sol / ready=true. Host/Pod SHA256 компонента
+      onboarding и API catalog совпадают. Runner digest
+      `sha256:f6015d7929f70231c1ce19888d9ab09cbbb078d1c06a50218a3bdf19c486cc50`,
+      сборка исходников `28aa18d5a0066bb518c0c97ecb42657c1a6f826a`.
+- [x] Chrome: завершение через штатную COMPLETE_ONBOARDING без проекта/запуска,
+      возврат из главной и сохранение этапа; настройки помощника через второй
+      шаг. В UI сохранена новая модель и опубликован overlay medium:
+      runtime v4, overlay v3. После hard reload настройки сохранены.
+      Снимки `/tmp/kodex-gpt61-medium-settings.png` и
+      `/tmp/kodex-onboarding-seven-steps-1920.png`; 1920×1080, нет переполнения.
+      Console error/warn пуста; финальные XHR/fetch 2xx. Единственный 503 во
+      время перезапуска control-plane разобран: retryable UNAVAILABLE;
+      после готовности Pod и обновления страницы рабочий путь проходит.
+- [x] Устаревшие install-contract assertions приведены к реальным
+      PostgreSQL profile counters и запуску Playwright через точный Node;
+      provenance-fixture дополнена изолированными заглушками новых host helpers.
+      Полный install-contract — PASS. ShellCheck сообщает прежние SC2034/SC1090
+      в тестовой оснастке; bash -n и diff-check проходят. Это не доказательство
+      реальной установки на новом сервере.
+- [ ] Реальные ИИ/STT/device-code и staging/production — NOT RUN.
+
+## 03.10.2026 — полная системная и проектная конфигурация помощника
+
+Последнее решение владельца заменяет промежуточные варианты «только
+общеплатформенный контур» и «только проектная привязка». В onboarding полностью
+настраивается системный Kodex; дополнительно у каждого проекта может быть
+собственная конфигурация помощника. Владелец подтвердил вариант 1: отдельные
+системные ресурсы организации, без служебного проекта; ограничение фиксированного
+образа в #1789 снято и readback обновлённого Issue подтверждён. Это требования
+и план, не результат проверки всей новой функциональности.
+
+- [x] Общеплатформенные образы и секреты имеют явную организационную область,
+      без фиктивного проекта и без обхода сборки, допуска или secret-broker.
+- [x] Лимит параллельных выполнений аккаунта провайдера по умолчанию — 10
+      вместо 1. Настраивается в параметрах аккаунта через штатные API и UI
+      владельцем/администратором, RU/EN; сохраняется в CP с OCC, idempotency,
+      аудитом и событием. Это общий лимит аккаунта для помощников и сотрудников,
+      а не число диалогов и не внешняя квота провайдера. Диапазон существующей
+      границы — 1..256; не оставлять второй жёстко заданный лимит 1.
+- [x] Новая forward-only migration задаёт DEFAULT 10; текущий подключённый
+      аккаунт получает 10 штатным проверяемым путём. Уже применённая migration
+      не редактируется; явные пользовательские настройки сохраняются.
+      Изменение лимита не переписывает RuntimeRevision и не обрывает активные
+      ходы. При снижении лимита новые задания ждут освобождения слотов.
+      Миграция и перевод текущего аккаунта проверены на локальном стенде;
+      снижение при активных ходах — в disposable PostgreSQL (этап 2).
+      Это не проверка живого inference и не приёмка остальных путей.
+- [x] Полная системная настройка: модель/аккаунт/reasoning, образ, проверенные
+      инструменты, окружение, несекретные переменные, привязки секретов, ресурсы,
+      тома, сетевой доступ и инструкции. Доступ — владелец/администратор.
+- [x] Отдельная конфигурация помощника проекта использует ресурсы только своего
+      проекта. Системные секреты, grants и полномочия не копируются автоматически.
+- [x] Несколько диалогов исполняются одновременно: отдельные session, workspace,
+      execution, leases/grants и история. Warm runtime переиспользуется только
+      при совпадении exact session/config; занятый единичный warm-процесс не
+      превращается в общую очередь всех чатов. Исполнители создаются по спросу,
+      не запускать десять постоянных Pod ради значения DEFAULT 10.
+- [x] Внутри одного диалога остаётся один активный ход: QUEUE добавляет сообщение
+      после текущего, INTERRUPT_ACTIVE прерывает только его граф. Stop, delete,
+      retry, lease expiry и отзыв доступа изолированы по диалогу; завершение
+      корня атомарно закрывает принадлежащие ему дочерние работы.
+- [x] В чате и настройках явно различимы системный и проектный помощники;
+      каждый диалог сохраняет собственные черновик, состояние и привязку.
+      Смена проекта/чата не перепривязывает историю или активный ход и не
+      останавливает фоновые чаты. События WebSocket обновляют точный диалог
+      без polling и мигания; после reconnect выполняется корректный rejoin.
+- [x] Scheduler/controller согласуют общий лимит аккаунта с ресурсами кластера
+      и ёмкостью controller. Claim атомарно проверяет свободные слоты, не
+      переподписывает один session и не допускает превышения при гонках.
+      В UI различимы очередь, выполнение и ожидание мощности; отдельный чат
+      не блокирует остальные. Внешние rate/usage limits обрабатываются отдельно,
+      лимит Kodex 10 не выдаётся за гарантию десяти запросов провайдеру.
+- [x] Системный помощник подготавливает изменения себе и проектному помощнику;
+      настроенный проектный помощник — себе. Полномочия определяет текущий actor,
+      а не имя помощника, текст запроса или идентификатор из tool payload.
+- [x] Все пути подготовки создают один versioned draft с объяснением изменений,
+      проверкой и редактируемой штатной формой. Публикация требует отдельного
+      подтверждения; текст секрета вводится только в защищённую форму.
+- [x] Onboarding сохраняет настройку системного помощника вторым шагом; сначала
+      видны основные действия, расширенные параметры доступны под раскрытием.
+      Настройку можно закончить раньше и затем вернуться к ней.
+- [x] Подпись модели: локализованная дата каталога Kodex без account ref и сырых
+      timestamps; reasoning отсортирован от меньшего к большему.
+- [x] READ_OWN_EXECUTION полностью удалён из контрактов, типов, настройки и
+      выдачи runtime-прав; совместимость со старым профилем не поддерживается.
+- [x] Contract/codegen, Go/unit/disposable PostgreSQL, frontend/lint/typecheck/build,
+      итоговый render, hot-reload readback и Chrome MCP со скриншотами, Console и
+      relevant Network. Проверить 2 и 10 одновременных диалогов, очередь 11-го,
+      смену/снижение лимита, Stop/retry/delete одного из чатов, переподключение,
+      рестарт controller и отсутствие смешивания истории/секретов. Устранить
+      текущий FAIL полного компонентного набора, активировать новый runner и
+      проверить exact digest в обслуживаемом runtime. Реальный inference, STT,
+      device-code и production — NOT RUN без отдельного решения владельца.
+      Завершение учитывает последующее решение владельца: вместо нового полного
+      baseline/review выполнен native Chrome/Network/Console/backend повтор.
+      Ранее выполненные suites остаются привязаны к своим checkpoint; текущий
+      hot-reload результат не объявляется immutable release acceptance.
+
+### 03.10.2026 — решение о параллельных диалогах
+
+Владелец отменил сериализацию всех запусков значением 1 и задал DEFAULT 10
+с настройкой на уровне аккаунта. Проверка исходников: значение 1 добавлено
+в `20260830000300_provider_execution_capacity.sql`; это локальный параметр
+Kodex, а не полученная от провайдера квота. Проверка текущей БД на момент
+планирования: один enabled/AUTHORIZED аккаунт, его max_concurrent_executions — 1.
+Лимит в рабочей БД ещё не изменён: этот раздел фиксирует план, не реализацию.
+
+У каждого создаваемого диалога уже отдельный session; claim-запрос упорядочивает
+ходы внутри session. Controller допускает до 16 отслеживаемых ходов по
+умолчанию и ограничивает claim текущей ёмкостью аккаунта. Совместимость warm
+runtime включает SessionRef, а его цикл исполняет один ход за раз; несовместимый
+session направляется в отдельный turn runtime. Эти механизмы ещё не являются
+доказательством сквозного прохождения десяти параллельных чатов.
+
+### Карта полномочий и жизненного цикла
+
+Для настройки ёмкости аккаунта фиксируется отдельный путь: проверенная owner/admin
+session → `PUT /api/v1/provider-accounts/{providerAccountRef}/concurrency` →
+gateway → `PlatformCommandService.SetProviderAccountConcurrency` → команда
+`SET_PROVIDER_ACCOUNT_CONCURRENCY` → owner-транзакция CP. Подписанная operation
+`platform.command.provider-accounts.concurrency.set` связывает полный метод,
+точный account ref, expected version, idempotency и verified actor; project и
+owner не берутся из payload. CP разрешает аккаунт внутри org до OCC/receipt,
+проверяет owner/admin и диапазон 1..256, блокирует ту же строку аккаунта, что
+использует claim, сохраняет значение, новую version, receipt, audit и
+`PROVIDER_ACCOUNT_CHANGED` атомарно. Ответ — актуальный `ProviderAccount`,
+включая maximumConcurrentExecutions; unknown/чужой ref — NOT_FOUND, отсутствие
+прав — FORBIDDEN, stale version/idempotency — штатный conflict, invalid limit —
+INVALID_REQUEST. Consumers: scheduler/controller через авторитетный claim;
+frontend cache через существующий scoped event/read path. Задачи не создаются,
+leases/grants/attempts и текущие RuntimeRevision не меняются; cancel/delete/retry
+этой настройке неприменимы. Снижение ёмкости запрещает новые claims, но не
+прерывает ранее выданные. Конкретная реализация и проверки ещё не завершены.
+
+| Сценарий                | Инициатор и authority                                                                             | Владелец состояния и эффект                                                                                          | Потребитель / terminal                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Системная настройка     | Owner/admin через проверенную browser session; отдельный системный API, org назначает CP          | CP: специализированная команда, точный ресурс организации, OCC/idempotency, immutable версия, audit/outbox           | Runtime-controller и secret-broker заново разрешают зависимости следующего хода; текущий snapshot не меняется                  |
+| Проектная настройка     | Проверенная session и актуальное право управления конкретным проектом; projectRef — locator       | CP разрешает Project и профиль внутри tenant до версии/receipt; новая неизменяемая конфигурация                      | Следующий ход связан с точным профилем/проектом; чужой проект скрывается как отсутствующий                                     |
+| Образ                   | Специализированные recipe/build/promotion commands; отдельно image source/build/promote authority | CP назначает recipe, generation, attempt, immutable input; прежние fenced claim/renew/complete и admission           | Только ACCEPTED + PROMOTED exact digest/ABI; cancel/retry/expiry закрывают прежний build-граф штатно                           |
+| Секрет                  | Специализированные create/rotate/revoke/draft commands; свежий scope и отдельный reveal gate      | CP хранит только descriptor, broker — material; OCC/idempotency, audit и точная immutable revision                   | Materialize/validate проверяют exact execution/lease/attempt и область секрета; terminal/cancel/expiry отзывают прежний допуск |
+| Настройка через чат     | Системный или уже настроенный проектный помощник, но authority принадлежит текущему root actor    | PREPARE draft → validation → редактируемая форма → подтверждаемая application; сохраняются target/ref/version/digest | CP повторно проверяет текущие права до применения и receipt replay; stale/отозванный draft не применяется                      |
+| Смена проекта / профиля | Навигация либо создание нового диалога через проверенную session                                  | Сам выбор ничего не публикует и не запускает; существующая история сохраняет привязку                                | Отправка разрешает профиль сервером; Stop закрывает только текущий граф выбранного диалога                                     |
+
+Физический формат новых scoped API, Proto и таблиц фиксируется вместе с
+реализацией до изменения контрактов; существующие project endpoints не
+получают неявное значение «системный» через произвольный projectRef.
+
+### Отказ от READ_OWN_EXECUTION: карта применимого изменения
+
+Источник — решение владельца от 03.10.2026 и checklist #1789. Владелец явно
+исключил обратную совместимость. Enum, schema и обработчики содержат только
+NONE; неизвестные профили закрыто отклоняются, включая read/rollback.
+Это решение относится и к дальнейшей переработке помощников: прежний
+фиксированный системный профиль не сохраняется как параллельный fallback,
+старые API и декодеры не поддерживаются ради совместимости. Если существующим
+данным потребуется преобразование, оно выполняется однократно проверяемой
+forward-only migration, без второго действующего источника состояния.
+Read-only проверка текущей БД: несовместимых environment versions и runtime
+revisions — 0. Данные не переписывались. Ранее применённые миграции остаются
+неизменяемой историей схемы, а не действующим контуром совместимости.
+
+| Сценарий | Authority и точный путь | Результат / event / consumer |
+| --- | --- | --- |
+| Новая среда или версия | Проверенная user session → createRuntimeEnvironmentSet / publishRuntimeEnvironmentVersion → RuntimeConfigurationService.CreateRuntimeEnvironmentSet / PublishRuntimeEnvironmentVersion → CreateRuntimeEnvironment / PublishRuntimeEnvironment; CP разрешает org/project/resource до OCC/idempotency | Input принимает только NONE; READ_OWN_EXECUTION и KUBERNETES_API отклоняются INVALID_REQUEST, без business state, receipt или события. Успешный NONE сохраняет прежний audit/outbox и version-pinned readback |
+| Черновик, assistant plan | Проверенная session/root actor → create/save/validate/publishRuntimeEnvironmentDraft либо PREPARE_RUNTIME_ENVIRONMENT_REVISION → те же typed policy parser и activation admission владельца CP | Неизвестный параметр не проходит validation/publication; plan не выдаёт authority. Read path также принимает только NONE |
+| Rollback | Проверенная session → rollbackRuntimeEnvironment → RuntimeConfigurationService.RollbackRuntimeEnvironment; owner resolves exact environment/version, OCC/idempotency | Неизвестный профиль закрыто отклоняется без новой версии или события. NONE rollback сохраняет прежние immutable/audit/outbox semantics |
+| Execution/retry/continuation | CP разрешает свежую exact RuntimeRevision и execution lease → RuntimeKubernetesAccessForExecution → runtime-controller ValidateRuntimeKubernetesAccess / ensureExecutionPolicy | READ-правила не выпускаются; подделанный старый input закрыто отклоняется до выдачи Role/RoleBinding/token. NONE использует ServiceAccount без token mount и штатное отсутствие execution RBAC |
+| Terminal/cancel/delete/expiry | Прежние server-owned task/session/lease/attempt transitions, без изменения consumer topology | Прежние атомарные owner events и exact resource cleanup. Отдельного события удаления capability нет; read path — существующие environment/version/execution API с единственным профилем NONE |
+
+### Проверки текущего пакета 03.10.2026
+
+- PASS: runtimecontract unit, runtime-controller целиком, gateway HTTP,
+  scoped CP environment/assistant-tool unit, agent-runner, Proto
+  lint/build/codegen, authority-policy codegen, SQL boundary, оба release render.
+- PASS: frontend — 54 теста шести связанных файлов, scoped ESLint, typecheck,
+  production build с configLoader runner; без реального вызова модели.
+- PASS: disposable PostgreSQL — отдельный компонентный сценарий fresh auth,
+  permission и отказа неизвестному Kubernetes-профилю при create/publish;
+  опубликованная версия после отказа не изменилась. На этом хосте Docker DNAT
+  недоступен: использован явный KODEX_TEST_POSTGRES_NETWORK=host, PostgreSQL
+  слушал только 127.0.0.1. Firewall и общая БД не менялись.
+- PASS: полный `TestBootstrapComponent` на текущем рабочем дереве — 81,6 с;
+  дополнительно прошли worker-grant и runner-policy read-only queries. Это
+  закрывает прежний каскад shared fixture/lifecycle, но не заменяет browser,
+  реальные ИИ/STT/device-code, staging/production и ручной допуск владельца.
+- PASS: Chrome hard reload, настройки модели и окружения; блок RBAC отсутствует,
+  ошибок/предупреждений Console нет, все 58 fetch/xhr текущей навигации — 200.
+  Сверены одинаковые host/Pod SHA256 shared policy, controller и UI-компонента.
+- NOT RUN: реальный агент, STT, повторная авторизация, staging/production.
+  Runner пересобран на `eec10c3690bfe3a20e776556ae87070a00e8f235`, точный
+  manifest — `sha256:3f48bbe91e090b168e2fe2362a906e1b606a4cd32446bfbbc72933fb322ed69a`,
+  binary SHA256 — `b649caf6bb33271d8a1ce7c2645a789e4d85484c32250cebb59d13d4cb87f115`.
+  Provenance и импорт в локальные ноды — PASS; отдельный repo-owned runner seed
+  подтвердил этот digest в promotion registry. Docker-контекст ограничен
+  исходниками runner и libs/go: приватные env, ключи, Git и frontend caches
+  исключены. Обновление действующей admission-policy и переключение системного
+  runtime на новый образ ещё NOT RUN: подготовка артефакта не считается его
+  активацией. Checkbox удаления capability остаётся незакрытым до readback.
+
+### Этап 1 — параметры параллельности аккаунта
+
+- [x] Отдельная команда `SetProviderAccountConcurrency` и
+      `PUT /api/v1/provider-accounts/{providerAccountRef}/concurrency`:
+      точные account/version/idempotency, закрытая регистрация операции,
+      owner/admin и domain permission до проверки версии или replay.
+      Изменение фиксируется общей транзакцией CP с receipt/audit/outbox.
+- [x] Account read/list и usage возвращают один сохранённый лимит.
+      В UI — настройки аккаунта, RU/EN и слайдер 1..256 с текущим значением;
+      элементы управления высотой 32 px. Устаревшие запросы и поздние ответы
+      после переключения аккаунта либо утраты доступа не применяются.
+- [x] Новая forward-only migration `20261003000300` меняет только DEFAULT.
+      На локальном стенде применена единственная выбранная Job
+      `control-plane-migrate` через repo-owned `render-local.sh` и
+      `deploy-local.sh --stage migrate --workload control-plane-migrate`.
+      Readback: schema default = 10, ledger = 20261003000300. Существующие
+      значения аккаунтов не изменяются миграцией.
+- [x] Текущий подключённый аккаунт переведён с 1 на 10 штатной командой
+      из Chrome MCP: PUT = 200; повторное чтение PostgreSQL подтверждает 10.
+      Авторизация и credential revision этой командой не меняются.
+- [x] Локальные проверки: control-plane domain/repository/gRPC unit,
+      controlplaneclient/policygen, gateway HTTP, Proto lint/codegen,
+      policy codegen и SQL boundary; отдельный PostgreSQL subtest
+      `TestBootstrapComponent/provider_concurrency_settings_are_versioned_and_isolated`.
+      Проверены 0/-1/257, 1/10/256, stale version, exact replay, иной payload,
+      обычный участник с делегированным manage, отсутствие EDIT у него,
+      отказ по полномочиям до раскрытия результата проверки версии.
+- [x] Frontend: 73 теста девяти файлов, typecheck, scoped ESLint и build.
+      Через Chrome: hard reload, сохранение, скриншот слайдера, смена значения
+      до 256 без сохранения и возврат к 10, отсутствие overflow и ошибок Console.
+      Совпадают host/Pod SHA256 миграции, SQL команды и компонента слайдера.
+- [ ] Общая матрица параллельного admission: 2/10 чатов, очередь 11-го,
+      race двух claim workers, снижение лимита с активными leases,
+      Stop/delete/retry отдельного графа и восстановление после restart/rejoin.
+      Изменение только account row ещё не доказывает всю эту матрицу.
+- [x] Полный `TestBootstrapComponent` повторён на общей последовательной
+      fixture и завершён PASS за 81,6 с; отдельно прошли worker-grant и
+      runner-policy read-only queries. Общеплатформенные ресурсы и проектные
+      профили, активация нового runner, реальные ИИ/STT/device-code и
+      staging/production этим не объявлены проверенными.
+
+Документация Context7: PostgreSQL 18 — DEFAULT при ALTER и row locks;
+Vue — реактивные props/watch и cleanup устаревших асинхронных запросов.
+
+### Этап 2 — смена лимита не отзывает каталог
+
+- [x] Исправлен подтверждённый disposable-дефект: versioned смена лимита
+      переводила свежий каталог в PENDING и claim закрывал ожидающие ходы
+      как FAILED на стадии session_catalog. Новая migration
+      `20261003000400` назначает server-owned catalog authority floor.
+      Только ёмкость и её метаданные сохраняют границу; другие изменения
+      аккаунта требуют новой версии наблюдения. Credential/freshness/lifecycle
+      и exact task proof не ослаблены; immutable snapshots не переписываются.
+- [x] Отдельный PostgreSQL сценарий: уникальные sessions и history refs
+      11 диалогов; 2 активных хода; два конкурирующих claim worker заполняют
+      ровно 10; 11-й ждёт; лимит 1 не отменяет 10 действующих leases;
+      Stop одного оставляет 9 других RUNNING, late completion закрыто
+      отклоняется; возврат лимита 10 выпускает только ожидающий 11-й.
+      При каждой смене лимита проверяются READY и прежний digest каталога.
+      Synthetic warm readiness и созданные run-графы очищаются штатными
+      командами; реальный provider и runtime Pods не запускаются.
+- [x] Локальный render и только выбранная migration Job применены
+      repo-owned путём. SHA256 миграции и catalog SQL одинаковы на host
+      и в control-plane Pod. Chrome после hard reload видит подключённый
+      аккаунт и сохранённое значение слайдера 10.
+- [x] Повторный локальный gateway HTTP на
+      `5238aa73fd5710034ca41a3138e5d15ac0e9df9c` — PASS.
+      Новые SQL boundary и Go domain/repository unit — PASS на рабочем diff.
+- [x] Полный component suite PASS на общей последовательной fixture.
+      Исправлены server-owned model capability ожидания, полный lifecycle
+      environment snapshot, точный audit kind runtime claim, очистка synthetic
+      leases, starvation заполненного provider account и учёт workflow child
+      concurrency без coordinator node. Временная БД удалена оснасткой.
+- [ ] Browser-проверка 10 активных synthetic диалогов, retry/delete,
+      interruption/queue, reconnect/restart, активация нового runner и
+      полные системные/проектные профили остаются впереди.
+
+После публикации `dc127c9138cdb8d01cca4db935b7b62dfe884765` Chrome MCP
+подтвердил модалку настройки подключённого аккаунта: слайдер 1..256 имеет
+сохранённое значение 10, кнопка сохранения без изменений disabled. Получен
+скриншот `/tmp/kodex-provider-concurrency-dc127c91.png`; Console без
+error/warn/issue, bootstrap, session callback/ticket и administration
+завершились HTTP 200. Новые агенты не запускались. Вкладки пользователя не
+закрывались, STT/device-code/inference не выполнялись.
+
+Контрольный commit кода этапа 2 —
+`57a2d5f01334720dbf5f9ecb144c3e5b88ec15e1`. Повторены Go domain/repository unit
+и SQL boundary — PASS. Readback локальной БД: ledger 20261003000400,
+catalog_authority_version существует, единственный enabled/AUTHORIZED
+аккаунт имеет лимит 10. Полный component FAIL не заменяется этими проверками.
+
+При повторе вместе с соседним provider lifecycle выявлена оставшаяся
+регистрация synthetic warm consumer. Оснастка после terminal всех своих
+графов освобождает её через versioned `RecoverAssistant`, а не через
+подмену SQL или отключение revoke guard. Это также выявило недостижимый
+путь действующего Recovery RPC: его пустой typed payload не имел
+command access target. Добавлена точная организация и `organization.manage`
+для этой закрытой команды; project-bound authority и неверный payload
+отклоняются до эффекта. Unit проверяет target/отказы, component повторяет
+реальную owner-команду. Общая проверка остальных Recovery lifecycle и
+фактический restart controller ещё не объявлены PASS.
+
+Путь Recovery: owner session → POST `/api/v1/system-assistant/commands`
+с единственным RECOVER → gateway `RecoverSystemAssistant` → CP
+`RecoverAssistant` → organisation access target и `organization.manage`
+до OCC/receipt → versioned update `assistant_runtime` и атомарный
+`SYSTEM_ASSISTANT_CHANGED`. Actor и организация разрешаются CP из
+проверенного principal; пустой payload не назначает authority.
+Readback — `GetSystemAssistant`; revision/сессия и история не переписываются.
+Late или project-bound caller не получает permission от пустого request.
+
+После исправления cleanup отдельно совместно пройдены concurrency settings,
+parallel admission и `TestBootstrapComponentProviderAccountLifecycle` — PASS
+на рабочем diff; Go repository/domain/gRPC unit также PASS. Соседний lifecycle
+вновь может отозвать освобождённый fixture account. Console после локальной
+миграции без errors/warnings; bootstrap/session/ticket возвращают 200.
+Цель остаётся активной; следующий этап — полные системные и проектные
+runtime-профили, browser smoke и ручная приёмка по checklist выше.
+
+### Этап 2.2 — общий admission и полный component readback
+
+- [x] Полный `TestBootstrapComponent` выполнен в новой disposable PostgreSQL
+      БД: PASS за 81,6 с. Worker grant и runner policy read-only queries — PASS.
+- [x] Runtime admission отбрасывает заполненные provider accounts до
+      `ORDER BY/LIMIT`, затем сохраняет точную account lock и повторный подсчёт
+      в owner-транзакции. Старейшая очередь заполненного аккаунта больше не
+      блокирует доступную работу другого аккаунта.
+- [x] `workflow.concurrency` ограничивает параллельные дочерние этапы;
+      coordinator и его continuation не занимают child slot. Self-delegation
+      при concurrency=1 и нелинейная делегация проходят в общей fixture.
+- [x] Synthetic матрица после 2/10/race/Stop завершает оставшиеся leases
+      штатными worker callbacks и подтверждает active=0; последующие сценарии
+      больше не зависят от 30-секундного lease expiry.
+- [x] Environment lifecycle snapshot содержит полный image contract, включая
+      platform-owned marker; disable/enable/delete и immutable readback — PASS.
+- [x] Server-owned `DefaultReasoningEffort` и `ModelCapabilityDigest` не
+      принимаются обратно как client input. Stale selected-model capability
+      закрывает claim, изменение посторонней модели сохранённый pin не отзывает.
+- [x] Локально на том же дереве: `make check-sql-boundary` — PASS;
+      `go test -p 2 ./internal/...` control-plane — PASS.
+- [x] Browser smoke после публикации `dc127c91`: slider 1..256, значение 10,
+      disabled save без изменений, screenshot и Console/Network readback —
+      PASS. Host/Pod SHA256 обоих изменённых SQL совпадают; hot reload собрал
+      control-plane и readiness восстановилась.
+- [ ] Полный owner acceptance и runtime-сценарии выше остаются впереди.
+      Реальные ИИ, STT, device-code и staging/production — `NOT RUN` по
+      ограничениям владельца.
+
+### Этап 3.1 — организационный образ и неизменяемая привязка
+
+- [x] Новая forward-only migration `20261003000500` вводит явную область
+      `ORGANIZATION|PROJECT` для рецептов и дескрипторов секретов, nullable
+      project только для организации и scoped уникальность имени секрета.
+      Применённые миграции не меняются; фиктивный проект не создаётся.
+- [x] Системное окружение закрепляет точный admitted/promoted artifact,
+      digest и runtime ABI. Claim и warm reconciliation больше не обходят
+      эти проверки ради фиксированного образа из конфигурации установки.
+- [x] Bootstrap обновляет только свой platform-owned baseline; пользовательский
+      организационный образ сохраняется вместе с неизменяемой версией окружения.
+      Чужая область закрыто отклоняется в обоих направлениях.
+- [x] На точном SHA `f658f3767d11e9bb9a60749be6650fed91301373`, в отдельном
+      чистом test-only worktree и новой disposable PostgreSQL: полный
+      `TestBootstrapComponent` — PASS за 83,310 с; повторное применение
+      migration, worker grant и runner policy read-only queries — PASS.
+      SQL boundary — PASS. Test-only worktree не примонтирован в платформу.
+- [ ] Общеплатформенные API каталогов, реальная сборка собственного образа,
+      секреты через broker и подтверждаемая публикация окружения ещё не
+      завершены. Этот этап не закрывает общий пункт организационных ресурсов.
+- [x] Migration `20261003000500` и `20261003000600`, runner V8 и exact
+      admission policy активированы repo-owned скриптами в разрешённом
+      локальном trusted-cluster; readback ниже. Synthetic проверка custom
+      marker не является сборкой пользовательского образа или production
+      acceptance.
+
+Правило продолжения владельца: текущая цель завершается только после полного
+checklist выше. Затем основной агент, без субагентов, создаёт отдельную цель,
+полностью читает и выполняет `.agents/full-qa-task.md`. В обеих целях каждые
+10–15 вызовов инструментов или каждые 5–10 минут (по раннему порогу) получает
+список вкладок Chrome через MCP. Чужие вкладки не закрывает; будущий QA-файл
+в текущем этапе заранее не читает.
+
+### Этап 3.2 — системный и проектный профили, checkpoint рабочего дерева
+
+Состояние после `7097c4a3`: большой интеграционный diff ещё не опубликован.
+Общий checklist намеренно не закрыт; перечисленное ниже — адресные доказательства,
+а не полный owner acceptance.
+
+- PASS: новые project profile/create/read и обязательная область диалога
+  `SYSTEM|PROJECT`; профиль, actor, agent, session и project закрепляются CP.
+  UI выбирает профиль явно, хранит отдельные history/draft/selection и открывает
+  штатный редактор сотрудника для проектного окружения/инструкций.
+- PASS: новый runner input V8 с единственным `AssistantScope` и exact profile ref.
+  Старый bool и decoder отсутствуют; старые схемы V4/V6/V7 удалены из активного
+  реестра/исходников и остаются доступными только через Git. Полные runtimecontract,
+  runtime-controller, agent-runner и публичный runner-test — локальный PASS.
+- PASS: CP полный Go unit, gateway HTTP/app/WebSocket, Proto lint/build/codegen,
+  authority policy/codegen и SQL boundary. Snapshot owner/caster/controller
+  проверяют один digest; область и profile pin входят в digest.
+- PASS: отдельные disposable component сценарии project profiles и parallel
+  lifecycle: QUEUE/INTERRUPT, late callback, retry, restart repository,
+  archive/purge одного диалога и lease expiry не затрагивают соседний.
+  Системный помощник может подготовить создание проектного профиля; эффект
+  появляется только после validation и отдельного подтверждения плана.
+- PASS: frontend typecheck, scoped lint и полный Vitest — 318 suites / 2117 тестов;
+  provider lifecycle и runtime detail — 9 synthetic browser сценариев. Найденные
+  отдельным визуальным ревью PROJECT header на 390 px и карточка результата
+  создания профиля исправлены отдельным пакетом: 85 targeted unit и 8 synthetic
+  browser сценариев — PASS. Скриншоты 1440/390 px RU/EN проверены; Console и
+  page errors — 0. Переход выполняется только после exact GET profile → GET agent;
+  четыре несовпадения scope/ref блокируют ссылку. Итоговый общий frontend набор
+  после этого пакета повторяется на checkpoint.
+- PASS после исправлений: четыре suites в одном публичном disposable запуске
+  на Go 1.26.6: credentials 4,03 с, parallel lifecycle 2,88 с, полный Bootstrap
+  80,79 с и project profiles 3,94 с; общий package 91,709 с. Повторное применение
+  migrations и worker grant / runner policy read-only queries — PASS.
+  Новые suites клонируют отдельную пустую мигрированную БД; старый bootstrap
+  по-прежнему проверяет точное состояние. Read-only authorization не берёт
+  `FOR SHARE`. Strict oracle списка действий дополнен новой согласованной
+  `CREATE_PROJECT_ASSISTANT`, без ослабления сравнения.
+- PASS: профиль переживает disable и исторический archived state, generic
+  archive защищён от необратимой потери assignment. Purge проекта учитывает
+  новый измеренный граф связей (97 таблиц / 248 рёбер), закрывает принадлежащий
+  ему assistant graph и не удаляет чужой профиль/диалог; активный граф блокирует
+  преждевременный purge. Общий creation gate использует текущие права из БД.
+- PASS: root actor должен быть active одновременно на materialization proof,
+  trusted credential recovery и credential consumer. Отдельный rollback fixture
+  доказывает отказ всех трёх путей при отключении точного root actor.
+- PASS отдельно: SQL secret consumer разрешает только exact ORGANIZATION/null
+  project либо exact PROJECT/project и immutable UID/RV/key/hash. Secret-broker
+  fake Kubernetes / owner unit проверяет SYSTEM-организационные дескрипторы,
+  PROJECT-дескрипторы, точное копирование, replay, recovery и изолированный отзыв.
+  Runtimecontract/controller/runner/broker full unit и vet — Go 1.26.6 PASS.
+  Это не свежая RuntimeRevision через ещё не реализованный организационный API.
+- FAIL render повторяем после freeze: сначала host Go 1.27.1 не соответствовал
+  закреплённому 1.26.6, затем устаревший default cache пересекался с serving
+  source. Оснастка теперь выбирает внешний cache. Последний запуск закрыто
+  обнаружил смену worktree provenance во время параллельных правок; проверку
+  не ослабляем, повторяем на неизменяемом checkpoint.
+- NOT RUN: организационные image/secret API и broker materialization,
+  fresh owner-reauth публикация полной системной среды, live migration 5/6,
+  rebuild/активация runner V8 и exact admission/render/Chrome acceptance.
+  Реальные ИИ, STT/device-code и staging/production не запускаются.
+  Read-only Kubernetes проверка: control-plane сейчас 1/2 и завершается на
+  materialization системного образа; новая организационная migration ещё не
+  применена live. Green остальных Pod не считается готовностью платформы.
+
+### Этап 3.3 — checkpoint `a9dae7e1`, локальная активация и warm wire
+
+Предыдущие FAIL/NOT RUN в этапе 3.2 сохранены как история, не текущий статус.
+
+- PASS на точном SHA `a9dae7e10a3e44cff566967d07f9508f3707f951`:
+  четыре disposable PostgreSQL suites одним публичным запуском — 92,960 с;
+  повтор migrations, worker grant и runner policy read-only — PASS. Новый
+  frontend Vitest — 318 suites / 2118 тестов; полный render — PASS, включая
+  39 отрицательных email cases. Использован Go 1.26.6. Первая попытка PG через
+  Docker bridge не достигла readiness; отдельный loopback host fixture прошёл,
+  shared/live БД в тестах не использовались.
+- PASS локальная активация через `build-local-runner.sh`, `render-local.sh`,
+  `deploy-local.sh` и `seed-local-image-supply-chain.sh`: migrations 5/6
+  применены; serving runner digest
+  `sha256:8c827da02d20c1aa34a0c1eab9a2ec8f0bd72377af7d1003590f28b8c0882b1b`;
+  exact admission policy SHA256
+  `9b417537a24f0a20ab1067417faa8027fe20d2e8f4e61c68e581a04005d5bb05`
+  одинаков у control-plane и runtime-controller. Read-only preflight:
+  active runs, pending admission/promotion и claimed leases — 0.
+- Найден и исправлен production warm defect: owner snapshot имел typed image,
+  но не содержал три flattened image pins, необходимые Proto caster. Добавлены
+  artifact, recipe и generation; turn producer уже содержал их. После hot reload
+  журнал controller подтвердил восстановление warm runtime. Все три контейнера
+  warm Pod используют точный digest выше; control-plane — 2/2 Ready.
+- PASS новой публичной synthetic точки `scripts/tests/assistant-warm-wire-test.sh`:
+  настоящий isolated owner → production caster → protobuf roundtrip → controller
+  BuildWarmInput, без пересчёта ожидаемого owner digest. PG 3,898 с, caster
+  0,044 с, controller 0,045 с. Шесть missing/foreign image pins отклонены.
+  Unit и vet control-plane transport и runtime-controller — PASS. Проверка
+  относится к исправлению поверх `a9dae7e1`, SHA нового checkpoint фиксируется
+  следующим коммитом; не приписывается неизменённому предыдущему SHA.
+- PASS Chrome MCP: действующий SSO, provider account READY, realtime connected;
+  slider текущего аккаунта 10, границы 1..256, сохранение без изменений disabled.
+  Скриншот проверен визуально; Console warning/error — 0. Реальные чаты,
+  распознавание и device-code не запускались.
+- NOT RUN: свежий организационный API образа/секрета → broker → RuntimeRevision,
+  подтверждаемая публикация полной среды, полный synthetic browser lifecycle
+  2/10/11 чатов и owner acceptance. Общий checklist остаётся открытым.
+
+### Этап 3.4 — организационные ресурсы и точная повторная авторизация
+
+Это промежуточное доказательство рабочего дерева поверх `2c9e590a`, не полный
+результат на опубликованном SHA. После завершения интеграции проверки повторяются
+на неизменяемом checkpoint; общий checklist пока не закрывается.
+
+Карта организационных сценариев:
+
+- Проверенная browser session → специализированные
+  `/api/v1/organization/role-image-recipes` и операции точного рецепта →
+  `ListOrganizationRoleImageRecipes`, `GetOrganizationRoleImageRecipe`,
+  `ListOrganizationRoleImageRecipeRevisions`, `ManageOrganizationRoleImageRecipe`,
+  `RequestOrganizationRoleImagePromotion` → CP. Организацию назначает CP из
+  проверенного principal, не из payload. Текущие ACTIVE OWNER/ADMIN и
+  `organization.manage` обязательны; подписанная проектная область отклоняется.
+  Сборка, допуск и promotion используют существующие version-pinned leases,
+  immutable provenance и точную организационную область, без служебного проекта.
+  Generic managed configuration не является обходным путём изменения образа.
+- Browser session → `/api/v1/organization/runtime-secret-drafts` →
+  `PrepareOrganizationRuntimeSecretDraft` → owner-транзакция CP → точный
+  SAVE grant → secret-broker с AEAD → fenced owner completion. Scope, organization,
+  draft, secret, generation и content digest совпадают на каждом переходе.
+  Сам текст не попадает в CP, audit, события, browser storage или purpose.
+  Общие save/validate/impact/publish/discard разрешают persisted owner до OCC
+  и idempotency receipt; публикация остаётся отдельным подтверждением.
+- Browser session → `/api/v1/organization/runtime-environment-drafts` →
+  `CreateOrganizationRuntimeEnvironmentDraft` → CP. Shared draft lifecycle
+  разрешает область существующего draft, а не превращает пустой project в
+  разрешение. Организационный образ и секреты нельзя подменять проектными;
+  публикация требует текущей версии, validation и отдельного подтверждения.
+- Secret reveal: проверенная session → авторитетный `GetRuntimeSecret` →
+  точный `scopeKind/organizationRef/projectRef/secretRef` → одноразовая fresh
+  OIDC purpose session → `PrepareRevealRuntimeSecret` с повторной проверкой CP
+  → exact grant secret-broker. ORGANIZATION запрещает project header,
+  PROJECT требует совпадающий header. Scope не является источником полномочий.
+  Чужая область, организация, секрет, replay или неизвестный scope не достигают
+  secret effect. Ответ всегда `no-store`; purpose session заменяется обычной.
+- Platform bootstrap/signal → gateway authoritative owner RPC → разные typed
+  organization/project catalogs и курсоры → frontend cache. Организационные
+  image/secret списки доступны без selected project; они не смешиваются с
+  проектными результатами. Отзыв owner-доступа очищает организационные данные.
+
+Адресные проверки текущего дерева:
+
+- PASS: disposable PostgreSQL организационного образа — create/list/revisions,
+  build/admit/promote, cancel/archive/restore, owner/signed-project isolation,
+  expired lease/retry/dead-letter. Организационный secret component после новой
+  migration `20261003000800` — PASS. Shared/live БД не использовались.
+- PASS: полный gateway unit и vet на Go 1.26.6, включая scoped fresh reveal,
+  одноразовый replay guard и раздельный WebSocket bootstrap. HTTP 8,944 с,
+  WebSocket 0,048 с; source transport unit не выдаётся за live mTLS acceptance.
+- PASS: строгие terminal/draft snapshot guards отклоняют пропущенный scope,
+  смешанную область, другую организацию и изменённую draft generation.
+- NOT RUN: полный owner → broker materialization composition, окончательная
+  публикация системного окружения, новая live activation и Chrome acceptance
+  всей организационной волны. Старый recovery fallback удаляется с сохранением
+  отдельного fenced retirement/recovery; его готовность ещё не заявляется.
+
+Итог замороженной волны 3.4 перед новым checkpoint:
+
+- PASS: полный публичный disposable PostgreSQL прогон девяти фактических suites,
+  99,665 с. Bootstrap 84,54 с; provider credentials, секреты и staged lifecycle
+  входят в его именованные subtests. Parallel lifecycle, project profiles,
+  credential scopes, три организационные suites, worker grant instances и
+  trusted workload generation выполнены без пропусков. Повтор migrations до
+  `20261003000900` и read-only worker-grant/runner-policy диагностики — PASS.
+  Два предыдущих FAIL исправлены без ослабления oracle: lifecycle SQL возвращает
+  полный scope/org snapshot, старый тест образа выбирает область явно.
+- PASS: новая публичная `scripts/tests/secret-owner-composition-test.sh`,
+  12,141 с. Настоящий CP/domain/PostgreSQL и production casters → loopback
+  Proto/gRPC → настоящий broker/AEAD → immutable fake Kubernetes. Для PROJECT
+  и ORGANIZATION проверены SAVE/VALIDATE/impact/PUBLISH, retained KEEP,
+  отказ другого recovery route, revoke/retire, exact delete, потерянный ACK,
+  повтор после удаления объекта и cleanup receipt. Это не live mTLS/SSO evidence.
+  Первый запуск отклонён строгим key-file reader; fixture права исправлены,
+  reader не ослаблялся.
+- PASS: IMMEDIATE/DRAFT work kind назначается только серверным effect producer;
+  неизвестные annotations не интерпретируются. Старый `recoverDraftFromLegacy`
+  удалён. Три settled KEEP не меняют `updated_at`/audit; старый ciphertext ACK
+  не очищает новый retirement intent. Serving read-only preflight: managed
+  runtime Secret — 0, существующие значения не удалялись и не переписывались.
+- PASS: полный broker unit/vet, CP unit/vet, gateway unit/vet и builder unit/vet
+  на Go 1.26.6; SQL boundary, Proto lint/build, authority codegen. Организационная
+  authority policy имеет новую монотонную revision 86; проверены все восемь
+  закрытых RPC profiles и target-owned classification. Proto codegen checker
+  дополнен output secret-broker, который прежде не сравнивался.
+- PASS: frontend full Vitest 323 suites / 2162 теста, lint, forced typecheck,
+  application/document synthetic build и E2E TypeScript. Изолированный Chromium
+  — 19/19 сценариев: ORG settings, PROJECT profiles, image promotion и runtime.
+  Скриншоты RU/EN 1440/390 px проверены визуально, Console warning/error — 0,
+  горизонтального overflow нет, контролы 32 px. Network assertions проверяют
+  точные canonical requests. Исправлены scope-invalid image fixtures и Pinia
+  isolated entry; production owner guard не ослаблялся.
+- NOT RUN: публикация/допуск нового пользовательского образа в serving cluster,
+  live migration 7/8/9 и окончательный Chrome readback этой волны; полный browser
+  2/10/11/rejoin сценарий. Реальные агенты, STT/device-code и production — NOT RUN.
+- Следующий обязательный этап 3.5: организационные потребители в SecretImpact,
+  EnvironmentImpact и rebind receipts. Старый project-only DTO пока закрыто
+  отклоняет организационный secret rotation impact; нельзя считать этот путь
+  готовым или исправлять его выводом scope из пустого project. Также проверяется
+  bootstrap org anchor на проектных image pages, без расширения полномочий.
+
+### Этап 3.5 — полный owner snapshot потребителей и изоляция браузерных чатов
+
+Checkpoint 3.4 опубликован в #1790: `479f269fc2a117b3d178783bea3800e8586d2a7c`.
+Повтор на точном SHA с чистым деревом до/после: PostgreSQL 9 suites PASS
+101,744 с; owner/broker composition PASS 11,235 с; broker unit/vet и gateway
+unit/vet PASS. Frontend 323 suites / 2162 PASS, lint/forced typecheck/build PASS,
+Chromium 19/19 PASS 32,9 с. Это локальные disposable/synthetic доказательства,
+не serving mTLS/SSO, реальный inference или production acceptance.
+
+Карта нового сценария до изменения wire contract:
+
+- Источник — полная ORGANIZATION/PROJECT настройка #1789 и checklist выше.
+  Actor — текущая проверенная browser session; gateway передаёт подписанный
+  контекст, а CP разрешает существующие secret/environment/agent в своей БД.
+- Ротация: защищённая форма → `PrepareRuntimeSecretDraftImpact` /
+  `GetRuntimeSecretImpact` → owner query с текущими правами и immutable
+  scope/org/project/version каждого environment и binding. У организационного
+  secret нет project authority; активный OWNER/ADMIN и специализированные
+  разрешения проверяются до OCC/idempotency. Project-signed context отклоняется.
+- Публикация/rebind: versioned draft и digest/plan → подтверждение владельца →
+  `PublishRuntimeSecretDraft` / `RebindRuntimeSecret`. Выбранный полный tuple
+  является ожидаемым snapshot для сравнения с owner state, не выдаёт полномочий.
+  Bindingless environment имеет тот же явный owner tuple. Owner-транзакция
+  фиксирует новую immutable revision, exact binding, receipt/audit/outbox;
+  активный RuntimeRevision не переписывается, следующие ходы получают новую.
+- Потребители: Proto/OpenAPI response, frontend impact/rebind reducer,
+  организационный/проектный cache и WebSocket readback. Общие consumers образа,
+  окружения, инструкции и prompt template также получают явные ScopeKind и
+  OrganizationRef. PROJECT требует projectRef; ORGANIZATION требует его
+  отсутствия. Неизвестный/отсутствующий scope закрыто отклоняется, не выводится
+  из пустой строки и не восстанавливается legacy decoder.
+- Cancel/expired/conflict плана не публикуют revision; authoritative GET
+  возвращает точный outcome. Потерянный ACK повторяется тем же semantic input,
+  version/idempotency; подтверждение не применяется автоматически после SSO.
+- Для браузерной проверки создаётся отдельная stateful synthetic fixture с
+  production AssistantWorkspace/stores, без подмены load/send/stop. Проверяются
+  2/10 диалогов и 11-й в очереди, точные запросы/события и изоляция draft/history.
+  Она не заменяет PostgreSQL claim или реальный controller restart.
+
+Статус этапа: реализация и проверка выполняются, чекбоксы полной цели не закрыты.
+
+Адресные результаты волны 3.5 до фиксации нового SHA:
+
+- PASS: gateway unit/vet и новые отрицательные проверки неизвестного scope,
+  смешанных owner tuple, bindingless consumer и подменённого receipt. Полный
+  gateway прогон: `/tmp/kodex-owner-consumer-final-gateway.log`.
+- PASS: SQL boundary, Proto и AsyncAPI reproducibility, authority codegen;
+  `/tmp/kodex-owner-consumer-final-codegen.log`. Buf ограничил удалённые
+  плагины; использованы точные закреплённые локальные версии, не другой API.
+- PASS: оба release render и шесть authority/service-identity проверок.
+  Прежний FAIL был устаревшим ожидаемым количеством операций; новый oracle
+  сохраняет точное число 395/309 и дополнительно проверяет закрытые восемь
+  организационных команд с обязательным user credential и без project scope.
+- FAIL → исправление: persisted permission registry разрешал организационные
+  secret-команды в Go, но не в SQL. Новая forward-only migration закрепляет
+  точные resource kinds пяти разрешений; существующие миграции не меняются.
+  Адресный ORG secret impact/rebind после исправления — PASS, 4,070 с.
+- FAIL → исправление: SYSTEM read/claim выбирал current окружения даже при
+  явной immutable привязке. Теперь auto-follow current применяется только к
+  bootstrap binding без version id; custom binding сохраняет точную версию.
+  Компонентная проверка actual claim выполняется отдельно.
+- PASS: synthetic Chromium и Firefox — 12/12, RU/EN, desktop/mobile,
+  `/tmp/kodex-concurrency-chrome-firefox.log`. Production Workspace и stores
+  используют stateful typed HTTP/WebSocket: 2→10 активных и 11-й QUEUED,
+  queue/interrupt/Stop/trash, drafts/history, project switch, rejoin и старый
+  requestRef. После мутаций снимки соседних диалогов неизменны.
+  Эта проверка не доказывает backend admission, реальный controller restart
+  или UI-команду retry; последние остаются обязательными отдельными пунктами.
+- NOT RUN: WebKit — отсутствуют пять системных библиотек; ОС не изменялась.
+  Chromium является обязательным браузерным профилем, Firefox — дополнительным.
+- Стандартная `make test-control-plane-postgres` теперь включает все девять
+  обязательных assistant/organization/component suites; новый путь не скрыт
+  за отдельным фильтром. Прежний avatar lifecycle также остаётся в default.
+
+Все результаты этого блока относятся к рабочему дереву после `479f269f`, а не
+к новому immutable checkpoint или live acceptance. Окончательный SHA и повтор
+обязательных проверок будут зафиксированы после заморозки общего дерева.
+
+Дополнительный системный аудит до checkpoint:
+
+- Actual SYSTEM claim проверен в disposable PG: bootstrap без version pin
+  следует current, custom binding после новой публикации остаётся на старой
+  immutable версии, selective rebind создаёт следующий RuntimeRevision с
+  новой точной версией. Проверены response и durable safe snapshot.
+- Стандартный PostgreSQL прогон: девять suites PASS, 99,934 с, Avatar отдельно
+  PASS 1,296 с. После него добавляется ещё fresh owner-before-digest guard
+  организационного образа; этот прогон не выдаётся за доказательство этой
+  последующей правки.
+- Полный frontend: 324 suites / 2180 unit PASS; lint/typecheck/build PASS;
+  31 Chromium synthetic сценарий PASS. Дополнительные четыре ORG-сценария
+  после локальной flex-правки подтвердили header SVG 20×20 на 1440/390 RU/EN.
+  Исторический CSS socket reset до API сохранился как FAIL, два последующих
+  полных прогона прошли. Форматирование owner identity и допуск данных в cache
+  разделяются; оставшийся PROJECT DTO self-anchor устраняется во всех
+  затронутых secret/environment/image путях, не только в image store.
+- Подготовка раскатки нашла repo-owned ordering gap: новый builder runtime
+  ConfigMap и source-bound runtime ConfigMaps выбранных CP/broker/frontend
+  применяются до соответствующих Deployment. CA, credential и другие
+  компоненты этой точечной стадией не переписываются.
+- Read-only ORG image history/impact ещё использовал PROJECT resolver; новый
+  закрытый resolver читает точный scope существующего recipe/mapping. Generic
+  организационные create/update/copy/detach этим не добавляются.
+- Проверка восстановленного образа выявила provenance gap обоих scopes:
+  RESTORE менял generation, но managed revision mapping оставался прежним.
+  Исправление выпускает новую immutable revision штатной owner-транзакцией;
+  target eligibility и исторические mapping не ослабляются.
+- Render contract ещё не принят: первый запуск использовал host Go 1.27.1
+  вместо закреплённого 1.26.6; следующие source-provenance проверки закрыто
+  отклонили дерево, изменившееся во время render. Итоговый прогон выполняется
+  только после freeze, с Go 1.26.6. Неуспешные попытки не названы PASS.
+- Отдельная disposable оснастка forward-upgrade старых PREPARED/APPLIED
+  zero/nonzero plan snapshots до нового server-owned протокола готовится
+  без отключения triggers, rollback схемы или legacy decoder.
+
+Финальный readback рабочего дерева волны 3.5 перед checkpoint:
+
+- PASS: стандартный PostgreSQL набор всех девяти suites — 101,636 с,
+  Avatar — 1,312 с; FAIL/SKIP нет. Лог
+  `/tmp/kodex-impact-scope-final-postgres.log`, SHA256
+  `59616097e2d906c7b97e240e5efe9e10ee41dba93d9dafbc56a9ce17b5318acb`.
+  Восстановленный PROJECT/ORGANIZATION образ проходит свежую managed revision,
+  exact generation, повтор RESTORE, promotion и impact/rebind. Подписанный
+  PROJECT контекст не получает организационные history/impact/prepare/apply
+  даже с неверными digest/OCC; отзыв OWNER не оставляет receipt или мутацию.
+- PASS: полный CP unit/vet после последних production-правок;
+  `/tmp/kodex-owner-consumer-latest-control-plane.log`.
+- PASS: отдельный публичный `make test-impact-owner-snapshot-upgrade` —
+  4,683 с; `/tmp/kodex-impact-owner-root-upgrade.log`. Двенадцать старых
+  PREPARED/APPLIED zero/nonzero plans и receipts остаются неизменяемыми,
+  повторная migration ничего не переписывает; новые планы принимают только
+  server-owned protocol 2. Исторический GET отклоняется теми же production
+  SQL, свежий exact owner snapshot читается. Это SQL/migration proof, не
+  доказательство RPC replay authority.
+- Исправлен найденный scoped review дефект rollout: новые ConfigMap selectors
+  ограничены namespace `kodex-system` и точными именами. Общий несекретный
+  `kodex-platform-endpoints` публикуется до CP и gateway, включая их точечный
+  rollout. CA, Secrets и одноимённые ресурсы другого проекта не выбираются.
+- Последние неуспешные PG попытки относились к новым test fixtures: неполный
+  recipe, syntactically invalid OCC и отсутствующий synthetic source digest.
+  Они исправлены каноническими input/fixture, не ослаблением production
+  admission или owner guards; итоговый полный повтор указан выше.
+- PASS: frontend после общей owner/lifetime границы — 325 suites / 2189 tests,
+  полный ESLint, forced vue-tsc, application/document synthetic builds и
+  e2e TypeScript. Итоговый combined Chromium — 31/31, 57,0 с; четыре ошибки
+  первого прогона были missing bootstrap в отдельной synthetic build fixture,
+  исправлены явным OWNER bootstrap, не обходом production guard. Визуально
+  проверены RU 1440/390, icon 20 px и controls 32 px без overflow.
+  Stateful concurrent Chromium/Firefox 12/12 — отдельная предыдущая проверка;
+UI-команда retry именно assistant-turn пока NOT RUN и остаётся в плане.
+
+Этот блок по-прежнему относится к замороженному рабочему дереву на базе
+`479f269f`, а не к обслуживаемой миграции или полному завершению цели.
+
+Итоговый локальный RoleImage render contract на замороженном дереве — PASS,
+Go 1.26.6; `/tmp/kodex-owner-consumer-frozen-render.log`. Проверены source
+provenance, 14 Go-cache contracts, 6 configuration selectors на 65 synthetic
+ресурсах, положительный EMAIL render и 39 негативных EMAIL сценариев.
+Найденные пробелы SYSTEM RunPage artifacts/retry проверяются следующей
+волной; этот checkpoint не объявляется полной приёмкой всех чатов.
+
+### 04.10.2026 — checkpoint 4033 и волна 3.6
+
+Опубликованный checkpoint: `4033cf3d636389fb64940ddb59b5d23f1cea19f1`,
+тот же Draft PR #1790. Свежий main `8c0275fe` является предком; ветка не
+сливается и не переводится в ready. Следующая общая QA-цель не начинается
+до полного выполнения текущего checklist.
+
+Повтор на чистом checkpoint:
+
+- PASS: стандартный disposable PostgreSQL набор девяти suites — 111,239 с,
+  Avatar — 1,291 с; `/tmp/kodex-assistant-4033-postgres.log`.
+- PASS: frontend — 325 suites / 2189 unit; журнал
+  `/tmp/kodex-assistant-4033-frontend-unit.log`.
+- FAIL → повтор PASS: первый Chromium запуск получил ECONNRESET при чтении
+  JS asset до API; следующий полный запуск — 43/43, 1,4 мин,
+  `/tmp/kodex-assistant-4033-chromium-v3.log`. Это synthetic-проверка,
+  не реальная inference или immutable release acceptance.
+- PASS: repo-owned runner build/import и supply-chain build для exact SHA.
+  Runner digest `sha256:8c827da02d20c1aa34a0c1eab9a2ec8f0bd72377af7d1003590f28b8c0882b1b`;
+  новая exact image policy
+  `b97db3ee630a8757b3fa773485ac55ad5d58e82ca31dd00f77dc6c733e33dedf`.
+- PASS: локальная миграция Job `control-plane-migrate-579e725801db` и
+  readback до `20261004000100`; старые migration-файлы не изменялись.
+- PASS: supply-chain/core readback и Ready нового CP, broker, gateway,
+  frontend, runtime-controller. Их source revision — exact checkpoint;
+  контрольные файлы совпали с host source в соответствующих Pod. У gateway
+  первая холодная сборка превысила 5 мин и startup probe перезапустила
+  контейнер; последующий запуск и отдельный repo-owned readback прошли.
+  Первоначальный rollout timeout остаётся FAIL, не скрыт успешным readback.
+- Browser live acceptance пока FAIL/не завершена: SSO восстановлен,
+  callback/bootstrap/ticket HTTP 200, но основное realtime-соединение не
+  восстановилось. Отдельный production ticket + WebSocket handshake
+  диагностически OPEN; причина основного пути ещё устанавливается.
+  Начавшееся hot reload рабочее дерево не выдаётся за immutable SHA.
+- NOT RUN: реальные ИИ-запуски, STT, device-code, staging/production.
+
+Независимое архитектурное ревью checkpoint — FAIL. Волна 3.6 исправляет:
+
+- [x] Exact HTTP methods в self-config prepare/read/edit/apply.
+- [x] Атомарный audit/event/typed idempotency outcome для expiry build claim
+  без нового кандидата; replay после появления новой work не забирает её.
+- [ ] Тома рабочего окружения и настроенные ресурсы в actual Codex executor,
+  согласованные с exact Pod admission; secret mounts не расширяются.
+- [ ] Server-owned CA/proxy keys в дочернем Codex и его shell без широкого
+  наследования окружения или второй plaintext-копии пользовательских секретов.
+- [ ] Раздельные closed provider routes и пользовательские web rules,
+  включая pinned provider WebSocket; generic GitHub exemption отсутствует.
+- [ ] Closed SYSTEM/PROJECT assistant pin в Run readback, точечная загрузка
+  root/child artifact refs, ссылка на запуск хода и UI-команда retry.
+- [ ] Повтор PostgreSQL/contract/Go/frontend/render/Chrome, local activation
+  и независимого review на следующем frozen checkpoint.
+
+Карта нового Run readback: владелец/доступный участник → authenticated
+`GET /api/v1/runs/{runRef}` или cursor list → gateway GetRun/ListRuns →
+CP owner-scoped repeatable read → persisted run/session/conversation/agent/
+profile tuple → typed assistant pin → frontend exact refs + captured owner
+lifetime cache. Pin — server-owned read-only projection, не mutation authority;
+неизвестный scope, отсутствующий pin и несовпадение проекта/agent/profile
+закрыто отклоняются. Обычный Run требует projectRef; отсутствие проекта
+допускается только у доказанного SYSTEM assistant pin, не выводится из пустой
+строки. Retry использует прежнюю специализированную command с OCC/idempotency,
+новой attempt/RuntimeRevision и прежней conversation/session identity; старый
+ход и соседние диалоги не переписываются. Read не создаёт event; command
+сохраняет штатные audit/outbox/receipt в owner-транзакции.
+
+Результаты исправлений волны 3.6 на рабочем дереве поверх `4033cf3d`:
+
+- PASS: self-config сохраняет HTTP methods в prepare/read/edit/apply;
+  неизвестные методы, дубли, несовместимый протокол и запрещённые поля
+  отклоняются. Expiry build claim обоих scopes атомарно сохраняет audit,
+  `ROLE_IMAGE_RECIPE_CHANGED` и typed отрицательный receipt; повтор старого
+  ключа не забирает новую работу.
+- PASS: SYSTEM/PROJECT Run pin содержит полный авторитетный tuple и actual
+  target version. Project-signed context не читает/отменяет/повторяет
+  системный Run без проекта, включая stale OCC и receipt replay; побочных
+  записей нет. Повтор assistant receipt получает fresh pin/target, но сохраняет
+  семантический результат прежней команды.
+- FAIL → исправление → PASS: первый полный PostgreSQL повтор показал, что
+  fresh Run read добавил право `run.view` к обычному agent launch. Fresh pin
+  read ограничен типизированным SYSTEM_ASSISTANT; обычная команда сохраняет
+  свой прежний контракт прав. Итоговый default: 10 suites PASS 105,018 с,
+  Avatar PASS 1,387 с; `/tmp/kodex-assistant-3-6-postgres-final-v2.log`.
+- PASS: CP/gateway full unit/vet, SQL boundary, Proto/AsyncAPI reproducibility,
+  Buf lint/build, authority codegen, оба release render и authority ABI.
+  Прежний SQL-boundary FAIL был единственным отсутствующим named header,
+  а не разрешённым обходом проверки. OpenAPI 3.0 использует singleton enum,
+  а не keyword следующей версии.
+- PASS: runtimecontract/controller/runner/egress full unit/vet; egress race.
+  Provider получает configured resources и те же environment mounts,
+  что driver; суммарный Pod budget не увеличен. Exact CEL проверяет оба
+  контейнера и закрыто отклоняет asymmetric/unsafe mounts и transport env.
+  Provider routes отделены от пользовательских HTTPS правил; SSE отдаёт
+  первый chunk до завершения upstream, Responses WebSocket допускается
+  только на двух exact paths через HTTP/1.1, с bounded idle/cleanup/join.
+- PASS: native volume canary на disposable bind disk и bounded tmpfs,
+  без inference/API/секретов. Проверяются immutable policy, distinct mount,
+  read-only/type/memory-capacity, bounded nonce CRUD/cleanup и cancellation.
+  Disk sizeLimit не выдаётся за statfs quota: это отдельный exact Pod
+  admission/readback. Эти проверки не доказывают десять живых исполнителей.
+- PASS: frontend 327 suites / 2202 unit, lint, forced typecheck, обе сборки;
+  Chromium 47/47, отдельный retry Chromium/Firefox 8/8. Native UI/SDK/Pinia
+  проверяют OCC 412 без эффекта, lost ACK/replay, attempt 2 того же чата,
+  девять неизменных соседей, rejoin и child artifact metadata. RU/EN
+  desktop/mobile снимки просмотрены. Дополнительная подпись assistant-нод
+  завершается отдельным адресным повтором.
+- Live Chrome FAIL → исправление → PASS на dirty hot reload: кодогенерация
+  optional arrays с `omitempty` теряла пустые каталоги. Теперь `omitzero`
+  сохраняет `[]`, а отсутствующие поля остаются отсутствующими. Wire tests
+  охватывают все коллекции и реальные organizational empty response shapes.
+  После hard reload основной realtime стал LIVE, attempt 0; Console чиста,
+  bootstrap/session/ticket 200, screenshot просмотрен. Проверены Context7
+  `/golang/go` и официальная документация `encoding/json`.
+- Независимое промежуточное статическое review: пять исходных findings и
+  Run authority paths — PASS. Итоговое review immutable SHA ещё впереди.
+- Local activation пока не повторена: hot-reload controller уже использует
+  новый resource layout, а admission policy стенда ещё от предыдущего SHA.
+  Она закрыто отклоняет warm Pod; helper показывает RECOVERING, что сейчас
+  соответствует фактическому состоянию. Новые runner/policy применяются
+  согласованным repo-owned rollout, не ослаблением admission.
+- NOT RUN: реальные ИИ, STT, device-code, staging/production. Полная цель
+  и её последний checklist остаются открытыми до нового checkpoint,
+  точной локальной активации/readback и оставшихся проверок.
+
+Перед следующим checkpoint дополнительно исправлен repo-owned supply-chain
+rollout: шесть exact runtime materialization policies и bindings применяются
+до нового controller и сверяются с итоговым render. Независимый review нашёл
+ложный FAIL raw-spec readback из-за Kubernetes defaults. Сравнение теперь
+канонизирует только утверждённые `Equivalent`, пустые selectors и `scope=*`,
+сохраняя exact сравнение всех остальных полей. Семь unit проверяют реальный
+selector, порядок, API defaults и отказ при изменении policy/selector/scope;
+oracle 65 конфигурационных ресурсов также PASS. Local apply ещё впереди.
+
+Финальный адресный frontend повтор: retry Chromium/Firefox 8/8 PASS; SYSTEM
+и PROJECT показывают «Помощник Kodex» по exact Run/pin, неизвестная identity
+остаётся нейтральной «Сессией». Kind не переписывается. Native Fit помещает обе
+ноды в canvas; desktop RU и mobile EN снимки просмотрены. Последние targeted
+unit/lint/forced typecheck/e2eTS/synthetic build PASS; полный повтор выполняется
+на следующем checkpoint. Protected workspace canary расширен без inference;
+публичный `make test-agent-runner` после расширения PASS.
+
+### 04.10.2026 — checkpoint 2c0a и оставшаяся полная самонастройка
+
+Checkpoint `2c0a554778669e44007941234d5d37ab2b2703c6` опубликован в том же
+Draft PR #1790. Основной checklist ещё не закрыт.
+
+- [x] На чистом SHA contract/codegen/SQL boundary, install/release render,
+      authority ABI/codegen, CP/gateway/controller/egress/runtimecontract
+      unit/vet и runner unit/vet — PASS. Mandatory disposable PostgreSQL:
+      10 suites PASS 115,393 с, Avatar PASS 1,553 с, SKIP нет;
+      `/tmp/kodex-product-review-2c0a554-postgres.log`.
+- [x] Frontend на этом SHA: 327 suites / 2205 tests, lint, forced typecheck,
+      E2E TypeScript, обе сборки; Chromium 47/47 и Firefox retry 4/4 — PASS.
+      Первый default-workers unit завершился FAIL по i18n-scanner timeout
+      5 с при общей CPU нагрузке. Повтор с workers=2 прошёл без изменения
+      timeout, исходный FAIL сохранён. Снимки RU desktop / EN mobile просмотрены.
+- [x] Repo-owned runner build/import, supply-chain build, итоговый private
+      render, supply-chain apply/readback и пять выбранных core workload.
+      Exact runner: `sha256:94777bbda54e7c1b36712183994363981c6b0ee22a017f4be5563c461d12d842`.
+      Политики обновлены до controller; все 12 VAP/binding exact specs совпали
+      с render с ограниченной нормализацией Kubernetes defaults.
+- [x] Control-plane, secret-broker, gateway, frontend, egress и controller
+      получили exact source revision; контрольные файлы host/Pod совпали.
+      Первый gateway rollout timeout — FAIL; после startup restart он стал
+      Ready, отдельный repo-owned gateway readback — PASS. Это не подмена
+      первого результата успешным повтором.
+- [x] Controller заменён: UID `b6c6c6c1-b29d-4064-a45e-1a0e5261f95d` →
+      `a74834bd-e411-47a8-b4de-7664a072770d`; warm Pod также заменён на
+      UID `4d8c0ee2-2c76-4481-9c3e-0d24022599f1`. Все три его контейнера
+      используют новый exact runner digest. Session PVC
+      `runtime-session-d973c67782fa1001` сохранил UID
+      `dacbe5d1-3e2c-4e24-82fc-5f2c8edfc33e` и Bound. Это проверка lifecycle
+      и идентичности PVC, не чтение пользовательских файлов или доказательство
+      десяти живых исполнителей.
+- [x] Защищённая native canary в role-runtime и provider-runtime вернула
+      именно `OK`; UID/digest/Ready проверены до и после. В живой default
+      конфигурации environment volumes — 0; положительные disk/tmpfs варианты
+      доказаны отдельным native disposable component, не выданы за live mounts.
+- [x] Live Chrome после hard reload: realtime LIVE, attempt 0, помощник READY,
+      Console error/warn нет, bootstrap/session/ticket HTTP 200, overflow нет.
+      Локальный screenshot сохранён и просмотрен; screenshot MCP-вызов завис
+      после сохранения файла и был остановлен, факт отмены не скрыт.
+- [x] Независимые architecture/security review на SHA — PASS. Продуктовый
+      review — FAIL по двум недостижимым путям ниже; остальные проверенные
+      сценарии не объявлены проваленными или полностью принятыми.
+- [ ] Системный помощник подготавливает создание/изменение собственного
+      ORGANIZATION Dockerfile через специализированный подтверждаемый план,
+      с тем же managed build/admission/promotion, что штатный UI.
+- [ ] SYSTEM и PROJECT помощники подготавливают модель/account/reasoning
+      через один versioned plan и отдельное подтверждение; нет расширения
+      generic UPDATE_AGENT и caller-issued scope/owner полномочий.
+- [ ] Fresh bounded discovery даёт допустимые target/profile/account/model
+      и organizational recipe refs, чтобы помощник не угадывал opaque IDs.
+- [ ] Проверки новой волны, новый checkpoint и повтор local activation/review.
+- [ ] Штатная сборка и admission/promotion собственного ORGANIZATION образа
+      через Chrome без запуска агента; полного live доказательства пока нет.
+
+Карта новой волны 3.7: exact controller lease/fence/generation → принадлежащий
+серверу run/conversation/assistant tuple → root actor с текущими правами →
+`ProposeAssistantPlan`/редактирование плана → immutable plan revision. Новые
+типы: `CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE`,
+`UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE`,
+`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`. UI читает и редактирует только
+пользовательские параметры; organization/scope/profile/versions/catalog pins
+назначает CP. Validate не пишет image/model. Human apply разрешает существующий
+target до OCC/receipt и в одной owner-транзакции выполняет canonical ORG
+image command либо runtime-config + overlay publication, receipt/audit/events.
+Replay не создаёт второй build/revision. PROJECT источник настраивает только
+своего помощника; SYSTEM источник — себя либо доступный assistant профиль
+проекта, не произвольного сотрудника. Scope не выводится из пустого projectRef.
+
+Модель и reasoning проверяются совместно по prospective current catalog;
+прочие TOML настройки сохраняются. Ручной overlay draft, catalog/target/version
+drift и отзыв доступа закрыто отклоняют сохранённый план, не лечатся скрытым
+fallback. Активные turns/grants/history/RuntimeRevision не переписываются;
+новая конфигурация применяется к следующим ходам. Image build/cancel/retry/
+expiry/admit/promote сохраняют существующий fenced lifecycle. Сам reject
+плана не создаёт image/model эффектов. Fresh read не выдаёт credentials,
+secret values или owner authority.
+
+NOT RUN: реальные ИИ, STT, device-code, staging/production. Следующий полный
+QA документ до достижения текущей цели не читается.
+
+### 04.10.2026 — незавершённая волна 3.7: каталог и полная самонастройка
+
+Следующие результаты относятся к рабочему дереву поверх `2c0a554`, а не
+к новому неизменяемому SHA. Итоговые проверки и активация будут повторены
+после фиксации всех изменений этой волны.
+
+- [x] Proto generation/lint/build/codegen — PASS. OpenAPI generation повторён
+      после устранения дублированного типа операции; gateway проверяет все
+      зарегистрированные Proto operation types против HTTP-контракта.
+      Первый запуск нового теста не скомпилировался из-за неверного обращения
+      к отсутствующему полю receipt; исправленная проверка — PASS.
+- [x] AsyncAPI, authority codegen/ABI и web-only release render — PASS.
+      Первый SQL-boundary запуск пришёлся на незавершённое добавление embedded
+      SQL и дал FAIL; после согласования дерева повтор — PASS.
+- [x] FE scoped-проверки versioned model/image form — PASS: 87 unit и
+      16 synthetic Chromium, forced typecheck, E2E TypeScript, lint и сборка.
+      Production-форма сохраняет неизменяемый `runtimeProfilePin` и все
+      server-owned scope/version pins. Просмотрен снимок 390 px: переполнения нет.
+- [x] Тестовая scheduler-upgrade БД теперь создаётся из пустого canonical
+      bootstrap-шаблона: Goose table/sequence принадлежат owner, migrator
+      получает только штатные точные grants. Первоначальная upgrade-проверка
+      была FAIL по правам метаданных, а не по бизнес-переходу. Повтор публичного
+      filtered entrypoint — PASS; impact upgrade через новую migration также
+      PASS. Полный компонентный набор новой волны ещё не принят.
+- [ ] Независимый preflight нашёл конфликт каталога: callback разрешал только
+      восемь известных reasoning labels, хотя canonical каталог поддерживает
+      новые значения вроде `adaptive`. Требуется единая структурная проверка,
+      сохранение bounded/duplicate/default checks и положительный fenced test.
+- [ ] Chrome ORG image-create: owner получил source view/manage, но
+      `image.build` был DENIED; source скрыт и создание недоступно. Исправляется
+      canonical registry/engine новой forward-only migration, без UI-обхода.
+      Query и command должны одинаково отклонять MEMBER с custom grant.
+- [ ] SYSTEM → PROJECT окружение/инструкции с общего экрана пока недостижимы.
+      Расширяются только специализированные пути помощника через locator
+      `projectAssistantRef`: сервер разрешает действительный профиль, actor,
+      проект, agent и опубликованное окружение до версии/receipt. Обычные
+      сотрудники не получают обход screen context. Fresh `ASSISTANTS` отдаёт
+      безопасный `runtime_environment_ref`, не полномочия или secret values.
+- [ ] Финальная компонентная матрица, неизменяемый checkpoint, независимые
+      review, повтор полной baseline и repo-owned local activation.
+- [ ] Штатная ORG image build/admission/promotion в Chrome без inference.
+
+Самонастройка отвергает существующий ручной overlay draft и drift выбранного
+runtime profile. Изменения модели и reasoning атомарны; активный RuntimeRevision
+не переписывается. Prompt `v44` исправляет обещание немедленной публикации
+окружения: apply создаёт draft, после чего нужны отдельные validate/impact/publish.
+Предыдущие immutable prompt revisions не редактируются.
+
+Chrome MCP список вкладок запрашивается регулярно; чужая вкладка сохранена.
+Секреты не раскрыты. Реальные ИИ, STT, device-code и staging/production — NOT RUN.
+
+Дополнительный preflight той же волны:
+
+- [ ] Явное восстановление STALE-плана новой ревизией: строгий DRAFT не
+      перебазируется, изменённые caller owner/locator pins отвергаются,
+      после видимого STALE сервер заново снимает snapshot. Первоначально новые
+      три типа отвергали и разрешённое восстановление либо передавали owner
+      поля в proposal decoder; компонентная проверка исправления продолжается.
+- [ ] FE model form должна поддерживать пустую степень как default exact
+      каталога, в том числе non-reasoning модель, и пересечение всех выбранных
+      аккаунтов. Неполученный/просроченный каталог не считается unsupported.
+      До исправления такую модель нельзя было сохранить; добавлены native
+      synthetic варианты с явным выбором default и двумя аккаунтами.
+- [ ] FE recognition закрытого контекстного реестра: отсутствовали
+      `CREATE_PROJECT_ASSISTANT`, `CREATE_INSTRUCTION_DRAFT` и
+      `UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS`, что отклоняло весь разрешённый
+      server context. Добавляются только известные типы; клиент по-прежнему
+      не назначает allowed operations и отклоняет неизвестный тип.
+- [x] Дополненный Proto с field 17: generation и lint/build/codegen — PASS.
+      Новый immutable prompt `v45` описывает точный проектный путь и явную
+      новую ревизию STALE. Prompt/materialization повтор — PASS; первый тест
+      был FAIL из-за ошибочного буквального oracle, исправлена только строка
+      ожидаемой формулировки, не ослаблена проверка запрета обхода контекста.
+
+Image UPDATE в targeted оснастке сначала не проходил из-за склеенного
+Dockerfile без перевода строки; после исправления fixture прошёл до ошибки
+другого fixture oracle (неверное имя outbox column). Это не доказанные дефекты
+production builder и не успешная приёмка всего компонентного набора.
+
+### 04.10.2026 — сквозные проверки текущего дерева 3.7
+
+Проверки ниже — scoped preflight поверх `2c0a554`, не новая итоговая
+SHA-приёмка. Основной checklist остаётся незавершённым.
+
+- [x] Runtime-controller unit/vet — PASS. Fenced callback принимает будущую
+      допустимую reasoning label из canonical каталога, но отклоняет malformed,
+      duplicate и неправильный default; сохраняется предел 16 значений и
+      canonical длина 64. Закрытые helper schema не расширяют обычные операции
+      сотрудников. `/tmp/kodex-assistant-project-locator-controller-unit.log`.
+- [x] Targeted disposable CP-повтор №13 — PASS, 9,565 с: новые model/image
+      операции, каталоги, ручной overlay/profile drift, явный STALE refresh,
+      lost acknowledgement и отзыв владельца. Повтор №15 — PASS, 10,095 с:
+      SYSTEM с общего экрана готовит окружение, привязку и инструкции PROJECT
+      помощника; PROJECT готовит только свои. Это ещё не полный набор.
+- [x] FE model/context scoped-повтор — PASS: 5 suites / 138 tests и 24 native
+      synthetic Chromium сценария, lint, forced typecheck, E2E TypeScript,
+      сборка. Non-reasoning модель поддерживает явный catalog default;
+      несколько аккаунтов — пересечение допустимых reasoning labels. Снимки
+      390/1440 px просмотрены исполнителем, без реального inference.
+- [ ] Первая новая helper UI browser-матрица — 8 PASS / 8 FAIL: incomplete
+      test bootstrap и видимый test-only JSON расширяли страницу. Оснастка
+      исправлена, повтор и визуальный readback ещё выполняются.
+- [ ] Составной план model → image воспроизвёл собственный version conflict.
+      Исправление переносит только точный canonical результат предыдущей
+      операции того же агрегата в этой owner-транзакции. Исходный immutable
+      план не меняется, внешний drift не перебазируется. Нужны положительные
+      порядки операций, rollback позднего отказа и отрицательный внешний drift.
+- [ ] После изменения PROJECT помощника исходный SYSTEM диалог не должен
+      становиться проектным в HTTP response или финальном plan event: область
+      операции и область истории различаются. Проверяется исходный общий
+      диалог и диалог проекта A при изменении помощника B; исключение — прежний
+      одиночный CREATE_PROJECT с явным штатным переходом.
+- [ ] Каталог повторяет canonical read eligibility: PROVIDER_ACCOUNTS —
+      `provider.account.view` для каждого экземпляра; MODELS —
+      `organization.view`, как штатный ListModelCapabilities. В engine нет
+      DENY-binding: отрицательная оснастка использует отсутствие ALLOW, а не
+      выдуманный тип запрета. Управление помощником не выдаёт право чтения
+      аккаунтов. Проверяется отдельный instance ALLOW и закрытый отказ.
+- [ ] FE helper scope использует неизменяемые server pins целевого PROJECT
+      профиля, а не projectRef исходной SYSTEM истории. Для обычных операций
+      screen/project boundary сохраняется; malformed helper locator не
+      превращается в обычную операцию. Итоговый повтор ещё предстоит.
+
+Chrome MCP доступ подтверждён после нового owner approval; список вкладок
+проверяется регулярно. Реальные ИИ, STT, device-code и staging/production —
+NOT RUN. Документ следующей полной QA-цели по-прежнему не читался.
+
+Дополнительный canonical per-account тест выявил несогласованность: registry
+и API разрешают `RESOURCE_INSTANCE / PROVIDER_ACCOUNT`, а исторический
+`access_bindings_scope_shape` для project=NULL разрешает только INTEGRATION
+и ARTIFACT. Подтверждено по исходникам обеих applied migrations; они не меняются.
+Согласована новая forward-only migration с exact precondition, добавляющая
+только PROVIDER_ACCOUNT. Положительный instance ALLOW создаётся штатной
+owner-командой, не прямой тестовой записью; остальные boundary не расширяются.
+
+- [x] Targeted CP №25 — PASS, 14,590 с: собственные model/image изменения,
+      проектные окружение/инструкции/привязка, допустимые составные порядки,
+      исходный SYSTEM проект A отдельно от helper B, instance ALLOW аккаунта.
+      `/tmp/kodex-assistant-self-configuration-targeted-25.log`.
+- [x] Helper UI — PASS, 5 suites / 105 tests и 32 native Chromium варианта,
+      forced typecheck/lint/E2E TypeScript/сборка. Проверены общий SYSTEM диалог
+      и SYSTEM диалог проекта A → helper B; DRAFT/APPLIED, 390/1440 px,
+      owner/locator/receipt tamper, Console/Network и отсутствие overflow.
+      Первые 8 FAIL и следующие 2 FAIL сохранены; исправлялись bootstrap,
+      test-only JSON и отсутствующий ETag оснастки, guards не ослаблялись.
+      `/tmp/kodex-fe-project-helper-final-browser.log`. Небольшая RU/EN правка
+      подписей помощника ещё требует адресного повтора.
+- [ ] Независимое review выявило скрытый DRAFT refresh выбранного alternate
+      runtime profile/account catalog. Теперь до редактирования читается и
+      сравнивается исходный frozen dependency snapshot; STALE восстанавливается
+      только явно новой ревизией. Alternate-profile negative проходит;
+      catalog negative сначала FAIL: повторное identical observation seed
+      может не менять canonical revision/digest. Требуется доказать реальный
+      новый pin до проверки отказа, не ослаблять oracle или production guard.
+
+Повтор contract/Proto/AsyncAPI/authority ABI/SQL-boundary текущего дерева —
+PASS; `/tmp/kodex-assistant-3-7-contract-current.log`. Полный итоговый SHA,
+baseline и local activation остаются впереди.
+
+### 04.10.2026 — завершение 3.7 по изменённому решению владельца
+
+Владелец остановил субагентов текущей задачи, отменил отдельные итоговые
+review и новый полный baseline-повтор. Оставшийся путь: Chrome MCP, визуальная
+проверка, Console/Network и логи backend; исправления на hot reload, затем
+commit/push и слияние #1790. После слияния — новая цель по
+`.agents/full-qa-task.md`; этот документ заранее не читался. Для следующей
+цели разрешены основной агент и четыре субагента, с соблюдением фактического
+лимита одновременно доступных слотов. Чужие вкладки не закрываются;
+список вкладок MCP запрашивается регулярно.
+
+Доказательства 3.7 относятся к рабочему дереву поверх
+`2c0a554778669e44007941234d5d37ab2b2703c6`, а не к ещё не созданному commit:
+
+- [x] Targeted CP №33 — PASS, 17,557 с; реальная смена обоих catalog pins
+      доказана до проверки закрытого отказа. DRAFT не обновляет зависимости
+      скрыто; STALE требует явно новой ревизии. Составные порядки и поздний
+      rollback, SYSTEM source A → PROJECT target B и instance account ALLOW
+      проверены. `/tmp/kodex-assistant-self-configuration-targeted-33.log`.
+- [x] Полный обязательный disposable PostgreSQL набор — PASS: 10 suites,
+      121,027 с, Avatar 1,334 с, SKIP нет.
+      `/tmp/kodex-assistant-3-7-full-postgres.log`, SHA-256
+      `1273b2ecacfb3de029cb4553b5b22f03cd5b9bda05736cd625e02185a7a358dd`.
+- [x] Полный frontend набор — PASS: 329 suites / 2238 tests; lint, forced
+      typecheck, E2E TypeScript, сборка. Helper copy-повтор — 106 tests и
+      32 Chromium варианта; модель — 24 Chromium варианта. RU/EN снимки
+      390/1440 px просмотрены; guards не ослаблялись. Этот набор предшествует
+      последней адресной локализации picker, проверенной отдельно в Chrome.
+- [x] Ошибка gateway usertext registry устранена добавлением RU/EN
+      `ROLE_IMAGE_BUILD_LEASE_EXPIRED`; адресный повтор PASS. Общий Go loop
+      не объявлен PASS: последний вызов использовал неверный путь egress-модуля.
+- [x] Forward-only migrations `20261004000200` и `20261004000300` применены
+      repo-owned migrate-stage; исторические applied migrations не изменялись.
+- [x] Chrome: onboarding, системная модель/reasoning и полная форма окружения
+      без горизонтального переполнения. Скриншоты onboarding/settings сохранены
+      и просмотрены; подготовленный текст самонастройки очищен без отправки.
+      Необработанный `i18n:SYSTEM_BASE_ROLE_IMAGE` в picker исправлен штатным
+      server-message локализатором; повторное открытие показывает перевод.
+- [x] Контрольные файлы CP/gateway/controller/frontend совпадают host/Pod;
+      все четыре workload Ready. После rollout соединение восстановлено,
+      последние scoped Console error/warn и backend error/warn отсутствуют.
+- [ ] Live organizational image build/admission/promotion: первые две сборки
+      завершились REJECTED из-за устаревшего скрипта допуска в ConfigMap.
+      Repo-owned supply-chain stage теперь обновляет exact
+      `kodex-system/kodex-image-admission` при остановленном controller и
+      сравнивает всю `.data` с render. Хеш скрипта после apply совпал с repo:
+      `08404e8021059ca89ad4852e02ac563c39e0a2d1679ee26860bc5ba829dd2f29`.
+      Supply-chain apply/readback PASS; кратковременные builder startup retries
+      не скрыты. Следующие сборки дошли до финального допуска, но REJECTED
+      ещё расследуется по отчёту сканера. Ослабление policy не применяется.
+
+Реальный inference, STT, device-code, staging/production — NOT RUN. Новый
+итоговый review и повтор полного baseline — NOT RUN по решению владельца,
+а не PASS. Ранее успешные scoped проверки не выдаются за новую SHA-приёмку.
+
+Отчёт следующей scan-phase подтвердил корректный закрытый отказ: пять
+fix-available High matches — gRPC `v1.82.1` (два GHSA) и libpcre2 `10.42-1`
+(три CVE). Причина первоначального provenance mismatch уже устранена;
+оставшийся отказ не обходится. Runner переводится на проверенную checksum
+`google.golang.org/grpc v1.83.1`; явная установка libpcre2 обновляет библиотеку
+из pinned Debian base до доступной исправленной версии. Проверены Context7
+`/grpc/grpc-go` README/versioning и официальный Go module checksum/origin.
+Это отдельный checkpoint исправления; новая сборка/digest/admission ещё впереди.
+
+Checkpoint `dfb6e42030786ecb49499425b95182b2ada2a234` опубликован. Новый
+runner `sha256:da8a365f19dd11c49ebabfcfe9ea6313aa4e60abc256790d51f78de1a1b681b9`
+с проверенным происхождением бинаря активирован repo-owned supply-chain/core;
+все три контейнера warm Pod используют этот digest и Ready. Native UI создал
+поколение 2 QA-образа; сборка COMPLETED. Scan устранил четыре blocking matches,
+но один gRPC GHSA остался: `v1.83.1` требует patch `v1.83.2`. Это не PASS
+допуска. Уточнение подтверждено [официальным advisory grpc-go](https://github.com/grpc/grpc-go/security/advisories/GHSA-2v4p-qf9q-27wj)
+и Go module checksum/origin. Применяется exact `v1.83.2`; policy не меняется.
+Во время переключения CP сохранение по старому каталогу закрыто отклонилось;
+после hard reload штатное создание поколения 2 прошло. Ошибочный вызов
+stage `core-runtime` был отклонён до изменений; повтор с поддерживаемым
+stage `core` завершился PASS. Эти первые отказы не скрываются.
+
+Checkpoint `67855fde31e52d9111cc4908482de40bb0bfd542`: runner пересобран
+с gRPC `v1.83.2`, exact digest
+`sha256:a323518dca10ba6bceb0a64b848c60e0e3b8b9bd37d9bfe908b7c34ad0ff37e5`.
+Repo-owned render/supply-chain/core завершились PASS; три контейнера warm
+используют этот digest и Ready, inference не запускался.
+
+Chrome выявил отдельную ошибку установки: CP загружал каталог один раз при
+старте и мог сохранить старый base digest при более позднем обновлении
+ConfigMap. Исправление поверх checkpoint: core применяет точный каталог до
+Deployment, render закрепляет SHA-256 каталога в Pod template. Native GET
+после rollout возвращает новый `a323…` digest; Ready replicas — 1, annotation
+`7a428c5cc8ad898987745fc9912ef417b76a146fe961a411e8e35d97b9693f12`.
+Render/core apply/readback — PASS. Добавлена адресная регрессия порядка и
+границы выбора ConfigMap; новый тестовый повтор — NOT RUN по решению владельца.
+Штатная UI-ревизия 3 автоматически создала сборку
+`imgbld_q0glN5ddP8pwOlz4-oYmccK_`; сборка COMPLETED, результат допуска
+на этом этапе ещё ожидается.
+
+Поколение 3 получило ACCEPTED с digest
+`sha256:8adf494cbe58e811dd34255c6f6bdbb5ae19c88950421d09b630c2c2a9367242`.
+Native Chrome обнаружил отсутствие обновления допуска без reload: рабочий
+`RecordAdmission` сохранял verdict, но не публиковал платформенный сигнал.
+Карта исправления: проверенная workload authority `image-admission` → внутренний
+`RecordAdmission` → CP owner-transaction → locked artifact scope/recipe/version →
+receipt и `ROLE_IMAGE_RECIPE_CHANGED` ровно один раз → gateway scoped catalog →
+frontend role-image detail. ACCEPTED и REJECTED одинаково сигнализируются;
+повтор receipt не создаёт событие, terminal другого графа не затрагивается.
+Новых API, event names, декодеров или источников authority нет. Регрессия
+организационной области и idempotent cardinality добавлена, повтор suite
+NOT RUN по решению владельца; native поколение 4 проверяет hot-reload путь.
+Также исправлена RU/EN подпись: отсутствие опубликованного образа больше не
+обозначается отсутствием допуска. Предупреждения controller/builder/admission
+при CP rollout относятся к кратковременному Unavailable; они сохранены как
+наблюдение, а не скрыты за общим PASS.
+
+### 04.10.2026 — завершение native пути собственного образа
+
+Поверх `67855fde31e52d9111cc4908482de40bb0bfd542` проверены исправления
+catalog-startup barrier и admission realtime signal. Native generation 4
+организационного QA-рецепта без проектной привязки получила ACCEPTED;
+кнопка публикации появилась автоматически без ручного reload после допуска.
+Штатная публикация через UI завершилась PROMOTED. Artifact
+`imgart_bt4fHxbEcqVa8oJB7ecNgBFm`, exact OCI digest
+`sha256:6013035ba95b5ea3dd6d5bdcdb76ba3daa65115dd52941cadcb53a7e6d665673`.
+Promotion Job завершился exit 0; native readback подтверждает activeArtifact.
+
+Образ выбран в полной системной форме окружения; штатные сохранение и
+проверка создали `renvd_zgxsvwuM4aJfz07t5xv9usyI`, state VALID,
+scopeKind ORGANIZATION, projectRef пуст, imageArtifactRef совпадает с допущенным
+и опубликованным артефактом. Активная конфигурация владельца не публиковалась.
+Это проверка draft/validation, не inference. Скриншоты
+`/tmp/kodex-assistant-g4-image-promoted.png` и
+`/tmp/kodex-assistant-g4-environment-validated.png` сохранены и просмотрены;
+горизонтального overflow нет, Console error/warn нет, native GET — 200.
+Неверная попытка прочитать уже завершившийся scan container не считается
+доказательством сканирования; основание допуска — авторитетный ACCEPTED.
+
+- [x] Собственный SYSTEM образ: Dockerfile → build → admission → promotion →
+      выбор exact artifact → VALID черновик окружения; все переходы штатные.
+- [x] Realtime обновление результата допуска и публикации без product polling.
+- [x] Исторические REJECTED и кратковременный Unavailable при rollout сохранены.
+- [x] Обязательные пункты конфигурации помощников закрыты в согласованном режиме;
+      новые review/full-suite повтор, real inference, STT, device-code,
+      staging/production — NOT RUN, не PASS.
+
+Владелец дополнительно разрешил субагентов в текущей цели и запросил
+ускорение независимых сборок и подбор ресурсов по возможностям сервера.
+Эта дополнительная оптимизация выполняется в том же PR до слияния.
+
+Read-only source/Pod проверка последних исправлений: CP admission SHA-256
+`7966cf39011d802ea2bfdf3978965bed86e248cc0de791a7bfbad86c6c9f823a`,
+frontend i18n `3ac4ba4138daa633ba27cc18befcd1fa879451d6fe97316e65145234838fc0e8`;
+оба совпали host/Pod. Gateway usertext
+`f0b122bda443a4d6095c7a71e7aa8849fa84e5a032d6a164cd511949fea0f765`,
+controller catalog
+`ea4fa09ea780d8ea48c49432268a2eeceec62f50424109c12c91f1a8be3078b6`
+тоже совпали. Source mount указывает на `/home/s/projects/kodex`, все приложения
+Ready; проверочный warm Pod 3/3 использует exact `a323…` runner. Пустой
+последний минутный срез backend logs не выдаётся за доказательство сценария.
+
+Read-only capacity: один физический EPYC 16 cores/32 threads, 125 GiB RAM,
+available около 101 GiB, CPU idle около 79%. Обе k3d-ноды делят этот сервер;
+их allocatable нельзя складывать. Другой проект сохраняет собственный запас.
+BuildKit уже имеет request 8 CPU/8 GiB и limit 24 CPU/64 GiB, увеличения лимита
+без evidence насыщения не требуется. Рекомендован начальный параллелизм сборок 2,
+4 остаётся явно выбираемым режимом. Реплики stateful координаторов не умножаются.
+
+- [x] Независимые OCI build/export и tools load поддерживают `--build-jobs 1..4`
+      в `tools/dev/build-local-image-supply-chain.sh`; переносимый default 1,
+      для данного сервера рекомендован 2. Exact state writer lock, приватные
+      каталоги/логи, bounded cancel/join process groups и общий failure barrier
+      исключают публикацию указателей при ошибке сборки. Source fingerprint
+      сверяется до import; все digest readback предшествуют новым pointers.
+      Дополнительно исправлено подавление ошибки import в command substitution.
+- [x] Адресные герметичные проверки оптимизации — PASS: 9 tests / 12,110 с,
+      bash syntax, shellcheck и diff check. Реальные повторные OCI builds не
+      выполнялись; ускорение холодной сборки не измерено и не заявляется PASS.
+- [x] Resourcing preflight выполнен; увеличение BuildKit limits или replicas
+      не требуется. Локальный render уменьшает admission reconcile с 5s до 1s
+      в уже разрешённом валидатором диапазоне; workspace cardinality, authority,
+      retry и production-конфигурация не меняются.
+
+Первый render оптимизации закрылся SOURCE_DRIFT во время параллельного
+редактирования: apply не выполнялся. После завершения edits используется
+новый чистый checkpoint; этот отказ не выдается за успешный render.
+
+### 04.10.2026 — финальное применение и восстановление выбора после reload
+
+Чистый checkpoint `650f3215dc4930270d12edf6af24d8b62a79658d`:
+render `render-browser-fast-local.yaml` — PASS; repo-owned supply-chain и core
+control-plane apply — PASS. Deployment image-admission-controller Ready,
+фактический `IMAGE_ADMISSION_CONTROLLER_RECONCILE_INTERVAL=1s`. CP Ready,
+template catalog SHA-256
+`50156cd0e2f4347353a9a133e8ba62f6e6fbee1dcec132fa5aef8336f648e65c`.
+Host/Pod admission source hash вновь совпал с `7966…`; после startup записан
+`control-plane readiness restored`. Эти результаты относятся только к
+разрешённому локальному trusted-cluster, не к release acceptance.
+
+Hard reload выявил дополнительный UX-дефект: draft хранит собственный artifact,
+но selector восстанавливал название только из активного окружения и показывал
+placeholder. Исправлена общая форма SYSTEM/PROJECT: точный artifact разрешается
+через существующий scoped promoted catalog с bounded cursor traversal,
+AbortSignal и проверкой поколения запроса. При отсутствии доступного artifact
+форма закрыто показывает конфликт; opaque ref не используется вместо имени.
+Authority, admission, publication и активная конфигурация не меняются.
+
+Поверх чистого `650f…` адресная suite image-tools-selection — PASS:
+14 tests, включая восстановление следующей страницы, отсутствующий artifact,
+повтор cursor и отмену позднего результата. Native hard reload — PASS:
+селектор показывает название QA-образа, draft VALID, image ACCEPTED/PROMOTED,
+точные GET — 200, Console error/warn отсутствуют, overflow отсутствует.
+Скриншот `/tmp/kodex-assistant-image-resume-fixed.png` просмотрен.
+Последний диагностический срез gateway/admission logs пустой; сам по себе
+он не считается доказательством сценария.
+
+Уточнение ресурсов: лимиты 24 CPU/64 GiB принадлежат кластерному BuildKit;
+отдельный Docker buildx builder не имеет cgroup CPU/RAM limit. `--build-jobs 2`
+ограничивает число независимых локальных сборок, а не их суммарную память.
+Реальный speedup и peak memory тяжёлой параллельной сборки — NOT RUN;
+автоматическое увеличение реплик и ресурсов не выполнялось. Через Context7
+проверены Docker Buildx OCI exporter/load (`/docker/docs`) и Vue watcher
+async cleanup (`/websites/vuejs`).
+
+Новое решение владельца: после слияния текущего PR прочитать
+`.agents/full-qa-task.md`, выполнить анализ и остановиться до запуска следующей
+цели; представить план и открытые вопросы с вариантами выбора. Прежнее
+автоматическое создание следующей цели отменено этим решением.

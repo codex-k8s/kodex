@@ -28,11 +28,13 @@ import {
   readSecretImpact,
 } from "./revision-impact";
 const consumer: RuntimeEnvironmentConsumer = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   agentRef: "agent",
   agentVersion: 3,
   bindingRef: "binding",
   bindingVersion: 4,
-  projectRef: "project",
+  projectRef: "project_synthetic",
   versionRef: "old-version",
 };
 const environment: RuntimeEnvironmentImpact = {
@@ -53,7 +55,9 @@ const secret: RuntimeSecretImpact = {
       environmentRef: "environment",
       environmentVersion: 19,
       environmentVersionRef: "old-version",
-      projectRef: "project",
+      projectRef: "project_synthetic",
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       secretRevisions: [6],
       consumer,
     },
@@ -73,6 +77,136 @@ const response = (data: unknown) => ({
   data,
   response: new Response(null, { status: 200 }),
 });
+
+it("закрывает чтение без authoritative org anchor до HTTP", async () => {
+  await expect(
+    readEnvironmentImpact(
+      "environment",
+      "target-version",
+      undefined,
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow("anchor");
+  expect(client.get).not.toHaveBeenCalled();
+});
+it("закрывает secret rebind с чужим nested owner до HTTP даже при совпадении selection", async () => {
+  const foreign = { ...consumer, organizationRef: "org_foreign" };
+  const row = secret.consumers[0];
+  if (!row) throw new Error("Synthetic consumer is missing");
+  await expect(
+    applySecretRebind(
+      { ...secret, consumers: [{ ...row, consumer: foreign }] },
+      [
+        {
+          environmentRef: row.environmentRef,
+          expectedEnvironmentVersion: row.environmentVersion,
+          sourceVersionRef: row.environmentVersionRef,
+          scopeKind: row.scopeKind,
+          organizationRef: row.organizationRef,
+          projectRef: row.projectRef,
+          consumers: [foreign],
+        },
+      ],
+      "org_synthetic",
+    ),
+  ).rejects.toThrow("selection");
+  expect(client.post).not.toHaveBeenCalled();
+});
+it.each([
+  { scopeKind: "UNSPECIFIED" },
+  { scopeKind: undefined },
+  { organizationRef: "org_foreign" },
+  { scopeKind: "PROJECT", projectRef: "" },
+  { scopeKind: "ORGANIZATION", projectRef: "project_synthetic" },
+])("отклоняет некорректный consumer owner tuple %j", async (change) => {
+  client.get.mockResolvedValue(
+    response({ ...environment, consumers: [{ ...consumer, ...change }] }),
+  );
+  await expect(
+    readEnvironmentImpact(
+      "environment",
+      "target-version",
+      undefined,
+      new AbortController().signal,
+      "",
+      40,
+      "org_synthetic",
+    ),
+  ).rejects.toThrow("impact");
+});
+it("публикует bindingless ORG окружение с точным пустым project и проверяет receipt owner", async () => {
+  const original = secret.consumers[0];
+  if (!original) throw new Error("Synthetic consumer is missing");
+  const row = {
+    ...original,
+    scopeKind: "ORGANIZATION" as const,
+    projectRef: "",
+    consumer: undefined,
+  };
+  const owned = { ...secret, consumers: [row] };
+  client.get.mockResolvedValue(response(owned));
+  await expect(
+    readSecretImpact(
+      "secret",
+      7,
+      undefined,
+      new AbortController().signal,
+      "",
+      40,
+      "org_synthetic",
+    ),
+  ).resolves.toEqual(owned);
+  const selection = {
+    scopeKind: row.scopeKind,
+    organizationRef: row.organizationRef,
+    projectRef: row.projectRef,
+    environmentRef: row.environmentRef,
+    expectedEnvironmentVersion: row.environmentVersion,
+    sourceVersionRef: row.environmentVersionRef,
+    consumers: [],
+  };
+  const receipt = {
+    environmentRef: row.environmentRef,
+    environmentVersion: 20,
+    versionRef: "published-version",
+    digest: "a".repeat(64),
+    scopeKind: row.scopeKind,
+    organizationRef: row.organizationRef,
+    projectRef: "",
+  };
+  client.post.mockResolvedValue(
+    response({ environments: [receipt], bindings: [] }),
+  );
+  await expect(
+    applySecretRebind(owned, [selection], "org_synthetic"),
+  ).resolves.toMatchObject({ environments: [receipt] });
+  client.post.mockResolvedValue(
+    response({
+      environments: [{ ...receipt, organizationRef: "org_foreign" }],
+      bindings: [],
+    }),
+  );
+  await expect(
+    applySecretRebind(owned, [selection], "org_synthetic"),
+  ).rejects.toThrow("receipt");
+});
+it("не публикует selection чужой организации даже без binding", async () => {
+  const row = secret.consumers[0];
+  if (!row) throw new Error("Synthetic consumer is missing");
+  const selection = {
+    scopeKind: "PROJECT" as const,
+    organizationRef: "org_foreign",
+    projectRef: row.projectRef,
+    environmentRef: row.environmentRef,
+    expectedEnvironmentVersion: row.environmentVersion,
+    sourceVersionRef: row.environmentVersionRef,
+    consumers: [],
+  };
+  await expect(
+    applySecretRebind(secret, [selection], "org_synthetic"),
+  ).rejects.toThrow("selection");
+  expect(client.post).not.toHaveBeenCalled();
+});
 describe("revision impact adapters", () => {
   beforeEach(() => vi.resetAllMocks());
   it("передаёт query вместе с cursor в оба impact endpoint", async () => {
@@ -84,6 +218,8 @@ describe("revision impact adapters", () => {
       "page",
       signal,
       "  agent  ",
+      undefined,
+      "org_synthetic",
     );
     expect(client.get).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -92,7 +228,15 @@ describe("revision impact adapters", () => {
       }),
     );
     client.get.mockResolvedValueOnce(response(secret));
-    await readSecretImpact("secret", 7, undefined, signal, " env ");
+    await readSecretImpact(
+      "secret",
+      7,
+      undefined,
+      signal,
+      " env ",
+      undefined,
+      "org_synthetic",
+    );
     expect(client.get).toHaveBeenLastCalledWith(
       expect.objectContaining({
         query: { pageSize: 40, query: "env" },
@@ -102,7 +246,7 @@ describe("revision impact adapters", () => {
   });
   it("передает исходную версию потребителя, целевую версию в path и OCC окружения", async () => {
     client.post.mockResolvedValue(response({ bindings: [binding] }));
-    await applyEnvironmentRebind(environment, [consumer]);
+    await applyEnvironmentRebind(environment, [consumer], "org_synthetic");
     expect(client.post).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { environmentRef: "environment", versionRef: "target-version" },
@@ -118,17 +262,25 @@ describe("revision impact adapters", () => {
   });
   it("отклоняет чужую и повторную выборку до мутации", async () => {
     await expect(
-      applyEnvironmentRebind(environment, [{ ...consumer, bindingVersion: 5 }]),
+      applyEnvironmentRebind(
+        environment,
+        [{ ...consumer, bindingVersion: 5 }],
+        "org_synthetic",
+      ),
     ).rejects.toThrow("selection");
     await expect(
-      applyEnvironmentRebind(environment, [consumer, consumer]),
+      applyEnvironmentRebind(
+        environment,
+        [consumer, consumer],
+        "org_synthetic",
+      ),
     ).rejects.toThrow("selection");
     expect(client.post).not.toHaveBeenCalled();
   });
   it("не принимает частичную квитанцию и не повторяет мутацию", async () => {
     client.post.mockResolvedValue(response({ bindings: [] }));
     await expect(
-      applyEnvironmentRebind(environment, [consumer]),
+      applyEnvironmentRebind(environment, [consumer], "org_synthetic"),
     ).rejects.toThrow("receipt");
     expect(client.post).toHaveBeenCalledTimes(1);
   });
@@ -142,17 +294,31 @@ describe("revision impact adapters", () => {
         "target-version",
         undefined,
         new AbortController().signal,
+        undefined,
+        undefined,
+        "org_synthetic",
       ),
     ).rejects.toThrow("impact");
     client.get.mockResolvedValue(
       response({ ...secret, nextPageToken: "same" }),
     );
     await expect(
-      readSecretImpact("secret", 7, "same", new AbortController().signal),
+      readSecretImpact(
+        "secret",
+        7,
+        "same",
+        new AbortController().signal,
+        undefined,
+        undefined,
+        "org_synthetic",
+      ),
     ).rejects.toThrow("impact");
   });
   it("публикует окружение без агентов с пустым обязательным consumers", async () => {
     const selection = {
+      scopeKind: "PROJECT" as const,
+      organizationRef: "org_synthetic",
+      projectRef: "project_synthetic",
       environmentRef: "environment",
       expectedEnvironmentVersion: 19,
       sourceVersionRef: "old-version",
@@ -164,7 +330,9 @@ describe("revision impact adapters", () => {
           {
             environmentRef: "environment",
             environmentVersion: 20,
-            projectRef: "project",
+            projectRef: "project_synthetic",
+            scopeKind: "PROJECT",
+            organizationRef: "org_synthetic",
             versionRef: "new-version",
             digest: "b".repeat(64),
           },
@@ -172,7 +340,7 @@ describe("revision impact adapters", () => {
         bindings: [],
       }),
     );
-    await applySecretRebind(secret, [selection]);
+    await applySecretRebind(secret, [selection], "org_synthetic");
     expect(client.post).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { secretRef: "secret", revision: 7 },
@@ -188,20 +356,25 @@ describe("revision impact adapters", () => {
   });
   it("отклоняет подмену sourceVersionRef и потерянные опубликованные окружения", async () => {
     const selection = {
+      scopeKind: "PROJECT" as const,
+      organizationRef: "org_synthetic",
+      projectRef: "project_synthetic",
       environmentRef: "environment",
       expectedEnvironmentVersion: 19,
       sourceVersionRef: "target-version",
       consumers: [],
     };
-    await expect(applySecretRebind(secret, [selection])).rejects.toThrow(
-      "snapshot",
-    );
+    await expect(
+      applySecretRebind(secret, [selection], "org_synthetic"),
+    ).rejects.toThrow("snapshot");
     expect(client.post).not.toHaveBeenCalled();
     client.post.mockResolvedValue(response({ environments: [], bindings: [] }));
     await expect(
-      applySecretRebind(secret, [
-        { ...selection, sourceVersionRef: "old-version" },
-      ]),
+      applySecretRebind(
+        secret,
+        [{ ...selection, sourceVersionRef: "old-version" }],
+        "org_synthetic",
+      ),
     ).rejects.toThrow("receipt");
   });
 });

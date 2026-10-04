@@ -13,6 +13,7 @@ const sdk = vi.hoisted(() => ({
   refreshProviderAccountAuthorization: vi.fn(),
   revokeProviderAccount: vi.fn(),
   setProviderAccountEnabled: vi.fn(),
+  setProviderAccountConcurrency: vi.fn(),
   startProviderAccountDeviceAuthorization: vi.fn(),
   verifyProviderAccountDeviceAuthorization: vi.fn(),
 }));
@@ -46,6 +47,7 @@ import {
   loadProviderAccounts,
   reauthorizeProviderDevice,
   setProviderAccountEnabled,
+  setProviderAccountConcurrency,
   verifyDeviceAuthorization,
 } from "./api";
 
@@ -58,6 +60,7 @@ const account: ProviderAccount = {
   state: "AUTHORIZED",
   enabled: true,
   ready: true,
+  maximumConcurrentExecutions: 10,
   nextActions: ["DISABLE", "REVOKE", "TEST", "CONFIGURE_CREDENTIAL"],
   createdAt: "2026-08-30T08:00:00Z",
   updatedAt: "2026-08-30T08:00:00Z",
@@ -65,6 +68,28 @@ const account: ProviderAccount = {
 
 describe("provider API adapter", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("сохраняет лимит с точными account/version и сигналом отмены", async () => {
+    const updated = { ...account, version: 5, maximumConcurrentExecutions: 12 };
+    sdk.setProviderAccountConcurrency.mockResolvedValue({
+      data: updated,
+      response: new Response(null, { status: 200 }),
+    });
+    const signal = new AbortController().signal;
+    expect(await setProviderAccountConcurrency(account, 12, signal)).toEqual(
+      updated,
+    );
+    expect(sdk.setProviderAccountConcurrency).toHaveBeenCalledWith({
+      path: { providerAccountRef: account.ref },
+      body: { maximumConcurrentExecutions: 12 },
+      headers: {
+        "Idempotency-Key": "request-key",
+        "If-Match": '"4"',
+        "X-CSRF-Token": "csrf-token",
+      },
+      signal,
+    });
+  });
 
   it("передаёт server-side search и cursor без ручной сборки URL", async () => {
     sdk.listProviderAccounts.mockResolvedValue({

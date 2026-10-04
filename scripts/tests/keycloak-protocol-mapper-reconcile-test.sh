@@ -137,9 +137,9 @@ fi
 if rg -q 'replace_mapper' "$bootstrap"; then
   fail 'legacy create-only mapper helper remains active'
 fi
-[[ "$(rg -c '^[[:space:]]*reconcile_mapper ' "$bootstrap")" == 9 ]] ||
+[[ "$(rg -c '^[[:space:]]*reconcile_mapper ' "$bootstrap")" == 10 ]] ||
   fail 'not every canonical mapper uses stable reconcile'
-[[ "$(rg -F -c '"claim.name":"groups","full.path":"false","multivalued":"true"' "$bootstrap")" == 2 ]] ||
-  fail 'group mapper apply and readback must require canonical multivalued output'
+[[ "$(rg -F -c '"claim.name":"groups","full.path":"false","multivalued":"true"' "$bootstrap")" == 1 ]] ||
+  fail 'group mapper must use one canonical multivalued configuration'
 
 printf 'Keycloak protocol mapper reconcile test completed\n'

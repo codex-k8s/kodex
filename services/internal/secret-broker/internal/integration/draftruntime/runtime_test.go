@@ -49,12 +49,12 @@ func runtimeFixture(t *testing.T) (value.DraftWork, *runtimeFake, []byte) {
 	plaintext := []byte("synthetic-draft-value")
 	sum := sha256.Sum256(plaintext)
 	digest := hex.EncodeToString(sum[:])
-	w := value.DraftWork{Kind: value.DraftPublish, OperationRef: "sop_fixture", ClaimantID: "pod_fixture", ClaimGeneration: 3, RuntimeNamespace: "kodex-runtime", TargetRevision: 4, Draft: value.SecretDraft{Ref: "draft_fixture", ProjectRef: "prj_fixture", SecretRef: "sec_fixture01", Generation: 2, ValueType: "STRING"}, Binding: value.SecretDraftBinding{ProjectRef: "prj_fixture", SecretRef: "sec_fixture01", DraftRef: "draft_fixture", DraftGeneration: 2, ValueType: "STRING", ContentSHA256: digest}}
+	w := value.DraftWork{Kind: value.DraftPublish, OperationRef: "sop_fixture", ClaimantID: "pod_fixture", ClaimGeneration: 3, RuntimeNamespace: "kodex-runtime", TargetRevision: 4, Draft: value.SecretDraft{Ref: "draft_fixture", ScopeKind: "PROJECT", OrganizationRef: "org_fixture", ProjectRef: "prj_fixture", SecretRef: "sec_fixture01", Generation: 2, ValueType: "STRING"}, Binding: value.SecretDraftBinding{ScopeKind: "PROJECT", OrganizationRef: "org_fixture", ProjectRef: "prj_fixture", SecretRef: "sec_fixture01", DraftRef: "draft_fixture", DraftGeneration: 2, ValueType: "STRING", ContentSHA256: digest}}
 	name, err := runtimesecret.VersionedKubernetesName(w.Draft.SecretRef, w.TargetRevision)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &runtimeFake{material: kube.Materialization{Namespace: w.RuntimeNamespace, Name: name, OperationRef: w.OperationRef, ClaimGeneration: w.ClaimGeneration, SecretRef: w.Draft.SecretRef, Key: "value", Revision: w.TargetRevision, UID: "fixture-uid", ResourceVersion: "123", ContentSHA256: digest}}
+	f := &runtimeFake{material: kube.Materialization{WorkKind: kube.WorkKindDraft, Namespace: w.RuntimeNamespace, Name: name, OperationRef: w.OperationRef, ClaimGeneration: w.ClaimGeneration, SecretRef: w.Draft.SecretRef, Key: "value", Revision: w.TargetRevision, UID: "fixture-uid", ResourceVersion: "123", ContentSHA256: digest}}
 	return w, f, plaintext
 }
 func TestRuntimePublishReadbackLookupAndDelete(t *testing.T) {

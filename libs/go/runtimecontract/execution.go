@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	RunnerInputSchemaV6       = "kodex.agent-runner-input.v6"
-	RunnerInputSchemaV7       = "kodex.agent-runner-input.v7"
+	RunnerInputSchemaV8       = "kodex.agent-runner-input.v8"
 	RunnerModeTurn            = "TURN"
 	RunnerModeWarm            = "WARM"
 	MaximumRunnerInputBytes   = 2 << 20
@@ -173,7 +172,8 @@ type RunnerInput struct {
 	SystemSTTConfigurationDigest      string                    `json:"system_stt_configuration_digest,omitempty"`
 	ExecutionBindingDigest            string                    `json:"execution_binding_digest,omitempty"`
 	MCPBindingDigest                  string                    `json:"mcp_binding_digest,omitempty"`
-	SystemAssistant                   bool                      `json:"system_assistant"`
+	AssistantScope                    AssistantScope            `json:"assistant_scope"`
+	AssistantProfileRef               string                    `json:"assistant_profile_ref,omitempty"`
 	Instructions                      string                    `json:"instructions"`
 	Task                              string                    `json:"task,omitempty"`
 	BoundedInput                      map[string]any            `json:"bounded_input,omitempty"`
@@ -255,6 +255,9 @@ func (request RunnerProviderCredentialRefreshRequest) Validate() error {
 }
 
 func (input RunnerInput) Validate() error {
+	if input.validateAssistantScope() != nil {
+		return errors.New("runner assistant scope binding is invalid")
+	}
 	if input.PromptServiceTemplateRevision != "" {
 		if _, err := DecodePromptService(input); err != nil {
 			return err
@@ -265,7 +268,7 @@ func (input RunnerInput) Validate() error {
 	if input.ContextSnapshot != nil && input.ContextSnapshot.ValidateFor(input, time.Now()) != nil {
 		return ErrRuntimeContext
 	}
-	if input.Schema != RunnerInputSchemaV7 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
+	if input.Schema != RunnerInputSchemaV8 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
 		input.WorkloadInstance == "" || len(input.WorkloadInstance) > 128 || !opaqueReferencePattern.MatchString(input.OrganizationRef) ||
 		!opaqueReferencePattern.MatchString(input.SessionRef) || !opaqueReferencePattern.MatchString(input.AgentRef) ||
 		!(opaqueReferencePattern.MatchString(input.RuntimeRevisionRef) || systemRuntimeRevisionPattern.MatchString(input.RuntimeRevisionRef)) || input.RuntimeRevisionVersion < 1 ||
@@ -298,7 +301,7 @@ func (input RunnerInput) Validate() error {
 		!validSessionContext(input.SessionContext) || !validIntegrationGrants(input.IntegrationGrants) ||
 		!validCapabilities(input.Capabilities) || ValidateRuntimeEnvironment(input.EnvironmentValues, input.SecretProjections) != nil ||
 		input.EnvironmentImage.Reference != input.ImageReference || input.EnvironmentImage.Digest != input.ImageManifestDigest ||
-		(!input.SystemAssistant && (input.EnvironmentImage.ArtifactRef == "" || input.EnvironmentImage.RecipeRef == "" || input.EnvironmentImage.RecipeGeneration < 1)) {
+		(input.EnvironmentImage.ArtifactRef == "" || input.EnvironmentImage.RecipeRef == "" || input.EnvironmentImage.RecipeGeneration < 1) {
 		return errors.New("runner input is invalid")
 	}
 	usesSTT := containsString(input.Capabilities, "platform.stt.use")
@@ -357,7 +360,7 @@ func (input RunnerInput) Validate() error {
 			return errors.New("runner execution binding digest is invalid")
 		}
 	} else if input.RunRef != "" || input.NodeRef != "" || input.TurnRef != "" || input.LeaseRef != "" ||
-		input.LeaseFence != "" || input.LeaseGeneration != 0 || input.Attempt != 0 || input.Task != "" || !input.SystemAssistant ||
+		input.LeaseFence != "" || input.LeaseGeneration != 0 || input.Attempt != 0 || input.Task != "" || !input.IsSystemAssistant() ||
 		input.ExecutionBindingDigest != "" || input.MCPBindingDigest != "" {
 		return errors.New("warm runner binding is invalid")
 	}
@@ -371,7 +374,7 @@ func (input RunnerInput) Validate() error {
 	}
 	if input.AssistantContext != nil {
 		context := input.AssistantContext
-		if !input.SystemAssistant || len(context.Route) > 500 || len(context.EntityKind) > 80 ||
+		if !input.IsAssistant() || len(context.Route) > 500 || len(context.EntityKind) > 80 ||
 			len(context.EntityRef) > 96 || len(context.EntityName) > 300 || len(context.AllowedOperations) > 32 ||
 			(context.EntityKind == "") != (context.EntityRef == "") || context.EntityVersion != nil && *context.EntityVersion < 1 {
 			return errors.New("runner assistant context is invalid")
@@ -513,12 +516,13 @@ func DecodeRunnerInput(raw []byte) (RunnerInput, error) {
 // которые определяют его неизменяемое окружение и session boundary. Turn и
 // execution input остаются частью полного RuntimeRevisionDigest.
 func WarmCompatibilityDigest(input RunnerInput) (string, error) {
-	if !input.SystemAssistant {
+	if !input.IsSystemAssistant() || input.validateAssistantScope() != nil {
 		return "", errors.New("warm runtime compatibility requires system assistant")
 	}
 	capabilities := append([]string(nil), input.Capabilities...)
 	sort.Strings(capabilities)
 	payload := struct {
+		AssistantScope                AssistantScope
 		OrganizationRef               string
 		SessionRef                    string
 		AgentRef                      string
@@ -578,6 +582,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		ContextSnapshot               *RuntimeContextSnapshot
 		KubernetesAccessProfile       RuntimeKubernetesAccessProfile
 	}{
+		AssistantScope:  input.AssistantScope,
 		OrganizationRef: input.OrganizationRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef,
 		ImageReference: input.ImageReference, ImageManifestDigest: input.ImageManifestDigest,
 		EnvironmentImage: input.EnvironmentImage, EnvironmentTools: input.EnvironmentTools,

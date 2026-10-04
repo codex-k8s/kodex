@@ -7,21 +7,31 @@ import type {
   AssistantPlan,
   SystemAssistant,
   ListAssistantConversationsResponse,
+  ProjectAssistantProfile,
+  Agent,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
 
 const createConversationMock = vi.hoisted(() => vi.fn());
 const appendTurnMock = vi.hoisted(() => vi.fn());
+const cancelAssistantTurnMock = vi.hoisted(() => vi.fn());
 const archiveConversationMock = vi.hoisted(() => vi.fn());
 const applyPlanDraftMock = vi.hoisted(() => vi.fn());
 const readAssistantMock = vi.hoisted(() => vi.fn());
 const readConversationsMock = vi.hoisted(() => vi.fn());
+const readProjectAssistantMock = vi.hoisted(() => vi.fn());
+const readProjectAssistantAgentMock = vi.hoisted(() => vi.fn());
+const createProjectAssistantProfileMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/assistant/api", () => ({
   readAssistant: readAssistantMock,
   readConversations: readConversationsMock,
+  readProjectAssistant: readProjectAssistantMock,
+  readProjectAssistantAgent: readProjectAssistantAgentMock,
+  createProjectAssistantProfile: createProjectAssistantProfileMock,
   createConversation: createConversationMock,
   appendTurn: appendTurnMock,
+  cancelAssistantTurn: cancelAssistantTurnMock,
   archiveConversation: archiveConversationMock,
   renameConversation: vi.fn(),
   savePlanDraft: vi.fn(),
@@ -77,6 +87,8 @@ function plan(state: AssistantPlan["state"] = "VALID"): AssistantPlan {
 function conversation(value: AssistantPlan = plan()): AssistantConversation {
   return {
     ref: "cnv_sales",
+    assistantScope: "SYSTEM",
+    assistantRef: "ast_system_assistant",
     state: "ACTIVE",
     version: 2,
     title: "Настройка отдела продаж",
@@ -137,6 +149,151 @@ function deferred<T>(): {
 }
 
 describe("assistant workspace store", () => {
+  const profile: ProjectAssistantProfile = {
+    ref: "aprf_sales",
+    projectRef: "prj_sales",
+    agentRef: "agt_project_assistant",
+    name: "Помощник продаж",
+    state: "ACTIVE",
+    version: 1,
+    createdAt: "2026-10-03T00:00:00Z",
+    updatedAt: "2026-10-03T00:00:00Z",
+  };
+  const projectAgent: Agent = {
+    ref: profile.agentRef,
+    projectRef: profile.projectRef,
+    version: 1,
+    name: profile.name,
+    purpose: "Продажи",
+    roleDescription: "Помощник",
+    state: "DRAFT",
+    enabled: true,
+    system: false,
+    runtimeRef: "runtime_sales",
+    runtimeName: "Продажи",
+    runtimeReady: false,
+    capabilities: [],
+    integrations: [],
+    knowledgeArtifactRefs: [],
+    nextActions: ["EDIT"],
+    updatedAt: profile.updatedAt,
+  };
+  const projectConversation = (): AssistantConversation => ({
+    ...conversation(),
+    ref: "cnv_project_assistant",
+    assistantScope: "PROJECT",
+    assistantRef: profile.agentRef,
+    assistantProfileRef: profile.ref,
+    turns: [],
+  });
+
+  it("читает профиль Проекта отдельно и не смешивает историю двух помощников", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock
+      .mockResolvedValueOnce({ items: [conversation()] })
+      .mockResolvedValueOnce({ items: [projectConversation()] });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    await store.selectAssistantScope("PROJECT");
+    expect(store.projectAssistant).toEqual(profile);
+    expect(store.projectAssistantAgent).toEqual(projectAgent);
+    expect(store.selectedConversation?.assistantRef).toBe(profile.agentRef);
+    expect(readConversationsMock.mock.lastCall?.[3]).toMatchObject({
+      assistantScope: "PROJECT",
+      assistantRef: profile.agentRef,
+    });
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation(), projectConversation()],
+      "prj_sales",
+    );
+    expect(store.conversations.map((value) => value.assistantScope)).toEqual([
+      "PROJECT",
+    ]);
+    store.setContext({ ...context, route: "/" }, undefined);
+    expect(store.assistantScope).toBe("SYSTEM");
+    expect(store.projectAssistant).toBeUndefined();
+  });
+
+  it("404 профиля не подменяет проектного помощника общесистемным", async () => {
+    readProjectAssistantMock.mockRejectedValue(
+      new AppProblem({
+        status: 404,
+        code: "NOT_FOUND",
+        retryable: false,
+        kind: "not-found",
+      }),
+    );
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales", true, "PROJECT");
+    expect(store.assistantScope).toBe("PROJECT");
+    expect(store.projectAssistant).toBeUndefined();
+    expect(store.conversations).toEqual([]);
+    expect(store.problem).toBeUndefined();
+    expect(readConversationsMock).not.toHaveBeenCalled();
+  });
+
+  it("перечитывает readiness только после realtime invalidation нужного Проекта", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [projectConversation()] });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales", true, "PROJECT");
+    const before = readProjectAssistantMock.mock.calls.length;
+    await store.invalidateProjectAssistantFromRealtime("prj_other");
+    expect(readProjectAssistantMock).toHaveBeenCalledTimes(before);
+    readProjectAssistantAgentMock.mockResolvedValue({
+      ...projectAgent,
+      version: 2,
+      runtimeReady: true,
+      nextActions: ["EDIT", "LAUNCH"],
+    });
+    await store.invalidateProjectAssistantFromRealtime("prj_sales");
+    expect(readProjectAssistantMock).toHaveBeenCalledTimes(before + 1);
+    expect(store.projectAssistantAgent?.runtimeReady).toBe(true);
+    expect(store.selectedConversation?.assistantRef).toBe(profile.agentRef);
+  });
+
+  it("игнорирует поздний profile read после смены контекста", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [] });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales", true, "PROJECT");
+    const pending = deferred<ProjectAssistantProfile>();
+    readProjectAssistantMock.mockReturnValueOnce(pending.promise);
+    const refresh = store.invalidateProjectAssistantFromRealtime("prj_sales");
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    pending.resolve(profile);
+    await refresh;
+    expect(store.projectAssistant).toBeUndefined();
+    expect(store.projectAssistantAgent).toBeUndefined();
+    expect(store.problem).toBeUndefined();
+  });
+
+  it("закрыто отклоняет чужую assistant history и сохраняет отдельный scope создания", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [] });
+    createConversationMock.mockResolvedValue(projectConversation());
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales", true, "PROJECT");
+    await store.startConversation();
+    expect(createConversationMock).toHaveBeenCalledWith(
+      context,
+      "prj_sales",
+      "PROJECT",
+    );
+    readConversationsMock.mockResolvedValue({ items: [conversation()] });
+    await store.load(context, "prj_sales", true, "PROJECT");
+    expect(store.problem).toBeDefined();
+    expect(store.conversations).toEqual([]);
+  });
   it("убирает прежнюю защищённую проекцию после отказа свежего чтения", async () => {
     readAssistantMock.mockResolvedValue(systemAssistant());
     readConversationsMock.mockResolvedValue({ items: [conversation()] });
@@ -180,7 +337,12 @@ describe("assistant workspace store", () => {
       "prj_sales",
       undefined,
       expect.any(AbortSignal),
-      { query: "second", state: "ACTIVE" },
+      {
+        query: "second",
+        state: "ACTIVE",
+        assistantScope: "SYSTEM",
+        assistantRef: "ast_system_assistant",
+      },
     );
     pending.resolve({ items: [conversation()] });
     await more;
@@ -225,6 +387,9 @@ describe("assistant workspace store", () => {
     applyPlanDraftMock.mockReset();
     readAssistantMock.mockReset();
     readConversationsMock.mockReset();
+    readProjectAssistantMock.mockReset();
+    readProjectAssistantAgentMock.mockReset();
+    createProjectAssistantProfileMock.mockReset();
   });
 
   afterEach(() => {
@@ -242,7 +407,7 @@ describe("assistant workspace store", () => {
     vi.stubGlobal("window", {
       sessionStorage: {
         getItem: (key: string) =>
-          key === "kodex.assistant.workspace.conversation.prj_sales"
+          key === "kodex.assistant.workspace.conversation.SYSTEM.prj_sales"
             ? selected.ref
             : null,
       },
@@ -423,11 +588,17 @@ describe("assistant workspace store", () => {
 
     await store.send("Создай сотрудника");
 
-    expect(createConversationMock).toHaveBeenCalledWith(context, "prj_sales");
+    expect(createConversationMock).toHaveBeenCalledWith(
+      context,
+      "prj_sales",
+      "SYSTEM",
+    );
     expect(appendTurnMock).toHaveBeenCalledWith(
       created,
       "Создай сотрудника",
       context,
+      undefined,
+      "QUEUE",
     );
     expect(store.selectedConversation?.turns).toHaveLength(1);
   });
@@ -448,7 +619,11 @@ describe("assistant workspace store", () => {
 
     await store.startConversation();
 
-    expect(createConversationMock).toHaveBeenCalledWith(context, "prj_sales");
+    expect(createConversationMock).toHaveBeenCalledWith(
+      context,
+      "prj_sales",
+      "SYSTEM",
+    );
     expect(store.selectedRef).toBe(created.ref);
     expect(store.selectedConversation?.turns).toEqual([]);
     expect(store.conversations).toHaveLength(2);
@@ -559,7 +734,64 @@ describe("assistant workspace store", () => {
       "Изучи вложения",
       context,
       "aset_contracts",
+      "QUEUE",
     );
+  });
+
+  it("передаёт выбранный режим доставки и оптимистично останавливает точный ход", async () => {
+    const initial = {
+      ...conversation(),
+      version: 4,
+      turns: [
+        {
+          ...userTurn("RUNNING"),
+          runRef: "run_active",
+          runVersion: 2,
+        },
+      ],
+    };
+    const accepted = {
+      ...initial,
+      version: 5,
+      turns: [
+        ...initial.turns,
+        {
+          ...userTurn("QUEUED"),
+          ref: "trn_immediate",
+          sequence: 3,
+          content: "Выполни это сейчас",
+          runRef: "run_immediate",
+        },
+      ],
+    };
+    appendTurnMock.mockResolvedValue(accepted);
+    cancelAssistantTurnMock.mockResolvedValue("run_immediate");
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [initial];
+    store.selectedRef = initial.ref;
+
+    await store.send("Выполни это сейчас", undefined, "INTERRUPT_ACTIVE");
+    expect(appendTurnMock).toHaveBeenCalledWith(
+      initial,
+      "Выполни это сейчас",
+      context,
+      undefined,
+      "INTERRUPT_ACTIVE",
+    );
+
+    await store.stopActiveTurn();
+    expect(cancelAssistantTurnMock).toHaveBeenCalledWith(accepted);
+    expect(
+      store.selectedConversation?.turns.find(
+        (turn) => turn.runRef === "run_immediate",
+      )?.state,
+    ).toBe("CANCELLED");
+    expect(
+      store.selectedConversation?.turns.find(
+        (turn) => turn.runRef === "run_active",
+      )?.state,
+    ).toBe("RUNNING");
   });
 
   it("применяет terminal ответ из realtime snapshot без polling", async () => {

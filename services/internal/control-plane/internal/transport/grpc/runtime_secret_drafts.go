@@ -11,7 +11,7 @@ import (
 )
 
 func castSecretDraft(d entity.RuntimeSecretDraft) *cp.RuntimeSecretDraft {
-	return &cp.RuntimeSecretDraft{Ref: d.Ref, Version: d.Version, Generation: d.Generation, ProjectRef: d.ProjectRef, SecretRef: d.SecretRef, SecretVersion: d.SecretVersion, Name: d.Name, Description: d.Description, ValueType: runtimeSecretValueType(d.ValueType), State: cp.RuntimeSecretDraftState(cp.RuntimeSecretDraftState_value["RUNTIME_SECRET_DRAFT_STATE_"+d.State]), PublishedRevision: d.PublishedRevision, CreatedAt: timestamp(d.CreatedAt), UpdatedAt: timestamp(d.UpdatedAt), ExpiresAt: timestamp(d.ExpiresAt)}
+	return &cp.RuntimeSecretDraft{ScopeKind: runtimeSecretScopeKind(d.ScopeKind), OrganizationRef: d.OrganizationRef, Ref: d.Ref, Version: d.Version, Generation: d.Generation, ProjectRef: d.ProjectRef, SecretRef: d.SecretRef, SecretVersion: d.SecretVersion, Name: d.Name, Description: d.Description, ValueType: runtimeSecretValueType(d.ValueType), State: cp.RuntimeSecretDraftState(cp.RuntimeSecretDraftState_value["RUNTIME_SECRET_DRAFT_STATE_"+d.State]), PublishedRevision: d.PublishedRevision, CreatedAt: timestamp(d.CreatedAt), UpdatedAt: timestamp(d.UpdatedAt), ExpiresAt: timestamp(d.ExpiresAt)}
 }
 func castDraftEncrypted(d *entity.RuntimeSecretDraftEncryptedDescriptor) *cp.RuntimeSecretDraftEncryptedDescriptor {
 	if d == nil {
@@ -54,11 +54,26 @@ func (server *Server) prepareSecretDraft(ctx context.Context, method string, inp
 	if err != nil {
 		return nil, transportError(err)
 	}
+	return castSecretDraftReceipt(result), nil
+}
+
+func castSecretDraftReceipt(result entity.RuntimeSecretDraftOperationReceipt) *cp.RuntimeSecretDraftOperationReceipt {
 	response := &cp.RuntimeSecretDraftOperationReceipt{OperationGrant: result.OperationGrant, OperationRef: result.OperationRef, State: runtimeSecretOperationState(result.State), ExpiresAt: draftOptionalTime(result.ExpiresAt), Draft: castSecretDraft(result.Draft), FailureCode: runtimeSecretFailureCode(result.FailureCode)}
 	if result.TerminalSecret != nil {
 		response.TerminalSecret = castRuntimeSecret(*result.TerminalSecret)
 	}
-	return response, nil
+	return response
+}
+func (server *Server) PrepareOrganizationRuntimeSecretDraft(ctx context.Context, request *cp.PrepareOrganizationRuntimeSecretDraftRequest) (*cp.PrepareOrganizationRuntimeSecretDraftResponse, error) {
+	p, err := principal(ctx, cp.PlatformCommandService_PrepareOrganizationRuntimeSecretDraft_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	result, err := server.service.PrepareOrganizationRuntimeSecretDraft(ctx, p, port.RuntimeSecretDraftPrepareInput{Kind: "SAVE", Mutation: mutation(request.GetMutation()), Name: request.GetName(), Description: request.GetDescription(), ValueType: runtimeSecretValueTypeName(request.GetValueType()), ExpectedContentSHA256: request.GetExpectedContentSha256()})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &cp.PrepareOrganizationRuntimeSecretDraftResponse{Operation: castSecretDraftReceipt(result)}, nil
 }
 func (server *Server) PrepareSaveRuntimeSecretDraft(ctx context.Context, request *cp.PrepareSaveRuntimeSecretDraftRequest) (*cp.PrepareSaveRuntimeSecretDraftResponse, error) {
 	operation, err := server.prepareSecretDraft(ctx, cp.PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName, port.RuntimeSecretDraftPrepareInput{Kind: "SAVE", Mutation: mutation(request.GetMutation()), SecretRef: request.GetSecretRef(), ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ValueType: runtimeSecretValueTypeName(request.GetValueType()), ExpectedContentSHA256: request.GetExpectedContentSha256()})

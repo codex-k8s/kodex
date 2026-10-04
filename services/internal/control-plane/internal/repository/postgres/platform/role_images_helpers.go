@@ -66,7 +66,7 @@ func scanRecipe(row roleImageRowScanner) (entity.RoleImageRecipe, string, error)
 		&recipe.PolicyRevision, &recipe.PolicySHA256, &recipe.RoleRuntimeContractRevision,
 		&recipe.RoleRuntimeContractSHA256, &recipe.ActiveImageArtifactRef,
 		&recipe.PromotedImageReference, &recipe.Version, &recipe.CreatedAt, &recipe.UpdatedAt,
-		&ownerSubjectRef)
+		&ownerSubjectRef, &recipe.ScopeKind, &recipe.OrganizationRef)
 	if err != nil {
 		return entity.RoleImageRecipe{}, "", err
 	}
@@ -85,7 +85,7 @@ func scanLockedRecipe(row roleImageRowScanner) (lockedRecipe, error) {
 		&result.Recipe.SpecSHA256, &result.Recipe.PolicyRevision, &result.Recipe.PolicySHA256,
 		&result.Recipe.RoleRuntimeContractRevision, &result.Recipe.RoleRuntimeContractSHA256,
 		&result.ActiveArtifactID, &result.Recipe.Version, &result.Recipe.CreatedAt,
-		&result.Recipe.UpdatedAt)
+		&result.Recipe.UpdatedAt, &result.Recipe.ScopeKind, &result.Recipe.OrganizationRef)
 	if err != nil {
 		return lockedRecipe{}, err
 	}
@@ -105,7 +105,8 @@ func scanBuild(row roleImageRowScanner) (entity.ImageBuild, error) {
 		&result.DiagnosticSummary, &result.LeaseTokenSHA256, &result.ClaimantWorkload,
 		&result.Version, &result.RecipeVersion, &result.RecipeGeneration, &result.Fence,
 		&result.AuthorityGeneration, &result.Attempt, &result.ProgressPercent,
-		&result.LeaseExpiresAt, &result.CreatedAt, &result.UpdatedAt, &specification)
+		&result.LeaseExpiresAt, &result.CreatedAt, &result.UpdatedAt, &specification,
+		&result.ScopeKind, &result.OrganizationRef, &result.ProjectRef)
 	if err != nil {
 		return entity.ImageBuild{}, err
 	}
@@ -132,7 +133,8 @@ func scanLockedBuild(row roleImageRowScanner) (lockedBuild, error) {
 		&result.Build.ProgressPercent, &result.Build.LeaseExpiresAt,
 		&result.Build.CreatedAt, &result.Build.UpdatedAt, &result.RecipeID,
 		&result.ProjectID, &specification, &result.PolicyRevision, &result.PolicySHA256,
-		&result.ContractRevision, &result.ContractSHA256)
+		&result.ContractRevision, &result.ContractSHA256,
+		&result.Build.ScopeKind, &result.Build.OrganizationRef, &result.Build.ProjectRef)
 	if err != nil {
 		return lockedBuild{}, err
 	}
@@ -160,7 +162,8 @@ func scanRoleImageArtifactWith(row roleImageRowScanner, additionalDestinations .
 		&result.RecipeGeneration, &result.BuildVersion, &result.PolicyRevision,
 		&result.AdmissionRevision, &result.RoleRuntimeContractRevision,
 		&result.BuildAttempt, &result.PromotedAt, &result.CreatedAt, &result.UpdatedAt,
-		&result.PromotionState, &result.PromotionRequested}
+		&result.PromotionState, &result.PromotionRequested,
+		&result.ScopeKind, &result.OrganizationRef, &result.ProjectRef}
 	destinations = append(destinations, additionalDestinations...)
 	err := row.Scan(destinations...)
 	if err != nil {
@@ -202,7 +205,8 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 		&result.PromotionState, &result.PromotionTokenSHA256, &result.PromotionFence,
 		&result.PromotionAuthorityGeneration, &result.PromotionExpiresAt,
 		&result.AuthorizationTokenSHA256, &result.AuthorizationExpiresAt,
-		&result.RecipeID, &result.PromotionRequestID)
+		&result.RecipeID, &result.PromotionRequestID,
+		&result.Artifact.ScopeKind, &result.Artifact.OrganizationRef, &result.Artifact.ProjectRef)
 	if err != nil {
 		return lockedArtifact{}, err
 	}
@@ -402,12 +406,16 @@ func (repository *Repository) storeRoleImageReceipt(ctx context.Context, tx pgx.
 }
 
 func (repository *Repository) auditRoleImage(ctx context.Context, tx pgx.Tx, current scope, projectID, action, resourceKind, resourceRef, summary string) error {
+	var auditProjectID any
+	if projectID != "" {
+		auditProjectID = projectID
+	}
 	ref, err := newRef("aud")
 	if err != nil {
 		return errs.ErrUnavailable
 	}
 	if _, err := tx.Exec(ctx, queryCommandsExecuteInsertAuditEventsRefProjectIdAction,
-		ref, current.organizationID, projectID, current.actorID, action, resourceKind,
+		ref, current.organizationID, auditProjectID, current.actorID, action, resourceKind,
 		resourceRef, summary, current.correlationRef); err != nil {
 		return errs.ErrUnavailable
 	}
@@ -458,6 +466,7 @@ func roleImageTransactionConflict(err error) bool {
 
 func newRoleImageBuildInput(recipe entity.RoleImageRecipe, immutableBuildSHA256 string) entity.RoleImageBuildInput {
 	return entity.RoleImageBuildInput{
+		ScopeKind: recipe.ScopeKind, OrganizationRef: recipe.OrganizationRef, ProjectRef: recipe.ProjectRef,
 		RecipeRef: recipe.Ref, RecipeVersion: recipe.Version, RecipeGeneration: recipe.Generation,
 		SpecSHA256: recipe.SpecSHA256, BaseImageReference: recipe.Input.BaseImageReference,
 		BaseImageDigest: recipe.Input.BaseImageDigest, SourceRef: recipe.Input.SourceRef,

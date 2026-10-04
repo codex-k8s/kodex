@@ -27,6 +27,8 @@ describe("RuntimeSecretsWorkspace", () => {
     const store = useRuntimeSecretsStore(pinia);
     store.items = [
       {
+        scopeKind: "PROJECT",
+        organizationRef: "org_synthetic",
         ref: "secret_main",
         version: 3,
         projectRef: "project_sales",

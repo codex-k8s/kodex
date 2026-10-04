@@ -146,16 +146,18 @@ function parsePolicy(
       "networkDestinations",
       "resources",
       "volumes",
+      "webAccess",
     ]) ||
-    (value.kubernetesAccess !== "NONE" &&
-      value.kubernetesAccess !== "READ_OWN_EXECUTION") ||
+    value.kubernetesAccess !== "NONE" ||
     !Array.isArray(value.networkDestinations) ||
     !value.networkDestinations.every((item) =>
-      ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY", "KUBERNETES_API"].includes(
+      ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY"].includes(
         String(item),
       ),
     ) ||
     !isRecord(value.resources) ||
+    !isRecord(value.webAccess) ||
+    !Array.isArray(value.webAccess.rules) ||
     !hasExactKeys(value.resources, [
       "cpuLimitMilli",
       "cpuRequestMilli",
@@ -176,6 +178,8 @@ function parsePolicy(
     volumes,
     networkDestinations:
       value.networkDestinations as RuntimeEnvironmentPolicyInput["networkDestinations"],
+    webAccess:
+      value.webAccess as unknown as RuntimeEnvironmentPolicyInput["webAccess"],
     kubernetesAccess: value.kubernetesAccess,
   };
 }

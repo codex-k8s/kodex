@@ -14,8 +14,12 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("./api", () => api);
 import { useRoleImagesStore } from "./store";
+import { usePlatformStore } from "@/features/platform/store";
+import type { BootstrapState } from "@/shared/api/generated/openapi/types.gen";
 
 const recipe: RoleImageRecipe = {
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   sourceAvailable: true,
   ref: "image_synthetic",
   projectRef: "project_synthetic",
@@ -33,7 +37,33 @@ const recipe: RoleImageRecipe = {
 describe("role image catalog store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    usePlatformStore().bootstrap = {
+      organizationRef: "org_synthetic",
+    } as BootstrapState;
     vi.resetAllMocks();
+  });
+  it("закрывает PROJECT snapshot без bootstrap org вместо доверия owner из DTO", () => {
+    usePlatformStore().bootstrap = undefined;
+    const store = useRoleImagesStore();
+    expect(() =>
+      store.applyCatalogSnapshot(recipe.projectRef, [recipe]),
+    ).toThrow("anchor");
+    expect(store.recipes[recipe.ref]).toBeUndefined();
+    expect(store.catalog(recipe.projectRef)).toEqual([]);
+  });
+  it("сверяет PROJECT snapshot с bootstrap org и скрывает прежний owner cache", () => {
+    const platform = usePlatformStore();
+    platform.bootstrap = { organizationRef: "org_synthetic" } as BootstrapState;
+    const store = useRoleImagesStore();
+    store.applyCatalogSnapshot(recipe.projectRef, [recipe]);
+    expect(() =>
+      store.applyCatalogSnapshot(recipe.projectRef, [
+        { ...recipe, organizationRef: "org_foreign" },
+      ]),
+    ).toThrow();
+    expect(store.catalog(recipe.projectRef)).toHaveLength(1);
+    platform.bootstrap = { organizationRef: "org_foreign" } as BootstrapState;
+    expect(store.catalog(recipe.projectRef)).toEqual([]);
   });
   it("убирает ранее прочитанный исходник после отказа защищённого detail", async () => {
     api.loadRoleImageDetail.mockResolvedValueOnce({ recipe, builds: [] });

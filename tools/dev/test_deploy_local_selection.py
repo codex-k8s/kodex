@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import subprocess
+import json
+import re
 import unittest
 
 
@@ -59,6 +61,122 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertLess(registries, seed)
         self.assertLess(seed, full_readiness)
 
+    def test_supply_chain_materialization_admission_is_exact_and_precedes_controller(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        match = re.search(r"apply_render runtime-materialization-admission\s+'([^']*)'", stage)
+        self.assertIsNotNone(match)
+        self.assertLess(match.start(), stage.index('apply_render image-supply-chain-controllers'))
+        names = [
+            "runtime-execution-ticket-exact-projection", "runtime-execution-service-account",
+            "runtime-execution-rbac", "runtime-execution-network-policy",
+            "runtime-revision-exact-configmap-projection", "runtime-role-pod-exact-secret-projection",
+        ]
+        accepted = [
+            {"kind": kind, "metadata": {"name": name}}
+            for name in names
+            for kind in ("ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding")
+        ]
+        rejected = [
+            {"kind": kind, "metadata": {"name": name}}
+            for name in names + ["other-project", "runtime-role-pod-exact-secret-projection-shadow"]
+            for kind in ("Secret", "ConfigMap", "Deployment")
+        ] + [
+            {"kind": kind, "metadata": {"name": name}}
+            for name in ("other-project", "runtime-role-pod-exact-secret-projection-shadow")
+            for kind in ("ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding")
+        ]
+        result = subprocess.run(
+            ["jq", "-c", match.group(1)], text=True, capture_output=True, timeout=5,
+            input="\n".join(json.dumps(item) for item in accepted + rejected),
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], accepted)
+        self.assertIn("runtime materialization admission readback mismatch", stage)
+
+    def test_supply_chain_admission_script_is_updated_while_controller_is_paused(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        match = re.search(r"apply_render image-admission-runtime-configuration\s+'([^']*)'", stage)
+        self.assertIsNotNone(match)
+        self.assertLess(stage.index('cleanup_local_image_admission_runs'), match.start())
+        self.assertLess(match.start(), stage.index('apply_render image-supply-chain-controllers'))
+        accepted = {"kind": "ConfigMap", "metadata": {"name": "kodex-image-admission", "namespace": "kodex-system"}}
+        rejected = [
+            {"kind": kind, "metadata": {"name": name, "namespace": namespace}}
+            for kind, name, namespace in (
+                ("Secret", "kodex-image-admission", "kodex-system"),
+                ("ConfigMap", "kodex-image-admission", "other-project"),
+                ("ConfigMap", "kodex-image-admission-shadow", "kodex-system"),
+                ("ConfigMap", "kodex-image-admission-policy", "kodex-system"),
+            )
+        ]
+        result = subprocess.run(
+            ["jq", "-c", match.group(1)], text=True, capture_output=True, timeout=5,
+            input="\n".join(json.dumps(item) for item in [accepted] + rejected),
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], [accepted])
+        self.assertIn("live image admission runtime configuration readback mismatch", source)
+
+    def test_control_plane_catalog_precedes_start_and_pins_pod_template(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == core ]]'):]
+        match = re.search(r"apply_render core-role-environment-catalog\s+'([^']*)'", stage)
+        self.assertIsNotNone(match)
+        self.assertLess(match.start(), stage.index('apply_render core-application'))
+        accepted = {"kind": "ConfigMap", "metadata": {"name": "kodex-role-environments", "namespace": "kodex-system"}}
+        rejected = [
+            {"kind": "Secret", "metadata": accepted["metadata"]},
+            {"kind": "ConfigMap", "metadata": {"name": "kodex-role-environments", "namespace": "other-project"}},
+        ]
+        result = subprocess.run(
+            ["jq", "-c", match.group(1)], text=True, capture_output=True, timeout=5,
+            input="\n".join(json.dumps(item) for item in [accepted] + rejected),
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], [accepted])
+        renderer = SCRIPT.with_name("render-local.sh").read_text()
+        self.assertIn('kodex.dev/role-environment-catalog-sha256', renderer)
+        self.assertIn('ROLE_ENVIRONMENT_CATALOG_DIGEST', renderer)
+
+    def test_materialization_readback_accepts_only_approved_api_defaults(self):
+        source = SCRIPT.read_text()
+        match = re.search(
+            r"canonical_runtime_admission_specs\(\) \{.*?jq -scS '([^']*)'", source, re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+
+        def canonical(spec):
+            result = subprocess.run(
+                ["jq", "-scS", match.group(1)], input=json.dumps(spec),
+                text=True, capture_output=True, timeout=5,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return result.stdout
+
+        for field in ("matchConstraints", "matchResources"):
+            raw = {field: {"resourceRules": [{"resources": ["pods"]}]}, "failurePolicy": "Fail"}
+            defaulted = json.loads(json.dumps(raw))
+            defaulted[field].update({
+                "matchPolicy": "Equivalent", "namespaceSelector": {}, "objectSelector": {},
+            })
+            defaulted[field]["resourceRules"][0]["scope"] = "*"
+            self.assertEqual(canonical(raw), canonical(defaulted))
+            for key, value in (("matchPolicy", "Exact"), ("namespaceSelector", {"matchLabels": {"foreign": "yes"}})):
+                changed = json.loads(json.dumps(defaulted))
+                changed[field][key] = value
+                self.assertNotEqual(canonical(raw), canonical(changed))
+            changed = json.loads(json.dumps(defaulted))
+            changed[field]["resourceRules"][0]["scope"] = "Namespaced"
+            self.assertNotEqual(canonical(raw), canonical(changed))
+            changed = json.loads(json.dumps(defaulted))
+            changed["failurePolicy"] = "Ignore"
+            self.assertNotEqual(canonical(raw), canonical(changed))
+            changed = json.loads(json.dumps(defaulted))
+            changed["unexpected"] = True
+            self.assertNotEqual(canonical(raw), canonical(changed))
+
     def test_unknown_and_noncore_selection_are_rejected(self):
         for workload, stage in [("stt-provider-smoke", "core"),
                                 ("stt-tts-service;echo invalid", "core"),
@@ -69,6 +187,13 @@ class DeployLocalSelectionTest(unittest.TestCase):
                 result = self.run_selection(workload, stage)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("workload selection requires", result.stderr)
+
+    def test_full_core_applies_the_synthetic_integration_fixture(self):
+        source = SCRIPT.read_text()
+        core = source[source.index('  if [[ "$stage" == core ]]'):]
+        full_selection = core[core.index("apply_render core-applications"):]
+        full_selection = full_selection[:full_selection.index("      '")]
+        self.assertIn("integration-synthetic", full_selection)
 
 
 if __name__ == "__main__":

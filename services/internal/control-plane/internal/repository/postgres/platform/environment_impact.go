@@ -25,9 +25,9 @@ var queryEnvironmentImpactConsumers string
 
 func (repository *Repository) environmentImpactTarget(ctx context.Context, tx pgx.Tx, current scope, ref, version string) (entity.RuntimeEnvironmentImpact, string, error) {
 	var result entity.RuntimeEnvironmentImpact
-	var projectRef, projectID string
+	var projectRef, projectID, scopeKind string
 	err := tx.QueryRow(ctx, queryEnvironmentImpactTarget, current.organizationID, ref, version).Scan(
-		&result.EnvironmentRef, &result.EnvironmentVersion, &result.TargetVersionRef, &result.TargetDigest, &projectRef, &projectID)
+		&result.EnvironmentRef, &result.EnvironmentVersion, &result.TargetVersionRef, &result.TargetDigest, &projectRef, &projectID, &scopeKind)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, "", errs.ErrNotFound
 	}
@@ -37,7 +37,7 @@ func (repository *Repository) environmentImpactTarget(ctx context.Context, tx pg
 	if current.authorityProjectID != "" && current.authorityProjectID != projectID {
 		return result, "", errs.ErrForbidden
 	}
-	if err := repository.requireAccess(ctx, tx, current, "project.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: projectRef}); err != nil {
+	if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, scopeKind, projectRef); err != nil {
 		return result, "", err
 	}
 	return result, projectRef, nil
@@ -78,7 +78,7 @@ func (repository *Repository) GetRuntimeEnvironmentImpact(ctx context.Context, p
 	}
 	for rows.Next() {
 		var item entity.RuntimeEnvironmentConsumer
-		if err := rows.Scan(&item.AgentRef, &item.AgentVersion, &item.BindingRef, &item.BindingVersion, &item.VersionRef, &item.ProjectRef, &result.Total); err != nil {
+		if err := rows.Scan(&item.AgentRef, &item.AgentVersion, &item.BindingRef, &item.BindingVersion, &item.VersionRef, &item.ProjectRef, &item.ScopeKind, &item.OrganizationRef, &result.Total); err != nil {
 			rows.Close()
 			return result, errs.ErrUnavailable
 		}
@@ -119,6 +119,13 @@ func (repository *Repository) rebindRuntimeEnvironment(ctx context.Context, tx p
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, current, payload.EnvironmentRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.authorizeRuntimeEnvironmentConsumers(ctx, tx, current, environment, payload.Consumers); err != nil {
+		return commandOutcome{}, err
+	}
 	if target.EnvironmentVersion != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
@@ -129,9 +136,6 @@ func (repository *Repository) rebindRuntimeEnvironment(ctx context.Context, tx p
 		if consumer.AgentRef == "" || consumer.BindingRef == "" || consumer.VersionRef == "" || consumer.AgentVersion < 1 || consumer.BindingVersion < 1 ||
 			(i > 0 && consumers[i-1].AgentRef == consumer.AgentRef) {
 			return commandOutcome{}, errs.ErrInvalid
-		}
-		if err := repository.requireAccess(ctx, tx, current, "agent.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: consumer.AgentRef}); err != nil {
-			return commandOutcome{}, err
 		}
 		if _, err := repository.lockRuntimeAgent(ctx, tx, current, consumer.AgentRef); err != nil {
 			return commandOutcome{}, err

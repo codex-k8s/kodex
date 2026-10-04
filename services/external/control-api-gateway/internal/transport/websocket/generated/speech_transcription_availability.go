@@ -3,7 +3,7 @@
 package generated
 
 type SpeechTranscriptionAvailability struct {
-	Available bool `json:"available"`
-	Reason string `json:"reason"`
+	Available  bool    `json:"available"`
+	Reason     string  `json:"reason"`
 	ValidUntil *string `json:"validUntil,omitempty"`
 }

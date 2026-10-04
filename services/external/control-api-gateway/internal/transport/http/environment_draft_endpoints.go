@@ -20,6 +20,40 @@ func (server *Server) GetRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.
 	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
+func (server *Server) CreateSystemRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, p generated.CreateSystemRuntimeEnvironmentDraftParams) {
+	body, ok := decodeJSON[generated.RuntimeEnvironmentDraftCreateInput](w, r)
+	if !ok {
+		return
+	}
+	expected := int64(0)
+	if body.ExpectedEnvironmentVersion != nil {
+		expected = *body.ExpectedEnvironmentVersion
+	}
+	if (body.EnvironmentRef == nil) != (body.ExpectedEnvironmentVersion == nil) || expected < 0 || expected > maximumSafeJSONInteger || body.EnvironmentRef != nil && (stringValue(body.EnvironmentRef) == "" || expected < 1) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	specification, ok := environmentDraftSpecificationInput(w, body.Specification)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, "")
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.CreateOrganizationRuntimeEnvironmentDraft(r.Context(), &controlplanev1.CreateOrganizationRuntimeEnvironmentDraftRequest{Mutation: mutation, EnvironmentRef: stringValue(body.EnvironmentRef), ExpectedEnvironmentVersion: expected, Specification: specification})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	draft := response.GetDraft()
+	if draft.GetScopeKind() != controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION || draft.GetEnvironmentRef() != stringValue(body.EnvironmentRef) || draft.GetExpectedEnvironmentVersion() != expected {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeEnvironmentDraft(w, http.StatusCreated, draft, "", "")
+}
+
 func (server *Server) CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateRuntimeEnvironmentDraftParams) {
 	r, ok := withProjectReference(w, r, projectRef)
 	if !ok {
@@ -123,6 +157,10 @@ func (server *Server) PublishRuntimeEnvironmentDraft(w http.ResponseWriter, r *h
 	plan, valid := revisionImpactPlanView(response.GetPlan())
 	environment := response.GetEnvironment()
 	draft := response.GetDraft()
+	if !validRuntimeResourceScope(runtimeResourceScopeKind(environment.GetScopeKind().String()), environment.GetOrganizationRef(), environment.GetProjectRef()) || environment.GetScopeKind() != draft.GetScopeKind() || environment.GetOrganizationRef() != draft.GetOrganizationRef() {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	if !valid || plan.Ref != body.PlanRef || plan.DraftRef != ref || plan.DraftVersion != mutation.GetExpectedVersion() || draft.GetVersion() != plan.DraftVersion+1 || plan.State != "APPLIED" || plan.Version != 2 ||
 		int64(len(body.SelectedItemRefs)) > plan.Total || plan.SourceRef != nil && *plan.SourceRef != environment.GetRef() ||
 		!fileTargetRef(environment.GetRef()) || !validManagedVersion(environment.GetVersion()) || environment.GetRef() != draft.GetPublishedEnvironmentRef() || draft.GetState() != "PUBLISHED" ||
@@ -180,7 +218,7 @@ func writeEnvironmentDraft(w http.ResponseWriter, statusCode int, input *control
 }
 
 func writeEnvironmentDraftResult(w http.ResponseWriter, statusCode int, input *controlplanev1.RuntimeEnvironmentDraft, ref, project string, envelope map[string]any) {
-	if input == nil || input.GetSpecification() == nil || input.GetRef() == "" || input.GetProjectRef() == "" ||
+	if input == nil || input.GetSpecification() == nil || input.GetRef() == "" || !validRuntimeResourceScope(runtimeResourceScopeKind(input.GetScopeKind().String()), input.GetOrganizationRef(), input.GetProjectRef()) ||
 		ref != "" && input.GetRef() != ref || project != "" && input.GetProjectRef() != project ||
 		input.GetVersion() < 1 || input.GetVersion() > maximumSafeJSONInteger || input.GetExpectedEnvironmentVersion() < 0 ||
 		input.GetExpectedEnvironmentVersion() > maximumSafeJSONInteger || len(input.GetDiagnostics()) > 64 {
@@ -213,6 +251,7 @@ func writeEnvironmentDraftResult(w http.ResponseWriter, statusCode int, input *c
 		return
 	}
 	result := generated.RuntimeEnvironmentDraft{
+		ScopeKind: runtimeResourceScopeKind(input.GetScopeKind().String()), OrganizationRef: input.GetOrganizationRef(),
 		Ref: input.GetRef(), Version: input.GetVersion(), ProjectRef: input.GetProjectRef(), ExpectedEnvironmentVersion: input.GetExpectedEnvironmentVersion(),
 		State: generated.RuntimeEnvironmentDraftState(input.GetState()), Diagnostics: append([]string{}, input.GetDiagnostics()...),
 		Specification: generated.RuntimeEnvironmentDraftSpecification{Name: spec.GetName(), Description: spec.GetDescription(), ImageArtifactRef: spec.GetImageArtifactRef(),
@@ -289,15 +328,16 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 	if resources.GetCpuRequestMilli() < 100 || resources.GetCpuRequestMilli() > 8000 || resources.GetCpuLimitMilli() < 100 || resources.GetCpuLimitMilli() > 16000 ||
 		resources.GetMemoryRequestMib() < 128 || resources.GetMemoryRequestMib() > 32768 || resources.GetMemoryLimitMib() < 128 || resources.GetMemoryLimitMib() > 65536 ||
 		resources.GetEphemeralStorageRequestMib() < 256 || resources.GetEphemeralStorageRequestMib() > 20480 || resources.GetEphemeralStorageLimitMib() < 256 || resources.GetEphemeralStorageLimitMib() > 102400 ||
-		len(input.GetVolumes()) > 16 || len(input.GetNetworkDestinations()) < 3 || len(input.GetNetworkDestinations()) > 4 {
+		len(input.GetVolumes()) > 16 || len(input.GetNetworkDestinations()) != 3 {
 		return nil, false
 	}
 	result := &generated.RuntimeEnvironmentPolicyInput{Resources: generated.RuntimeResourcePolicy{
 		CpuRequestMilli: resources.GetCpuRequestMilli(), CpuLimitMilli: resources.GetCpuLimitMilli(), MemoryRequestMib: resources.GetMemoryRequestMib(), MemoryLimitMib: resources.GetMemoryLimitMib(),
 		EphemeralStorageRequestMib: resources.GetEphemeralStorageRequestMib(), EphemeralStorageLimitMib: resources.GetEphemeralStorageLimitMib(),
-	}, Volumes: []generated.RuntimeVolumeInput{}, NetworkDestinations: []generated.RuntimeNetworkDestination{}}
+	}, Volumes: []generated.RuntimeVolumeInput{}, NetworkDestinations: []generated.RuntimeNetworkDestination{},
+		WebAccess: generated.RuntimeWebAccess{Mode: generated.NONE, Rules: []generated.RuntimeWebAccessRule{}}}
 	switch input.GetKubernetesAccess() {
-	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE, controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_READ_OWN_EXECUTION:
+	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
 		result.KubernetesAccess = generated.RuntimeKubernetesAccessKind(strings.TrimPrefix(input.GetKubernetesAccess().String(), "RUNTIME_KUBERNETES_ACCESS_KIND_"))
 	default:
 		return nil, false
@@ -311,10 +351,29 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 	for _, destination := range input.GetNetworkDestinations() {
 		switch destination {
 		case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS, controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK,
-			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY, controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_KUBERNETES_API:
+			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY:
 			result.NetworkDestinations = append(result.NetworkDestinations, generated.RuntimeNetworkDestination(strings.TrimPrefix(destination.String(), "RUNTIME_NETWORK_DESTINATION_")))
 		default:
 			return nil, false
+		}
+	}
+	if webAccess := input.GetWebAccess(); webAccess != nil {
+		mode := strings.TrimPrefix(webAccess.GetMode().String(), "RUNTIME_WEB_ACCESS_MODE_")
+		if mode == "UNSPECIFIED" {
+			mode = "NONE"
+		}
+		result.WebAccess.Mode = generated.RuntimeWebAccessMode(mode)
+		if !result.WebAccess.Mode.Valid() {
+			return nil, false
+		}
+		for _, rule := range webAccess.GetRules() {
+			methods := make([]generated.RuntimeWebAccessRuleHttpMethods, 0, len(rule.GetHttpMethods()))
+			for _, method := range rule.GetHttpMethods() {
+				methods = append(methods, generated.RuntimeWebAccessRuleHttpMethods(method))
+			}
+			result.WebAccess.Rules = append(result.WebAccess.Rules, generated.RuntimeWebAccessRule{
+				DomainPattern: rule.GetDomainPattern(), Protocol: generated.RuntimeWebAccessRuleProtocol(rule.GetProtocol()), Port: generated.RuntimeWebAccessRulePort(rule.GetPort()), HttpMethods: methods,
+			})
 		}
 	}
 	return result, true

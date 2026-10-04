@@ -1,17 +1,23 @@
 import type { RuntimeSecretDraftSuggestion } from "./model";
+import {
+  parseRuntimeResourceScope,
+  runtimeResourceAddressScope,
+  runtimeResourceScopeKey,
+  type RuntimeResourceAddress,
+  type RuntimeResourceScope,
+} from "@/features/runtime/resource-scope";
 
 const lifetimeMs = 5 * 60 * 1000;
-const opaqueReferencePattern = /^[A-Za-z0-9_-]{8,128}$/;
 
 export const runtimeSecretReauthSuggestionStorageKey =
   "kodex.oidc.runtime-secret-draft-suggestion";
 
 interface StoredRuntimeSecretSuggestion {
   readonly expiresAt: number;
-  readonly projectRef: string;
+  readonly resourceScope: RuntimeResourceScope;
   readonly suggestion: RuntimeSecretDraftSuggestion;
   readonly surface?: "assistant";
-  readonly version: 1;
+  readonly version: 2;
 }
 
 function validSuggestion(
@@ -37,19 +43,20 @@ function validSuggestion(
 
 export function rememberRuntimeSecretReauthSuggestion(
   storage: Pick<Storage, "setItem">,
-  projectRef: string,
+  projectRef: RuntimeResourceAddress,
   suggestion: RuntimeSecretDraftSuggestion,
   surface?: "assistant",
   now = Date.now(),
 ): void {
-  if (!opaqueReferencePattern.test(projectRef) || !validSuggestion(suggestion))
+  const resourceScope = runtimeResourceAddressScope(projectRef);
+  if (!validSuggestion(suggestion))
     throw new Error("Runtime secret re-auth suggestion is invalid");
   const stored: StoredRuntimeSecretSuggestion = {
     expiresAt: now + lifetimeMs,
-    projectRef,
+    resourceScope,
     suggestion,
     ...(surface ? { surface } : {}),
-    version: 1,
+    version: 2,
   };
   storage.setItem(
     runtimeSecretReauthSuggestionStorageKey,
@@ -59,7 +66,10 @@ export function rememberRuntimeSecretReauthSuggestion(
 
 export function consumeRuntimeSecretReauthSuggestion(
   storage: Pick<Storage, "getItem" | "removeItem">,
-  expected: { readonly projectRef: string; readonly surface?: "assistant" },
+  expected: {
+    readonly projectRef: RuntimeResourceAddress;
+    readonly surface?: "assistant";
+  },
   now = Date.now(),
 ): RuntimeSecretDraftSuggestion | undefined {
   const raw = storage.getItem(runtimeSecretReauthSuggestionStorageKey);
@@ -69,16 +79,21 @@ export function consumeRuntimeSecretReauthSuggestion(
     const value = JSON.parse(raw) as Record<string, unknown>;
     const keys = Object.keys(value).sort().join(",");
     const expectedKeys = value.surface
-      ? "expiresAt,projectRef,suggestion,surface,version"
-      : "expiresAt,projectRef,suggestion,version";
+      ? "expiresAt,resourceScope,suggestion,surface,version"
+      : "expiresAt,resourceScope,suggestion,version";
     if (
       keys !== expectedKeys ||
-      value.version !== 1 ||
+      value.version !== 2 ||
       typeof value.expiresAt !== "number" ||
       !Number.isSafeInteger(value.expiresAt) ||
       value.expiresAt <= now ||
       value.expiresAt > now + lifetimeMs ||
-      value.projectRef !== expected.projectRef ||
+      runtimeResourceScopeKey(
+        parseRuntimeResourceScope(value.resourceScope),
+      ) !==
+        runtimeResourceScopeKey(
+          runtimeResourceAddressScope(expected.projectRef),
+        ) ||
       value.surface !== expected.surface ||
       !validSuggestion(value.suggestion)
     )
