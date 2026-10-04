@@ -165,6 +165,13 @@ const managedTools = new Set([
 function toolPreview(
   toolCall: NonNullable<RunActivityItem["toolCall"]>,
 ): string | undefined {
+  if (
+    toolCall.state === "FAILED" &&
+    /^[A-Z][A-Z0-9_]{0,127}$/.test(
+      toolCall.safeResult.trim().replace(/^i18n:/, ""),
+    )
+  )
+    return t("runs.toolFailed");
   return (toolCall.state === "SUCCEEDED" &&
     managedTools.has(toolCall.tool) &&
     toolCall.safeResult === `${toolCall.tool}:completed`) ||
@@ -172,6 +179,24 @@ function toolPreview(
     isSuccessfulIntegrationToolReceipt(toolCall)
     ? undefined
     : toolCall.safeResult || undefined;
+}
+
+function compactServiceRow(item: (typeof displayItems.value)[number]): boolean {
+  const scope = executionKey(item.execution);
+  return Boolean(
+    scope &&
+    item.serviceHistory &&
+    !item.working &&
+    !["FAILED", "CANCELLED"].includes(item.state ?? "") &&
+    displayItems.value.some(
+      (entry) =>
+        !entry.historical &&
+        executionKey(entry.execution) === scope &&
+        (Boolean(entry.toolCall) ||
+          ((entry.phase === "COMMENTARY" || entry.phase === "FINAL") &&
+            Boolean(entry.summary?.trim()))),
+    ),
+  );
 }
 
 function toolLabel(toolCall: NonNullable<RunActivityItem["toolCall"]>): string {
@@ -382,7 +407,11 @@ function bytes(value: number): string {
                 :data-turn-ref="item.execution?.turnRef"
                 :data-attempt="item.execution?.attempt"
               >
-                <span class="run-activity-item__icon" aria-hidden="true">
+                <span
+                  v-if="!compactServiceRow(item)"
+                  class="run-activity-item__icon"
+                  aria-hidden="true"
+                >
                   <component
                     :is="toolIcon(item)"
                     v-if="item.toolCall"
@@ -398,7 +427,7 @@ function bytes(value: number): string {
                   <CircleDot v-else :size="16" />
                 </span>
                 <article class="run-activity-item__content">
-                  <header>
+                  <header v-if="!compactServiceRow(item)">
                     <strong>{{
                       item.toolCall
                         ? toolLabel(item.toolCall)
@@ -684,6 +713,7 @@ function bytes(value: number): string {
   font-size: 0.85rem;
 }
 .run-activity-item--service > article {
+  grid-column: 2;
   border: 0;
   background: transparent;
 }

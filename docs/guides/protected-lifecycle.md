@@ -23,6 +23,25 @@ audit или events. Успех сохраняет их в одной owner-тр
 Пустой результат claim не доказывает отсутствие изменений: истечение lease и
 terminal непригодного кандидата сохраняют audit и command receipt в той же
 транзакции. Только действительно неизменившийся idle poll может их пропустить.
+Queued execution с terminal SessionStorage `ERROR|PURGED` сверяется до join
+runtime eligibility: отсутствующая credential или конфигурация не скрывает
+неисполняемый граф. Server-owned ClaimExecution ограниченно блокирует точные
+tenant/session/node/storage, закрывает весь root graph существующим atomic
+terminal path и сохраняет audit, receipt и ordered run/node/gate events.
+Storage не переводится обратно в `LIVE`, свежий grant/RuntimeRevision не выдаётся.
+`SNAPSHOT_READY|SNAPSHOTTING|DELETE_PVC_READY|ARCHIVED|RESTORE_READY|RESTORING`
+остаются ожиданием, а не terminal failure.
+
+| Переход storage-blocked execution | Результат владельца |
+| --- | --- |
+| create во время snapshot/restore | Queue сохраняется; claim не запускает provider до `LIVE` |
+| claim при `ERROR|PURGED` | Одна owner-транзакция завершает root tree как `FAILED`, закрывает leases/turns/gates/effects; durable receipt, audit и ordered events |
+| claim при transit state | Нет terminal-перехода и новых runtime grants; очередь ждёт штатный archive/restore |
+| renew/complete после terminal reconcile | Прежняя lease/grant закрыто отклоняется существующим terminal fence |
+| owner cancel до reconcile | Штатный OCC cancel закрывает весь граф независимо storage; последующий reconcile не повторяет эффект |
+| replay/повторный poll после reconcile | Сохранённый command receipt либо отсутствие открытого кандидата; новых terminal events нет |
+| retry/continuation | Новая attempt проходит обычную свежую authority и storage eligibility; terminal storage не восстанавливается автоматически |
+
 Устойчивый cleanup receipt может повторно сообщать прежний produced descriptor
 после его отдельной очистки. Владелец принимает доказанное exact terminal
 завершение идемпотентно, не создаёт повторный эффект и сохраняет защиту от

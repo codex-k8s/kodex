@@ -641,17 +641,41 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	if err != nil {
 		t.Fatal(err)
 	}
+	nameOnly := image
+	nameOnly.Parameters = map[string]any{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "name": "Name-only custom image"}
+	nameOnlyPlan := propose(nameOnly, "image-name-only-custom-proposal")
+	if assistantImageDockerfile(nameOnlyPlan.Operations[0].After) != beforeRepair.Recipe.Input.Dockerfile {
+		t.Fatal("name-only proposal discarded the existing custom Dockerfile")
+	}
 	environments := catalog.List()
 	environments[0].Input.SourceRevision = "revision-2"
 	environments[0].Input.SourceSHA256 = strings.Repeat("c", 64)
 	environments[0].Input.ContextRef = "oci://registry.internal/role-input@sha256:" + strings.Repeat("c", 64)
 	environments[0].Input.ContextSHA256 = strings.Repeat("c", 64)
 	environments[0].Input.ToolchainSHA256 = strings.Repeat("c", 64)
+	environments[0].Input.BaseImageDigest = "sha256:" + strings.Repeat("c", 64)
 	repairCatalog, err := roleimageservice.NewCatalog(environments)
 	if err != nil {
 		t.Fatal(err)
 	}
 	r.ConfigureRoleImageCatalog(repairCatalog)
+	freshTemplate, err := repairCatalog.Resolve(entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"})
+	if err != nil || freshTemplate.Dockerfile == beforeRepair.Recipe.Input.Dockerfile {
+		t.Fatal("changed base did not produce a fresh server Dockerfile template")
+	}
+	for index, parameters := range []map[string]any{
+		nameOnly.Parameters,
+		{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "environmentKey": "promotion", "dockerfile": beforeRepair.Recipe.Input.Dockerfile},
+	} {
+		invalid := image
+		invalid.Parameters = parameters
+		_, denied := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: prefix + "-image-old-base-" + string(rune('a'+index))},
+			Payload:  command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation, Summary: invalid.Summary, Operations: []entity.AssistantPlanOperation{invalid}}})
+		if !errors.Is(denied, errs.ErrInvalid) {
+			t.Fatal("old explicit or name-only Dockerfile was silently repinned")
+		}
+	}
 	repairImage := image
 	repairImage.Parameters = map[string]any{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "environmentKey": "promotion"}
 	callerPinned := repairImage
@@ -669,7 +693,8 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		assistantString(repairOperation.After, "specSha256") == beforeRepair.Recipe.SpecSHA256 ||
 		!exactSHA256(assistantString(repairOperation.After, "specSha256")) ||
 		assistantString(repairOperation.After, "name") != beforeRepair.Recipe.Name ||
-		assistantImageDockerfile(repairOperation.After) != beforeRepair.Recipe.Input.Dockerfile {
+		assistantImageDockerfile(repairOperation.Before) != beforeRepair.Recipe.Input.Dockerfile ||
+		assistantImageDockerfile(repairOperation.After) != freshTemplate.Dockerfile {
 		t.Fatal("same textual selection did not pin an explicit immutable catalog repair")
 	}
 	stillFrozen, err := r.GetOrganization(ctx, resolved, recipeRef)

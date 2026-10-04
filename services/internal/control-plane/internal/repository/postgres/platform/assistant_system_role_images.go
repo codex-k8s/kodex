@@ -145,11 +145,9 @@ func (repository *Repository) hydrateSystemAssistantImage(ctx context.Context, t
 		if payload.Name == "" {
 			payload.Name = previous.Name
 		}
-		if payload.Environment.EnvironmentKey == "" {
-			payload.Environment.EnvironmentKey = previous.Input.EnvironmentKey
-		}
-		if payload.Environment.Dockerfile == "" && payload.Environment.EnvironmentKey == previous.Input.EnvironmentKey {
-			payload.Environment.Dockerfile = previous.Input.Dockerfile
+		payload.Environment, err = assistantImageUpdateSelection(operation.Parameters, previous.Input)
+		if err != nil {
+			return operation, err
 		}
 		v := int64(previous.Version)
 		version = &v

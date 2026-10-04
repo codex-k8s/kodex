@@ -17,6 +17,7 @@ async function render(
   safeParameters: Record<string, unknown> = {},
   locale: "ru" | "en" = "ru",
   safeResult = "",
+  state: NonNullable<RunActivityItem["toolCall"]>["state"] = "SUCCEEDED",
 ): Promise<string> {
   const item: RunActivityItem = {
     id: "tool-example",
@@ -29,7 +30,7 @@ async function render(
         ref: "call_example",
         tool,
         safeParameters,
-        state: "SUCCEEDED" as const,
+        state,
         revision: 1,
         durationMs: 10,
         safeResult,
@@ -252,6 +253,129 @@ describe("RunTranscript: managed инструменты", () => {
 });
 
 describe("RunTranscript: безопасный runtime text", () => {
+  it("показывает ошибку инструмента понятным текстом, а closed code только в закрытых деталях", async () => {
+    for (const locale of ["ru", "en"] as const) {
+      for (const code of ["TOOL_UNAVAILABLE", "FUTURE_TOOL_ERROR"]) {
+        const html = await render(
+          "get_configuration_catalog",
+          {},
+          locale,
+          code,
+          "FAILED",
+        );
+        const preview =
+          /class="safe-markdown run-transcript__preview"[^>]*>([^]*?)<\/div>/.exec(
+            html,
+          )?.[1];
+        expect(preview).toContain(
+          locale === "ru"
+            ? "Не удалось выполнить действие"
+            : "The action could not be completed",
+        );
+        expect(preview).not.toContain(code);
+        expect(html).toMatch(
+          new RegExp(`<details[^>]*><summary[^>]*>[^]*?${code}`),
+        );
+        expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+        expect(html.match(/data-state="FAILED"/g)).toHaveLength(1);
+      }
+    }
+    const normal = await render(
+      "get_configuration_catalog",
+      {},
+      "ru",
+      "Не удалось прочитать выбранный файл",
+      "FAILED",
+    );
+    expect(normal).toContain("Не удалось прочитать выбранный файл");
+  });
+
+  it("служебные этапы не создают пустую author/time шапку рядом с exact commentary или tool", async () => {
+    const execution = {
+      runRef: "run_exact",
+      nodeRef: "nod_exact",
+      sessionRef: "ses_exact",
+      turnRef: "trn_exact",
+      turnNumber: 1,
+      attempt: 1,
+    };
+    const service: RunActivityItem = {
+      id: "service",
+      kind: "system",
+      actor: "Системный помощник",
+      occurredAt: "2026-10-04T10:00:00Z",
+      historical: false,
+      execution,
+      eventType: "TURN_PROGRESS",
+      messageKind: "STATE",
+      state: "RUNNING",
+      summary: "MODEL_REQUEST_RUNNING",
+    };
+    const comment: RunActivityItem = {
+      ...service,
+      id: "comment",
+      kind: "agent",
+      phase: "COMMENTARY",
+      summary: "Проверяю настройки",
+    };
+    const tool: RunActivityItem = {
+      ...service,
+      id: "tool",
+      kind: "tool",
+      toolCall: {
+        ref: "call_example",
+        tool: "get_configuration_catalog",
+        safeParameters: {},
+        state: "SUCCEEDED",
+        revision: 1,
+        durationMs: 10,
+        safeResult: "get_configuration_catalog:completed",
+        auditRef: "aud_example",
+      },
+    };
+    const renderItems = async (items: RunActivityItem[]) => {
+      const app = createSSRApp({
+        render: () =>
+          h(RunTranscript, {
+            items,
+            embedded: true,
+            activeItemId: items.at(-1)?.id ?? null,
+          }),
+      });
+      app.use(i18n);
+      return renderToString(app);
+    };
+    for (const semantic of [comment, tool]) {
+      const html = await renderItems([service, semantic]);
+      const serviceHtml =
+        /<li[^>]*run-activity-item--service[^>]*>([^]*?)<\/article>/.exec(
+          html,
+        )?.[1];
+      expect(serviceHtml).toBeDefined();
+      expect(serviceHtml).not.toMatch(/<header\b|run-activity-item__icon/);
+      expect(serviceHtml).toContain("run-transcript__service-history");
+      expect(serviceHtml).toContain("Этапы выполнения: 1");
+      expect(html.match(/<header\b/g)).toHaveLength(1);
+    }
+    const foreign = { ...comment, execution: { ...execution, attempt: 2 } };
+    expect(
+      (await renderItems([service, foreign])).match(/<header\b/g),
+    ).toHaveLength(2);
+    expect(
+      (await renderItems([{ ...service, state: "FAILED" }, comment])).match(
+        /<header\b/g,
+      ),
+    ).toHaveLength(2);
+    expect(await renderItems([service])).toContain('role="status"');
+    const source = readFileSync(
+      new URL("./RunTranscript.vue", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(
+      /\.run-activity-item--service > article\s*\{\s*grid-column: 2;/,
+    );
+  });
+
   it.each(["ru", "en"] as const)(
     "локализует raw progress/failure в %s без второго fallback",
     async (locale) => {

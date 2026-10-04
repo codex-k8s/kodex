@@ -392,6 +392,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	terminalStorage, err := repository.reconcileTerminalSessionStorage(ctx, tx, scope, input, payload.Limit)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
 		scope.organizationID, payload.Limit, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
@@ -466,6 +470,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	var items []map[string]any
 	var firstProjectID, firstProjectRef, firstRunRef string
 	failedRoots := make(map[string]bool)
+	for _, candidate := range terminalStorage {
+		failedRoots[candidate.rootRunID] = true
+		if firstRunRef == "" {
+			firstProjectID, firstProjectRef, firstRunRef = candidate.projectID, candidate.projectRef, candidate.runRef
+		}
+	}
 	claimedRoots := make(map[string]string)
 	for _, candidate := range claimable {
 		if failedRoots[candidate.rootRunID] {

@@ -47,6 +47,27 @@ func (repository *Repository) assistantRoleImageManageInput(
 		RoleDefinitionRef: roleRef, Name: payload.Name, Environment: payload.Environment, Recipe: recipe}, nil
 }
 
+// Явный выбор окружения заново выбирает серверный шаблон. Переименование
+// без такого выбора сохраняет исходный Dockerfile, включая пользовательский.
+func assistantImageUpdateSelection(parameters map[string]any, previous entity.RoleImageRecipeInput) (entity.RoleEnvironmentSelection, error) {
+	selection := entity.RoleEnvironmentSelection{EnvironmentKey: previous.EnvironmentKey, Dockerfile: previous.Dockerfile}
+	if supplied, exists := parameters["environmentKey"]; exists {
+		key, valid := supplied.(string)
+		if !valid || key == "" {
+			return entity.RoleEnvironmentSelection{}, errs.ErrInvalid
+		}
+		selection.EnvironmentKey, selection.Dockerfile = key, ""
+	}
+	if supplied, exists := parameters["dockerfile"]; exists {
+		dockerfile, valid := supplied.(string)
+		if !valid || dockerfile == "" || len(dockerfile) > 64<<10 {
+			return entity.RoleEnvironmentSelection{}, errs.ErrInvalid
+		}
+		selection.Dockerfile = dockerfile
+	}
+	return selection, nil
+}
+
 func (repository *Repository) authorizeAssistantRoleImage(
 	ctx context.Context, tx pgx.Tx, current scope, payload command.AssistantRoleImageRecipeInput,
 ) error {
@@ -200,30 +221,15 @@ func (repository *Repository) hydrateAssistantRoleImageUpdate(
 			return entity.AssistantPlanOperation{}, errs.ErrInvalid
 		}
 	}
-	key := previous.Input.EnvironmentKey
-	if supplied, exists := operation.Parameters["environmentKey"]; exists {
-		var valid bool
-		key, valid = supplied.(string)
-		if !valid {
-			return entity.AssistantPlanOperation{}, errs.ErrInvalid
-		}
-	}
-	dockerfile := previous.Input.Dockerfile
-	if key != previous.Input.EnvironmentKey {
-		dockerfile = ""
-	}
-	if supplied, exists := operation.Parameters["dockerfile"]; exists {
-		var valid bool
-		dockerfile, valid = supplied.(string)
-		if !valid || len(dockerfile) > 64<<10 {
-			return entity.AssistantPlanOperation{}, errs.ErrInvalid
-		}
+	selection, err := assistantImageUpdateSelection(operation.Parameters, previous.Input)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
 	}
 	version := int64(previous.Version)
 	mutation := value.Mutation{ExpectedVersion: &version}
 	managedInput, _, err := repository.assistantRoleImageUpdateInput(ctx, tx, current, mutation,
 		command.AssistantRoleImageUpdateInput{ProjectRef: projectRef, RecipeRef: ref, Name: name,
-			Environment: entity.RoleEnvironmentSelection{EnvironmentKey: key, Dockerfile: dockerfile}})
+			Environment: selection})
 	if err != nil {
 		return entity.AssistantPlanOperation{}, err
 	}
@@ -231,7 +237,7 @@ func (repository *Repository) hydrateAssistantRoleImageUpdate(
 		"name": previous.Name, "environmentKey": previous.Input.EnvironmentKey,
 		"dockerfile": previous.Input.Dockerfile}
 	after := cloneAssistantFields(before)
-	after["name"], after["environmentKey"], after["dockerfile"] = name, key, managedInput.Recipe.Dockerfile
+	after["name"], after["environmentKey"], after["dockerfile"] = name, selection.EnvironmentKey, managedInput.Recipe.Dockerfile
 	if reflect.DeepEqual(before, after) {
 		return entity.AssistantPlanOperation{}, errs.ErrConflict
 	}

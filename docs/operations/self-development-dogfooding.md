@@ -1699,3 +1699,46 @@ all38 inventory нового образа и штатный admission/promotion 
 PASS — imageinventory unit Go1.26.6 .042s; предыдущие whole agent-runner,
 runtimecontract, builder build unit/vet и девять Python profile tests успешны.
 Это адресная диагностика, не полный QA и не staging acceptance.
+
+04.10.2026 22:55 UTC, clean supply-chain `f968aba60be4e7609b33316598e0d8770db5fdba`
+и текущий интеграционный tree поверх него:
+PASS — новый полный runner807 и четыре supply-chain компонента собраны штатными
+скриптами. Canonical render/apply/readback control-plane, session-archive и
+supply-chain завершены; полный spec VAP/bindings, exact builder CRI digest и
+host/Pod/host hashes проверены. Первая render попытка GO_TOOLCHAIN_MISMATCH
+была FAIL; повтор с явным Go1.26.6 PATH успешен, небезопасного fallback нет.
+PASS — bounded BuildKit диагностика exact runner807 с native observer и
+network=none: все 38 required tools VERIFIED, npm exit0, native mutation guards
+сохранены. Это не штатный admission собственного артефакта: прежний собственный
+artifact всё ещё REJECTED32/38, новая recipe/build/admission/promotion NOT RUN.
+FAIL — QA38D реальный ход завершился, но typed image update дважды отклонён
+PLAN_INPUT_INVALID/server_validation. При явном выборе прежнего environmentKey
+hydration сохраняла устаревший Dockerfile вместо свежего server template.
+SYSTEM presence fix интегрирован; disposable PG regression baseline FAIL20.305s
+→ targeted PASS15.877s, unit/vet PASS. Live повтор пока NOT RUN; отдельный PROJECT
+immutable spec repair в работе, его готовность не заявляется.
+PASS — terminal-storage reconcile интегрирован без ручной правки БД: точные
+owner graph с ERROR/PURGED закрываются атомарно, transit не затрагивается.
+Disposable PG matrix PASS7.059s, claim isolation/cancel PASS3.403s. Actual orphan
+run_RAHiuMuRQCzhZY_4R-6pd_pq перешёл RUNNING→FAILED через server reconciliation;
+graph node также FAILED, storage остался ERROR. Это dirty mounted source,
+не часть immutable f968 binary; exact новый commit proof предстоит.
+PASS — ROOT191 frontend tests, ESLint предыдущих точечных suites и diff-check.
+Системная карточка образа объединяет две realtime revision notifications в один
+read; это не доказательство общего detail-cache или live network dedup.
+Actual desktop screenshot текущего dirty tree просмотрен: пустая служебная
+шапка скрыта, этапы свёрнуты при ответе, ошибки tool имеют понятный основной
+текст, безопасные детали доступны. Console после hard reload чиста.
+Повтор выбирает другой диалог по умолчанию: сохранение selection исследуется,
+не называется исправленным. Chromium inventory path в frontend требует
+отдельного exact-path исправления перед настройкой всех38 инструментов.
+Chrome own22 регулярно обновляется, чужие вкладки не изменены.
+Checkbox2–15 OPEN; полный QA, штатный all38 admission и финальный dogfooding
+ещё NOT RUN. Incident token rotation по-прежнему NOT RUN.
+
+04.10.2026 22:56 UTC, тот же интеграционный tree:
+ROOT targeted platform unit PASS на явном Go1.26.6/GOENVoff/GOWORKoff .123s;
+первый локальный запуск .105s использовал Go1.27.1 и не выдаётся за pinned suite.
+ROOT frontend ESLint PASS и 191 targeted unit PASS, diff-check PASS.
+SYSTEM template fix перенесён в основной mounted source; actual native repeat
+пока NOT RUN. Чужие вкладки не изменены, own22 hard reload22:55:36.

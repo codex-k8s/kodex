@@ -204,15 +204,22 @@ watch(
 );
 
 watch(
-  () => platform.roleImageRealtimeRevision,
-  () => {
-    if (target.value) void refresh?.();
-  },
-);
-watch(
-  () => platform.organizationRoleImageRealtimeRevision,
-  () => {
-    if (target.value?.resourceScope) void refresh?.();
+  [
+    () => platform.roleImageRealtimeRevision,
+    () => platform.organizationRoleImageRealtimeRevision,
+  ],
+  (
+    [projectRevision, organizationRevision],
+    [previousProject, previousOrganization],
+  ) => {
+    const exact = target.value;
+    if (
+      exact &&
+      (exact.resourceScope
+        ? organizationRevision !== previousOrganization
+        : projectRevision !== previousProject)
+    )
+      void refresh?.();
   },
 );
 
