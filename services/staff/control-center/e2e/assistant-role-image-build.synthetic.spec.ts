@@ -38,7 +38,14 @@ for (const width of [1440, 390]) {
           admissionVerdict: "ACCEPTED",
           promotionState: "PENDING",
           promotionRequested: true,
-          tools: [],
+          declaredTools: [],
+          verifiedToolInventory: {
+            status: "UNAVAILABLE",
+            sha256: "",
+            imageDigest: "",
+            provenanceSha256: "",
+            platforms: [],
+          },
         };
         let promotionState: RoleImageArtifact["promotionState"] = "PENDING";
         let reads = 0;

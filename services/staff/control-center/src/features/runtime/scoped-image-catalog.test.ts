@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { verifiedInventoryFixture } from "@/test-utils/image-inventory-fixture";
 import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen";
 import {
   createScopedRuntimeImageCatalog,
@@ -21,7 +22,8 @@ const artifact: RoleImageArtifact = {
   admissionVerdict: "ACCEPTED",
   promotionState: "PROMOTED",
   promotionRequested: true,
-  tools: [{ name: "git", version: "2.53" }],
+  declaredTools: [{ name: "git", version: "2.53" }],
+  verifiedToolInventory: verifiedInventoryFixture(),
 };
 const recipe: Awaited<ReturnType<ScopedImageCatalogReader["read"]>>["recipe"] =
   {

@@ -21,6 +21,12 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.CreateProjectAssistantIntegrationConnection:
+		payload, valid := input.Payload.(command.ProjectAssistantConnectionInput)
+		if !valid {
+			return errs.ErrInvalid
+		}
+		return repository.authorizeProjectAssistantConnection(ctx, tx, current, payload, true)
 	case command.ResolveOwnerGate:
 		return repository.authorizeOwnerGateCommand(ctx, tx, current, input.Payload)
 	case command.RetryRun:

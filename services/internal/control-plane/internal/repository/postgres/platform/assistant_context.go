@@ -77,6 +77,29 @@ func (repository *Repository) authorizeAssistantContextCommand(ctx context.Conte
 		if json.Unmarshal(raw, &operations) != nil {
 			return errs.ErrUnavailable
 		}
+		for _, operation := range operations {
+			if operation.Type != prepareProjectAssistantConnection {
+				continue
+			}
+			if len(operations) != 1 {
+				return errs.ErrInvalid
+			}
+			normalized, err := normalizeAssistantOperation(operation)
+			if err != nil {
+				return err
+			}
+			planned, err := projectAssistantConnectionCommand(normalized)
+			if err != nil {
+				return err
+			}
+			payload, valid := planned.Payload.(command.ProjectAssistantConnectionInput)
+			if !valid {
+				return errs.ErrInvalid
+			}
+			if err := repository.authorizeProjectAssistantConnection(ctx, tx, current, payload, true); err != nil {
+				return err
+			}
+		}
 		if err := repository.constrainAssistantPlanScope(ctx, tx, &current, conversationRef, operations); err != nil {
 			return err
 		}

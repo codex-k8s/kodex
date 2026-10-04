@@ -330,7 +330,10 @@ func (input RunnerInput) Validate() error {
 		input.EffectiveKubernetesAccess.Profile != normalizedPolicy.KubernetesAccess {
 		return errors.New("runner environment policy binding is invalid")
 	}
-	if input.WorkspacePolicy.Validate() != nil {
+	expectedWorkspace, workspaceErr := RuntimeWorkspacePolicyWithLimits(normalizedPolicy.Resources.WorkspaceLimits)
+	if workspaceErr != nil || input.WorkspacePolicy.Validate() != nil ||
+		input.WorkspacePolicy.MaximumWritableBytes != expectedWorkspace.MaximumWritableBytes ||
+		input.WorkspacePolicy.MaximumFileCount != expectedWorkspace.MaximumFileCount {
 		return errors.New("runner workspace policy binding is invalid")
 	}
 	if input.FileCatalog != nil && (input.FileCatalog.Validate() != nil || input.Mode != RunnerModeTurn || input.ProjectRef == "") {

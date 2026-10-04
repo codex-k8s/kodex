@@ -699,8 +699,13 @@ func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentP
 		return runtimecontract.RuntimeEnvironmentPolicy{}, errors.New("runtime environment policy is incomplete")
 	}
 	resources := value.GetResources()
+	var workspaceLimits *runtimecontract.RuntimeWorkspaceLimits
+	if limits := resources.GetWorkspaceLimits(); limits != nil {
+		workspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: limits.GetMaxBytes(), MaxFiles: limits.GetMaxFiles()}
+	}
 	policy := runtimecontract.RuntimeEnvironmentPolicy{
 		Resources: runtimecontract.RuntimeResourcePolicy{
+			WorkspaceLimits: workspaceLimits,
 			CPURequestMilli: resources.GetCpuRequestMilli(), CPULimitMilli: resources.GetCpuLimitMilli(),
 			MemoryRequestMiB: resources.GetMemoryRequestMib(), MemoryLimitMiB: resources.GetMemoryLimitMib(),
 			EphemeralStorageRequestMiB: resources.GetEphemeralStorageRequestMib(),

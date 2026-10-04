@@ -3,6 +3,10 @@ import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import EnvironmentImpactDialog from "@/features/runtime/EnvironmentImpactDialog.vue";
 import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
 import RuntimeEnvironmentToolsEditor from "@/features/runtime/RuntimeEnvironmentToolsEditor.vue";
+import {
+  verifiedImageInventoryAvailable,
+  verifiedImageTools,
+} from "@/shared/lib/verified-image-tools";
 import RuntimeEnvironmentPolicyFields from "@/features/runtime/RuntimeEnvironmentPolicyFields.vue";
 import PublicationImpactSelection from "@/features/runtime/PublicationImpactSelection.vue";
 import {
@@ -278,6 +282,11 @@ const canPublish = computed(
       serverDraft.value?.ref === draftReference.value) &&
     (!environmentRef.value || !!current.value) &&
     (!current.value || hasEnvironmentAction(current.value, "UPDATE")),
+);
+const imageInventoryReady = computed(
+  () =>
+    imageArtifact.value?.ref === input.imageArtifactRef &&
+    verifiedImageInventoryAvailable(imageArtifact.value),
 );
 const versionDigest = computed(() =>
   current.value
@@ -697,6 +706,7 @@ async function preparePublication(): Promise<void> {
       }
       return;
     }
+    if (!imageInventoryReady.value) return;
     publicationPlan.value = await prepareEnvironmentPublication(
       serverDraft.value,
       draftController.signal,
@@ -809,6 +819,7 @@ async function publish(selected: string[]): Promise<void> {
     !serverDraft.value.validationDigest ||
     draftDirty.value ||
     !canPublish.value ||
+    (!hadUnknownAttempt && !imageInventoryReady.value) ||
     !publicationPlan.value ||
     publicationUnknown.value
   )
@@ -1105,6 +1116,7 @@ onBeforeUnmount(() => {
           :disabled="
             busy ||
             !canPublish ||
+            !imageInventoryReady ||
             serverDraft?.state !== 'VALID' ||
             !serverDraft?.validationDigest ||
             draftDirty
@@ -1404,7 +1416,10 @@ onBeforeUnmount(() => {
 
                 <RuntimeEnvironmentToolsEditor
                   :tools="input.tools"
-                  :catalog="imageArtifact?.tools ?? []"
+                  :catalog="verifiedImageTools(imageArtifact)"
+                  :inventory-available="
+                    verifiedImageInventoryAvailable(imageArtifact)
+                  "
                   :image-selected="!!input.imageArtifactRef"
                   :loading="imageLoading"
                   :disabled="busy || !draftEditable || !canPublish"

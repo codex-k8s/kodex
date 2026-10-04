@@ -266,6 +266,9 @@ func castRuntimeEnvironmentPolicy(value runtimecontract.RuntimeEnvironmentPolicy
 		}, ResourcesDigest: value.ResourcesDigest, VolumesDigest: value.VolumesDigest,
 		NetworkDigest: value.NetworkDigest, RbacDigest: value.RBACDigest,
 	}
+	if limits := value.Resources.WorkspaceLimits; limits != nil {
+		result.Resources.WorkspaceLimits = &controlplanev1.RuntimeWorkspaceLimits{MaxBytes: limits.MaxBytes, MaxFiles: limits.MaxFiles}
+	}
 	for _, volume := range value.Volumes {
 		result.Volumes = append(result.Volumes, &controlplanev1.RuntimeVolume{
 			Name: volume.Name, Kind: castRuntimeVolumeKind(volume.Kind), SizeMib: volume.SizeMiB, MountPath: volume.MountPath,
@@ -705,7 +708,7 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 func assistantPlanOperationTitle(operation entity.AssistantPlanOperation) string {
 	field := ""
 	switch operation.Type {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
 		field = "name"
 	case "CREATE_PROJECT_FILE":
 		field = "fileName"

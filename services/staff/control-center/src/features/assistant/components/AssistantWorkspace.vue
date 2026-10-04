@@ -1278,6 +1278,7 @@ async function applyPlan(): Promise<void> {
         kinds.add("RUN");
         break;
       case "CREATE_INTEGRATION_CONNECTION":
+      case "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
       case "UPDATE_INTEGRATION_CONNECTION":
       case "TEST_INTEGRATION_CONNECTION":
         kinds.add("INTEGRATION_CONNECTION");
@@ -2258,6 +2259,8 @@ onBeforeUnmount(() => {
                       v-for="operation in turn.plan.operations.filter(
                         (item) =>
                           item.type === 'CREATE_INTEGRATION_CONNECTION' ||
+                          item.type ===
+                            'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' ||
                           item.type === 'UPDATE_INTEGRATION_CONNECTION' ||
                           item.type === 'TEST_INTEGRATION_CONNECTION',
                       )"

@@ -4,6 +4,10 @@ import type {
   RuntimeEnvironmentTool,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
+import {
+  verifiedImageInventoryAvailable,
+  verifiedImageTools,
+} from "@/shared/lib/verified-image-tools";
 import type {
   AsyncEntityOption,
   AsyncEntityOptionPage,
@@ -45,6 +49,7 @@ export function assertPromotedRuntimeImage(
     artifact.recipeGeneration !== expected.recipeGeneration ||
     artifact.admissionVerdict !== "ACCEPTED" ||
     artifact.promotionState !== "PROMOTED" ||
+    !verifiedImageInventoryAvailable(artifact) ||
     !/^[a-f0-9]{64}$/.test(digest) ||
     !artifact.promotedReference?.endsWith(`@sha256:${digest}`)
   )
@@ -60,7 +65,9 @@ export function toolsForRuntimeImage(
   tools: readonly RuntimeEnvironmentTool[],
   artifact: RoleImageArtifact,
 ): RuntimeEnvironmentTool[] {
-  const commands = new Set(artifact.tools.map((tool) => tool.name));
+  const commands = new Set(
+    verifiedImageTools(artifact).map((tool) => tool.name),
+  );
   return tools
     .filter((tool) => commands.has(tool.command))
     .map((tool) => ({ ...tool }));

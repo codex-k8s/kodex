@@ -3,6 +3,7 @@ package runtimecontract
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -399,4 +400,29 @@ func validRunnerInputFixture() RunnerInput {
 
 func refreshRunnerInputBindings(input *RunnerInput) {
 	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = RuntimeExecutionBindingDigests(*input)
+}
+
+func TestRunnerWorkspaceQuotaMatchesImmutableEnvironmentBudget(t *testing.T) {
+	input := validRunnerInputFixture()
+	input.EnvironmentPolicy.Resources.WorkspaceLimits = &RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}
+	input.EnvironmentPolicy, _ = NormalizeRuntimeEnvironmentPolicy(input.EnvironmentPolicy)
+	input.RuntimeEnvironmentDigest, _ = RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, input.EnvironmentPolicy)
+	refreshRunnerInputBindings(&input)
+	if input.Validate() == nil {
+		t.Fatal("default workspace ignored configured immutable budget")
+	}
+	input.WorkspacePolicy, _ = RuntimeWorkspacePolicyWithLimits(input.EnvironmentPolicy.Resources.WorkspaceLimits)
+	refreshRunnerInputBindings(&input)
+	if err := input.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	input.WorkspacePolicy.MaximumFileCount = 11
+	input.WorkspacePolicy.Digest = ""
+	raw, _ := json.Marshal(input.WorkspacePolicy)
+	sum := sha256.Sum256(raw)
+	input.WorkspacePolicy.Digest = hex.EncodeToString(sum[:])
+	refreshRunnerInputBindings(&input)
+	if input.Validate() == nil {
+		t.Fatal("foreign attempt quota accepted")
+	}
 }

@@ -4,8 +4,8 @@ title: Оркестрация среды выполнения
 type: domain
 status: approved
 owner: architect
-version: 1.1.1
-updated: 2026-08-23
+version: 1.2.0
+updated: 2026-10-04
 ---
 
 # Оркестрация среды выполнения
@@ -29,6 +29,28 @@ image. Protected init проверяет signed immutable input и materialize-�
 config. `agent-runner` запускает provider process, передаёт progress, выполняет
 разрешённые MCP calls, собирает безопасный result и завершает attempt через
 typed RPC. Pod и credential generation закрываются после terminal transition.
+
+## Ограниченная настройка workspace
+
+Typed `PREPARE_RUNTIME_ENVIRONMENT_REVISION` принимает необязательный
+`policy.resources.workspaceLimits: {maxBytes, maxFiles}`. При наличии объекта
+оба целых поля обязательны: от 1 до platform maxima 1073741824 байт и 10000
+файлов. Отсутствие объекта сохраняет прежние квоты и resource digest; отдельный
+top-level alias, root, protected path, hostPath и shared mutable PVC не принимаются.
+
+| Этап | Авторитетная граница |
+| --- | --- |
+| Managed MCP → ProposeAssistantPlan | Exact lease/source SYSTEM или PROJECT; прежние owner/context/version checks |
+| Подготовка и owner confirmation | Closed policy input → own ENV snapshot и OCC → прежняя canonical draft command |
+| Публикация | Immutable environment resource JSON и resourcesDigest включают exact budget; прежние receipt/audit/events |
+| Fresh warm/turn/retry revision | CP выводит quota policy из опубликованных ресурсов, не из caller snapshot |
+| Controller → runner | Typed Proto/resource JSON → bound RunnerInput; consumer требует совпадения quota и environment budget |
+| Исполнение и handoff | Прежний execution-scoped `/workspace`, защищённые input/knowledge/context/auth paths, quota canary и result publication; durable handoff через Project Files/Artifacts/VFS |
+
+Публикация влияет только на новые immutable revisions. Уже назначенный turn
+не переписывается; terminal/cancel/expiry сохраняют прежний lifecycle и cleanup.
+Для read/rejoin используется штатное чтение environment version/собственной
+конфигурации; новое событие или отдельный cache не вводятся.
 
 ## Always-hot системный помощник
 

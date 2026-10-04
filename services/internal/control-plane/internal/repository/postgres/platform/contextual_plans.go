@@ -103,7 +103,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			continue
 		}
 		switch operation.Type {
-		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
+		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", prepareProjectAssistantConnection:
 			updated, err := repository.rehydrateEditedAssistantConfiguration(ctx, tx, scope, original, operation, state == "STALE")
 			if err != nil {
 				return commandOutcome{}, err
@@ -361,9 +361,16 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 			problems = append(problems, fmt.Sprintf("operation-%d-invalid", index+1))
 			continue
 		}
-		if commandErr = repository.authorizeCommand(ctx, tx, scope, planned); commandErr != nil {
+		if commandErr = repository.authorizeAssistantPreparedOperation(ctx, tx, scope, operation, planned); commandErr != nil {
 			problems = append(problems, assistantPlanAuthorizationProblem(index, commandErr))
 			continue
+		}
+		if operation.Type == prepareProjectAssistantConnection {
+			matching, snapshotErr := repository.projectAssistantConnectionSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
 		}
 		if operation.Type == "LAUNCH_RUN" {
 			if readinessErr := repository.validateAssistantLaunchReadiness(ctx, tx, scope, operation); readinessErr != nil {

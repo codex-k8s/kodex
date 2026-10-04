@@ -728,13 +728,15 @@ discover_local_object_storage_secret() {
 }
 
 readback_session_archive_worker_secret() {
-  local source runtime
+  local source runtime source_file="$temporary_directory/session-archive-source-secret.json"
   [[ -n "$object_storage_secret_name" ]] || fail 'session archive object storage Secret name is absent'
   source=$(kubectl -n "$namespace" get "secret/$object_storage_secret_name" -o json) ||
     fail 'session archive source object storage Secret is absent'
   runtime=$(kubectl -n "$runtime_namespace" get "secret/$object_storage_secret_name" -o json) ||
     fail 'session archive runtime object storage Secret is absent'
-  jq -e --arg name "$object_storage_secret_name" --argjson source "$source" '
+  printf '%s' "$source" >"$source_file"
+  chmod 0600 "$source_file"
+  jq -e --arg name "$object_storage_secret_name" --slurpfile source "$source_file" '
     .metadata.name == $name and .metadata.namespace == "kodex-runtime" and
     .metadata.labels["app.kubernetes.io/name"] == "session-archive" and
     .metadata.labels["app.kubernetes.io/component"] == "archive-worker" and
@@ -742,8 +744,8 @@ readback_session_archive_worker_secret() {
     .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
     .immutable == true and
     (.data | keys | sort) == (["access-key", "secret-key"] | sort) and
-    .data["access-key"] == $source.data["access-key"] and
-    .data["secret-key"] == $source.data["secret-key"]
+    .data["access-key"] == $source[0].data["access-key"] and
+    .data["secret-key"] == $source[0].data["secret-key"]
   ' <<<"$runtime" >/dev/null || fail 'session archive runtime object storage Secret readback failed'
 }
 
@@ -1462,6 +1464,7 @@ PY
         .kind != "Secret" and .kind != "CustomResourceDefinition" and .kind != "Namespace")
     '
     ensure_email_projection_secret
+    ensure_session_archive_worker_secret
     wait_certificates
     apply_render statefulsets 'select(.kind == "StatefulSet")'
     reconcile_local_statefulset_rollout \
@@ -1728,6 +1731,14 @@ PY
   fi
   if [[ "$stage" == core ]]; then
     if [[ "$mode" == apply ]]; then
+      if [[ "$selected_workload" == session-archive ]]; then
+        # Worker находится в runtime namespace: Secret не наследуется из system.
+        ensure_session_archive_worker_secret
+        apply_render session-archive-local-configuration '
+          select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+            .metadata.name == "session-archive-runtime")
+        '
+      fi
       if [[ -z "$selected_workload" || "$selected_workload" == control-plane ]]; then
         # Каталог должен быть применён до старта CP, не только в supply-chain:
         # процесс загружает его при запуске и не перечитывает projected volume.

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { verifiedInventoryFixture } from "../src/test-utils/image-inventory-fixture";
 const now = "2026-10-04T00:00:00Z",
   digest = "a".repeat(64);
 const artifact = {
@@ -16,7 +17,8 @@ const artifact = {
   promotionState: "PROMOTED",
   promotionRequested: true,
   promotedReference: `example.invalid/assistant@sha256:${digest}`,
-  tools: [{ name: "git", version: "2.53" }],
+  declaredTools: [{ name: "git", version: "2.53" }],
+  verifiedToolInventory: verifiedInventoryFixture(digest, digest, ["git"]),
 };
 const recipe = {
   ref: artifact.recipeRef,

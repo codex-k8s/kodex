@@ -9,7 +9,7 @@ import (
 )
 
 func assistantConfigurationOperationType(kind string) bool {
-	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
+	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == prepareProjectAssistantConnection
 }
 
 func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.Context, tx pgx.Tx, current scope, original, edited entity.AssistantPlanOperation, refreshStale bool) (entity.AssistantPlanOperation, error) {
@@ -18,6 +18,9 @@ func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.
 	}
 	if original.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		return repository.rehydrateEditedSystemAssistantGrant(ctx, tx, current, original, edited, refreshStale)
+	}
+	if original.Type == prepareProjectAssistantConnection {
+		return repository.rehydrateEditedProjectAssistantConnection(ctx, tx, current, original, edited, refreshStale)
 	}
 	request := cloneAssistantFields(edited.Parameters)
 	var refreshed entity.AssistantPlanOperation

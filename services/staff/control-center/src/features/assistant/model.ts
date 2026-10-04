@@ -6,6 +6,7 @@ import type {
   AssistantPlanTarget,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+import { projectAssistantConnectionPlanOwner } from "./project-connection-plan";
 
 function assistantAppliedResourceRef(
   plan: AssistantPlan,
@@ -384,6 +385,16 @@ export function assistantIntegrationConnectionTarget(
   plan: AssistantPlan,
   operationRef: string,
 ): { connectionRef: string } | undefined {
+  const prepared = plan.operations.find((item) => item.ref === operationRef);
+  const projectPreparedRef =
+    prepared && projectAssistantConnectionPlanOwner(prepared)
+      ? assistantAppliedResourceRef(
+          plan,
+          operationRef,
+          "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION",
+          "PROJECT_ASSISTANT",
+        )
+      : undefined;
   const createdRef = assistantAppliedResourceRef(
     plan,
     operationRef,
@@ -404,6 +415,7 @@ export function assistantIntegrationConnectionTarget(
   );
   const operation = plan.operations.find((item) => item.ref === operationRef);
   const connectionRef =
+    projectPreparedRef ||
     createdRef ||
     (updatedRef === operation?.target.ref ? updatedRef : undefined) ||
     (testedRef === operation?.target.ref ? testedRef : undefined);
@@ -571,6 +583,7 @@ export type FriendlyPlanOperationType =
   | "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
   | "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
   | "CREATE_INTEGRATION_CONNECTION"
+  | "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
   | "UPDATE_INTEGRATION_CONNECTION"
   | "TEST_INTEGRATION_CONNECTION"
   | "PUBLISH_INTEGRATION_DEFINITION"
@@ -581,6 +594,22 @@ export type FriendlyPlanOperationType =
 export function friendlyPlanOperationType(
   operation: EditablePlanOperation,
 ): FriendlyPlanOperationType | undefined {
+  if (
+    operation.value.type === "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
+  ) {
+    try {
+      return projectAssistantConnectionPlanOwner({
+        ...operation.value,
+        parameters: parseObject(operation.parametersText),
+        before: parseObject(operation.beforeText),
+        after: parseObject(operation.afterText),
+      })
+        ? operation.value.type
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
   if (operation.value.type === "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT")
     return operation.value.type;
   const operationType: FriendlyPlanOperationType = operation.value.type;
@@ -689,6 +718,8 @@ export function updateOperationParameter(
   if (
     key === "name" &&
     operation.value.action === "CREATE" &&
+    operation.value.type !==
+      "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
     typeof value === "string"
   )
     operation.value.target.name = value;

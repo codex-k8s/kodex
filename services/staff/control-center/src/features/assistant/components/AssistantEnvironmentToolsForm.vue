@@ -10,6 +10,10 @@ import type { RuntimeResourceScope } from "@/features/runtime/resource-scope";
 import type { RuntimeImageCatalog } from "@/features/runtime/image-tools-selection";
 import RuntimeEnvironmentToolsEditor from "@/features/runtime/RuntimeEnvironmentToolsEditor.vue";
 import {
+  verifiedImageInventoryAvailable,
+  verifiedImageTools,
+} from "@/shared/lib/verified-image-tools";
+import {
   defaultRuntimeEnvironmentPolicy,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
@@ -124,10 +128,10 @@ const problems = computed(() => {
   if (
     suppliedTools.value !== undefined &&
     tools.value.length > 0 &&
-    (!artifact.value ||
+    (!verifiedImageInventoryAvailable(artifact.value) ||
       tools.value.some(
         (tool) =>
-          !artifact.value?.tools.some(
+          !verifiedImageTools(artifact.value).some(
             (available) => available.name === tool.command,
           ),
       ))
@@ -237,7 +241,8 @@ function update(next: RuntimeEnvironmentTool[]): void {
   <div class="assistant-environment-tools">
     <RuntimeEnvironmentToolsEditor
       :tools="tools ?? []"
-      :catalog="artifact?.tools ?? []"
+      :catalog="verifiedImageTools(artifact)"
+      :inventory-available="verifiedImageInventoryAvailable(artifact)"
       :image-selected="!!imageRef"
       :loading="loading"
       :disabled="disabled || !tools || !artifact"

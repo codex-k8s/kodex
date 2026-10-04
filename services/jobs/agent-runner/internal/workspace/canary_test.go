@@ -98,6 +98,25 @@ func testPolicy() runtimecontract.RuntimeWorkspacePolicy {
 	return runtimecontract.RuntimeWorkspacePolicyV1()
 }
 
+func TestCanaryEnforcesConfiguredLowerWorkspaceQuota(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	policy, err := runtimecontract.RuntimeWorkspacePolicyWithLimits(&runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10})
+	if err != nil || RunCanary(t.Context(), root, policy) != nil {
+		t.Fatal("bounded writable workspace not ready")
+	}
+	if err := os.WriteFile(filepath.Join(root, "result"), make([]byte, 4097), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = RunCanary(t.Context(), root, policy)
+	var denial *Denial
+	if !errors.As(err, &denial) || denial.Reason != runtimecontract.RuntimeWorkspaceQuotaExceeded {
+		t.Fatal("configured lower quota was not enforced")
+	}
+}
+
 func TestRunCanaryExercisesAtomicWritablePathAndCleansUp(t *testing.T) {
 	root := t.TempDir()
 	for _, path := range []string{".kodex/outbox", "input", "knowledge"} {

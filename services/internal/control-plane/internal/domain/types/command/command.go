@@ -23,6 +23,8 @@ type ManagedConfigurationGitSourceInput struct {
 	ExpectedConnectionVersion                                                    int64
 }
 
+const CreateProjectAssistantIntegrationConnection Kind = "CREATE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
+
 const (
 	CreateEmailMailboxDraft                   Kind = "CREATE_EMAIL_MAILBOX_DRAFT"
 	SaveEmailMailboxDraft                     Kind = "SAVE_EMAIL_MAILBOX_DRAFT"
@@ -267,6 +269,14 @@ type AgentBindingInput struct {
 	Enabled              bool
 }
 type AgentAvatarInput struct{ AgentRef, ArtifactRef string }
+
+// Внутренняя команда применяется только из подтверждённого specialty plan.
+type ProjectAssistantConnectionInput struct {
+	AssistantRef, OrganizationRef, ProjectRef, ProfileRef, DefinitionVersion, DefinitionDigest string
+	AgentVersion, ProfileVersion                                                               int64
+	Connection                                                                                 ConnectionInput
+}
+
 type AgentRuntimeConfigurationInput struct {
 	AgentRef, RuntimeProfileRef, Model, ProviderPolicyMode string
 	ProviderAccounts                                       []entity.ProviderAccountCandidate

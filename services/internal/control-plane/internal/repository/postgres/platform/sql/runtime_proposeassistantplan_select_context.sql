@@ -9,7 +9,9 @@ SELECT conversation.id::text,
                run.initiated_by,conversation.project_id,conversation.assistant_scope,run.assistant_context_entity_kind)
                THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[] ELSE '{}'::text[] END
        || control_plane.assistant_system_integration_grant_operations(run.organization_id,
-           run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,NULL::uuid),
+           run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,NULL::uuid)
+       || control_plane.assistant_project_connection_operations(run.organization_id,
+           run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,run.project_id),
        run.assistant_context_entity_kind,
        run.assistant_context_entity_ref,
        run.target_ref,

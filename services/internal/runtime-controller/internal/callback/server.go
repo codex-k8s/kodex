@@ -1223,6 +1223,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		"PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":   "Подготовить настройку модели помощника",
 		"CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT": "Изменить права интеграции Kodex",
 	}
+	labels["PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"] = "Подготовить подключение помощника Проекта"
 	label := labels[kind]
 	if strings.TrimSpace(name) == "" {
 		return label
@@ -1252,7 +1253,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
+	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
 		return true
 	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		return true
@@ -1264,10 +1265,26 @@ func assistantServerHydratedOperation(kind string) bool {
 // Здесь проверяется форма locator, а не authority: текущие права, профиль,
 // scope, версии и каталог повторно разрешает control-plane в owner-транзакции.
 func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, kind string, parameters map[string]any) bool {
-	if _, supplied := parameters["projectAssistantRef"]; supplied {
+	if _, supplied := parameters["projectAssistantRef"]; supplied && kind != "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" {
 		return projectAssistantLocatorParametersAllowed(input, kind, parameters)
 	}
 	switch kind {
+	case "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
+		if input.AssistantScope != runtimecontract.AssistantScopeProject || input.AgentRef == "" || parameters["projectAssistantRef"] != input.AgentRef ||
+			!onlyKeys(parameters, "projectAssistantRef", "definitionKey", "name", "publicConfiguration") || !assistantRequiredStrings(parameters, "projectAssistantRef", "definitionKey", "name") {
+			return false
+		}
+		configuration, valid := parameters["publicConfiguration"].(map[string]any)
+		if !valid || len(configuration) > 100 {
+			return false
+		}
+		for _, value := range configuration {
+			text, valid := value.(string)
+			if !valid || len(text) > 4096 {
+				return false
+			}
+		}
+		return len(parameters["name"].(string)) <= 160
 	case "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
 		if !input.IsSystemAssistant() || input.AgentRef == "" || !onlyKeys(parameters, "connectionRef", "capabilityKey", "enabled", "approvalPolicy", "approvalScopePaths") ||
 			!assistantRequiredStrings(parameters, "connectionRef", "capabilityKey", "approvalPolicy") {
@@ -1473,6 +1490,13 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 		return map[string]any{"kind": targetKind, "name": parameters["projectAssistantRef"]}
 	}
 	targetKind := strings.TrimPrefix(kind, "CREATE_")
+	if kind == "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" {
+		ref, _ := parameters["projectAssistantRef"].(string)
+		if strings.TrimSpace(ref) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "PROJECT_ASSISTANT", "name": ref}
+	}
 	if kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
 		ref, _ := parameters["agentRef"].(string)
 		if strings.TrimSpace(ref) == "" {

@@ -52,12 +52,13 @@ var reservedRuntimeVolumeNames = map[string]struct{}{
 // Kubernetes quantities. Это сохраняет browser contract типизированным и
 // исключает неоднозначную канонизацию значений.
 type RuntimeResourcePolicy struct {
-	CPURequestMilli            int64 `json:"cpu_request_milli"`
-	CPULimitMilli              int64 `json:"cpu_limit_milli"`
-	MemoryRequestMiB           int64 `json:"memory_request_mib"`
-	MemoryLimitMiB             int64 `json:"memory_limit_mib"`
-	EphemeralStorageRequestMiB int64 `json:"ephemeral_storage_request_mib"`
-	EphemeralStorageLimitMiB   int64 `json:"ephemeral_storage_limit_mib"`
+	WorkspaceLimits            *RuntimeWorkspaceLimits `json:"workspace_limits,omitempty"`
+	CPURequestMilli            int64                   `json:"cpu_request_milli"`
+	CPULimitMilli              int64                   `json:"cpu_limit_milli"`
+	MemoryRequestMiB           int64                   `json:"memory_request_mib"`
+	MemoryLimitMiB             int64                   `json:"memory_limit_mib"`
+	EphemeralStorageRequestMiB int64                   `json:"ephemeral_storage_request_mib"`
+	EphemeralStorageLimitMiB   int64                   `json:"ephemeral_storage_limit_mib"`
 }
 
 // RuntimeVolume разрешает только execution-scoped emptyDir. Имя источника,
@@ -161,6 +162,13 @@ func NormalizeRuntimeEnvironmentPolicy(input RuntimeEnvironmentPolicy) (RuntimeE
 	}
 	if err := validateRuntimeResources(input.Resources); err != nil {
 		return RuntimeEnvironmentPolicy{}, err
+	}
+	if input.Resources.WorkspaceLimits != nil {
+		if err := input.Resources.WorkspaceLimits.Validate(); err != nil {
+			return RuntimeEnvironmentPolicy{}, err
+		}
+		limits := *input.Resources.WorkspaceLimits
+		input.Resources.WorkspaceLimits = &limits
 	}
 	volumes := append([]RuntimeVolume{}, input.Volumes...)
 	for index := range volumes {
@@ -434,9 +442,13 @@ func validRuntimeDomainPattern(value string) bool {
 }
 
 func digestRuntimeResources(value RuntimeResourcePolicy) string {
-	return digestParts("resources-v1", strconv.FormatInt(value.CPURequestMilli, 10), strconv.FormatInt(value.CPULimitMilli, 10),
+	parts := []string{"resources-v1", strconv.FormatInt(value.CPURequestMilli, 10), strconv.FormatInt(value.CPULimitMilli, 10),
 		strconv.FormatInt(value.MemoryRequestMiB, 10), strconv.FormatInt(value.MemoryLimitMiB, 10),
-		strconv.FormatInt(value.EphemeralStorageRequestMiB, 10), strconv.FormatInt(value.EphemeralStorageLimitMiB, 10))
+		strconv.FormatInt(value.EphemeralStorageRequestMiB, 10), strconv.FormatInt(value.EphemeralStorageLimitMiB, 10)}
+	if value.WorkspaceLimits != nil {
+		parts = append(parts, "workspace-limits-v1", strconv.FormatInt(value.WorkspaceLimits.MaxBytes, 10), strconv.FormatInt(value.WorkspaceLimits.MaxFiles, 10))
+	}
+	return digestParts(parts...)
 }
 
 func digestRuntimeVolumes(values []RuntimeVolume) string {

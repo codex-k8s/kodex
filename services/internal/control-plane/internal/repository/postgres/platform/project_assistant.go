@@ -143,6 +143,19 @@ func (repository *Repository) expandAssistantContext(ctx context.Context, tx pgx
 			descriptor.AllowedOperations = append(descriptor.AllowedOperations, operation)
 		}
 	}
+	var connectionOperations []string
+	if err := tx.QueryRow(ctx, queryProjectAssistantConnectionOperations, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "actor_id": current.actorID,
+		"assistant_agent_id": assistant.ID, "assistant_scope": assistant.Scope,
+		"authority_project": current.authorityProjectID,
+	}).Scan(&connectionOperations); err != nil {
+		return errs.ErrUnavailable
+	}
+	for _, operation := range connectionOperations {
+		if !contains(descriptor.AllowedOperations, operation) {
+			descriptor.AllowedOperations = append(descriptor.AllowedOperations, operation)
+		}
+	}
 	return nil
 }
 
@@ -159,6 +172,9 @@ func (repository *Repository) constrainAssistantPlanScope(ctx context.Context, t
 		return errs.ErrNotFound
 	}
 	for _, operation := range operations {
+		if operation.Type == prepareProjectAssistantConnection && assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref {
+			return errs.ErrForbidden
+		}
 		if assistantProjectConfigurationOperation(operation) && assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref {
 			return errs.ErrForbidden
 		}

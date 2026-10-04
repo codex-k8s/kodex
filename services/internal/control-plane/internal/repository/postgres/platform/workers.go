@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -196,7 +197,10 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	resolvedInstructions := materializedPrompt.Prompt
 	resolvedInstructionsSum := sha256.Sum256([]byte(resolvedInstructions))
 	resolvedInstructionsDigest := hex.EncodeToString(resolvedInstructionsSum[:])
-	workspacePolicy := runtimeWorkspacePolicy()
+	workspacePolicy, err := runtimeWorkspacePolicyWithLimits(environmentPolicy.Resources.WorkspaceLimits)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
 	snapshot := map[string]any{
 		"organizationRef": scope.organizationRef, "assistantRef": assistant.Ref, "agentRef": assistant.Ref,
 		"stableKey": assistant.StableKey, "sessionRef": systemSessionRef,

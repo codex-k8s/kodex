@@ -8,6 +8,23 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("показывает PROJECT preparation как ORG подключение с readonly owner и защищённым продолжением", () => {
+    expect(source).toContain("projectAssistantConnectionPlanOwner");
+    expect(source).toContain("projectConnectionReady(operation)");
+    expect(source).toContain("assistant.planEditor.projectConnectionBoundary");
+    expect(source).toContain('v-if="allowRawOperationEdit(operation)"');
+    expect(source).toMatch(
+      /operation\.value\.type !==\s*"PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"/,
+    );
+    expect(source).not.toContain("setField(operation, 'projectAssistantRef'");
+    const workspace = readFileSync(
+      new URL("./AssistantWorkspace.vue", import.meta.url),
+      "utf8",
+    );
+    expect(workspace).toContain(
+      "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION",
+    );
+  });
   it("показывает SYSTEM grant как закрытую owner-confirmed форму без прямой публикации", () => {
     expect(source).toContain("<AssistantSystemIntegrationGrantPlanForm");
     expect(
@@ -98,7 +115,7 @@ describe("AssistantPlanEditor layout", () => {
 
   it("показывает понятные поля проекта и сотрудника без редактирования authority", () => {
     expect(source).toContain('v-if="friendlyPlanOperationType(operation)"');
-    expect(source).toContain('v-if="!friendlyPlanOperationType(operation)"');
+    expect(source).toContain('v-if="allowRawOperationEdit(operation)"');
     expect(source).toContain("fieldValue(operation, 'name')");
     expect(source).toContain("fieldValue(operation, 'purpose')");
     expect(source).toContain("fieldValue(operation, 'instructions')");
@@ -293,7 +310,7 @@ describe("AssistantPlanEditor layout", () => {
       "assistant.planEditor.integrationPublicationBoundary",
     );
     expect(source).toContain('operationParameter(operation, "revisionRef")');
-    expect(source).toContain('v-if="!friendlyPlanOperationType(operation)"');
+    expect(source).toContain('v-if="allowRawOperationEdit(operation)"');
   });
 
   it("показывает тест интеграции и архивирование как понятные подтверждения", () => {

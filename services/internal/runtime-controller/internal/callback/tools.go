@@ -274,6 +274,10 @@ func environmentPolicySchema() map[string]any {
 		"memoryLimitMib":             map[string]any{"type": "integer", "minimum": 128, "maximum": 65536},
 		"ephemeralStorageRequestMib": map[string]any{"type": "integer", "minimum": 256, "maximum": 20480},
 		"ephemeralStorageLimitMib":   map[string]any{"type": "integer", "minimum": 256, "maximum": 102400},
+		"workspaceLimits": objectSchema([]string{"maxBytes", "maxFiles"}, map[string]any{
+			"maxBytes": map[string]any{"type": "integer", "minimum": 1, "maximum": runtimecontract.RuntimeWorkspaceWritableBytes},
+			"maxFiles": map[string]any{"type": "integer", "minimum": 1, "maximum": runtimecontract.RuntimeWorkspaceMaximumFiles},
+		}),
 	})
 	webAccessRule := objectSchema([]string{"domainPattern", "protocol", "port", "httpMethods"}, map[string]any{
 		"domainPattern": map[string]any{
@@ -413,6 +417,13 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			[]string{"projectRef", "name", "purpose", "instructions"}, map[string]any{
 				"projectRef": projectRef, "name": stringSchema(1, 120), "purpose": stringSchema(1, 1000),
 				"instructions": assistantAgentInstructionsSchema(),
+			})))
+	}
+	if input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != "" {
+		result = append(result, assistantOperationSchema("PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION", objectSchema(
+			[]string{"projectAssistantRef", "definitionKey", "name", "publicConfiguration"}, map[string]any{
+				"projectAssistantRef": enumSchema(input.AgentRef), "definitionKey": capabilityKeySchema(), "name": stringSchema(1, 160),
+				"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": map[string]any{"type": "string", "maxLength": 4096}},
 			})))
 	}
 	selfInstructionsOperation := input.IsSystemAssistant() && input.AgentRef != ""

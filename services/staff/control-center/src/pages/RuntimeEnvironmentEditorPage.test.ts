@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reactive, type Ref } from "vue";
 import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
+import {
+  verifiedInventoryFixture,
+  unavailableInventoryFixture,
+} from "@/test-utils/image-inventory-fixture";
 import type {
   RoleImageArtifact,
   RuntimeEnvironmentInput,
@@ -43,6 +47,7 @@ async function editor() {
   )) as unknown as {
     input: { imageArtifactRef: string; name: string };
     imageArtifact: Ref<RoleImageArtifact | undefined>;
+    imageInventoryReady: Ref<boolean>;
     imageLoading: Ref<boolean>;
     imageProblem: Ref<unknown>;
     selectedImage: Ref<{ ref: string; title: string } | undefined>;
@@ -68,6 +73,23 @@ beforeEach(() => {
 });
 
 describe("ответы образа принадлежат текущему окружению", () => {
+  it("публикация требует inventory точного выбранного artifact, а не декларации", async () => {
+    const state = await editor();
+    state.input.imageArtifactRef = "image_1";
+    state.imageArtifact.value = {
+      ref: "image_1",
+      manifestDigest: `sha256:${"a".repeat(64)}`,
+      provenanceSha256: "b".repeat(64),
+      declaredTools: [{ name: "git", version: "2.53" }],
+      verifiedToolInventory: unavailableInventoryFixture(),
+    } as RoleImageArtifact;
+    expect(state.imageInventoryReady.value).toBe(false);
+    state.imageArtifact.value.verifiedToolInventory =
+      verifiedInventoryFixture();
+    expect(state.imageInventoryReady.value).toBe(true);
+    state.input.imageArtifactRef = "image_2";
+    expect(state.imageInventoryReady.value).toBe(false);
+  });
   it("пустой черновик не показывает ложную загрузку восстановленного образа", async () => {
     const state = await editor();
     state.selectedImage.value = { ref: "old_image", title: "Старый образ" };

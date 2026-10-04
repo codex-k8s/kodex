@@ -59,6 +59,9 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	seen := make(map[string]struct{}, len(payload.Operations))
 	normalizedOperations := make([]entity.AssistantPlanOperation, 0, len(payload.Operations))
 	for index, operation := range payload.Operations {
+		if operation.Type == prepareProjectAssistantConnection && (len(payload.Operations) != 1 || assistant.Scope != "PROJECT" || assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref) {
+			return commandOutcome{}, errs.ErrForbidden
+		}
 		if assistant.Scope == "PROJECT" && !projectAssistantOperation(operation.Type) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
@@ -114,7 +117,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		if err := repository.authorizeCommand(ctx, tx, actorScope, planned); err != nil {
+		if err := repository.authorizeAssistantPreparedOperation(ctx, tx, actorScope, operation, planned); err != nil {
 			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
 		}
 		if noRuntimeChange {
@@ -181,6 +184,8 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 
 func projectAssistantOperation(operationType string) bool {
 	switch operationType {
+	case prepareProjectAssistantConnection:
+		return true
 	case "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT",
 		"CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE",
 		"UPDATE_SCHEDULE", "LAUNCH_RUN", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW", "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
@@ -217,6 +222,8 @@ func assistantPlanDigest(summary string, rawOperations []byte) string {
 
 func assistantOperationType(value string) bool {
 	switch value {
+	case prepareProjectAssistantConnection:
+		return true
 	case "CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
@@ -229,6 +236,8 @@ func assistantOperationType(value string) bool {
 
 func assistantOperationMatchesContext(contextKind, contextRef string, operation entity.AssistantPlanOperation) bool {
 	switch operation.Type {
+	case prepareProjectAssistantConnection:
+		return true
 	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
 		return true
 	case "PUBLISH_INTEGRATION_DEFINITION":
@@ -274,6 +283,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Parameters == nil || len(operation.Parameters) > 100 {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if operation.Type == prepareProjectAssistantConnection {
+		return repository.hydrateProjectAssistantConnection(ctx, tx, actorScope, operation)
 	}
 	if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		return repository.hydrateSystemAssistantIntegrationGrant(ctx, tx, actorScope, operation)
@@ -952,7 +964,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	if operation.Action != expectedAction {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
-	if expectedAction == "CREATE" {
+	if expectedAction == "CREATE" && operation.Type != prepareProjectAssistantConnection {
 		expectedAfter := cloneAssistantFields(operation.Parameters)
 		if operation.Type == "CREATE_PROJECT_FILE" {
 			delete(expectedAfter, "content")
@@ -963,7 +975,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 		}
 		operation.After = expectedAfter
 	}
-	if expectedAction == "CREATE" {
+	if expectedAction == "CREATE" && operation.Type != prepareProjectAssistantConnection {
 		kind, name, supported := assistantCreateTarget(operation.Type, operation.Parameters)
 		if !supported || operation.Target.Kind != kind || operation.Target.Name != name || operation.Target.Ref != "" || operation.Target.Version != nil {
 			return entity.AssistantPlanOperation{}, errs.ErrInvalid
@@ -979,6 +991,17 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedTargetKind, expectedTargetRef := "", ""
 	switch operation.Type {
+	case prepareProjectAssistantConnection:
+		expectedTargetKind, expectedTargetRef = "PROJECT_ASSISTANT", assistantString(operation.Parameters, "projectAssistantRef")
+		if operation.ExpectedVersion == nil || operation.Target.Version == nil || *operation.ExpectedVersion != *operation.Target.Version ||
+			*operation.ExpectedVersion != mustAssistantInt64(operation.Parameters, "agentVersion") || !assistantJSONEqual(operation.After, operation.Parameters) {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		for _, field := range append([]string{"projectAssistantRef"}, projectConnectionPins...) {
+			if !assistantJSONEqual(operation.Parameters[field], operation.Before[field]) {
+				return entity.AssistantPlanOperation{}, errs.ErrInvalid
+			}
+		}
 	case "UPDATE_PROJECT":
 		expectedTargetKind = "PROJECT"
 		expectedTargetRef = assistantString(operation.Parameters, "projectRef")
@@ -1081,6 +1104,9 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 }
 
 func assistantOperationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
+	if operation.Type == prepareProjectAssistantConnection {
+		return projectAssistantConnectionCommand(operation)
+	}
 	if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		return systemAssistantIntegrationGrantCommand(operation)
 	}

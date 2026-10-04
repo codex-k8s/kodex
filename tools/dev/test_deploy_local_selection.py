@@ -86,6 +86,17 @@ class DeployLocalSelectionTest(unittest.TestCase):
             "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}],
         }])
 
+    def test_archive_runtime_secret_precedes_controller_activation(self):
+        source = SCRIPT.read_text()
+        core = source[source.index('  if [[ "$stage" == core ]]'):]
+        archive = core[core.index('if [[ "$selected_workload" == session-archive ]]'):]
+        self.assertLess(archive.index("ensure_session_archive_worker_secret"), archive.index("apply_render core-application"))
+        self.assertIn("apply_render session-archive-local-configuration", archive)
+        readback = source[source.index("readback_session_archive_worker_secret() {"):source.index("readback_session_archive() {")]
+        self.assertIn('--slurpfile source "$source_file"', readback)
+        self.assertNotIn("--argjson source", readback)
+        self.assertIn('chmod 0600 "$source_file"', readback)
+
     def test_supply_chain_seed_precedes_full_registry_readiness(self):
         source = SCRIPT.read_text()
         stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]

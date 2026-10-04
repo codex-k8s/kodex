@@ -12408,6 +12408,7 @@ components:
           ephemeralStorageLimitMib,
         ]
       properties:
+        workspaceLimits: { $ref: "#/components/schemas/RuntimeWorkspaceLimits" }
         cpuRequestMilli:
           { type: integer, format: int64, minimum: 100, maximum: 8000 }
         cpuLimitMilli:
@@ -12420,6 +12421,13 @@ components:
           { type: integer, format: int64, minimum: 256, maximum: 20480 }
         ephemeralStorageLimitMib:
           { type: integer, format: int64, minimum: 256, maximum: 102400 }
+    RuntimeWorkspaceLimits:
+      type: object
+      additionalProperties: false
+      required: [maxBytes, maxFiles]
+      properties:
+        maxBytes: { type: integer, format: int64, minimum: 1, maximum: 1073741824 }
+        maxFiles: { type: integer, format: int64, minimum: 1, maximum: 10000 }
     RuntimeVolumeInput:
       type: object
       additionalProperties: false
@@ -17700,6 +17708,7 @@ components:
                 CHANGE_CAPABILITY,
                 CHANGE_INTEGRATION_GRANT,
                 CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT,
+                PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION,
                 CREATE_SCHEDULE,
                 UPDATE_SCHEDULE,
                 LAUNCH_RUN,
@@ -17900,6 +17909,7 @@ components:
                   CHANGE_CAPABILITY,
                   CHANGE_INTEGRATION_GRANT,
                   CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT,
+                  PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION,
                   CREATE_SCHEDULE,
                   UPDATE_SCHEDULE,
                   LAUNCH_RUN,

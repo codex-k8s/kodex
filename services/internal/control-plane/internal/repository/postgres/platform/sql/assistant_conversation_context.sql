@@ -7,6 +7,8 @@ SELECT COALESCE(project.ref,''), conversation.context_route, conversation.contex
                THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[] ELSE '{}'::text[] END
        || control_plane.assistant_system_integration_grant_operations(conversation.organization_id,
            @actor_id::uuid,conversation.assistant_agent_id,conversation.assistant_scope,NULLIF(@authority_project,'')::uuid)
+       || control_plane.assistant_project_connection_operations(conversation.organization_id,
+           @actor_id::uuid,conversation.assistant_agent_id,conversation.assistant_scope,NULLIF(@authority_project,'')::uuid)
 FROM control_plane.assistant_conversations conversation
 LEFT JOIN control_plane.projects project ON project.id=conversation.project_id
 JOIN LATERAL control_plane.assistant_context_projection_v2(conversation.organization_id,@actor_id::uuid,

@@ -19,6 +19,7 @@ import { useRoute, useRouter } from "vue-router";
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
+import { verifiedImageInventoryAvailable } from "@/shared/lib/verified-image-tools";
 import { recipeCopySource } from "@/features/managed-configurations/copy-source";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import {
@@ -1014,14 +1015,44 @@ onBeforeUnmount(() => {
           </section>
           <section class="panel artifact-card">
             <TerminalSquare :size="20" aria-hidden="true" />
-            <h2>{{ t("roleImages.executables") }}</h2>
-            <ul v-if="artifact?.tools.length" class="tool-list">
-              <li v-for="tool in artifact.tools" :key="tool.name">
+            <h2>{{ t("roleImages.declaredTools") }}</h2>
+            <ul v-if="artifact?.declaredTools.length" class="tool-list">
+              <li v-for="tool in artifact.declaredTools" :key="tool.name">
                 <code>{{ tool.name }}</code
                 ><span>{{ tool.version }}</span>
               </li>
             </ul>
-            <p v-else>{{ t("roleImages.noVerifiedExecutables") }}</p>
+            <h2>{{ t("roleImages.verifiedInventory") }}</h2>
+            <template
+              v-if="artifact && verifiedImageInventoryAvailable(artifact)"
+            >
+              <code>{{ artifact.verifiedToolInventory.sha256 }}</code>
+              <details
+                v-for="platform in artifact.verifiedToolInventory.platforms"
+                :key="platform.platform"
+              >
+                <summary>{{ platform.platform }}</summary>
+                <code>{{ platform.platformDigest }}</code>
+                <code>{{ platform.manifestSha256 }}</code>
+                <ul class="tool-list">
+                  <li v-for="tool in platform.tools" :key="tool.name">
+                    <code>{{ tool.name }}</code>
+                    <span v-if="tool.status === 'VERIFIED'"
+                      >{{ tool.version }} · {{ tool.path }}</span
+                    >
+                    <span v-else>{{
+                      t(
+                        tool.status === "MISSING"
+                          ? "roleImages.inventoryProbeMissing"
+                          : "roleImages.inventoryProbeFailed",
+                      )
+                    }}</span>
+                    <code v-if="tool.sha256">{{ tool.sha256 }}</code>
+                  </li>
+                </ul>
+              </details>
+            </template>
+            <p v-else>{{ t("roleImages.inventoryUnavailable") }}</p>
           </section>
           <section class="panel artifact-card">
             <Link2 :size="20" aria-hidden="true" />

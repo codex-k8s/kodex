@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { verifiedInventoryFixture } from "../../src/test-utils/image-inventory-fixture";
 import type {
   RuntimeEnvironmentDraft,
   RuntimeEnvironmentDraftSpecification,
@@ -152,7 +153,8 @@ export async function installEnvironmentFixture(
       admissionVerdict: "ACCEPTED",
       promotionState: "PROMOTED",
       promotionRequested: true,
-      tools: [],
+      declaredTools: [],
+      verifiedToolInventory: verifiedInventoryFixture(digest, digest),
     },
   };
   const consumer: RuntimeEnvironmentConsumer = {

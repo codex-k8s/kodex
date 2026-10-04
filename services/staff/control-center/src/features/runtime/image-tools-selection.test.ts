@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  verifiedInventoryFixture,
+  unavailableInventoryFixture,
+} from "@/test-utils/image-inventory-fixture";
 import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen";
 import {
   assertPromotedRuntimeImage,
@@ -24,7 +28,11 @@ function artifact(
     promotedReference: `example.invalid/assistant@sha256:${"a".repeat(64)}`,
     admissionVerdict: "ACCEPTED",
     promotionState: "PROMOTED",
-    tools: [{ name: "git", version: "2.53" }],
+    provenanceSha256: "b".repeat(64),
+    declaredTools: [{ name: "git", version: "2.53" }],
+    verifiedToolInventory: verifiedInventoryFixture(undefined, undefined, [
+      "git",
+    ]),
     ...overrides,
   } as RoleImageArtifact;
 }
@@ -51,6 +59,7 @@ describe("Выбор образа и проверенных инструмент
     { promotedReference: "example.invalid/assistant:latest" },
     { promotedReference: `example.invalid/assistant@sha256:${"b".repeat(64)}` },
     { manifestDigest: "invalid" },
+    { verifiedToolInventory: unavailableInventoryFixture() },
   ] as Partial<RoleImageArtifact>[])(
     "не открывает инструменты для недопущенного или stale образа %o",
     (change) => {
@@ -152,9 +161,9 @@ describe("Выбор образа и проверенных инструмент
     const controller = new AbortController();
     const loadPage = vi
       .fn<RuntimeImageCatalog["loadPage"]>()
-      .mockImplementation(async () => {
+      .mockImplementation(() => {
         controller.abort();
-        return { items: [] };
+        return Promise.resolve({ items: [] });
       });
     await expect(
       restoreRuntimeImageOption(

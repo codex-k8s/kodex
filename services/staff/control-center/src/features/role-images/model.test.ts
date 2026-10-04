@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { unavailableInventoryFixture } from "@/test-utils/image-inventory-fixture";
 
 import {
   buildIsActive,
@@ -77,7 +78,8 @@ function admittedArtifact(
     admissionVerdict: "ACCEPTED",
     promotionState: "PENDING",
     promotionRequested: false,
-    tools: [],
+    declaredTools: [],
+    verifiedToolInventory: unavailableInventoryFixture(),
     ...overrides,
   };
 }
@@ -221,7 +223,8 @@ describe("role image model", () => {
       admissionVerdict: "ACCEPTED" as const,
       promotionState: "PENDING" as const,
       promotionRequested: false,
-      tools: [],
+      declaredTools: [],
+      verifiedToolInventory: unavailableInventoryFixture(),
     };
     expect(
       canPromoteRoleImage(

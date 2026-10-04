@@ -34,7 +34,14 @@ const artifact: RoleImageArtifact = {
   admissionVerdict: "ACCEPTED",
   promotionState: "PROMOTED",
   promotionRequested: true,
-  tools: [],
+  declaredTools: [],
+  verifiedToolInventory: {
+    status: "UNAVAILABLE",
+    sha256: "",
+    imageDigest: "",
+    provenanceSha256: "",
+    platforms: [],
+  },
 };
 const recipe: RoleImageRecipe = {
   ...owner,

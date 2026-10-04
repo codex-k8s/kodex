@@ -14,6 +14,8 @@ SELECT CASE WHEN EXISTS (SELECT 1 FROM control_plane.runs candidate
           ELSE '{}'::text[] END
           || control_plane.assistant_system_integration_grant_operations(run.organization_id,
             run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,NULL::uuid)
+          || control_plane.assistant_project_connection_operations(run.organization_id,
+            run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,run.project_id)
     )
     FROM control_plane.runs run
     JOIN control_plane.assistant_conversations conversation

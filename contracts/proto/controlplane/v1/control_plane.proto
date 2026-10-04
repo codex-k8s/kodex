@@ -1591,6 +1591,8 @@ message AssistantPlanOperation {
     TYPE_PREPARE_ASSISTANT_RUNTIME_CONFIGURATION = 29;
     // Подготовить exact integration grant системного помощника для human confirmation.
     TYPE_CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT = 30;
+    // Подготовить организационное подключение для exact PROJECT помощника, без выдачи grants.
+    TYPE_PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION = 31;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -5503,12 +5505,18 @@ enum RuntimeKubernetesAccessKind {
 }
 
 message RuntimeResourcePolicy {
+  RuntimeWorkspaceLimits workspace_limits = 7;
   int64 cpu_request_milli = 1;
   int64 cpu_limit_milli = 2;
   int64 memory_request_mib = 3;
   int64 memory_limit_mib = 4;
   int64 ephemeral_storage_request_mib = 5;
   int64 ephemeral_storage_limit_mib = 6;
+}
+
+message RuntimeWorkspaceLimits {
+  int64 max_bytes = 1;
+  int64 max_files = 2;
 }
 
 message RuntimeVolumeInput {

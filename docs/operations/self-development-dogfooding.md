@@ -1103,3 +1103,31 @@ controller теперь требует успешный owner claim, не тол
 11 закрытых deploy/DNS contract tests PASS .309 s; archive app unit PASS
 .034 s; safe code диагностика не выводит сырые ошибки/credentials.
 Canonical network apply и повторное live DNS/claim — ещё NOT RUN.
+
+04.10.2026 15:28 UTC, интеграция поверх `e7d3442692e683b28cc9dc2e88c6bd6cb85671f5`:
+PASS — canonical network stage применён. FQDN control-plane разрешается,
+TCP8443 достижим, archive claim success counter1; readyReplicas1. Последний
+deadline был до восстановления DNS. Host/Pod app SHA256 совпал:
+52fa98e345efce9e7ca21f1eb0018569b5b6161af4ab9369d1181664b9c61109.
+FAIL — первый реальный архивный worker остался ContainerCreating: отсутствует
+exact S3 Secret в kodex-runtime, хотя исходный Secret есть в kodex-system.
+Существующий repo-owned secret projection включён в trusted data stage и
+explicit archive core stage, до активации controller. Readback теперь читает
+private0600 file через slurpfile, не передаёт Secret JSON в argv.
+12 selection/DNS/projection tests PASS .494 s; canonical apply ещё OPEN.
+PASS — объединены frozen project connection specialty, workspace limits и
+frontend signed inventory consumers, сохранены соседние native/resume/UX blocks.
+Новая purpose migration получила номер015 после уже applied014; applied
+migrations не изменены. Proto/OpenAPI codegen выполнен после объединения.
+Root quick unit: CP platform .575 s / gRPC .666 s; callback .920 s /
+workload .904 s; gateway 11.434 s; shared .107 s; Codex 4.579 s /
+workspace 1.287 s. Frontend141 адресных тестов PASS3.40 s, typecheck PASS.
+Detached исполнители дополнительно доказали bounded publish/read, warm→turn,
+SYSTEM/PROJECT isolation и specialty owner/stale/replay на disposable PG.
+Canonical новый runner/image chain и actual model/tool paths ещё NOT RUN.
+FAIL — в actual Chrome IntegrationsPage показывает0 при authoritative GET200
+с одним CONNECTED и platform.connections count1. selectedProjectRef=null,
+global snapshot marker scopeKey="" существует, integration revision1.
+Исполнитель воспроизвёл late marker watcher failure и отдельный project-scope
+аналог. Исправление страницы не добавляет polling; live повтор ещё OPEN.
+Checkbox2–15 остаются открытыми; частичный source/доступ не заменяет Workflow.

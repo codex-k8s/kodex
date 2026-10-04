@@ -12,6 +12,7 @@ const props = defineProps<{
   imageSelected: boolean;
   disabled: boolean;
   loading?: boolean;
+  inventoryAvailable: boolean;
 }>();
 const fieldPrefix = `environment-tools-${useId()}`;
 const expandedTools = reactive(new Map<string, boolean>());
@@ -41,7 +42,7 @@ function toggleDetails(command: string, event: Event): void {
 }
 
 function toggle(tool: RoleImageArtifactTool): void {
-  if (props.disabled) return;
+  if (props.disabled || !props.inventoryAvailable) return;
   const existing = selected(tool.name);
   emit(
     "update:tools",
@@ -100,6 +101,13 @@ function update(
     </div>
     <div v-if="loading" class="secondary-text" role="status">
       {{ $t("common.loading") }}
+    </div>
+    <div
+      v-else-if="imageSelected && inventoryAvailable === false"
+      class="secondary-text"
+      role="status"
+    >
+      {{ $t("runtime.imageInventoryUnavailable") }}
     </div>
     <div v-else-if="catalog.length" class="tool-catalog">
       <article

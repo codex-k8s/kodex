@@ -797,7 +797,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 					return commandOutcome{}, errs.ErrConflict
 				}
 			}
-			workspacePolicy := runtimeWorkspacePolicy()
+			workspacePolicy, err := runtimeWorkspacePolicyWithLimits(environmentPolicy.Resources.WorkspaceLimits)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
 			revisionRef, err := newRef("rrev")
 			if err != nil {
 				return commandOutcome{}, err
@@ -1154,7 +1157,15 @@ func capabilityEnabled(capabilities []string, expected string) bool {
 }
 
 func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
-	shared := runtimecontract.RuntimeWorkspacePolicyV1()
+	policy, _ := runtimeWorkspacePolicyWithLimits(nil)
+	return policy
+}
+
+func runtimeWorkspacePolicyWithLimits(limits *runtimecontract.RuntimeWorkspaceLimits) (entity.RuntimeWorkspacePolicy, error) {
+	shared, err := runtimecontract.RuntimeWorkspacePolicyWithLimits(limits)
+	if err != nil {
+		return entity.RuntimeWorkspacePolicy{}, err
+	}
 	policy := entity.RuntimeWorkspacePolicy{
 		Revision: shared.Revision, Root: shared.Root, Digest: shared.Digest,
 		MaximumWritableBytes: shared.MaximumWritableBytes, MaximumFileCount: shared.MaximumFileCount,
@@ -1164,7 +1175,7 @@ func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
 	for _, rule := range shared.Rules {
 		policy.Rules = append(policy.Rules, entity.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
 	}
-	return policy
+	return policy, nil
 }
 
 func runtimeAssistantScope(stableKey string) runtimecontract.AssistantScope {

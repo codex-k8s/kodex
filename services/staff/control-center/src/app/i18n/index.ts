@@ -1548,6 +1548,8 @@ const ru = {
     searchPromotedImage: "Найти promoted образ",
     promotedAndVerified: "Опубликован и проверен",
     verifiedTools: "Проверенные инструменты",
+    imageInventoryUnavailable:
+      "Проверенный состав программ недоступен. Выбор команд и публикация требуют нового допуска образа.",
     verifiedToolsHelp:
       "Разрешите только нужные программы из выбранного образа и опишите их назначение для инструкции сотрудника.",
     selectedToolsCount: "Выбрано: {selected} из {total}",
@@ -1961,6 +1963,11 @@ const ru = {
     admissionVerdict: "Результат допуска",
     noPromotedArtifact: "Образ ещё не опубликован.",
     executables: "Обнаруженные исполняемые программы",
+    declaredTools: "Заявленные программы рецепта",
+    verifiedInventory: "Проверенный состав программ образа",
+    inventoryUnavailable: "Нет подтверждённого состава программ",
+    inventoryProbeMissing: "Отсутствует",
+    inventoryProbeFailed: "Проверка версии не выполнена",
     noVerifiedExecutables: "Проверенных исполняемых программ пока нет.",
     usedByEnvironments: "Используется окружениями",
     noEnvironmentDependencies: "Ни одно окружение не использует этот образ.",
@@ -3750,6 +3757,8 @@ const ru = {
       CREATE_SCHEDULE: "Создать Автоматизацию",
       LAUNCH_RUN: "Запустить Run",
       CREATE_INTEGRATION_CONNECTION: "Создать подключение",
+      PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION:
+        "Подготовить подключение помощника Проекта",
       PUBLISH_INTEGRATION_DEFINITION: "Опубликовать интеграцию",
       TEST_INTEGRATION_CONNECTION: "Проверить подключение",
       ARCHIVE_AGENT: "Архивировать сотрудника",
@@ -4267,6 +4276,8 @@ const ru = {
       connectionListHint: "Значения разделяются запятыми.",
       connectionCredentialNextSteps:
         "Здесь только общедоступные параметры. Если интеграции нужен ключ или пароль, после создания откроется защищённая форма. Не отправляйте секрет помощнику.",
+      projectConnectionBoundary:
+        "Подключение принадлежит организации и создаётся только после подтверждения владельца. Цель — помощник Проекта:",
       runTitle: "Название запуска",
       runTargetType: "Кого запустить",
       runAgent: "ИИ-сотрудника",
@@ -5522,6 +5533,11 @@ const en = {
     admissionVerdict: "Admission verdict",
     noPromotedArtifact: "The image has not been published yet.",
     executables: "Detected executables",
+    declaredTools: "Recipe-declared tools",
+    verifiedInventory: "Verified image tool inventory",
+    inventoryUnavailable: "Verified tool inventory unavailable",
+    inventoryProbeMissing: "Missing",
+    inventoryProbeFailed: "Version probe failed",
     noVerifiedExecutables: "No verified executables are available yet.",
     usedByEnvironments: "Used by environments",
     noEnvironmentDependencies: "No environment uses this artifact.",
@@ -6083,6 +6099,8 @@ const en = {
     searchPromotedImage: "Search promoted images",
     promotedAndVerified: "Promoted and verified",
     verifiedTools: "Verified tools",
+    imageInventoryUnavailable:
+      "Verified tool inventory is unavailable. Command selection and publication require new image admission.",
     verifiedToolsHelp:
       "Allow only required executables from the selected image and describe their purpose for the materialized prompt.",
     selectedToolsCount: "Selected: {selected} of {total}",
@@ -8182,6 +8200,8 @@ const en = {
       CREATE_SCHEDULE: "Create Automation",
       LAUNCH_RUN: "Launch Run",
       CREATE_INTEGRATION_CONNECTION: "Create connection",
+      PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION:
+        "Prepare project assistant connection",
       PUBLISH_INTEGRATION_DEFINITION: "Publish integration",
       TEST_INTEGRATION_CONNECTION: "Test connection",
       ARCHIVE_AGENT: "Archive agent",
@@ -8695,6 +8715,8 @@ const en = {
       connectionListHint: "Separate values with commas.",
       connectionCredentialNextSteps:
         "Only public settings belong here. If the integration needs a key or password, use the protected form after creation. Never send secrets to the assistant.",
+      projectConnectionBoundary:
+        "This connection belongs to the organization and requires owner confirmation. Intended project assistant:",
       runTitle: "Run title",
       runTargetType: "What to launch",
       runAgent: "AI employee",

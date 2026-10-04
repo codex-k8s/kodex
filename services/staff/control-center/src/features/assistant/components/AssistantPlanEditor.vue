@@ -21,6 +21,7 @@ import AssistantCapabilityPlanForm from "@/features/assistant/components/Assista
 import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
 import AssistantSystemIntegrationGrantPlanForm from "./AssistantSystemIntegrationGrantPlanForm.vue";
 import { systemIntegrationGrantReceiptRef } from "../system-integration-grant-plan";
+import { projectAssistantConnectionPlanOwner } from "../project-connection-plan";
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import AssistantSchedulePlanForm from "@/features/assistant/components/AssistantSchedulePlanForm.vue";
 import AssistantRuntimeConfigurationPlanForm from "./AssistantRuntimeConfigurationPlanForm.vue";
@@ -100,6 +101,28 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const runtime = useRuntimeStore();
 const platform = usePlatformStore();
+function projectConnectionReady(operation: EditablePlanOperation): boolean {
+  try {
+    const input = operationInputs([operation])[0];
+    return Boolean(
+      platform.bootstrap &&
+      input &&
+      projectAssistantConnectionPlanOwner(
+        input,
+        platform.bootstrap.organizationRef,
+      ),
+    );
+  } catch {
+    return false;
+  }
+}
+function allowRawOperationEdit(operation: EditablePlanOperation): boolean {
+  return (
+    operation.value.type !==
+      "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
+    !friendlyPlanOperationType(operation)
+  );
+}
 const systemResourceScope = computed(() =>
   organizationRuntimeResourceScope(platform.bootstrap),
 );
@@ -319,6 +342,8 @@ function resetDraft(): void {
       .filter(
         (operation) =>
           operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+          operation.value.type ===
+            "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" ||
           operation.value.type === "UPDATE_INTEGRATION_CONNECTION",
       )
       .map((operation) => {
@@ -402,6 +427,8 @@ watch(
           .filter(
             (operation) =>
               operation.type === "CREATE_INTEGRATION_CONNECTION" ||
+              operation.type ===
+                "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" ||
               operation.type === "UPDATE_INTEGRATION_CONNECTION",
           )
           .map((operation) => operation.parameters.definitionKey)
@@ -473,6 +500,14 @@ function connectionProblems(
   try {
     const definition = connectionDefinition(operation);
     if (!definition?.available) return { definitionKey: "UNAVAILABLE" };
+    if (
+      operation.value.type ===
+        "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
+      (definition.definitionVersion !==
+        operationParameter(operation, "definitionVersion") ||
+        definition.digest !== operationParameter(operation, "definitionDigest"))
+    )
+      return { definitionKey: "UNAVAILABLE" };
     const raw = connectionInputs.value[operation.value.ref] ?? {};
     const initial = operationParameter(operation, "publicConfiguration");
     if (
@@ -645,9 +680,14 @@ const friendlyInputsReady = computed(() =>
           Boolean(operationProjectRef(operation))) &&
         (!(
           operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+          operation.value.type ===
+            "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" ||
           operation.value.type === "UPDATE_INTEGRATION_CONNECTION"
         ) ||
           !Object.keys(connectionProblems(operation)).length) &&
+        (operation.value.type !==
+          "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" ||
+          projectConnectionReady(operation)) &&
         (operation.value.type !== "LAUNCH_RUN" ||
           runFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_WORKFLOW" &&
@@ -747,6 +787,8 @@ function save(): void {
       if (
         !operation.value.selected ||
         (operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
+          operation.value.type !==
+            "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
           operation.value.type !== "UPDATE_INTEGRATION_CONNECTION")
       )
         continue;
@@ -1378,7 +1420,7 @@ function validationProblemLabel(problem: string): string {
               }}</strong>
               <small>{{ operation.value.target.kind }}</small>
             </div>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetKind") }}</span>
               <input
                 v-model="operation.value.target.kind"
@@ -1387,7 +1429,7 @@ function validationProblemLabel(problem: string): string {
                 :disabled="!editable"
               />
             </label>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetName") }}</span>
               <input
                 v-model="operation.value.target.name"
@@ -1396,7 +1438,7 @@ function validationProblemLabel(problem: string): string {
                 :disabled="!editable"
               />
             </label>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetRef") }}</span>
               <input
                 v-model="operation.value.target.ref"
@@ -1405,7 +1447,7 @@ function validationProblemLabel(problem: string): string {
                 :disabled="!editable"
               />
             </label>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetVersion") }}</span>
               <input
                 type="number"
@@ -1417,7 +1459,7 @@ function validationProblemLabel(problem: string): string {
                 @input="operation.value.target.version = optionalNumber($event)"
               />
             </label>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.expectedVersion") }}</span>
               <input
                 type="number"
@@ -1723,6 +1765,8 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
+                  operation.value.type !==
+                    'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
                   operation.value.type !==
@@ -2020,9 +2064,21 @@ function validationProblemLabel(problem: string): string {
               </template>
               <template
                 v-else-if="
-                  operation.value.target.kind === 'INTEGRATION_CONNECTION'
+                  operation.value.target.kind === 'INTEGRATION_CONNECTION' ||
+                  operation.value.type ===
+                    'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION'
                 "
               >
+                <p
+                  v-if="
+                    operation.value.type ===
+                    'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION'
+                  "
+                  class="assistant-plan-friendly__hint"
+                >
+                  {{ $t("assistant.planEditor.projectConnectionBoundary") }}
+                  {{ operation.value.target.name }}
+                </p>
                 <div class="field">
                   <span>{{
                     $t("assistant.planEditor.connectionDefinition")
@@ -2349,7 +2405,7 @@ function validationProblemLabel(problem: string): string {
           </div>
 
           <div
-            v-if="!friendlyPlanOperationType(operation)"
+            v-if="allowRawOperationEdit(operation)"
             class="field field--code"
           >
             <span class="assistant-field-label">
@@ -2376,7 +2432,7 @@ function validationProblemLabel(problem: string): string {
             />
           </div>
           <div
-            v-if="!friendlyPlanOperationType(operation)"
+            v-if="allowRawOperationEdit(operation)"
             class="assistant-plan-transition"
           >
             <div class="field field--code">

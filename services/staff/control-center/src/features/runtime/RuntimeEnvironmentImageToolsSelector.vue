@@ -13,6 +13,10 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import RuntimeEnvironmentToolsEditor from "./RuntimeEnvironmentToolsEditor.vue";
 import {
+  verifiedImageInventoryAvailable,
+  verifiedImageTools,
+} from "@/shared/lib/verified-image-tools";
+import {
   assertPromotedRuntimeImage,
   runtimeImageOption,
   restoreRuntimeImageOption,
@@ -78,14 +82,15 @@ async function load(
       props.imageArtifactRef,
       signal,
     );
-    if (signal.aborted || current !== generation) return;
+    const obsolete = () => signal.aborted || current !== generation;
+    if (obsolete()) return;
     const result = await props.catalog.loadArtifact(
       props.resourceScope,
       option.recipeRef,
       option.ref,
       signal,
     );
-    if (signal.aborted || current !== generation) return;
+    if (obsolete()) return;
     assertPromotedRuntimeImage(result.artifact, {
       artifactRef: option.ref,
       recipeRef: option.recipeRef,
@@ -200,7 +205,8 @@ async function loadPage(
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <RuntimeEnvironmentToolsEditor
       :tools="tools"
-      :catalog="artifact?.tools ?? []"
+      :catalog="verifiedImageTools(artifact)"
+      :inventory-available="verifiedImageInventoryAvailable(artifact)"
       :image-selected="Boolean(imageArtifactRef)"
       :loading="loading"
       :disabled="disabled || loading || !artifact || !!problem"

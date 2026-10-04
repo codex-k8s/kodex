@@ -330,6 +330,12 @@ func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput
 		EphemeralStorageLimitMib:   input.Resources.EphemeralStorageLimitMib,
 	}, KubernetesAccess: runtimeKubernetesAccessKind(string(input.KubernetesAccess)),
 		WebAccess: &controlplanev1.RuntimeWebAccess{Mode: runtimeWebAccessMode(string(input.WebAccess.Mode))}}
+	if limits := input.Resources.WorkspaceLimits; limits != nil {
+		if limits.MaxBytes < 1 || limits.MaxBytes > 1<<30 || limits.MaxFiles < 1 || limits.MaxFiles > 10_000 {
+			return nil, false
+		}
+		result.Resources.WorkspaceLimits = &controlplanev1.RuntimeWorkspaceLimits{MaxBytes: limits.MaxBytes, MaxFiles: limits.MaxFiles}
+	}
 	for _, rule := range input.WebAccess.Rules {
 		methods := make([]string, 0, len(rule.HttpMethods))
 		for _, method := range rule.HttpMethods {

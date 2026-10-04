@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+func TestEnvironmentWorkspaceLimitsDigestAndImmutableCopy(t *testing.T) {
+	base := DefaultRuntimeEnvironmentPolicy()
+	baseDigest := base.ResourcesDigest
+	base.Resources.WorkspaceLimits = &RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}
+	limited, err := NormalizeRuntimeEnvironmentPolicy(base)
+	if err != nil || limited.ResourcesDigest == baseDigest || limited.Resources.WorkspaceLimits == base.Resources.WorkspaceLimits {
+		t.Fatal("workspace budget not bound or mutable input retained")
+	}
+	base.Resources.WorkspaceLimits.MaxBytes = 1
+	if limited.Resources.WorkspaceLimits.MaxBytes != 4096 {
+		t.Fatal("normalization retained caller-owned mutable quota")
+	}
+	limited.Resources.WorkspaceLimits = nil
+	reset, err := NormalizeRuntimeEnvironmentPolicy(limited)
+	if err != nil || reset.ResourcesDigest != baseDigest {
+		t.Fatal("nil quota changed previous resources digest")
+	}
+	base.Resources.WorkspaceLimits.MaxFiles = RuntimeWorkspaceMaximumFiles + 1
+	if _, err := NormalizeRuntimeEnvironmentPolicy(base); err == nil {
+		t.Fatal("excessive workspace budget accepted")
+	}
+}
+
 func TestRuntimeEnvironmentPolicyFromInputMaterializesExactBoundary(t *testing.T) {
 	t.Parallel()
 	defaults := DefaultRuntimeEnvironmentPolicy()

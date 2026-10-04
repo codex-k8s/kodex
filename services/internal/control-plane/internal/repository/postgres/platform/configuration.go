@@ -1253,6 +1253,9 @@ func (repository *Repository) cancelActiveAssistantRun(ctx context.Context, tx p
 }
 
 func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	// Исходный verified browser scope хранится отдельно. Только новая specialty
+	// использует его после owner gate; проектная граница остальных effects не меняется.
+	ownerEffectScope := scope
 	payload, ok := input.Payload.(command.AssistantPlanInput)
 	if !ok || payload.PlanRef == "" || payload.Revision < 1 || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
@@ -1305,6 +1308,10 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		if !operation.Selected {
 			continue
 		}
+		operationScope := scope
+		if operation.Type == prepareProjectAssistantConnection {
+			operationScope = ownerEffectScope
+		}
 		if grantPreflightConflict != nil {
 			operation = *grantPreflightConflict
 		}
@@ -1338,12 +1345,18 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			projectFile.Content = nil
 			planned.Payload = projectFile
 		}
-		if err := repository.authorizeCommand(ctx, operationEffectsTx, scope, planned); err != nil {
+		if err := repository.authorizeCommand(ctx, operationEffectsTx, operationScope, planned); err != nil {
 			_ = operationEffectsTx.Rollback(ctx)
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
 		var outcome commandOutcome
+		if operation.Type == prepareProjectAssistantConnection {
+			matching, matchErr := repository.projectAssistantConnectionSnapshotMatches(ctx, operationEffectsTx, operationScope, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if grantPreflightConflict != nil {
 			err = errs.ErrConflict
 		}
@@ -1436,7 +1449,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			}
 		}
 		if err == nil {
-			outcome, err = repository.applyCommand(ctx, operationEffectsTx, scope, planned)
+			outcome, err = repository.applyCommand(ctx, operationEffectsTx, operationScope, planned)
 		}
 		if err != nil {
 			if errors.Is(err, errs.ErrVersionMismatch) || errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrNotFound) {

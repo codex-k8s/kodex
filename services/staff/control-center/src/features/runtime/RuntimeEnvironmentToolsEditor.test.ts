@@ -21,9 +21,27 @@ it("сворачивает заполненные метаданные, но п�
     ],
     disabled: false,
     imageSelected: true,
+    inventoryAvailable: true,
   });
   const expanded = state.expandedTools as Map<string, boolean>;
   expect(expanded.get("git")).toBe(false);
   expect(expanded.get("node")).toBe(true);
   expect(tools).toEqual(before);
+});
+
+it("не разрешает команду при недоступном inventory даже при переданном каталоге", async () => {
+  const state = await captureSetupState(Component, undefined, {
+    tools: [],
+    catalog: [{ name: "git", version: "2" }],
+    disabled: false,
+    imageSelected: true,
+    inventoryAvailable: false,
+  });
+  // Недоступный inventory закрывает обработчик до любого пользовательского эффекта.
+  const source = await import("./RuntimeEnvironmentToolsEditor.vue?raw");
+  expect(source.default).toContain(
+    "props.disabled || !props.inventoryAvailable",
+  );
+  expect(source.default).toContain("runtime.imageInventoryUnavailable");
+  expect(state).toHaveProperty("toggle");
 });
