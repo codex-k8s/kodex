@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -11,7 +12,10 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
+	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -63,17 +67,165 @@ func TestProviderDiscoveryDiagnosticContainsOnlyClosedRoute(t *testing.T) {
 	access := runtimecontract.RuntimeProxyAccess{ProviderAccess: true}
 	target := connect.Target{Hostname: "chatgpt.com", Port: 443}
 	request := &http.Request{Method: http.MethodGet, URL: &url.URL{Path: "/backend-api/wham/config/bundle", RawQuery: "private=must-not-log"}}
-	if got := deniedProviderDiscoveryRoute(request, target, access); got != "CONFIG_BUNDLE" {
+	if got := providerDiscoveryRoute(request, target, access); got != "CONFIG_BUNDLE" {
 		t.Fatalf("closed discovery route=%q", got)
 	}
 	request.URL.Path = "/private-account-path"
-	if got := deniedProviderDiscoveryRoute(request, target, access); got != "" {
+	if got := providerDiscoveryRoute(request, target, access); got != "" {
 		t.Fatalf("unknown path was exposed: %q", got)
 	}
 	request.URL.Path = "/backend-api/wham/accounts/check"
 	access.ProviderAccess = false
-	if got := deniedProviderDiscoveryRoute(request, target, access); got != "" {
+	if got := providerDiscoveryRoute(request, target, access); got != "" {
 		t.Fatalf("unverified provider route classified: %q", got)
+	}
+	access.ProviderAccess = true
+	target.Port = 8443
+	if got := providerDiscoveryRoute(request, target, access); got != "" {
+		t.Fatalf("unverified provider port classified: %q", got)
+	}
+	target.Port = 443
+	request.URL.RawPath = "/backend-api/wham/accounts/%63heck"
+	if got := providerDiscoveryRoute(request, target, access); got != "" {
+		t.Fatalf("encoded provider path classified: %q", got)
+	}
+}
+
+func TestProviderDiscoveryProxyDiagnosticsAreClosed(t *testing.T) {
+	for _, test := range []struct {
+		name, path, failure, statusClass string
+		status                           int
+		resolverFailure, tlsFailure      bool
+	}{
+		{name: "upstream forbidden", status: http.StatusForbidden, statusClass: "4XX"},
+		{name: "upstream unavailable", status: http.StatusServiceUnavailable, statusClass: "5XX"},
+		{name: "DNS failure", resolverFailure: true, failure: "DNS"},
+		{name: "TLS failure", tlsFailure: true, failure: "TLS"},
+		{name: "known route denied", path: "/backend-api/wham/config/bundle", status: http.StatusForbidden},
+		{name: "unknown route omitted", path: "/private-account-path", status: http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			previousWriter, previousFlags, previousPrefix := log.Writer(), log.Flags(), log.Prefix()
+			log.SetOutput(&output)
+			log.SetFlags(0)
+			log.SetPrefix("")
+			t.Cleanup(func() { log.SetOutput(previousWriter); log.SetFlags(previousFlags); log.SetPrefix(previousPrefix) })
+			certificate, roots := serverCertificateFixture(t, "chatgpt.com")
+			if test.tlsFailure {
+				_, _, roots = certificateAuthorityFixture(t, "untrusted-fixture")
+			}
+			_, client, resolver, dialer, done := providerProxyFixture(t, "chatgpt.com", runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone}, roots)
+			if test.resolverFailure {
+				resolver.err = errors.New("private-dns-error-sentinel")
+			}
+			upstreamResult := make(chan error, 1)
+			if test.path == "" && !test.resolverFailure {
+				go func() {
+					peer := <-dialer.peers
+					defer peer.Close()
+					_ = peer.SetDeadline(time.Now().Add(2 * time.Second))
+					upstream := tls.Server(peer, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}})
+					if test.tlsFailure {
+						if err := upstream.Handshake(); err == nil {
+							upstreamResult <- errors.New("untrusted TLS fixture accepted")
+						} else {
+							upstreamResult <- nil
+						}
+						return
+					}
+					request, err := http.ReadRequest(bufio.NewReader(upstream))
+					if err != nil {
+						upstreamResult <- err
+						return
+					}
+					_ = request.Body.Close()
+					body := "private-upstream-body-sentinel"
+					response := &http.Response{StatusCode: test.status, ProtoMajor: 1, ProtoMinor: 1, Header: http.Header{"X-Private": []string{"private-response-header-sentinel"}}, Body: io.NopCloser(strings.NewReader(body)), ContentLength: int64(len(body)), Close: true}
+					upstreamResult <- response.Write(upstream)
+				}()
+			}
+			path := test.path
+			if path == "" {
+				path = "/backend-api/wham/accounts/check"
+			}
+			request, err := http.NewRequest(http.MethodGet, "https://chatgpt.com"+path+"?private-query-sentinel=private-identity-sentinel", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("Authorization", "Bearer private-request-header-sentinel")
+			if err := request.Write(client.conn); err != nil {
+				t.Fatal(err)
+			}
+			response, err := http.ReadResponse(client.reader, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.Copy(io.Discard, response.Body)
+			_ = response.Body.Close()
+			wantStatus := test.status
+			if test.failure != "" {
+				wantStatus = http.StatusBadGateway
+			}
+			if response.StatusCode != wantStatus {
+				t.Fatalf("proxy status=%d, want %d", response.StatusCode, wantStatus)
+			}
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("diagnostic proxy handler did not join")
+			}
+			if test.path == "" && !test.resolverFailure {
+				if err := <-upstreamResult; err != nil {
+					t.Fatal(err)
+				}
+			} else if len(dialer.targets) != 0 {
+				t.Fatal("failed DNS or denied route crossed dial boundary")
+			}
+			want := ""
+			switch {
+			case test.path == "/backend-api/wham/config/bundle":
+				want = fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "CONFIG_BUNDLE", "POLICY", "DENIED", "NONE", "NONE") + "\n"
+			case test.path == "":
+				want = fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "ACCOUNTS_CHECK", "POLICY", "ALLOWED", "NONE", "NONE") + "\n"
+				if test.failure != "" {
+					want += fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "ACCOUNTS_CHECK", "UPSTREAM", "FAILED", "NONE", test.failure) + "\n"
+				} else {
+					want += fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "ACCOUNTS_CHECK", "UPSTREAM", "RESPONSE", test.statusClass, "NONE") + "\n"
+				}
+			}
+			if output.String() != want {
+				t.Fatal("provider diagnostic differs from closed event sequence or exposes private fixture data")
+			}
+		})
+	}
+}
+
+func TestProviderDiscoveryFailureAndStatusClassesRemainClosed(t *testing.T) {
+	for _, test := range []struct {
+		err       error
+		tlsFailed bool
+		want      string
+	}{
+		{proxyUpstreamDNSFailure, false, "DNS"},
+		{fmt.Errorf("private-wrapped-sentinel: %w", proxyUpstreamDialFailure), false, "DIAL"},
+		{fmt.Errorf("private-cancel-sentinel: %w", context.Canceled), true, "CANCELLED"},
+		{context.DeadlineExceeded, true, "TIMEOUT"},
+		{errors.New("private-tls-error-sentinel"), true, "TLS"},
+		{errors.New("TLS DNS private-error-sentinel"), false, "UNKNOWN"},
+		{proxyUpstreamFailure("private-unknown-kind-sentinel"), false, "UNKNOWN"},
+	} {
+		if got := providerDiscoveryFailure(test.err, test.tlsFailed); got != test.want {
+			t.Fatalf("failure class=%q, want %q", got, test.want)
+		}
+	}
+	for _, test := range []struct {
+		status int
+		want   string
+	}{{99, "UNKNOWN"}, {100, "1XX"}, {199, "1XX"}, {200, "2XX"}, {299, "2XX"}, {300, "3XX"}, {399, "3XX"}, {400, "4XX"}, {499, "4XX"}, {500, "5XX"}, {599, "5XX"}, {600, "UNKNOWN"}} {
+		if got := providerDiscoveryStatusClass(test.status); got != test.want {
+			t.Fatalf("status class=%q, want %q", got, test.want)
+		}
 	}
 }
 

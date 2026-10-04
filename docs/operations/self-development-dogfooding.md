@@ -312,3 +312,42 @@ discovery route само по себе не устранило отказ. Мо�
 Прокси hot-reload обновлён; точный safe RPC detail требует нового runner image.
 Метка `QA_SELF_CONFIG_20261004_0852` отправлена штатным UI, materialized input
 ещё не доказан. Необязательный config/bundle без actual trace не разрешён.
+
+04.10.2026 09:01–09:06 UTC, checkpoint
+`a2a2e55290c1fb0ff943831fe77835761528e4be`:
+PASS — новый runner exact digest
+`sha256:eb2275008e8168c19baafb68fff780e2e103049d1ca11b27cc08bc7ed3ac8dca`,
+repo-owned build/render/supply-chain activation. CP/controller/egress READY;
+warm и фактический turn Pod обслуживали этот digest.
+FAIL — четвёртый SYSTEM self-configuration
+`run_isAFDbBo30PgUJGL5xhTfion`: ACCOUNT_READ, PROVIDER, RPC_ERROR,
+JSON-RPC code `-32603`, notification NONE. Это ответ app-server, не ошибка
+нашего account schema decoder. План и inference ещё NOT RUN.
+Попытка прочитать только безопасные materialized pins через exec не успела
+до завершения контейнеров: NOT RUN, не доказательство prompt delivery.
+PASS — Chrome reload, bootstrap/session/ticket/graph/history HTTP 200,
+Console без ошибок. Скриншот `/tmp/kodex-system-account-read-diagnostic.png`
+подтверждает USER справа, агент/прогресс/terminal слева и отсутствие дубля
+terminal ошибки. Чекбоксы 2–15 остаются открытыми.
+Следующий адресный шаг — точное сопоставление статических workspace-routing
+ошибок закреплённого Codex 0.160.0 с закрытым enum, без raw message/data,
+account metadata или credentials в логах. Сам код `-32603` ещё не доказывает
+конкретную сетевую либо конфигурационную причину.
+
+04.10.2026 09:08–09:11 UTC, исправляемое дерево после `a2a2e552`:
+PASS — runner account/read reason classifier: 18 точных статических причин
+официального `rust-v0.160.0`, строгие method/code/schema/size boundaries,
+неизвестное UNKNOWN, raw message/data не сохраняются. Полный Codex 4.500 s,
+адресный race 1.101 s и vet PASS. Egress diagnostics теперь различают
+точный provider discovery, policy deny, ответ upstream и DNS/DIAL/TLS/
+timeout; labels/логи закрытые, неизвестные paths не записываются. Полный
+gateway 0.242 s, synthetic redaction/HTTP403/503/DNS/TLS cases PASS.
+PASS — подготовлен repo-owned `tools/dev/protected-secret-input.mjs` для
+credential уже созданного Context7/GitHub connection. Приватный canonical
+reader, отдельный in-memory SSO browser, exact origins/owner/catalog/version,
+один PUT с OCC/idempotency, UNKNOWN outcome без повторной отправки. 40 Node
+tests, syntax/format PASS. Реальные secrets/SSO/effects helper ещё NOT RUN;
+runtime-secret operation этой оснасткой закрыто отклоняется. Это не подмена
+самонастройки: подключение и план должен создать настоящий помощник.
+Новый runner build/activation и повторный live turn с закрытой причиной
+ещё NOT RUN на момент фиксации этого checkpoint.

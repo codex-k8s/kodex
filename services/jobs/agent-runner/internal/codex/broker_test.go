@@ -215,6 +215,9 @@ func TestProviderSafeFailureDetailsRemainClosed(t *testing.T) {
 		{name: "unknown detail", err: &appServerCallFailure{detail: "private-upstream-detail", code: 42, err: errors.New("private-upstream-detail")}, want: "detail: NONE; rpc_code: 0"},
 		{name: "registered notification", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "account/updated", err: errors.New("private-upstream-detail")}, want: "notification: account/updated"},
 		{name: "unknown notification", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "notification: UNKNOWN"},
+		{name: "known account failure", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32603, accountRead: "DISCOVERY_FAILED", err: errors.New("private-upstream-detail")}, want: "account_read: DISCOVERY_FAILED"},
+		{name: "unknown account failure", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32603, accountRead: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "account_read: UNKNOWN"},
+		{name: "different RPC code", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32602, accountRead: "DISCOVERY_FAILED", err: errors.New("private-upstream-detail")}, want: "account_read: NONE"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			diagnostic.Reset()

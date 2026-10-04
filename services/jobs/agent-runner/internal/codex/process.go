@@ -107,6 +107,7 @@ type appServerCallFailure struct {
 	detail       string
 	code         int64
 	notification string
+	accountRead  string
 	err          error
 }
 
@@ -591,7 +592,7 @@ func protocolError(method string, raw json.RawMessage) error {
 	if err != nil {
 		return errors.New("Codex app-server returned an invalid protocol error")
 	}
-	return &appServerCallFailure{detail: "RPC_ERROR", code: code,
+	return &appServerCallFailure{detail: "RPC_ERROR", code: code, accountRead: closedAccountReadFailure(method, code, raw),
 		err: fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)}
 }
 

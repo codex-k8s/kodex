@@ -342,6 +342,15 @@ func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
 	}
 }
 
+func TestProtocolErrorPreservesClosedAccountReadReason(t *testing.T) {
+	t.Parallel()
+	err := protocolError("account/read", json.RawMessage(`{"code":-32603,"message":"workspace routing discovery failed","data":{"private":"private-sentinel"}}`))
+	var failure *appServerCallFailure
+	if !errors.As(err, &failure) || failure.accountRead != "DISCOVERY_FAILED" || strings.Contains(err.Error(), "private-sentinel") {
+		t.Fatal("account read diagnostic did not preserve only the closed reason")
+	}
+}
+
 func TestClassifyAccountReadResponse(t *testing.T) {
 	t.Parallel()
 

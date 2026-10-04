@@ -35,7 +35,7 @@ const (
 	providerRefreshCommitTimeout = 40 * time.Second
 	providerSandboxProbeTimeout  = 5 * time.Second
 	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
-	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s"
+	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s"
 )
 
 var (
@@ -258,6 +258,7 @@ func providerSafeFailureClass(err error) string {
 func logProviderSafeFailure(stage providerExecutionStage, err error) {
 	detail, code := "NONE", int64(0)
 	notification := "NONE"
+	accountRead := "NONE"
 	var failure *appServerCallFailure
 	if errors.As(err, &failure) {
 		switch failure.detail {
@@ -266,6 +267,9 @@ func logProviderSafeFailure(stage providerExecutionStage, err error) {
 			detail = failure.detail
 			if detail == "RPC_ERROR" {
 				code = failure.code
+				if stage == providerStageAccountRead && code == -32603 {
+					accountRead = safeAccountReadFailure(failure.accountRead)
+				}
 			}
 			if detail == "NOTIFICATION_INVALID" {
 				notification = "UNKNOWN"
@@ -275,7 +279,7 @@ func logProviderSafeFailure(stage providerExecutionStage, err error) {
 			}
 		}
 	}
-	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err), detail, code, notification)
+	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err), detail, code, notification, accountRead)
 }
 
 // ServeProviderBroker запускается только в container UID 10002 без Kubernetes
