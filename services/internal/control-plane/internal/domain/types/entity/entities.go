@@ -534,14 +534,15 @@ type RunDelta struct {
 }
 
 type RunEventDelta struct {
-	Run       *RunDelta
-	Node      *RunNode
-	Edge      *RunEdge
-	Gate      *OwnerGate
-	Artifact  *Artifact
-	Incident  *Incident
-	Execution *RunEventExecution
-	Message   *RunMessage
+	IntegrationInvocationRef string `json:",omitempty"`
+	Run                      *RunDelta
+	Node                     *RunNode
+	Edge                     *RunEdge
+	Gate                     *OwnerGate
+	Artifact                 *Artifact
+	Incident                 *Incident
+	Execution                *RunEventExecution
+	Message                  *RunMessage
 }
 
 type RunEventExecution struct {

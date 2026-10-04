@@ -1199,6 +1199,9 @@ message RunEvent {
   // Координаты назначаются владельцем по исходному execution, не текущему UI.
   RunEventExecution execution = 24;
   RunMessage message = 25;
+  // Только новые INTEGRATION_ACTION_* completion-события: ref invocation,
+  // назначенный владельцем после проверки lease/fence, не общий aggregate_ref.
+  optional string integration_invocation_ref = 26;
 }
 
 message RunEventExecution {

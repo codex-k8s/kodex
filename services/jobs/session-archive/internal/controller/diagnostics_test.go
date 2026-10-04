@@ -2,18 +2,91 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 )
+
+func TestArchiveAPIFailureIsClosedAndExact(t *testing.T) {
+	for _, scenario := range []struct {
+		name, verb, resource, stage, reason string
+		code                                int32
+	}{
+		{"input already exists", "create", "configmaps", "CREATE_INPUT", "AlreadyExists", 409},
+		{"job forbidden", "create", "jobs", "CREATE_JOB", "Forbidden", 403},
+		{"job invalid", "create", "jobs", "CREATE_JOB", "Invalid", 422},
+		{"unknown reason", "create", "jobs", "CREATE_JOB", "SENTINEL_REASON", 999},
+		{"job read timeout", "get", "jobs", "OBSERVE_JOB", "ServerTimeout", 504},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			task := testSnapshotTask()
+			task.OrganizationRef, task.SessionRef, task.ProviderAccountRef, task.RuntimeRevisionRef = "org_fixture01", "ses_fixture01", "pva_fixture01", "rrev_fixture01"
+			task.RuntimeRevisionVersion = 1
+			task.RuntimeRevisionDigest, task.InputDigest, task.SourceSHA256 = strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
+			task.CodexSessionID = "00000000-0000-4000-8000-000000000003"
+			task.SourceRelativePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-" + task.CodexSessionID + ".jsonl"
+			task.SourceSizeBytes, task.TargetObjectKey = 1024, "SENTINEL_PRIVATE_OBJECT"
+			task.PVCName, _ = runtimecontract.SessionPVCName(task.SessionRef)
+			client := fake.NewSimpleClientset(&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: exactWorkerNamespace, UID: "source-pvc-uid"}})
+			client.PrependReactor(scenario.verb, scenario.resource, func(clienttesting.Action) (bool, runtime.Object, error) {
+				return true, nil, &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReason(scenario.reason), Code: scenario.code,
+					Message: "SENTINEL_PRIVATE_MESSAGE", Details: &metav1.StatusDetails{Name: "SENTINEL_PRIVATE_RESOURCE", Causes: []metav1.StatusCause{{Message: "SENTINEL_PRIVATE_CAUSE"}}}}}
+			})
+			var logs bytes.Buffer
+			cfg := testConfig()
+			cfg.Logger = slog.New(slog.NewJSONHandler(&logs, nil))
+			controller, err := New(client, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			controller.poll = time.Millisecond
+			result, err := controller.Execute(t.Context(), task, func(context.Context) error { return nil })
+			if err == nil || result.Success {
+				t.Fatal("API failure changed canonical business result")
+			}
+			var record map[string]any
+			if err := json.Unmarshal(logs.Bytes(), &record); err != nil {
+				t.Fatal(err)
+			}
+			wantReason, wantCode := scenario.reason, scenario.code
+			if scenario.name == "unknown reason" {
+				wantReason, wantCode = "UNKNOWN", 0
+			}
+			if record["msg"] != archiveAPIFailureMessage || record[archiveAPIStageAttribute] != scenario.stage ||
+				record[archiveAPIReasonAttribute] != wantReason || record[archiveAPIStatusAttribute] != float64(wantCode) ||
+				record[archiveTaskRefAttribute] != task.TaskRef || record[archiveSessionRefAttribute] != task.SessionRef ||
+				strings.Contains(logs.String(), "SENTINEL") || len(record) != 11 {
+				t.Fatal("API failure diagnostic is missing, unbounded or exposed private data")
+			}
+		})
+	}
+	for _, item := range []struct {
+		err    error
+		reason string
+	}{
+		{fmt.Errorf("SENTINEL_PRIVATE: %w", context.DeadlineExceeded), "CLIENT_TIMEOUT"},
+		{fmt.Errorf("SENTINEL_PRIVATE: %w", context.Canceled), "CLIENT_CANCELLED"},
+		{fmt.Errorf("SENTINEL_PRIVATE"), "UNKNOWN"},
+	} {
+		if reason, code := boundedAPIError(item.err); reason != item.reason || code != 0 {
+			t.Fatal("untyped error escaped closed classification")
+		}
+	}
+}
 
 func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 	t.Parallel()

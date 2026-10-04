@@ -20,6 +20,7 @@ import {
   activeTranscriptItemId,
   assistantFailureMessageKey,
   isAssistantPlanToolReceipt,
+  isSuccessfulIntegrationToolReceipt,
   isTranscriptNearBottom,
   presentRunTranscriptItems,
   type RunActivityItem,
@@ -167,7 +168,8 @@ function toolPreview(
   return (toolCall.state === "SUCCEEDED" &&
     managedTools.has(toolCall.tool) &&
     toolCall.safeResult === `${toolCall.tool}:completed`) ||
-    isAssistantPlanToolReceipt(toolCall)
+    isAssistantPlanToolReceipt(toolCall) ||
+    isSuccessfulIntegrationToolReceipt(toolCall)
     ? undefined
     : toolCall.safeResult || undefined;
 }

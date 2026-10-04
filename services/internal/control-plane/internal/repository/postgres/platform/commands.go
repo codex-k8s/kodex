@@ -1914,6 +1914,35 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 }
 
 func (repository *Repository) emitRunEventWithActivity(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState string) (entity.RunEvent, error) {
+	return repository.emitRunEventWithBinding(ctx, tx, scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, incident, message, summary, runState, nodeState, "")
+}
+
+func (repository *Repository) emitIntegrationActionEvent(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, invocationRef, nodeRef, state string) (entity.RunEvent, error) {
+	if !validIntegrationActionBinding("TURN_PROGRESS", integrationActionOutcomeMessage(state), invocationRef) ||
+		(state != "SUCCEEDED" && state != "FAILED" && state != "UNKNOWN_OUTCOME") {
+		return entity.RunEvent{}, errs.ErrInvalid
+	}
+	// Ref получен из заблокированной owner-строки после проверки lease/fence;
+	// общий aggregateRef никогда не становится публичной привязкой автоматически.
+	return repository.emitRunEventWithBinding(ctx, tx, scope, projectID, rootRunID, invocationRef, "TURN_PROGRESS", nodeRef, "", "", "", nil, nil, integrationActionOutcomeMessage(state), "RUNNING", "RUNNING", invocationRef)
+}
+
+func validIntegrationActionBinding(eventType, summary, ref string) bool {
+	if eventType != "TURN_PROGRESS" || len(ref) < 8 || len(ref) > 96 || !strings.HasPrefix(ref, "inv_") {
+		return false
+	}
+	for _, char := range ref {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_' || char == '-') {
+			return false
+		}
+	}
+	return summary == "i18n:INTEGRATION_ACTION_SUCCEEDED" || summary == "i18n:INTEGRATION_ACTION_FAILED" || summary == "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"
+}
+
+func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState, integrationInvocationRef string) (entity.RunEvent, error) {
+	if integrationInvocationRef != "" && (integrationInvocationRef != aggregateRef || !validIntegrationActionBinding(eventType, summary, integrationInvocationRef)) {
+		return entity.RunEvent{}, errs.ErrInvalid
+	}
 	if eventType != "TOOL_CALL_RECORDED" {
 		if err := repository.closeTerminalToolActivity(ctx, tx, scope, projectID, rootRunID); err != nil {
 			return entity.RunEvent{}, err
@@ -1937,6 +1966,7 @@ func (repository *Repository) emitRunEventWithActivity(ctx context.Context, tx p
 	if err != nil {
 		return entity.RunEvent{}, err
 	}
+	delta.IntegrationInvocationRef = integrationInvocationRef
 	var inputActor *entity.RunEventActor
 	if delta.Node != nil && delta.Node.TurnRef != "" {
 		execution, turnInput, bindingErr := readRuntimeActivityExecution(ctx, tx, scope.organizationID, rootRunID, nodeRef)
@@ -1999,6 +2029,9 @@ func (repository *Repository) emitRunEventWithActivity(ctx context.Context, tx p
 	}
 	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": safeSummary,
 		"actor": map[string]string{"kind": actor.Kind, "ref": actor.Ref, "name": actor.Name}, "messageKind": messageKind}
+	if integrationInvocationRef != "" {
+		data["integrationInvocationRef"] = integrationInvocationRef
+	}
 	if execution := delta.Execution; execution != nil {
 		data["execution"] = map[string]any{"runRef": execution.RunRef, "nodeRef": execution.NodeRef, "sessionRef": execution.SessionRef,
 			"turnRef": execution.TurnRef, "turnNumber": execution.TurnNumber, "attempt": execution.Attempt}

@@ -169,6 +169,12 @@ components:
         actor: { $ref: '#/components/schemas/RunEventActor' }
         messageKind: { $ref: '#/components/schemas/RunEventMessageKind' }
         toolCall: { $ref: '#/components/schemas/RunToolCall' }
+        integrationInvocationRef:
+          description: Только новый owner completion INTEGRATION_ACTION_*; persisted delta и protected ListRunEvents сохраняют этот exact pin. Duplicate не создаёт повторного события; historical без pin не восстанавливаются.
+          type: string
+          minLength: 8
+          maxLength: 96
+          pattern: '^inv_[A-Za-z0-9_-]+$'
         execution: { $ref: '#/components/schemas/RunEventExecution' }
         message: { $ref: '#/components/schemas/RunMessage' }
         state:

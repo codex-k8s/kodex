@@ -1105,6 +1105,12 @@ components:
         actor: { $ref: "#/components/schemas/RunEventActor" }
         messageKind: { $ref: "#/components/schemas/RunEventMessageKind" }
         toolCall: { $ref: "#/components/schemas/RunToolCall" }
+        integrationInvocationRef:
+          description: Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не общий aggregateRef.
+          type: string
+          minLength: 8
+          maxLength: 96
+          pattern: '^inv_[A-Za-z0-9_-]+$'
         execution: { $ref: "#/components/schemas/RunEventExecution" }
         message: { $ref: "#/components/schemas/RunMessage" }
     RunEventExecution:

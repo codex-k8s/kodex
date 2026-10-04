@@ -33,6 +33,7 @@ export interface RunActivityItem {
   historical: boolean;
   eventType?: RunEvent["type"];
   serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
+  integrationInvocationRef?: string;
 }
 
 // Только exact машинная квитанция успешной подготовки плана, не его описание.
@@ -46,6 +47,51 @@ export function isAssistantPlanToolReceipt(
       tool.safeResult,
     )
   );
+}
+
+// Только каноническая безопасная квитанция; произвольный результат не скрывается.
+export function isSuccessfulIntegrationToolReceipt(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): boolean {
+  return Boolean(successfulIntegrationInvocationRef(tool));
+}
+
+function successfulIntegrationInvocationRef(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): string | undefined {
+  if (
+    tool.state !== "SUCCEEDED" ||
+    tool.safeResult.length > 512 ||
+    ![
+      "invoke_integration",
+      "context7_resolve_library_id",
+      "context7_query_docs",
+    ].includes(tool.tool)
+  )
+    return undefined;
+  try {
+    const value: unknown = JSON.parse(tool.safeResult);
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return undefined;
+    const receipt = value as Record<string, unknown>;
+    const valid =
+      receipt.version === 1 &&
+      receipt.state === "SUCCEEDED" &&
+      typeof receipt.invocationRef === "string" &&
+      /^inv_[A-Za-z0-9_-]{8,124}$/.test(receipt.invocationRef) &&
+      typeof receipt.inputSHA256 === "string" &&
+      /^[a-f0-9]{64}$/.test(receipt.inputSHA256) &&
+      tool.safeResult ===
+        JSON.stringify({
+          version: 1,
+          invocationRef: receipt.invocationRef,
+          state: "SUCCEEDED",
+          inputSHA256: receipt.inputSHA256,
+        });
+    return valid ? String(receipt.invocationRef) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 interface ActivityContext {
@@ -149,6 +195,15 @@ export function buildRunTranscriptItems(
     const previous =
       previousPosition !== undefined ? items[previousPosition] : undefined;
     const presented = event as Partial<PresentedRunEvent>;
+    // Привязка повторного подтверждения не выводится из текста или aggregateRef.
+    const integrationBound = Boolean(
+      scope &&
+      event.runRef === event.execution?.runRef &&
+      event.nodeRef === event.execution.nodeRef &&
+      event.run.ref === event.runRef &&
+      Number.isSafeInteger(event.run.version) &&
+      event.run.version >= 1,
+    );
     const item: RunActivityItem = {
       id: previous?.id ?? key ?? event.ref,
       kind,
@@ -189,6 +244,13 @@ export function buildRunTranscriptItems(
       serviceProgressCode:
         transcriptServiceProgressCode(event.summary) ??
         transcriptServiceProgressCode(event.progress),
+      integrationInvocationRef: integrationBound
+        ? tool
+          ? successfulIntegrationInvocationRef(tool)
+          : !event.message && !event.progress?.trim()
+            ? event.integrationInvocationRef
+            : undefined
+        : undefined,
     };
     if (previousPosition !== undefined) items[previousPosition] = item;
     else {
@@ -544,6 +606,26 @@ export function presentRunTranscriptItems(
   activeItemId: string | null = activeTranscriptItemId(items),
   closedExecutionKeys: readonly string[] = [],
 ): PresentedTranscriptItem[] {
+  const successfulInvocations = new Set<string>();
+  for (const item of items) {
+    const scope = executionKey(item.execution);
+    if (
+      scope &&
+      !item.historical &&
+      item.kind === "tool" &&
+      !item.phase &&
+      item.eventType === "TOOL_CALL_RECORDED" &&
+      item.messageKind === "TOOL_CALL" &&
+      item.integrationInvocationRef &&
+      item.toolCall &&
+      Number.isSafeInteger(item.toolCall.revision) &&
+      (item.toolCall.revision ?? 0) >= 2 &&
+      isSuccessfulIntegrationToolReceipt(item.toolCall)
+    )
+      successfulInvocations.add(
+        JSON.stringify([scope, item.integrationInvocationRef]),
+      );
+  }
   const services = new Map<
     string,
     { items: RunActivityItem[]; last: number }
@@ -610,6 +692,26 @@ export function presentRunTranscriptItems(
     .filter((item) => {
       if (hidden.has(item.id)) return false;
       const scope = executionKey(item.execution);
+      // Квитанция инструмента уже показывает этот exact успешный результат.
+      // Сервер назначает привязку только integration completion, не по тексту.
+      // Без exact успешной квитанции ошибки и неизвестный исход не скрываются.
+      if (
+        scope &&
+        !item.historical &&
+        item.kind === "system" &&
+        item.eventType === "TURN_PROGRESS" &&
+        item.messageKind === "INTERMEDIATE_MESSAGE" &&
+        !item.phase &&
+        !item.progress?.trim() &&
+        !item.toolCall &&
+        !item.artifact &&
+        !item.artifactRef &&
+        item.integrationInvocationRef &&
+        successfulInvocations.has(
+          JSON.stringify([scope, item.integrationInvocationRef]),
+        )
+      )
+        return false;
       // До FINAL пустая successful квитанция не образует отдельный пузырь.
       // История остаётся в исходных events и присоединяется к FINAL при rejoin.
       return !(

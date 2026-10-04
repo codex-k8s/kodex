@@ -1547,6 +1547,9 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		if err := json.Unmarshal(delta, &e.Delta); err != nil || e.Delta.Run == nil {
 			return nil, 0, false, errs.ErrUnavailable
 		}
+		if e.Delta.IntegrationInvocationRef != "" && !validIntegrationActionBinding(e.Type, e.Summary, e.Delta.IntegrationInvocationRef) {
+			return nil, 0, false, errs.ErrUnavailable
+		}
 		if e.Delta.Incident != nil {
 			e.IncidentRef = e.Delta.Incident.Ref
 		}

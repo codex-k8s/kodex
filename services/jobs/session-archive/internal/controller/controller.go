@@ -144,11 +144,13 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
 		Immutable: &immutable, Data: map[string]string{"task.json": string(raw)}}
 	if _, err := controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
+		controller.observeAPIFailure(ctx, task, archiveAPICreateInput, err)
 		return model.Result{}, errors.New("create session archive task input")
 	}
 	defer controller.cleanup(ctx, name)
 	job := controller.job(name, task, sourcePVCUID)
 	if _, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Create(ctx, job, metav1.CreateOptions{}); err != nil {
+		controller.observeAPIFailure(ctx, task, archiveAPICreateJob, err)
 		return model.Result{}, errors.New("create session archive worker job")
 	}
 	ticker := time.NewTicker(controller.poll)
@@ -175,6 +177,7 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 			}
 			job, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Get(ctx, name, metav1.GetOptions{})
 			if err != nil {
+				controller.observeAPIFailure(ctx, task, archiveAPIObserveJob, err)
 				return model.Result{}, errors.New("observe session archive worker job")
 			}
 			if job.Status.Succeeded == 0 && job.Status.Failed == 0 {

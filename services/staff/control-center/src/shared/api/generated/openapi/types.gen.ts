@@ -2856,6 +2856,10 @@ export type RunEvent = {
     actor?: RunEventActor;
     messageKind?: 'STATE' | 'USER_MESSAGE' | 'ASSISTANT_MESSAGE' | 'INTERMEDIATE_MESSAGE' | 'FINAL_MESSAGE' | 'TOOL_CALL' | 'PLAN_UPDATE' | 'ARTIFACT' | 'INCIDENT' | 'OWNER_GATE';
     toolCall?: RunToolCall;
+    /**
+     * Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
+     */
+    integrationInvocationRef?: string;
     execution?: RunEventExecution;
     message?: RunMessage;
     occurredAt: Timestamp;

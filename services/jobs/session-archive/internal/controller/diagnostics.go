@@ -10,17 +10,88 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
-	workerObservationMessage = "session archive worker terminal observation"
-	taskRefAnnotation        = "session-archive.kodex.dev/task-ref"
-	taskKindAnnotation       = "session-archive.kodex.dev/task-kind"
-	taskGenerationAnnotation = "session-archive.kodex.dev/content-generation"
-	taskAttemptAnnotation    = "session-archive.kodex.dev/attempt"
+	workerObservationMessage   = "session archive worker terminal observation"
+	archiveAPIFailureMessage   = "session archive Kubernetes operation failed"
+	archiveTaskRefAttribute    = "task_ref"
+	archiveSessionRefAttribute = "session_ref"
+	archiveTaskKindAttribute   = "task_kind"
+	archiveGenerationAttribute = "content_generation"
+	archiveAttemptAttribute    = "attempt"
+	archiveAPIStageAttribute   = "api_stage"
+	archiveAPIReasonAttribute  = "api_reason"
+	archiveAPIStatusAttribute  = "api_status_code"
+	taskRefAnnotation          = "session-archive.kodex.dev/task-ref"
+	taskKindAnnotation         = "session-archive.kodex.dev/task-kind"
+	taskGenerationAnnotation   = "session-archive.kodex.dev/content-generation"
+	taskAttemptAnnotation      = "session-archive.kodex.dev/attempt"
 )
+
+type archiveAPIStage string
+
+const (
+	archiveAPICreateInput archiveAPIStage = "CREATE_INPUT"
+	archiveAPICreateJob   archiveAPIStage = "CREATE_JOB"
+	archiveAPIObserveJob  archiveAPIStage = "OBSERVE_JOB"
+)
+
+// Диагностика использует только проверенный claim и закрытые поля API status.
+// Message, Details, headers и произвольный текст причины не выдаются.
+func (controller *Controller) observeAPIFailure(ctx context.Context, task model.Task, stage archiveAPIStage, err error) {
+	if err == nil || controller.config.Logger == nil || task.Validate() != nil || task.Attempt > 5 {
+		return
+	}
+	safeStage := "UNKNOWN"
+	switch stage {
+	case archiveAPICreateInput, archiveAPICreateJob, archiveAPIObserveJob:
+		safeStage = string(stage)
+	}
+	reason, code := boundedAPIError(err)
+	ref := func(value string) string {
+		if diagnosticRefPattern.MatchString(value) {
+			return value
+		}
+		return "UNKNOWN"
+	}
+	controller.config.Logger.InfoContext(ctx, archiveAPIFailureMessage,
+		archiveTaskRefAttribute, ref(task.TaskRef), archiveSessionRefAttribute, ref(task.SessionRef),
+		archiveTaskKindAttribute, diagnosticTaskKind(task.Kind), archiveGenerationAttribute, task.ContentGeneration,
+		archiveAttemptAttribute, task.Attempt, archiveAPIStageAttribute, safeStage,
+		archiveAPIReasonAttribute, reason, archiveAPIStatusAttribute, code)
+}
+
+func boundedAPIError(err error) (string, int32) {
+	reason := "UNKNOWN"
+	switch value := apierrors.ReasonForError(err); value {
+	case metav1.StatusReasonUnauthorized, metav1.StatusReasonForbidden, metav1.StatusReasonNotFound,
+		metav1.StatusReasonAlreadyExists, metav1.StatusReasonConflict, metav1.StatusReasonGone,
+		metav1.StatusReasonInvalid, metav1.StatusReasonServerTimeout, metav1.StatusReasonTimeout,
+		metav1.StatusReasonTooManyRequests, metav1.StatusReasonBadRequest,
+		metav1.StatusReasonMethodNotAllowed, metav1.StatusReasonNotAcceptable,
+		metav1.StatusReasonRequestEntityTooLarge, metav1.StatusReasonUnsupportedMediaType,
+		metav1.StatusReasonInternalError, metav1.StatusReasonExpired, metav1.StatusReasonServiceUnavailable:
+		reason = string(value)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		reason = "CLIENT_TIMEOUT"
+	} else if errors.Is(err, context.Canceled) {
+		reason = "CLIENT_CANCELLED"
+	}
+	var apiStatus apierrors.APIStatus
+	var code int32
+	if errors.As(err, &apiStatus) {
+		statusCode := apiStatus.Status().Code
+		if statusCode >= 400 && statusCode <= 599 {
+			code = statusCode
+		}
+	}
+	return reason, code
+}
 
 var diagnosticRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 
@@ -93,8 +164,8 @@ func (controller *Controller) readResult(ctx context.Context, task model.Task, j
 			return "UNKNOWN"
 		}
 		controller.config.Logger.InfoContext(ctx, workerObservationMessage,
-			"task_ref", ref(task.TaskRef), "session_ref", ref(task.SessionRef), "task_kind", diagnosticTaskKind(task.Kind),
-			"content_generation", task.ContentGeneration, "attempt", task.Attempt, "job_ref", ref(jobRef), "pod_ref", ref(podRef),
+			archiveTaskRefAttribute, ref(task.TaskRef), archiveSessionRefAttribute, ref(task.SessionRef), archiveTaskKindAttribute, diagnosticTaskKind(task.Kind),
+			archiveGenerationAttribute, task.ContentGeneration, archiveAttemptAttribute, task.Attempt, "job_ref", ref(jobRef), "pod_ref", ref(podRef),
 			"stage", stage, "termination_reason", reason, "exit_code", exit, "safe_error_code", code)
 	}()
 	if !validWorkerJob(task, job, uid) {

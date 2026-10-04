@@ -1502,13 +1502,13 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 			return commandOutcome{}, errs.ErrInvalid
 		}
 	}
-	var invocationID, runID, rootRunID, projectID, projectRef, nodeRef, storedDigest, state, leaseRef string
+	var invocationID, invocationRef, runID, rootRunID, projectID, projectRef, nodeRef, storedDigest, state, leaseRef string
 	var effectKey, inputDigest, receiptRef, receiptEffectKey, receiptInputDigest string
 	var receiptProviderRef, receiptResponseDigest, receiptResult string
 	var generation int64
 	var expiresAt *time.Time
 	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef, input.Principal.CallerWorkload).Scan(
-		&invocationID, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest,
+		&invocationID, &invocationRef, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest,
 		&generation, &state, &leaseRef, &expiresAt, &effectKey, &inputDigest, &receiptRef,
 		&receiptEffectKey, &receiptInputDigest, &receiptProviderRef, &receiptResponseDigest, &receiptResult,
 	)
@@ -1567,7 +1567,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 			return commandOutcome{}, err
 		}
 	}
-	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.InvocationRef, "TURN_PROGRESS", nodeRef, "", "", "", integrationActionOutcomeMessage(next), "RUNNING", "RUNNING")
+	event, err := repository.emitIntegrationActionEvent(ctx, tx, scope, projectID, rootRunID, invocationRef, nodeRef, next)
 	if err != nil {
 		return commandOutcome{}, err
 	}

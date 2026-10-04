@@ -10,6 +10,7 @@ import {
   assistantTurnIsEmptyTerminalReceipt,
   assistantTurnIsDuplicateFailureReceipt,
   isAssistantPlanToolReceipt,
+  isSuccessfulIntegrationToolReceipt,
   activeTranscriptItemId,
   assistantTerminalTranscriptScopes,
   assistantTranscriptReplacesWorkingFallback,
@@ -87,6 +88,63 @@ describe("закрытая машинная квитанция инструме�
       "TOOL_UNAVAILABLE",
     ])
       expect(isAssistantPlanToolReceipt({ ...tool, safeResult })).toBe(false);
+  });
+});
+
+describe("закрытая успешная квитанция интеграции", () => {
+  const receipt = {
+    version: 1,
+    invocationRef: "inv_fixture123",
+    state: "SUCCEEDED",
+    inputSHA256: "a".repeat(64),
+  };
+  const tool: NonNullable<RunActivityItem["toolCall"]> = {
+    ref: "tcl_example",
+    tool: "context7_resolve_library_id",
+    state: "SUCCEEDED",
+    revision: 2,
+    durationMs: 10,
+    safeParameters: {},
+    safeResult: JSON.stringify(receipt),
+    auditRef: "aud_example",
+  };
+  it.each([
+    "invoke_integration",
+    "context7_resolve_library_id",
+    "context7_query_docs",
+  ])("отличает техническую квитанцию %s от текста ответа", (name) =>
+    expect(isSuccessfulIntegrationToolReceipt({ ...tool, tool: name })).toBe(
+      true,
+    ),
+  );
+  it("не скрывает ошибку, unknown tool, произвольный результат или некорректные поля", () => {
+    expect(
+      isSuccessfulIntegrationToolReceipt({ ...tool, tool: "unknown_tool" }),
+    ).toBe(false);
+    for (const state of ["RUNNING", "FAILED", "CANCELLED"] as const)
+      expect(isSuccessfulIntegrationToolReceipt({ ...tool, state })).toBe(
+        false,
+      );
+    for (const safeResult of [
+      "Результат найден",
+      "TOOL_UNAVAILABLE",
+      "{invalid}",
+      "null",
+      "[]",
+      JSON.stringify({ ...receipt, version: 2 }),
+      JSON.stringify({ ...receipt, state: "FAILED" }),
+      JSON.stringify({ ...receipt, invocationRef: "run_fixture123" }),
+      JSON.stringify({ ...receipt, invocationRef: "inv_short" }),
+      JSON.stringify({ ...receipt, inputSHA256: "a".repeat(63) }),
+      JSON.stringify({ ...receipt, inputSHA256: "A".repeat(64) }),
+      JSON.stringify({ ...receipt, message: "Важный результат" }),
+      JSON.stringify({ ...receipt, inputSHA256: "a".repeat(64) }) +
+        " Дополнительный текст",
+      `{"version":1,"version":1,"invocationRef":"inv_fixture123","state":"SUCCEEDED","inputSHA256":"${"a".repeat(64)}"}`,
+    ])
+      expect(isSuccessfulIntegrationToolReceipt({ ...tool, safeResult })).toBe(
+        false,
+      );
   });
 });
 
@@ -1453,6 +1511,204 @@ describe("assistantTurnHasAuthoritativeActivity", () => {
 });
 
 describe("buildRunActivityItems", () => {
+  describe("точное повторное подтверждение успешной интеграции", () => {
+    function completionFixture(): [RunEvent, RunEvent] {
+      const base = required(events[0]);
+      const invocationRef = "inv_fixture123";
+      return [
+        {
+          ...base,
+          ref: "evt_tool_success",
+          type: "TOOL_CALL_RECORDED",
+          messageKind: "TOOL_CALL",
+          message: undefined,
+          toolCall: {
+            ref: "tcl_fixture123",
+            tool: "context7_resolve_library_id",
+            state: "SUCCEEDED",
+            revision: 2,
+            durationMs: 10,
+            safeParameters: {},
+            safeResult: JSON.stringify({
+              version: 1,
+              invocationRef,
+              state: "SUCCEEDED",
+              inputSHA256: "a".repeat(64),
+            }),
+            auditRef: "aud_fixture123",
+          },
+        },
+        {
+          ...base,
+          ref: "evt_integration_success",
+          sequence: 3,
+          type: "TURN_PROGRESS",
+          messageKind: "INTERMEDIATE_MESSAGE",
+          message: undefined,
+          summary: "i18n:INTEGRATION_ACTION_SUCCEEDED",
+          integrationInvocationRef: invocationRef,
+        },
+      ];
+    }
+
+    function show(input: readonly RunEvent[]) {
+      return presentRunTranscriptItems(buildRunTranscriptItems(input));
+    }
+
+    it("оставляет один tool при same six-tuple и owner invocation pin, не меняя events", () => {
+      const input = completionFixture();
+      const original = JSON.stringify(input);
+      const result = show(input);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.toolCall?.state).toBe("SUCCEEDED");
+      expect(JSON.stringify(input)).toBe(original);
+      expect(show([...input].reverse())).toEqual(result);
+    });
+
+    it("не связывает receipt с presentation-переводом summary", () => {
+      const [tool, completion] = completionFixture();
+      const translated: PresentedRunEvent = {
+        ...completion,
+        displaySummary: "Действие интеграции выполнено успешно",
+      };
+      expect(show([tool, translated])).toHaveLength(1);
+    });
+
+    it.each([
+      "Действие интеграции выполнено успешно",
+      "Integration action completed successfully",
+    ])("сохраняет owner pin при gateway summary %s", (summary) => {
+      const [tool, completion] = completionFixture();
+      expect(
+        show([
+          tool,
+          {
+            ...completion,
+            summary,
+          },
+        ]),
+      ).toHaveLength(1);
+    });
+
+    it("до terminal revision сохраняет progress, после rejoin убирает только повтор", () => {
+      const [tool, completion] = completionFixture();
+      const running: RunEvent = {
+        ...tool,
+        ref: "evt_tool_running",
+        toolCall: {
+          ...required(tool.toolCall),
+          revision: 1,
+          state: "RUNNING",
+          safeResult: "",
+        },
+      };
+      expect(show([running, completion])).toHaveLength(2);
+      expect(
+        show([running, completion, { ...tool, sequence: 4 }]),
+      ).toHaveLength(1);
+    });
+
+    it.each([
+      "runRef",
+      "nodeRef",
+      "sessionRef",
+      "turnRef",
+      "turnNumber",
+      "attempt",
+    ] as const)("сохраняет completion другого %s", (field) => {
+      const [tool, completion] = completionFixture();
+      const execution = required(completion.execution);
+      expect(
+        show([
+          tool,
+          {
+            ...completion,
+            execution: {
+              ...execution,
+              [field]:
+                typeof execution[field] === "number"
+                  ? 2
+                  : `${execution[field]}_foreign`,
+            },
+          },
+        ]),
+      ).toHaveLength(2);
+    });
+
+    it("не скрывает unbound, unknown, errors, meaningful или опубликованные messages", () => {
+      const [tool, completion] = completionFixture();
+      const variants: RunEvent[] = [
+        { ...completion, integrationInvocationRef: undefined },
+        { ...completion, integrationInvocationRef: "inv_otherfixture" },
+        { ...completion, integrationInvocationRef: "inv_short" },
+        { ...completion, execution: undefined },
+        { ...completion, runRef: "run_foreignfixture" },
+        { ...completion, nodeRef: "nod_foreignfixture" },
+        { ...completion, artifactRef: "art_fixture123" },
+        { ...completion, run: { ...completion.run, version: 0 } },
+        {
+          ...completion,
+          run: { ...completion.run, ref: "run_foreignfixture" },
+        },
+        {
+          ...completion,
+          summary: "i18n:INTEGRATION_ACTION_SUCCEEDED\nЕсть пояснение",
+          integrationInvocationRef: undefined,
+        },
+        { ...completion, progress: "Важные результаты" },
+        { ...completion, type: "TURN_STARTED" },
+        { ...completion, messageKind: "STATE" },
+        {
+          ...completion,
+          message: {
+            ref: "msg_fixture123",
+            phase: "COMMENTARY",
+            revision: 1,
+            text: "i18n:INTEGRATION_ACTION_SUCCEEDED",
+          },
+        },
+      ];
+      for (const variant of variants)
+        expect(show([tool, variant])).toHaveLength(2);
+    });
+
+    it.each([
+      "i18n:INTEGRATION_ACTION_FAILED",
+      "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN",
+      "Действие интеграции не выполнено",
+      "Исход действия интеграции неизвестен",
+    ])("сохраняет terminal non-success outcome %s", (summary) => {
+      const [tool, completion] = completionFixture();
+      const failed: RunEvent = {
+        ...tool,
+        toolCall: {
+          ...required(tool.toolCall),
+          state: "FAILED",
+          safeResult: "INTEGRATION_ACTION_FAILED",
+        },
+      };
+      expect(show([failed, { ...completion, summary }])).toHaveLength(2);
+    });
+
+    it("не использует unknown, stale или противоречивую tool receipt", () => {
+      const [tool, completion] = completionFixture();
+      const call = required(tool.toolCall);
+      const variants: RunEvent[] = [
+        { ...tool, type: "TURN_PROGRESS" },
+        { ...tool, messageKind: "INTERMEDIATE_MESSAGE" },
+        { ...tool, runRef: "run_foreignfixture" },
+        { ...tool, nodeRef: "nod_foreignfixture" },
+        { ...tool, run: { ...tool.run, version: 0 } },
+        { ...tool, toolCall: { ...call, revision: 1 } },
+        { ...tool, toolCall: { ...call, state: "FAILED" } },
+        { ...tool, toolCall: { ...call, tool: "unknown_tool" } },
+        { ...tool, toolCall: { ...call, safeResult: `${call.safeResult} ` } },
+      ];
+      for (const variant of variants)
+        expect(show([variant, completion])).toHaveLength(2);
+    });
+  });
+
   it("сохраняет полный USER текст больше 64 KiB в авторитетном бюджете 100000 символов", () => {
     const base = required(events[0]);
     const text = "я".repeat(40000);

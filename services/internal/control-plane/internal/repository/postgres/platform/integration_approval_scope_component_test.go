@@ -18,6 +18,7 @@ import (
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -247,14 +248,43 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 	}
 	completeFailure := func(key string, claim map[string]any) {
 		t.Helper()
-		_, completeErr := service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway,
+		completion := command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway,
 			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.IntegrationInvocationInput{
 				InvocationRef: stringMap(claim, "invocationRef"), LeaseRef: stringMap(claim, "leaseRef"),
 				Fence: stringMap(claim, "fence"), Generation: claim["generation"].(int64),
 				SafeErrorCode: "INTEGRATION_REQUEST_REJECTED",
-			}})
+			}}
+		completed, completeErr := service.Execute(ctx, completion)
 		if completeErr != nil {
 			t.Fatalf("complete failed fixture effect: %v", completeErr)
+		}
+		if completed.Event == nil || completed.Event.Delta.IntegrationInvocationRef != stringMap(claim, "invocationRef") {
+			t.Fatal("owner completion lost exact invocation binding")
+		}
+		events, sequence, _, readErr := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completed.Event.RunRef})
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		found := false
+		for _, event := range events {
+			if event.Ref == completed.Event.Ref {
+				found = event.Delta.IntegrationInvocationRef == stringMap(claim, "invocationRef")
+			}
+		}
+		if !found {
+			t.Fatal("event read lost persisted invocation binding")
+		}
+		var outboxBinding string
+		if err := pool.QueryRow(ctx, `SELECT convert_from(payload,'UTF8')::jsonb->'data'->>'integrationInvocationRef' FROM control_plane.outbox_events WHERE ordering_key=$1 AND sequence=$2`, "run:"+completed.Event.RunRef, completed.Event.Sequence).Scan(&outboxBinding); err != nil || outboxBinding != stringMap(claim, "invocationRef") {
+			t.Fatal("outbox lost exact owner binding", err)
+		}
+		replayed, replayErr := service.Execute(ctx, completion)
+		if replayErr != nil || replayed.Event == nil || replayed.Event.Sequence != completed.Event.Sequence || replayed.Event.Delta.IntegrationInvocationRef != outboxBinding {
+			t.Fatal("completion replay changed event cardinality or binding", replayErr)
+		}
+		_, replaySequence, _, replayReadErr := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completed.Event.RunRef})
+		if replayReadErr != nil || replaySequence != sequence {
+			t.Fatal("completion replay created another event", replayReadErr)
 		}
 	}
 	completeFailure("scoped-first-complete", firstClaim[0])

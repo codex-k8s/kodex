@@ -11014,10 +11014,13 @@ type RunEvent struct {
 	MessageKind RunEventMessageKind `protobuf:"varint,22,opt,name=message_kind,json=messageKind,proto3,enum=controlplane.v1.RunEventMessageKind" json:"message_kind,omitempty"`
 	ToolCall    *RunToolCall        `protobuf:"bytes,23,opt,name=tool_call,json=toolCall,proto3" json:"tool_call,omitempty"`
 	// Координаты назначаются владельцем по исходному execution, не текущему UI.
-	Execution     *RunEventExecution `protobuf:"bytes,24,opt,name=execution,proto3" json:"execution,omitempty"`
-	Message       *RunMessage        `protobuf:"bytes,25,opt,name=message,proto3" json:"message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Execution *RunEventExecution `protobuf:"bytes,24,opt,name=execution,proto3" json:"execution,omitempty"`
+	Message   *RunMessage        `protobuf:"bytes,25,opt,name=message,proto3" json:"message,omitempty"`
+	// Только новые INTEGRATION_ACTION_* completion-события: ref invocation,
+	// назначенный владельцем после проверки lease/fence, не общий aggregate_ref.
+	IntegrationInvocationRef *string `protobuf:"bytes,26,opt,name=integration_invocation_ref,json=integrationInvocationRef,proto3,oneof" json:"integration_invocation_ref,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *RunEvent) Reset() {
@@ -11223,6 +11226,13 @@ func (x *RunEvent) GetMessage() *RunMessage {
 		return x.Message
 	}
 	return nil
+}
+
+func (x *RunEvent) GetIntegrationInvocationRef() string {
+	if x != nil && x.IntegrationInvocationRef != nil {
+		return *x.IntegrationInvocationRef
+	}
+	return ""
 }
 
 type RunEventExecution struct {
@@ -78906,7 +78916,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vfinished_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x12>\n" +
 	"\fnext_actions\x18\r \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\x121\n" +
-	"\x05usage\x18\x0e \x01(\v2\x1b.controlplane.v1.TokenUsageR\x05usage\"\xe2\b\n" +
+	"\x05usage\x18\x0e \x01(\v2\x1b.controlplane.v1.TokenUsageR\x05usage\"\xc4\t\n" +
 	"\bRunEvent\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x17\n" +
 	"\arun_ref\x18\x02 \x01(\tR\x06runRef\x12\x1a\n" +
@@ -78935,7 +78945,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\fmessage_kind\x18\x16 \x01(\x0e2$.controlplane.v1.RunEventMessageKindR\vmessageKind\x129\n" +
 	"\ttool_call\x18\x17 \x01(\v2\x1c.controlplane.v1.RunToolCallR\btoolCall\x12@\n" +
 	"\texecution\x18\x18 \x01(\v2\".controlplane.v1.RunEventExecutionR\texecution\x125\n" +
-	"\amessage\x18\x19 \x01(\v2\x1b.controlplane.v1.RunMessageR\amessage\"\xbe\x01\n" +
+	"\amessage\x18\x19 \x01(\v2\x1b.controlplane.v1.RunMessageR\amessage\x12A\n" +
+	"\x1aintegration_invocation_ref\x18\x1a \x01(\tH\x00R\x18integrationInvocationRef\x88\x01\x01B\x1d\n" +
+	"\x1b_integration_invocation_ref\"\xbe\x01\n" +
 	"\x11RunEventExecution\x12\x17\n" +
 	"\arun_ref\x18\x01 \x01(\tR\x06runRef\x12\x19\n" +
 	"\bnode_ref\x18\x02 \x01(\tR\anodeRef\x12\x1f\n" +
@@ -89562,6 +89574,7 @@ func file_controlplane_v1_control_plane_proto_init() {
 		(*RunTarget_WorkflowRef)(nil),
 		(*RunTarget_SystemAssistantRef)(nil),
 	}
+	file_controlplane_v1_control_plane_proto_msgTypes[25].OneofWrappers = []any{}
 	file_controlplane_v1_control_plane_proto_msgTypes[47].OneofWrappers = []any{}
 	file_controlplane_v1_control_plane_proto_msgTypes[48].OneofWrappers = []any{}
 	file_controlplane_v1_control_plane_proto_msgTypes[49].OneofWrappers = []any{}

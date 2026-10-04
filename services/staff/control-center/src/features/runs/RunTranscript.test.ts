@@ -155,6 +155,30 @@ describe("RunTranscript: названия native инструментов", () =
 });
 
 describe("RunTranscript: managed инструменты", () => {
+  it.each([
+    "invoke_integration",
+    "context7_resolve_library_id",
+    "context7_query_docs",
+  ])(
+    "оставляет успешную машинную квитанцию %s только в закрытых деталях",
+    async (tool) => {
+      const receipt = JSON.stringify({
+        version: 1,
+        invocationRef: "inv_fixture123",
+        state: "SUCCEEDED",
+        inputSHA256: "a".repeat(64),
+      });
+      const html = await render(tool, {}, "ru", receipt);
+      expect(html).not.toContain("run-transcript__preview");
+      expect(html).toContain("Invocation Ref");
+      expect(html).toContain("Input SHA256");
+      expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+      expect(html).toMatch(
+        /<details[^>]*><summary[^>]*>Безопасный результат[^]*?Invocation Ref/,
+      );
+    },
+  );
+
   it("оставляет exact successful plan ref в деталях без дублирующего машинного preview", async () => {
     const html = await render(
       "propose_configuration_plan",

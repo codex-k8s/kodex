@@ -12869,31 +12869,34 @@ type RunEdgeType string
 
 // RunEvent defines model for RunEvent.
 type RunEvent struct {
-	Actor         *RunEventActor       `json:"actor,omitempty"`
-	Artifact      *Artifact            `json:"artifact,omitempty"`
-	ArtifactRef   *OpaqueRef           `json:"artifactRef,omitempty"`
-	Edge          *RunEdge             `json:"edge,omitempty"`
-	EdgeRef       *OpaqueRef           `json:"edgeRef,omitempty"`
-	Execution     *RunEventExecution   `json:"execution,omitempty"`
-	Gate          *OwnerGate           `json:"gate,omitempty"`
-	GateRef       *OpaqueRef           `json:"gateRef,omitempty"`
-	GraphRevision int64                `json:"graphRevision"`
-	Incident      *Incident            `json:"incident,omitempty"`
-	Message       *RunMessage          `json:"message,omitempty"`
-	MessageKind   *RunEventMessageKind `json:"messageKind,omitempty"`
-	Node          *RunNode             `json:"node,omitempty"`
-	NodeRef       *OpaqueRef           `json:"nodeRef,omitempty"`
-	NodeState     *RunEventNodeState   `json:"nodeState,omitempty"`
-	OccurredAt    Timestamp            `json:"occurredAt"`
-	Progress      *string              `json:"progress,omitempty"`
-	Ref           OpaqueRef            `json:"ref"`
-	Run           RunDelta             `json:"run"`
-	RunRef        OpaqueRef            `json:"runRef"`
-	RunState      *RunEventRunState    `json:"runState,omitempty"`
-	Sequence      int64                `json:"sequence"`
-	Summary       string               `json:"summary"`
-	ToolCall      *RunToolCall         `json:"toolCall,omitempty"`
-	Type          RunEventType         `json:"type"`
+	Actor         *RunEventActor     `json:"actor,omitempty"`
+	Artifact      *Artifact          `json:"artifact,omitempty"`
+	ArtifactRef   *OpaqueRef         `json:"artifactRef,omitempty"`
+	Edge          *RunEdge           `json:"edge,omitempty"`
+	EdgeRef       *OpaqueRef         `json:"edgeRef,omitempty"`
+	Execution     *RunEventExecution `json:"execution,omitempty"`
+	Gate          *OwnerGate         `json:"gate,omitempty"`
+	GateRef       *OpaqueRef         `json:"gateRef,omitempty"`
+	GraphRevision int64              `json:"graphRevision"`
+	Incident      *Incident          `json:"incident,omitempty"`
+
+	// IntegrationInvocationRef Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
+	IntegrationInvocationRef *string              `json:"integrationInvocationRef,omitempty"`
+	Message                  *RunMessage          `json:"message,omitempty"`
+	MessageKind              *RunEventMessageKind `json:"messageKind,omitempty"`
+	Node                     *RunNode             `json:"node,omitempty"`
+	NodeRef                  *OpaqueRef           `json:"nodeRef,omitempty"`
+	NodeState                *RunEventNodeState   `json:"nodeState,omitempty"`
+	OccurredAt               Timestamp            `json:"occurredAt"`
+	Progress                 *string              `json:"progress,omitempty"`
+	Ref                      OpaqueRef            `json:"ref"`
+	Run                      RunDelta             `json:"run"`
+	RunRef                   OpaqueRef            `json:"runRef"`
+	RunState                 *RunEventRunState    `json:"runState,omitempty"`
+	Sequence                 int64                `json:"sequence"`
+	Summary                  string               `json:"summary"`
+	ToolCall                 *RunToolCall         `json:"toolCall,omitempty"`
+	Type                     RunEventType         `json:"type"`
 }
 
 // RunEventMessageKind defines model for RunEvent.MessageKind.

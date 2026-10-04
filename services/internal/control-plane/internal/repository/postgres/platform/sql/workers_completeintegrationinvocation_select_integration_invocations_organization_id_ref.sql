@@ -1,5 +1,5 @@
 -- name: workers_completeintegrationinvocation_select_integration_invocations_organization_id_ref :one
-SELECT i.id::text,i.run_id::text,r.root_run_id::text,COALESCE(r.project_id::text,''),COALESCE(p.ref,''),n.ref,
+SELECT i.id::text,i.ref,i.run_id::text,r.root_run_id::text,COALESCE(r.project_id::text,''),COALESCE(p.ref,''),n.ref,
 	COALESCE(i.effect_fence_digest,''),i.generation,i.state,COALESCE(i.lease_ref,''),i.lease_expires_at,
 	i.effect_key,i.input_digest,COALESCE(receipt.ref,''),COALESCE(receipt.effect_key,''),
 	COALESCE(receipt.input_digest,''),COALESCE(receipt.provider_effect_ref,''),COALESCE(receipt.response_digest,''),

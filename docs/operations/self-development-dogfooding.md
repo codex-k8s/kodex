@@ -141,6 +141,7 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 | Cancel/delete/terminal/expiry | Прежняя owner-транзакция отзывает execution и закрывает незавершённые activity; stale callback не создаёт новых фактов | Сохранённая история остаётся доступна только по прежнему eligibility; отмена не превращается в успех |
 | Retry/continuation | Новые turn/attempt и свежая RuntimeRevision, прежние items не переписываются | Exact tuple разделяет попытки и дочерние сессии |
 | Rejoin/reload/gap | Прежний защищённый run event read и непрерывный cursor, без нового cache/authority | Порядок внутри Run по sequence; между assistant turns по owner turnNumber |
+| Integration completion → compact transcript | После exact lease/fence/generation owner берёт invocation ref из заблокированной строки; в той же транзакции сохраняет typed integrationInvocationRef в delta/outbox; Proto/HTTP/WS не выводят его из общего aggregateRef | Только совпавшая каноническая SUCCEEDED tool receipt revision≥2 и полный run/node/session/turn/turnNumber/attempt позволяют скрыть повторную служебную запись. Локализованный summary не источник привязки; ошибки, опубликованные сообщения, artifacts и unbound история остаются видимыми. Backfill и миграция не нужны |
 | UI consumer acquire/release | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию |
 
 ## Журнал
@@ -1396,3 +1397,46 @@ UI helper35 самостоятельно создал typed план собст�
 pln_sHFqfPWwNm04gJykxewQiKOk; обычная Validate прошла, Apply ещё NOT RUN.
 Перед Apply после смены full base нужен свежий readback шаблона и каталога.
 Checkbox2–15 OPEN: полный tool inventory/build/admit/promote и Workflow впереди.
+
+04.10.2026 19:05 UTC, интеграционный tree поверх `ab33896e2bb72a4c1c0254641438d7d3f872e733`:
+PASS — canonical render ab338, migration017, archive core, supply-chain и
+control-plane core применены repo-owned скриптами. Все supply-chain workloads
+Ready; warm Pod использует exact full498b9012 тремя Ready контейнерами.
+Актуальный protected SYSTEM readback READY. Это trusted-local evidence,
+не staging/production acceptance.
+PASS — настоящий SYSTEM ход36 выполнил оба управляемых Context7 вызова:
+run_G6CBzCKAoE5N2aBhU6plgSAc, exact invocation receipts
+inv_s00cxwhK1ggJKphgKfd5eQmY и inv_3hApAw6LUK06LtcUM54Nqaki.
+Ни один итоговый текст модели не заменяет owner event/read path.
+PASS — повторный ход37 на full498: run_DF-mqdtnS82EJfDaio9Vr3eV,
+session ses_0K-9cRu5HRSQfQoQ1RYqqWwW, turn trn_2vW-cj0EANhIzGh7Q-Q-kwMZ,
+revision rrev_yqQz4iNBdLOryaV1NtuHFB2Q, attempt1. Owner history200:
+resolve inv_tlFoBsKcfPoi34iAYAjOffuM и query inv_r0wXraSPgz2oGhnl8hUMJOp0
+SUCCEEDED; новые completion events содержат exact typed invocation pin.
+Actual Pod proof: инструкции byte-equal runtime input, prompt содержит exact
+task и harmless marker, model gpt-6.1-sol/medium, prompt-service-v2, семь
+platform slots, пользовательский шаблон и один managed MCP profile.
+PASS — helper37 сам прочитал свежий ROLE_ENVIRONMENTS и создал typed план
+pln_Z-C67-5hoTRUbbtCrQnGOee_; normal UI Validate и Apply выполнены.
+Серверный Dockerfile использует exact full498 digest без host-подмены плана.
+Actual build/admission/38-required inventory/promotion пока NOT RUN.
+PASS — сквозной typed integrationInvocationRef: owner locked row → delta/
+outbox → Proto → HTTP/WS → generated Go/TS → frontend. Нет legacy/backfill,
+нового RPC или расширения generic aggregateRef. Detached PG completion/read/
+outbox/replay PASS1.64s, race/vet/codegen/SQL boundary PASS. Root unit CP
+platform/grpc .543/.579s, gateway HTTP/WS11.475/.108s, archive controller .045s.
+PASS — frontend159unit1.93s; скрыты только exact canonical успешные квитанции
+и дубли их completion, summary не используется как authority. Реальный ход37
+после hot reload больше не содержит повторных successful integration bubbles.
+Desktop/mobile screenshot recheck после окончательной правки ещё NOT RUN;
+Console error/warn отсутствуют, scoped history/network200.
+FAIL — live archive completion/restore не доказаны. Exact archive716 отсутствует
+на обеих node image stores; retained Pod UID917bb341-e602-4230-ad0a-7e8220ef4c89
+прошёл scheduling, затем image pull DNS failed. registry.local.kodex — только
+preload name, не опубликованный реестр. Попытки kubelet image GC подтверждены,
+но удаление именно716 этим процессом независимо не доказано. В работе durable
+публикация repo-built platform worker через существующую TLS registry boundary;
+повторный import сам по себе не считается устойчивым исправлением.
+Forward017 canonical SYSTEM/PROJECT component на exactab source PASS7.868s;
+live archive, restore/restart и full dogfooding остаются NOT RUN.
+Checkbox2–15 OPEN; частичный SYSTEM успех не закрывает PROJECT/сотрудников.

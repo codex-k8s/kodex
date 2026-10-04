@@ -39,6 +39,7 @@ export interface RunEvent {
   actor: RunEventActor;
   messageKind: RunEventMessageKind;
   toolCall?: RunToolCall;
+  integrationInvocationRef?: string;
   execution?: RunEventExecution;
   message?: RunMessage;
 }

@@ -476,6 +476,9 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 	if err := validateRunSessionReadinessShape(value, descriptor); err != nil {
 		return err
 	}
+	if err := validateRunIntegrationBinding(value, descriptor); err != nil {
+		return err
+	}
 	return normalizeIntegrationShape(value, descriptor)
 }
 
