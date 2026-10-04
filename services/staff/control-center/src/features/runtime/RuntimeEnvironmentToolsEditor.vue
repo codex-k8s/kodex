@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useId } from "vue";
+import { reactive, useId, watch } from "vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import type {
   RoleImageArtifactTool,
@@ -14,12 +14,30 @@ const props = defineProps<{
   loading?: boolean;
 }>();
 const fieldPrefix = `environment-tools-${useId()}`;
+const expandedTools = reactive(new Map<string, boolean>());
+watch(
+  () => props.tools,
+  (tools) => {
+    const names = new Set(tools.map((tool) => tool.command));
+    for (const name of expandedTools.keys())
+      if (!names.has(name)) expandedTools.delete(name);
+    for (const tool of tools)
+      if (!expandedTools.has(tool.command))
+        expandedTools.set(tool.command, !tool.description.trim());
+  },
+  { immediate: true },
+);
 const emit = defineEmits<{
   "update:tools": [value: RuntimeEnvironmentTool[]];
 }>();
 
 function selected(command: string): RuntimeEnvironmentTool | undefined {
   return props.tools.find((item) => item.command === command);
+}
+function toggleDetails(command: string, event: Event): void {
+  const element = event.currentTarget;
+  if (element instanceof HTMLDetailsElement)
+    expandedTools.set(command, element.open);
 }
 
 function toggle(tool: RoleImageArtifactTool): void {
@@ -126,25 +144,34 @@ function update(
               readonly
             />
           </label>
-          <label class="field field--wide">
-            <span>{{ $t("common.description") }}</span>
-            <VoiceTextarea
-              :disabled="disabled"
-              :value="selected(tool.name)?.description"
-              maxlength="500"
-              required
-              @input="update(tool.name, 'description', $event)"
-            />
-          </label>
-          <label class="field field--wide">
-            <span>{{ $t("runtime.toolUsageHint") }}</span>
-            <VoiceTextarea
-              :disabled="disabled"
-              :value="selected(tool.name)?.usageHint"
-              maxlength="500"
-              @input="update(tool.name, 'usageHint', $event)"
-            />
-          </label>
+          <details
+            class="tool-details field--wide"
+            :open="expandedTools.get(tool.name)"
+            @toggle="toggleDetails(tool.name, $event)"
+          >
+            <summary>{{ $t("runtime.toolDetails") }}</summary>
+            <label class="field">
+              <span>{{ $t("common.description") }}</span>
+              <VoiceTextarea
+                class="tool-metadata-editor"
+                :disabled="disabled"
+                :value="selected(tool.name)?.description"
+                maxlength="500"
+                required
+                @input="update(tool.name, 'description', $event)"
+              />
+            </label>
+            <label class="field">
+              <span>{{ $t("runtime.toolUsageHint") }}</span>
+              <VoiceTextarea
+                class="tool-metadata-editor"
+                :disabled="disabled"
+                :value="selected(tool.name)?.usageHint"
+                maxlength="500"
+                @input="update(tool.name, 'usageHint', $event)"
+              />
+            </label>
+          </details>
         </div>
       </article>
     </div>
@@ -206,6 +233,17 @@ function update(
 }
 .tool-fields .field--wide {
   grid-column: 1 / -1;
+}
+.tool-details > summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.tool-details > .field {
+  margin-top: 10px;
+}
+:deep(textarea.tool-metadata-editor) {
+  min-height: 72px;
+  height: 72px;
 }
 @media (max-width: 700px) {
   .tool-fields {

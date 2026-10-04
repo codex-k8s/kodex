@@ -27,17 +27,20 @@ func (server *Server) GetRuntimeSecretImpact(w http.ResponseWriter, r *http.Requ
 	result := generated.RuntimeSecretImpact{SecretRef: ref, SecretVersion: response.GetSecretVersion(), TargetRevision: revision, Total: response.GetTotal(),
 		NextPageToken: response.GetPage().GetNextPageToken(), Consumers: []generated.RuntimeSecretImpactConsumer{}}
 	seen := make(map[string]bool)
+	owner := ""
 	for _, input := range response.GetConsumers() {
 		item, ok := secretImpactConsumerView(input, revision)
+		ownerKey := impactConsumerOwnerKey(item.ScopeKind, item.OrganizationRef, item.ProjectRef)
 		key := item.EnvironmentVersionRef
 		if item.Consumer != nil {
 			key = item.Consumer.BindingRef
 		}
-		if !ok || seen[key] {
+		if !ok || seen[key] || owner != "" && ownerKey != owner {
 			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
 		seen[key] = true
+		owner = ownerKey
 		result.Consumers = append(result.Consumers, item)
 	}
 	w.Header().Set("ETag", "\""+strconv.FormatInt(result.SecretVersion, 10)+"\"")
@@ -46,7 +49,8 @@ func (server *Server) GetRuntimeSecretImpact(w http.ResponseWriter, r *http.Requ
 
 func secretImpactConsumerView(input *controlplanev1.RuntimeSecretImpactConsumer, target int64) (generated.RuntimeSecretImpactConsumer, bool) {
 	if input == nil || !opaqueHTTPReference.MatchString(input.GetEnvironmentRef()) || !opaqueHTTPReference.MatchString(input.GetEnvironmentVersionRef()) ||
-		input.GetEnvironmentVersion() < 1 || input.GetEnvironmentVersion() > maximumSafeJSONInteger || len(input.GetSecretRevisions()) < 1 || len(input.GetSecretRevisions()) > 128 {
+		input.GetEnvironmentVersion() < 1 || input.GetEnvironmentVersion() > maximumSafeJSONInteger || len(input.GetSecretRevisions()) < 1 || len(input.GetSecretRevisions()) > 128 ||
+		!validRuntimeResourceScope(runtimeResourceScopeKind(input.GetScopeKind().String()), input.GetOrganizationRef(), input.GetProjectRef()) {
 		return generated.RuntimeSecretImpactConsumer{}, false
 	}
 	seen := make(map[int64]bool)
@@ -57,15 +61,18 @@ func secretImpactConsumerView(input *controlplanev1.RuntimeSecretImpactConsumer,
 		seen[revision] = true
 	}
 	consumer := input.GetConsumer()
-	if !opaqueHTTPReference.MatchString(consumer.GetProjectRef()) || consumer.GetVersionRef() != input.GetEnvironmentVersionRef() {
+	result := generated.RuntimeSecretImpactConsumer{EnvironmentRef: input.GetEnvironmentRef(), EnvironmentVersion: input.GetEnvironmentVersion(), EnvironmentVersionRef: input.GetEnvironmentVersionRef(),
+		ProjectRef: input.GetProjectRef(), ScopeKind: runtimeResourceScopeKind(input.GetScopeKind().String()), OrganizationRef: input.GetOrganizationRef(), SecretRevisions: append([]int64{}, input.GetSecretRevisions()...)}
+	if consumer == nil {
+		return result, true
+	}
+	if consumer.GetScopeKind() != input.GetScopeKind() || consumer.GetOrganizationRef() != input.GetOrganizationRef() || consumer.GetProjectRef() != input.GetProjectRef() || consumer.GetVersionRef() != input.GetEnvironmentVersionRef() {
 		return generated.RuntimeSecretImpactConsumer{}, false
 	}
-	result := generated.RuntimeSecretImpactConsumer{EnvironmentRef: input.GetEnvironmentRef(), EnvironmentVersion: input.GetEnvironmentVersion(), EnvironmentVersionRef: input.GetEnvironmentVersionRef(),
-		ProjectRef: consumer.GetProjectRef(), SecretRevisions: append([]int64{}, input.GetSecretRevisions()...)}
 	if consumer.GetAgentRef() == "" {
 		return result, consumer.GetAgentVersion() == 0 && consumer.GetBindingRef() == "" && consumer.GetBindingVersion() == 0
 	}
-	item := generated.RuntimeEnvironmentConsumer{AgentRef: consumer.GetAgentRef(), AgentVersion: consumer.GetAgentVersion(), BindingRef: consumer.GetBindingRef(), BindingVersion: consumer.GetBindingVersion(), VersionRef: consumer.GetVersionRef(), ProjectRef: consumer.GetProjectRef()}
+	item := environmentConsumerView(consumer)
 	result.Consumer = &item
 	return result, validEnvironmentConsumer(item)
 }
@@ -87,21 +94,26 @@ func (server *Server) RebindRuntimeSecret(w http.ResponseWriter, r *http.Request
 	input := &controlplanev1.RebindRuntimeSecretRequest{Mutation: mutation, SecretRef: ref, Revision: revision}
 	selected := make(map[string]generated.RuntimeSecretRebindSelection)
 	agents := make(map[string]string)
+	owner := ""
 	for _, selection := range body.Selections {
 		_, duplicate := selected[selection.EnvironmentRef]
-		if duplicate || !opaqueHTTPReference.MatchString(selection.EnvironmentRef) || !opaqueHTTPReference.MatchString(selection.SourceVersionRef) || selection.ExpectedEnvironmentVersion < 1 || selection.ExpectedEnvironmentVersion > maximumSafeJSONInteger || selection.Consumers == nil || len(selection.Consumers) > 100 {
+		key := impactConsumerOwnerKey(selection.ScopeKind, selection.OrganizationRef, selection.ProjectRef)
+		if duplicate || owner != "" && key != owner || !validRuntimeResourceScope(selection.ScopeKind, selection.OrganizationRef, selection.ProjectRef) || !opaqueHTTPReference.MatchString(selection.EnvironmentRef) || !opaqueHTTPReference.MatchString(selection.SourceVersionRef) || selection.ExpectedEnvironmentVersion < 1 || selection.ExpectedEnvironmentVersion > maximumSafeJSONInteger || selection.Consumers == nil || len(selection.Consumers) > 100 {
 			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 			return
 		}
 		selected[selection.EnvironmentRef] = selection
-		item := &controlplanev1.RuntimeSecretRebindSelection{EnvironmentRef: selection.EnvironmentRef, ExpectedEnvironmentVersion: selection.ExpectedEnvironmentVersion, SourceVersionRef: selection.SourceVersionRef}
+		owner = key
+		item := &controlplanev1.RuntimeSecretRebindSelection{EnvironmentRef: selection.EnvironmentRef, ExpectedEnvironmentVersion: selection.ExpectedEnvironmentVersion, SourceVersionRef: selection.SourceVersionRef,
+			ScopeKind: consumerScopeProto(selection.ScopeKind), OrganizationRef: selection.OrganizationRef, ProjectRef: selection.ProjectRef}
 		for _, consumer := range selection.Consumers {
-			if !validEnvironmentConsumer(consumer) || consumer.VersionRef != selection.SourceVersionRef || agents[consumer.AgentRef] != "" || len(agents) >= 100 {
+			if !validEnvironmentConsumer(consumer) || consumer.ScopeKind != selection.ScopeKind || consumer.OrganizationRef != selection.OrganizationRef || consumer.ProjectRef != selection.ProjectRef || consumer.VersionRef != selection.SourceVersionRef || agents[consumer.AgentRef] != "" || len(agents) >= 100 {
 				writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 				return
 			}
 			agents[consumer.AgentRef] = selection.EnvironmentRef
-			item.Consumers = append(item.Consumers, &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: consumer.AgentRef, AgentVersion: consumer.AgentVersion, BindingRef: consumer.BindingRef, BindingVersion: consumer.BindingVersion, VersionRef: consumer.VersionRef, ProjectRef: consumer.ProjectRef})
+			item.Consumers = append(item.Consumers, &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: consumer.AgentRef, AgentVersion: consumer.AgentVersion, BindingRef: consumer.BindingRef, BindingVersion: consumer.BindingVersion, VersionRef: consumer.VersionRef, ProjectRef: consumer.ProjectRef,
+				ScopeKind: consumerScopeProto(consumer.ScopeKind), OrganizationRef: consumer.OrganizationRef})
 		}
 		input.Selections = append(input.Selections, item)
 	}
@@ -129,7 +141,9 @@ func secretRebindView(response *controlplanev1.RebindRuntimeSecretResponse, ref 
 		selection, exists := selected[environment.GetRef()]
 		current := environment.GetCurrentVersion()
 		if !exists || versions[environment.GetRef()] != "" || environment.GetVersion() <= selection.ExpectedEnvironmentVersion || environment.GetVersion() > maximumSafeJSONInteger ||
-			!opaqueHTTPReference.MatchString(environment.GetProjectRef()) || !opaqueHTTPReference.MatchString(current.GetRef()) || current.GetRef() == selection.SourceVersionRef || !validManagedDigest(current.GetDigest()) || len(current.GetSecretDescriptors()) > 128 {
+			!validRuntimeResourceScope(runtimeResourceScopeKind(environment.GetScopeKind().String()), environment.GetOrganizationRef(), environment.GetProjectRef()) ||
+			runtimeResourceScopeKind(environment.GetScopeKind().String()) != selection.ScopeKind || environment.GetOrganizationRef() != selection.OrganizationRef || environment.GetProjectRef() != selection.ProjectRef ||
+			!opaqueHTTPReference.MatchString(current.GetRef()) || current.GetRef() == selection.SourceVersionRef || !validManagedDigest(current.GetDigest()) || len(current.GetSecretDescriptors()) > 128 {
 			return result, false
 		}
 		matched := false
@@ -145,13 +159,14 @@ func secretRebindView(response *controlplanev1.RebindRuntimeSecretResponse, ref 
 			return result, false
 		}
 		for _, consumer := range selection.Consumers {
-			if consumer.ProjectRef != environment.GetProjectRef() {
+			if consumer.ScopeKind != selection.ScopeKind || consumer.OrganizationRef != selection.OrganizationRef || consumer.ProjectRef != environment.GetProjectRef() {
 				return result, false
 			}
 			consumers[consumer.AgentRef] = consumer
 		}
 		versions[environment.GetRef()] = current.GetRef()
-		result.Environments = append(result.Environments, generated.RuntimeSecretReboundEnvironment{EnvironmentRef: environment.GetRef(), EnvironmentVersion: environment.GetVersion(), ProjectRef: environment.GetProjectRef(), VersionRef: current.GetRef(), Digest: current.GetDigest()})
+		result.Environments = append(result.Environments, generated.RuntimeSecretReboundEnvironment{EnvironmentRef: environment.GetRef(), EnvironmentVersion: environment.GetVersion(), ProjectRef: environment.GetProjectRef(),
+			ScopeKind: runtimeResourceScopeKind(environment.GetScopeKind().String()), OrganizationRef: environment.GetOrganizationRef(), VersionRef: current.GetRef(), Digest: current.GetDigest()})
 	}
 	for _, binding := range response.GetBindings() {
 		previous, exists := consumers[binding.GetAgentRef()]

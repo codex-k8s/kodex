@@ -1,5 +1,8 @@
 import { defineStore } from "pinia";
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
+import { usePlatformStore } from "@/features/platform/store";
+import { requireRuntimeOrganizationRef } from "@/features/runtime/resource-scope";
+import { runtimeResourceOwnerBoundary } from "@/features/runtime/active-resource-owner";
 
 import {
   commandRoleImage,
@@ -37,6 +40,19 @@ import {
 } from "./resource-scope";
 
 export const useRoleImagesStore = defineStore("role-images", () => {
+  const platform = usePlatformStore();
+  const assertOwned: typeof assertRoleImageResourceIdentity = (
+    scope,
+    resource,
+    organizationRef,
+  ) => {
+    const currentOrganizationRef = requireRuntimeOrganizationRef(
+      platform.bootstrap?.organizationRef,
+    );
+    if (organizationRef && organizationRef !== currentOrganizationRef)
+      throw new Error("Role image request organization anchor changed");
+    assertRoleImageResourceIdentity(scope, resource, currentOrganizationRef);
+  };
   const recipes = reactive<Record<string, RoleImageRecipe>>({});
   const builds = reactive<Record<string, RoleImageBuild[]>>({});
   const artifacts = reactive<Record<string, RoleImageArtifact | undefined>>({});
@@ -80,7 +96,15 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     const projectRef = roleImageScopeKey(scope);
     return (projectRecipeRefs[projectRef] ?? [])
       .map((ref) => recipes[ref])
-      .filter((value): value is RoleImageRecipe => Boolean(value));
+      .filter((value): value is RoleImageRecipe => {
+        if (!value) return false;
+        try {
+          assertOwned(scope, value);
+          return true;
+        } catch {
+          return false;
+        }
+      });
   }
 
   function applyCatalogSnapshot(
@@ -89,8 +113,9 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     nextPageToken?: string,
     total?: number,
   ): void {
+    runtimeResourceOwnerBoundary(scope);
     const projectRef = roleImageScopeKey(scope);
-    for (const value of values) assertRoleImageResourceIdentity(scope, value);
+    for (const value of values) assertOwned(scope, value);
     if (new Set(values.map((recipe) => recipe.ref)).size !== values.length)
       throw new Error("Invalid role image realtime catalog scope");
     const refs = new Set(values.map((recipe) => recipe.ref));
@@ -156,8 +181,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         (page.nextPageToken && page.nextPageToken === cursor)
       )
         throw new Error("Invalid role image catalog scope or cursor");
-      for (const recipe of page.items)
-        assertRoleImageResourceIdentity(scope, recipe);
+      for (const recipe of page.items) assertOwned(scope, recipe);
       const refs = reset ? [] : [...(projectRecipeRefs[projectRef] ?? [])];
       const seen = new Set(refs);
       for (const recipe of page.items) {
@@ -214,23 +238,15 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         detail.builds.some((build) => build.recipeRef !== recipeRef)
       )
         throw new Error("Invalid role image detail scope");
-      assertRoleImageResourceIdentity(scope, detail.recipe);
+      assertOwned(scope, detail.recipe);
       for (const build of detail.builds)
-        assertRoleImageResourceIdentity(
-          scope,
-          build,
-          detail.recipe.organizationRef,
-        );
+        assertOwned(scope, build, detail.recipe.organizationRef);
       for (const artifact of [
         detail.activeArtifact,
         detail.promotionCandidate,
       ]) {
         if (!artifact) continue;
-        assertRoleImageResourceIdentity(
-          scope,
-          artifact,
-          detail.recipe.organizationRef,
-        );
+        assertOwned(scope, artifact, detail.recipe.organizationRef);
         if (artifact.recipeRef !== recipeRef)
           throw new Error("Role image artifact recipe mismatch");
       }
@@ -386,14 +402,14 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     mutating.value = true;
     problem.value = undefined;
     try {
-      assertRoleImageResourceIdentity(projectRef, recipe);
+      assertOwned(projectRef, recipe);
       const receipt = await commandRoleImage(
         projectRef,
         recipe,
         action,
         buildRef,
       );
-      assertRoleImageResourceIdentity(projectRef, receipt.recipe);
+      assertOwned(projectRef, receipt.recipe);
       recipes[receipt.recipe.ref] = receipt.recipe;
       if (action === "REQUEST_BUILD")
         Reflect.deleteProperty(promotionReceipts, receipt.recipe.ref);
@@ -423,7 +439,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     problem.value = undefined;
     try {
       const recipe = await createRoleImage(projectRef, input);
-      assertRoleImageResourceIdentity(projectRef, recipe);
+      assertOwned(projectRef, recipe);
       recipes[recipe.ref] = recipe;
       return recipe;
     } catch (error) {
@@ -442,9 +458,9 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     mutating.value = true;
     problem.value = undefined;
     try {
-      assertRoleImageResourceIdentity(projectRef, recipe);
+      assertOwned(projectRef, recipe);
       const saved = await updateRoleImage(projectRef, recipe, input);
-      assertRoleImageResourceIdentity(projectRef, saved);
+      assertOwned(projectRef, saved);
       recipes[saved.ref] = saved;
       await loadDetail(projectRef, saved.ref);
       return saved;
@@ -464,7 +480,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     mutating.value = true;
     problem.value = undefined;
     try {
-      assertRoleImageResourceIdentity(projectRef, recipe);
+      assertOwned(projectRef, recipe);
       if (
         artifact.scopeKind !== recipe.scopeKind ||
         artifact.organizationRef !== recipe.organizationRef ||
@@ -496,6 +512,32 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     detailGeneration += 1;
     loadingDetail.value = false;
   }
+
+  watch(
+    () => platform.bootstrap?.organizationRef,
+    () => {
+      dispose();
+      for (const cache of [
+        recipes,
+        builds,
+        artifacts,
+        revisions,
+        revisionNextPageToken,
+        promotionReceipts,
+        dependencies,
+        projectRecipeRefs,
+        projectNextPageToken,
+        projectTotal,
+        createAllowed,
+      ])
+        for (const key of Object.keys(cache))
+          Reflect.deleteProperty(cache, key);
+      roleDefinitions.value = [];
+      environments.value = [];
+      problem.value = undefined;
+    },
+    { flush: "sync" },
+  );
 
   return {
     recipes,

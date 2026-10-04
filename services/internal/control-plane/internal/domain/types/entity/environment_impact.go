@@ -2,6 +2,7 @@ package entity
 
 type RuntimeEnvironmentConsumer struct {
 	AgentRef, BindingRef, VersionRef, ProjectRef string
+	ScopeKind, OrganizationRef                   string
 	AgentVersion, BindingVersion                 int64
 }
 

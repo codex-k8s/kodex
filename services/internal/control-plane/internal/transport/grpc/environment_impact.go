@@ -23,8 +23,7 @@ func (server *Server) GetRuntimeEnvironmentImpact(ctx context.Context, request *
 		EnvironmentVersion: result.EnvironmentVersion, TargetVersionRef: result.TargetVersionRef, TargetDigest: result.TargetDigest,
 		Total: result.Total, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}}
 	for _, item := range result.Consumers {
-		response.Consumers = append(response.Consumers, &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: item.AgentRef,
-			AgentVersion: item.AgentVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion, VersionRef: item.VersionRef, ProjectRef: item.ProjectRef})
+		response.Consumers = append(response.Consumers, castRuntimeEnvironmentConsumer(item))
 	}
 	return response, nil
 }
@@ -32,8 +31,7 @@ func (server *Server) GetRuntimeEnvironmentImpact(ctx context.Context, request *
 func (server *Server) RebindRuntimeEnvironment(ctx context.Context, request *controlplanev1.RebindRuntimeEnvironmentRequest) (*controlplanev1.RebindRuntimeEnvironmentResponse, error) {
 	input := command.RuntimeEnvironmentRebindInput{EnvironmentRef: request.GetEnvironmentRef(), VersionRef: request.GetVersionRef()}
 	for _, item := range request.GetConsumers() {
-		input.Consumers = append(input.Consumers, entity.RuntimeEnvironmentConsumer{AgentRef: item.GetAgentRef(), AgentVersion: item.GetAgentVersion(),
-			BindingRef: item.GetBindingRef(), BindingVersion: item.GetBindingVersion(), VersionRef: item.GetVersionRef(), ProjectRef: item.GetProjectRef()})
+		input.Consumers = append(input.Consumers, runtimeEnvironmentConsumerInput(item))
 	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RebindRuntimeEnvironment_FullMethodName,
 		command.RebindRuntimeEnvironment, request.GetMutation(), input)
@@ -46,4 +44,27 @@ func (server *Server) RebindRuntimeEnvironment(ctx context.Context, request *con
 			Version: item.Version, EnvironmentRef: item.EnvironmentRef, VersionRef: item.VersionRef, Digest: item.Digest})
 	}
 	return response, nil
+}
+
+func castRuntimeEnvironmentConsumer(item entity.RuntimeEnvironmentConsumer) *controlplanev1.RuntimeEnvironmentConsumer {
+	return &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: item.AgentRef, AgentVersion: item.AgentVersion,
+		BindingRef: item.BindingRef, BindingVersion: item.BindingVersion, VersionRef: item.VersionRef,
+		ProjectRef: item.ProjectRef, ScopeKind: roleImageScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef}
+}
+
+func runtimeEnvironmentConsumerInput(item *controlplanev1.RuntimeEnvironmentConsumer) entity.RuntimeEnvironmentConsumer {
+	return entity.RuntimeEnvironmentConsumer{AgentRef: item.GetAgentRef(), AgentVersion: item.GetAgentVersion(),
+		BindingRef: item.GetBindingRef(), BindingVersion: item.GetBindingVersion(), VersionRef: item.GetVersionRef(),
+		ProjectRef: item.GetProjectRef(), ScopeKind: runtimeResourceScopeName(item.GetScopeKind()), OrganizationRef: item.GetOrganizationRef()}
+}
+
+func runtimeResourceScopeName(kind controlplanev1.RuntimeResourceScopeKind) string {
+	switch kind {
+	case controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION:
+		return "ORGANIZATION"
+	case controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT:
+		return "PROJECT"
+	default:
+		return ""
+	}
 }

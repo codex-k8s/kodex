@@ -31,7 +31,7 @@ describe("Области каталога образов", () => {
       organizationRef: "org_alpha",
     } as const;
     expect(() =>
-      assertRoleImageResourceIdentity(organization, systemImage),
+      assertRoleImageResourceIdentity(organization, systemImage, "org_alpha"),
     ).not.toThrow();
     for (const value of [
       { ...systemImage, organizationRef: "org_beta" },
@@ -39,14 +39,18 @@ describe("Области каталога образов", () => {
       { ...systemImage, scopeKind: "UNSPECIFIED" as const },
     ])
       expect(() =>
-        assertRoleImageResourceIdentity(organization, value),
+        assertRoleImageResourceIdentity(organization, value, "org_alpha"),
       ).toThrow();
     expect(() =>
-      assertRoleImageResourceIdentity("prj_alpha", {
-        ...systemImage,
-        scopeKind: "PROJECT",
-        projectRef: "prj_beta",
-      }),
+      assertRoleImageResourceIdentity(
+        "prj_alpha",
+        {
+          ...systemImage,
+          scopeKind: "PROJECT",
+          projectRef: "prj_beta",
+        },
+        "org_alpha",
+      ),
     ).toThrow();
   });
 });

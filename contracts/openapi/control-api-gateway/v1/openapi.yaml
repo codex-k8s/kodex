@@ -9736,6 +9736,8 @@ components:
         [
           ref,
           projectRef,
+          scopeKind,
+          organizationRef,
           consumerKind,
           consumerRef,
           consumerVersion,
@@ -9749,7 +9751,9 @@ components:
         projectRef:
           type: string
           maxLength: 160
-          description: Пустая строка допустима только для организационного Agent или AGENT_CONTINUATION в плане PromptTemplate; область и права проверяет owner.
+          description: Пустая строка допустима только при явном ORGANIZATION для Agent или AGENT_CONTINUATION; область и права проверяет owner.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         consumerKind:
           {
             type: string,
@@ -9877,6 +9881,8 @@ components:
           sourceVersionRef,
           sourceVersionDigest,
           projectRef,
+          scopeKind,
+          organizationRef,
           outcome,
         ]
       properties:
@@ -9891,7 +9897,12 @@ components:
           }
         sourceVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
         sourceVersionDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Пусто только при явном ORGANIZATION; полный owner snapshot назначает сервер.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         consumer: { $ref: "#/components/schemas/RuntimeEnvironmentConsumer" }
         outcome:
           {
@@ -12547,6 +12558,8 @@ components:
           environmentVersion,
           environmentVersionRef,
           projectRef,
+          scopeKind,
+          organizationRef,
           secretRevisions,
         ]
       properties:
@@ -12559,7 +12572,12 @@ components:
             maximum: 9007199254740991,
           }
         environmentVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Пусто только для ORGANIZATION; PROJECT требует точный projectRef владельца окружения.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         secretRevisions:
           {
             type: array,
@@ -12628,6 +12646,9 @@ components:
           expectedEnvironmentVersion,
           sourceVersionRef,
           consumers,
+          scopeKind,
+          organizationRef,
+          projectRef,
         ]
       properties:
         environmentRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -12639,6 +12660,12 @@ components:
             maximum: 9007199254740991,
           }
         sourceVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Полный ожидаемый owner snapshot окружения; не источник полномочий. Пусто только для ORGANIZATION.
         consumers:
           {
             type: array,
@@ -12660,7 +12687,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [environmentRef, environmentVersion, projectRef, versionRef, digest]
+        [environmentRef, environmentVersion, projectRef, scopeKind, organizationRef, versionRef, digest]
       properties:
         environmentRef: { $ref: "#/components/schemas/OpaqueRef" }
         environmentVersion:
@@ -12670,7 +12697,12 @@ components:
             minimum: 1,
             maximum: 9007199254740991,
           }
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Пусто только для ORGANIZATION; PROJECT требует точный projectRef владельца окружения.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         versionRef: { $ref: "#/components/schemas/OpaqueRef" }
         digest: { type: string, pattern: "^[a-f0-9]{64}$" }
     RuntimeSecretRebindResult:
@@ -12866,6 +12898,8 @@ components:
           bindingVersion,
           versionRef,
           projectRef,
+          scopeKind,
+          organizationRef,
         ]
       properties:
         agentRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -12887,7 +12921,12 @@ components:
         versionRef:
           allOf: [{ $ref: "#/components/schemas/OpaqueRef" }]
           description: Прежняя версия окружения в binding; не целевая версия из path.
-        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef:
+          type: string
+          maxLength: 96
+          description: Пусто только при явном ORGANIZATION. Полный scope/org/project назначает owner, request не выдаёт полномочий.
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
     RuntimeEnvironmentImpact:
       type: object
       additionalProperties: false

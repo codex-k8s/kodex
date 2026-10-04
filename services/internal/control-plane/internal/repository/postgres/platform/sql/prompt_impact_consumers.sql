@@ -1,7 +1,10 @@
 -- name: prompt_impact_consumers :many
 SELECT COALESCE(p.ref,''),b.consumer_kind,b.consumer_ref,
- COALESCE(a.version,w.version,s.version),b.ref,b.version,r.ref
+ COALESCE(a.version,w.version,s.version),b.ref,b.version,r.ref,
+ CASE WHEN a.id IS NOT NULL AND a.system_key='system-assistant' AND a.project_id IS NULL THEN 'ORGANIZATION'
+      WHEN p.id IS NOT NULL THEN 'PROJECT' ELSE '' END,organization.ref
 FROM control_plane.managed_configuration_bindings b
+JOIN control_plane.organizations organization ON organization.id=b.organization_id
 JOIN control_plane.managed_configuration_revisions r ON r.id=b.configuration_revision_id AND r.configuration_set_id=b.configuration_set_id
 LEFT JOIN control_plane.agents a ON b.consumer_kind IN ('AGENT','AGENT_CONTINUATION') AND a.ref=b.consumer_ref AND a.organization_id=b.organization_id AND (a.project_id IS NOT DISTINCT FROM b.project_id OR b.project_id IS NULL AND b.consumer_kind='AGENT') AND a.state<>'ARCHIVED'
 LEFT JOIN control_plane.workflows w ON b.consumer_kind='WORKFLOW' AND w.ref=b.consumer_ref AND w.organization_id=b.organization_id AND (b.project_id IS NULL OR w.project_id=b.project_id) AND w.state<>'ARCHIVED'

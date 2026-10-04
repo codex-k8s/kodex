@@ -44,6 +44,12 @@ func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
+		SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
+		SecretResourceVersion: "1", ContentSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := repository.ConfigureRoleImages(RoleImageConfig{
 		PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
 		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
@@ -280,4 +286,7 @@ func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 	if err != nil || discarded.RuntimeEnvironmentDraft.State != "DISCARDED" {
 		t.Fatalf("organization draft discard: %v", err)
 	}
+	t.Run("organization secret rotation preserves explicit impact owner snapshots", func(t *testing.T) {
+		testOrganizationSecretImpact(t, ctx, repository, service, pool, owner, s, assistant.Ref, spec, projectID)
+	})
 }

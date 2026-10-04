@@ -11586,16 +11586,18 @@ type RevisionImpactItem struct {
 	ConsumerKind    RevisionImpactItemConsumerKind `json:"consumerKind"`
 	ConsumerRef     OpaqueRef                      `json:"consumerRef"`
 	ConsumerVersion int64                          `json:"consumerVersion"`
+	OrganizationRef OpaqueRef                      `json:"organizationRef"`
 	Outcome         RevisionImpactItemOutcome      `json:"outcome"`
 
-	// ProjectRef Пустая строка допустима только для организационного Agent или AGENT_CONTINUATION в плане PromptTemplate; область и права проверяет owner.
-	ProjectRef            string     `json:"projectRef"`
-	Ref                   OpaqueRef  `json:"ref"`
-	ResultBindingRef      *OpaqueRef `json:"resultBindingRef,omitempty"`
-	ResultBindingVersion  *int64     `json:"resultBindingVersion,omitempty"`
-	ResultConsumerVersion *int64     `json:"resultConsumerVersion,omitempty"`
-	ResultRevisionRef     *OpaqueRef `json:"resultRevisionRef,omitempty"`
-	SourceRevisionRef     OpaqueRef  `json:"sourceRevisionRef"`
+	// ProjectRef Пустая строка допустима только при явном ORGANIZATION для Agent или AGENT_CONTINUATION; область и права проверяет owner.
+	ProjectRef            string                   `json:"projectRef"`
+	Ref                   OpaqueRef                `json:"ref"`
+	ResultBindingRef      *OpaqueRef               `json:"resultBindingRef,omitempty"`
+	ResultBindingVersion  *int64                   `json:"resultBindingVersion,omitempty"`
+	ResultConsumerVersion *int64                   `json:"resultConsumerVersion,omitempty"`
+	ResultRevisionRef     *OpaqueRef               `json:"resultRevisionRef,omitempty"`
+	ScopeKind             RuntimeResourceScopeKind `json:"scopeKind"`
+	SourceRevisionRef     OpaqueRef                `json:"sourceRevisionRef"`
 }
 
 // RevisionImpactItemConsumerKind defines model for RevisionImpactItem.ConsumerKind.
@@ -11783,17 +11785,21 @@ type RoleImageGitSourceInputContentFormat string
 
 // RoleImageImpactItem defines model for RoleImageImpactItem.
 type RoleImageImpactItem struct {
-	Consumer                    *RuntimeEnvironmentConsumer `json:"consumer,omitempty"`
-	EnvironmentRef              OpaqueRef                   `json:"environmentRef"`
-	EnvironmentVersion          int64                       `json:"environmentVersion"`
-	Outcome                     RoleImageImpactItemOutcome  `json:"outcome"`
-	ProjectRef                  OpaqueRef                   `json:"projectRef"`
-	Ref                         OpaqueRef                   `json:"ref"`
-	ResultBindingRef            *OpaqueRef                  `json:"resultBindingRef,omitempty"`
-	ResultBindingVersion        *int64                      `json:"resultBindingVersion,omitempty"`
-	ResultEnvironmentVersionRef *OpaqueRef                  `json:"resultEnvironmentVersionRef,omitempty"`
-	SourceVersionDigest         string                      `json:"sourceVersionDigest"`
-	SourceVersionRef            OpaqueRef                   `json:"sourceVersionRef"`
+	Consumer           *RuntimeEnvironmentConsumer `json:"consumer,omitempty"`
+	EnvironmentRef     OpaqueRef                   `json:"environmentRef"`
+	EnvironmentVersion int64                       `json:"environmentVersion"`
+	OrganizationRef    OpaqueRef                   `json:"organizationRef"`
+	Outcome            RoleImageImpactItemOutcome  `json:"outcome"`
+
+	// ProjectRef Пусто только при явном ORGANIZATION; полный owner snapshot назначает сервер.
+	ProjectRef                  string                   `json:"projectRef"`
+	Ref                         OpaqueRef                `json:"ref"`
+	ResultBindingRef            *OpaqueRef               `json:"resultBindingRef,omitempty"`
+	ResultBindingVersion        *int64                   `json:"resultBindingVersion,omitempty"`
+	ResultEnvironmentVersionRef *OpaqueRef               `json:"resultEnvironmentVersionRef,omitempty"`
+	ScopeKind                   RuntimeResourceScopeKind `json:"scopeKind"`
+	SourceVersionDigest         string                   `json:"sourceVersionDigest"`
+	SourceVersionRef            OpaqueRef                `json:"sourceVersionRef"`
 }
 
 // RoleImageImpactItemOutcome defines model for RoleImageImpactItem.Outcome.
@@ -12261,11 +12267,15 @@ type RuntimeEnvironmentBindingInput struct {
 
 // RuntimeEnvironmentConsumer defines model for RuntimeEnvironmentConsumer.
 type RuntimeEnvironmentConsumer struct {
-	AgentRef       OpaqueRef `json:"agentRef"`
-	AgentVersion   int64     `json:"agentVersion"`
-	BindingRef     OpaqueRef `json:"bindingRef"`
-	BindingVersion int64     `json:"bindingVersion"`
-	ProjectRef     OpaqueRef `json:"projectRef"`
+	AgentRef        OpaqueRef `json:"agentRef"`
+	AgentVersion    int64     `json:"agentVersion"`
+	BindingRef      OpaqueRef `json:"bindingRef"`
+	BindingVersion  int64     `json:"bindingVersion"`
+	OrganizationRef OpaqueRef `json:"organizationRef"`
+
+	// ProjectRef Пусто только при явном ORGANIZATION. Полный scope/org/project назначает owner, request не выдаёт полномочий.
+	ProjectRef string                   `json:"projectRef"`
+	ScopeKind  RuntimeResourceScopeKind `json:"scopeKind"`
 
 	// VersionRef Прежняя версия окружения в binding; не целевая версия из path.
 	VersionRef OpaqueRef `json:"versionRef"`
@@ -12693,8 +12703,12 @@ type RuntimeSecretImpactConsumer struct {
 	EnvironmentRef        OpaqueRef                   `json:"environmentRef"`
 	EnvironmentVersion    int64                       `json:"environmentVersion"`
 	EnvironmentVersionRef OpaqueRef                   `json:"environmentVersionRef"`
-	ProjectRef            OpaqueRef                   `json:"projectRef"`
-	SecretRevisions       []int64                     `json:"secretRevisions"`
+	OrganizationRef       OpaqueRef                   `json:"organizationRef"`
+
+	// ProjectRef Пусто только для ORGANIZATION; PROJECT требует точный projectRef владельца окружения.
+	ProjectRef      string                   `json:"projectRef"`
+	ScopeKind       RuntimeResourceScopeKind `json:"scopeKind"`
+	SecretRevisions []int64                  `json:"secretRevisions"`
 }
 
 // RuntimeSecretPage defines model for RuntimeSecretPage.
@@ -12720,7 +12734,12 @@ type RuntimeSecretRebindSelection struct {
 	Consumers                  []RuntimeEnvironmentConsumer `json:"consumers"`
 	EnvironmentRef             OpaqueRef                    `json:"environmentRef"`
 	ExpectedEnvironmentVersion int64                        `json:"expectedEnvironmentVersion"`
-	SourceVersionRef           OpaqueRef                    `json:"sourceVersionRef"`
+	OrganizationRef            OpaqueRef                    `json:"organizationRef"`
+
+	// ProjectRef Полный ожидаемый owner snapshot окружения; не источник полномочий. Пусто только для ORGANIZATION.
+	ProjectRef       string                   `json:"projectRef"`
+	ScopeKind        RuntimeResourceScopeKind `json:"scopeKind"`
+	SourceVersionRef OpaqueRef                `json:"sourceVersionRef"`
 }
 
 // RuntimeSecretReboundEnvironment defines model for RuntimeSecretReboundEnvironment.
@@ -12728,8 +12747,12 @@ type RuntimeSecretReboundEnvironment struct {
 	Digest             string    `json:"digest"`
 	EnvironmentRef     OpaqueRef `json:"environmentRef"`
 	EnvironmentVersion int64     `json:"environmentVersion"`
-	ProjectRef         OpaqueRef `json:"projectRef"`
-	VersionRef         OpaqueRef `json:"versionRef"`
+	OrganizationRef    OpaqueRef `json:"organizationRef"`
+
+	// ProjectRef Пусто только для ORGANIZATION; PROJECT требует точный projectRef владельца окружения.
+	ProjectRef string                   `json:"projectRef"`
+	ScopeKind  RuntimeResourceScopeKind `json:"scopeKind"`
+	VersionRef OpaqueRef                `json:"versionRef"`
 }
 
 // RuntimeSecretReveal defines model for RuntimeSecretReveal.

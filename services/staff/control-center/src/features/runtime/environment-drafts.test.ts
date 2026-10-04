@@ -1,3 +1,4 @@
+import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   RuntimeEnvironmentDraft,
@@ -281,3 +282,5 @@ describe("серверные черновики окружений", () => {
     );
   });
 });
+
+beforeEach(() => initializeRuntimeOwnerFixture("org_synthetic"));

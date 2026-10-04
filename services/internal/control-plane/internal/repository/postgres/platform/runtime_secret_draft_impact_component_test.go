@@ -65,6 +65,12 @@ func testSecretDraftImpactRebind(t *testing.T, ctx context.Context, r *Repositor
 	if err != nil || len(second.Items) != 1 {
 		t.Fatalf("impact next page: %v", err)
 	}
+	for _, item := range append(page.Items, second.Items...) {
+		if item.Consumer.ScopeKind != secret.ScopeKind || item.Consumer.OrganizationRef != secret.OrganizationRef || item.Consumer.ProjectRef != secret.ProjectRef ||
+			item.Consumer.Consumer.ScopeKind != item.Consumer.ScopeKind || item.Consumer.Consumer.OrganizationRef != item.Consumer.OrganizationRef || item.Consumer.Consumer.ProjectRef != item.Consumer.ProjectRef {
+			t.Fatal("secret draft impact lost its immutable owner snapshot")
+		}
+	}
 	selected := []string{page.Items[0].Ref, second.Items[0].Ref}
 	if _, err := s.PrepareRuntimeSecretDraft(ctx, owner, port.RuntimeSecretDraftPrepareInput{Kind: "PUBLISH", DraftRef: draft.Ref, ExpectedSecretVersion: draft.SecretVersion, ImpactPlanRef: plan.Ref, SelectedItemRefs: []string{"sdit_foreign00"}, Mutation: value.Mutation{IdempotencyKey: "draft-impact-foreign-selection", ExpectedVersion: &draft.Version}}); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("foreign plan item accepted: %v", err)
@@ -77,8 +83,14 @@ func testSecretDraftImpactRebind(t *testing.T, ctx context.Context, r *Repositor
 		t.Fatalf("impact cursor query replay: %v", err)
 	}
 	// Один consumer изменился после preview; другой обязан получить новый pin.
-	if _, err := r.pool.Exec(ctx, `UPDATE control_plane.agents SET version=version+1 WHERE ref=$1`, second.Items[0].Consumer.Consumer.AgentRef); err != nil {
-		t.Fatal(err)
+	if second.Items[0].Consumer.Consumer.AgentRef != "" {
+		if tag, err := r.pool.Exec(ctx, `UPDATE control_plane.agents SET version=version+1 WHERE ref=$1`, second.Items[0].Consumer.Consumer.AgentRef); err != nil || tag.RowsAffected() != 1 {
+			t.Fatalf("advance exact bound consumer fixture: %v", err)
+		}
+	} else {
+		if tag, err := r.pool.Exec(ctx, `UPDATE control_plane.runtime_environment_sets SET version=version+1 WHERE ref=$1`, second.Items[0].Consumer.EnvironmentRef); err != nil || tag.RowsAffected() != 1 {
+			t.Fatalf("advance exact unbound environment fixture: %v", err)
+		}
 	}
 	work = prepare(port.RuntimeSecretDraftPrepareInput{Kind: "PUBLISH", DraftRef: draft.Ref, ExpectedSecretVersion: draft.SecretVersion, ImpactPlanRef: plan.Ref, SelectedItemRefs: selected, Mutation: value.Mutation{IdempotencyKey: "draft-impact-publish", ExpectedVersion: &draft.Version}})
 	name, err := runtimesecret.VersionedKubernetesName(secret.Ref, work.TargetRevision)
@@ -98,8 +110,15 @@ func testSecretDraftImpactRebind(t *testing.T, ctx context.Context, r *Repositor
 	}
 	for _, item := range final.Items {
 		if item.Ref == selected[0] {
-			if item.Outcome != "APPLIED" || item.ResultEnvironmentVersionRef == item.Consumer.EnvironmentVersionRef || item.ResultBindingRef != item.Consumer.Consumer.BindingRef || item.ResultBindingVersion <= item.Consumer.Consumer.BindingVersion {
+			if item.Outcome != "APPLIED" || item.ResultEnvironmentVersionRef == item.Consumer.EnvironmentVersionRef {
 				t.Fatalf("successful replacement receipt: %+v", item)
+			}
+			if item.Consumer.Consumer.AgentRef != "" {
+				if item.ResultBindingRef != item.Consumer.Consumer.BindingRef || item.ResultBindingVersion <= item.Consumer.Consumer.BindingVersion {
+					t.Fatalf("successful binding replacement receipt: %+v", item)
+				}
+			} else if item.ResultBindingRef != "" || item.ResultBindingVersion != 0 {
+				t.Fatal("unbound replacement invented an agent binding")
 			}
 		} else if item.Outcome != "CONFLICT" || item.ResultBindingRef != "" {
 			t.Fatalf("conflicting replacement receipt: %+v", item)

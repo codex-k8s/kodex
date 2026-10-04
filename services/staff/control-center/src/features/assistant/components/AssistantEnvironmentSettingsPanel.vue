@@ -10,7 +10,10 @@ import RuntimeResourceManagementLinks from "@/features/runtime/RuntimeResourceMa
 import RuntimeEnvironmentDraftActions from "@/features/runtime/RuntimeEnvironmentDraftActions.vue";
 import { useSessionStore } from "@/features/session/store";
 import { useRoute, useRouter } from "vue-router";
-import { assertRuntimeResourceIdentity } from "@/features/runtime/resource-scope";
+import {
+  assertActiveRuntimeResourceIdentity,
+  runtimeResourceOwnerBoundary,
+} from "@/features/runtime/active-resource-owner";
 import type { RuntimeImageCatalog } from "@/features/runtime/image-tools-selection";
 import type { RuntimeSecretCatalog } from "@/features/runtime/secret-catalog";
 import {
@@ -98,6 +101,11 @@ async function load(): Promise<void> {
   loading.value = true;
   problem.value = undefined;
   try {
+    const owner = runtimeResourceOwnerBoundary(
+      props.resourceScope.kind === "PROJECT"
+        ? props.resourceScope.projectRef
+        : props.resourceScope,
+    );
     const result = await loadAgentRuntime(props.agentRef, signal);
     if (signal.aborted || currentGeneration !== generation) return;
     if (
@@ -106,6 +114,7 @@ async function load(): Promise<void> {
       result.environmentBinding.environmentRef !== result.environment.ref
     )
       throw new Error("Assistant runtime configuration identity mismatch");
+    owner.assert(result.environment);
     sync(result.environment);
     view.value = result;
   } catch (error) {
@@ -126,7 +135,7 @@ function published(value: RuntimeEnvironmentSet): void {
 }
 async function reauthenticate(value: RuntimeEnvironmentDraft): Promise<void> {
   if (props.resourceScope.kind !== "ORGANIZATION" || !environment.value) return;
-  assertRuntimeResourceIdentity(
+  assertActiveRuntimeResourceIdentity(
     props.resourceScope,
     value,
     props.resourceScope.organizationRef,
@@ -200,6 +209,7 @@ onBeforeUnmount(reset);
           <label class="field field--wide">
             <span>{{ $t("common.description") }}</span>
             <VoiceTextarea
+              class="assistant-environment-description"
               v-model="input.description"
               maxlength="1000"
               :disabled="busy || !canEdit"
@@ -309,6 +319,10 @@ onBeforeUnmount(reset);
 </template>
 
 <style scoped>
+:deep(textarea.assistant-environment-description) {
+  min-height: 72px;
+  height: 72px;
+}
 .assistant-environment-settings {
   display: grid;
   gap: 16px;
@@ -352,6 +366,13 @@ onBeforeUnmount(reset);
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+.section-header > div {
+  flex: 1;
+  min-width: 0;
+}
+.section-header > svg {
+  flex-shrink: 0;
 }
 .section-header h3,
 .section-header p {

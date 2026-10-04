@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppProblem } from "@/shared/api/problem";
 
 const sdk = vi.hoisted(() => ({
@@ -150,3 +151,5 @@ describe("безопасный adapter черновиков Secret", () => {
     ).rejects.toThrow();
   });
 });
+
+beforeEach(() => initializeRuntimeOwnerFixture("org_synthetic"));

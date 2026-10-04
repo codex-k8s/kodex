@@ -1,4 +1,8 @@
 import {
+  assertActiveRuntimeResourceIdentity,
+  runtimeResourceOwnerBoundary,
+} from "@/features/runtime/active-resource-owner";
+import {
   createRuntimeEnvironmentDraft,
   createSystemRuntimeEnvironmentDraft,
   getRuntimeEnvironmentDraft,
@@ -24,7 +28,6 @@ import {
   publicationSelection,
 } from "./publication-impact";
 import {
-  assertRuntimeResourceAddressIdentity,
   runtimeResourceAddressFromIdentity,
   runtimeResourceAddressScope,
   type RuntimeResourceAddress,
@@ -33,7 +36,12 @@ import {
 export async function prepareEnvironmentPublication(
   draft: RuntimeEnvironmentDraft,
   signal: AbortSignal,
+  key?: string,
 ): Promise<RevisionImpactPlan> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   const fresh = await readEnvironmentDraft(
     runtimeResourceAddressFromIdentity(draft),
     draft.ref,
@@ -45,6 +53,7 @@ export async function prepareEnvironmentPublication(
     !fresh.validationDigest
   )
     throw new Error("Environment draft changed before impact preparation");
+  owner.assert(fresh);
   const plan = checkedPublicationPlan(
     (
       await mutate(
@@ -55,9 +64,11 @@ export async function prepareEnvironmentPublication(
             signal: requestSignal(signal),
           }),
         fresh.version,
+        key,
       )
     ).data,
   );
+  owner.assertCurrent();
   if (
     plan.kind !== "RUNTIME_ENVIRONMENT" ||
     plan.draftRef !== fresh.ref ||
@@ -78,6 +89,10 @@ export async function publishEnvironmentDraft(
   signal: AbortSignal,
   key: string,
 ): Promise<RuntimeEnvironmentPublicationResult> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   if (
     plan.kind !== "RUNTIME_ENVIRONMENT" ||
     plan.draftRef !== draft.ref ||
@@ -97,10 +112,12 @@ export async function publishEnvironmentDraft(
       key,
     )
   ).data;
+  owner.assert(result.draft);
+  owner.assert(result.environment);
   checkedPublicationPlan(result.plan);
   const scope = runtimeResourceAddressFromIdentity(draft);
-  assertRuntimeResourceAddressIdentity(scope, result.draft);
-  assertRuntimeResourceAddressIdentity(scope, result.environment);
+  assertActiveRuntimeResourceIdentity(scope, result.draft);
+  assertActiveRuntimeResourceIdentity(scope, result.environment);
   if (
     publicationPlanIdentity(result.plan) !== publicationPlanIdentity(plan) ||
     result.plan.state !== "APPLIED" ||
@@ -146,7 +163,7 @@ function readback(
     (draft.state === "PUBLISHED" && !draft.publishedEnvironmentRef)
   )
     throw new Error("Invalid runtime environment draft readback");
-  assertRuntimeResourceAddressIdentity(scope, draft);
+  assertActiveRuntimeResourceIdentity(scope, draft);
   return draft;
 }
 export async function readEnvironmentDraft(
@@ -154,16 +171,15 @@ export async function readEnvironmentDraft(
   draftRef: string,
   signal: AbortSignal,
 ): Promise<RuntimeEnvironmentDraft> {
-  return readback(
-    await unwrap(
-      getRuntimeEnvironmentDraft({
-        path: { draftRef },
-        signal: requestSignal(signal),
-      }),
-    ),
-    scope,
-    draftRef,
+  const owner = runtimeResourceOwnerBoundary(scope);
+  const result = await unwrap(
+    getRuntimeEnvironmentDraft({
+      path: { draftRef },
+      signal: requestSignal(signal),
+    }),
   );
+  owner.assert(result.data);
+  return readback(result, scope, draftRef);
 }
 export async function createEnvironmentDraft(
   scope: RuntimeResourceAddress,
@@ -172,6 +188,7 @@ export async function createEnvironmentDraft(
   environment?: Pick<RuntimeEnvironmentSet, "ref" | "version">,
   key?: string,
 ): Promise<RuntimeEnvironmentDraft> {
+  const owner = runtimeResourceOwnerBoundary(scope);
   const resolved = runtimeResourceAddressScope(scope);
   const body = {
     specification,
@@ -193,6 +210,7 @@ export async function createEnvironmentDraft(
       undefined,
       key,
     );
+    owner.assert(result.data);
     const draft = readback(result, scope);
     if (
       draft.state !== "DRAFT" ||
@@ -222,6 +240,7 @@ export async function createEnvironmentDraft(
     undefined,
     key,
   );
+  owner.assert(result.data);
   const draft = readback(result, projectRef);
   if (
     draft.state !== "DRAFT" ||
@@ -237,6 +256,10 @@ export async function saveEnvironmentDraft(
   signal: AbortSignal,
   key?: string,
 ): Promise<RuntimeEnvironmentDraft> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   const result = await mutate(
     (headers) =>
       saveRuntimeEnvironmentDraft({
@@ -248,6 +271,7 @@ export async function saveEnvironmentDraft(
     draft.version,
     key,
   );
+  owner.assert(result.data);
   const saved = readback(
     result,
     runtimeResourceAddressFromIdentity(draft),
@@ -262,6 +286,10 @@ export async function transitionEnvironmentDraft(
   draft: RuntimeEnvironmentDraft,
   signal: AbortSignal,
 ): Promise<RuntimeEnvironmentDraft> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   const operation = {
     validate: validateRuntimeEnvironmentDraft,
     discard: discardRuntimeEnvironmentDraft,
@@ -275,6 +303,7 @@ export async function transitionEnvironmentDraft(
       }),
     draft.version,
   );
+  owner.assert(result.data);
   const saved = readback(
     result,
     runtimeResourceAddressFromIdentity(draft),

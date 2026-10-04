@@ -559,9 +559,11 @@ export type RevisionImpactPlan = {
 export type RevisionImpactItem = {
     ref: OpaqueRef;
     /**
-     * Пустая строка допустима только для организационного Agent или AGENT_CONTINUATION в плане PromptTemplate; область и права проверяет owner.
+     * Пустая строка допустима только при явном ORGANIZATION для Agent или AGENT_CONTINUATION; область и права проверяет owner.
      */
     projectRef: string;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     consumerKind: 'AGENT' | 'AGENT_CONTINUATION' | 'WORKFLOW' | 'SCHEDULE';
     consumerRef: OpaqueRef;
     consumerVersion: number;
@@ -608,7 +610,12 @@ export type RoleImageImpactItem = {
     environmentVersion: number;
     sourceVersionRef: OpaqueRef;
     sourceVersionDigest: string;
-    projectRef: OpaqueRef;
+    /**
+     * Пусто только при явном ORGANIZATION; полный owner snapshot назначает сервер.
+     */
+    projectRef: string;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     consumer?: RuntimeEnvironmentConsumer;
     outcome: 'PENDING' | 'APPLIED' | 'CONFLICT' | 'FORBIDDEN' | 'NOT_SELECTED';
     resultEnvironmentVersionRef?: OpaqueRef;
@@ -1749,7 +1756,12 @@ export type RuntimeSecretImpactConsumer = {
     environmentRef: OpaqueRef;
     environmentVersion: number;
     environmentVersionRef: OpaqueRef;
-    projectRef: OpaqueRef;
+    /**
+     * Пусто только для ORGANIZATION; PROJECT требует точный projectRef владельца окружения.
+     */
+    projectRef: string;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     secretRevisions: Array<number>;
     /**
      * Отсутствует у окружения без agent binding; сама environment revision остаётся доступна для публикации.
@@ -1770,6 +1782,12 @@ export type RuntimeSecretRebindSelection = {
     environmentRef: OpaqueRef;
     expectedEnvironmentVersion: number;
     sourceVersionRef: OpaqueRef;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    /**
+     * Полный ожидаемый owner snapshot окружения; не источник полномочий. Пусто только для ORGANIZATION.
+     */
+    projectRef: string;
     consumers: Array<RuntimeEnvironmentConsumer>;
 };
 
@@ -1783,7 +1801,12 @@ export type RuntimeSecretRebindInput = {
 export type RuntimeSecretReboundEnvironment = {
     environmentRef: OpaqueRef;
     environmentVersion: number;
-    projectRef: OpaqueRef;
+    /**
+     * Пусто только для ORGANIZATION; PROJECT требует точный projectRef владельца окружения.
+     */
+    projectRef: string;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
     versionRef: OpaqueRef;
     digest: string;
 };
@@ -1869,7 +1892,12 @@ export type RuntimeEnvironmentConsumer = {
      * Прежняя версия окружения в binding; не целевая версия из path.
      */
     versionRef: OpaqueRef;
-    projectRef: OpaqueRef;
+    /**
+     * Пусто только при явном ORGANIZATION. Полный scope/org/project назначает owner, request не выдаёт полномочий.
+     */
+    projectRef: string;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
 };
 
 export type RuntimeEnvironmentImpact = {

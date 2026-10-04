@@ -252,6 +252,9 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return "", resolvedAccessTarget{}, err
 		}
+		if err := repository.authorizeRuntimeEnvironmentConsumers(ctx, tx, current, environment, payload.Consumers); err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
 		if environment.ScopeKind == "ORGANIZATION" {
 			if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, environment.ScopeKind, environment.ProjectRef); err != nil {
 				return "", resolvedAccessTarget{}, err
@@ -260,15 +263,12 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
 	case command.RuntimeSecretRebindInput:
-		for _, selection := range payload.Selections {
-			if _, _, err := repository.environmentImpactTarget(ctx, tx, current, selection.EnvironmentRef, selection.SourceVersionRef); err != nil {
-				return "", resolvedAccessTarget{}, err
-			}
-			for _, consumer := range selection.Consumers {
-				if err := repository.requireAccess(ctx, tx, current, "agent.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: consumer.AgentRef}); err != nil {
-					return "", resolvedAccessTarget{}, err
-				}
-			}
+		secret, err := repository.authorizeRuntimeSecretSelections(ctx, tx, current, payload.SecretRef, payload.Revision, payload.Selections)
+		if err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		if secret.scopeKind == "ORGANIZATION" {
+			return "secret.rotate", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "secret.rotate", "SECRET", payload.SecretRef, "")
 	case command.RuntimeEnvironmentLifecycleInput:

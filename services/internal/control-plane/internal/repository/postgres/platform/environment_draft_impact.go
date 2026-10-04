@@ -83,7 +83,7 @@ func (r *Repository) prepareEnvironmentDraftImpact(ctx context.Context, tx pgx.T
 		}
 		for rows.Next() {
 			item := entity.RevisionImpactItem{ConsumerKind: "AGENT", Outcome: "PENDING"}
-			if rows.Scan(&item.ProjectRef, &item.ConsumerRef, &item.ConsumerVersion, &item.BindingRef, &item.BindingVersion, &item.SourceRevisionRef) != nil {
+			if rows.Scan(&item.ProjectRef, &item.ConsumerRef, &item.ConsumerVersion, &item.BindingRef, &item.BindingVersion, &item.SourceRevisionRef, &item.ScopeKind, &item.OrganizationRef) != nil {
 				rows.Close()
 				return commandOutcome{}, errs.ErrUnavailable
 			}
@@ -173,7 +173,7 @@ func (r *Repository) applyEnvironmentDraftImpact(ctx context.Context, tx pgx.Tx,
 			nested := input
 			nested.Kind = command.RebindRuntimeEnvironment
 			nested.Mutation.ExpectedVersion = &environment.Version
-			nested.Payload = command.RuntimeEnvironmentRebindInput{EnvironmentRef: environment.Ref, VersionRef: environment.CurrentVersion.Ref, Consumers: []entity.RuntimeEnvironmentConsumer{{AgentRef: item.ConsumerRef, AgentVersion: item.ConsumerVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion, VersionRef: item.SourceRevisionRef, ProjectRef: item.ProjectRef}}}
+			nested.Payload = command.RuntimeEnvironmentRebindInput{EnvironmentRef: environment.Ref, VersionRef: environment.CurrentVersion.Ref, Consumers: []entity.RuntimeEnvironmentConsumer{{AgentRef: item.ConsumerRef, AgentVersion: item.ConsumerVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion, VersionRef: item.SourceRevisionRef, ProjectRef: item.ProjectRef, ScopeKind: item.ScopeKind, OrganizationRef: item.OrganizationRef}}}
 			outcome, applyErr := r.rebindRuntimeEnvironment(ctx, attempt, s, nested)
 			if applyErr != nil {
 				_ = attempt.Rollback(ctx)

@@ -49,13 +49,16 @@ func (s *Server) GetRoleImageImpactPlan(w http.ResponseWriter, r *http.Request, 
 	}
 	result := generated.RoleImageImpactPage{Plan: plan, Items: []generated.RoleImageImpactItem{}, Total: response.Total, NextPageToken: optionalManagedString(next)}
 	seen := map[string]bool{}
+	owner := ""
 	for _, value := range response.Items {
 		item, valid := roleImageImpactItemView(value, plan.State)
-		if !valid || seen[item.Ref] {
+		key := impactConsumerOwnerKey(item.ScopeKind, item.OrganizationRef, item.ProjectRef)
+		if !valid || seen[item.Ref] || owner != "" && key != owner {
 			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
 		seen[item.Ref] = true
+		owner = key
 		result.Items = append(result.Items, item)
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -88,7 +91,8 @@ func roleImageImpactPlanView(v *cp.RoleImageImpactPlan) (generated.RoleImageImpa
 
 func roleImageImpactItemView(v *cp.RoleImageImpactItem, state generated.RoleImageImpactPlanState) (generated.RoleImageImpactItem, bool) {
 	result := generated.RoleImageImpactItem{}
-	if v == nil || !fileTargetRef(v.Ref) || !fileTargetRef(v.EnvironmentRef) || !validManagedVersion(v.EnvironmentVersion) || !fileTargetRef(v.SourceVersionRef) || !validManagedDigest(v.SourceVersionDigest) || v.Consumer == nil || !fileTargetRef(v.Consumer.ProjectRef) || v.Consumer.VersionRef != v.SourceVersionRef {
+	if v == nil || !fileTargetRef(v.Ref) || !fileTargetRef(v.EnvironmentRef) || !validManagedVersion(v.EnvironmentVersion) || !fileTargetRef(v.SourceVersionRef) || !validManagedDigest(v.SourceVersionDigest) || v.Consumer == nil ||
+		!validRuntimeResourceScope(runtimeResourceScopeKind(v.Consumer.GetScopeKind().String()), v.Consumer.GetOrganizationRef(), v.Consumer.GetProjectRef()) || v.Consumer.VersionRef != v.SourceVersionRef {
 		return result, false
 	}
 	outcome := strings.TrimPrefix(v.Outcome.String(), "ROLE_IMAGE_IMPACT_OUTCOME_")
@@ -100,10 +104,11 @@ func roleImageImpactItemView(v *cp.RoleImageImpactItem, state generated.RoleImag
 	if state == "APPLIED" && outcome == "PENDING" || state != "APPLIED" && outcome != "PENDING" {
 		return result, false
 	}
-	result = generated.RoleImageImpactItem{Ref: v.Ref, EnvironmentRef: v.EnvironmentRef, EnvironmentVersion: v.EnvironmentVersion, SourceVersionRef: v.SourceVersionRef, SourceVersionDigest: v.SourceVersionDigest, ProjectRef: v.Consumer.ProjectRef, Outcome: generated.RoleImageImpactItemOutcome(outcome)}
+	result = generated.RoleImageImpactItem{Ref: v.Ref, EnvironmentRef: v.EnvironmentRef, EnvironmentVersion: v.EnvironmentVersion, SourceVersionRef: v.SourceVersionRef, SourceVersionDigest: v.SourceVersionDigest, ProjectRef: v.Consumer.ProjectRef,
+		ScopeKind: runtimeResourceScopeKind(v.Consumer.GetScopeKind().String()), OrganizationRef: v.Consumer.GetOrganizationRef(), Outcome: generated.RoleImageImpactItemOutcome(outcome)}
 	c := v.Consumer
 	if c.AgentRef != "" {
-		consumer := generated.RuntimeEnvironmentConsumer{AgentRef: c.AgentRef, AgentVersion: c.AgentVersion, BindingRef: c.BindingRef, BindingVersion: c.BindingVersion, VersionRef: c.VersionRef, ProjectRef: c.ProjectRef}
+		consumer := environmentConsumerView(c)
 		if !validEnvironmentConsumer(consumer) {
 			return result, false
 		}

@@ -17,11 +17,12 @@ type instructionImpactSnapshot struct {
 	agentID, systemKey, projectID, projectRef, revisionRef, state, content, digest, bindingRef, sourceRevision string
 	agentVersion, revisionVersion, bindingVersion                                                              int64
 	effective                                                                                                  bool
+	scopeKind, organizationRef                                                                                 string
 }
 
 func readInstructionImpact(ctx context.Context, tx pgx.Tx, s scope, agent, revision string) (instructionImpactSnapshot, error) {
 	var v instructionImpactSnapshot
-	err := tx.QueryRow(ctx, queryInstructionImpactSnapshot, pgx.StrictNamedArgs{"organization_id": s.organizationID, "agent_ref": agent, "revision_ref": revision}).Scan(&v.agentID, &v.systemKey, &v.agentVersion, &v.projectID, &v.projectRef, &v.revisionRef, &v.revisionVersion, &v.state, &v.content, &v.digest, &v.bindingRef, &v.bindingVersion, &v.sourceRevision, &v.effective)
+	err := tx.QueryRow(ctx, queryInstructionImpactSnapshot, pgx.StrictNamedArgs{"organization_id": s.organizationID, "agent_ref": agent, "revision_ref": revision}).Scan(&v.agentID, &v.systemKey, &v.agentVersion, &v.projectID, &v.projectRef, &v.revisionRef, &v.revisionVersion, &v.state, &v.content, &v.digest, &v.bindingRef, &v.bindingVersion, &v.sourceRevision, &v.effective, &v.scopeKind, &v.organizationRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return v, errs.ErrNotFound
 	}
@@ -59,7 +60,7 @@ func (r *Repository) prepareInstructionsImpact(ctx context.Context, tx pgx.Tx, s
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		items = append(items, entity.RevisionImpactItem{Ref: ref, ProjectRef: v.projectRef, ConsumerKind: "AGENT", ConsumerRef: p.Ref, ConsumerVersion: v.agentVersion, BindingRef: v.bindingRef, BindingVersion: v.bindingVersion, SourceRevisionRef: v.sourceRevision, Outcome: "PENDING"})
+		items = append(items, entity.RevisionImpactItem{Ref: ref, ProjectRef: v.projectRef, ScopeKind: v.scopeKind, OrganizationRef: v.organizationRef, ConsumerKind: "AGENT", ConsumerRef: p.Ref, ConsumerVersion: v.agentVersion, BindingRef: v.bindingRef, BindingVersion: v.bindingVersion, SourceRevisionRef: v.sourceRevision, Outcome: "PENDING"})
 	}
 	plan, err = persistRevisionImpact(ctx, tx, s, plan, items)
 	if err != nil {

@@ -71,10 +71,7 @@ export function assertRuntimeResourceAddressIdentity(
   assertRuntimeResourceIdentity(
     scope,
     resource,
-    organizationRef ??
-      (scope.kind === "ORGANIZATION"
-        ? scope.organizationRef
-        : resource.organizationRef),
+    requireRuntimeOrganizationRef(organizationRef),
   );
 }
 
@@ -82,6 +79,39 @@ export interface RuntimeScopedResourceIdentity {
   readonly scopeKind: "ORGANIZATION" | "PROJECT" | "UNSPECIFIED";
   readonly organizationRef: string;
   readonly projectRef?: string;
+}
+export function runtimeResourceIdentityKey(
+  resource: RuntimeScopedResourceIdentity,
+): string {
+  const address = runtimeResourceAddressFromIdentity(resource);
+  return JSON.stringify([
+    resource.scopeKind,
+    resource.organizationRef,
+    runtimeResourceAddressKey(address),
+  ]);
+}
+export function validRuntimeResourceIdentity(
+  resource: RuntimeScopedResourceIdentity,
+  organizationRef: string | undefined,
+): boolean {
+  if (!organizationRef) return false;
+  try {
+    assertRuntimeResourceAddressIdentity(
+      runtimeResourceAddressFromIdentity(resource),
+      resource,
+      organizationRef,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+export function requireRuntimeOrganizationRef(
+  organizationRef: string | undefined,
+): string {
+  if (!organizationRef || !/^[A-Za-z0-9_-]{8,128}$/.test(organizationRef))
+    throw new Error("Runtime impact organization anchor is unavailable");
+  return organizationRef;
 }
 
 export function runtimeResourceAddressFromIdentity(
@@ -94,7 +124,12 @@ export function runtimeResourceAddressFromIdentity(
           typeof resource.projectRef === "string"
         ? resource.projectRef
         : "";
-  assertRuntimeResourceAddressIdentity(address, resource);
+  // Преобразование описывает адрес, но не подтверждает владельца ресурса.
+  requireRuntimeOrganizationRef(resource.organizationRef);
+  assertRuntimeResourceScope(
+    runtimeResourceAddressScope(address),
+    resource.projectRef,
+  );
   return address;
 }
 

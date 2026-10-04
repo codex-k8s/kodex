@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import AssistantRoleImageBuildCard from "../../src/features/assistant/components/AssistantRoleImageBuildCard.vue";
-import type { AssistantPlan } from "../../src/shared/api/generated/openapi/types.gen";
+import { usePlatformStore } from "../../src/features/platform/store";
+import type {
+  AssistantPlan,
+  BootstrapState,
+} from "../../src/shared/api/generated/openapi/types.gen";
+
+usePlatformStore().bootstrap = {
+  organizationRef: "org_synthetic",
+  platformRole: "OWNER",
+} as BootstrapState;
 
 const plan: AssistantPlan = {
   ref: "plan_synthetic_image",

@@ -43,7 +43,9 @@ const page: RevisionImpactPage = {
   items: [
     {
       ref: "item",
-      projectRef: "project",
+      projectRef: "project_synthetic",
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       consumerKind: "AGENT",
       consumerRef: "agent",
       consumerVersion: 2,
@@ -54,9 +56,41 @@ const page: RevisionImpactPage = {
     },
   ],
 };
+it("системный impact допускает только явные ORGANIZATION agent kinds", () => {
+  const row = page.items[0];
+  if (!row) throw new Error("Synthetic impact item is missing");
+  const systemRow = {
+    ...row,
+    scopeKind: "ORGANIZATION" as const,
+    projectRef: "",
+  };
+  const system = { ...page, items: [systemRow] };
+  expect(
+    checkedPublicationPage(system, plan, undefined, "org_synthetic"),
+  ).toEqual(system);
+  for (const change of [
+    { organizationRef: "org_foreign" },
+    { scopeKind: "UNSPECIFIED" as const },
+    { scopeKind: "PROJECT" as const },
+    { consumerKind: "WORKFLOW" as const },
+  ])
+    expect(() =>
+      checkedPublicationPage(
+        { ...system, items: [{ ...systemRow, ...change }] } as unknown as RevisionImpactPage,
+        plan,
+        undefined,
+        "org_synthetic",
+      ),
+    ).toThrow();
+  expect(() => checkedPublicationPage(system, plan)).toThrow("anchor");
+});
 it("сохраняет immutable total и текущий owner count, допускает явную публикацию без замен", () => {
-  expect(checkedPublicationPage(page, plan).total).toBe(1);
-  expect(checkedPublicationPage(page, plan).plan.total).toBe(4);
+  expect(
+    checkedPublicationPage(page, plan, undefined, "org_synthetic").total,
+  ).toBe(1);
+  expect(
+    checkedPublicationPage(page, plan, undefined, "org_synthetic").plan.total,
+  ).toBe(4);
   expect(publicationSelection(plan, [])).toEqual({
     planRef: "plan",
     selectedItemRefs: [],
@@ -69,8 +103,12 @@ it("отклоняет подмену snapshot, повтор cursor и рост 
     { ...page, total: 5 },
     { ...page, items: [...page.items, ...page.items], total: 2 },
   ])
-    expect(() => checkedPublicationPage(invalid, plan)).toThrow();
-  expect(() => checkedPublicationPage(page, plan, "next")).toThrow();
+    expect(() =>
+      checkedPublicationPage(invalid, plan, undefined, "org_synthetic"),
+    ).toThrow();
+  expect(() =>
+    checkedPublicationPage(page, plan, "next", "org_synthetic"),
+  ).toThrow();
 });
 it("terminal recovery начинает новую страницу и сохраняет per-item CONFLICT", () => {
   const recovered: RevisionImpactPage = {
@@ -83,10 +121,13 @@ it("terminal recovery начинает новую страницу и сохра
     },
     items: page.items.map((item) => ({ ...item, outcome: "CONFLICT" })),
   };
-  expect(checkedPublicationPage(recovered, plan).items[0]?.outcome).toBe(
-    "CONFLICT",
-  );
-  expect(() => checkedPublicationPage(recovered, plan, "old-cursor")).toThrow();
+  expect(
+    checkedPublicationPage(recovered, plan, undefined, "org_synthetic").items[0]
+      ?.outcome,
+  ).toBe("CONFLICT");
+  expect(() =>
+    checkedPublicationPage(recovered, plan, "old-cursor", "org_synthetic"),
+  ).toThrow();
 });
 it("не принимает APPLIED строку с чужим binding или revision", () => {
   const applied = {
@@ -107,7 +148,9 @@ it("не принимает APPLIED строку с чужим binding или re
       resultConsumerVersion: 3,
     })),
   };
-  expect(checkedPublicationPage(result, plan).items).toHaveLength(1);
+  expect(
+    checkedPublicationPage(result, plan, undefined, "org_synthetic").items,
+  ).toHaveLength(1);
   for (const changes of [
     { resultRevisionRef: "foreign" },
     { resultBindingRef: "foreign" },
@@ -120,6 +163,8 @@ it("не принимает APPLIED строку с чужим binding или re
           items: result.items.map((item) => ({ ...item, ...changes })),
         },
         plan,
+        undefined,
+        "org_synthetic",
       ),
     ).toThrow();
   }
@@ -145,7 +190,14 @@ it("повторяет безопасное чтение точного impact p
       data: page,
       response: new Response(null, { status: 200 }),
     });
-  const request = readPublicationImpact(plan, new AbortController().signal);
+  const request = readPublicationImpact(
+    plan,
+    new AbortController().signal,
+    undefined,
+    undefined,
+    undefined,
+    "org_synthetic",
+  );
 
   await vi.runAllTimersAsync();
 

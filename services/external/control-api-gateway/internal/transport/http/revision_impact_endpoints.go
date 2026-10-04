@@ -49,13 +49,15 @@ func (s *Server) GetRevisionImpactPlan(w http.ResponseWriter, r *http.Request, r
 	}
 	result := generated.RevisionImpactPage{Plan: plan, Items: []generated.RevisionImpactItem{}, Total: response.Total, NextPageToken: optionalManagedString(next)}
 	seen := map[string]bool{}
+	organizationRef := ""
 	for _, value := range response.Items {
 		item, valid := revisionImpactItemView(value, plan)
-		if !valid || seen[item.Ref] {
+		if !valid || seen[item.Ref] || organizationRef != "" && organizationRef != item.OrganizationRef {
 			writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
 		seen[item.Ref] = true
+		organizationRef = item.OrganizationRef
 		result.Items = append(result.Items, item)
 	}
 	writeJSON(w, 200, result)
@@ -103,7 +105,8 @@ func revisionImpactItemView(v *cp.RevisionImpactItem, plan generated.RevisionImp
 	if kind != "AGENT" && (plan.Kind != "PROMPT_TEMPLATE" || kind != "AGENT_CONTINUATION" && kind != "WORKFLOW" && kind != "SCHEDULE") {
 		return result, false
 	}
-	if !fileTargetRef(v.ProjectRef) && !(v.ProjectRef == "" && plan.Kind == "PROMPT_TEMPLATE" && (kind == "AGENT" || kind == "AGENT_CONTINUATION")) {
+	if !validRuntimeResourceScope(runtimeResourceScopeKind(v.GetScopeKind().String()), v.GetOrganizationRef(), v.GetProjectRef()) ||
+		v.GetScopeKind() == cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION && kind != "AGENT" && kind != "AGENT_CONTINUATION" {
 		return result, false
 	}
 	for _, ref := range []string{v.Ref, v.ConsumerRef, v.BindingRef, v.SourceRevisionRef} {
@@ -127,7 +130,7 @@ func revisionImpactItemView(v *cp.RevisionImpactItem, plan generated.RevisionImp
 	} else if v.ResultRevisionRef != "" || v.ResultBindingRef != "" || v.ResultBindingVersion != 0 || v.ResultConsumerVersion != 0 {
 		return result, false
 	}
-	result = generated.RevisionImpactItem{Ref: v.Ref, ProjectRef: v.ProjectRef, ConsumerKind: generated.RevisionImpactItemConsumerKind(kind), ConsumerRef: v.ConsumerRef, ConsumerVersion: v.ConsumerVersion, BindingRef: v.BindingRef, BindingVersion: v.BindingVersion, SourceRevisionRef: v.SourceRevisionRef, Outcome: generated.RevisionImpactItemOutcome(outcome), ResultRevisionRef: optionalManagedString(v.ResultRevisionRef), ResultBindingRef: optionalManagedString(v.ResultBindingRef)}
+	result = generated.RevisionImpactItem{Ref: v.Ref, ProjectRef: v.ProjectRef, ScopeKind: runtimeResourceScopeKind(v.GetScopeKind().String()), OrganizationRef: v.GetOrganizationRef(), ConsumerKind: generated.RevisionImpactItemConsumerKind(kind), ConsumerRef: v.ConsumerRef, ConsumerVersion: v.ConsumerVersion, BindingRef: v.BindingRef, BindingVersion: v.BindingVersion, SourceRevisionRef: v.SourceRevisionRef, Outcome: generated.RevisionImpactItemOutcome(outcome), ResultRevisionRef: optionalManagedString(v.ResultRevisionRef), ResultBindingRef: optionalManagedString(v.ResultBindingRef)}
 	if outcome == "APPLIED" {
 		result.ResultBindingVersion = &v.ResultBindingVersion
 		result.ResultConsumerVersion = &v.ResultConsumerVersion

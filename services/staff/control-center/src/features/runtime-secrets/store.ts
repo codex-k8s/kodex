@@ -1,5 +1,10 @@
+import {
+  assertActiveRuntimeResourceIdentity,
+  runtimeResourceOwnerBoundary,
+} from "@/features/runtime/active-resource-owner";
 import { defineStore } from "pinia";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
+import { usePlatformStore } from "@/features/platform/store";
 
 import { requestSignal } from "@/shared/api/client";
 import { AppProblem } from "@/shared/api/problem";
@@ -18,13 +23,13 @@ import type {
 } from "./model";
 import { normalizeSecretPage } from "./model";
 import {
-  assertRuntimeResourceAddressIdentity,
   runtimeResourceAddressKey,
   runtimeResourceAddressScope,
   type RuntimeResourceAddress,
 } from "@/features/runtime/resource-scope";
 
 export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
+  const platform = usePlatformStore();
   const items = ref<RuntimeSecret[]>([]);
   const projectRef = ref("");
   const resourceScope = ref<RuntimeResourceAddress>();
@@ -46,6 +51,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   const hasMore = computed(() => nextPageToken.value.length > 0);
 
   function prepareRealtimeScope(scope: RuntimeResourceAddress): void {
+    runtimeResourceOwnerBoundary(scope);
     const nextProjectRef = runtimeResourceAddressKey(scope);
     resourceScope.value = scope;
     generation += 1;
@@ -65,10 +71,10 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     values: RuntimeSecret[],
     sourceNextPageToken?: string,
   ): void {
+    const owner = runtimeResourceOwnerBoundary(scope);
     const nextProjectRef = runtimeResourceAddressKey(scope);
     if (query.value || projectRef.value !== nextProjectRef) return;
-    for (const item of values)
-      assertRuntimeResourceAddressIdentity(scope, item);
+    for (const item of values) owner.assert(item);
     const previous = new Map(items.value.map((item) => [item.ref, item]));
     items.value = values.map((item) => {
       const retained = previous.get(item.ref);
@@ -101,6 +107,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     mutationProblem.value = undefined;
     problem.value = undefined;
     try {
+      const owner = runtimeResourceOwnerBoundary(scope);
       const page = normalizeSecretPage(
         await loadRuntimeSecretPage(
           scope,
@@ -111,8 +118,8 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
         ),
       );
       if (current !== generation) return;
-      for (const item of page.items)
-        assertRuntimeResourceAddressIdentity(scope, item);
+      for (const item of page.items) owner.assert(item);
+      owner.assertCurrent();
       items.value = page.items;
       nextPageToken.value = page.nextPageToken;
     } catch (error) {
@@ -134,6 +141,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     loadingMore.value = true;
     problem.value = undefined;
     try {
+      const owner = runtimeResourceOwnerBoundary(scope);
       const page = normalizeSecretPage(
         await loadRuntimeSecretPage(
           scope,
@@ -144,8 +152,8 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
         ),
       );
       if (current !== generation) return;
-      for (const item of page.items)
-        assertRuntimeResourceAddressIdentity(scope, item);
+      for (const item of page.items) owner.assert(item);
+      owner.assertCurrent();
       if (page.nextPageToken && page.nextPageToken === cursor)
         throw new Error("Runtime secret catalog cursor did not advance");
       const merged = new Map(items.value.map((item) => [item.ref, item]));
@@ -185,6 +193,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     const mutation = ++mutationGeneration;
     mutationProblem.value = undefined;
     try {
+      runtimeResourceOwnerBoundary(project);
       const receipt = checkedReceipt(
         await createRuntimeSecret(project, input),
         project,
@@ -205,7 +214,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   ): Promise<void> {
     const scope = resourceScope.value;
     if (!scope) throw new Error("Runtime secret mutation scope is unavailable");
-    assertRuntimeResourceAddressIdentity(scope, secret);
+    assertActiveRuntimeResourceIdentity(scope, secret);
     if (busyRef.value)
       throw new Error("Runtime secret mutation is already in progress");
     const current = generation;
@@ -231,7 +240,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   async function revoke(secret: RuntimeSecret): Promise<void> {
     const scope = resourceScope.value;
     if (!scope) throw new Error("Runtime secret mutation scope is unavailable");
-    assertRuntimeResourceAddressIdentity(scope, secret);
+    assertActiveRuntimeResourceIdentity(scope, secret);
     if (busyRef.value)
       throw new Error("Runtime secret mutation is already in progress");
     const current = generation;
@@ -268,13 +277,13 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
           result.currentRevision < previous.currentRevision))
     )
       throw new Error("Invalid runtime secret mutation receipt");
-    assertRuntimeResourceAddressIdentity(project, result);
+    assertActiveRuntimeResourceIdentity(project, result);
     return result;
   }
 
   function retainReceipt(receipt: RuntimeSecret): void {
     if (!resourceScope.value) return;
-    assertRuntimeResourceAddressIdentity(resourceScope.value, receipt);
+    assertActiveRuntimeResourceIdentity(resourceScope.value, receipt);
     const previous = items.value.find((item) => item.ref === receipt.ref);
     if (previous && previous.version > receipt.version) return;
     if (query.value && !previous) return;
@@ -308,6 +317,8 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     busyRef.value = "";
     requestedPageSize = 20;
   }
+
+  watch(() => platform.bootstrap?.organizationRef, dispose, { flush: "sync" });
 
   return {
     items,

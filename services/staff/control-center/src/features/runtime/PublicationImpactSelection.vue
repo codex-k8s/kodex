@@ -5,6 +5,7 @@ import type {
   RevisionImpactPage,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { usePlatformStore } from "@/features/platform/store";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -21,6 +22,7 @@ const props = defineProps<{
   consumerNames?: Record<string, string>;
 }>();
 const fieldPrefix = `publication-impact-${useId()}`;
+const platform = usePlatformStore();
 const emit = defineEmits<{ publish: [selectedItemRefs: string[]] }>();
 const page = ref<RevisionImpactPage>();
 const itemList = ref<HTMLElement>();
@@ -80,6 +82,7 @@ async function load(more = false): Promise<void> {
       query.value,
       more ? previous?.nextPageToken : undefined,
       pageSize.value,
+      platform.bootstrap?.organizationRef,
     );
     if (current !== generation) return;
     if (more && previous) {

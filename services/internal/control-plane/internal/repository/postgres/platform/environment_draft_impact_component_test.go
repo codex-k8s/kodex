@@ -81,8 +81,8 @@ func testEnvironmentPrepublicationImpact(t *testing.T, ctx context.Context, r *R
 		t.Fatal(err)
 	}
 	var expiredID string
-	if err = r.pool.QueryRow(ctx, `INSERT INTO control_plane.revision_impact_plans(ref,organization_id,actor_id,kind,snapshot,digest,created_at,expires_at)
-SELECT $2,organization_id,actor_id,kind,$3::jsonb,$4,clock_timestamp()-interval '16 minutes',clock_timestamp()-interval '1 minute'
+	if err = r.pool.QueryRow(ctx, `INSERT INTO control_plane.revision_impact_plans(ref,organization_id,actor_id,kind,snapshot,digest,created_at,expires_at,owner_snapshot_revision)
+SELECT $2,organization_id,actor_id,kind,$3::jsonb,$4,clock_timestamp()-interval '16 minutes',clock_timestamp()-interval '1 minute',2
 FROM control_plane.revision_impact_plans WHERE ref=$1 RETURNING id::text`, plan.Ref, expired.Ref, string(asJSON(expired)), expired.Digest).Scan(&expiredID); err != nil {
 		t.Fatal(err)
 	}

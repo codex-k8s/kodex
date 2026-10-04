@@ -82,7 +82,7 @@ func TestRoleImageImpactPrepareAndRebindUseImmutablePlan(t *testing.T) {
 	}
 }
 func TestRoleImageImpactItemsKeepEnvironmentAndAgentOutcomes(t *testing.T) {
-	source := &cp.RoleImageImpactItem{Ref: "riitem_fixture01", EnvironmentRef: "env_fixture01", EnvironmentVersion: 2, SourceVersionRef: "envv_fixture01", SourceVersionDigest: strings.Repeat("a", 64), Consumer: &cp.RuntimeEnvironmentConsumer{ProjectRef: "prj_fixture01", VersionRef: "envv_fixture01"}, Outcome: cp.RoleImageImpactOutcome_ROLE_IMAGE_IMPACT_OUTCOME_APPLIED, ResultEnvironmentVersionRef: "envv_new0001"}
+	source := &cp.RoleImageImpactItem{Ref: "riitem_fixture01", EnvironmentRef: "env_fixture01", EnvironmentVersion: 2, SourceVersionRef: "envv_fixture01", SourceVersionDigest: strings.Repeat("a", 64), Consumer: &cp.RuntimeEnvironmentConsumer{ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", VersionRef: "envv_fixture01"}, Outcome: cp.RoleImageImpactOutcome_ROLE_IMAGE_IMPACT_OUTCOME_APPLIED, ResultEnvironmentVersionRef: "envv_new0001"}
 	item, ok := roleImageImpactItemView(source, "APPLIED")
 	if !ok || item.Consumer != nil || item.ResultEnvironmentVersionRef == nil {
 		t.Fatal("environment-only outcome lost")

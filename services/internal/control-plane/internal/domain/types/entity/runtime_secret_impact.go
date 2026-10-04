@@ -1,10 +1,11 @@
 package entity
 
 type RuntimeSecretImpactConsumer struct {
-	EnvironmentRef, EnvironmentVersionRef string
-	EnvironmentVersion                    int64
-	SecretRevisions                       []int64
-	Consumer                              RuntimeEnvironmentConsumer
+	EnvironmentRef, EnvironmentVersionRef  string
+	ScopeKind, OrganizationRef, ProjectRef string
+	EnvironmentVersion                     int64
+	SecretRevisions                        []int64
+	Consumer                               RuntimeEnvironmentConsumer
 }
 
 type RuntimeSecretImpact struct {
@@ -15,7 +16,8 @@ type RuntimeSecretImpact struct {
 }
 
 type RuntimeSecretRebindSelection struct {
-	EnvironmentRef, SourceVersionRef string
-	ExpectedEnvironmentVersion       int64
-	Consumers                        []RuntimeEnvironmentConsumer
+	EnvironmentRef, SourceVersionRef       string
+	ScopeKind, OrganizationRef, ProjectRef string
+	ExpectedEnvironmentVersion             int64
+	Consumers                              []RuntimeEnvironmentConsumer
 }

@@ -92,6 +92,10 @@ test-interaction-gateway-postgres:
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
+.PHONY: test-impact-owner-snapshot-upgrade
+test-impact-owner-snapshot-upgrade:
+	@./scripts/tests/impact-owner-snapshot-upgrade-test.sh
+
 test-session-archive-seaweedfs-e2e:
 	@./scripts/tests/session-archive-seaweedfs-e2e-test.sh
 

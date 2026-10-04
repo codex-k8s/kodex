@@ -18,7 +18,7 @@ import (
 )
 
 const secretRevisionPath = "/api/v1/runtime-secrets/sec_fixture01/revisions/2"
-const secretRebindBody = `{"selections":[{"environmentRef":"env_fixture01","expectedEnvironmentVersion":4,"sourceVersionRef":"ever_fixture01","consumers":[{"agentRef":"agt_fixture01","agentVersion":5,"bindingRef":"bind_fixture01","bindingVersion":2,"versionRef":"ever_fixture01","projectRef":"prj_fixture01"}]}]}`
+const secretRebindBody = `{"selections":[{"environmentRef":"env_fixture01","expectedEnvironmentVersion":4,"sourceVersionRef":"ever_fixture01","scopeKind":"PROJECT","organizationRef":"org_fixture01","projectRef":"prj_fixture01","consumers":[{"agentRef":"agt_fixture01","agentVersion":5,"bindingRef":"bind_fixture01","bindingVersion":2,"versionRef":"ever_fixture01","projectRef":"prj_fixture01","scopeKind":"PROJECT","organizationRef":"org_fixture01"}]}]}`
 
 type secretImpactRecorder struct {
 	grpc.ClientConnInterface
@@ -37,11 +37,11 @@ func (client *secretImpactRecorder) Invoke(_ context.Context, method string, req
 	case controlplanev1.PlatformQueryService_GetRuntimeSecretImpact_FullMethodName:
 		result = &controlplanev1.GetRuntimeSecretImpactResponse{SecretRef: "sec_fixture01", SecretVersion: 3, TargetRevision: 2, Total: 2, Page: &controlplanev1.PageInfo{NextPageToken: "cursor-fixture"},
 			Consumers: []*controlplanev1.RuntimeSecretImpactConsumer{
-				{EnvironmentRef: "env_fixture01", EnvironmentVersion: 4, EnvironmentVersionRef: "ever_fixture01", SecretRevisions: []int64{1}, Consumer: &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: "agt_fixture01", AgentVersion: 5, BindingRef: "bind_fixture01", BindingVersion: 2, VersionRef: "ever_fixture01", ProjectRef: "prj_fixture01"}},
-				{EnvironmentRef: "env_fixture02", EnvironmentVersion: 1, EnvironmentVersionRef: "ever_unbound01", SecretRevisions: []int64{1}, Consumer: &controlplanev1.RuntimeEnvironmentConsumer{VersionRef: "ever_unbound01", ProjectRef: "prj_fixture01"}},
+				{EnvironmentRef: "env_fixture01", EnvironmentVersion: 4, EnvironmentVersionRef: "ever_fixture01", ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", ProjectRef: "prj_fixture01", SecretRevisions: []int64{1}, Consumer: &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: "agt_fixture01", AgentVersion: 5, BindingRef: "bind_fixture01", BindingVersion: 2, VersionRef: "ever_fixture01", ProjectRef: "prj_fixture01", ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01"}},
+				{EnvironmentRef: "env_fixture02", EnvironmentVersion: 1, EnvironmentVersionRef: "ever_unbound01", ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", ProjectRef: "prj_fixture01", SecretRevisions: []int64{1}, Consumer: &controlplanev1.RuntimeEnvironmentConsumer{VersionRef: "ever_unbound01", ProjectRef: "prj_fixture01", ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01"}},
 			}}
 	case controlplanev1.PlatformCommandService_RebindRuntimeSecret_FullMethodName:
-		result = &controlplanev1.RebindRuntimeSecretResponse{Environments: []*controlplanev1.RuntimeEnvironmentSet{{Ref: "env_fixture01", Version: 5, ProjectRef: "prj_fixture01", CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{
+		result = &controlplanev1.RebindRuntimeSecretResponse{Environments: []*controlplanev1.RuntimeEnvironmentSet{{Ref: "env_fixture01", Version: 5, ProjectRef: "prj_fixture01", ScopeKind: controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{
 			Ref: "ever_fixture02", Digest: strings.Repeat("b", 64), Values: []*controlplanev1.RuntimeEnvironmentValue{{Name: "PRIVATE_ENV", Value: "private-value-not-for-receipt"}}, SecretDescriptors: []*controlplanev1.RuntimeSecretDescriptor{{SecretRef: "sec_fixture01", Revision: 2}}}}},
 			Bindings: []*controlplanev1.AgentRuntimeEnvironmentBinding{{Ref: "bind_fixture01", Version: 3, AgentRef: "agt_fixture01", EnvironmentRef: "env_fixture01", VersionRef: "ever_fixture02", Digest: strings.Repeat("c", 64)}}}
 	default:
@@ -105,7 +105,7 @@ func TestSecretRebindExactMappingAndSafeReceipt(t *testing.T) {
 func TestSecretRebindAllowsPublicationWithoutAgentBindings(t *testing.T) {
 	client := &secretImpactRecorder{corrupt: func(m proto.Message) { m.(*controlplanev1.RebindRuntimeSecretResponse).Bindings = nil }}
 	w := httptest.NewRecorder()
-	body := `{"selections":[{"environmentRef":"env_fixture01","expectedEnvironmentVersion":4,"sourceVersionRef":"ever_fixture01","consumers":[]}]}`
+	body := `{"selections":[{"environmentRef":"env_fixture01","expectedEnvironmentVersion":4,"sourceVersionRef":"ever_fixture01","scopeKind":"PROJECT","organizationRef":"org_fixture01","projectRef":"prj_fixture01","consumers":[]}]}`
 	secretImpactHandler(client).ServeHTTP(w, managedTestRequest(http.MethodPost, secretRevisionPath+"/consumer-bindings", body))
 	if w.Code != 200 {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())

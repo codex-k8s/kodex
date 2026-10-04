@@ -131,7 +131,9 @@ func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context,
 		}
 		set.Archived = input.Action == "ARCHIVE"
 	}
-	if input.Action != "CREATE" && input.Action != "UPDATE" {
+	// RESTORE создаёт новую generation рецепта, поэтому для неё требуется
+	// новая immutable source revision, а не ссылка на прежнюю generation.
+	if input.Action != "CREATE" && input.Action != "UPDATE" && input.Action != "RESTORE" {
 		if result.Build != nil && set != nil {
 			_, err := tx.Exec(ctx, queryRoleImageManagedBuild, current.organizationID, result.Build.Ref)
 			if err != nil {

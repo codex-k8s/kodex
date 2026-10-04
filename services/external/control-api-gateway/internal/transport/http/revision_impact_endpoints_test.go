@@ -60,7 +60,7 @@ func TestRevisionImpactRejectsInventedPinsAndOutcomes(t *testing.T) {
 	p.Version = 2
 	p.PublishedRevisionRef = "renvv_published01"
 	plan, _ := revisionImpactPlanView(p)
-	item := &cp.RevisionImpactItem{Ref: "rii_fixture01", ProjectRef: "prj_fixture01", ConsumerKind: cp.RevisionImpactConsumerKind_REVISION_IMPACT_CONSUMER_KIND_AGENT, ConsumerRef: "agent_fixture01", ConsumerVersion: 3, BindingRef: "binding_fixture01", BindingVersion: 4, SourceRevisionRef: "renvv_previous01", Outcome: cp.RevisionImpactOutcome_REVISION_IMPACT_OUTCOME_APPLIED, ResultRevisionRef: p.PublishedRevisionRef, ResultBindingRef: "binding_fixture01", ResultBindingVersion: 5, ResultConsumerVersion: 4}
+	item := &cp.RevisionImpactItem{Ref: "rii_fixture01", ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", ConsumerKind: cp.RevisionImpactConsumerKind_REVISION_IMPACT_CONSUMER_KIND_AGENT, ConsumerRef: "agent_fixture01", ConsumerVersion: 3, BindingRef: "binding_fixture01", BindingVersion: 4, SourceRevisionRef: "renvv_previous01", Outcome: cp.RevisionImpactOutcome_REVISION_IMPACT_OUTCOME_APPLIED, ResultRevisionRef: p.PublishedRevisionRef, ResultBindingRef: "binding_fixture01", ResultBindingVersion: 5, ResultConsumerVersion: 4}
 	if _, ok := revisionImpactItemView(item, plan); !ok {
 		t.Fatal("valid owner outcome rejected")
 	}

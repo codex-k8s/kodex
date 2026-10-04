@@ -6,6 +6,7 @@ import type {
   RuntimeEnvironmentRebindResult,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { usePlatformStore } from "@/features/platform/store";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -17,6 +18,7 @@ import {
 } from "./revision-impact";
 const props = defineProps<{ environmentRef: string; versionRef: string }>();
 const fieldPrefix = `environment-impact-${useId()}`;
+const platform = usePlatformStore();
 const emit = defineEmits<{ close: []; applied: [] }>();
 const impact = ref<RuntimeEnvironmentImpact>();
 const impactList = ref<HTMLElement>();
@@ -71,6 +73,7 @@ async function load(more = false): Promise<void> {
       active.signal,
       query.value,
       pageSize.value,
+      platform.bootstrap?.organizationRef,
     );
     if (current !== generation) return;
     if (more && previous?.nextPageToken) cursors.add(previous.nextPageToken);
@@ -117,7 +120,11 @@ async function apply(): Promise<void> {
   const current = generation;
   busy.value = true;
   try {
-    const result = await applyEnvironmentRebind(impact.value, selection.value);
+    const result = await applyEnvironmentRebind(
+      impact.value,
+      selection.value,
+      platform.bootstrap?.organizationRef,
+    );
     if (current !== generation) return;
     receipt.value = result;
     selected.value.clear();
@@ -219,7 +226,11 @@ useCursorInfiniteScroll({
           />
           <span
             ><strong>{{ consumer.agentRef }}</strong
-            ><small>{{ consumer.projectRef }}</small
+            ><small>{{
+              consumer.scopeKind === "ORGANIZATION"
+                ? $t("assistant.settings.systemScope")
+                : consumer.projectRef
+            }}</small
             ><code>{{ consumer.versionRef }}</code
             ><small>{{
               $t("impact.bindingVersion", { version: consumer.bindingVersion })

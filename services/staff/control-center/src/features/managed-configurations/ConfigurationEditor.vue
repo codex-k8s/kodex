@@ -656,6 +656,7 @@ async function transition(action: "validate" | "publish"): Promise<void> {
         const report = await restorePublicationImpact(
           stored.planRef,
           controller.signal,
+          platform.bootstrap?.organizationRef,
         );
         if (
           report.plan.kind !== "PROMPT_TEMPLATE" ||
@@ -765,6 +766,7 @@ async function retryPromptPublication(): Promise<void> {
     const report = await restorePublicationImpact(
       attempt.planRef,
       controller.signal,
+      platform.bootstrap?.organizationRef,
     );
     if (publicationPlanIdentity(report.plan) !== publicationPlanIdentity(plan))
       throw new Error("Prompt recovery plan changed");
@@ -799,7 +801,11 @@ async function recoverPromptPublication(): Promise<void> {
     plan = publicationPlan.value;
   if (!current || !plan || busy.value) return;
   await perform(async () => {
-    const report = await restorePublicationImpact(plan.ref, controller.signal);
+    const report = await restorePublicationImpact(
+      plan.ref,
+      controller.signal,
+      platform.bootstrap?.organizationRef,
+    );
     if (
       publicationPlanIdentity(report.plan) === publicationPlanIdentity(plan) &&
       report.plan.state === "EXPIRED"
@@ -844,6 +850,7 @@ async function showImpact(more = false): Promise<void> {
           const report = await restoreImageImpact(
             saved.planRef,
             controller.signal,
+            platform.bootstrap?.organizationRef,
           );
           if (
             report.plan.configurationRef !== current.ref ||
@@ -1078,7 +1085,11 @@ async function retryRoleImage(): Promise<void> {
   busy.value = true;
   problem.value = undefined;
   try {
-    const report = await restoreImageImpact(attempt.planRef, controller.signal);
+    const report = await restoreImageImpact(
+      attempt.planRef,
+      controller.signal,
+      platform.bootstrap?.organizationRef,
+    );
     if (roleImagePlanIdentity(report.plan) !== roleImagePlanIdentity(plan))
       throw new Error("Role image recovery plan changed");
     if (report.plan.state !== "PREPARED") {
@@ -1108,7 +1119,11 @@ async function recoverRoleImage(): Promise<void> {
   const plan = imagePlan.value;
   if (!plan || busy.value) return;
   await perform(async () => {
-    const report = await restoreImageImpact(plan.ref, controller.signal);
+    const report = await restoreImageImpact(
+      plan.ref,
+      controller.signal,
+      platform.bootstrap?.organizationRef,
+    );
     if (
       roleImagePlanIdentity(report.plan) === roleImagePlanIdentity(plan) &&
       report.plan.state === "EXPIRED"

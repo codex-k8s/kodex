@@ -22,7 +22,7 @@ func secretPlanFixture() *cp.RuntimeSecretDraftImpactPlan {
 	return &cp.RuntimeSecretDraftImpactPlan{Ref: "sdip_fixture01", DraftRef: "sdft_fixture01", DraftVersion: 3, SecretRef: "sec_fixture01", SecretVersion: 7, SourceRevision: 2, Digest: strings.Repeat("a", 64), Total: 3, ExpiresAt: timestamppb.New(time.Now().Add(time.Hour)), State: cp.RuntimeSecretDraftImpactState_RUNTIME_SECRET_DRAFT_IMPACT_STATE_PREPARED}
 }
 func secretPlanItemFixture() *cp.RuntimeSecretDraftImpactItem {
-	return &cp.RuntimeSecretDraftImpactItem{Ref: "sdit_fixture01", Outcome: cp.RuntimeSecretDraftImpactOutcome_RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_PENDING, Consumer: &cp.RuntimeSecretImpactConsumer{EnvironmentRef: "renv_fixture01", EnvironmentVersion: 4, EnvironmentVersionRef: "renvv_fixture01", SecretRevisions: []int64{1, 2}, Consumer: &cp.RuntimeEnvironmentConsumer{ProjectRef: "prj_fixture01", VersionRef: "renvv_fixture01", AgentRef: "agt_fixture01", AgentVersion: 5, BindingRef: "renvb_fixture01", BindingVersion: 6}}}
+	return &cp.RuntimeSecretDraftImpactItem{Ref: "sdit_fixture01", Outcome: cp.RuntimeSecretDraftImpactOutcome_RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_PENDING, Consumer: &cp.RuntimeSecretImpactConsumer{EnvironmentRef: "renv_fixture01", EnvironmentVersion: 4, EnvironmentVersionRef: "renvv_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", ProjectRef: "prj_fixture01", SecretRevisions: []int64{1, 2}, Consumer: &cp.RuntimeEnvironmentConsumer{ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", VersionRef: "renvv_fixture01", AgentRef: "agt_fixture01", AgentVersion: 5, BindingRef: "renvb_fixture01", BindingVersion: 6}}}
 }
 
 type secretPlanRecorder struct {
@@ -78,7 +78,7 @@ func TestSecretDraftImpactPreservesPlanAndServerFiltering(t *testing.T) {
 func TestSecretDraftImpactFinalOutcomesAndBindingPins(t *testing.T) {
 	for _, applied := range []bool{false, true} {
 		item := secretPlanItemFixture()
-		item.Consumer.Consumer = &cp.RuntimeEnvironmentConsumer{ProjectRef: "prj_fixture01", VersionRef: item.Consumer.EnvironmentVersionRef}
+		item.Consumer.Consumer = &cp.RuntimeEnvironmentConsumer{ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", VersionRef: item.Consumer.EnvironmentVersionRef}
 		state := generated.RuntimeSecretDraftImpactPlanState("PREPARED")
 		if applied {
 			state = "APPLIED"

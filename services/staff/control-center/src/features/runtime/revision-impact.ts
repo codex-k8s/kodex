@@ -15,6 +15,11 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
+import {
+  runtimeResourceIdentityKey,
+  validRuntimeResourceIdentity,
+  requireRuntimeOrganizationRef,
+} from "./resource-scope";
 const positive = (value: number) => Number.isSafeInteger(value) && value > 0;
 function headers(value: MutationHeaders) {
   if (!value["If-Match"])
@@ -33,10 +38,13 @@ export function consumerKey(value: RuntimeEnvironmentConsumer): string {
     value.bindingVersion,
     value.versionRef,
     value.projectRef,
+    value.scopeKind,
+    value.organizationRef,
   ]);
 }
 function validConsumer(
   value: RuntimeEnvironmentConsumer | null | undefined,
+  organizationRef: string | undefined,
 ): boolean {
   return (
     !!value &&
@@ -45,7 +53,7 @@ function validConsumer(
     !!value.bindingRef &&
     positive(value.bindingVersion) &&
     !!value.versionRef &&
-    !!value.projectRef
+    validRuntimeResourceIdentity(value, organizationRef)
   );
 }
 function validPage(
@@ -69,7 +77,9 @@ export async function readEnvironmentImpact(
   signal: AbortSignal,
   query = "",
   pageSize = 40,
+  organizationRef?: string,
 ): Promise<RuntimeEnvironmentImpact> {
+  requireRuntimeOrganizationRef(organizationRef);
   const result = (
     await unwrap(
       getRuntimeEnvironmentImpact({
@@ -89,7 +99,7 @@ export async function readEnvironmentImpact(
     !positive(result.environmentVersion) ||
     !result.targetDigest ||
     !Array.isArray(result.consumers) ||
-    result.consumers.some((item) => !validConsumer(item)) ||
+    result.consumers.some((item) => !validConsumer(item, organizationRef)) ||
     new Set(result.consumers.map((item) => item.agentRef)).size !==
       result.consumers.length ||
     !validPage(
@@ -105,10 +115,13 @@ export async function readEnvironmentImpact(
 export async function applyEnvironmentRebind(
   impact: RuntimeEnvironmentImpact,
   consumers: RuntimeEnvironmentConsumer[],
+  organizationRef?: string,
 ): Promise<RuntimeEnvironmentRebindResult> {
+  requireRuntimeOrganizationRef(organizationRef);
   const eligible = new Set(impact.consumers.map(consumerKey));
   if (
     !consumers.length ||
+    impact.consumers.some((item) => !validConsumer(item, organizationRef)) ||
     consumers.length > 100 ||
     new Set(consumers.map((item) => item.agentRef)).size !== consumers.length ||
     consumers.some((item) => !eligible.has(consumerKey(item)))
@@ -157,7 +170,9 @@ export async function readSecretImpact(
   signal: AbortSignal,
   query = "",
   pageSize = 40,
+  organizationRef?: string,
 ): Promise<RuntimeSecretImpact> {
+  requireRuntimeOrganizationRef(organizationRef);
   const result = (
     await unwrap(
       getRuntimeSecretImpact({
@@ -187,13 +202,14 @@ export async function readSecretImpact(
         !item.environmentRef ||
         !positive(item.environmentVersion) ||
         !item.environmentVersionRef ||
-        !item.projectRef ||
+        !validRuntimeResourceIdentity(item, organizationRef) ||
         !Array.isArray(item.secretRevisions) ||
         item.secretRevisions.some((value) => !positive(value)) ||
         (item.consumer &&
-          (!validConsumer(item.consumer) ||
+          (!validConsumer(item.consumer, organizationRef) ||
             item.consumer.versionRef !== item.environmentVersionRef ||
-            item.consumer.projectRef !== item.projectRef)),
+            runtimeResourceIdentityKey(item.consumer) !==
+              runtimeResourceIdentityKey(item))),
     )
   )
     throw new Error("Invalid runtime secret impact");
@@ -202,10 +218,31 @@ export async function readSecretImpact(
 export async function applySecretRebind(
   impact: RuntimeSecretImpact,
   selections: RuntimeSecretRebindSelection[],
+  organizationRef?: string,
 ): Promise<RuntimeSecretRebindResult> {
+  requireRuntimeOrganizationRef(organizationRef);
   const consumers = selections.flatMap((item) => item.consumers);
   if (
     !selections.length ||
+    impact.consumers.some(
+      (item) =>
+        !validRuntimeResourceIdentity(item, organizationRef) ||
+        (item.consumer &&
+          (!validConsumer(item.consumer, organizationRef) ||
+            item.consumer.versionRef !== item.environmentVersionRef ||
+            runtimeResourceIdentityKey(item.consumer) !==
+              runtimeResourceIdentityKey(item))),
+    ) ||
+    selections.some(
+      (item) =>
+        !validRuntimeResourceIdentity(item, organizationRef) ||
+        item.consumers.some(
+          (consumer) =>
+            !validConsumer(consumer, organizationRef) ||
+            runtimeResourceIdentityKey(consumer) !==
+              runtimeResourceIdentityKey(item),
+        ),
+    ) ||
     selections.length > 32 ||
     consumers.length > 100 ||
     new Set(consumers.map((item) => item.agentRef)).size !== consumers.length ||
@@ -222,6 +259,11 @@ export async function applySecretRebind(
     );
     if (
       !eligible.length ||
+      eligible.some(
+        (row) =>
+          runtimeResourceIdentityKey(row) !==
+          runtimeResourceIdentityKey(selection),
+      ) ||
       selection.consumers.some(
         (consumer) =>
           !eligible.some(
@@ -271,7 +313,8 @@ export async function applySecretRebind(
     if (
       !selection ||
       !source ||
-      environment.projectRef !== source.projectRef ||
+      runtimeResourceIdentityKey(environment) !==
+        runtimeResourceIdentityKey(source) ||
       !positive(environment.environmentVersion) ||
       environment.environmentVersion <= selection.expectedEnvironmentVersion ||
       !environment.versionRef ||

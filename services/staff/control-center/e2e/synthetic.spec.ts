@@ -751,6 +751,8 @@ for (const { width, height } of [
           items: [
             {
               ref: "prompt_item_synthetic",
+              scopeKind: "PROJECT",
+              organizationRef: "org_synthetic",
               projectRef: projects[0]?.ref ?? "project_synthetic",
               consumerKind: "AGENT",
               consumerRef: "agent_prompt_consumer",

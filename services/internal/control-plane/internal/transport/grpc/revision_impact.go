@@ -47,7 +47,7 @@ func (s *Server) GetRevisionImpactPlan(ctx context.Context, request *cp.GetRevis
 	}
 	response := &cp.GetRevisionImpactPlanResponse{Plan: castRevisionImpactPlan(&result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
 	for _, item := range result.Items {
-		response.Items = append(response.Items, &cp.RevisionImpactItem{Ref: item.Ref, ProjectRef: item.ProjectRef,
+		response.Items = append(response.Items, &cp.RevisionImpactItem{Ref: item.Ref, ProjectRef: item.ProjectRef, ScopeKind: roleImageScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef,
 			ConsumerKind: cp.RevisionImpactConsumerKind(cp.RevisionImpactConsumerKind_value["REVISION_IMPACT_CONSUMER_KIND_"+item.ConsumerKind]),
 			ConsumerRef:  item.ConsumerRef, ConsumerVersion: item.ConsumerVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion,
 			SourceRevisionRef: item.SourceRevisionRef, Outcome: cp.RevisionImpactOutcome(cp.RevisionImpactOutcome_value["REVISION_IMPACT_OUTCOME_"+item.Outcome]),

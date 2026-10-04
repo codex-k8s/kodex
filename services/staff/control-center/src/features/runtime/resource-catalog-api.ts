@@ -1,10 +1,7 @@
-import { requestSignal } from "@/shared/api/client";
 import {
-  getRuntimeSecret,
-  listRuntimeSecrets,
-  listSystemRuntimeSecrets,
-} from "@/shared/api/generated/openapi/sdk.gen";
-import { unwrap } from "@/shared/api/problem";
+  loadRuntimeSecretPage,
+  readRuntimeSecret,
+} from "@/features/runtime-secrets/api";
 import {
   loadRoleImageDetail,
   loadRoleImagePage,
@@ -31,37 +28,20 @@ export function createRuntimeResourceCatalogs(organizationRef: string) {
   });
   const secrets = createScopedRuntimeSecretCatalog(organizationRef, {
     async list(scope, search, cursor, signal, pageSize) {
-      const query = {
+      return loadRuntimeSecretPage(
+        scope.kind === "PROJECT" ? scope.projectRef : scope,
+        search,
+        cursor,
+        signal,
         pageSize,
-        ...(search.trim() ? { query: search.trim() } : {}),
-        ...(cursor ? { pageToken: cursor } : {}),
-      };
-      if (scope.kind === "ORGANIZATION")
-        return (
-          await unwrap(
-            listSystemRuntimeSecrets({ query, signal: requestSignal(signal) }),
-          )
-        ).data;
-      return (
-        await unwrap(
-          listRuntimeSecrets({
-            path: { projectRef: scope.projectRef },
-            query,
-            signal: requestSignal(signal),
-          }),
-        )
-      ).data;
+      );
     },
-    async read(_scope, secretRef, signal) {
-      return (
-        await unwrap(
-          getRuntimeSecret({
-            path: { secretRef },
-            signal: requestSignal(signal),
-            cache: "no-store",
-          }),
-        )
-      ).data;
+    async read(scope, secretRef, signal) {
+      return readRuntimeSecret(
+        secretRef,
+        scope.kind === "PROJECT" ? scope.projectRef : scope,
+        signal,
+      );
     },
   });
   return { images, secrets };

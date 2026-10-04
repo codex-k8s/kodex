@@ -4968,6 +4968,8 @@ message RuntimeEnvironmentConsumer {
   int64 binding_version = 4;
   string version_ref = 5;
   string project_ref = 6;
+  RuntimeResourceScopeKind scope_kind = 7;
+  string organization_ref = 8;
 }
 message GetRuntimeEnvironmentImpactRequest {
   string environment_ref = 1;
@@ -5131,6 +5133,9 @@ message RuntimeSecretImpactConsumer {
   string environment_version_ref = 3;
   repeated int64 secret_revisions = 4;
   RuntimeEnvironmentConsumer consumer = 5;
+  RuntimeResourceScopeKind scope_kind = 6;
+  string organization_ref = 7;
+  string project_ref = 8;
 }
 message GetRuntimeSecretImpactRequest {
   string secret_ref = 1;
@@ -5151,6 +5156,10 @@ message RuntimeSecretRebindSelection {
   int64 expected_environment_version = 2;
   string source_version_ref = 3;
   repeated RuntimeEnvironmentConsumer consumers = 4;
+  // Полный ожидаемый owner snapshot, не источник полномочий.
+  RuntimeResourceScopeKind scope_kind = 5;
+  string organization_ref = 6;
+  string project_ref = 7;
 }
 message RebindRuntimeSecretRequest {
   MutationContext mutation = 1;
@@ -6534,6 +6543,8 @@ message RevisionImpactItem {
   string result_binding_ref = 11;
   int64 result_binding_version = 12;
   int64 result_consumer_version = 13;
+  RuntimeResourceScopeKind scope_kind = 14;
+  string organization_ref = 15;
 }
 message PrepareEnvironmentDraftImpactRequest {
   MutationContext mutation = 1;

@@ -7,8 +7,23 @@ const source = JSON.parse(readFileSync(new URL("../../deploy/k8s/base/internal-r
 const classification = JSON.parse(readFileSync(new URL("../../services/internal/control-plane/internal/app/service-identity-classification.json",import.meta.url),"utf8"));
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,384);
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,298);
+  assert.equal(policy.bindings.length,395);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,309);
+  for (const operation of [
+    "platform.organization.role-images.recipes.list",
+    "platform.organization.role-images.recipes.get",
+    "platform.organization.role-images.recipe-revisions.list",
+    "platform.organization.role-images.recipes.manage",
+    "platform.command.organization.role-images.promote",
+    "platform.query.organization.runtime-secrets.list",
+    "platform.command.organization.runtime-secret-drafts.create",
+    "platform.command.organization.runtime-environment-drafts.create",
+  ]) {
+    const bindings=policy.bindings.filter(binding=>binding.operation_id===operation);
+    assert.equal(bindings.length,1);
+    assert.equal(bindings[0].actor_mode,"USER_CREDENTIAL_REQUIRED");
+    assert.equal(bindings[0].project_required,false);
+  }
   for (const operation of ["platform.assistant.turns.add", "platform.assistant.turns.cancel"]) {
     assert.equal(policy.bindings.filter(binding=>binding.operation_id===operation&&binding.actor_mode==="USER_CREDENTIAL_REQUIRED").length,1);
   }

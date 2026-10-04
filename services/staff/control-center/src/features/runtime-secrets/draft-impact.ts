@@ -1,3 +1,7 @@
+import {
+  assertActiveRuntimeResourceIdentity,
+  runtimeResourceOwnerBoundary,
+} from "@/features/runtime/active-resource-owner";
 import { requestSignal } from "@/shared/api/client";
 import {
   prepareRuntimeSecretDraftImpact,
@@ -15,7 +19,9 @@ import { checkedDraft, type RuntimeSecretDraft } from "./draft-api";
 import { normalizeSecretPage } from "./model";
 import {
   runtimeResourceAddressFromIdentity,
-  assertRuntimeResourceAddressIdentity,
+  validRuntimeResourceIdentity,
+  runtimeResourceIdentityKey,
+  requireRuntimeOrganizationRef,
 } from "@/features/runtime/resource-scope";
 
 export type { RuntimeSecretDraftImpactPlan, RuntimeSecretDraftImpactPage };
@@ -54,6 +60,10 @@ export async function prepareDraftImpact(
   draft: RuntimeSecretDraft,
   key: string,
 ): Promise<RuntimeSecretDraftImpactPlan> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   const result = await mutate(
     (value) =>
       prepareRuntimeSecretDraftImpact({
@@ -64,6 +74,7 @@ export async function prepareDraftImpact(
     draft.version,
     key,
   );
+  owner.assertCurrent();
   return checkedPlan(result.data, draft);
 }
 
@@ -73,7 +84,12 @@ export async function readDraftImpact(
   query = "",
   pageToken?: string,
   pageSize = 40,
+  organizationRef?: string,
 ): Promise<RuntimeSecretDraftImpactPage> {
+  const owner = runtimeResourceOwnerBoundary({
+    kind: "ORGANIZATION",
+    organizationRef: requireRuntimeOrganizationRef(organizationRef),
+  });
   const result = (
     await unwrap(
       getRuntimeSecretDraftImpact({
@@ -88,7 +104,8 @@ export async function readDraftImpact(
       }),
     )
   ).data;
-  return checkedImpactPage(result, plan, pageToken);
+  owner.assertCurrent();
+  return checkedImpactPage(result, plan, pageToken, organizationRef);
 }
 
 export async function restoreDraftImpact(
@@ -96,6 +113,10 @@ export async function restoreDraftImpact(
   planRef: string,
   signal: AbortSignal,
 ): Promise<RuntimeSecretDraftImpactPage> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   const result = (
     await unwrap(
       getRuntimeSecretDraftImpact({
@@ -106,6 +127,7 @@ export async function restoreDraftImpact(
       }),
     )
   ).data;
+  owner.assertCurrent();
   if (result.plan.ref !== planRef)
     throw new Error("Secret draft impact reference mismatch");
   // Публикация продвигает текущий Draft; план сохраняет исходные immutable pins.
@@ -114,14 +136,21 @@ export async function restoreDraftImpact(
     version: result.plan.draftVersion,
     secretVersion: result.plan.secretVersion,
   });
-  return checkedImpactPage(result, result.plan);
+  return checkedImpactPage(
+    result,
+    result.plan,
+    undefined,
+    draft.organizationRef,
+  );
 }
 
 function checkedImpactPage(
   result: RuntimeSecretDraftImpactPage,
   plan: RuntimeSecretDraftImpactPlan,
   pageToken?: string,
+  organizationRef?: string,
 ): RuntimeSecretDraftImpactPage {
+  requireRuntimeOrganizationRef(organizationRef);
   if (
     result.plan.ref !== plan.ref ||
     result.plan.digest !== plan.digest ||
@@ -149,7 +178,7 @@ function checkedImpactPage(
         !item.ref ||
         !row.environmentRef ||
         !row.environmentVersionRef ||
-        !row.projectRef ||
+        !validRuntimeResourceIdentity(row, organizationRef) ||
         !positive(row.environmentVersion) ||
         !Array.isArray(row.secretRevisions) ||
         row.secretRevisions.some((revision) => !positive(revision)) ||
@@ -159,7 +188,9 @@ function checkedImpactPage(
             !agent.versionRef ||
             !positive(agent.agentVersion) ||
             !positive(agent.bindingVersion) ||
-            agent.projectRef !== row.projectRef)) ||
+            !validRuntimeResourceIdentity(agent, organizationRef) ||
+            runtimeResourceIdentityKey(agent) !==
+              runtimeResourceIdentityKey(row))) ||
         ![
           "PENDING",
           "APPLIED",
@@ -187,6 +218,10 @@ export async function publishSecretDraft(
   selectedItemRefs: string[],
   key: string,
 ): Promise<RuntimeSecretDraftPublication> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   checkedPlan(plan, draft);
   if (
     plan.state !== "PREPARED" ||
@@ -211,6 +246,8 @@ export async function publishSecretDraft(
       key,
     )
   ).data;
+  owner.assert(result.draft);
+  owner.assert(result.secret);
   const scope = runtimeResourceAddressFromIdentity(draft);
   const receipt = checkedDraft(result.draft, scope, draft);
   const secret = normalizeSecretPage({ items: [result.secret] }).items[0];
@@ -222,6 +259,6 @@ export async function publishSecretDraft(
     secret.currentRevision !== receipt.publishedRevision
   )
     throw new Error("Secret draft publication receipt mismatch");
-  assertRuntimeResourceAddressIdentity(scope, secret);
+  assertActiveRuntimeResourceIdentity(scope, secret);
   return { draft: receipt, secret };
 }

@@ -104,7 +104,7 @@ func (r *Repository) applySecretDraftImpact(ctx context.Context, tx pgx.Tx, s sc
 		if err != nil {
 			return errs.ErrUnavailable
 		}
-		base := command.Command{Kind: command.RebindRuntimeSecret, Principal: value.Principal{CorrelationRef: o.correlation}, Mutation: value.Mutation{ExpectedVersion: &secret.Version}, Payload: command.RuntimeSecretRebindInput{SecretRef: secret.Ref, Revision: secret.CurrentRevision, Selections: []entity.RuntimeSecretRebindSelection{{EnvironmentRef: source.EnvironmentRef, SourceVersionRef: source.EnvironmentVersionRef, ExpectedEnvironmentVersion: expected}}}}
+		base := command.Command{Kind: command.RebindRuntimeSecret, Principal: value.Principal{CorrelationRef: o.correlation}, Mutation: value.Mutation{ExpectedVersion: &secret.Version}, Payload: command.RuntimeSecretRebindInput{SecretRef: secret.Ref, Revision: secret.CurrentRevision, Selections: []entity.RuntimeSecretRebindSelection{{EnvironmentRef: source.EnvironmentRef, SourceVersionRef: source.EnvironmentVersionRef, ExpectedEnvironmentVersion: expected, ScopeKind: source.ScopeKind, OrganizationRef: source.OrganizationRef, ProjectRef: source.ProjectRef}}}}
 		published, applyErr := r.rebindRuntimeSecret(ctx, batch, s, base)
 		if applyErr != nil {
 			_ = batch.Rollback(ctx)

@@ -133,6 +133,9 @@ func (r *Repository) revisionImpactItems(ctx context.Context, tx pgx.Tx, row rev
 		if rows.Scan(&raw, &outcome, &revision, &binding, &bindingVersion, &consumerVersion) != nil || json.Unmarshal(raw, &item) != nil {
 			return nil, errs.ErrUnavailable
 		}
+		if !validRuntimeOwnerSnapshot(item.ScopeKind, item.OrganizationRef, item.ProjectRef) {
+			return nil, errs.ErrNotFound
+		}
 		item.Outcome, item.ResultRevisionRef, item.ResultBindingRef, item.ResultBindingVersion, item.ResultConsumerVersion = outcome, revision, binding, bindingVersion, consumerVersion
 		items = append(items, item)
 		if len(items) > maximumRevisionImpactItems {
@@ -242,6 +245,13 @@ func (r *Repository) GetRevisionImpactPlan(ctx context.Context, p value.Principa
 }
 
 func (r *Repository) revisionImpactItemAccess(ctx context.Context, tx pgx.Tx, s scope, item entity.RevisionImpactItem) error {
+	owner, err := r.impactConsumerOwner(ctx, tx, s, item.ConsumerKind, item.ConsumerRef)
+	if err != nil {
+		return err
+	}
+	if err := matchRuntimeOwnerSnapshot(owner.ScopeKind, owner.OrganizationRef, owner.ProjectRef, item.ScopeKind, item.OrganizationRef, item.ProjectRef); err != nil {
+		return err
+	}
 	if item.ConsumerKind == "AGENT" || item.ConsumerKind == "AGENT_CONTINUATION" {
 		permission, target, err := r.resolveRuntimeConfigurationTarget(ctx, tx, s, "agent.manage", item.ConsumerRef)
 		if err != nil {

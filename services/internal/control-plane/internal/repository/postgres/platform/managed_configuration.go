@@ -49,7 +49,13 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 	if action == "COPY_CFG" {
 		return repository.copyCFG(ctx, tx, current, input, payload, kind)
 	}
-	configuration, err := repository.resolveManagedSet(ctx, tx, current, payload, kind, action == "CREATE")
+	var configuration managedSet
+	var err error
+	if input.Kind == command.PrepareRoleImageImpactPlan || input.Kind == command.RebindRoleImage {
+		configuration, err = repository.resolveRoleImageImpactSet(ctx, tx, current, payload)
+	} else {
+		configuration, err = repository.resolveManagedSet(ctx, tx, current, payload, kind, action == "CREATE")
+	}
 	if err != nil {
 		return commandOutcome{}, err
 	}

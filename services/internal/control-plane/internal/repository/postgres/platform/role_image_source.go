@@ -8,6 +8,7 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
+	revisionservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/revision"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -16,14 +17,43 @@ import (
 //go:embed sql/role_image_source__configuration_target.sql
 var queryRoleImageSourceConfigurationTarget string
 
+//go:embed sql/role_image_configuration_owner.sql
+var queryRoleImageConfigurationOwner string
+
+// Scope задаёт неизменяемая связь с реальным рецептом, а не пустой ProjectRef.
+func (repository *Repository) roleImageConfigurationOwner(ctx context.Context, tx pgx.Tx, current scope, ref string) (string, string, string, error) {
+	var recipeRef, scopeKind, organizationRef, projectRef string
+	err := tx.QueryRow(ctx, queryRoleImageConfigurationOwner, current.organizationID, ref).Scan(&recipeRef, &scopeKind, &organizationRef, &projectRef)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", "", errs.ErrNotFound
+	}
+	if err != nil || !validRuntimeOwnerSnapshot(scopeKind, organizationRef, projectRef) || organizationRef != current.organizationRef {
+		return "", "", "", errs.ErrUnavailable
+	}
+	if scopeKind == "ORGANIZATION" {
+		if err := repository.requireOrganizationRoleImageAccess(ctx, tx, current); err != nil {
+			return "", "", "", err
+		}
+	}
+	return recipeRef, scopeKind, projectRef, nil
+}
+
+func (repository *Repository) resolveRoleImageImpactSet(ctx context.Context, tx pgx.Tx, current scope, payload command.ManagedConfigurationInput) (managedSet, error) {
+	_, scopeKind, _, err := repository.roleImageConfigurationOwner(ctx, tx, current, payload.ConfigurationRef)
+	if err != nil {
+		return managedSet{}, err
+	}
+	return repository.resolveManagedSetScope(ctx, tx, current, payload, revisionservice.KindRoleImage, false, scopeKind)
+}
+
 // Проекция выполняется только на пользовательской границе. Неизменяемый
 // source для build worker остаётся частью его отдельного exact grant.
 func projectRoleImageSource(recipe *entity.RoleImageRecipe, builds []entity.ImageBuild, canRead, canEdit bool) {
 	recipe.SourceAvailable = canRead
-	if canRead && !slices.Contains(recipe.NextActions, "COPY") {
+	if canRead && recipe.ScopeKind == "PROJECT" && !slices.Contains(recipe.NextActions, "COPY") {
 		recipe.NextActions = append(recipe.NextActions, "COPY")
 	}
-	if !canRead {
+	if !canRead || recipe.ScopeKind != "PROJECT" {
 		recipe.NextActions = slices.DeleteFunc(recipe.NextActions, func(action string) bool { return action == "COPY" })
 	}
 	for index := range builds {
@@ -54,7 +84,11 @@ func (repository *Repository) managedRoleImageSourceAccess(ctx context.Context, 
 		}
 		projectRef = actualProjectRef
 		if recipeRef != "" {
-			target, err := repository.resolveRoleImageAccessTarget(ctx, tx, current, recipeRef, projectRef)
+			recipeRef, scopeKind, actualProject, err := repository.roleImageConfigurationOwner(ctx, tx, current, ref)
+			if err != nil {
+				return err
+			}
+			target, err := repository.resolveScopedRoleImageAccessTarget(ctx, tx, current, recipeRef, actualProject, scopeKind)
 			if err != nil {
 				return err
 			}

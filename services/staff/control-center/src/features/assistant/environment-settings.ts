@@ -2,10 +2,8 @@ import {
   editableRuntimeEnvironmentPolicy,
   editableSecretBindings,
 } from "@/features/runtime/environment-form";
-import {
-  assertRuntimeResourceIdentity,
-  type RuntimeResourceScope,
-} from "@/features/runtime/resource-scope";
+import { type RuntimeResourceScope } from "@/features/runtime/resource-scope";
+import { assertActiveRuntimeResourceIdentity } from "@/features/runtime/active-resource-owner";
 import type {
   RuntimeEnvironmentInput,
   RuntimeEnvironmentSet,
@@ -15,12 +13,9 @@ export function editableAssistantEnvironment(
   environment: RuntimeEnvironmentSet,
   scope: RuntimeResourceScope,
 ): RuntimeEnvironmentInput {
-  assertRuntimeResourceIdentity(
-    scope,
+  assertActiveRuntimeResourceIdentity(
+    scope.kind === "PROJECT" ? scope.projectRef : scope,
     environment,
-    scope.kind === "ORGANIZATION"
-      ? scope.organizationRef
-      : environment.organizationRef,
   );
   const current = environment.currentVersion;
   return {

@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { client } from "../../src/shared/api/generated/openapi/client.gen";
+import { usePlatformStore } from "../../src/features/platform/store";
+import type { BootstrapState } from "../../src/shared/api/generated/openapi/types.gen";
+usePlatformStore().bootstrap = {
+  organizationRef: "org_fixture",
+  platformRole: "OWNER",
+} as BootstrapState;
 import AssistantEnvironmentSettingsPanel from "../../src/features/assistant/components/AssistantEnvironmentSettingsPanel.vue";
 import { createRuntimeResourceCatalogs } from "../../src/features/runtime/resource-catalog-api";
 client.setConfig({ baseUrl: location.origin });

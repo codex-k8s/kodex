@@ -156,6 +156,8 @@ export async function installEnvironmentFixture(
     },
   };
   const consumer: RuntimeEnvironmentConsumer = {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     agentRef: "agent_impact_synthetic",
     agentVersion: 3,
     bindingRef: "binding_impact_synthetic",

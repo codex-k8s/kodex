@@ -1,3 +1,7 @@
+import {
+  assertActiveRuntimeResourceIdentity,
+  runtimeResourceOwnerBoundary,
+} from "@/features/runtime/active-resource-owner";
 import { requestSignal } from "@/shared/api/client";
 import {
   createRuntimeSecretDraft,
@@ -15,7 +19,6 @@ import type {
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { AppProblem, asProblem, unwrap } from "@/shared/api/problem";
 import {
-  assertRuntimeResourceAddressIdentity,
   runtimeResourceAddressFromIdentity,
   runtimeResourceAddressScope,
   type RuntimeResourceAddress,
@@ -68,7 +71,7 @@ export function checkedDraft(
     typeof draft.description !== "string"
   )
     throw new Error("Runtime secret draft receipt is invalid");
-  assertRuntimeResourceAddressIdentity(scope, draft);
+  assertActiveRuntimeResourceIdentity(scope, draft);
   // В состояние формы попадает только закрытый набор безопасных метаданных.
   return {
     ref: draft.ref,
@@ -100,6 +103,7 @@ export async function createSecretDraft(
   input: RuntimeSecretCreateInput,
   key: string,
 ): Promise<RuntimeSecretDraft> {
+  const owner = runtimeResourceOwnerBoundary(scope);
   const resolved = runtimeResourceAddressScope(scope);
   if (resolved.kind === "ORGANIZATION") {
     const result = await mutate(
@@ -115,6 +119,7 @@ export async function createSecretDraft(
       undefined,
       key,
     );
+    owner.assert(result.data);
     return checkedDraft(result.data, scope);
   }
   const projectRef = resolved.projectRef;
@@ -132,6 +137,7 @@ export async function createSecretDraft(
     undefined,
     key,
   );
+  owner.assert(result.data);
   return checkedDraft(result.data, projectRef);
 }
 
@@ -141,6 +147,7 @@ export async function saveSecretDraft(
   input: RuntimeSecretRotateInput,
   key: string,
 ): Promise<RuntimeSecretDraft> {
+  const owner = runtimeResourceOwnerBoundary(scope);
   const result = await mutate(
     (headers) =>
       saveRuntimeSecretDraft({
@@ -152,6 +159,7 @@ export async function saveSecretDraft(
     secret.version,
     key,
   );
+  owner.assert(result.data);
   return checkedDraft(result.data, scope, { secretRef: secret.ref });
 }
 
@@ -160,6 +168,7 @@ export async function readSecretDraft(
   draftRef: string,
   signal: AbortSignal,
 ): Promise<RuntimeSecretDraft> {
+  const owner = runtimeResourceOwnerBoundary(scope);
   const result = await unwrap(
     getRuntimeSecretDraft({
       path: { draftRef },
@@ -167,6 +176,7 @@ export async function readSecretDraft(
       cache: "no-store",
     }),
   );
+  owner.assert(result.data);
   return checkedDraft(result.data, scope, { ref: draftRef });
 }
 
@@ -175,6 +185,10 @@ export async function changeSecretDraft(
   action: "validate" | "discard",
   key: string,
 ): Promise<RuntimeSecretDraft> {
+  const owner = runtimeResourceOwnerBoundary(
+    runtimeResourceAddressFromIdentity(draft),
+  );
+  owner.assert(draft);
   const operation =
     action === "validate"
       ? validateRuntimeSecretDraft
@@ -189,6 +203,7 @@ export async function changeSecretDraft(
     draft.version,
     key,
   );
+  owner.assert(result.data);
   return checkedDraft(
     result.data,
     runtimeResourceAddressFromIdentity(draft),

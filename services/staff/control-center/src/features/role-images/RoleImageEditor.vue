@@ -42,6 +42,7 @@ import { useServerMessage } from "@/shared/ui/server-message";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { requestConfirmation } from "@/shared/ui/confirmation";
+import { requireRuntimeOrganizationRef } from "@/features/runtime/resource-scope";
 import {
   roleImageScopeKey,
   roleImageCatalogPath,
@@ -104,7 +105,11 @@ const recipe = computed(() => {
   const value = props.recipeRef ? store.recipes[props.recipeRef] : undefined;
   if (!value) return undefined;
   try {
-    assertRoleImageResourceIdentity(resourceScope.value, value);
+    assertRoleImageResourceIdentity(
+      resourceScope.value,
+      value,
+      requireRuntimeOrganizationRef(platform.bootstrap?.organizationRef),
+    );
     return value;
   } catch {
     return undefined;

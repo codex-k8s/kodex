@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
+import { beforeEach, describe, expect, it } from "vitest";
 import { editableAssistantEnvironment } from "./environment-settings";
 import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
 import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
@@ -137,3 +138,5 @@ describe("Настройка окружения помощника", () => {
     ).toBe("imgart_exact");
   });
 });
+
+beforeEach(() => initializeRuntimeOwnerFixture("org_alpha"));

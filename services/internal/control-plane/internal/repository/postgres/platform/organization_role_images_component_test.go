@@ -153,6 +153,14 @@ func TestOrganizationRoleImagesComponent(t *testing.T) {
 	if restored.Recipe.State != "ACTIVE" {
 		t.Fatal("organization recipe did not restore")
 	}
+	if restored.Build == nil || restored.Build.ConfigurationRevisionRef == "" || restored.Build.ConfigurationRevisionRef == created.Build.ConfigurationRevisionRef {
+		t.Fatal("organization restoration did not assign a fresh source revision")
+	}
+	assertManagedRoleImageBuild(t, ctx, repository, restored.Recipe, *restored.Build)
+	restoredReplay := manage("RESTORE", "restore", archived.Recipe, "")
+	if restoredReplay.Recipe.Generation != restored.Recipe.Generation || restoredReplay.Build == nil || restoredReplay.Build.ConfigurationRevisionRef != restored.Build.ConfigurationRevisionRef {
+		t.Fatal("organization restoration replay created another generation or source revision")
+	}
 	claim, err = repository.ClaimBuild(ctx, worker, "org-image-restored-claim")
 	if err != nil {
 		t.Fatalf("claim restored build: %v", err)
@@ -239,6 +247,8 @@ func TestOrganizationRoleImagesComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	imagePlan := testOrganizationRoleImageImpactRevokedOwner(t, ctx, repository, platform, owner, current, created.Recipe.Ref)
+	testOrganizationRoleImageImpactConsumers(t, ctx, repository, platform, owner, current, created.Recipe.Ref, promoted)
 	project, err := platform.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "org-image-project"}, Payload: command.ProjectInput{Name: "Image owner boundary", Language: "en"}})
 	if err != nil || project.Project == nil {
 		t.Fatalf("create signed project fixture: %v", err)
@@ -249,6 +259,26 @@ func TestOrganizationRoleImagesComponent(t *testing.T) {
 	}
 	if _, err := repository.GetOrganization(ctx, signed, created.Recipe.Ref); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("signed project principal accessed organization image: %v", err)
+	}
+	signedUI := owner
+	signedUI.ProjectRef = signed.ProjectRef
+	if _, _, _, _, err := platform.ListManagedConfigurationHistory(ctx, signedUI, imagePlan.ConfigurationRef, query.Page{Size: 20}); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("signed project principal accessed organization source history: %v", err)
+	}
+	if _, err := platform.GetRoleImageImpactPlan(ctx, signedUI, imagePlan.Ref, "", query.Page{Size: 20}); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("signed project principal accessed organization image impact: %v", err)
+	}
+	for _, kind := range []command.Kind{command.PrepareRoleImageImpactPlan, command.RebindRoleImage} {
+		wrongVersion := int64(999999)
+		payload := command.ManagedConfigurationInput{ConfigurationRef: imagePlan.ConfigurationRef, RevisionRef: imagePlan.RevisionRef}
+		if kind == command.RebindRoleImage {
+			payload.PlanRef, payload.ImpactDigest = imagePlan.Ref, strings.Repeat("0", 64)
+		}
+		if _, err := platform.Execute(ctx, command.Command{Kind: kind, Principal: signedUI,
+			Mutation: value.Mutation{IdempotencyKey: "signed-org-image-" + string(kind), ExpectedVersion: &wrongVersion},
+			Payload:  payload}); !errors.Is(err, errs.ErrNotFound) {
+			t.Fatalf("signed project image gate must precede OCC and digest: %v", err)
+		}
 	}
 	if _, err := repository.RequestOrganizationPromotion(ctx, roleimagerepo.PromotionRequestInput{Principal: signed, Mutation: promotionInput.Mutation,
 		RecipeRef: created.Recipe.Ref, ArtifactRef: artifact.Ref, ExpectedProvenanceSHA256: artifact.ProvenanceSHA256}); !errors.Is(err, errs.ErrNotFound) {

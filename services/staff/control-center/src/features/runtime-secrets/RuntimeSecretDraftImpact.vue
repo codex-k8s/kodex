@@ -117,7 +117,14 @@ async function selectAvailable(): Promise<void> {
     AbortSignal.timeout(15_000),
   ]);
   let current = query.value.trim()
-    ? await readDraftImpact(plan.value, signal)
+    ? await readDraftImpact(
+        plan.value,
+        signal,
+        "",
+        undefined,
+        40,
+        props.draft.organizationRef,
+      )
     : page.value;
   const expectedTotal = current.total;
   const refs = new Set<string>();
@@ -149,6 +156,8 @@ async function selectAvailable(): Promise<void> {
       signal,
       "",
       current.nextPageToken,
+      40,
+      props.draft.organizationRef,
     );
   }
   throw new Error("Secret draft default selection page limit exceeded");
@@ -165,6 +174,7 @@ async function load(more = false): Promise<void> {
     query.value,
     more ? before?.nextPageToken : undefined,
     impactPageSize.value,
+    props.draft.organizationRef,
   );
   if (disposed) return;
   if (more && before) {

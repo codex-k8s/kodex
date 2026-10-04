@@ -1572,6 +1572,12 @@ PY
       apply_render role-environment-catalog '
         select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments")
       '
+      # Новый builder читает exact toolchain из ConfigMap уже при старте.
+      # Прежний digest нельзя оставлять до ожидания Ready новой binary.
+      apply_render supply-chain-builder-configuration '
+        select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+          .metadata.name == "role-image-builder-runtime")
+      '
       apply_render buildkit-workload '
         select(.kind == "Deployment" and .metadata.name == "kodex-buildkit")
       '
@@ -1661,6 +1667,44 @@ PY
   fi
   if [[ "$stage" == core ]]; then
     if [[ "$mode" == apply ]]; then
+      # Точечный rollout должен сначала получить свои source-bound настройки.
+      # CA, секреты и конфигурации других компонентов здесь не публикуются.
+      case "$selected_workload" in
+        "")
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              (.metadata.name == "control-plane-runtime" or
+               .metadata.name == "secret-broker-runtime" or
+               .metadata.name == "kodex-platform-endpoints" or
+               (.metadata.name | test("^staff-control-center-runtime-[a-z0-9]+$"))))
+          '
+          ;;
+        control-plane)
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              (.metadata.name == "control-plane-runtime" or
+               .metadata.name == "kodex-platform-endpoints"))
+          '
+          ;;
+        secret-broker)
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              .metadata.name == "secret-broker-runtime")
+          '
+          ;;
+        control-api-gateway)
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              .metadata.name == "kodex-platform-endpoints")
+          '
+          ;;
+        staff-control-center)
+          apply_render core-runtime-configuration '
+            select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+              (.metadata.name | test("^staff-control-center-runtime-[a-z0-9]+$")))
+          '
+          ;;
+      esac
       if [[ -z "$selected_workload" || "$selected_workload" == clamav-db-updater ]]; then
         apply_render clamav-db-updater-foundation '
           select((.kind == "ServiceAccount" and .metadata.name == "clamav-db-updater") or

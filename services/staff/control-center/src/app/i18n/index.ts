@@ -1554,6 +1554,7 @@ const ru = {
     toolDisplayName: "Название в prompt",
     toolCommand: "Проверенная программа",
     toolUsageHint: "Подсказка по использованию",
+    toolDetails: "Описание и подсказка по использованию",
     noVerifiedTools: "В образе нет проверенных программ.",
     chooseImageFirst: "Сначала выберите promoted образ.",
     secretReferences: "Ссылки на секреты",
@@ -3616,6 +3617,9 @@ const ru = {
       organizationHelp:
         "Ресурсы системного помощника — только для владельца и администраторов.",
       environment: "Окружение помощника",
+      reprepareImpact: "Проверить влияние заново",
+      reprepareImpactHelp:
+        "Предыдущий план влияния недоступен. Заново проверить точную сохранённую ревизию? Это создаст новый план; публикацию потребуется подтвердить отдельно.",
       publicationHelp:
         "Сначала сохраните черновик, проверьте его, затем подтвердите влияние и публикацию. Изменения применяются к следующим ходам.",
     },
@@ -5982,6 +5986,7 @@ const en = {
     toolDisplayName: "Name in prompt",
     toolCommand: "Verified executable",
     toolUsageHint: "Usage hint",
+    toolDetails: "Description and usage hint",
     noVerifiedTools: "The image has no verified executables.",
     chooseImageFirst: "Choose a promoted image first.",
     secretReferences: "Secret references",
@@ -7946,6 +7951,9 @@ const en = {
       organizationHelp:
         "System assistant resources are restricted to owners and administrators.",
       environment: "Assistant environment",
+      reprepareImpact: "Review impact again",
+      reprepareImpactHelp:
+        "The previous impact plan is unavailable. Review the exact saved revision again? This creates a new plan; publication still requires separate confirmation.",
       publicationHelp:
         "Save and validate a draft, then confirm its impact and publication. Changes apply to subsequent turns.",
     },

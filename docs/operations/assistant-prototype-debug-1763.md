@@ -7483,3 +7483,163 @@ checklist выше. Затем основной агент, без субаге�
   отклоняет организационный secret rotation impact; нельзя считать этот путь
   готовым или исправлять его выводом scope из пустого project. Также проверяется
   bootstrap org anchor на проектных image pages, без расширения полномочий.
+
+### Этап 3.5 — полный owner snapshot потребителей и изоляция браузерных чатов
+
+Checkpoint 3.4 опубликован в #1790: `479f269fc2a117b3d178783bea3800e8586d2a7c`.
+Повтор на точном SHA с чистым деревом до/после: PostgreSQL 9 suites PASS
+101,744 с; owner/broker composition PASS 11,235 с; broker unit/vet и gateway
+unit/vet PASS. Frontend 323 suites / 2162 PASS, lint/forced typecheck/build PASS,
+Chromium 19/19 PASS 32,9 с. Это локальные disposable/synthetic доказательства,
+не serving mTLS/SSO, реальный inference или production acceptance.
+
+Карта нового сценария до изменения wire contract:
+
+- Источник — полная ORGANIZATION/PROJECT настройка #1789 и checklist выше.
+  Actor — текущая проверенная browser session; gateway передаёт подписанный
+  контекст, а CP разрешает существующие secret/environment/agent в своей БД.
+- Ротация: защищённая форма → `PrepareRuntimeSecretDraftImpact` /
+  `GetRuntimeSecretImpact` → owner query с текущими правами и immutable
+  scope/org/project/version каждого environment и binding. У организационного
+  secret нет project authority; активный OWNER/ADMIN и специализированные
+  разрешения проверяются до OCC/idempotency. Project-signed context отклоняется.
+- Публикация/rebind: versioned draft и digest/plan → подтверждение владельца →
+  `PublishRuntimeSecretDraft` / `RebindRuntimeSecret`. Выбранный полный tuple
+  является ожидаемым snapshot для сравнения с owner state, не выдаёт полномочий.
+  Bindingless environment имеет тот же явный owner tuple. Owner-транзакция
+  фиксирует новую immutable revision, exact binding, receipt/audit/outbox;
+  активный RuntimeRevision не переписывается, следующие ходы получают новую.
+- Потребители: Proto/OpenAPI response, frontend impact/rebind reducer,
+  организационный/проектный cache и WebSocket readback. Общие consumers образа,
+  окружения, инструкции и prompt template также получают явные ScopeKind и
+  OrganizationRef. PROJECT требует projectRef; ORGANIZATION требует его
+  отсутствия. Неизвестный/отсутствующий scope закрыто отклоняется, не выводится
+  из пустой строки и не восстанавливается legacy decoder.
+- Cancel/expired/conflict плана не публикуют revision; authoritative GET
+  возвращает точный outcome. Потерянный ACK повторяется тем же semantic input,
+  version/idempotency; подтверждение не применяется автоматически после SSO.
+- Для браузерной проверки создаётся отдельная stateful synthetic fixture с
+  production AssistantWorkspace/stores, без подмены load/send/stop. Проверяются
+  2/10 диалогов и 11-й в очереди, точные запросы/события и изоляция draft/history.
+  Она не заменяет PostgreSQL claim или реальный controller restart.
+
+Статус этапа: реализация и проверка выполняются, чекбоксы полной цели не закрыты.
+
+Адресные результаты волны 3.5 до фиксации нового SHA:
+
+- PASS: gateway unit/vet и новые отрицательные проверки неизвестного scope,
+  смешанных owner tuple, bindingless consumer и подменённого receipt. Полный
+  gateway прогон: `/tmp/kodex-owner-consumer-final-gateway.log`.
+- PASS: SQL boundary, Proto и AsyncAPI reproducibility, authority codegen;
+  `/tmp/kodex-owner-consumer-final-codegen.log`. Buf ограничил удалённые
+  плагины; использованы точные закреплённые локальные версии, не другой API.
+- PASS: оба release render и шесть authority/service-identity проверок.
+  Прежний FAIL был устаревшим ожидаемым количеством операций; новый oracle
+  сохраняет точное число 395/309 и дополнительно проверяет закрытые восемь
+  организационных команд с обязательным user credential и без project scope.
+- FAIL → исправление: persisted permission registry разрешал организационные
+  secret-команды в Go, но не в SQL. Новая forward-only migration закрепляет
+  точные resource kinds пяти разрешений; существующие миграции не меняются.
+  Адресный ORG secret impact/rebind после исправления — PASS, 4,070 с.
+- FAIL → исправление: SYSTEM read/claim выбирал current окружения даже при
+  явной immutable привязке. Теперь auto-follow current применяется только к
+  bootstrap binding без version id; custom binding сохраняет точную версию.
+  Компонентная проверка actual claim выполняется отдельно.
+- PASS: synthetic Chromium и Firefox — 12/12, RU/EN, desktop/mobile,
+  `/tmp/kodex-concurrency-chrome-firefox.log`. Production Workspace и stores
+  используют stateful typed HTTP/WebSocket: 2→10 активных и 11-й QUEUED,
+  queue/interrupt/Stop/trash, drafts/history, project switch, rejoin и старый
+  requestRef. После мутаций снимки соседних диалогов неизменны.
+  Эта проверка не доказывает backend admission, реальный controller restart
+  или UI-команду retry; последние остаются обязательными отдельными пунктами.
+- NOT RUN: WebKit — отсутствуют пять системных библиотек; ОС не изменялась.
+  Chromium является обязательным браузерным профилем, Firefox — дополнительным.
+- Стандартная `make test-control-plane-postgres` теперь включает все девять
+  обязательных assistant/organization/component suites; новый путь не скрыт
+  за отдельным фильтром. Прежний avatar lifecycle также остаётся в default.
+
+Все результаты этого блока относятся к рабочему дереву после `479f269f`, а не
+к новому immutable checkpoint или live acceptance. Окончательный SHA и повтор
+обязательных проверок будут зафиксированы после заморозки общего дерева.
+
+Дополнительный системный аудит до checkpoint:
+
+- Actual SYSTEM claim проверен в disposable PG: bootstrap без version pin
+  следует current, custom binding после новой публикации остаётся на старой
+  immutable версии, selective rebind создаёт следующий RuntimeRevision с
+  новой точной версией. Проверены response и durable safe snapshot.
+- Стандартный PostgreSQL прогон: девять suites PASS, 99,934 с, Avatar отдельно
+  PASS 1,296 с. После него добавляется ещё fresh owner-before-digest guard
+  организационного образа; этот прогон не выдаётся за доказательство этой
+  последующей правки.
+- Полный frontend: 324 suites / 2180 unit PASS; lint/typecheck/build PASS;
+  31 Chromium synthetic сценарий PASS. Дополнительные четыре ORG-сценария
+  после локальной flex-правки подтвердили header SVG 20×20 на 1440/390 RU/EN.
+  Исторический CSS socket reset до API сохранился как FAIL, два последующих
+  полных прогона прошли. Форматирование owner identity и допуск данных в cache
+  разделяются; оставшийся PROJECT DTO self-anchor устраняется во всех
+  затронутых secret/environment/image путях, не только в image store.
+- Подготовка раскатки нашла repo-owned ordering gap: новый builder runtime
+  ConfigMap и source-bound runtime ConfigMaps выбранных CP/broker/frontend
+  применяются до соответствующих Deployment. CA, credential и другие
+  компоненты этой точечной стадией не переписываются.
+- Read-only ORG image history/impact ещё использовал PROJECT resolver; новый
+  закрытый resolver читает точный scope существующего recipe/mapping. Generic
+  организационные create/update/copy/detach этим не добавляются.
+- Проверка восстановленного образа выявила provenance gap обоих scopes:
+  RESTORE менял generation, но managed revision mapping оставался прежним.
+  Исправление выпускает новую immutable revision штатной owner-транзакцией;
+  target eligibility и исторические mapping не ослабляются.
+- Render contract ещё не принят: первый запуск использовал host Go 1.27.1
+  вместо закреплённого 1.26.6; следующие source-provenance проверки закрыто
+  отклонили дерево, изменившееся во время render. Итоговый прогон выполняется
+  только после freeze, с Go 1.26.6. Неуспешные попытки не названы PASS.
+- Отдельная disposable оснастка forward-upgrade старых PREPARED/APPLIED
+  zero/nonzero plan snapshots до нового server-owned протокола готовится
+  без отключения triggers, rollback схемы или legacy decoder.
+
+Финальный readback рабочего дерева волны 3.5 перед checkpoint:
+
+- PASS: стандартный PostgreSQL набор всех девяти suites — 101,636 с,
+  Avatar — 1,312 с; FAIL/SKIP нет. Лог
+  `/tmp/kodex-impact-scope-final-postgres.log`, SHA256
+  `59616097e2d906c7b97e240e5efe9e10ee41dba93d9dafbc56a9ce17b5318acb`.
+  Восстановленный PROJECT/ORGANIZATION образ проходит свежую managed revision,
+  exact generation, повтор RESTORE, promotion и impact/rebind. Подписанный
+  PROJECT контекст не получает организационные history/impact/prepare/apply
+  даже с неверными digest/OCC; отзыв OWNER не оставляет receipt или мутацию.
+- PASS: полный CP unit/vet после последних production-правок;
+  `/tmp/kodex-owner-consumer-latest-control-plane.log`.
+- PASS: отдельный публичный `make test-impact-owner-snapshot-upgrade` —
+  4,683 с; `/tmp/kodex-impact-owner-root-upgrade.log`. Двенадцать старых
+  PREPARED/APPLIED zero/nonzero plans и receipts остаются неизменяемыми,
+  повторная migration ничего не переписывает; новые планы принимают только
+  server-owned protocol 2. Исторический GET отклоняется теми же production
+  SQL, свежий exact owner snapshot читается. Это SQL/migration proof, не
+  доказательство RPC replay authority.
+- Исправлен найденный scoped review дефект rollout: новые ConfigMap selectors
+  ограничены namespace `kodex-system` и точными именами. Общий несекретный
+  `kodex-platform-endpoints` публикуется до CP и gateway, включая их точечный
+  rollout. CA, Secrets и одноимённые ресурсы другого проекта не выбираются.
+- Последние неуспешные PG попытки относились к новым test fixtures: неполный
+  recipe, syntactically invalid OCC и отсутствующий synthetic source digest.
+  Они исправлены каноническими input/fixture, не ослаблением production
+  admission или owner guards; итоговый полный повтор указан выше.
+- PASS: frontend после общей owner/lifetime границы — 325 suites / 2189 tests,
+  полный ESLint, forced vue-tsc, application/document synthetic builds и
+  e2e TypeScript. Итоговый combined Chromium — 31/31, 57,0 с; четыре ошибки
+  первого прогона были missing bootstrap в отдельной synthetic build fixture,
+  исправлены явным OWNER bootstrap, не обходом production guard. Визуально
+  проверены RU 1440/390, icon 20 px и controls 32 px без overflow.
+  Stateful concurrent Chromium/Firefox 12/12 — отдельная предыдущая проверка;
+  UI-команда retry именно assistant-turn пока NOT RUN и остаётся в плане.
+
+Этот блок по-прежнему относится к замороженному рабочему дереву на базе
+`479f269f`, а не к обслуживаемой миграции или полному завершению цели.
+
+Итоговый локальный RoleImage render contract на замороженном дереве — PASS,
+Go 1.26.6; `/tmp/kodex-owner-consumer-frozen-render.log`. Проверены source
+provenance, 14 Go-cache contracts, 6 configuration selectors на 65 synthetic
+ресурсах, положительный EMAIL render и 39 негативных EMAIL сценариев.
+Найденные пробелы SYSTEM RunPage artifacts/retry проверяются следующей
+волной; этот checkpoint не объявляется полной приёмкой всех чатов.

@@ -73,6 +73,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if json.Unmarshal(storedPayload, &result) != nil {
 			return command.Result{}, errs.ErrConflict
 		}
+		if err := repository.validateImpactOwnerReceipt(ctx, tx, scope, input, result); err != nil {
+			return command.Result{}, err
+		}
 		if err := repository.refreshMemoryReceipt(ctx, tx, scope, &result); err != nil {
 			return command.Result{}, err
 		}

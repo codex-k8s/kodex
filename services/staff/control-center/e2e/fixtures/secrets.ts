@@ -251,6 +251,8 @@ export async function checkSecretEditor(
     consumers: [
       {
         environmentRef: "environment_synthetic",
+        scopeKind: "PROJECT",
+        organizationRef: "org_synthetic",
         environmentVersion: 19,
         environmentVersionRef: "source_synthetic",
         projectRef,

@@ -158,6 +158,8 @@ for (const width of [390, 2900]) {
               (outcome, index) => ({
                 ref: `item_rotation_${String(index)}`,
                 consumer: {
+                  scopeKind: "PROJECT",
+                  organizationRef: "org_synthetic",
                   environmentRef: `environment_rotation_${String(index)}`,
                   environmentVersion: 9,
                   environmentVersionRef: `version_rotation_${String(index)}`,
@@ -252,14 +254,9 @@ for (const width of [390, 2900]) {
         exact: true,
       })
       .click();
-    await expect(
-      dialog.getByRole("button", {
-        name: "Повторить исходный запрос",
-        exact: true,
-      }),
-    ).toBeVisible();
+    await expect(dialog).toContainText("PUBLISHED");
+    await expect(dialog).toContainText("published_environment_rotation");
     await expect(page).toHaveURL(/planRef=plan_rotation/);
-    page.on("dialog", (value) => value.accept());
     await page.reload();
     dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("PUBLISHED");

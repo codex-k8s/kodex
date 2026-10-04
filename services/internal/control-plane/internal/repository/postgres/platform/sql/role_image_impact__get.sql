@@ -7,4 +7,4 @@ JOIN control_plane.managed_configuration_sets configuration ON configuration.id=
 JOIN control_plane.managed_configuration_revisions revision ON revision.id=plan.revision_id
  AND revision.organization_id=plan.organization_id AND revision.configuration_set_id=configuration.id
 JOIN control_plane.image_artifacts artifact ON artifact.id=plan.artifact_id AND artifact.organization_id=plan.organization_id
-WHERE plan.organization_id=@organization_id::uuid AND plan.actor_id=@actor_id::uuid AND plan.ref=@plan_ref;
+WHERE plan.organization_id=@organization_id::uuid AND plan.actor_id=@actor_id::uuid AND plan.ref=@plan_ref AND plan.owner_snapshot_revision=2;

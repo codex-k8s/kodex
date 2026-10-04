@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { assertActiveRuntimeResourceIdentity } from "@/features/runtime/active-resource-owner";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import type {
   RuntimeEnvironmentDraft,
   RuntimeEnvironmentDraftSpecification,
@@ -22,7 +25,6 @@ import {
   transitionEnvironmentDraft,
 } from "./environment-drafts";
 import {
-  assertRuntimeResourceAddressIdentity,
   runtimeResourceAddressKey,
   type RuntimeResourceAddress,
 } from "./resource-scope";
@@ -54,10 +56,12 @@ const emit = defineEmits<{
   busy: [value: boolean];
 }>();
 const draft = ref<RuntimeEnvironmentDraft>();
+const { t } = useI18n();
 const plan = ref<RevisionImpactPlan>();
 const problem = ref<AppProblem>();
 const busy = ref(false);
 const pending = ref<PublicationAttempt>();
+const missingPlan = ref(false);
 const saveAttempt = ref<{
   key: string;
   fingerprint: string;
@@ -90,7 +94,7 @@ const freshAuthNeeded = computed(
 );
 
 function checkDraft(value: RuntimeEnvironmentDraft): void {
-  assertRuntimeResourceAddressIdentity(
+  assertActiveRuntimeResourceIdentity(
     props.resourceScope,
     value,
     props.environment.organizationRef,
@@ -292,9 +296,66 @@ async function reconcile(): Promise<void> {
     previous = draft.value;
   if (!attempt || !previous) return;
   await run(async () => {
-    const report = await currentResult(
-      restorePublicationImpact(attempt.planRef, controller.signal),
-    );
+    let report: Awaited<ReturnType<typeof restorePublicationImpact>>;
+    try {
+      report = await currentResult(
+        restorePublicationImpact(
+          attempt.planRef,
+          controller.signal,
+          props.environment.organizationRef,
+        ),
+      );
+    } catch (error) {
+      if (asProblem(error).status === 404) {
+        const fresh = await currentResult(
+          readEnvironmentDraft(
+            props.resourceScope,
+            previous.ref,
+            controller.signal,
+          ),
+        );
+        assertActiveRuntimeResourceIdentity(
+          props.resourceScope,
+          fresh,
+          props.environment.organizationRef,
+        );
+        if (
+          fresh.ref !== attempt.ownerRef ||
+          fresh.environmentRef !== props.environment.ref
+        )
+          throw new Error(
+            "Assistant environment publication recovery owner mismatch",
+          );
+        if (
+          fresh.state === "PUBLISHED" &&
+          fresh.publishedEnvironmentRef === props.environment.ref
+        ) {
+          forgetPublicationAttempt(
+            "RUNTIME_ENVIRONMENT",
+            fresh.ref,
+            window.sessionStorage,
+          );
+          pending.value = undefined;
+          missingPlan.value = false;
+          draft.value = fresh;
+          plan.value = undefined;
+          emit("draftSaved", fresh);
+          return;
+        }
+        checkDraft(fresh);
+        missingPlan.value =
+          fresh.state === "VALID" &&
+          fresh.version === attempt.version &&
+          fresh.version === previous.version &&
+          Boolean(fresh.validationDigest) &&
+          fresh.validationDigest === previous.validationDigest &&
+          fresh.baseVersionRef === previous.baseVersionRef &&
+          fresh.baseRevision === previous.baseRevision &&
+          environmentDraftFingerprint(fresh.specification) ===
+            environmentDraftFingerprint(previous.specification);
+      }
+      throw error;
+    }
     const current = await currentResult(
       readEnvironmentDraft(
         props.resourceScope,
@@ -302,7 +363,7 @@ async function reconcile(): Promise<void> {
         controller.signal,
       ),
     );
-    assertRuntimeResourceAddressIdentity(
+    assertActiveRuntimeResourceIdentity(
       props.resourceScope,
       current,
       props.environment.organizationRef,
@@ -344,6 +405,65 @@ async function reconcile(): Promise<void> {
       );
   });
 }
+async function reprepareMissingPlan(): Promise<void> {
+  const attempt = pending.value,
+    previous = draft.value;
+  if (
+    !attempt ||
+    !previous ||
+    !missingPlan.value ||
+    busy.value ||
+    dirty.value ||
+    !props.valid ||
+    !props.canEdit
+  )
+    return;
+  if (
+    !(await requestConfirmation({
+      title: t("managed.impact"),
+      message: t("assistant.resources.reprepareImpactHelp"),
+      confirmLabel: t("assistant.resources.reprepareImpact"),
+    }))
+  )
+    return;
+  await run(async () => {
+    const fresh = await currentResult(
+      readEnvironmentDraft(
+        props.resourceScope,
+        previous.ref,
+        controller.signal,
+      ),
+    );
+    checkDraft(fresh);
+    if (
+      fresh.ref !== attempt.ownerRef ||
+      fresh.version !== attempt.version ||
+      fresh.version !== previous.version ||
+      fresh.state !== "VALID" ||
+      !fresh.validationDigest ||
+      fresh.validationDigest !== previous.validationDigest ||
+      fresh.baseVersionRef !== previous.baseVersionRef ||
+      fresh.baseRevision !== previous.baseRevision ||
+      environmentDraftFingerprint(fresh.specification) !==
+        environmentDraftFingerprint(previous.specification)
+    )
+      throw new Error(
+        "Assistant environment draft changed before impact recovery",
+      );
+    const next = await currentResult(
+      prepareEnvironmentPublication(fresh, controller.signal, idempotencyKey()),
+    );
+    forgetPublicationAttempt(
+      "RUNTIME_ENVIRONMENT",
+      fresh.ref,
+      window.sessionStorage,
+    );
+    draft.value = fresh;
+    pending.value = undefined;
+    missingPlan.value = false;
+    plan.value = next;
+  });
+}
 watch(busy, (value) => emit("busy", value));
 watch(
   [scopeKey, () => props.environment.ref, () => props.initialDraftRef],
@@ -354,6 +474,7 @@ watch(
     draft.value = undefined;
     plan.value = undefined;
     pending.value = undefined;
+    missingPlan.value = false;
     saveAttempt.value = undefined;
     busy.value = false;
     problem.value = undefined;
@@ -397,6 +518,14 @@ onBeforeUnmount(() => {
       </button>
       <button v-if="pending" class="button" :disabled="busy" @click="reconcile">
         {{ $t("runtime.reload") }}
+      </button>
+      <button
+        v-if="pending && missingPlan"
+        class="button"
+        :disabled="busy || dirty || !valid"
+        @click="reprepareMissingPlan"
+      >
+        {{ $t("assistant.resources.reprepareImpact") }}
       </button>
       <button
         v-if="freshAuthNeeded && draft"

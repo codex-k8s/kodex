@@ -173,6 +173,28 @@ for (const width of [1440, 390])
         page.locator(".assistant-environment-settings__image"),
       ).toContainText("Среда помощника");
       await expect(page.locator(".environment-draft-actions")).toBeVisible();
+      const headerIcon = page.locator(
+        ".assistant-environment-settings__general .section-header > svg",
+      );
+      const iconBounds = await headerIcon.boundingBox();
+      expect(iconBounds?.width).toBe(20);
+      expect(iconBounds?.height).toBe(20);
+      const details = page.locator(".tool-details");
+      await expect(details).not.toHaveAttribute("open");
+      await details.locator("summary").click();
+      await expect(details).toHaveAttribute("open", "");
+      await expect(details.locator("textarea").first()).toHaveValue(
+        "Проверка рабочего дерева",
+      );
+      await expect(details.locator("textarea").last()).toHaveValue("status");
+      expect(
+        (await details.locator("textarea").first().boundingBox())?.height,
+      ).toBe(72);
+      await details.locator("summary").click();
+      await expect(details).not.toHaveAttribute("open");
+      await expect(details.locator("textarea").first()).toHaveValue(
+        "Проверка рабочего дерева",
+      );
       await expect(page.locator(".runtime-resource-links a")).toHaveCount(4);
       await expect(
         page.locator(".assistant-environment-settings__advanced"),

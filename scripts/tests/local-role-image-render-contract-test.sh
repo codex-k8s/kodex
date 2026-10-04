@@ -28,6 +28,7 @@ done
   fail 'source root is invalid'
 timeout 30s python3 "$source_root/scripts/tests/registry-credential-files-test.py"
 timeout 30s python3 "$source_root/scripts/tests/worker-grant-rollout-test.py"
+timeout 30s python3 "$source_root/scripts/tests/local-runtime-config-selectors-test.py"
 # Общий cache не пересекается с исходниками: его writable mounts не должны
 # открывать Pod доступ на запись к serving clone.
 [[ -n "$cache_root" ]] || cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/kodex-dev/render-contract"
@@ -116,6 +117,23 @@ builder_apply_line=$(rg -n -F 'apply_render image-supply-chain-controllers' \
 [[ -n "$catalog_apply_line" && -n "$builder_apply_line" &&
   "$catalog_apply_line" -lt "$builder_apply_line" ]] ||
   fail 'new trusted runner digest must enter the catalog before builder rollout'
+builder_configuration_apply_line=$(rg -n -F 'apply_render supply-chain-builder-configuration' \
+  "$source_root/tools/dev/deploy-local.sh" | cut -d: -f1)
+[[ -n "$builder_configuration_apply_line" &&
+  "$catalog_apply_line" -lt "$builder_configuration_apply_line" &&
+  "$builder_configuration_apply_line" -lt "$builder_apply_line" ]] ||
+  fail 'exact builder toolchain configuration must precede supply-chain controller rollout'
+core_configuration_first_line=$(rg -n -F 'apply_render core-runtime-configuration' \
+  "$source_root/tools/dev/deploy-local.sh" | head -n 1 | cut -d: -f1)
+core_configuration_last_line=$(rg -n -F 'apply_render core-runtime-configuration' \
+  "$source_root/tools/dev/deploy-local.sh" | tail -n 1 | cut -d: -f1)
+core_deployment_first_line=$(rg -n -F 'apply_render core-application' \
+  "$source_root/tools/dev/deploy-local.sh" | head -n 1 | cut -d: -f1)
+[[ -n "$core_configuration_first_line" && -n "$core_configuration_last_line" &&
+  -n "$core_deployment_first_line" &&
+  "$core_configuration_first_line" -le "$core_configuration_last_line" &&
+  "$core_configuration_last_line" -lt "$core_deployment_first_line" ]] ||
+  fail 'source-bound core runtime configuration must precede selected application rollout'
 rg -Fq 'role environment catalog readback mismatch' \
   "$source_root/tools/dev/deploy-local.sh" ||
   fail 'local deploy does not compare the applied role environment catalog'

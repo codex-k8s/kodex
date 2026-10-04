@@ -1,3 +1,4 @@
+import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sdk = vi.hoisted(() => ({
@@ -27,8 +28,11 @@ import {
   revealRuntimeSecret,
   revokeRuntimeSecret,
   rotateRuntimeSecret,
+  readRuntimeSecret,
 } from "./api";
 import type { RuntimeSecret } from "./model";
+import { usePlatformStore } from "@/features/platform/store";
+import type { BootstrapState } from "@/shared/api/generated/openapi/types.gen";
 
 const secret: RuntimeSecret = {
   scopeKind: "PROJECT",
@@ -70,6 +74,37 @@ describe("runtime secrets API adapter", () => {
           "X-CSRF-Token": "c".repeat(43),
         }),
     );
+  });
+  it("не делает HTTP без текущего bootstrap owner", async () => {
+    usePlatformStore().bootstrap = undefined;
+    await expect(
+      readRuntimeSecret(
+        secret.ref,
+        secret.projectRef,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("anchor");
+    expect(sdk.getRuntimeSecret).not.toHaveBeenCalled();
+  });
+  it("закрыто отклоняет поздний metadata ответ после смены owner", async () => {
+    let resolve!: (
+      value: Awaited<ReturnType<typeof response<RuntimeSecret>>>,
+    ) => void;
+    sdk.getRuntimeSecret.mockReturnValue(
+      new Promise((ready) => {
+        resolve = ready;
+      }),
+    );
+    const read = readRuntimeSecret(
+      secret.ref,
+      secret.projectRef,
+      new AbortController().signal,
+    );
+    usePlatformStore().bootstrap = {
+      organizationRef: "org_foreign",
+    } as BootstrapState;
+    resolve(await response({ ...secret, organizationRef: "org_foreign" }));
+    await expect(read).rejects.toThrow("changed");
   });
 
   it("передаёт серверу project, поиск и cursor", async () => {
@@ -206,3 +241,5 @@ describe("runtime secrets API adapter", () => {
     },
   );
 });
+
+beforeEach(() => initializeRuntimeOwnerFixture("org_synthetic"));
