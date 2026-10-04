@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
-for (const component of ['runner', 'session-archive']) for (const sudo of [false, true]) test(`${component} seed uses exact ${sudo ? 'sudo k3s' : 'ordinary kubectl'} prefix through port-forward`, () => {
+for (const component of ['runner', 'session-archive', 'role-image-builder']) for (const sudo of [false, true]) test(`${component} seed uses exact ${sudo ? 'sudo k3s' : 'ordinary kubectl'} prefix through port-forward`, () => {
   const root=mkdtempSync(join(tmpdir(),'kodex-seed-prefix-'));
   try {
     const bin=join(root,'bin'), state=join(root,'state'), log=join(root,'calls.jsonl');
@@ -14,17 +14,19 @@ for (const component of ['runner', 'session-archive']) for (const sudo of [false
     writeFileSync(join(state,'image-supply-chain-tools-docker-tag'),`kodex-local/image-admission-tools:${'a'.repeat(64)}`);
     writeFileSync(join(state,'agent-runner-image'),`registry.invalid/runner@sha256:${'b'.repeat(64)}`);
     writeFileSync(join(state,'cache','agent-runner-fixture.oci.tar'),'fixture');
-    if (component === 'session-archive') {
+    if (component !== 'runner') {
+      const platformCache=component==='role-image-builder'?join(state,'cache','image-supply-chain'):join(state,'cache');
+      if(component==='role-image-builder')mkdirSync(platformCache,{mode:0o700});
       const oci=join(root,'oci'); mkdirSync(oci); mkdirSync(join(oci,'blobs')); mkdirSync(join(oci,'blobs','sha256'));
       const blob=(value,mediaType)=>{const bytes=Buffer.from(value),sha=createHash('sha256').update(bytes).digest('hex');writeFileSync(join(oci,'blobs','sha256',sha),bytes);return {mediaType,digest:`sha256:${sha}`,size:bytes.length};};
       const layer=blob('preserved fixture layer','application/vnd.oci.image.layer.v1.tar');
-      const config=blob(JSON.stringify({os:'linux',architecture:'amd64',config:{Entrypoint:['/usr/local/bin/session-archive']}}),'application/vnd.oci.image.config.v1+json');
+      const config=blob(JSON.stringify({os:'linux',architecture:'amd64',config:{Entrypoint:[`/usr/local/bin/${component}`]}}),'application/vnd.oci.image.config.v1+json');
       const manifest=blob(JSON.stringify({schemaVersion:2,config,layers:[layer]}),'application/vnd.oci.image.manifest.v1+json');
-      manifest.annotations={'org.opencontainers.image.ref.name':`local-${'c'.repeat(64)}`,'io.containerd.image.name':`registry.local.kodex/kodex/session-archive:local-${'c'.repeat(64)}`};
+      manifest.annotations={'org.opencontainers.image.ref.name':`local-${'c'.repeat(64)}`,'io.containerd.image.name':`registry.local.kodex/kodex/${component}:local-${'c'.repeat(64)}`};
       writeFileSync(join(oci,'index.json'),JSON.stringify({schemaVersion:2,manifests:[manifest]}));
       writeFileSync(join(oci,'oci-layout'),JSON.stringify({imageLayoutVersion:'1.0.0'}));
-      writeFileSync(join(state,'session-archive-image'),`registry.local.kodex/kodex/session-archive@${manifest.digest}`);
-      const archive=spawnSync('/usr/bin/tar',['-cf',join(state,'cache',`session-archive-${'c'.repeat(64)}.oci.tar`),'-C',oci,'index.json','oci-layout','blobs'],{encoding:'utf8'});
+      writeFileSync(join(state,`${component}-image`),`registry.local.kodex/kodex/${component}@${manifest.digest}`);
+      const archive=spawnSync('/usr/bin/tar',['-cf',join(platformCache,`${component}-${'c'.repeat(64)}.oci.tar`),'-C',oci,'index.json','oci-layout','blobs'],{encoding:'utf8'});
       assert.equal(archive.status,0,archive.stderr);
       // Отдельный archive consumer не зависит от runner cache/state.
       rmSync(join(state,'agent-runner-image'));

@@ -207,6 +207,28 @@ func TestWorkerIdentityKeepsRestoredSourceOwnedByNativeWriter(t *testing.T) {
 				job.Annotations[sourcePVCUIDAnnotation] != "pvc-uid" {
 				t.Fatal("worker lost its canonical volume, task entrypoint or source PVC binding")
 			}
+			if scenario.kind != "RESTORE" {
+				if len(pod.InitContainers) != 0 {
+					t.Fatal("non-restore task received a restore preparer")
+				}
+				return
+			}
+			if len(pod.InitContainers) != 1 {
+				t.Fatal("restore task lacks its exact directory preparer")
+			}
+			prepare := pod.InitContainers[0]
+			if prepare.Name != "restore-prepare" || prepare.Image != pod.Containers[0].Image ||
+				len(prepare.Args) != 1 || prepare.Args[0] != "prepare-restore" || len(prepare.Command) != 0 ||
+				prepare.SecurityContext == nil || *prepare.SecurityContext.RunAsUser != 10001 ||
+				*prepare.SecurityContext.RunAsGroup != 10001 || *prepare.SecurityContext.AllowPrivilegeEscalation ||
+				!*prepare.SecurityContext.ReadOnlyRootFilesystem || len(prepare.SecurityContext.Capabilities.Add) != 0 ||
+				len(prepare.SecurityContext.Capabilities.Drop) != 1 || prepare.SecurityContext.Capabilities.Drop[0] != "ALL" ||
+				len(prepare.Env) != 0 || len(prepare.VolumeMounts) != 2 ||
+				prepare.VolumeMounts[0].Name != "task" || !prepare.VolumeMounts[0].ReadOnly ||
+				prepare.VolumeMounts[1].Name != "session" || prepare.VolumeMounts[1].MountPath != "/workspace/.kodex/state" ||
+				len(prepare.Resources.Limits) != 2 {
+				t.Fatal("restore preparer widened identity, mounts, credentials or execution bounds")
+			}
 		})
 	}
 }

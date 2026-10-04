@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,8 +15,133 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
+
+const fullRestoreTaskFile = "/var/run/config/kodex/session-archive/task.json"
+
+func fullRestoreSnapshotTask(t *testing.T) model.Task {
+	t.Helper()
+	pvc, err := runtimecontract.SessionPVCName("ses_abcdefgh")
+	if err != nil {
+		t.Fatal("fixture PVC binding is invalid")
+	}
+	body := []byte("{\"type\":\"session_meta\"}\n")
+	hash := sha256.Sum256(body)
+	return model.Task{TaskRef: "sat_abcdefgh", Kind: "SNAPSHOT", OrganizationRef: "org_abcdefgh",
+		SessionRef: "ses_abcdefgh", ProviderAccountRef: "pacc_abcdefgh", RuntimeRevisionRef: "rrev_abcdefgh",
+		RuntimeRevisionVersion: 1, RuntimeRevisionDigest: stringDigest('a'), ContentGeneration: 1,
+		CodexSessionID: "00000000-0000-4000-8000-000000000001", PVCName: pvc, InputDigest: stringDigest('b'),
+		SourceRelativePath: ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000001.jsonl",
+		SourceSHA256:       hex.EncodeToString(hash[:]), SourceSizeBytes: int64(len(body)),
+		TargetObjectKey: "session-archive/v1/org_abcdefgh/ses_abcdefgh/g1/sat_abcdefgh-a1.tar", Attempt: 1}
+}
+
+func fullRestoreFixtureSnapshot(t *testing.T) (*objectstoragetest.Store, model.Result) {
+	t.Helper()
+	task := fullRestoreSnapshotTask(t)
+	root := t.TempDir()
+	path := filepath.Join(root, task.SourceRelativePath)
+	if os.MkdirAll(filepath.Dir(path), 0o750) != nil || os.WriteFile(path, []byte("{\"type\":\"session_meta\"}\n"), 0o640) != nil {
+		t.Fatal("create bounded synthetic snapshot source")
+	}
+	store := objectstoragetest.New()
+	result, err := Snapshot(t.Context(), store, root, task)
+	if err != nil {
+		t.Fatal("create verified synthetic archive receipt")
+	}
+	return store, result
+}
+
+// Только disposable kernel-container с tmpfs /workspace и отдельными test binaries.
+func TestPreparedRestoreThenCurrentWorkspaceAndNativeCapture(t *testing.T) {
+	if os.Getenv("KODEX_TEST_FULL_RESTORE_ABI") != "1" {
+		return
+	}
+	if os.Geteuid() != 0 {
+		t.Fatal("isolated full ABI driver identity is invalid")
+	}
+	runnerBinary := os.Getenv("KODEX_TEST_RUNNER_CAPTURE_BINARY")
+	prepareBinary := os.Getenv("KODEX_TEST_RESTORE_PREPARE_BINARY")
+	for path, expected := range map[string]string{runnerBinary: "runner-capture.test", prepareBinary: "restore-prepare.test"} {
+		info, err := os.Lstat(path)
+		if err != nil || !filepath.IsAbs(path) || filepath.Base(path) != expected || !info.Mode().IsRegular() {
+			t.Fatal("isolated full ABI fixture executable is invalid")
+		}
+	}
+	archiveBinary, err := os.Executable()
+	if err != nil {
+		t.Fatal("isolated archive executable is unavailable")
+	}
+	run := func(binary, test, stage string, uid uint32, failure bool) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+		command := exec.CommandContext(ctx, binary, "-test.run", "^"+test+"$")
+		command.Env = []string{"KODEX_TEST_FULL_RESTORE_ABI=1", "KODEX_TEST_RESTORE_WORKSPACE=/workspace", "KODEX_TEST_RESTORE_MODE=" + stage}
+		if failure {
+			command.Env = append(command.Env, "KODEX_TEST_RESTORE_PREPARE_EXPECT_FAILURE=1")
+		}
+		command.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: uid, Groups: []uint32{29000}}}
+		if command.Run() != nil {
+			t.Fatalf("isolated full RESTORE ABI stage failed: %s", stage)
+		}
+	}
+	if os.Chown("/workspace", 0, 29000) != nil || os.Chmod("/workspace", 0o2770) != nil {
+		t.Fatal("prepare isolated workspace volume root")
+	}
+	run(runnerBinary, "TestRestoredWorkspaceGuardKernelFixture", "PARENT_PREPARE", 10001, false)
+	state := "/workspace/.kodex/state"
+	if os.Mkdir(state, 0o770) != nil || os.Chown(state, 0, 29000) != nil || os.Chmod(state, 0o2770) != nil {
+		t.Fatal("prepare isolated kubelet state volume root")
+	}
+	_, receipt := fullRestoreFixtureSnapshot(t)
+	task := fullRestoreSnapshotTask(t)
+	task.Kind, task.TargetObjectKey = "RESTORE", ""
+	task.Archive = &model.ArchiveBinding{ArchiveRef: "sar_abcdefgh", FormatVersion: receipt.FormatVersion,
+		ObjectKey: receipt.ObjectKey, ObjectVersion: receipt.ObjectVersion, ObjectETag: receipt.ObjectETag,
+		ObjectDigest: receipt.ObjectDigest, ObjectSizeBytes: receipt.ObjectSizeBytes,
+		SourceRelativePath: task.SourceRelativePath, SourceSHA256: task.SourceSHA256, SourceSizeBytes: task.SourceSizeBytes}
+	raw, err := json.Marshal(task)
+	if err != nil || os.WriteFile(fullRestoreTaskFile, raw, 0o444) != nil {
+		t.Fatal("write exact synthetic immutable restore task")
+	}
+	run(prepareBinary, "TestPrepareRestoredHomeKernelFixture", "DIRECTORY_PREPARE", 10001, false)
+	home := filepath.Join(state, "codex-home")
+	if os.Chown(home, 10002, 29000) != nil {
+		t.Fatal("prepare isolated wrong-owner negative")
+	}
+	run(prepareBinary, "TestPrepareRestoredHomeKernelFixture", "WRONG_OWNER", 10001, true)
+	if os.Chown(home, 10001, 29000) != nil || os.Remove(home) != nil || os.Symlink("/tmp", home) != nil {
+		t.Fatal("prepare isolated symlink negative")
+	}
+	run(prepareBinary, "TestPrepareRestoredHomeKernelFixture", "SYMLINK", 10001, true)
+	if os.Remove(home) != nil {
+		t.Fatal("clear isolated negative symlink")
+	}
+	run(prepareBinary, "TestPrepareRestoredHomeKernelFixture", "DIRECTORY_PREPARE", 10001, false)
+	run(archiveBinary, "TestFullPreparedRestoreKernelFixture", "RESTORE", 10002, false)
+	run(runnerBinary, "TestRestoredWorkspaceGuardKernelFixture", "WORKSPACE_GUARD", 10001, false)
+	run(runnerBinary, "TestRestoredRolloutCaptureFixture", "FULL_NATIVE_WRITER", 10002, false)
+}
+
+func TestFullPreparedRestoreKernelFixture(t *testing.T) {
+	if os.Getenv("KODEX_TEST_FULL_RESTORE_ABI") != "1" || os.Getenv("KODEX_TEST_RESTORE_MODE") != "RESTORE" {
+		return
+	}
+	if os.Geteuid() != 10002 || os.Getenv("KODEX_TEST_RESTORE_WORKSPACE") != "/workspace" {
+		t.Fatal("isolated native restore identity is invalid")
+	}
+	task, err := model.DecodeFile(fullRestoreTaskFile)
+	if err != nil {
+		t.Fatal("read exact synthetic restore task")
+	}
+	store, _ := fullRestoreFixtureSnapshot(t)
+	if _, err := Restore(t.Context(), store, "/workspace", task); err != nil {
+		t.Fatal("verified native archive restore failed")
+	}
+}
 
 func TestSnapshotRestoreAndDeleteExactArchive(t *testing.T) {
 	t.Run("PROJECT", func(t *testing.T) { snapshotRestoreAndDeleteExactArchive(t, "prj_abcdefgh") })

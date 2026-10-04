@@ -181,6 +181,9 @@ case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is in
 [[ "$session_archive_image" =~ ^registry\.local\.kodex/kodex/session-archive@sha256:[a-f0-9]{64}$ &&
   "$session_archive_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'local session archive image must use an exact manifest digest'
+[[ "$role_image_builder_image" =~ ^registry\.local\.kodex/kodex/role-image-builder@sha256:[a-f0-9]{64}$ &&
+  "$role_image_builder_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'local role image builder must use an exact platform manifest digest'
 [[ "$stt_hot_reload_image" =~ ^registry\.local\.kodex/kodex/stt-hot-reload@sha256:[a-f0-9]{64}$ &&
   "$stt_hot_reload_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'local STT hot-reload image must use an exact manifest digest'
@@ -398,12 +401,14 @@ runner_digest=${runner_image#*@}
 runtime_runner_image="$promoted_pull_host/kodex/agent-runner@$runner_digest"
 session_archive_digest=${session_archive_image#*@}
 runtime_session_archive_image="$promoted_pull_host/kodex/session-archive@$session_archive_digest"
+role_image_builder_digest=${role_image_builder_image#*@}
+runtime_role_image_builder_image="$promoted_pull_host/kodex/role-image-builder@$role_image_builder_digest"
 admission_tools_digest=${image_admission_tools_image#*@}
 admission_tools_sha256=${image_admission_tools_image#*@sha256:}
 frontend_sha256=$("$source_root/tools/dev/resolve-local-dockerfile-frontend.sh" \
   --source-root "$source_root" --format digest)
 [[ "$frontend_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'Dockerfile frontend digest is invalid'
-ROLE_IMAGE_BUILDER_IMAGE="$role_image_builder_image" \
+ROLE_IMAGE_BUILDER_IMAGE="$runtime_role_image_builder_image" \
 IMAGE_ADMISSION_IMAGE="$image_admission_image" \
 IMAGE_ADMISSION_TOOLS_IMAGE="$image_admission_tools_image" \
 AUTHORITY_IMAGE="$authority_image" \
@@ -1697,13 +1702,13 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'Control Plane internal caller ingress is incomplete'
 
 PROMOTED_PULL_HOST="$promoted_pull_host" \
-ROLE_IMAGE_BUILDER_IMAGE="$role_image_builder_image" \
+ROLE_IMAGE_BUILDER_IMAGE="$runtime_role_image_builder_image" \
 IMAGE_ADMISSION_IMAGE="$image_admission_image" \
 IMAGE_ADMISSION_TOOLS_IMAGE="$image_admission_tools_image" \
 AUTHORITY_IMAGE="$authority_image" \
 RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   --arg pullHost "$promoted_pull_host" \
-  --arg builderImage "$role_image_builder_image" \
+  --arg builderImage "$runtime_role_image_builder_image" \
   --arg admissionImage "$image_admission_image" \
   --arg toolsImage "$image_admission_tools_image" \
   --arg authorityImage "$authority_image" \

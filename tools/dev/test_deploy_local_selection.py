@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import json
 import re
+import os
 import unittest
 
 
@@ -175,6 +176,74 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], [accepted])
         self.assertIn("live image admission runtime configuration readback mismatch", source)
+
+    def test_supply_chain_image_admission_registry_is_exact_and_gates_controller(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        names = ["kodex-image-admission-controller-jobs",
+                 "kodex-image-admission-controller-workspaces",
+                 "kodex-image-admission-proof-release"]
+        previous = stage.index('apply_render image-admission-owner-intent')
+        for step, kind in (("policies", "ValidatingAdmissionPolicy"),
+                           ("bindings", "ValidatingAdmissionPolicyBinding")):
+            match = re.search(r"apply_render image-admission-controller-" + step + r"\s+'([^']*)'", stage)
+            self.assertIsNotNone(match)
+            self.assertLess(previous, match.start())
+            previous = match.start()
+            accepted = [{"kind": kind, "metadata": {"name": name}} for name in names]
+            rejected = [{"kind": other, "metadata": {"name": name}}
+                        for other in ("Secret", "ConfigMap", "Deployment",
+                                      "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding")
+                        for name in names + [names[0] + "-shadow", "other-project"]
+                        if other != kind or name not in names]
+            result = subprocess.run(["jq", "-c", match.group(1)], text=True,
+                                    capture_output=True, timeout=5,
+                                    input="\n".join(json.dumps(item) for item in accepted + rejected))
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], accepted)
+        gate = stage.index('      readback_local_image_admission_policies')
+        self.assertLess(previous, gate)
+        self.assertLess(gate, stage.index('apply_render image-supply-chain-controllers'))
+        self.assertLess(stage.index('pause_local_image_admission_controller'), previous)
+        readback = source[source.index('readback_local_image_supply_chain() {'):]
+        self.assertIn('  readback_local_image_admission_policies', readback)
+
+    def test_image_admission_readback_rejects_live_scan_drift_and_incomplete_registry(self):
+        source = SCRIPT.read_text()
+        functions = "\n".join(re.search(r"(?ms)^" + name + r"\(\) \{.*?^\}", source).group(0)
+                              for name in ("canonical_runtime_admission_specs",
+                                           "readback_local_image_admission_policies"))
+        command = functions + '''
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+yq() { printf '%s\\n' "$EXPECTED_SPEC"; }
+kubectl() { printf '{"spec":%s}\\n' "$ACTUAL_SPEC"; }
+render=synthetic-render
+readback_local_image_admission_policies
+'''
+        expected = {"failurePolicy": "Fail", "matchConstraints": {
+            "resourceRules": [{"resources": ["jobs"]}]},
+            "validations": [{"expression": "scan tmp == 32Gi"}]}
+        defaulted = json.loads(json.dumps(expected))
+        defaulted["matchConstraints"].update({"matchPolicy": "Equivalent",
+                                            "namespaceSelector": {}, "objectSelector": {}})
+        defaulted["matchConstraints"]["resourceRules"][0]["scope"] = "*"
+        drift = json.loads(json.dumps(defaulted))
+        drift["validations"][0]["expression"] = "scan tmp == 1Gi"
+        for rendered, actual, error in (
+            (json.dumps(expected), defaulted, None),
+            (json.dumps(expected), drift, "readback mismatch"),
+            ("", defaulted, "registry is incomplete"),
+            (json.dumps(expected) + "\n" + json.dumps(expected), defaulted, "registry is incomplete"),
+        ):
+            with self.subTest(error=error):
+                env = dict(os.environ, EXPECTED_SPEC=rendered, ACTUAL_SPEC=json.dumps(actual))
+                result = subprocess.run(["bash", "-euo", "pipefail", "-c", command],
+                                        env=env, capture_output=True, text=True, timeout=5)
+                if error is None:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(error, result.stderr)
 
     def test_control_plane_catalog_precedes_start_and_pins_pod_template(self):
         source = SCRIPT.read_text()

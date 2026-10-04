@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
 )
 
 // Этот процесс запускается отдельной archive kernel-fixture с UID native writer.
@@ -21,13 +22,17 @@ func TestRestoredRolloutCaptureFixture(t *testing.T) {
 		return
 	}
 	workspace := os.Getenv("KODEX_TEST_RESTORE_WORKSPACE")
-	if (mode != "WRONG_RESTORE_OWNER" && mode != "NATIVE_WRITER_RESTORE_OWNER") || os.Geteuid() != 10002 ||
-		filepath.Dir(workspace) != os.TempDir() || !strings.HasPrefix(filepath.Base(workspace), "kodex-session-restore-") {
+	fullABI := mode == "FULL_NATIVE_WRITER" && os.Getenv("KODEX_TEST_FULL_RESTORE_ABI") == "1" && workspace == "/workspace"
+	if (mode != "WRONG_RESTORE_OWNER" && mode != "NATIVE_WRITER_RESTORE_OWNER" && !fullABI) || os.Geteuid() != 10002 ||
+		(!fullABI && (filepath.Dir(workspace) != os.TempDir() || !strings.HasPrefix(filepath.Base(workspace), "kodex-session-restore-"))) {
 		t.Fatal("isolated runner fixture binding is invalid")
 	}
 	relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000001.jsonl"
 	path := filepath.Join(workspace, relative)
 	input := model.Input{WorkspaceRoot: workspace, CodexHome: filepath.Join(workspace, ".kodex/state/codex-home")}
+	if fullABI && secureDirectory(input.CodexHome) != nil {
+		t.Fatal("restored directory does not satisfy the current provider trust boundary")
+	}
 	if mode == "WRONG_RESTORE_OWNER" {
 		if writer, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0); err == nil {
 			writer.Close()
@@ -75,5 +80,24 @@ func TestRestoredRolloutCaptureFixture(t *testing.T) {
 	owner := info.Sys().(*syscall.Stat_t)
 	if owner.Uid != 10002 || owner.Gid != 29000 {
 		t.Fatal("capture changed the canonical restored source owner")
+	}
+}
+
+func TestRestoredWorkspaceGuardKernelFixture(t *testing.T) {
+	if os.Getenv("KODEX_TEST_FULL_RESTORE_ABI") != "1" {
+		return
+	}
+	if os.Geteuid() != 10001 || os.Getenv("KODEX_TEST_RESTORE_WORKSPACE") != "/workspace" {
+		t.Fatal("workspace guard fixture identity is invalid")
+	}
+	mode := os.Getenv("KODEX_TEST_RESTORE_MODE")
+	if mode == "PARENT_PREPARE" {
+		if security.EnsureSharedWorkspaceDirectory(".kodex") != nil {
+			t.Fatal("current workspace parent preparation failed")
+		}
+		return
+	}
+	if mode != "WORKSPACE_GUARD" || security.EnsureSharedWorkspaceDirectory(".kodex/state/codex-home") != nil {
+		t.Fatal("restored directory failed the unchanged current workspace guard")
 	}
 }

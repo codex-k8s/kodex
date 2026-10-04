@@ -1250,11 +1250,33 @@ wait_stable_workloads() {
   fail 'local workloads did not retain a stable Ready state'
 }
 
+readback_local_image_admission_policies() {
+  local admission_name admission_kind expected_admission actual_admission
+  # Полный закрытый набор относится к одному executable contract; presence
+  # не доказывает, что Job renderer обслуживается актуальной policy.
+  for admission_name in kodex-image-admission-controller-jobs \
+    kodex-image-admission-controller-workspaces kodex-image-admission-proof-release; do
+    for admission_kind in ValidatingAdmissionPolicy ValidatingAdmissionPolicyBinding; do
+      expected_admission=$(ADMISSION_KIND="$admission_kind" ADMISSION_NAME="$admission_name" \
+        yq -o=json -I=0 'select(.kind == strenv(ADMISSION_KIND) and
+          .metadata.name == strenv(ADMISSION_NAME)) | .spec' "$render" | canonical_runtime_admission_specs)
+      [[ "$(jq -r length <<<"$expected_admission")" == 1 ]] ||
+        fail 'image admission policy registry is incomplete'
+      actual_admission=$(kubectl get "$admission_kind/$admission_name" -o json | \
+        jq -c .spec | canonical_runtime_admission_specs) ||
+        fail 'image admission policy readback failed'
+      [[ "$actual_admission" == "$expected_admission" ]] ||
+        fail 'image admission policy readback mismatch'
+    done
+  done
+}
+
 readback_local_image_supply_chain() {
   local expected_policy actual_policy policy_resource controller workloads expected_deployments
   local expected_digest actual_digest catalog_expected_digest catalog_actual_digest
   local expected_admission_configuration actual_admission_configuration
   local target_registry promoted_pull_host resource name
+  readback_local_image_admission_policies
   expected_admission_configuration=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
       .metadata.name == "kodex-image-admission") | .data
@@ -1606,6 +1628,17 @@ PY
           (.kind == "ImageAdmissionPolicyParameters" and
            .metadata.name == "kodex-image-admission-policy"))
       '
+      # Parameters уже применены, controller остановлен. Сначала exact policy,
+      # затем её binding и полный spec readback до запуска нового renderer.
+      apply_render image-admission-controller-policies '
+        select(.kind == "ValidatingAdmissionPolicy" and
+          (.metadata.name | test("^kodex-image-admission-(controller-jobs|controller-workspaces|proof-release)$")))
+      '
+      apply_render image-admission-controller-bindings '
+        select(.kind == "ValidatingAdmissionPolicyBinding" and
+          (.metadata.name | test("^kodex-image-admission-(controller-jobs|controller-workspaces|proof-release)$")))
+      '
+      readback_local_image_admission_policies
       apply_render image-registry-workloads '
         select(.kind == "Deployment" and
           (.metadata.name | test("^kodex-image-registry-(pull|push|promotion|staging-read|evidence)$")))

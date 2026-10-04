@@ -7,6 +7,7 @@ import type {
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import { assertRunOwner } from "@/features/runs/run-owner";
+import { serverMessageKey } from "@/shared/ui/server-message";
 
 export type PresentedRunEvent = RunEvent & {
   displaySummary: string;
@@ -319,26 +320,14 @@ const serviceProgressCodes = new Set([
   "WORKLOAD_SCHEDULED",
   "MODEL_REQUEST_RUNNING",
 ]);
-const assistantFailureMessageCodes = new Set([
-  "PROVIDER_RESULT_UNVERIFIABLE",
-  "PROVIDER_RESULT_UNKNOWN",
-  "PROVIDER_AUTHENTICATION_REQUIRED",
-  "PROVIDER_USAGE_LIMIT_EXCEEDED",
-  "PROVIDER_OVERLOADED",
-  "PROVIDER_POLICY_DENIED",
-  "RUNTIME_CONFIGURATION_STALE",
-  "RUNTIME_PROVIDER_UNAVAILABLE",
-]);
-
 export function assistantFailureMessageKey(
   value: string | undefined,
   state: string | undefined,
 ): string | undefined {
   if (state !== "FAILED") return undefined;
   const code = value?.trim().replace(/^i18n:/, "");
-  return code && assistantFailureMessageCodes.has(code)
-    ? `serverMessages.${code}`
-    : undefined;
+  if (!code || !/^[A-Z][A-Z0-9_]*$/.test(code)) return undefined;
+  return serverMessageKey(`i18n:${code}`) ?? "workboard.runFailedSummary";
 }
 
 function transcriptServiceProgressCode(

@@ -15,17 +15,22 @@ SEED = ROOT / "tools/dev/seed-local-image-supply-chain.sh"
 
 
 class PlatformArchiveSeed(unittest.TestCase):
+    component = "session-archive"
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="kodex-archive-seed-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.cache = self.root / "cache"
         self.cache.mkdir(mode=0o700)
+        if self.component == "role-image-builder":
+            self.cache = self.cache / "image-supply-chain"
+            self.cache.mkdir(mode=0o700)
         self.output = self.root / "verified.oci.tar"
         self.members = {"oci-layout": b'{"imageLayoutVersion":"1.0.0"}'}
         self.layer = self.blob(b"synthetic preserved layer", "application/vnd.oci.image.layer.v1.tar")
         config = self.blob(json.dumps({"os": "linux", "architecture": "amd64", "config": {
-            "Entrypoint": ["/usr/local/bin/session-archive"]}}).encode(),
+            "Entrypoint": ["/usr/local/bin/" + self.component]}}).encode(),
             "application/vnd.oci.image.config.v1+json")
         manifest = self.blob(json.dumps({"schemaVersion": 2, "config": config,
             "layers": [self.layer]}).encode(), "application/vnd.oci.image.manifest.v1+json")
@@ -33,10 +38,10 @@ class PlatformArchiveSeed(unittest.TestCase):
         self.input_digest = "b" * 64
         manifest["annotations"] = {
             "org.opencontainers.image.ref.name": "local-" + self.input_digest,
-            "io.containerd.image.name": "registry.local.kodex/kodex/session-archive:local-" + self.input_digest,
+            "io.containerd.image.name": "registry.local.kodex/kodex/" + self.component + ":local-" + self.input_digest,
         }
         self.members["index.json"] = json.dumps({"schemaVersion": 2, "manifests": [manifest]}).encode()
-        self.archive = self.cache / ("session-archive-" + self.input_digest + ".oci.tar")
+        self.archive = self.cache / (self.component + "-" + self.input_digest + ".oci.tar")
 
     def blob(self, data, media_type):
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
@@ -52,10 +57,9 @@ class PlatformArchiveSeed(unittest.TestCase):
         self.archive.chmod(0o600)
 
     def verify(self, expected=None):
-        source = SEED.read_text()
-        script = source.split("<<'PY_ARCHIVE'", 1)[1].split("\n", 1)[1].split("\nPY_ARCHIVE", 1)[0]
-        return subprocess.run(["python3", "-", str(self.cache), expected or self.digest, str(self.output)],
-            input=script, capture_output=True, text=True, timeout=5)
+        return subprocess.run(["python3", str(ROOT / "tools/dev/verify-platform-image-archive.py"),
+            self.component, str(self.cache), expected or self.digest, str(self.output)],
+            capture_output=True, text=True, timeout=5)
 
     def test_preserved_bytes_without_any_node_image_cache(self):
         self.write_archive()
@@ -105,7 +109,8 @@ class PlatformArchiveSeed(unittest.TestCase):
         self.assertIn('runtime_session_archive_image="$promoted_pull_host/kodex/session-archive@$session_archive_digest"', renderer)
         self.assertIn('SESSION_ARCHIVE_IMAGE="$runtime_session_archive_image"', renderer)
         self.assertNotIn('SESSION_ARCHIVE_IMAGE="$session_archive_image"', renderer)
-        self.assertLess(seed.index("PY_ARCHIVE\n"), seed.index("get secret/kodex-image-promotion-writer"))
+        self.assertLess(seed.index('timeout 120s python3 "$source_root/tools/dev/verify-platform-image-archive.py"'),
+            seed.index("get secret/kodex-image-promotion-writer"))
 
     def test_actual_renderer_sets_controller_and_worker_pin(self):
         source = (ROOT / "tools/dev/render-local.sh").read_text()
@@ -133,6 +138,53 @@ class PlatformArchiveSeed(unittest.TestCase):
         self.assertEqual(self.verify().returncode, 0)
         self.output.unlink()
         self.cache.chmod(0o770)
+        self.assertNotEqual(self.verify().returncode, 0)
+
+
+class PlatformBuilderSeed(PlatformArchiveSeed):
+    component = "role-image-builder"
+
+    def test_unknown_platform_component_and_cache_key_mismatch_rejected(self):
+        self.write_archive()
+        result = subprocess.run(["python3", str(ROOT / "tools/dev/verify-platform-image-archive.py"),
+            "foreign", str(self.cache), self.digest, str(self.output)],
+            capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.output.exists())
+        self.archive.rename(self.cache / ("role-image-builder-" + "c" * 64 + ".oci.tar"))
+        self.assertNotEqual(self.verify().returncode, 0)
+
+    def test_actual_renderer_sets_durable_builder_pin(self):
+        source = (ROOT / "tools/dev/render-local.sh").read_text()
+        fragment = source.split('ROLE_IMAGE_BUILDER_IMAGE="$runtime_role_image_builder_image"', 1)[1]
+        expression = fragment.split("yq -i '", 1)[1].split("\n' \"$render\"", 1)[0]
+        expected = "pull.fixture.invalid/kodex/role-image-builder@" + self.digest
+        fixture = self.root / "builder-render.json"
+        fixture.write_text(json.dumps({"kind": "Deployment", "metadata": {"name": "role-image-builder"},
+            "spec": {"template": {"spec": {"containers": [{"name": "role-image-builder",
+                "image": "missing-node-cache"}]}}}}))
+        result = subprocess.run(["yq", "-i", expression, str(fixture)], capture_output=True, text=True,
+            env={**os.environ, "ROLE_IMAGE_BUILDER_IMAGE": expected}, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        projected = subprocess.run(["yq", "-o=json", ".", str(fixture)], capture_output=True, text=True, timeout=5)
+        self.assertEqual(projected.returncode, 0, projected.stderr)
+        container = json.loads(projected.stdout)["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(container["image"], expected)
+        self.assertEqual(container["imagePullPolicy"], "IfNotPresent")
+
+    def test_wrong_entrypoint_never_becomes_verified(self):
+        config = self.blob(json.dumps({"os": "linux", "architecture": "amd64", "config": {
+            "Entrypoint": ["/usr/local/bin/session-archive"]}}).encode(),
+            "application/vnd.oci.image.config.v1+json")
+        manifest = self.blob(json.dumps({"schemaVersion": 2, "config": config,
+            "layers": [self.layer]}).encode(), "application/vnd.oci.image.manifest.v1+json")
+        manifest["annotations"] = {
+            "org.opencontainers.image.ref.name": "local-" + self.input_digest,
+            "io.containerd.image.name": "registry.local.kodex/kodex/" + self.component + ":local-" + self.input_digest,
+        }
+        self.digest = manifest["digest"]
+        self.members["index.json"] = json.dumps({"schemaVersion": 2, "manifests": [manifest]}).encode()
+        self.write_archive()
         self.assertNotEqual(self.verify().returncode, 0)
 
 

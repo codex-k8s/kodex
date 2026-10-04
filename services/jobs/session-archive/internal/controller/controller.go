@@ -364,7 +364,7 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 			{Name: "SESSION_ARCHIVE_WORKER_TIMEOUT", Value: controller.config.WorkerTimeout.String()}},
 		VolumeMounts: mounts, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 		SecurityContext: restricted(workerUID)}
-	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
 		Labels: map[string]string{managedLabel: "true"}, Annotations: workerDiagnosticAnnotations(task, sourcePVCUID)},
 		Spec: batchv1.JobSpec{BackoffLimit: &zero, ActiveDeadlineSeconds: &deadline, TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true"}}, Spec: corev1.PodSpec{
@@ -372,6 +372,21 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 				RestartPolicy: corev1.RestartPolicyNever, EnableServiceLinks: &falseValue, Containers: []corev1.Container{container}, Volumes: volumes,
 				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPtr(true), FSGroup: int64Ptr(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			}}}}
+	if task.Kind == "RESTORE" {
+		job.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name: "restore-prepare", Image: controller.config.WorkerImage, ImagePullPolicy: corev1.PullIfNotPresent,
+			Args: []string{"prepare-restore"}, SecurityContext: restricted(10001),
+			VolumeMounts: []corev1.VolumeMount{
+				{Name: "task", MountPath: "/var/run/config/kodex/session-archive", ReadOnly: true},
+				{Name: "session", MountPath: "/workspace/.kodex/state"},
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceCPU: *quantity("50m"), corev1.ResourceMemory: *quantity("32Mi")},
+				Limits:   corev1.ResourceList{corev1.ResourceCPU: *quantity("200m"), corev1.ResourceMemory: *quantity("128Mi")},
+			},
+		}}
+	}
+	return job
 }
 
 func pvcBindingAnnotation(uid types.UID) map[string]string {

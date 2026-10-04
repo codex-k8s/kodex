@@ -1603,3 +1603,42 @@ FAIL — runtime Pod UID266c6491-9322-4b90-b082-21b1b6c297e6 Failed во вре�
 инициализации, модель ещё не стартовала. Причина init в работе; SUCCESS
 продолжения не заявляется. Safe actual prompt capture INPUT_NOT_READY —
 NOT RUN, не доказательство отсутствия контекста. Checkbox2–15 OPEN.
+
+04.10.2026 21:02 UTC, интеграционный tree поверх
+`d944ec807d2bb075e1f36d034b7585736a9074bd`:
+FAIL — новый собственный образ COMPLETED, но scanner ещё не создан.
+Действующий controller renderer задаёт scan tmp32Gi; live VAP допускает
+scan1Gi, binding Deny. Успешный managed claim не доказывает scan/admission.
+Exact runtime policy drift подтверждён read-only; OOM не заявляется.
+Исправлен repo-owned supply-chain apply: закрытые три VAP и три bindings,
+canonical full-spec readback до запуска нового controller и при readback.
+ROOT14 unit PASS.616s; actual обновление policy пока NOT RUN.
+Интегрирована durable публикация platform builder через существующий TLS
+promotion writer; exact promoted pull host и закрытый node/installer
+repository kodex/role-image-builder. Общая bounded preserved OCI проверка
+проверяет platform, entrypoint, tag/cache key, bytes и полный digest graph;
+preload остаётся дополнительным cache, не источником сохранности образа.
+ROOT OCI19 PASS1.328s, CLI6 PASS8.874s, credential13 PASS3.021s,
+authorizer unit PASS.328s; detached полный render PASS на frozen input.
+Actual durable publication/node CRI pull пока NOT RUN.
+FAIL — QA36B terminal RUNTIME_UNAVAILABLE, callback diagnostic
+WORKSPACE_INIT_EXITED_NONZERO. Restore fileUID10002 исправлен, но созданный
+каталог codex-home имеет UID10002 вместо обязательного UID10001/sharedGID.
+В работе non-root RESTORE preparer; production workspace/ownership guards
+не ослабляются. Actual successful continuation и prompt proof NOT RUN.
+Chrome собственная вкладка22 обновляется; чужие вкладки не изменяются.
+Попытка live mobile UPDATE screenshot показала другой ранее выбранный чат,
+поэтому mobile UPDATE остаётся NOT RUN. Console после reload чиста.
+Checkbox2–15 OPEN; incident token rotation по-прежнему NOT RUN.
+
+04.10.2026 21:05 UTC, тот же интеграционный tree:
+ROOT archive worker/controller/archive unit PASS.018/.047/.027s, Codex4.563s.
+Non-root RESTORE preparer10001 создаёт только canonical codex-home2770/GID29000
+до worker10002; immutable RESTORE task binding, native file owner и прежние
+guards сохранены. Detached actual kernel PASS.13s: prepare → verified restore
+→ unchanged workspace/provider guards → append/fsync → capture нового digest;
+foreign owner/symlink/task mismatch закрыто отказаны. Live повтор NOT RUN.
+ROOT transcript108unit PASS.738s. Actual screenshot выявил missing fallback
+translation key: runs.runFailedSummary вместо существующего
+workboard.runFailedSummary. Исправлен ключ; live повтор пока NOT RUN.
+Ошибка не объявляется устранённой только по unit assertion имени ключа.

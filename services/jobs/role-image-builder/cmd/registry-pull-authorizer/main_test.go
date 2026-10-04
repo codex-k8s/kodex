@@ -108,10 +108,11 @@ func TestInstallationNodePullProfileIsBounded(t *testing.T) {
 	if profile.configFile != "/identity/pull-dockerconfigjson" {
 		t.Fatalf("installation credential path = %q", profile.configFile)
 	}
-	if len(profile.repositories) != 3 ||
+	if len(profile.repositories) != 4 ||
 		profile.repositories[0] != "kodex/agent-runner" ||
 		profile.repositories[1] != "kodex/roles" ||
-		profile.repositories[2] != "kodex/session-archive" {
+		profile.repositories[2] != "kodex/session-archive" ||
+		profile.repositories[3] != "kodex/role-image-builder" {
 		t.Fatalf("installation repositories = %v", profile.repositories)
 	}
 }
@@ -119,6 +120,9 @@ func TestInstallationNodePullProfileIsBounded(t *testing.T) {
 func TestPlatformArchivePullIsLimitedToNodeIdentities(t *testing.T) {
 	t.Parallel()
 	for name, profile := range pullProfiles() {
+		if allowed := pathInRepositories("/v2/kodex/role-image-builder/manifests/sha256:abc", profile.repositories); allowed != (name == "kodex-node-pull-installer") {
+			t.Fatalf("platform builder pull profile %s allowed=%v", name, allowed)
+		}
 		allowed := pathInRepositories("/v2/kodex/session-archive/manifests/sha256:abc", profile.repositories)
 		if allowed != (name == "kodex-node-pull-installer") {
 			t.Fatalf("platform archive pull profile %s allowed=%v", name, allowed)
@@ -126,6 +130,8 @@ func TestPlatformArchivePullIsLimitedToNodeIdentities(t *testing.T) {
 		for _, path := range []string{
 			"/v2/kodex/session-archive-other/manifests/sha256:abc",
 			"/v2/kodex/session-archive/tags/list",
+			"/v2/kodex/role-image-builder-other/manifests/sha256:abc",
+			"/v2/kodex/role-image-builder/tags/list",
 		} {
 			if pathInRepositories(path, profile.repositories) {
 				t.Fatalf("unrelated archive path allowed for %s", name)
@@ -153,6 +159,12 @@ func TestPlatformArchiveActualNodeAuthorization(t *testing.T) {
 		method, path, failure string
 	}{
 		{http.MethodGet, "/v2/kodex/session-archive/manifests/sha256:abc", ""},
+		{http.MethodGet, "/v2/kodex/role-image-builder/manifests/sha256:abc", ""},
+		{http.MethodHead, "/v2/kodex/role-image-builder/blobs/sha256:abc", ""},
+		{http.MethodPost, "/v2/kodex/role-image-builder/blobs/uploads/", "request_shape"},
+		{http.MethodDelete, "/v2/kodex/role-image-builder/manifests/sha256:abc", "request_shape"},
+		{http.MethodGet, "/v2/kodex/role-image-builder-other/manifests/sha256:abc", "node_repository"},
+		{http.MethodGet, "/v2/kodex/role-image-builder/tags/list", "node_repository"},
 		{http.MethodHead, "/v2/kodex/session-archive/blobs/sha256:abc", ""},
 		{http.MethodPost, "/v2/kodex/session-archive/blobs/uploads/", "request_shape"},
 		{http.MethodDelete, "/v2/kodex/session-archive/manifests/sha256:abc", "request_shape"},

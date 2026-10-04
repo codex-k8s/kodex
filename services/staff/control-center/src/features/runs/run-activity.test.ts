@@ -49,9 +49,29 @@ describe("закрытая локализация failed результата", 
       assistantFailureMessageKey(`Ошибка ${code}`, "FAILED"),
     ).toBeUndefined();
   });
-  it("не интерпретирует unknown/error payload или substring как известную ошибку", () => {
+  it.each(["RUNTIME_WORKLOAD_EXITED", "FUTURE_RUNTIME_ERROR"])(
+    "не выводит сырой terminal code %s в сообщении",
+    (code) => {
+      expect(assistantFailureMessageKey(code, "FAILED")).toBe(
+        "workboard.runFailedSummary",
+      );
+      expect(assistantFailureMessageKey(`i18n:${code}`, "FAILED")).toBe(
+        "workboard.runFailedSummary",
+      );
+      expect(assistantFailureMessageKey(code, "SUCCEEDED")).toBeUndefined();
+    },
+  );
+  it("использует существующий каталог, а не дополнительный список кодов", () => {
+    expect(
+      assistantFailureMessageKey("INTERACTION_AUTHORITY_CHANGED", "FAILED"),
+    ).toBe("serverMessages.INTERACTION_AUTHORITY_CHANGED");
+  });
+  it("не интерпретирует error payload или обычный текст как код ошибки", () => {
     expect(
       assistantFailureMessageKey("i18n:PROVIDER_FUTURE_ERROR", "FAILED"),
+    ).toBe("workboard.runFailedSummary");
+    expect(
+      assistantFailureMessageKey("Работа завершилась с ошибкой", "FAILED"),
     ).toBeUndefined();
     expect(
       assistantFailureMessageKey(

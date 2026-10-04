@@ -1424,12 +1424,15 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   restart/readback k3s на каждом node.
   Локальный preload не заменяет durable публикацию platform worker: kubelet
   вправе удалить неиспользуемый cache до следующей фоновой задачи. Repo-owned
-  session-archive OCI перед публикацией проходит bounded проверку всех blobs,
+  session-archive и role-image-builder OCI перед публикацией проходят bounded проверку всех blobs,
   descriptors, platform и exact manifest digest; private копия исходных байтов
   передаётся существующему promotion writer по mTLS/application identity.
   Controller и его worker используют один exact digest через настроенный
   promoted pull host. Node и installer получают только закрытый repository
-  `kodex/session-archive`, не право произвольной публикации или role admission.
+  `kodex/session-archive` и `kodex/role-image-builder`, не право произвольной
+  публикации или role admission. Одинаковые guards связывают repository,
+  entrypoint, cache input digest/tag и platform; builder использует тот же
+  promoted pull host без зависимости от сохранности preload.
   Unknown исход публикации проверяется отдельным readback без повторного import;
   task/lease/grants, UID, content generation и immutable receipts не меняются.
 - `RuntimeRevision`, runtime-controller client, credential broker, workload
@@ -1458,10 +1461,18 @@ control-plane. Политика строится из фактического S
 Восстановленный native history принадлежит фактическому writer/capture UID,
 а не UID контейнера, передающего запрос. В текущем Pod ABI Codex app-server
 и захват rollout исполняются в `provider-runtime` с UID10002; RESTORE создаёт
-файлы с тем же UID, group29000 и mode0640. Main runner UID10001 не получает
+файлы с тем же UID, group29000 и mode0640. Отдельный non-root init RESTORE
+с UID10001 заранее создаёт только точный корень `codex-home` с group29000,
+setgid и mode2770: существующие init/provider guards требуют эту directory
+identity. Init читает тот же immutable RESTORE task, не получает credentials
+object storage, RPC tokens, произвольные paths или новую authority.
+Main runner UID10001 не получает
 CAP_CHOWN или право менять чужой rollout. Kernel-регрессия проверяет append
 новых history bytes и их последующий exact digest от UID10002, а чужой UID10001
-остаётся отрицательным случаем. SNAPSHOT/DELETE сохраняют прежние identities,
+остаётся отрицательным случаем. Полная kernel-проверка проходит directory
+preparation → restore → текущий workspace guard → native append/capture;
+чужой владелец, symlink и mismatched task закрыто отклоняются.
+SNAPSHOT/DELETE сохраняют прежние identities,
 claim/fence и минимальные capabilities. Уже созданный wrong-owner PVC не
 исправляется ручным chown: нужен штатный архив и новый owner-bound RESTORE
 с проверенным immutable archive receipt, без подмены terminal outcome.
