@@ -174,12 +174,77 @@ describe("публичное состояние образа помощника"
     expect(html).toContain("Допуск отклонён");
     expect(html).toContain('data-state="REJECTED"');
   });
+  it.each([
+    { admissionVerdict: "REJECTED", promotionState: "PENDING" },
+    { admissionVerdict: "ACCEPTED", promotionState: "REJECTED" },
+    { admissionVerdict: "REJECTED", promotionState: "REJECTED" },
+  ] as const)(
+    "публикация текущего отклонённого образа явно заблокирована %o",
+    async (state) => {
+      for (const locale of ["ru", "en"] as const) {
+        i18n.global.locale.value = locale;
+        const html = await summary(artifact(state), true);
+        const lifecycle = html.slice(
+          html.indexOf('class="image-lifecycle"'),
+          html.indexOf('class="editor-layout"'),
+        );
+        const promotion = lifecycle.slice(lifecycle.lastIndexOf("<article"));
+        expect(promotion).toContain(
+          locale === "ru"
+            ? "Заблокирована допуском"
+            : "Blocked by image admission",
+        );
+        expect(promotion).toContain('data-state="REJECTED"');
+        expect(promotion).not.toContain(
+          locale === "ru" ? "Ожидает проверки" : "Pending review",
+        );
+      }
+    },
+  );
+  it("не переносит отказ предыдущего artifact/generation на текущую публикацию", async () => {
+    for (const stale of [
+      { buildRef: "build_previous" },
+      { recipeGeneration: 0 },
+    ]) {
+      const html = await summary(
+        artifact({
+          ...stale,
+          admissionVerdict: "REJECTED",
+          promotionState: "REJECTED",
+        }),
+        true,
+      );
+      const lifecycle = html.slice(
+        html.indexOf('class="image-lifecycle"'),
+        html.indexOf('class="editor-layout"'),
+      );
+      const promotion = lifecycle.slice(lifecycle.lastIndexOf("<article"));
+      expect(promotion).toContain("Ожидает проверки");
+      expect(promotion).not.toContain("Заблокирована допуском");
+    }
+  });
   it("старый artifact не доказывает admission новой сборки", async () => {
     expect(
       await summary(
         artifact({ buildRef: "build_previous", recipeGeneration: 0 }),
       ),
     ).toContain("Ожидает допуска");
+  });
+  it("сворачивает полные digest в технические сведения, не скрывая verdict", async () => {
+    const value = artifact({ admissionVerdict: "REJECTED" });
+    const html = await summary(value, true);
+    const card = html.slice(
+      html.indexOf('class="panel artifact-card"'),
+      html.indexOf("</section>", html.indexOf('class="panel artifact-card"')),
+    );
+    const detailsStart = card.indexOf("<details");
+    expect(detailsStart).toBeGreaterThan(0);
+    expect(card.slice(0, detailsStart)).toContain('data-state="REJECTED"');
+    expect(card).toMatch(/<summary[^>]*>Технические сведения<\/summary>/);
+    expect(card).not.toMatch(/<details[^>]*\sopen(?:[\s=>])/);
+    const details = card.slice(detailsStart, card.indexOf("</details>"));
+    expect(details).toContain(value.manifestDigest);
+    expect(details).toContain(value.provenanceSha256);
   });
   it("допуск прежнего поколения не переносится на изменённый рецепт", async () => {
     recipe.generation = 2;

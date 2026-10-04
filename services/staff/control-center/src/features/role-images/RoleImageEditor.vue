@@ -148,6 +148,13 @@ const currentBuild = computed(() => latestBuild(builds.value));
 const artifact = computed(() =>
   props.recipeRef ? store.artifacts[props.recipeRef] : undefined,
 );
+const currentArtifact = computed(() =>
+  currentBuild.value?.recipeGeneration === recipe.value?.generation &&
+  artifact.value?.buildRef === currentBuild.value?.ref &&
+  artifact.value?.recipeGeneration === currentBuild.value?.recipeGeneration
+    ? artifact.value
+    : undefined,
+);
 const revisions = computed(() =>
   props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
 );
@@ -183,6 +190,11 @@ const promotionEvidenceState = computed(() => {
   return promotionReceipt.value?.state;
 });
 const promotionVisualState = computed(() => {
+  if (
+    currentArtifact.value?.admissionVerdict === "REJECTED" ||
+    currentArtifact.value?.promotionState === "REJECTED"
+  )
+    return "REJECTED";
   if (recipe.value?.promotedImageReady) return "PROMOTED";
   if (promotionReceipt.value?.state === "PROMOTING") return "RUNNING";
   return promotionReceipt.value?.state ?? "PENDING";
@@ -192,17 +204,11 @@ const summaryStatus = computed<{ state: string; label?: string }>(() => {
   const state = roleImageState(recipe.value, currentBuild.value);
   if (state === "PROMOTED") return { state, label: t("roleImages.promoted") };
   if (state !== "COMPLETED") return { state };
-  const currentArtifact =
-    currentBuild.value?.recipeGeneration === recipe.value.generation &&
-    artifact.value?.buildRef === currentBuild.value.ref &&
-    artifact.value.recipeGeneration === currentBuild.value.recipeGeneration
-      ? artifact.value
-      : undefined;
-  if (!currentArtifact)
+  if (!currentArtifact.value)
     return { state: "PENDING", label: t("roleImages.awaitingAdmission") };
-  if (currentArtifact.admissionVerdict === "REJECTED")
+  if (currentArtifact.value.admissionVerdict === "REJECTED")
     return { state: "REJECTED", label: t("roleImages.admissionRejected") };
-  if (promotionReceipt.value?.imageArtifactRef === currentArtifact.ref) {
+  if (promotionReceipt.value?.imageArtifactRef === currentArtifact.value.ref) {
     if (promotionReceipt.value.state === "FAILED") return { state: "FAILED" };
     if (promotionReceipt.value.state === "PROMOTING")
       return { state: "PROMOTING" };
@@ -628,7 +634,14 @@ onBeforeUnmount(() => {
               {{ recipe.promotedImageReference }}
             </small>
           </div>
-          <StatusBadge :state="promotionVisualState" />
+          <StatusBadge
+            :state="promotionVisualState"
+            :label="
+              promotionVisualState === 'REJECTED'
+                ? t('roleImages.promotionBlockedByAdmission')
+                : undefined
+            "
+          />
         </article>
       </section>
 
@@ -992,42 +1005,48 @@ onBeforeUnmount(() => {
           <section class="panel artifact-card">
             <ShieldCheck :size="20" aria-hidden="true" />
             <h2>{{ t("roleImages.evidence") }}</h2>
-            <dl v-if="artifact">
-              <div>
-                <dt>{{ t("roleImages.manifestDigest") }}</dt>
-                <dd>
-                  <code>{{ artifact.manifestDigest }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>SBOM SHA-256</dt>
-                <dd>
-                  <code>{{ artifact.sbomSha256 ?? "—" }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ t("roleImages.vulnerabilityEvidence") }}</dt>
-                <dd>
-                  <code>{{ artifact.vulnerabilityEvidenceSha256 ?? "—" }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ t("roleImages.admissionVerdict") }}</dt>
-                <dd><StatusBadge :state="artifact.admissionVerdict" /></dd>
-              </div>
-              <div>
-                <dt>Provenance</dt>
-                <dd>
-                  <code>{{ artifact.provenanceSha256 }}</code>
-                </dd>
-              </div>
-              <div v-if="artifact.promotionReceiptSha256">
-                <dt>{{ t("roleImages.promotion") }}</dt>
-                <dd>
-                  <code>{{ artifact.promotionReceiptSha256 }}</code>
-                </dd>
-              </div>
-            </dl>
+            <StatusBadge v-if="artifact" :state="artifact.admissionVerdict" />
+            <details v-if="artifact">
+              <summary>{{ t("roleImages.technicalDetails") }}</summary>
+              <dl>
+                <div>
+                  <dt>{{ t("roleImages.manifestDigest") }}</dt>
+                  <dd>
+                    <code>{{ artifact.manifestDigest }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>SBOM SHA-256</dt>
+                  <dd>
+                    <code>{{ artifact.sbomSha256 ?? "—" }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ t("roleImages.vulnerabilityEvidence") }}</dt>
+                  <dd>
+                    <code>{{
+                      artifact.vulnerabilityEvidenceSha256 ?? "—"
+                    }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ t("roleImages.admissionVerdict") }}</dt>
+                  <dd><StatusBadge :state="artifact.admissionVerdict" /></dd>
+                </div>
+                <div>
+                  <dt>Provenance</dt>
+                  <dd>
+                    <code>{{ artifact.provenanceSha256 }}</code>
+                  </dd>
+                </div>
+                <div v-if="artifact.promotionReceiptSha256">
+                  <dt>{{ t("roleImages.promotion") }}</dt>
+                  <dd>
+                    <code>{{ artifact.promotionReceiptSha256 }}</code>
+                  </dd>
+                </div>
+              </dl>
+            </details>
             <StatusBadge
               v-if="promotionEvidenceState"
               :state="promotionEvidenceState"

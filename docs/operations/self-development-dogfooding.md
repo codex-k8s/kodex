@@ -1787,3 +1787,24 @@ Existing promotion+PROJECT impact PG PASS4.558s. ROOT integrated targeted unit
 Go1.26.6 PASS.093s и vet PASS. Actual SYSTEM publish ещё NOT RUN.
 Chrome own22 hard reload23:08:39, чужие вкладки не изменены.
 Checkbox2–15 остаются OPEN; полный QA/финальный dogfooding ещё NOT RUN.
+
+04.10.2026 23:33 UTC, интеграционный tree поверх
+`fdc20a0d686ad1e8652eff86e68b16dfe7800796`:
+PASS — UI текущего rejected artifact показывает «Заблокирована допуском»,
+не «Ожидает проверки»; прежний отказ не переносится на новую generation/build.
+Хеши sidebar доступны в закрытых технических сведениях. ROOT16 frontend unit
+PASS3.07s, scoped ESLint PASS; isolated24 tests/typecheck/format PASS.
+Actual desktop screenshot просмотрен, горизонтального переполнения нет;
+Console clean, owner protected recipe GET200 подтвердил generation4 и все38
+required VERIFIED. AdmissionREJECTED сохраняется; причина ещё UNKNOWN.
+PASS — stale receipt fixture закрепляет exact grant.version; Mattermost revoke
+использует допустимую HUMAN_EACH_EFFECT, owner cleanup выполняется даже после
+раннего assertion failure, через серверный Cancel с exact target/latest OCC.
+ROOT Go1.26.6 platform unit PASS.658s (PG без DSN не запускался).
+Isolated Bootstrap repeat FAIL85.12s: осталось две верхних проверки вместо16;
+receipt и OWNER_REVOKE PASS, Profile предыдущего repeat PASS21.59s.
+Email configuration CONFLICT и недопустимый gated READ fixture исследуются;
+полная Bootstrap suite не называется успешной.
+Штатное повторное admission ещё не запускалось: диагностика готовится для
+заранее известного recipe/generation без извлечения browser cookies.
+Checkbox2–15 OPEN, environment publish и внутренний dogfooding ещё NOT RUN.
