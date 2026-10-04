@@ -1,10 +1,12 @@
 import type {
   Artifact,
+  AssistantConversation,
   AssistantTurn,
   Run,
   RunEvent,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
+import { assertRunOwner } from "@/features/runs/run-owner";
 
 export type PresentedRunEvent = RunEvent & {
   displaySummary: string;
@@ -292,9 +294,10 @@ function isTranscriptService(item: RunActivityItem): boolean {
 // Работающий статус принадлежит последней записи текущего exact хода/попытки.
 export function activeTranscriptItemId(
   items: readonly RunActivityItem[],
+  closedExecutionKeys: readonly string[] = [],
 ): string | null {
   const current = new Map<string, NonNullable<RunActivityItem["execution"]>>();
-  const closed = new Set<string>();
+  const closed = new Set<string>(closedExecutionKeys);
   const states = new Map<string, string>();
   const sessionKey = (execution: NonNullable<RunActivityItem["execution"]>) =>
     JSON.stringify([execution.runRef, execution.nodeRef, execution.sessionRef]);
@@ -333,6 +336,88 @@ export function activeTranscriptItemId(
     );
   });
   return candidates.at(-1)?.id ?? null;
+}
+
+// Terminal receipt может прийти раньше terminal RunEvent. Привязка проверяется
+// по owner snapshot и persisted USER/node, а не по текущему экрану или receipt ref.
+export function assistantTerminalTranscriptScopes(
+  conversation: AssistantConversation | undefined,
+  organizationRef: string | undefined,
+  run: Run | undefined,
+  nodes: readonly RunNode[],
+  events: readonly RunEvent[],
+): string[] {
+  if (
+    !conversation ||
+    !organizationRef ||
+    !run ||
+    run.source !== "SYSTEM_ASSISTANT" ||
+    run.target.type !== "SYSTEM_ASSISTANT"
+  )
+    return [];
+  try {
+    assertRunOwner(run, organizationRef);
+  } catch {
+    return [];
+  }
+  const pin = run.assistantPin;
+  if (
+    !pin ||
+    pin.conversationRef !== conversation.ref ||
+    pin.scope !== conversation.assistantScope ||
+    pin.assistantRef !== conversation.assistantRef ||
+    pin.projectRef !== conversation.projectRef ||
+    pin.profileRef !== conversation.assistantProfileRef
+  )
+    return [];
+  const terminalReceipt = conversation.turns.some(
+    (turn) =>
+      turn.role === "ASSISTANT" &&
+      turn.runRef === run.ref &&
+      ["COMPLETED", "FAILED", "CANCELLED"].includes(turn.state) &&
+      Number.isSafeInteger(turn.runVersion) &&
+      (turn.runVersion ?? 0) >= run.version,
+  );
+  const anchors = conversation.turns.filter(
+    (turn) => turn.role === "USER" && turn.runRef === run.ref,
+  );
+  const anchor = anchors.length === 1 ? anchors[0] : undefined;
+  if (!anchor) return [];
+  const keys = events.flatMap((event) => {
+    const scope = executionKey(event.execution);
+    const execution = event.execution;
+    if (
+      !scope ||
+      !execution ||
+      event.runRef !== run.ref ||
+      execution.runRef !== run.ref ||
+      execution.sessionRef !== run.sessionRef ||
+      execution.turnRef !== anchor.ref ||
+      execution.turnNumber !== anchor.sequence ||
+      execution.attempt !== run.attempt
+    )
+      return [];
+    const node = nodes.find(
+      (candidate) =>
+        candidate.ref === execution.nodeRef && candidate.runRef === run.ref,
+    );
+    if (
+      !node ||
+      node.type !== "AGENT_EXECUTION" ||
+      node.turnRef !== anchor.ref ||
+      node.attempt !== run.attempt ||
+      (node.agentRef !== undefined && node.agentRef !== pin.assistantRef)
+    )
+      return [];
+    if (
+      !terminalReceipt &&
+      !terminalTranscriptStates.has(run.state) &&
+      !terminalTranscriptStates.has(node.state)
+    )
+      return [];
+    return [scope];
+  });
+  return [...new Set(keys)];
 }
 
 export function presentRunTranscriptItems(

@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { i18n } from "@/app/i18n";
 import RunTranscript from "@/features/runs/RunTranscript.vue";
-import type { RunActivityItem } from "@/features/runs/run-activity";
+import {
+  executionKey,
+  type RunActivityItem,
+} from "@/features/runs/run-activity";
 
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 
@@ -293,9 +296,13 @@ describe("RunTranscript: компактная работа", () => {
       ...changes,
     };
   }
-  async function transcript(items: RunActivityItem[]): Promise<string> {
+  async function transcript(
+    items: RunActivityItem[],
+    closedExecutionKeys: readonly string[] = [],
+  ): Promise<string> {
     const app = createSSRApp({
-      render: () => h(RunTranscript, { items, embedded: true }),
+      render: () =>
+        h(RunTranscript, { items, embedded: true, closedExecutionKeys }),
     });
     app.use(i18n);
     return renderToString(app);
@@ -395,6 +402,26 @@ describe("RunTranscript: компактная работа", () => {
     expect(html.match(/role="status"/g)).toHaveLength(1);
     expect(html).not.toContain('class="run-transcript__execution"');
     expect(html).toContain("Этапы выполнения: 3");
+  });
+
+  it("closed exact receipt убирает dots до terminal event, не подавляя соседний running ход", async () => {
+    const current = progress("current");
+    const key = executionKey(current.execution);
+    if (!key) throw new Error("Missing synthetic execution key");
+    const html = await transcript([current], [key]);
+    expect(html).not.toContain('role="status"');
+    expect(html).toContain("run-transcript__service-history");
+    const other = progress("other", {
+      execution: {
+        ...execution,
+        runRef: "run_parallel",
+        turnRef: "trn_parallel",
+        turnNumber: 2,
+      },
+    });
+    const parallel = await transcript([current, other], [key]);
+    expect(parallel.match(/role="status"/g)).toHaveLength(1);
+    expect(parallel).toContain('data-turn-ref="trn_parallel"');
   });
 
   it("сохраняет анимацию и отключает её при reduced motion, tool preview ограничен", () => {

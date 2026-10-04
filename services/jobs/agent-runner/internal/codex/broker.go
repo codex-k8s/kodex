@@ -35,7 +35,7 @@ const (
 	providerRefreshCommitTimeout = 40 * time.Second
 	providerSandboxProbeTimeout  = 5 * time.Second
 	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
-	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s"
+	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s; notification_error: %s"
 )
 
 var (
@@ -258,6 +258,7 @@ func providerSafeFailureClass(err error) string {
 func logProviderSafeFailure(stage providerExecutionStage, err error) {
 	detail, code := "NONE", int64(0)
 	notification := "NONE"
+	notificationError := "NONE"
 	accountRead := "NONE"
 	var failure *appServerCallFailure
 	if errors.As(err, &failure) {
@@ -272,14 +273,34 @@ func logProviderSafeFailure(stage providerExecutionStage, err error) {
 				}
 			}
 			if detail == "NOTIFICATION_INVALID" {
-				notification = "UNKNOWN"
-				if _, allowed := serverNotificationMethods[failure.notification]; allowed {
-					notification = failure.notification
+				notification = safeNotificationMethod(failure.notification)
+				notificationError = "UNKNOWN"
+				switch failure.notificationError {
+				case "METHOD", "ENVELOPE", "TUPLE", "ITEM", "TIMESTAMP", "MESSAGE", "TOKEN_USAGE", "TERMINAL", "LIFECYCLE", "MCP", "PROVIDER_ERROR":
+					notificationError = failure.notificationError
 				}
 			}
 		}
 	}
-	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err), detail, code, notification, accountRead)
+	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err), detail, code, notification, accountRead, notificationError)
+}
+
+// Дополнительные методы Codex 0.160.0 разрешены только для закрытой диагностики,
+// а не для исполнения notification или расширения authority.
+func safeNotificationMethod(method string) string {
+	if _, allowed := serverNotificationMethods[method]; allowed {
+		return method
+	}
+	switch method {
+	case "thread/reverted", "thread/attachment/updated", "thread/queue/changed", "project/changed",
+		"thread/project/updated", "thread/environment/connected", "thread/environment/disconnected",
+		"autoApprovalReview/strictReviewRequired", "mcpServer/event/stream/notification", "account/gatewayOAuth/changed",
+		"modelProvider/authRecoveryStarted", "modelProvider/authRecoveryCompleted", "thread/realtime/item/started",
+		"thread/realtime/item/transcript/delta", "thread/realtime/item/completed":
+		return method
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // ServeProviderBroker запускается только в container UID 10002 без Kubernetes

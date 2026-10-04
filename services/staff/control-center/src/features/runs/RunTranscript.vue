@@ -38,15 +38,16 @@ const props = withDefaults(
     embedded?: boolean;
     groupTools?: boolean;
     activeItemId?: string | null;
+    closedExecutionKeys?: readonly string[];
   }>(),
-  { embedded: false, groupTools: true },
+  { embedded: false, groupTools: true, closedExecutionKeys: () => [] },
 );
 const emit = defineEmits<{ download: [artifact: Artifact] }>();
 const { locale, t } = useI18n();
 const serverMessage = useServerMessage();
 const activeItemId = computed(() =>
   props.activeItemId === undefined
-    ? activeTranscriptItemId(props.items)
+    ? activeTranscriptItemId(props.items, props.closedExecutionKeys)
     : props.activeItemId,
 );
 const displayItems = computed(() =>

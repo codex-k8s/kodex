@@ -104,11 +104,12 @@ type streamEvent struct {
 
 // Причина транспортного отказа закрыта и не содержит payload провайдера.
 type appServerCallFailure struct {
-	detail       string
-	code         int64
-	notification string
-	accountRead  string
-	err          error
+	detail            string
+	code              int64
+	notification      string
+	notificationError string
+	accountRead       string
+	err               error
 }
 
 func (failure *appServerCallFailure) Error() string { return failure.err.Error() }
@@ -116,6 +117,47 @@ func (failure *appServerCallFailure) Unwrap() error { return failure.err }
 
 func callFailure(detail string, err error) error {
 	return &appServerCallFailure{detail: detail, err: err}
+}
+
+// Категория выводится только из точных статических отказов parser; внешние
+// сообщения, неизвестные поля и значения не становятся диагностическими labels.
+func notificationFailure(method string, err error) error {
+	category := "UNKNOWN"
+	switch err.Error() {
+	case "Codex app-server notification method is not allowed":
+		category = "METHOD"
+	case "Codex app-server notification is invalid":
+		category = "ENVELOPE"
+	case "Codex app-server notification tuple is invalid", "Codex app-server token usage tuple is invalid":
+		category = "TUPLE"
+	case "Codex app-server item timestamp is invalid":
+		category = "TIMESTAMP"
+	case "Codex app-server thread item is invalid", "Codex app-server thread item type is invalid",
+		"Codex app-server tagged thread item is invalid", "Codex app-server thread item id is invalid", "Codex app-server MCP UI metadata is invalid":
+		category = "ITEM"
+	case "Codex app-server agent message text is invalid", "Codex app-server agent message phase is invalid",
+		"Codex app-server agent message is invalid", "Codex app-server agent message changed after completion",
+		"Codex app-server published message limit exceeded", "Codex app-server published message exceeds its bound",
+		"Codex app-server emitted duplicate final messages":
+		category = "MESSAGE"
+	case "Codex app-server token usage is invalid", "Codex app-server token usage breakdown is invalid", "Codex app-server token usage delta is invalid":
+		category = "TOKEN_USAGE"
+	case "Codex app-server terminal notification is invalid", "Codex app-server turn lifecycle is incomplete",
+		"Codex app-server successful turn carries an error", "Codex app-server completed with an unfinished native tool",
+		"Codex app-server completed without a final message", "Codex app-server terminal status is invalid":
+		category = "TERMINAL"
+	case "Codex app-server thread started notification is invalid", "Codex app-server turn started notification is invalid":
+		category = "LIFECYCLE"
+	case "Codex app-server MCP startup notification is invalid", "Codex app-server MCP startup thread is invalid",
+		"Codex app-server MCP startup diagnostic is invalid", "Codex app-server MCP startup failure reason is invalid":
+		category = "MCP"
+	case "Codex app-server error notification is invalid", "Codex app-server error retry flag is invalid":
+		category = "PROVIDER_ERROR"
+	}
+	if errors.Is(err, ErrRequiredMCPUnavailable) {
+		category = "MCP"
+	}
+	return &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: method, notificationError: category, err: err}
 }
 
 type appServer struct {
@@ -601,7 +643,7 @@ func (server *appServer) call(ctx context.Context, state *protocolState, method 
 			switch event.message.kind {
 			case messageNotification:
 				if err := state.notification(event.message.method, event.message.payload); err != nil {
-					return nil, &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: event.message.method, err: err}
+					return nil, notificationFailure(event.message.method, err)
 				}
 			case messageRequest:
 				if err := server.handleRequest(state, event.message); err != nil {
@@ -636,25 +678,25 @@ func (server *appServer) waitTerminal(ctx context.Context, state *protocolState)
 	for state.terminals == 0 {
 		select {
 		case <-ctx.Done():
-			return context.Canceled
+			return callFailure("CONTEXT_CANCELLED", context.Canceled)
 		case event, open := <-server.messages:
 			if !open {
-				return errors.New("Codex app-server closed before a terminal notification")
+				return callFailure("STREAM_CLOSED", errors.New("Codex app-server closed before a terminal notification"))
 			}
 			if event.err != nil {
-				return event.err
+				return callFailure("STREAM_INVALID", event.err)
 			}
 			switch event.message.kind {
 			case messageNotification:
 				if err := state.notification(event.message.method, event.message.payload); err != nil {
-					return err
+					return notificationFailure(event.message.method, err)
 				}
 			case messageRequest:
 				if err := server.handleRequest(state, event.message); err != nil {
-					return err
+					return callFailure("REQUEST_REJECTED", err)
 				}
 			default:
-				return errors.New("Codex app-server emitted an uncorrelated response")
+				return callFailure("RESPONSE_CORRELATION", errors.New("Codex app-server emitted an uncorrelated response"))
 			}
 		}
 	}

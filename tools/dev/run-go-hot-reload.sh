@@ -67,7 +67,13 @@ test -w "$runtime_root" || fail 'Air runtime path is not writable'
 chmod 0700 -- "$runtime_root" || fail 'cannot secure Air runtime path'
 config="$runtime_root/air.toml"
 kill_delay=$(sh "$repository_root/tools/dev/go-shutdown-budget.sh" "$name")
-entrypoint="\"$runtime_root/build/main\""
+supervisor_started=$(awk '{ sub(/^.*\) /, ""); print $20 }' "/proc/$$/stat") ||
+  fail 'Air supervisor process generation is unavailable'
+printf '%s' "$supervisor_started" | grep -Eq '^[1-9][0-9]*$' ||
+  fail 'Air supervisor process generation is invalid'
+child_supervisor="$repository_root/tools/dev/run-go-hot-child.sh"
+test -x "$child_supervisor" || fail 'development child supervisor is unavailable'
+entrypoint="\"$child_supervisor\", \"$$\", \"$supervisor_started\", \"$air_binary\", \"$runtime_root/build/main\""
 for argument in "$@"; do
   printf '%s' "$argument" | grep -Eq '^[A-Za-z0-9._:/=-]+$' || fail 'process argument is invalid'
   entrypoint="$entrypoint, \"$argument\""
@@ -92,7 +98,8 @@ poll_interval = 500
 stop_on_error = true
 send_interrupt = true
 kill_delay = "$kill_delay"
-# Повторный запуск упавшего процесса принадлежит liveness probe Kubernetes.
+# Упавший child закрывает Air через проверенный supervisor tuple. Повторный
+# запуск контейнера принадлежит Kubernetes, без ожидания startupProbe budget.
 # Air с rerun=true может параллельно породить новые процессы до остановки
 # прежнего и вызвать гонки bootstrap и занятие gRPC-порта.
 rerun = false

@@ -342,6 +342,54 @@ func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
 	}
 }
 
+func TestWaitTerminalPreservesClosedFailureDiagnostics(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name, method, detail, category string
+		payload                        json.RawMessage
+		kind                           messageKind
+		streamError                    error
+	}{
+		{name: "unknown method", method: "private-sentinel", payload: json.RawMessage(`{"private":"private-sentinel"}`), kind: messageNotification, detail: "NOTIFICATION_INVALID", category: "METHOD"},
+		{name: "known SDK unsupported method", method: "thread/attachment/updated", payload: json.RawMessage(`{}`), kind: messageNotification, detail: "NOTIFICATION_INVALID", category: "METHOD"},
+		{name: "envelope", method: "item/started", payload: json.RawMessage(`{"private":"private-sentinel"}`), kind: messageNotification, detail: "NOTIFICATION_INVALID", category: "ENVELOPE"},
+		{name: "tuple", method: "item/started", payload: json.RawMessage(`{"threadId":"other","turnId":"turn-1","startedAtMs":1,"item":{"id":"item-1","type":"unknown"}}`), kind: messageNotification, detail: "NOTIFICATION_INVALID", category: "TUPLE"},
+		{name: "item", method: "item/started", payload: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","startedAtMs":1,"item":{"id":"item-1","type":"private-sentinel"}}`), kind: messageNotification, detail: "NOTIFICATION_INVALID", category: "ITEM"},
+		{name: "stream", streamError: errors.New("private-sentinel"), detail: "STREAM_INVALID"},
+		{name: "uncorrelated", kind: messageResponse, detail: "RESPONSE_CORRELATION"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			messages := make(chan streamEvent, 1)
+			messages <- streamEvent{message: wireMessage{kind: test.kind, method: test.method, payload: test.payload}, err: test.streamError}
+			close(messages)
+			state := newProtocolState("")
+			state.threadID, state.turnID = "thread-1", "turn-1"
+			err := (&appServer{messages: messages}).waitTerminal(t.Context(), state)
+			var failure *appServerCallFailure
+			if !errors.As(err, &failure) || failure.detail != test.detail || failure.notificationError != test.category || state.terminals != 0 {
+				t.Fatal("terminal wait discarded or changed closed failure diagnostics")
+			}
+		})
+	}
+}
+
+func TestWaitTerminalClosedStreamAndCancellationDiagnostics(t *testing.T) {
+	t.Parallel()
+	messages := make(chan streamEvent)
+	close(messages)
+	err := (&appServer{messages: messages}).waitTerminal(t.Context(), newProtocolState(""))
+	var failure *appServerCallFailure
+	if !errors.As(err, &failure) || failure.detail != "STREAM_CLOSED" {
+		t.Fatal("closed terminal stream category was discarded")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	err = (&appServer{messages: make(chan streamEvent)}).waitTerminal(ctx, newProtocolState(""))
+	if !errors.Is(err, context.Canceled) || !errors.As(err, &failure) || failure.detail != "CONTEXT_CANCELLED" {
+		t.Fatal("terminal cancellation category or identity was discarded")
+	}
+}
+
 func TestProtocolErrorPreservesClosedAccountReadReason(t *testing.T) {
 	t.Parallel()
 	err := protocolError("account/read", json.RawMessage(`{"code":-32603,"message":"workspace routing discovery failed","data":{"private":"private-sentinel"}}`))

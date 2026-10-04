@@ -88,6 +88,7 @@ import {
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import {
   assistantTurnHasAuthoritativeActivity,
+  assistantTerminalTranscriptScopes,
   isTranscriptNearBottom,
 } from "@/features/runs/run-activity";
 import { runtimeProgressKey } from "@/features/runs/runtime-text";
@@ -172,6 +173,21 @@ const conversationRunEvents = computed(() =>
   conversationRunRefs.value.flatMap((runRef) =>
     Object.values(platform.events[runRef] ?? {}),
   ),
+);
+const closedTranscriptExecutionKeys = computed(() =>
+  conversationRunRefs.value.flatMap((runRef) => {
+    const run = platform.runs[runRef];
+    const graph = run
+      ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
+      : undefined;
+    return assistantTerminalTranscriptScopes(
+      store.selectedConversation,
+      platform.bootstrap?.organizationRef,
+      run,
+      graph?.nodes ?? [],
+      conversationRunEvents.value,
+    );
+  }),
 );
 function turnHasPublishedMessage(turn: AssistantTurn): boolean {
   const run = turn.runRef ? platform.runs[turn.runRef] : undefined;
@@ -2030,6 +2046,7 @@ onBeforeUnmount(() => {
                 <RunActivityView
                   v-if="conversationRunEvents.length"
                   :events="conversationRunEvents"
+                  :closed-execution-keys="closedTranscriptExecutionKeys"
                   embedded
                 />
                 <article

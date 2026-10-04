@@ -53,6 +53,11 @@ describe("AssistantWorkspace layout", () => {
       "for (const release of transcriptLeases.values()) release()",
     );
     expect(template).toContain(':events="conversationRunEvents"');
+    expect(template).toContain(
+      ':closed-execution-keys="closedTranscriptExecutionKeys"',
+    );
+    expect(source).toContain("assistantTerminalTranscriptScopes(");
+    expect(source).toContain("platform.bootstrap?.organizationRef");
     expect(template).not.toContain("runs.unscopedHistory");
     expect(source).not.toContain("hasHistoricalTurns");
     expect(source).toContain("assistantTurnHasAuthoritativeActivity(");

@@ -7,8 +7,12 @@ import { buildRunTranscriptItems } from "@/features/runs/run-activity";
 import type { RunEvent } from "@/shared/api/generated/openapi/types.gen";
 
 const props = withDefaults(
-  defineProps<{ events: readonly RunEvent[]; embedded?: boolean }>(),
-  { embedded: false },
+  defineProps<{
+    events: readonly RunEvent[];
+    embedded?: boolean;
+    closedExecutionKeys?: readonly string[];
+  }>(),
+  { embedded: false, closedExecutionKeys: () => [] },
 );
 const { t } = useI18n();
 const items = computed(() =>
@@ -17,5 +21,9 @@ const items = computed(() =>
 </script>
 
 <template>
-  <RunTranscript :items="items" :embedded="embedded" />
+  <RunTranscript
+    :items="items"
+    :embedded="embedded"
+    :closed-execution-keys="closedExecutionKeys"
+  />
 </template>

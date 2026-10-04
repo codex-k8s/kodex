@@ -7,12 +7,14 @@ import {
   publishedRunMessage,
   assistantTurnHasAuthoritativeActivity,
   activeTranscriptItemId,
+  assistantTerminalTranscriptScopes,
   presentRunTranscriptItems,
   type RunActivityItem,
   type PresentedRunEvent,
 } from "@/features/runs/run-activity";
 import type {
   AssistantTurn,
+  AssistantConversation,
   Run,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -387,6 +389,230 @@ function required<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Required test fixture is missing");
   return value;
 }
+
+describe("terminal receipt раньше terminal RunEvent", () => {
+  const user: AssistantTurn = {
+    ref: "trn_example",
+    sequence: 1,
+    role: "USER",
+    content: "Запрос",
+    state: "COMPLETED",
+    runRef: run.ref,
+    createdAt: run.createdAt,
+  };
+  const receipt: AssistantTurn = {
+    ...user,
+    ref: "trn_result",
+    sequence: 2,
+    role: "ASSISTANT",
+    state: "FAILED",
+    runVersion: 2,
+  };
+  const conversation: AssistantConversation = {
+    ref: "cnv_example",
+    version: 2,
+    title: "Диалог",
+    state: "ACTIVE",
+    assistantScope: "SYSTEM",
+    assistantRef: run.target.ref,
+    titleSource: "SERVER_DEFAULT",
+    titleRevision: 1,
+    projectRef: run.projectRef,
+    context: {
+      route: "/",
+      entityKind: "",
+      entityRef: "",
+      entityName: "",
+      allowedOperations: [],
+    },
+    turns: [user, receipt],
+    updatedAt: run.createdAt,
+  };
+  const ownedRun: Run = {
+    ...run,
+    source: "SYSTEM_ASSISTANT",
+    target: { ...run.target, type: "SYSTEM_ASSISTANT" },
+    assistantPin: {
+      scope: "SYSTEM",
+      organizationRef: "org_example",
+      conversationRef: conversation.ref,
+      assistantRef: run.target.ref,
+      projectRef: run.projectRef,
+    },
+  };
+  const boundNode = {
+    ...node,
+    agentRef: ownedRun.target.ref,
+    turnRef: user.ref,
+  };
+  const progress = {
+    ...required(events[0]),
+    message: undefined,
+    messageKind: "INTERMEDIATE_MESSAGE" as const,
+    summary: "MODEL_REQUEST_RUNNING",
+    displaySummary: "Подготовка запроса",
+    nodeState: "RUNNING" as const,
+  };
+  const scopes = (
+    changedConversation = conversation,
+    changedRun = ownedRun,
+    changedNode = boundNode,
+    changedEvent = progress,
+    organizationRef: string | undefined = "org_example",
+  ) =>
+    assistantTerminalTranscriptScopes(
+      changedConversation,
+      organizationRef,
+      changedRun,
+      [changedNode],
+      [changedEvent],
+    );
+
+  it.each(["SYSTEM", "PROJECT"] as const)(
+    "terminal %s receipt закрывает только exact pending progress",
+    (scope) => {
+      const currentConversation = {
+        ...conversation,
+        assistantScope: scope,
+        assistantProfileRef: scope === "PROJECT" ? "asstp_example" : undefined,
+      };
+      const currentRun = {
+        ...ownedRun,
+        assistantPin: {
+          ...required(ownedRun.assistantPin),
+          scope,
+          profileRef: currentConversation.assistantProfileRef,
+        },
+      };
+      const closed = scopes(currentConversation, currentRun);
+      expect(closed).toHaveLength(1);
+      const items = buildRunTranscriptItems([progress]);
+      expect(activeTranscriptItemId(items)).not.toBeNull();
+      expect(activeTranscriptItemId(items, closed)).toBeNull();
+      expect(
+        presentRunTranscriptItems(
+          items,
+          activeTranscriptItemId(items, closed),
+        )[0]?.working,
+      ).toBe(false);
+      const other = {
+        ...progress,
+        ref: "evt_parallel",
+        runRef: "run_parallel",
+        execution: {
+          ...required(progress.execution),
+          runRef: "run_parallel",
+          turnRef: "trn_parallel",
+          turnNumber: 2,
+        },
+      };
+      const parallelItems = buildRunTranscriptItems([progress, other]);
+      expect(activeTranscriptItemId(parallelItems, closed)).toBe(
+        parallelItems[1]?.id,
+      );
+    },
+  );
+
+  it.each([
+    "runRef",
+    "nodeRef",
+    "sessionRef",
+    "turnRef",
+    "turnNumber",
+    "attempt",
+  ] as const)("не подавляет другую execution.%s", (key) => {
+    const execution = required(progress.execution);
+    expect(
+      scopes(conversation, ownedRun, boundNode, {
+        ...progress,
+        execution: {
+          ...execution,
+          [key]: typeof execution[key] === "number" ? 2 : "foreign_ref",
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it("не suppress при stale/неполном receipt, foreign owner/pin/node и UNSCOPED истории", () => {
+    expect(
+      scopes({ ...conversation, turns: [user, { ...receipt, runVersion: 0 }] }),
+    ).toEqual([]);
+    expect(
+      scopes({
+        ...conversation,
+        turns: [user, { ...receipt, runVersion: undefined }],
+      }),
+    ).toEqual([]);
+    expect(
+      scopes({
+        ...conversation,
+        turns: [user, { ...receipt, state: "RUNNING" }],
+      }),
+    ).toEqual([]);
+    expect(
+      scopes({
+        ...conversation,
+        turns: [user, { ...receipt, role: "SYSTEM_RECEIPT" }],
+      }),
+    ).toEqual([]);
+    expect(
+      scopes({
+        ...conversation,
+        turns: [user, { ...user, ref: "trn_duplicate" }, receipt],
+      }),
+    ).toEqual([]);
+    expect(scopes({ ...conversation, ref: "cnv_foreign" })).toEqual([]);
+    expect(scopes({ ...conversation, assistantRef: "agt_foreign" })).toEqual(
+      [],
+    );
+    expect(
+      scopes(conversation, ownedRun, { ...boundNode, attempt: 2 }),
+    ).toEqual([]);
+    expect(
+      scopes(conversation, ownedRun, boundNode, {
+        ...progress,
+        execution: undefined,
+      }),
+    ).toEqual([]);
+    expect(
+      scopes(conversation, ownedRun, boundNode, progress, "org_foreign"),
+    ).toEqual([]);
+    expect(
+      assistantTerminalTranscriptScopes(
+        conversation,
+        undefined,
+        ownedRun,
+        [boundNode],
+        [progress],
+      ),
+    ).toEqual([]);
+    expect(scopes(conversation, { ...ownedRun, version: 3 })).toEqual([]);
+  });
+
+  it("авторитетный terminal run закрывает exact ход без будущего receipt", () => {
+    expect(
+      scopes(
+        { ...conversation, turns: [user] },
+        { ...ownedRun, state: "FAILED" },
+      ),
+    ).toHaveLength(1);
+  });
+  it("terminal owner graph закрывает только bound node до terminal run/event", () => {
+    expect(
+      scopes({ ...conversation, turns: [user] }, ownedRun, {
+        ...boundNode,
+        state: "FAILED",
+      }),
+    ).toHaveLength(1);
+    expect(
+      scopes({ ...conversation, turns: [user] }, ownedRun, {
+        ...boundNode,
+        state: "FAILED",
+        turnRef: "trn_foreign",
+      }),
+    ).toEqual([]);
+  });
+});
 
 describe("assistantTurnHasAuthoritativeActivity", () => {
   const user: AssistantTurn = {

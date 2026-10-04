@@ -513,3 +513,44 @@ PASS — финальное frontend дерево: 111 адресных unit tes
 scoped ESLint, typecheck, Prettier и diff-check. Root полный Codex unit
 повторно PASS (4.528 s). Новые provider и окончательный runner activation
 не подменяются этими локальными результатами.
+
+04.10.2026 10:22–10:30 UTC, checkpoint
+`f7adead0539b2c7c00b4564fe424580b8c18f9cb`:
+PASS — frontend build (Vite 8.46 s; прежнее предупреждение bundle), clean
+runner build/provenance: image
+`sha256:e55ec9efc52b0a8fdf3a05d9c4ff17c883d42b00258e783ae24e76f145cdb3fd`,
+binary SHA256 `749fcb2982824f1e69ab38453d7aeb2971c26ea3778931f74a9b202e68b29433`,
+provenance SHA256 `2d4d7df77fcca5186bba9da679dcd9eba6e42c9a056935d8642fe1b8e594afbd`.
+PASS — render fingerprint
+`4126e368915f7735ce090f51c11c979c7124ef6f3ed273e0f655bb907acf606b`;
+selected CP/GW/FE/egress и supply-chain activation завершились успешно.
+Warm spec и все три ready imageID совпадают с e55ec9. Source/Pod
+Workspace и run-activity hashes совпадают, дерево было чистым.
+FAIL — двенадцатый реальный ход `run_d97QVDF_TelqAV5qXiLgGeyF`:
+10:29:33 UTC `TERMINAL_WAIT`, class `PROVIDER`, detail `NONE`.
+Account/read, thread, MCP readiness и turn/start пройдены, дальнейшая причина
+UNKNOWN: waitTerminal теряет закрытую категорию ошибки. Не inference PASS.
+FAIL — screenshot `/tmp/kodex-chat-compact-active-f7adead0.png` показал
+«Работает» рядом с terminal receipt: receipt появился раньше terminal event.
+Анимация и один компактный индикатор видны, но итоговый UX ещё не принят.
+
+04.10.2026 10:31–10:37 UTC, финальное дерево перед следующим checkpoint:
+PASS — waitTerminal теперь сохраняет закрытые transport/notification failure
+категории; diagnostic-only allowlist известных методов точного SDK не
+расширяет parser acceptance или authority. Произвольные message/payload/error
+не печатаются, errors.Is/As сохранены. FAIL→PASS 7 cases; полный Codex unit
+PASS (4.513 s), адресный race PASS (1.071 s), format/diffcheck PASS.
+PASS — terminal receipt/run/node выключает «Работает» только через exact
+owner/conversation/run/node/turn/attempt binding и версию. Параллельные
+ходы, старые/чужие receipts и UNSCOPED не закрываются этим отображением.
+Frontend 123 адресных unit PASS (2.04 s), typecheck/lint/format/diffcheck PASS.
+PASS — repo-owned dev helper проверяет Air PID/starttime/executable/ancestor,
+wait/join child и завершает supervisor только после unexpected nonzero exit.
+rerun=false, штатный reload/shutdown и startup/readiness budgets сохранены.
+Тест с настоящим pinned Air и synthetic child, no-orphans, syntax/shellcheck
+и адресные dev contracts PASS. Причина прежнего NATS connect failure UNKNOWN;
+доказано исправление долгого ожидания dead child, не NATS boundary.
+Узкий viewport 390×844 проверен без наложений и технического пояснения;
+ранний mobile screenshot во время rollout попал в временный API unavailable
+и не считается успешной проверкой переписки. Живой повтор нового runner
+и имитация late-terminal race в браузере ещё NOT RUN.
