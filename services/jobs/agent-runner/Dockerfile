@@ -84,7 +84,9 @@ USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/kodex-init", "entrypoint", "/usr/local/bin/kodex-agent-runner"]
 CMD ["runtime-session"]
 
-FROM runner-build AS toolchain-build
+# Зафиксированные инструменты не наследуют исходники и бинарник runner:
+# изменение приложения не должно сбрасывать кэш их загрузки и сборки.
+FROM build AS toolchain-build
 
 ARG GOOSE_VERSION=v3.27.1
 ARG OAPI_CODEGEN_VERSION=v2.7.1
@@ -302,6 +304,7 @@ COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /kodex-go-toolchain
 RUN ["/kodex-go-toolchain-guard", "prepare", "services"]
 COPY --from=build /usr/local/go/ /usr/local/go/
 COPY --from=toolchain-build /out/kodex-protected/ /opt/kodex/protected-artifacts/
+COPY --from=runner-build /out/kodex-protected/kodex-agent-runner /opt/kodex/protected-artifacts/kodex-agent-runner
 COPY --from=build /out/kodex-go-toolchain-guard /opt/kodex/protected-artifacts/kodex-init
 ENV GOROOT=/usr/local/go \
 	GOENV=off \

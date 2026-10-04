@@ -25,6 +25,70 @@ def peer(name):
 
 
 class TrustedClusterRenderTest(unittest.TestCase):
+    def registry_workload(self, name, container_names, namespace="kodex-system", kind="Deployment"):
+        resource = workload(name)
+        resource["kind"] = kind
+        resource["metadata"]["namespace"] = namespace
+        resource["spec"]["template"]["spec"]["containers"] = [{
+            "name": container_name,
+            "resources": {"requests": {"cpu": "10m", "memory": "32Mi", "ephemeral-storage": "1Mi"},
+                          "limits": {"cpu": "100m", "memory": "64Mi", "ephemeral-storage": "2Mi"}},
+            "securityContext": {"allowPrivilegeEscalation": False},
+            "readinessProbe": {"exec": {"command": ["/bin/true"]}},
+        } for container_name in container_names]
+        return resource
+
+    def test_trusted_registry_cpu_budget_is_exact_and_preserves_other_resources(self):
+        targets = {
+            ("kodex-image-registry-promotion", "registry"): ("500m", "4"),
+            ("kodex-image-registry-pull", "pull-authorizer"): ("100m", "1"),
+            ("kodex-image-registry-promotion", "certificate-guard"): ("50m", "500m"),
+            ("kodex-image-registry-pull", "certificate-guard"): ("50m", "500m"),
+            ("kodex-image-registry-evidence", "certificate-guard"): ("50m", "500m"),
+        }
+        resources = [self.registry_workload(name, [container for target, container in targets if target == name] + ["other"])
+                     for name in sorted({name for name, _ in targets})]
+        before = copy.deepcopy(resources)
+        result = materialize(resources, PROFILE)
+        self.assertEqual(resources, before)
+        for original, rendered in zip(before, result):
+            for old, current in zip(original["spec"]["template"]["spec"]["containers"],
+                                    rendered["spec"]["template"]["spec"]["containers"]):
+                cpu = targets.get((original["metadata"]["name"], old["name"]), ("10m", "100m"))
+                self.assertEqual(current["resources"]["requests"],
+                                 {"cpu": cpu[0], "memory": "32Mi", "ephemeral-storage": "1Mi"})
+                self.assertEqual(current["resources"]["limits"],
+                                 {"cpu": cpu[1], "memory": "64Mi", "ephemeral-storage": "2Mi"})
+                self.assertEqual(current["securityContext"], old["securityContext"])
+                self.assertEqual(current["readinessProbe"], old["readinessProbe"])
+        self.assertEqual(materialize(result, PROFILE), result)
+
+    def test_trusted_registry_cpu_verifier_rejects_budget_drift(self):
+        resource = self.registry_workload("kodex-image-registry-promotion", ["registry"])
+        resource["spec"]["template"]["spec"]["initContainers"] = [{
+            "name": "registry", "resources": {"limits": {"cpu": "100m"}},
+        }]
+        result = materialize([resource], PROFILE)
+        self.assertEqual(result[0]["spec"]["template"]["spec"]["initContainers"][0]["resources"],
+                         {"limits": {"cpu": "100m"}})
+        for section in ("requests", "limits"):
+            changed = copy.deepcopy(result)
+            changed[0]["spec"]["template"]["spec"]["containers"][0]["resources"][section]["cpu"] = "100m"
+            with self.assertRaisesRegex(ValueError, "TRUSTED_REGISTRY_CPU_BUDGET_REQUIRED:kodex-image-registry-promotion:registry"):
+                verify(changed, PROFILE)
+
+    def test_registry_cpu_budget_does_not_target_foreign_or_non_registry_workloads(self):
+        resources = [self.registry_workload("kodex-image-registry-promotion", ["registry"], "other"),
+                     self.registry_workload("kodex-image-registry-promotion", ["registry"], kind="Job"),
+                     self.registry_workload("kodex-image-registry-push", ["registry", "write-authorizer"]),
+                     self.registry_workload("kodex-image-registry-staging-read", ["registry"])]
+        result = materialize(resources, PROFILE)
+        for original, rendered in zip(resources, result):
+            self.assertEqual([container["resources"] for container in original["spec"]["template"]["spec"]["containers"]],
+                             [container["resources"] for container in rendered["spec"]["template"]["spec"]["containers"]])
+        with self.assertRaisesRegex(ValueError, "EXPLICIT_TRUSTED_PROFILE_REQUIRED"):
+            materialize(resources, "")
+
     def test_stt_removes_internal_identity_but_preserves_spool_and_external_trust(self):
         service = workload("stt-tts-service")
         spec = service["spec"]["template"]["spec"]

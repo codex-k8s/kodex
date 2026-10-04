@@ -160,6 +160,42 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         for executable in required:
             self.assertIn(executable, dockerfile)
 
+    def test_toolchain_and_full_download_layers_do_not_depend_on_runner_source(self):
+        dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
+        stages = {}
+        headers = list(re.finditer(r'^FROM ([^\n]+) AS ([a-z0-9-]+)$', dockerfile, re.MULTILINE))
+        for index, header in enumerate(headers):
+            end = headers[index + 1].start() if index + 1 < len(headers) else len(dockerfile)
+            stages[header.group(2)] = (header.group(1), dockerfile[header.end():end])
+        parent, tools = stages["toolchain-build"]
+        self.assertEqual(parent, "build")
+        self.assertNotRegex(stages["build"][1] + tools, r'(?m)^(?:COPY|ADD) ')
+        self.assertNotIn("runner-build", tools)
+        self.assertEqual(tools.count("CGO_ENABLED=0 go install "), 13)
+        full = stages["full-runtime"][1]
+        installation_end = full.index('rm -rf /var/lib/apt/lists/* /root/.cache')
+        source_copy = full.index('COPY --from=runner-build ')
+        self.assertGreater(source_copy, installation_end)
+        early_copies = re.findall(r'(?m)^COPY .*?--from=([^ ]+)', full[:installation_end])
+        self.assertEqual(early_copies, ["toolchain-build", "build"])
+
+    def test_full_guard_stages_exact_runner_after_prepare_before_install(self):
+        dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
+        full = dockerfile.split(" AS full-runtime\n", 1)[1]
+        expected = (
+            'RUN ["/kodex-go-toolchain-guard", "prepare", "services"]',
+            'COPY --from=toolchain-build /out/kodex-protected/ /opt/kodex/protected-artifacts/',
+            'COPY --from=runner-build /out/kodex-protected/kodex-agent-runner /opt/kodex/protected-artifacts/kodex-agent-runner',
+            'COPY --from=build /out/kodex-go-toolchain-guard /opt/kodex/protected-artifacts/kodex-init',
+            'RUN ["/kodex-go-toolchain-guard", "install", "services", "/usr/local/go/bin/go"]',
+            'USER 10001:10001',
+            'ENTRYPOINT ["/usr/local/bin/kodex-init", "entrypoint", "/usr/local/bin/kodex-agent-runner"]',
+        )
+        positions = [full.index(instruction) for instruction in expected]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(full.count("COPY --from=runner-build "), 1)
+        self.assertIn('COPY --from=build /usr/local/go/ /usr/local/go/', full)
+
 
 if __name__ == "__main__":
     unittest.main()

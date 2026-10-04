@@ -1329,5 +1329,32 @@ safe-code до cleanup. Raw task/termination/input/logs не выводятся;
 и retry неизменны. Actual SNAPSHOT root cause всё ещё UNKNOWN до активации.
 Frozen оптимизация Dockerfile cache подготовлена отдельным исполнителем:
 runner source больше не будет инвалидировать toolchain/apt/npm/Chromium.
-Её actual build/time ещё NOT RUN; в текущий активируемый tree не включена.
+  Её actual build/time ещё NOT RUN; в текущий активируемый tree не включена.
 Checkbox2–15 OPEN; 38/38 actual inventory, MCP call и полный QA ещё впереди.
+
+04.10.2026 18:18 UTC, интеграционный tree поверх `0b5defa0c7896fdf330f8b486a396903452de757`:
+PASS — migration016, адресный core control-plane и session-archive применены
+каноническими скриптами на exact0b5. Actual auto MCP probe counter вырос2→3;
+это агрегированное наблюдение, не доказательство exact Context7 tool call.
+PASS — новый full runner6f2462 фактически обслуживает system-assistant-warm:
+три контейнера Ready с exact imageID; protected SYSTEM readback READY.
+FAIL — полная supply-chain ещё не готова: role-image-builder ImagePullBackOff;
+apply session завершилась143, поэтому весь этап не объявляется PASS.
+FAIL — archive worker success не принимается за owner completion: новый
+точный task sat_9dfd244b-4787-48e6-b6fe-4e8c0fc99ec1/gen3/attempt4 получил
+COMPLETE_SNAPSHOT rpc_code Unavailable, protected storage всё ещё SNAPSHOTTING.
+Причина исследуется без raw errors и прямого чтения live PostgreSQL.
+Detached SYSTEM/PROJECT archive roundtrip на exact0b5 PASS6.271s; это
+disposable evidence, не live completion. Добавлен закрытый RPC stage/code.
+Root archive unit PASS .208s; RPC diagnostic не меняет lifecycle/authority.
+PASS — интегрирована изоляция Dockerfile toolchain от runner source и поздний
+COPY runner после тяжёлых слоёв. Root публичный verifier44tests16.641s,
+profile8tests3.533s и cache import contract PASS; actual rebuild/time NOT RUN.
+PASS — trusted renderer меняет CPU только пяти exact registry containers:
+promotion registry500m/4, pull authorizer100m/1, три certificate guards50m/500m.
+Production base, память, auth/network/readiness неизменны. Root13unit PASS;
+live apply и измерение ускорения NOT RUN. Подтверждён накопленный CFS throttle,
+но он не объявляется единственной причиной длительного seed.
+До полного QA три дочерних исполнителя параллельно разбирают owner completion,
+supply-chain pull/readback и доказательство full tool inventory; основной
+агент интегрирует и проверяет нормальные UI-сценарии. Checkbox2–15 OPEN.
