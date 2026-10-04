@@ -41,7 +41,10 @@
   "integrationGrants": [
     {
       "ref": "igr_abcdefgh",
+      "grantVersion": "1",
       "connectionRef": "int_abcdefgh",
+      "connectionVersion": "2",
+      "approvalPolicy": "HUMAN_EACH_EFFECT",
       "definitionKey": "email",
       "connectionName": "Fixture email",
       "capabilityKey": "email.message.send",
@@ -198,7 +201,7 @@
   "runtimeProvider": "openai",
   "runtimeModel": "codex",
   "providerCredentialRevisionNumber": 1,
-  "revisionDigest": "cf2bd8005e457d71e0c8c3a93275c3d6ea2d608434802559d12aa1fe8485ae5b",
+  "revisionDigest": "40ea14c9efefbaf00d43856dfe3adf940b0384bc2fbbab8de208a0f6cb4c6738",
   "fence": "fence-1",
   "generation": 1,
   "roleRuntimeContractSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",

@@ -2166,10 +2166,36 @@ const ru = {
     graphEdges: "Связи: {count}",
     platformActor: "Платформа",
     toolParameters: "Безопасные параметры",
+    toolTechnicalId: "Идентификатор инструмента",
+    nativeToolNames: {
+      CODEX_SHELL: "Работа в терминале",
+      CODEX_FILE_CHANGE: "Изменение файлов",
+      CODEX_WEB_SEARCH: "Поиск в интернете",
+      CODEX_DYNAMIC_TOOL: "Вызов инструмента",
+      CODEX_IMAGE_VIEW: "Просмотр изображения",
+      CODEX_IMAGE_GENERATION: "Создание изображения",
+      CODEX_SLEEP: "Ожидание",
+    },
+    nativeShellActions: {
+      READ: "чтение файлов",
+      LIST_FILES: "список файлов",
+      SEARCH: "поиск",
+    },
     toolResult: "Безопасный результат",
     toolDuration: "Длительность: {duration} мс",
     expandMessage: "Показать полностью",
     collapseMessage: "Свернуть",
+    newMessages: "Новые сообщения ↓",
+    earlierServiceHistory: "Показать предыдущие служебные записи",
+    toolGroup: "Вызовы инструментов: {count}",
+    transcriptTurn: "Ход {turn} · попытка {attempt}",
+    unscopedHistory:
+      "Служебная история без точной привязки к ходу и попытке. Эти записи не объединяются с сообщениями текущей сессии.",
+    messagePhases: {
+      USER: "Задание",
+      COMMENTARY: "Ход работы",
+      FINAL: "Ответ",
+    },
     runtimeProgress: {
       workloadScheduled: "Задание передано исполнителю",
       modelRequestRunning: "Модель обрабатывает запрос",
@@ -2428,6 +2454,9 @@ const ru = {
     resourceKind: "Вид ресурса",
     resourceScope: "Область ресурсов",
     approvalPolicy: "Порядок подтверждения",
+    chooseApprovalPolicy: "Выберите порядок подтверждения",
+    approvalPolicySelectionHelp:
+      "Выбранное значение сохраняется явно. Доступны только разрешённые для этого действия варианты.",
     technicalDetails: "Технические сведения",
     approvalPolicies: {
       NONE: "без согласования",
@@ -2641,6 +2670,8 @@ const ru = {
     consequencesUnavailable:
       "Последствия решения не переданы API. Действие следует выполнять только после проверки запуска.",
     projectUnavailable: "Название Проекта недоступно",
+    scope: "Область",
+    organizationScope: "Организация · общесистемный помощник",
     run: "Запуск",
     process: "Запуск и точный узел",
     runUnavailable: "Название запуска недоступно",
@@ -3696,6 +3727,8 @@ const ru = {
       CREATE_WORKFLOW: "Создать Workflow",
       CHANGE_CAPABILITY: "Изменить возможности",
       CHANGE_INTEGRATION_GRANT: "Изменить доступ к подключению",
+      CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT:
+        "Изменить доступ общесистемного помощника",
       CREATE_SCHEDULE: "Создать Автоматизацию",
       LAUNCH_RUN: "Запустить Run",
       CREATE_INTEGRATION_CONNECTION: "Создать подключение",
@@ -3740,6 +3773,16 @@ const ru = {
       runtime: "Модель и выполнение",
       environment: "Окружение",
       instructions: "Инструкции",
+      integrations: "Интеграции",
+      integrationsHelp:
+        "Доступы общесистемного помощника назначаются в области организации. Выберите подключение, возможность и явную политику подтверждения. Изменения применятся к следующим ходам.",
+      integrationEnabled: "Разрешить эту возможность помощнику",
+      integrationGranted: "Доступ разрешён",
+      integrationNotGranted: "Доступ не разрешён",
+      integrationsReadOnly:
+        "Изменение этого доступа недоступно. Полномочия проверяет сервер организации.",
+      integrationSaved:
+        "Доступ сохранён. Выберите возможность для проверки актуального состояния.",
       instructionsHelp:
         "Дополнение владельца применяется к следующим ходам. Изменения, предложенные самим Kodex, сначала показываются как подтверждаемый черновик.",
       environmentTitle: "Рабочее окружение Kodex",
@@ -4111,6 +4154,10 @@ const ru = {
       grantUnavailable:
         "Это разрешение недоступно для выбранного получателя. Проверьте подключение или попросите другой план.",
       grantNothingToRevoke: "Активного разрешения для отзыва не найдено.",
+      systemGrantFixedTarget:
+        "Подключение и возможность зафиксированы в этой ревизии плана. Получатель — общесистемный помощник организации. Для другого подключения или возможности подготовьте новый план; здесь меняются только включение и порядок подтверждения.",
+      systemGrantApplied:
+        "Сохранённое разрешение проверено по точной квитанции",
       grantFixedTarget:
         "Подключение и получатель закреплены в этом плане. Если нужен другой объект, попросите помощника изменить план. Секреты сюда не вводятся.",
       agentNextSteps:
@@ -6549,10 +6596,32 @@ const en = {
     graphEdges: "Links: {count}",
     platformActor: "Platform",
     toolParameters: "Safe parameters",
+    toolTechnicalId: "Tool identifier",
+    nativeToolNames: {
+      CODEX_SHELL: "Terminal action",
+      CODEX_FILE_CHANGE: "File changes",
+      CODEX_WEB_SEARCH: "Web search",
+      CODEX_DYNAMIC_TOOL: "Tool call",
+      CODEX_IMAGE_VIEW: "View image",
+      CODEX_IMAGE_GENERATION: "Generate image",
+      CODEX_SLEEP: "Waiting",
+    },
+    nativeShellActions: {
+      READ: "read files",
+      LIST_FILES: "list files",
+      SEARCH: "search",
+    },
     toolResult: "Safe result",
     toolDuration: "Duration: {duration} ms",
     expandMessage: "Show full message",
     collapseMessage: "Collapse",
+    newMessages: "New messages ↓",
+    earlierServiceHistory: "Show earlier service records",
+    toolGroup: "Tool calls: {count}",
+    transcriptTurn: "Turn {turn} · attempt {attempt}",
+    unscopedHistory:
+      "Service history without an exact turn and attempt scope. These records are not merged with current session messages.",
+    messagePhases: { USER: "Task", COMMENTARY: "Progress", FINAL: "Answer" },
     runtimeProgress: {
       workloadScheduled: "Task handed to the worker",
       modelRequestRunning: "Model is processing the request",
@@ -6814,6 +6883,9 @@ const en = {
     resourceScope: "Resource scope",
     approvalPolicy: "Approval policy",
     technicalDetails: "Technical details",
+    chooseApprovalPolicy: "Choose an approval policy",
+    approvalPolicySelectionHelp:
+      "The selected value is saved explicitly. Only policies allowed for this capability are available.",
     approvalPolicies: {
       NONE: "no approval",
       HUMAN_EACH_EFFECT: "approve every action",
@@ -7027,6 +7099,8 @@ const en = {
     consequencesUnavailable:
       "The consequences were not provided by the API. Inspect the run before taking action.",
     projectUnavailable: "Project name unavailable",
+    scope: "Scope",
+    organizationScope: "Organization · system assistant",
     run: "Run",
     process: "Run and exact node",
     runUnavailable: "Run title unavailable",
@@ -8066,6 +8140,8 @@ const en = {
       CREATE_WORKFLOW: "Create Workflow",
       CHANGE_CAPABILITY: "Change capabilities",
       CHANGE_INTEGRATION_GRANT: "Change connection access",
+      CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT:
+        "Change system assistant access",
       CREATE_SCHEDULE: "Create Automation",
       LAUNCH_RUN: "Launch Run",
       CREATE_INTEGRATION_CONNECTION: "Create connection",
@@ -8111,6 +8187,16 @@ const en = {
       runtime: "Model and runtime",
       environment: "Environment",
       instructions: "Instructions",
+      integrations: "Integrations",
+      integrationsHelp:
+        "System assistant grants belong to the organization. Choose a connection, capability and explicit approval policy. Changes apply to subsequent turns.",
+      integrationEnabled: "Allow this capability for the assistant",
+      integrationGranted: "Access granted",
+      integrationNotGranted: "Access not granted",
+      integrationsReadOnly:
+        "This grant cannot be changed. The organization server checks permissions.",
+      integrationSaved:
+        "Grant saved. Select the capability to inspect its current state.",
       instructionsHelp:
         "Owner instructions apply to future turns. Changes proposed by Kodex itself are shown as a draft for confirmation first.",
       environmentTitle: "Kodex runtime environment",
@@ -8477,6 +8563,10 @@ const en = {
       grantUnavailable:
         "This permission is unavailable for the selected recipient. Check the connection or request another plan.",
       grantNothingToRevoke: "No active grant was found to revoke.",
+      systemGrantFixedTarget:
+        "The connection and capability are pinned to this plan revision. The recipient is the organization's system assistant. Prepare a new plan for another connection or capability; only enablement and approval policy can be edited here.",
+      systemGrantApplied:
+        "The saved grant was verified against its exact receipt",
       grantFixedTarget:
         "This plan fixes the connection and recipient. Ask the assistant to revise it for another target. Do not enter secrets here.",
       agentNextSteps:

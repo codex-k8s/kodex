@@ -78,6 +78,20 @@ const toolNode: RunNode = {
 
 const event: PresentedRunEvent = {
   ref: "evt_progress",
+  execution: {
+    runRef: run.ref,
+    nodeRef: node.ref,
+    sessionRef: run.sessionRef,
+    turnRef: "trn_example",
+    turnNumber: 1,
+    attempt: 1,
+  },
+  message: {
+    ref: "msg_commentary",
+    phase: "COMMENTARY",
+    revision: 1,
+    text: "Собираю данные",
+  },
   runRef: run.ref,
   sequence: 1,
   type: "TURN_PROGRESS",
@@ -100,6 +114,11 @@ const event: PresentedRunEvent = {
     nextActions: [],
   },
 };
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("Required test fixture is missing");
+  return value;
+}
 
 async function render(
   nodes: RunNode[] = [node],
@@ -147,6 +166,8 @@ async function render(
             toolDuration: "Длительность: {duration} мс",
             expandMessage: "Показать полностью",
             collapseMessage: "Свернуть",
+            unscopedHistory: "Служебная история без точной привязки",
+            toolGroup: "Вызовы инструментов: {count}",
             nodeTypes: { EXTERNAL_ACTION: "Внешнее действие" },
           },
           states: { RUNNING: "Выполняется", SUCCEEDED: "Завершено" },
@@ -158,6 +179,128 @@ async function render(
 }
 
 describe("RunActivityDrawer", () => {
+  it("отображает commentary, вызов с итоговым revision и final в общей хронологии", async () => {
+    const started: PresentedRunEvent = {
+      ...event,
+      ref: "evt_tool_started",
+      sequence: 2,
+      message: undefined,
+      toolCall: {
+        ref: "call_progress",
+        tool: "files.lookup",
+        revision: 1,
+        state: "RUNNING",
+        safeParameters: {},
+        safeResult: "",
+        durationMs: 0,
+        auditRef: "audit_progress",
+      },
+    };
+    const completed: PresentedRunEvent = {
+      ...started,
+      ref: "evt_tool_done",
+      sequence: 4,
+      toolCall: {
+        ...required(started.toolCall),
+        revision: 2,
+        state: "SUCCEEDED",
+        safeResult: "Найдены материалы",
+      },
+    };
+    const final: PresentedRunEvent = {
+      ...event,
+      ref: "evt_final",
+      sequence: 5,
+      message: {
+        ref: "msg_final",
+        phase: "FINAL",
+        revision: 1,
+        text: "Итоговый полный ответ",
+      },
+    };
+    const html = await render([node], [final, completed, started, event]);
+    expect(html.indexOf("Собираю данные")).toBeLessThan(
+      html.indexOf("files.lookup"),
+    );
+    expect(html.indexOf("files.lookup")).toBeLessThan(
+      html.indexOf("Итоговый полный ответ"),
+    );
+    expect(html.match(/files.lookup/g)).toHaveLength(1);
+    expect(html).toContain("Найдены материалы");
+    expect(html).toContain('data-turn-ref="trn_example"');
+  });
+
+  it("выводит только безопасные поля вызова, не raw args/output или hidden reasoning", async () => {
+    const toolCall = Object.assign(
+      {
+        ref: "call_safe",
+        tool: "files.read",
+        revision: 1,
+        state: "SUCCEEDED" as const,
+        safeParameters: { file: "report.md" },
+        safeResult: "Безопасный результат",
+        durationMs: 20,
+        auditRef: "audit_safe",
+      },
+      {
+        arguments: "RAW_ARGUMENT_SENTINEL",
+        output: "RAW_OUTPUT_SENTINEL",
+        reasoning: "HIDDEN_REASONING_SENTINEL",
+        headers: "HEADER_SENTINEL",
+      },
+    );
+    const html = await render(
+      [node],
+      [{ ...event, message: undefined, toolCall }],
+    );
+    expect(html).toContain("report.md");
+    for (const forbidden of [
+      "RAW_ARGUMENT_SENTINEL",
+      "RAW_OUTPUT_SENTINEL",
+      "HIDDEN_REASONING_SENTINEL",
+      "HEADER_SENTINEL",
+    ])
+      expect(html).not.toContain(forbidden);
+  });
+
+  it("выделяет старую историю без execution вместо приписывания текущему ходу", async () => {
+    const html = await render(
+      [node],
+      [{ ...event, execution: undefined, message: undefined }],
+    );
+    expect(html).toContain("Служебная история без точной привязки");
+    expect(html).not.toContain('data-turn-ref="trn_example"');
+    expect(html).not.toContain('data-phase="COMMENTARY"');
+  });
+
+  it("сворачивает длинную серию tools, сохраняя названия и раскрываемые безопасные результаты", async () => {
+    const toolEvents: PresentedRunEvent[] = Array.from(
+      { length: 5 },
+      (_, index) => ({
+        ...event,
+        ref: `evt_tool_${String(index)}`,
+        sequence: index + 2,
+        message: undefined,
+        toolCall: {
+          ref: `call_${String(index)}`,
+          tool: `files.operation_${String(index)}`,
+          revision: 1,
+          state: "SUCCEEDED",
+          safeParameters: {},
+          safeResult: `Результат ${String(index)}`,
+          durationMs: 10,
+          auditRef: `audit_${String(index)}`,
+        },
+      }),
+    );
+    const html = await render([node], toolEvents, [], undefined, "");
+    expect(html).toContain("Вызовы инструментов: 5");
+    expect(html).toContain('class="run-transcript__tool-group"');
+    expect(html).toContain("files.operation_4");
+    expect(html).toContain("Результат 4");
+    expect(html).not.toContain("<details open");
+  });
+
   it("разделяет сообщения инициатора и агента без выдуманного tool-call", async () => {
     const html = await render();
 
@@ -199,6 +342,7 @@ describe("RunActivityDrawer", () => {
         tool: "project_files.search",
         safeParameters: { query: "квартальный отчёт" },
         state: "SUCCEEDED",
+        revision: 1,
         durationMs: 240,
         safeResult: "Найдено 4 фрагмента",
         auditRef: "evt_audit",
@@ -225,6 +369,7 @@ describe("RunActivityDrawer", () => {
         tool: "integration.read",
         safeParameters: {},
         state: "FAILED",
+        revision: 1,
         safeResult: "",
         auditRef: "evt_failed_audit",
         durationMs: 0,
@@ -249,7 +394,7 @@ describe("RunActivityDrawer", () => {
       [event],
       [],
       undefined,
-      "Проверить отчёт. ".repeat(30),
+      "Проверить отчёт. ".repeat(100),
     );
     expect(longHtml).toContain("run-activity-item__message--collapsed");
     expect(longHtml).toContain("Показать полностью");

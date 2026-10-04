@@ -374,6 +374,8 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		configuration = map[string]string{"base_url": "https://api.example.test", "resource_path": "/v1/status"}
 	case "openapi-mcp":
 		configuration = map[string]string{"base_url": "https://api.example.test"}
+	case "context7":
+		configuration = map[string]string{"base_url": "https://mcp.context7.com"}
 	}
 	scope, err := capability.ResourceScopeValues(configuration)
 	if err != nil {
@@ -401,6 +403,7 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		EmailExecution:    &emailapi.ExecutionBinding{InvocationRef: &invocation, Lease: emailapi.ExecutionLease{Ref: "lease_fixture01", Fence: "fixture-fence", Generation: 1, ExpiresAt: time.Now().Add(time.Minute)}},
 		DefinitionKey:     definition.Metadata.Key, DefinitionVersion: definition.Metadata.Version,
 		DefinitionDigest: definition.Digest, ConnectionRef: "int_test", CapabilityKey: capability.Key,
+		GrantRef: "igr_fixture01", GrantVersion: 1,
 		Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy,
 		ResourceKind: capability.ResourceScope.Kind, ResourceScope: scope,
 		ResourceScopeDigest: hex.EncodeToString(scopeDigest[:]), EffectKey: "eff_0123456789abcdef0123456789abcdef",

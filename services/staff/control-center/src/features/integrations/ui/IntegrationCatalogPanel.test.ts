@@ -71,6 +71,7 @@ function githubDefinition(): IntegrationDefinition {
         approvalRequired: false,
         operation: "github.repository.read",
         approvalPolicy: "NONE",
+        allowedApprovalPolicies: ["NONE"],
         resourceKind: "GITHUB_REPOSITORY",
         inputFields: [
           {

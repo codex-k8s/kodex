@@ -203,7 +203,7 @@ type preparedTurn struct {
 
 type turnRuntime struct {
 	prepare        func(context.Context, model.Input, *callback.Client) (preparedTurn, string, error)
-	execute        func(context.Context, model.Input, []byte, string, string) (codex.Result, error)
+	execute        func(context.Context, model.Input, []byte, string, string, func(runtimecontract.RuntimeActivity) error) (codex.Result, error)
 	checkWorkspace func(context.Context) error
 }
 
@@ -265,10 +265,22 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
 	}
-	result, executionErr := runtime.execute(ctx, input, prompt, prepared.proxy.SocketPath(), prepared.proxy.LocalBearerToken())
-	// Уже совершённые native effects сохраняются и при последующем отказе
-	// workspace/quota; такой отказ не превращает выполнение в отсутствие действий.
-	if err := recordNativeToolTimeline(ctx, input, client, result.ToolCalls); err != nil {
+	activityFailed := false
+	result, executionErr := runtime.execute(ctx, input, prompt, prepared.proxy.SocketPath(), prepared.proxy.LocalBearerToken(), func(activity runtimecontract.RuntimeActivity) error {
+		if err := activity.Validate(); err != nil {
+			activityFailed = true
+			return errors.New("runtime activity is invalid")
+		}
+		var err error
+		if activity.Message != nil {
+			err = client.PublishedMessage(ctx, input, *activity.Message)
+		} else {
+			err = client.RecordNativeToolCall(ctx, input, *activity.ToolCall)
+		}
+		activityFailed = activityFailed || err != nil
+		return err
+	})
+	if activityFailed {
 		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_UNAVAILABLE", "i18n:RUNTIME_UNAVAILABLE", result.Usage)
 	}
 	if executionErr != nil {
@@ -309,25 +321,6 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID", result.Usage)
 	}
 	return client.Complete(ctx, input, payload)
-}
-
-type nativeToolCallRecorder interface {
-	RecordNativeToolCall(context.Context, model.Input, runtimecontract.NativeToolCall) error
-}
-
-func recordNativeToolTimeline(ctx context.Context, input model.Input, recorder nativeToolCallRecorder, calls []runtimecontract.NativeToolCall) error {
-	if len(calls) > runtimecontract.MaximumNativeToolCalls {
-		return errors.New("native tool timeline is invalid")
-	}
-	for _, call := range calls {
-		if call.Validate() != nil {
-			return errors.New("native tool timeline is invalid")
-		}
-		if err := recorder.RecordNativeToolCall(ctx, input, call); err != nil {
-			return errors.New("record native tool timeline")
-		}
-	}
-	return nil
 }
 
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {

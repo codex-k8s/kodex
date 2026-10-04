@@ -122,7 +122,7 @@ type appServer struct {
 	nextID         int64
 }
 
-func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string) (result Result, resultErr error) {
+func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error) (result Result, resultErr error) {
 	if err := validateRuntimeSelection(input); err != nil {
 		return Result{}, atProviderStage(providerStageSelection, err)
 	}
@@ -135,17 +135,24 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
 	defer cancelContext()
+	if onActivity == nil {
+		return Result{}, atProviderStage(providerStageSelection, errors.New("Codex runtime activity consumer is unavailable"))
+	}
 	if err := verifyAccountPin(input); err != nil {
 		return Result{}, atProviderStage(providerStageAccountPin, err)
 	}
 	if err := verifyRestoreArchive(input); err != nil {
 		return Result{}, atProviderStage(providerStageArchiveRestore, err)
 	}
+	if err := runtimecontract.ValidateManagedMCPReadiness(input, time.Now()); err != nil {
+		return Result{}, atProviderStage(providerStageMCPReadiness, err)
+	}
 	server, err := startAppServer(input, mcpProxyToken)
 	if err != nil {
 		return Result{}, atProviderStage(providerStageProcessStart, err)
 	}
 	state := newProtocolState(input.CodexSessionID)
+	state.onActivity = onActivity
 	defer func() {
 		if resultErr != nil {
 			// Учитываем только ранее проверенные измерения, даже если terminal,

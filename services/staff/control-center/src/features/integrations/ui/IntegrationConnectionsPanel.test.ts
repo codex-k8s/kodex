@@ -29,6 +29,7 @@ const definition: IntegrationDefinition = {
       approvalRequired: true,
       operation: "synthetic.journal.write",
       approvalPolicy: "HUMAN_EACH_EFFECT",
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"],
       resourceKind: "SYNTHETIC_JOURNAL",
       inputFields: [],
     },

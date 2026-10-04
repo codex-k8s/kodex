@@ -1,5 +1,5 @@
 -- name: workers_resolveintegrationinvocation_select_runs_id_organization_id_ref :one
-SELECT r.id::text,n.id::text,c.id::text,g.id::text,g.ref,r.project_id::text,r.root_run_id::text,
+SELECT r.id::text,n.id::text,c.id::text,g.id::text,g.ref,COALESCE(r.project_id::text,''),r.root_run_id::text,
 	c.definition_key,c.definition_version,c.definition_digest,c.name,
 	g.risk,g.approval_policy,g.resource_kind,g.resource_scope,g.resource_scope_digest,initiator.ref,
 	g.version,g.approval_scope_paths,COALESCE(n.agent_id::text,'')
@@ -18,6 +18,7 @@ JOIN control_plane.integration_grants g
  AND g.definition_digest=c.definition_digest
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 WHERE r.organization_id=$1::uuid AND r.ref=$2 AND n.ref=$3 AND n.state='RUNNING'
+  AND (r.project_id IS NOT NULL OR control_plane.owned_organization_assistant_run(r.organization_id,r.root_run_id))
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND d.enabled AND (d.adapter_owner,d.execution_route) IN
       (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
@@ -48,5 +49,6 @@ WHERE r.organization_id=$1::uuid AND r.ref=$2 AND n.ref=$3 AND n.state='RUNNING'
       AND revision.generation=(SELECT max(latest.generation) FROM control_plane.runtime_revisions latest WHERE latest.node_id=n.id)
       AND binding->>'ref'=g.ref AND binding->>'capabilityKey'=g.capability_key
 	  AND binding->>'grantVersion'=g.version::text
+      AND binding->>'approvalPolicy'=g.approval_policy
   )
 FOR UPDATE OF n,c,g

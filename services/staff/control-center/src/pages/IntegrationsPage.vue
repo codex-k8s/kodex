@@ -1056,6 +1056,7 @@ async function saveGrant(selection: IntegrationGrantSelection): Promise<void> {
   try {
     await platform.changeConnectionGrant(connection, {
       capabilityKey: grant.capabilityKey,
+      approvalPolicy: selection.approvalPolicy,
       ...(grant.targetKind === "AGENT"
         ? { agentRef: grant.targetRef }
         : { workflowRef: grant.targetRef }),
@@ -1079,10 +1080,14 @@ async function revokeGrant(item: IntegrationGrantPresentation): Promise<void> {
   try {
     await platform.changeConnectionGrant(item.connection, {
       capabilityKey: item.capabilityKey,
+      approvalPolicy: item.grant.approvalPolicy,
       ...(item.grant.agentRef
         ? { agentRef: item.grant.agentRef }
         : { workflowRef: item.grant.workflowRef }),
       enabled: false,
+      ...(item.grant.approvalPolicy === "HUMAN_SCOPED"
+        ? { approvalScopePaths: item.grant.approvalScopePaths }
+        : {}),
     });
   } catch (error) {
     problem.value = asProblem(error);

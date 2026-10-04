@@ -9,12 +9,15 @@ import (
 )
 
 func assistantConfigurationOperationType(kind string) bool {
-	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
+	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
 }
 
 func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.Context, tx pgx.Tx, current scope, original, edited entity.AssistantPlanOperation, refreshStale bool) (entity.AssistantPlanOperation, error) {
 	if original.Type != edited.Type || original.Key != edited.Key || edited.Parameters == nil {
 		return edited, errs.ErrForbidden
+	}
+	if original.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+		return repository.rehydrateEditedSystemAssistantGrant(ctx, tx, current, original, edited, refreshStale)
 	}
 	request := cloneAssistantFields(edited.Parameters)
 	var refreshed entity.AssistantPlanOperation

@@ -11,7 +11,7 @@ func TestNativeToolCallProjectionKeepsCorrelationAndSafeMetadata(t *testing.T) {
 	payload := runtimecontract.RunnerNativeToolCallRequest{
 		RuntimeRevisionDigest: input.RuntimeRevisionDigest,
 		NativeToolCall: runtimecontract.NativeToolCall{
-			CallID: "call-file-1", Kind: runtimecontract.NativeToolKindFileChange,
+			CallID: "call-file-1", Revision: 2, Kind: runtimecontract.NativeToolKindFileChange,
 			State: runtimecontract.NativeToolStateSucceeded, DurationMS: 42,
 			SafeResult: runtimecontract.NativeToolResultCompleted,
 			SafeParameters: map[string]any{"change_count": 1, "change_kinds": []string{"UPDATE"},

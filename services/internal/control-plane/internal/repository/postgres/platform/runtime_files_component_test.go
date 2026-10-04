@@ -130,7 +130,7 @@ func testRuntimeFileQueries(t *testing.T, ctx context.Context, repository *Repos
 	}, "runtime-controller")
 	projection := command.RunToolCallInput{LeaseRef: execution.LeaseRef, Fence: execution.Fence, Generation: execution.Generation,
 		CallRef: "tcl_filefixture1", Tool: runtimecontract.FileToolSearch, GrantRef: execution.CatalogRef,
-		SafeParameters: map[string]any{"purpose": execution.Purpose}, State: "SUCCEEDED", DurationMS: 1, SafeResult: "completed"}
+		SafeParameters: map[string]any{"purpose": execution.Purpose}, State: "SUCCEEDED", Revision: 2, DurationMS: 1, SafeResult: "completed"}
 	recorded, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: activity,
 		Mutation: value.Mutation{IdempotencyKey: "runtime-files-activity-1"}, Payload: projection})
 	if err != nil || recorded.Event == nil || recorded.Event.ToolCall == nil || recorded.Event.ToolCall.CapabilityRef != "" || recorded.Event.ToolCall.GrantRef != execution.CatalogRef {

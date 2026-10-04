@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -221,13 +222,32 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	}
 	if grants, ok := values["integrationGrants"].([]map[string]string); ok {
 		for _, grant := range grants {
+			grantVersion, _ := strconv.ParseInt(grant["grantVersion"], 10, 64)
+			connectionVersion, _ := strconv.ParseInt(grant["connectionVersion"], 10, 64)
 			result.IntegrationGrants = append(result.IntegrationGrants, &controlplanev1.IntegrationGrant{
-				Ref: grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"],
+				Version: grantVersion, ConnectionVersion: connectionVersion,
+				ApprovalPolicy: controlplanev1.IntegrationApprovalPolicy(controlplanev1.IntegrationApprovalPolicy_value["INTEGRATION_APPROVAL_POLICY_"+grant["approvalPolicy"]]),
+				Ref:            grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"],
 				DefinitionVersion: grant["definitionVersion"], DefinitionDigest: grant["definitionDigest"],
 				ConnectionName: grant["connectionName"], CapabilityKey: grant["capabilityKey"],
 				CapabilityName: grant["capabilityName"], CapabilityDescription: grant["capabilityDescription"],
 				Operation: grant["operation"], InputSchema: grant["inputSchema"], InputSchemaSha256: grant["inputSchemaSha256"],
 				Risk: grant["risk"], Enabled: true,
+			})
+		}
+	}
+	if profiles, ok := values["managedMCPProfiles"].([]runtimecontract.ManagedMCPProfile); ok {
+		for _, item := range profiles {
+			health := item.Health
+			result.ManagedMcpProfiles = append(result.ManagedMcpProfiles, &controlplanev1.ManagedMCPProfile{
+				Provider: item.Provider, Version: uint32(item.Version), Namespace: item.Namespace, Required: item.Required,
+				ScopeKind: controlplanev1.ManagedMCPScopeKind(controlplanev1.ManagedMCPScopeKind_value["MANAGED_MCP_SCOPE_KIND_"+item.ScopeKind]),
+				ScopeRef:  item.ScopeRef, ResolveGrantRef: item.ResolveGrantRef, QueryGrantRef: item.QueryGrantRef, Digest: item.Digest,
+				Health: &controlplanev1.ManagedMCPHealthProof{TestRef: health.TestRef, Generation: health.Generation,
+					ConnectionRef: health.ConnectionRef, ConnectionVersion: health.ConnectionVersion, ConfigurationSha256: health.ConfigurationSHA256,
+					CredentialRevisionRef: health.CredentialRevisionRef, CredentialRevision: health.CredentialRevision, CredentialSha256: health.CredentialSHA256,
+					DefinitionKey: health.DefinitionKey, DefinitionVersion: health.DefinitionVersion, DefinitionDigest: health.DefinitionDigest,
+					CheckedAt: timestamppb.New(health.CheckedAt), Probe: health.Probe},
 			})
 		}
 	}
@@ -399,6 +419,9 @@ func (server *Server) RenewExecution(ctx context.Context, request *controlplanev
 
 func (server *Server) ReportExecutionProgress(ctx context.Context, request *controlplanev1.ReportExecutionProgressRequest) (*controlplanev1.ReportExecutionProgressResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Progress: request.GetProgress()}
+	if message := request.GetMessage(); message != nil {
+		payload.Message = &entity.RunMessage{Ref: message.GetRef(), Phase: enumSuffix(message.GetPhase(), "RUN_MESSAGE_PHASE_"), Revision: message.GetRevision(), Text: message.GetText()}
+	}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName, command.ReportExecutionProgress, nil, payload)
 	if err != nil {
 		return nil, err
@@ -503,7 +526,7 @@ func (server *Server) RecordRunToolCall(ctx context.Context, request *controlpla
 	payload := command.RunToolCallInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
 		CallRef: request.GetCallRef(), Tool: request.GetTool(), SafeParameters: asMap(request.GetSafeParameters()),
 		CapabilityRef: request.GetCapabilityRef(), GrantRef: request.GetGrantRef(), State: enumSuffix(request.GetState(), "RUN_TOOL_CALL_STATE_"),
-		DurationMS: request.GetDurationMs(), SafeResult: request.GetSafeResult()}
+		DurationMS: request.GetDurationMs(), SafeResult: request.GetSafeResult(), Revision: request.GetRevision()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RecordRunToolCall_FullMethodName, command.RecordRunToolCall, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
@@ -740,6 +763,7 @@ func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.Integra
 		DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
 		Operation: mapString(item, "operation"), Risk: integrationRisk(mapString(item, "risk")),
 		ApprovalPolicy: integrationApprovalPolicy(mapString(item, "approvalPolicy")),
+		GrantRef:       mapString(item, "grantRef"), GrantVersion: mapInt64(item, "grantVersion"),
 		ResourceScope: &controlplanev1.IntegrationResourceScope{
 			Kind: integrationResourceKind(mapString(item, "resourceKind")), Values: resourceScope,
 			Digest: mapString(item, "resourceScopeDigest"),

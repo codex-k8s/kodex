@@ -1379,7 +1379,7 @@ func knownCommand(kind command.Kind) bool {
 		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled, command.SetProviderAccountConcurrency,
 		command.CreateConnection, command.UpdateConnection, command.DeleteConnection,
 		command.ConfigureConnectionCredential, command.ConfigureEmailCredential,
-		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
+		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant, command.ChangeSystemAssistantIntegrationGrant,
 		command.CreateProjectAssistant, command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn, command.CancelAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,

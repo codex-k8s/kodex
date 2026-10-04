@@ -186,7 +186,7 @@ func continuationComponents(snapshot map[string]any) (map[string][]promptservice
 		// В diff попадают exact refs и capability; credential и transport fields
 		// не входят ни в отображение, ни в digest безопасного descriptor.
 		safe := map[string]any{}
-		for _, name := range []string{"ref", "grantVersion", "connectionRef", "connectionVersion", "definitionKey", "definitionVersion", "definitionDigest", "capabilityKey", "inputSchemaSha256"} {
+		for _, name := range []string{"ref", "grantVersion", "approvalPolicy", "connectionRef", "connectionVersion", "definitionKey", "definitionVersion", "definitionDigest", "capabilityKey", "inputSchemaSha256"} {
 			safe[name] = item[name]
 		}
 		result["INTEGRATIONS"] = append(result["INTEGRATIONS"], promptservice.RuntimeDescriptor{Ref: continuationString(item, "ref"), Version: continuationNumber(item["grantVersion"]), Value: continuationString(item, "capabilityKey"), Digest: continuationDigest(safe)})

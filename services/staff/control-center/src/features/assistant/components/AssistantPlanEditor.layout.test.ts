@@ -8,6 +8,26 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("показывает SYSTEM grant как закрытую owner-confirmed форму без прямой публикации", () => {
+    expect(source).toContain("<AssistantSystemIntegrationGrantPlanForm");
+    expect(
+      /operation\.value\.type !==\s*"CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"/.test(
+        source,
+      ),
+    ).toBe(true);
+    const form = readFileSync(
+      new URL("./AssistantSystemIntegrationGrantPlanForm.vue", import.meta.url),
+      "utf8",
+    );
+    expect(form).toContain("systemIntegrationGrantPlanOwner");
+    expect(form).toContain("systemIntegrationGrantPlanCandidate");
+    expect(form).toContain("readSystemGrantCandidates");
+    expect(form).not.toContain("saveSystemGrant");
+    expect(form).not.toContain('changed("connectionRef"');
+    expect(form).not.toContain('changed("capabilityKey"');
+    expect(form).not.toContain("getAgent");
+    expect(form).not.toContain("getWorkflow");
+  });
   it("локализует помощника только в закрытом helper context и объясняет уже сохранённый черновик", () => {
     expect(source).toContain("isProjectAssistantHelper(operation)");
     expect(source).toContain("assistant.planEditor.helperInstructions");

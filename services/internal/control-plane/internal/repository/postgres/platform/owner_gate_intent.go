@@ -26,6 +26,9 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 	if gate == nil {
 		return nil
 	}
+	if err := repository.projectOwnerGateScope(ctx, runner, current, gate, actorScoped); err != nil {
+		return err
+	}
 	var integration, delivery, completesRun bool
 	var scopeJSON, input []byte
 	var inputDigest, risk, approval, definitionVersion, definitionDigest string
@@ -52,7 +55,11 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		if !ok {
 			return errs.ErrUnavailable
 		}
-		if err := repository.requireAccess(ctx, tx, current, "project.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: gate.ProjectRef}); err != nil {
+		permission, target := "project.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: gate.ProjectRef}
+		if gate.ScopeKind == "ORGANIZATION" {
+			permission, target = "organization.view", organizationTarget(gate.OrganizationRef)
+		}
+		if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 			if !errors.Is(err, errs.ErrForbidden) && !errors.Is(err, errs.ErrNotFound) {
 				return err
 			}

@@ -37,7 +37,7 @@ type Result struct {
 	ArchiveSHA256       string
 	ArchiveSizeBytes    int64
 	Usage               runtimecontract.TokenUsage
-	ToolCalls           []runtimecontract.NativeToolCall
+	ToolCalls           []runtimecontract.NativeToolCall `json:"ToolCalls,omitempty"`
 }
 
 type messageKind uint8
@@ -183,6 +183,9 @@ type protocolState struct {
 	workspaceRoot     string
 	finalID           string
 	fallbackID        string
+	onActivity        func(runtimecontract.RuntimeActivity) error
+	activityErr       error
+	startedToolCalls  map[string]runtimecontract.NativeToolCall
 }
 
 type agentMessage struct {
@@ -192,7 +195,7 @@ type agentMessage struct {
 
 func newProtocolState(expectedSessionID string) *protocolState {
 	return &protocolState{expectedSessionID: expectedSessionID, agentMessages: make(map[string]agentMessage),
-		toolCalls: make(map[string]runtimecontract.NativeToolCall), itemStartedAtMS: make(map[string]int64)}
+		toolCalls: make(map[string]runtimecontract.NativeToolCall), itemStartedAtMS: make(map[string]int64), startedToolCalls: make(map[string]runtimecontract.NativeToolCall)}
 }
 
 func (state *protocolState) captureUsageBaseline() error {
@@ -309,6 +312,9 @@ func (state *protocolState) bindTurn(raw json.RawMessage) error {
 }
 
 func (state *protocolState) notification(method string, raw json.RawMessage) error {
+	if state.activityErr != nil {
+		return state.activityErr
+	}
 	if _, allowed := serverNotificationMethods[method]; !allowed {
 		return errors.New("Codex app-server notification method is not allowed")
 	}
@@ -722,7 +728,21 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 			if timestampMS > 0 {
 				state.itemStartedAtMS[id] = timestampMS
 			}
-			return nil
+			call, _, parseErr := state.parseNativeToolCall(typeName, id, fields, timestampMS, true)
+			if parseErr != nil {
+				return parseErr
+			}
+			if previous, exists := state.startedToolCalls[id]; exists {
+				if previous.Kind != call.Kind {
+					return errors.New("Codex app-server native tool kind changed")
+				}
+				return nil
+			}
+			if _, completed := state.toolCalls[id]; completed || len(state.startedToolCalls) >= runtimecontract.MaximumNativeToolCalls {
+				return errors.New("Codex app-server native tool start is invalid")
+			}
+			state.startedToolCalls[id] = call
+			return state.publishActivity(runtimecontract.RuntimeActivity{ToolCall: &call})
 		}
 		call, terminal, parseErr := state.parseNativeToolCall(typeName, id, fields, timestampMS)
 		if parseErr != nil {
@@ -752,8 +772,17 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 		return nil
 	}
 	value := agentMessage{text: text, phase: phase}
-	if previous, duplicate := state.agentMessages[id]; duplicate && previous != value {
-		return errors.New("Codex app-server agent message changed after completion")
+	if previous, duplicate := state.agentMessages[id]; duplicate {
+		if previous != value {
+			return errors.New("Codex app-server agent message changed after completion")
+		}
+		return nil
+	}
+	if len(state.agentMessages) >= maximumPublishedMessages {
+		return errors.New("Codex app-server published message limit exceeded")
+	}
+	if phase != "" && len(text) > runtimecontract.MaximumRuntimeMessageBytes {
+		return errors.New("Codex app-server published message exceeds its bound")
 	}
 	state.agentMessages[id] = value
 	if phase == "final_answer" {
@@ -764,11 +793,19 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 	} else if phase == "" {
 		state.fallbackID = id
 	}
+	if phase != "" {
+		messagePhase := runtimecontract.RuntimeMessageCommentary
+		if phase == "final_answer" {
+			messagePhase = runtimecontract.RuntimeMessageFinal
+		}
+		message := runtimecontract.RuntimeAgentMessage{ItemID: id, Phase: messagePhase, Revision: 1, Text: text}
+		return state.publishActivity(runtimecontract.RuntimeActivity{Message: &message})
+	}
 	return nil
 }
 
-func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[string]json.RawMessage, completedAtMS int64) (runtimecontract.NativeToolCall, bool, error) {
-	call := runtimecontract.NativeToolCall{CallID: id}
+func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[string]json.RawMessage, completedAtMS int64, running ...bool) (runtimecontract.NativeToolCall, bool, error) {
+	call := runtimecontract.NativeToolCall{CallID: id, Revision: 2}
 	var durationPresent bool
 	var err error
 	switch typeName {
@@ -778,9 +815,6 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 		call.State, call.SafeResult, _, err = terminalNativeState(statusValue, nil)
 		if statusErr != nil || err != nil {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server command status is invalid")
-		}
-		if statusValue == "inProgress" {
-			return runtimecontract.NativeToolCall{}, false, nil
 		}
 		actions, actionErr := safeCommandActions(fields["commandActions"])
 		cwd, cwdErr := decodeBoundedString(fields["cwd"], 4096)
@@ -814,9 +848,6 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 		if statusErr != nil || err != nil {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server file change status is invalid")
 		}
-		if statusValue == "inProgress" {
-			return runtimecontract.NativeToolCall{}, false, nil
-		}
 		changes, changeErr := state.safeFileChanges(fields["changes"])
 		if changeErr != nil {
 			return runtimecontract.NativeToolCall{}, false, changeErr
@@ -844,9 +875,6 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 		call.State, call.SafeResult, _, err = terminalNativeState(statusValue, success)
 		if statusErr != nil || err != nil {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server dynamic tool status is invalid")
-		}
-		if statusValue == "inProgress" {
-			return runtimecontract.NativeToolCall{}, false, nil
 		}
 		tool, toolErr := safeNativeLabel(fields["tool"])
 		namespace := "UNSPECIFIED"
@@ -882,9 +910,6 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 		if statusErr != nil || err != nil {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server image generation status is invalid")
 		}
-		if statusValue == "inProgress" {
-			return runtimecontract.NativeToolCall{}, false, nil
-		}
 		var result string
 		if strictDecode(fields["result"], &result) != nil || len(result) > maximumJSONLLineBytes || !utf8.ValidString(result) {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server image generation result is invalid")
@@ -909,14 +934,22 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 			call.DurationMS = completedAtMS - startedAt
 		}
 	}
-	delete(state.itemStartedAtMS, id)
+	wantRunning := len(running) == 1 && running[0]
+	if wantRunning || call.State == runtimecontract.NativeToolStateRunning {
+		call.Revision, call.State, call.SafeResult, call.DurationMS = 1, runtimecontract.NativeToolStateRunning, "", 0
+	} else {
+		delete(state.itemStartedAtMS, id)
+	}
 	if call.Validate() != nil {
 		return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server native tool projection is invalid")
 	}
-	return call, true, nil
+	return call, call.State != runtimecontract.NativeToolStateRunning, nil
 }
 
 func (state *protocolState) recordNativeToolCall(call runtimecontract.NativeToolCall) error {
+	if started, exists := state.startedToolCalls[call.CallID]; exists && started.Kind != call.Kind {
+		return errors.New("Codex app-server native tool kind changed")
+	}
 	if previous, exists := state.toolCalls[call.CallID]; exists {
 		previousDuration, currentDuration := previous.DurationMS, call.DurationMS
 		previous.DurationMS, call.DurationMS = 0, 0
@@ -934,6 +967,20 @@ func (state *protocolState) recordNativeToolCall(call runtimecontract.NativeTool
 	}
 	state.toolCalls[call.CallID] = call
 	state.toolCallOrder = append(state.toolCallOrder, call.CallID)
+	return state.publishActivity(runtimecontract.RuntimeActivity{ToolCall: &call})
+}
+
+func (state *protocolState) publishActivity(activity runtimecontract.RuntimeActivity) error {
+	if state.activityErr != nil {
+		return state.activityErr
+	}
+	if activity.Validate() != nil {
+		return errors.New("Codex app-server runtime activity is invalid")
+	}
+	if state.onActivity != nil && state.onActivity(activity) != nil {
+		state.activityErr = errors.New("Codex runtime activity delivery failed")
+		return state.activityErr
+	}
 	return nil
 }
 
@@ -1121,7 +1168,7 @@ func safeCommandSource(raw json.RawMessage) (string, error) {
 func terminalNativeState(statusValue string, success *bool) (string, string, bool, error) {
 	switch statusValue {
 	case "inProgress":
-		return "", "", false, nil
+		return runtimecontract.NativeToolStateRunning, "", false, nil
 	case "completed":
 		if success != nil && !*success {
 			return runtimecontract.NativeToolStateFailed, runtimecontract.NativeToolResultFailed, true, nil
@@ -1195,6 +1242,11 @@ func (state *protocolState) complete(turn parsedTurn) error {
 	case "completed":
 		if turn.errorValue != nil {
 			return errors.New("Codex app-server successful turn carries an error")
+		}
+		for id := range state.startedToolCalls {
+			if _, completed := state.toolCalls[id]; !completed {
+				return errors.New("Codex app-server completed with an unfinished native tool")
+			}
 		}
 		messageID := state.finalID
 		if messageID == "" {

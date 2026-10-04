@@ -52,8 +52,20 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 		definition, err := repository.executableIntegrationPackage(format, content)
 		if err != nil || definition.Metadata.Key != key || definition.Metadata.Version != version || definition.Digest != digest ||
 			!definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) ||
-			definition.Spec.Adapter != string(integrationpackage.AdapterOpenAPIMCP) || definition.ValidateConfiguration(configuration) != nil {
+			(definition.Spec.Adapter != string(integrationpackage.AdapterOpenAPIMCP) && definition.Spec.Adapter != string(integrationpackage.AdapterContext7)) || definition.ValidateConfiguration(configuration) != nil {
 			return nil, errs.ErrUnavailable
+		}
+		if definition.Spec.Adapter == string(integrationpackage.AdapterContext7) {
+			if key != "context7" {
+				return nil, errs.ErrUnavailable
+			}
+			// Единственный origin принадлежит repo-owned adapter, а не настройкам
+			// или ответу удалённого MCP. Не расширяем доступ к произвольным URLs.
+			hosts["mcp.context7.com"] = struct{}{}
+			if len(hosts) > shared.MaximumDestinations {
+				return nil, errs.ErrUnavailable
+			}
+			continue
 		}
 		origin := configuration["base_url"]
 		parsed, err := url.Parse(origin)

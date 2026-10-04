@@ -14,5 +14,5 @@ JOIN control_plane.managed_configuration_revisions revision
  AND revision.organization_id=connection.organization_id AND revision.state='PUBLISHED'
  AND configuration.current_revision_id=revision.id
 WHERE connection.lifecycle_state='ACTIVE' AND connection.enabled
-  AND connection.definition_key='openapi-mcp'
+  AND connection.definition_key IN ('openapi-mcp','context7')
 ORDER BY connection.organization_id,connection.ref;

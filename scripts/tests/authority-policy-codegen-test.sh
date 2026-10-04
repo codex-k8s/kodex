@@ -32,7 +32,15 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 86 and .policy.authority_abi_version == 2 and
+	.policy_revision == 87 and .policy.authority_abi_version == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.system-assistant.integration-grants.change") |
+    select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
+      .authority_proof_producer_id == "control-plane.oidc" and
+      .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.query.system-assistant.integration-grant-candidates.get") |
+    select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
+      .authority_proof_producer_id == "control-plane.oidc" and
+      .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 1 and
   ([.policy.operation_bindings[] | select(.operation_id | contains("organization.runtime") or contains("organization.role-images")) |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and
       .authority_proof_producer_id == "control-plane.oidc" and .project_required == false and

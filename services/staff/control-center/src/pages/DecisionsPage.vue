@@ -25,6 +25,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
 import { useGateProjects } from "@/features/workboard/gate-projects";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
+import { gateScopeKey } from "@/features/workboard/gate-scope";
 import {
   decisionActionLayout,
   decisionHistory,
@@ -81,7 +82,9 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const addressedGate = ref<OwnerGate>();
 watch(
   () => [
-    ...catalog.items.value.map((gate) => gate.projectRef),
+    ...catalog.items.value.flatMap((gate) =>
+      gate.projectRef ? [gate.projectRef] : [],
+    ),
     addressedGate.value?.projectRef ?? "",
   ],
   (refs) => void gateProjects.ensure(refs),
@@ -92,6 +95,7 @@ function loadCatalog(more = false): Promise<void> {
     const snapshot = platform.realtimeSnapshot("RUN");
     catalog.applySnapshot(
       {
+        organizationRef: platform.bootstrap?.organizationRef,
         query: "",
         view: view.value,
         pageSize: pageSize.value,
@@ -104,6 +108,7 @@ function loadCatalog(more = false): Promise<void> {
   }
   return catalog.load(
     {
+      organizationRef: platform.bootstrap?.organizationRef,
       projectRef: projectFilter.value || undefined,
       query: search.value,
       view: view.value,
@@ -148,7 +153,9 @@ const unsubscribeProjectReadback = platform.$onAction(
     after(() => {
       if (!pageMounted) return;
       void gateProjects.ensure([
-        ...catalog.items.value.map((gate) => gate.projectRef),
+        ...catalog.items.value.flatMap((gate) =>
+          gate.projectRef ? [gate.projectRef] : [],
+        ),
         addressedGate.value?.projectRef ?? "",
       ]);
     });
@@ -171,6 +178,7 @@ async function loadAddressedGate(): Promise<void> {
       reference,
       projectFilter.value || undefined,
       controller.signal,
+      platform.bootstrap?.organizationRef,
     );
     if (
       controller.signal.aborted ||
@@ -254,7 +262,8 @@ const groups = computed(() => {
     const previous = result.at(-1);
     if (
       previous?.urgency === item.urgency &&
-      previous.items[0]?.gate.projectRef === item.gate.projectRef
+      previous.items[0] &&
+      gateScopeKey(previous.items[0].gate) === gateScopeKey(item.gate)
     )
       previous.items.push(item);
     else
@@ -453,6 +462,7 @@ watch(
     if (!projectFilter.value && !search.value.trim()) void loadCatalog();
     else
       catalog.invalidate({
+        organizationRef: platform.bootstrap?.organizationRef,
         projectRef: projectFilter.value || undefined,
         query: search.value,
         view: view.value,
@@ -518,8 +528,10 @@ function approvalPathLabel(path: string): string {
     .join(".");
 }
 
-function projectPath(item: DecisionInboxItem): string {
-  return `/projects/${encodeURIComponent(item.gate.projectRef)}`;
+function projectPath(item: DecisionInboxItem): string | undefined {
+  return item.gate.scopeKind === "PROJECT" && item.gate.projectRef
+    ? `/projects/${encodeURIComponent(item.gate.projectRef)}`
+    : undefined;
 }
 
 function runNodePath(item: DecisionInboxItem) {
@@ -812,7 +824,12 @@ const serverMessage = useServerMessage();
                 {{ $t(`decisions.urgency.${group.urgency}`) }}
               </span>
               <strong>
-                {{ group.project?.name ?? $t("decisions.projectUnavailable") }}
+                {{
+                  group.items[0]?.gate.scopeKind === "ORGANIZATION"
+                    ? $t("decisions.organizationScope")
+                    : (group.project?.name ??
+                      $t("decisions.projectUnavailable"))
+                }}
               </strong>
               <span class="decision-group-header__count">
                 {{ group.items.length }}
@@ -895,15 +912,23 @@ const serverMessage = useServerMessage();
             <div>
               <dt>
                 <FolderKanban :size="15" aria-hidden="true" />{{
-                  $t("app.project")
+                  $t(
+                    selected.gate.scopeKind === "ORGANIZATION"
+                      ? "decisions.scope"
+                      : "app.project",
+                  )
                 }}
               </dt>
               <dd>
-                <RouterLink :to="projectPath(selected)">
+                <RouterLink
+                  v-if="projectPath(selected)"
+                  :to="projectPath(selected)!"
+                >
                   {{
                     selected.project?.name ?? $t("decisions.projectUnavailable")
                   }}
                 </RouterLink>
+                <span v-else>{{ $t("decisions.organizationScope") }}</span>
               </dd>
             </div>
             <div>

@@ -1248,6 +1248,20 @@ func (repository *Repository) applyResultActionPermissions(
 		return err
 	}
 	if projectRef == "" {
+		for _, gate := range []*entity.OwnerGate{result.Gate} {
+			if gate != nil {
+				if err := repository.projectGateIntent(ctx, runner, scope, gate, true); err != nil {
+					return err
+				}
+				gate.NextActions = gateActions(gate.State, true)
+			}
+		}
+		if result.Event != nil && result.Event.Delta.Gate != nil {
+			if err := repository.projectGateIntent(ctx, runner, scope, result.Event.Delta.Gate, true); err != nil {
+				return err
+			}
+			result.Event.Delta.Gate.NextActions = gateActions(result.Event.Delta.Gate.State, true)
+		}
 		return nil
 	}
 	permissions, err := repository.projectActionPermissions(ctx, runner, scope, projectRef)
@@ -1567,7 +1581,7 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
 	canResolve := true
-	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ResolutionAttachmentSetRef}
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ResolutionAttachmentSetRef, &item.ScopeKind, &item.OrganizationRef}
 	if actorScoped {
 		canResolve = false
 		destinations = append(destinations, &canResolve)
@@ -1601,6 +1615,11 @@ func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.
 	gate, err := scanGate(tx.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID), true)
 	if err != nil {
 		return entity.OwnerGate{}, err
+	}
+	if gate.ScopeKind == "ORGANIZATION" {
+		if err := repository.requireOrganizationRoleImageAccess(ctx, tx, scope); err != nil {
+			return entity.OwnerGate{}, err
+		}
 	}
 	if err := repository.projectGateIntent(ctx, tx, scope, &gate, true); err != nil {
 		return entity.OwnerGate{}, err
@@ -2118,7 +2137,7 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 	if err := projectConnectionPackage(ctx, querier, scope, item); err != nil {
 		return err
 	}
-	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.actorID)
+	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.actorID, scope.authorityProjectID, scope.role)
 	if err != nil {
 		return err
 	}
@@ -2136,6 +2155,7 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 		if json.Unmarshal(resourceScope, &grant.ResourceScope) != nil {
 			return errors.New("decode integration grant resource scope")
 		}
+		grant.ConnectionVersion = item.Version
 		item.Grants = append(item.Grants, grant)
 	}
 	return rows.Err()

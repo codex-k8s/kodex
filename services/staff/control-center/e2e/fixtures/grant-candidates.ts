@@ -34,6 +34,7 @@ export async function checkGrantCandidates(
         risk: "READ",
         approvalRequired: false,
         approvalPolicy: "NONE",
+        allowedApprovalPolicies: ["NONE"],
         operation: "read",
         resourceKind: "GITHUB_REPOSITORY",
         inputFields: [],

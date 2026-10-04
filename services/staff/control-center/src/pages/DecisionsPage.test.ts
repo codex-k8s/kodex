@@ -93,6 +93,8 @@ const run: Run = {
 
 const gate: OwnerGate = {
   ref: "gat_offer",
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   version: 1,
   projectRef: project.ref,
   runRef: run.ref,
@@ -143,6 +145,40 @@ const auditEvent: AuditEvent = {
 };
 
 describe("DecisionsPage", () => {
+  it("показывает организационный SYSTEM gate без фиктивного проекта", async () => {
+    const originalProject = gate.projectRef;
+    gate.scopeKind = "ORGANIZATION";
+    Reflect.deleteProperty(gate, "projectRef");
+    try {
+      const pinia = createPinia();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: "/decisions", component: DecisionsPage },
+          {
+            path: "/:pathMatch(.*)*",
+            component: defineComponent({ render: () => h("div") }),
+          },
+        ],
+      });
+      await router.push("/decisions");
+      await router.isReady();
+      const platform = usePlatformStore(pinia);
+      platform.gates[gate.ref] = gate;
+      const app = createSSRApp(DecisionsPage);
+      app.use(pinia);
+      app.use(router);
+      app.use(applicationI18n);
+      const html = await renderToString(app);
+      expect(html).toContain("Организация · общесистемный помощник");
+      expect(html).not.toContain("Название Проекта недоступно");
+      expect(html).not.toContain("/projects/undefined");
+      expect(html).not.toContain("/projects/prj_sales");
+    } finally {
+      gate.scopeKind = "PROJECT";
+      gate.projectRef = originalProject;
+    }
+  });
   it("не раскрывает имя из старого общего кэша после отказа адресного чтения", async () => {
     gateProjectReadback.available = false;
     try {

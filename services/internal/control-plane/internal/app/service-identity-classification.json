@@ -3,6 +3,16 @@
   "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
   "operations": [
     {
+      "operation_id": "platform.command.system-assistant.integration-grants.change",
+      "source_binding_sha256": "6748ccf1dceaa351db260ed1d18078f4873fdc62274305b71478ed5079cb5f7d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.system-assistant.integration-grant-candidates.get",
+      "source_binding_sha256": "3563cf0a67f8e78f9a110fc1538c9af5924c84ae72acc955717bbdea18556405",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.organization.role-images.recipe-revisions.list",
       "source_binding_sha256": "84c5b62cff8efe2f489c7fb948d01f9e51a7bb6bfc1f137404c48eb957497efc",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"

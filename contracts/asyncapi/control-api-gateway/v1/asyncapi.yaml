@@ -1105,6 +1105,31 @@ components:
         actor: { $ref: "#/components/schemas/RunEventActor" }
         messageKind: { $ref: "#/components/schemas/RunEventMessageKind" }
         toolCall: { $ref: "#/components/schemas/RunToolCall" }
+        execution: { $ref: "#/components/schemas/RunEventExecution" }
+        message: { $ref: "#/components/schemas/RunMessage" }
+    RunEventExecution:
+      type: object
+      additionalProperties: false
+      required: [runRef, nodeRef, sessionRef, turnRef, turnNumber, attempt]
+      properties:
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        sessionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        turnRef: { $ref: "#/components/schemas/OpaqueRef" }
+        turnNumber: { type: integer, format: int64, minimum: 1 }
+        attempt: { type: integer, format: int32, minimum: 1 }
+    RunMessage:
+      type: object
+      additionalProperties: false
+      required: [ref, phase, revision, text]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        phase: { $ref: "#/components/schemas/RunMessagePhase" }
+        revision: { type: integer, format: int64, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 100000 }
+    RunMessagePhase:
+      type: string
+      enum: [USER, COMMENTARY, FINAL]
     RunEventActor:
       type: object
       additionalProperties: false
@@ -1144,13 +1169,14 @@ components:
         capabilityRef: { type: string, maxLength: 160 }
         grantRef: { $ref: "#/components/schemas/OpaqueRef" }
         state: { $ref: "#/components/schemas/RunToolCallState" }
+        revision: { type: integer, format: int64, minimum: 1 }
         durationMs:
           { type: integer, format: int64, minimum: 0, maximum: 86400000 }
         safeResult: { type: string, maxLength: 2000 }
         auditRef: { $ref: "#/components/schemas/OpaqueRef" }
     RunToolCallState:
       type: string
-      enum: [SUCCEEDED, FAILED]
+      enum: [RUNNING, SUCCEEDED, FAILED, CANCELLED]
     RunEventType:
       type: string
       enum:
@@ -1193,7 +1219,8 @@ components:
         [
           ref,
           version,
-          projectRef,
+          scopeKind,
+          organizationRef,
           runRef,
           nodeRef,
           title,
@@ -1202,13 +1229,15 @@ components:
           requestedBy,
           state,
           allowedDecisions,
-          artifactRefs,
+          decisionConsequences,
           openedAt,
           nextActions,
         ]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
+        scopeKind: { type: string, enum: [ORGANIZATION, PROJECT] }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         runRef: { $ref: "#/components/schemas/OpaqueRef" }
         nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -1224,16 +1253,53 @@ components:
         decision: { $ref: "#/components/schemas/OwnerGateDecision" }
         decisionComment: { type: string, maxLength: 4000 }
         openedAt: { $ref: "#/components/schemas/Timestamp" }
+        expiresAt: { $ref: "#/components/schemas/Timestamp" }
         decidedAt: { $ref: "#/components/schemas/Timestamp" }
-        artifactRefs:
+        decidedBy: { $ref: "#/components/schemas/UserSummary" }
+        resolutionAttachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        sourceAttachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        decisionConsequences:
           type: array
-          maxItems: 100
-          items: { $ref: "#/components/schemas/OpaqueRef" }
+          maxItems: 4
+          items: { $ref: "#/components/schemas/OwnerGateDecisionConsequence" }
+        integrationIntent: { $ref: "#/components/schemas/IntegrationIntent" }
         nextActions:
           type: array
           maxItems: 12
           uniqueItems: true
           items: { $ref: "#/components/schemas/NextAction" }
+    OwnerGateDecisionConsequence:
+      type: object
+      additionalProperties: false
+      required: [decision, safeSummary, executesExternalEffect, terminalForRun]
+      properties:
+        decision: { $ref: "#/components/schemas/OwnerGateDecision" }
+        safeSummary: { type: string, maxLength: 1000 }
+        executesExternalEffect: { type: boolean }
+        terminalForRun: { type: boolean }
+    IntegrationIntent:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, connectionName, definitionKey, capabilityKey, operation, resourceScope, effectPreview, effectKey]
+      properties:
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionName: { type: string, maxLength: 160 }
+        definitionKey: { type: string, maxLength: 100 }
+        capabilityKey: { type: string, maxLength: 100 }
+        operation: { type: string, maxLength: 120 }
+        resourceScope: { $ref: "#/components/schemas/IntegrationResourceScope" }
+        effectPreview: { type: object, maxProperties: 32, additionalProperties: true }
+        effectKey: { type: string, pattern: "^[a-f0-9]{64}$" }
+    IntegrationResourceScope:
+      type: object
+      additionalProperties: false
+      required: [kind, values, digest]
+      properties:
+        kind:
+          type: string
+          enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER, HTTPS_RESOURCE]
+        values: { type: object, maxProperties: 8, additionalProperties: { type: string, maxLength: 2048 } }
+        digest: { type: string, pattern: "^[a-f0-9]{64}$" }
     OwnerGateState:
       type: string
       enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED]

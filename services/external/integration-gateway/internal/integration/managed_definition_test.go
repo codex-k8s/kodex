@@ -96,7 +96,10 @@ func TestManagedHealthCheckHonorsNarrowedBudgetAndGate(t *testing.T) {
 					}
 				}
 			}
-			definition = sealedDefinitionFixture(t, definition)
+			if mode == "budget" {
+				definition = sealedDefinitionFixture(t, definition)
+			}
+			// human_gate намеренно содержит default вне allowed policies: parse обязан отказать до HTTP.
 			request := invocationRequest(t, definition, definition.Spec.HealthCheck.Operation, map[string]any{}, testCredential(t, adapter, "health-fixture-token"))
 			calls := 0
 			adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {

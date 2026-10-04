@@ -24,7 +24,7 @@ func TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport(t *tes
 			input, authPath := providerTurnFixture(t, []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"synthetic-old"}}`))
 			usage := runtimecontract.TokenUsage{TotalTokens: 30, InputTokens: 20, OutputTokens: 10, ReasoningOutputTokens: 3}
 			want := Result{Usage: usage, FinalMessage: "unconfirmed final", Outcome: "SUCCEEDED", SessionID: "unconfirmed-session",
-				ArchivePath: "unconfirmed-archive", ToolCalls: []runtimecontract.NativeToolCall{{CallID: "call-one", Kind: runtimecontract.NativeToolKindSleep,
+				ArchivePath: "unconfirmed-archive", ToolCalls: []runtimecontract.NativeToolCall{{CallID: "call-one", Revision: 2, Kind: runtimecontract.NativeToolKindSleep,
 					State: runtimecontract.NativeToolStateSucceeded, SafeResult: runtimecontract.NativeToolResultCompleted,
 					SafeParameters: map[string]any{"requested_duration_ms": int64(25)}, DurationMS: 25}}}
 			ctx, cancel := context.WithCancel(t.Context())
@@ -87,10 +87,7 @@ func TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport(t *tes
 			if mode == "before effect" {
 				want = Result{}
 			}
-			// JSON меняет числовые значения map, поэтому сверяем канонические bytes.
-			gotCalls, _ := json.Marshal(got.ToolCalls)
-			wantCalls, _ := json.Marshal(want.ToolCalls)
-			if got.Usage != want.Usage || !bytes.Equal(gotCalls, wantCalls) || got.Outcome != "" || got.FinalMessage != "" ||
+			if got.Usage != want.Usage || len(got.ToolCalls) != 0 || got.Outcome != "" || got.FinalMessage != "" ||
 				got.SessionID != "" || got.ArchivePath != "" || got.ArchiveRelativePath != "" || got.ArchiveSHA256 != "" || got.ArchiveSizeBytes != 0 {
 				t.Fatal("broker lost measurements or published an unconfirmed result")
 			}
@@ -120,7 +117,7 @@ func TestBrokerRejectsMalformedPartialMeasurements(t *testing.T) {
 			case "too many calls":
 				response.Result.ToolCalls = make([]runtimecontract.NativeToolCall, runtimecontract.MaximumNativeToolCalls+1)
 			}
-			encoded, _ := json.Marshal(response)
+			encoded, _ := json.Marshal(brokerFrame{Version: providerBrokerVersion, Sequence: 1, Kind: brokerFrameTerminal, Terminal: &response})
 			if mode == "trailing data" {
 				encoded = append(encoded, []byte(" {}")...)
 			}

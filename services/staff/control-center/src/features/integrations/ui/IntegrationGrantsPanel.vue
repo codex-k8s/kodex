@@ -13,6 +13,7 @@ import { useI18n } from "vue-i18n";
 
 import {
   connectionAllows,
+  allowedIntegrationApprovalPolicies,
   type IntegrationGrantPresentation,
 } from "@/features/integrations/ui/model";
 import {
@@ -25,6 +26,7 @@ import type {
   IntegrationGrantProjectCandidate,
   IntegrationGrantRecipientCandidate,
   IntegrationGrantCapabilityCandidate,
+  IntegrationCapability,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
@@ -76,6 +78,10 @@ const projectCandidate = ref<IntegrationGrantProjectCandidate>();
 const recipientCandidate = ref<IntegrationGrantRecipientCandidate>();
 const capabilityCandidate = ref<IntegrationGrantCapabilityCandidate>();
 const approvalScopePaths = ref<string[]>([]);
+const selectedApprovalPolicy = ref<IntegrationCapability["approvalPolicy"]>();
+const availableApprovalPolicies = computed(() =>
+  allowedIntegrationApprovalPolicies(capabilityCandidate.value?.capability),
+);
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 useCursorInfiniteScroll({
@@ -217,11 +223,13 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     recipient.recipientRef !== props.targetRef ||
     recipient.recipientKind !== props.targetKind ||
     capability.capability.key !== props.capabilityKey ||
-    capability.pins.connectionVersion !== connection.version
+    capability.pins.connectionVersion !== connection.version ||
+    !selectedApprovalPolicy.value ||
+    !availableApprovalPolicies.value.includes(selectedApprovalPolicy.value)
   )
     return undefined;
   if (
-    capability.capability.approvalPolicy === "HUMAN_SCOPED" &&
+    selectedApprovalPolicy.value === "HUMAN_SCOPED" &&
     !validApprovalScopeSelection(
       approvalScopePaths.value,
       availableApprovalScopePaths.value,
@@ -235,7 +243,8 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     recipientKind: recipient.recipientKind,
     recipientRef: recipient.recipientRef,
     capabilityKey: capability.capability.key,
-    ...(capability.capability.approvalPolicy === "HUMAN_SCOPED"
+    approvalPolicy: selectedApprovalPolicy.value,
+    ...(selectedApprovalPolicy.value === "HUMAN_SCOPED"
       ? { approvalScopePaths: [...approvalScopePaths.value].sort() }
       : {}),
   };
@@ -246,11 +255,18 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
     ? [...new Set([...approvalScopePaths.value, path])].sort()
     : approvalScopePaths.value.filter((candidate) => candidate !== path);
 }
+function changeApprovalPolicy(value: string): void {
+  selectedApprovalPolicy.value = availableApprovalPolicies.value.find(
+    (policy) => policy === value,
+  );
+  approvalScopePaths.value = [];
+}
 function submit(): void {
   if (selection.value && !props.busy) emit("save", selection.value);
 }
 function clearCapability(): void {
   approvalScopePaths.value = [];
+  selectedApprovalPolicy.value = undefined;
   capabilityGeneration += 1;
   capabilityCandidate.value = undefined;
   chosenCapability.value = undefined;
@@ -304,7 +320,17 @@ function chooseCapability(option: AsyncEntityOption): void {
       grant.ref === candidate.currentGrantRef &&
       grant.version === candidate.currentGrantVersion,
   );
-  if (candidate.capability.approvalPolicy === "HUMAN_SCOPED" && existing) {
+  const preferred =
+    existing?.approvalPolicy ?? candidate.capability.approvalPolicy;
+  selectedApprovalPolicy.value = availableApprovalPolicies.value.includes(
+    preferred,
+  )
+    ? preferred
+    : undefined;
+  if (
+    selectedApprovalPolicy.value === "HUMAN_SCOPED" &&
+    existing?.approvalPolicy === "HUMAN_SCOPED"
+  ) {
     const previous = existing.approvalScopePaths ?? [];
     if (
       previous.every((path) => availableApprovalScopePaths.value.includes(path))
@@ -781,12 +807,6 @@ const canManageSelected = computed(
                   {{ resourceKindLabel(selectedCapability.resourceKind) }}
                 </dd>
               </div>
-              <div>
-                <dt>{{ t("integrations.approvalPolicy") }}</dt>
-                <dd>
-                  {{ approvalPolicyLabel(selectedCapability.approvalPolicy) }}
-                </dd>
-              </div>
             </dl>
             <details class="grant-technical-details">
               <summary>{{ t("integrations.technicalDetails") }}</summary>
@@ -794,8 +814,35 @@ const canManageSelected = computed(
             </details>
           </section>
 
+          <label v-if="selectedCapability" class="field">
+            <span>{{ t("integrations.approvalPolicy") }}</span>
+            <select
+              :id="`${fieldPrefix}-approval-policy`"
+              :name="`${fieldPrefix}-approval-policy`"
+              :value="selectedApprovalPolicy ?? ''"
+              :disabled="
+                busy || !canManageSelected || !availableApprovalPolicies.length
+              "
+              @change="
+                changeApprovalPolicy(($event.target as HTMLSelectElement).value)
+              "
+            >
+              <option value="" disabled>
+                {{ t("integrations.chooseApprovalPolicy") }}
+              </option>
+              <option
+                v-for="policy in availableApprovalPolicies"
+                :key="policy"
+                :value="policy"
+              >
+                {{ approvalPolicyLabel(policy) }}
+              </option>
+            </select>
+            <small>{{ t("integrations.approvalPolicySelectionHelp") }}</small>
+          </label>
+
           <fieldset
-            v-if="selectedCapability?.approvalPolicy === 'HUMAN_SCOPED'"
+            v-if="selectedApprovalPolicy === 'HUMAN_SCOPED'"
             class="capability-boundary"
           >
             <legend>{{ t("integrations.approvalScopeTitle") }}</legend>

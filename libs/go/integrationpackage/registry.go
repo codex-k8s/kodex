@@ -25,6 +25,7 @@ const (
 	AdapterHTTPSJSONRead AdapterKey = "HTTPS_JSON_READ"
 	AdapterOpenAPIMCP    AdapterKey = "OPENAPI_MCP"
 	AdapterMattermost    AdapterKey = "MATTERMOST_INTERACTION"
+	AdapterContext7      AdapterKey = "CONTEXT7"
 
 	OwnerIntegrationGateway AdapterOwner = "integration-gateway"
 	OwnerInteractionGateway AdapterOwner = "interaction-gateway"
@@ -70,6 +71,7 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterHTTPSJSONRead: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterOpenAPIMCP:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
+	AdapterContext7:      {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 }
 
 func Adapter(key string) (AdapterDescriptor, bool) {

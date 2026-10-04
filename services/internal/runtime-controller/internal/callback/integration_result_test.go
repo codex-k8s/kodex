@@ -250,3 +250,41 @@ func TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt(t *testing.T) {
 		t.Fatal("untyped result became authoritative projection")
 	}
 }
+
+func TestIntegrationLegacyLocatorIsRejectedBeforeOwnerMutation(t *testing.T) {
+	grant := integrationGrantFixture()
+	legacy := map[string]any{
+		"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey,
+		"definition_version": grant.DefinitionVersion, "definition_digest": grant.DefinitionDigest,
+		"input_schema_sha256": grant.InputSchemaSHA256, "input": map[string]any{"value": "private-input"},
+	}
+	for _, withRef := range []bool{false, true} {
+		t.Run(map[bool]string{false: "legacy", true: "mixed"}[withRef], func(t *testing.T) {
+			args := make(map[string]any, len(legacy)+1)
+			for key, value := range legacy {
+				args[key] = value
+			}
+			if withRef {
+				args["grant_ref"] = grant.Ref
+			}
+			client := &integrationResultClient{}
+			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			input := runtimecontract.RunnerInput{IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
+			params, _ := json.Marshal(map[string]any{"name": "invoke_integration", "arguments": args})
+			writer := httptest.NewRecorder()
+			server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`1`), Params: params}, input)
+			var wire struct {
+				Result struct {
+					IsError           bool           `json:"isError"`
+					StructuredContent map[string]any `json:"structuredContent"`
+				} `json:"result"`
+			}
+			if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError || wire.Result.StructuredContent["error_code"] != "INTEGRATION_INPUT_INVALID" {
+				t.Fatalf("legacy locator was not rejected: %s", writer.Body.String())
+			}
+			if len(client.resolves) != 0 || len(client.reads) != 0 || client.projection != nil || strings.Contains(writer.Body.String(), "private-input") {
+				t.Fatal("legacy locator reached owner state or leaked input")
+			}
+		})
+	}
+}

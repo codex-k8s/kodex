@@ -120,6 +120,8 @@ function gate(runRef: string): OwnerGate {
   return {
     ref: "gate_owner",
     version: 1,
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     projectRef: "project_sales",
     runRef,
     nodeRef: "node_gate",

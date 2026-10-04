@@ -141,7 +141,7 @@ func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 	inputSchema := `{"additionalProperties":false,"properties":{},"required":[],"type":"object"}`
 	inputSchemaDigest := sha256.Sum256([]byte(inputSchema))
 	valid.IntegrationGrants = []RunnerIntegrationGrant{{
-		Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh", DefinitionKey: "crm",
+		Ref: "grant_abcdefgh", GrantVersion: 1, ConnectionRef: "conn_abcdefgh", ConnectionVersion: 1, ApprovalPolicy: "NONE", DefinitionKey: "crm",
 		ConnectionName: "CRM", CapabilityKey: "crm.read", CapabilityName: "Read CRM",
 		CapabilityDescription: "Read bounded CRM records.", Risk: "READ", DefinitionVersion: "1.2.3",
 		DefinitionDigest: strings.Repeat("8", 64), Operation: "crm.records.read", InputSchema: inputSchema,

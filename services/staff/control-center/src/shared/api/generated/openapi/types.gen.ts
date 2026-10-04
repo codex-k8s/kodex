@@ -2773,6 +2773,8 @@ export type RunEvent = {
     actor?: RunEventActor;
     messageKind?: 'STATE' | 'USER_MESSAGE' | 'ASSISTANT_MESSAGE' | 'INTERMEDIATE_MESSAGE' | 'FINAL_MESSAGE' | 'TOOL_CALL' | 'PLAN_UPDATE' | 'ARTIFACT' | 'INCIDENT' | 'OWNER_GATE';
     toolCall?: RunToolCall;
+    execution?: RunEventExecution;
+    message?: RunMessage;
     occurredAt: Timestamp;
     graphRevision: number;
     run: RunDelta;
@@ -2781,6 +2783,22 @@ export type RunEvent = {
     gate?: OwnerGate;
     artifact?: Artifact;
     incident?: Incident;
+};
+
+export type RunEventExecution = {
+    runRef: OpaqueRef;
+    nodeRef: OpaqueRef;
+    sessionRef: OpaqueRef;
+    turnRef: OpaqueRef;
+    turnNumber: number;
+    attempt: number;
+};
+
+export type RunMessage = {
+    ref: OpaqueRef;
+    phase: 'USER' | 'COMMENTARY' | 'FINAL';
+    revision: number;
+    text: string;
 };
 
 export type RunEventActor = {
@@ -2797,7 +2815,8 @@ export type RunToolCall = {
     };
     capabilityRef?: string;
     grantRef?: OpaqueRef;
-    state: 'SUCCEEDED' | 'FAILED';
+    state: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+    revision?: number;
     durationMs: number;
     safeResult: string;
     auditRef: OpaqueRef;
@@ -2886,10 +2905,45 @@ export type RunEventPage = {
     complete: boolean;
 };
 
+export type SystemAssistantIntegrationGrantInput = {
+    connectionRef: OpaqueRef;
+    capabilityKey: string;
+    enabled: boolean;
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    approvalScopePaths?: Array<string>;
+};
+
+export type SystemAssistantIntegrationGrantCandidate = {
+    capability: IntegrationCapability;
+    grantable: boolean;
+    reason: IntegrationCandidateReason;
+    currentGrantRef?: OpaqueRef;
+    currentGrantVersion: number;
+    currentGrantEnabled: boolean;
+    currentApprovalPolicy?: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    currentApprovalScopePaths: Array<string>;
+};
+
+export type SystemAssistantIntegrationGrantCandidates = {
+    scopeKind: 'ORGANIZATION';
+    organizationRef: OpaqueRef;
+    assistantRef: OpaqueRef;
+    assistantVersion: number;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    definitionVersion: string;
+    definitionDigest: string;
+    items: Array<SystemAssistantIntegrationGrantCandidate>;
+    total: number;
+    nextPageToken: string;
+};
+
 export type OwnerGate = {
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    scopeKind: 'ORGANIZATION' | 'PROJECT';
+    organizationRef: OpaqueRef;
+    projectRef?: OpaqueRef;
     runRef: OpaqueRef;
     nodeRef: OpaqueRef;
     title: string;
@@ -3532,6 +3586,7 @@ export type IntegrationCapability = {
     approvalRequired: boolean;
     operation: string;
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    allowedApprovalPolicies: Array<'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED'>;
     resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
@@ -3829,6 +3884,7 @@ export type IntegrationConnectionCommand = {
 
 export type IntegrationGrantInput = {
     capabilityKey: string;
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
     agentRef?: OpaqueRef;
     workflowRef?: OpaqueRef;
     enabled: boolean;
@@ -3837,7 +3893,7 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
+    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
     action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
@@ -3936,7 +3992,7 @@ export type AssistantContextDescriptor = {
     entityRef: string;
     entityName: string;
     entityVersion?: number;
-    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
 };
 
 export type AssistantPlanReceipt = {
@@ -10988,6 +11044,66 @@ export type UpdateSystemAssistantOwnerInstructionsResponses = {
 };
 
 export type UpdateSystemAssistantOwnerInstructionsResponse = UpdateSystemAssistantOwnerInstructionsResponses[keyof UpdateSystemAssistantOwnerInstructionsResponses];
+
+export type GetSystemAssistantIntegrationGrantCandidatesData = {
+    body?: never;
+    path?: never;
+    query: {
+        connectionRef: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/system-assistant/integration-grant-candidates';
+};
+
+export type GetSystemAssistantIntegrationGrantCandidatesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSystemAssistantIntegrationGrantCandidatesError = GetSystemAssistantIntegrationGrantCandidatesErrors[keyof GetSystemAssistantIntegrationGrantCandidatesErrors];
+
+export type GetSystemAssistantIntegrationGrantCandidatesResponses = {
+    /**
+     * Безопасные capabilities и точные server-owned grant pins
+     */
+    200: SystemAssistantIntegrationGrantCandidates;
+};
+
+export type GetSystemAssistantIntegrationGrantCandidatesResponse = GetSystemAssistantIntegrationGrantCandidatesResponses[keyof GetSystemAssistantIntegrationGrantCandidatesResponses];
+
+export type ChangeSystemAssistantIntegrationGrantData = {
+    body: SystemAssistantIntegrationGrantInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-assistant/integration-grants';
+};
+
+export type ChangeSystemAssistantIntegrationGrantErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ChangeSystemAssistantIntegrationGrantError = ChangeSystemAssistantIntegrationGrantErrors[keyof ChangeSystemAssistantIntegrationGrantErrors];
+
+export type ChangeSystemAssistantIntegrationGrantResponses = {
+    /**
+     * Selected policy сохранена и аудирована в точном grant; активный effect блокирует изменение policy
+     */
+    200: IntegrationConnection;
+};
+
+export type ChangeSystemAssistantIntegrationGrantResponse = ChangeSystemAssistantIntegrationGrantResponses[keyof ChangeSystemAssistantIntegrationGrantResponses];
 
 export type CommandSystemAssistantData = {
     body: {

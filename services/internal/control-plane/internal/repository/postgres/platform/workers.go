@@ -9,6 +9,7 @@ import (
 	"fmt"
 	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1151,12 +1152,15 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	definition, packageErr := repository.integrationPackage(ctx, tx, scope.organizationID, input["connection_ref"], definitionKey, definitionVersion, definitionDigest)
 	capability, capabilityExists := definition.Capability(input["capability_key"])
 	if packageErr != nil || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
-		capability.Risk != risk || capability.ApprovalPolicy != approvalPolicy || capability.ResourceScope.Kind != resourceKind {
+		capability.Risk != risk || !capability.AllowsApprovalPolicy(approvalPolicy) || capability.ResourceScope.Kind != resourceKind || grantVersion < 1 {
 		return nil, errs.ErrForbidden
 	}
 	canonicalInput, err := capability.ValidateInput(encodedInput)
 	if err != nil {
 		return nil, errs.ErrInvalid
+	}
+	if definition.ValidateInvocationApprovalPolicy(capability, approvalPolicy, canonicalInput) != nil {
+		return nil, errs.ErrForbidden
 	}
 	if len(encodedInput) > 64<<10 && (definitionKey != "github" || capability.Operation != "github.repository.content.update") {
 		return nil, errs.ErrInvalid
@@ -1170,7 +1174,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	inputDigestHex := hex.EncodeToString(inputDigest[:])
 	intentParts := []string{
 		input["node_ref"], input["idempotency_key"], input["connection_ref"], input["capability_key"],
-		inputDigestHex, definitionDigest, resourceScopeDigest,
+		inputDigestHex, definitionDigest, resourceScopeDigest, grantRef, strconv.FormatInt(grantVersion, 10), approvalPolicy,
 	}
 	mailboxGate := false
 	if definitionKey == "email" {
@@ -1195,7 +1199,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		state = "WAITING_APPROVAL"
 	}
 	var approvalScopeID string
-	pinnedGrantVersion := int64(0)
+	pinnedGrantVersion := grantVersion
 	pinnedApprovalScopePaths := []string{}
 	if approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
 		if agentID == "" || grantVersion < 1 || mailboxGate {
@@ -1337,6 +1341,8 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		resourceKind, resourceScopeDigest, effectKey, inputDigest            string
 		approvalScopeDigest, approvalSchemaDigest                            string
 		approvalScopePaths                                                   []string
+		grantRef                                                             string
+		grantVersion                                                         int64
 		generation                                                           int64
 		configuration, boundedInput, resourceScope                           []byte
 		credential                                                           entity.IntegrationCredentialRevision
@@ -1354,6 +1360,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
 			&item.credentialCreatedAt, &item.initiatorRef,
 			&item.approvalScopePaths, &item.approvalScopeDigest, &item.approvalSchemaDigest,
+			&item.grantRef, &item.grantVersion,
 		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
@@ -1375,11 +1382,13 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		if err != nil {
 			return nil, err
 		}
+		capability, capabilityOK := definition.Capability(item.capabilityKey)
+		if !capabilityOK || item.grantVersion < 1 || item.grantRef == "" ||
+			capability.Risk != item.risk || capability.Operation != item.operation ||
+			definition.ValidateInvocationApprovalPolicy(capability, item.approvalPolicy, item.boundedInput) != nil {
+			return nil, errs.ErrForbidden
+		}
 		if item.approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
-			capability, ok := definition.Capability(item.capabilityKey)
-			if !ok || capability.ApprovalPolicy != item.approvalPolicy {
-				return nil, errs.ErrForbidden
-			}
 			resolvedScope, scopeErr := capability.ResolveApprovalScope(item.approvalScopePaths, item.boundedInput)
 			schemaDigest, digestErr := capability.InputSchemaDigest()
 			if scopeErr != nil || digestErr != nil || resolvedScope.Digest != item.approvalScopeDigest ||
@@ -1411,6 +1420,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			"capabilityKey":     item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
 			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
 			"operation": item.operation, "risk": item.risk, "approvalPolicy": item.approvalPolicy,
+			"grantRef": item.grantRef, "grantVersion": item.grantVersion,
 			"resourceKind": item.resourceKind, "resourceScope": resourceScope,
 			"resourceScopeDigest": item.resourceScopeDigest, "effectKey": item.effectKey, "inputDigest": item.inputDigest,
 			"workMode": workMode,

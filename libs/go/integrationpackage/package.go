@@ -103,17 +103,18 @@ type ResourceScope struct {
 }
 
 type Capability struct {
-	Key            string        `yaml:"key" json:"key"`
-	Name           string        `yaml:"name" json:"name"`
-	Description    string        `yaml:"description" json:"description"`
-	Operation      string        `yaml:"operation" json:"operation"`
-	Risk           string        `yaml:"risk" json:"risk"`
-	ApprovalPolicy string        `yaml:"approvalPolicy" json:"approvalPolicy"`
-	ResourceScope  ResourceScope `yaml:"resourceScope" json:"resourceScope"`
-	InputFields    []Field       `yaml:"inputFields" json:"inputFields"`
-	OutputFields   []Field       `yaml:"outputFields" json:"outputFields"`
-	Execution      Execution     `yaml:"execution" json:"execution"`
-	OpenAPI        *OpenAPIHTTP  `yaml:"openapi,omitempty" json:"openapi,omitempty"`
+	Key                     string        `yaml:"key" json:"key"`
+	Name                    string        `yaml:"name" json:"name"`
+	Description             string        `yaml:"description" json:"description"`
+	Operation               string        `yaml:"operation" json:"operation"`
+	Risk                    string        `yaml:"risk" json:"risk"`
+	ApprovalPolicy          string        `yaml:"approvalPolicy" json:"approvalPolicy"`
+	AllowedApprovalPolicies []string      `yaml:"allowedApprovalPolicies" json:"allowedApprovalPolicies"`
+	ResourceScope           ResourceScope `yaml:"resourceScope" json:"resourceScope"`
+	InputFields             []Field       `yaml:"inputFields" json:"inputFields"`
+	OutputFields            []Field       `yaml:"outputFields" json:"outputFields"`
+	Execution               Execution     `yaml:"execution" json:"execution"`
+	OpenAPI                 *OpenAPIHTTP  `yaml:"openapi,omitempty" json:"openapi,omitempty"`
 }
 
 // OpenAPIHTTP является закреплённым результатом import/admission, а не
@@ -596,9 +597,7 @@ func validate(result *Package) error {
 	for _, capability := range result.Spec.Capabilities {
 		if !validKey(capability.Key) || len(capability.Name) == 0 || len(capability.Name) > 120 ||
 			len(capability.Description) == 0 || len(capability.Description) > 500 || !validKey(capability.Operation) ||
-			!validRisk(capability.Risk) || !validApprovalPolicy(capability.ApprovalPolicy) ||
-			(capability.Risk != "READ" && capability.ApprovalPolicy == "NONE" &&
-				!emailMailboxApproval(result, capability)) ||
+			!validRisk(capability.Risk) || !validCapabilityApprovalPolicies(result, capability) ||
 			!validResourceKind(capability.ResourceScope.Kind) ||
 			len(capability.ResourceScope.ConnectionFields) == 0 || len(capability.ResourceScope.ConnectionFields) > 8 ||
 			len(capability.InputFields) > 24 || len(capability.OutputFields) == 0 || len(capability.OutputFields) > 24 ||
@@ -637,8 +636,7 @@ func validate(result *Package) error {
 				return errors.New("OpenAPI operationId is duplicated")
 			}
 			openAPIOperationIDs[capability.OpenAPI.OperationID] = struct{}{}
-		} else if capability.OpenAPI != nil || capability.Execution.Idempotency == string(IdempotencyOneAttempt) ||
-			capability.ApprovalPolicy == string(ApprovalHumanScoped) {
+		} else if capability.OpenAPI != nil || capability.Execution.Idempotency == string(IdempotencyOneAttempt) {
 			return errors.New("integration capability exceeds adapter contract")
 		}
 		if _, exists := capabilityOperations[capability.Operation]; exists {

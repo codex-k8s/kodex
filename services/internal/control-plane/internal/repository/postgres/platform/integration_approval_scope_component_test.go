@@ -73,6 +73,7 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 	for index := range modified.Spec.Capabilities {
 		if modified.Spec.Capabilities[index].Key == "synthetic.journal.write" {
 			modified.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_SCOPED"
+			modified.Spec.Capabilities[index].AllowedApprovalPolicies = []string{"HUMAN_SCOPED"}
 		}
 	}
 	raw, err := json.Marshal(modified)
@@ -140,7 +141,7 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "scoped-agent", "Scoped operator")
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "scoped-invalid-grant", ExpectedVersion: &connectionVersion},
-		Payload: command.IntegrationGrantInput{ConnectionRef: connection.Connection.Ref,
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_SCOPED", ConnectionRef: connection.Connection.Ref,
 			CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: true,
 			ApprovalScopePaths: []string{"/action", "/action"}},
 	}); !errors.Is(err, domainerrs.ErrInvalid) {
@@ -148,7 +149,7 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 	}
 	granted, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "scoped-grant", ExpectedVersion: &connectionVersion},
-		Payload: command.IntegrationGrantInput{ConnectionRef: connection.Connection.Ref,
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_SCOPED", ConnectionRef: connection.Connection.Ref,
 			CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: true,
 			ApprovalScopePaths: []string{"/action"}},
 	})
@@ -275,13 +276,20 @@ SET reserved_effects=max_effects WHERE origin_gate_id=(SELECT id FROM control_pl
 	if err != nil || stringMap(changed, "state") != "WAITING_APPROVAL" || stringMap(changed, "gateRef") == "" {
 		t.Fatalf("changed typed scope skipped gate: state=%q err=%v", stringMap(changed, "state"), err)
 	}
-	reconfigured, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
+	_, err = service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "scoped-change-paths", ExpectedVersion: &granted.Connection.Version},
-		Payload: command.IntegrationGrantInput{ConnectionRef: connection.Connection.Ref,
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_SCOPED", ConnectionRef: connection.Connection.Ref,
 			CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: true,
 			ApprovalScopePaths: []string{"/value"}}})
-	if err != nil || reconfigured.Connection == nil {
-		t.Fatalf("change scoped grant paths: %v", err)
+	if !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("active scoped grant path change was accepted: %v", err)
+	}
+	revoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "scoped-revoke", ExpectedVersion: &granted.Connection.Version},
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_SCOPED", ConnectionRef: connection.Connection.Ref,
+			CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: false}})
+	if err != nil || revoked.Connection == nil {
+		t.Fatalf("revoke scoped grant: %v", err)
 	}
 	staleGate, err := service.GetOwnerGate(ctx, owner, stringMap(changed, "gateRef"))
 	if err != nil || staleGate.IntegrationIntent == nil {
@@ -303,13 +311,6 @@ SET reserved_effects=max_effects WHERE origin_gate_id=(SELECT id FROM control_pl
 	claimsBeforeRevoke, err := service.ClaimIntegrationInvocations(ctx, gateway, "scoped-gateway", 10)
 	if err != nil || len(claimsBeforeRevoke) != 0 {
 		t.Fatalf("grant path change did not revoke a queued scoped effect: count=%d err=%v", len(claimsBeforeRevoke), err)
-	}
-	revoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "scoped-revoke", ExpectedVersion: &reconfigured.Connection.Version},
-		Payload: command.IntegrationGrantInput{ConnectionRef: connection.Connection.Ref,
-			CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: false}})
-	if err != nil || revoked.Connection == nil {
-		t.Fatalf("revoke scoped grant: %v", err)
 	}
 	claims, err := service.ClaimIntegrationInvocations(ctx, gateway, "scoped-gateway", 10)
 	if err != nil || len(claims) != 0 {

@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: confluence
-  version: 1.2.0
+  version: 1.2.1
   origin: SHIPPED
 spec:
   name: Confluence
@@ -28,6 +28,7 @@ spec:
       operation: confluence.space.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields: []
       outputFields:
@@ -41,6 +42,7 @@ spec:
       operation: confluence.page.search
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
@@ -57,6 +59,7 @@ spec:
       operation: confluence.page.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
@@ -73,6 +76,7 @@ spec:
       operation: confluence.page.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
@@ -90,6 +94,7 @@ spec:
       operation: confluence.page.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
@@ -108,6 +113,7 @@ spec:
       operation: confluence.attachment.upload
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
@@ -125,6 +131,7 @@ spec:
       operation: confluence.space.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields: []
       outputFields:
@@ -138,6 +145,7 @@ spec:
       operation: confluence.page.descendant.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -154,6 +162,7 @@ spec:
       operation: confluence.page.comment.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -171,6 +180,7 @@ spec:
       operation: confluence.page.comment.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -189,6 +199,7 @@ spec:
       operation: confluence.page.comment.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -208,6 +219,7 @@ spec:
       operation: confluence.page.comment.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -228,6 +240,7 @@ spec:
       operation: confluence.page.comment.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -242,6 +255,7 @@ spec:
       operation: confluence.attachment.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -258,6 +272,7 @@ spec:
       operation: confluence.attachment.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -276,6 +291,7 @@ spec:
       operation: confluence.attachment.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}

@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -228,6 +229,17 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	if !toolCapabilityMatches(payload.Tool, payload.CapabilityRef, payload.GrantRef != "", systemAssistant) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	previous, err := latestRuntimeActivity(ctx, tx, scope, lease, "TOOL", payload.CallRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if previous != nil {
+		old := previous.ToolCall
+		if old == nil || old.Tool != payload.Tool || old.GrantRef != payload.GrantRef || old.CapabilityRef != payload.CapabilityRef ||
+			payload.Revision <= old.Revision || old.State != "RUNNING" || payload.State == "RUNNING" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+	}
 	auditRef, err := newRef("aud")
 	if err != nil {
 		return commandOutcome{}, err
@@ -240,7 +252,7 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	}
 	toolCall := &entity.RunToolCall{Ref: payload.CallRef, Tool: payload.Tool, SafeParameters: payload.SafeParameters,
 		CapabilityRef: payload.CapabilityRef, GrantRef: payload.GrantRef, State: payload.State,
-		DurationMS: payload.DurationMS, SafeResult: strings.TrimSpace(payload.SafeResult), AuditRef: auditRef}
+		DurationMS: payload.DurationMS, SafeResult: strings.TrimSpace(payload.SafeResult), AuditRef: auditRef, Revision: payload.Revision}
 	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"),
 		payload.CallRef, "TOOL_CALL_RECORDED", stringMap(lease, "nodeRef"), "", "", "",
 		"i18n:RUNTIME_TOOL_CALL_RECORDED", "", "")
@@ -251,15 +263,9 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	if systemAssistant {
 		actorKind = "SYSTEM_ASSISTANT"
 	}
-	if _, err := tx.Exec(ctx, queryRuntimeRecordtoolcallUpdateEvent, scope.organizationID, actorKind, actorRef,
-		actorName, asJSON(toolCall), event.Ref); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	if err := attachToolCallActivity(ctx, tx, scope, &event, entity.RunEventActor{Kind: actorKind, Ref: actorRef, Name: actorName}, toolCall); err != nil {
+		return commandOutcome{}, err
 	}
-	if _, err := tx.Exec(ctx, queryRuntimeRecordtoolcallUpdateOutbox, scope.organizationID, asJSON(toolCall), event.Ref); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	event.Actor = entity.RunEventActor{Kind: actorKind, Ref: actorRef, Name: actorName}
-	event.MessageKind, event.ToolCall = "TOOL_CALL", toolCall
 	return commandOutcome{result: command.Result{Event: &event}, projectID: stringMap(lease, "projectID"),
 		projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_TOOL_CALL", resourceRef: payload.CallRef,
 		summary: "i18n:RUNTIME_TOOL_CALL_RECORDED"}, nil
@@ -267,7 +273,7 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 
 func validToolCallProjection(input command.RunToolCallInput) bool {
 	if len(input.CallRef) < 8 || len(input.CallRef) > 96 || len(input.Tool) < 1 || len(input.Tool) > 120 ||
-		(input.State != "SUCCEEDED" && input.State != "FAILED") || input.DurationMS < 0 || input.DurationMS > 86_400_000 ||
+		!validToolActivityLifecycle(input.State, input.Revision, input.SafeResult, input.DurationMS) || input.DurationMS < 0 || input.DurationMS > 86_400_000 ||
 		len([]rune(input.SafeResult)) > 2000 || input.SafeParameters == nil || len(input.SafeParameters) > 32 ||
 		len(asJSON(input.SafeParameters)) > 4096 {
 		return false
@@ -761,6 +767,16 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			instructions = materializedPrompt.Prompt
 			capabilities = materializedPrompt.EffectiveCapabilities
 			integrationGrants = filterIntegrationGrants(integrationGrants, capabilities)
+			mcpScopeKind, mcpScopeRef := "AGENT", agentRef
+			if runtimeAssistantScope(stableKey) == runtimecontract.AssistantScopeSystem {
+				mcpScopeKind = "SYSTEM"
+			} else if runtimeAssistantScope(stableKey) == runtimecontract.AssistantScopeProject {
+				mcpScopeKind, mcpScopeRef = "PROJECT", candidate.assistantProfileRef
+			}
+			managedMCPProfiles, err := runtimeManagedMCPProfiles(ctx, tx, scope.organizationID, mcpScopeKind, mcpScopeRef, agentRef, projectRef, runtimeRevisionGrants(integrationGrants))
+			if err != nil {
+				return commandOutcome{}, err
+			}
 			rawEffectiveIntegrationGrants, err := json.Marshal(integrationGrants)
 			if err != nil {
 				return commandOutcome{}, errs.ErrConflict
@@ -816,6 +832,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 					"connection": connectionCapabilities, "humanGate": humanGateCapabilities,
 				},
 				"capabilities": capabilities, "integrationGrants": integrationGrants,
+				"managedMCPProfiles":    managedMCPProfiles,
 				"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
 				"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
 				"attachmentContext": inputAttachmentContext,
@@ -1231,6 +1248,9 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		}
 	}
 	input.IntegrationGrants = runtimeRevisionGrants(values["integrationGrants"])
+	if profiles, ok := values["managedMCPProfiles"].([]runtimecontract.ManagedMCPProfile); ok {
+		input.ManagedMCPProfiles = profiles
+	}
 	input.AttachmentSets = runtimeRevisionAttachmentSets(values["attachmentSets"])
 	input.InputArtifacts = runtimeRevisionArtifacts(values["artifacts"])
 	input.DelegationTargets = runtimeRevisionDelegationTargets(values["delegationTargets"])
@@ -1323,7 +1343,10 @@ func runtimeRevisionGrants(value any) []runtimecontract.RunnerIntegrationGrant {
 	values, _ := value.([]map[string]string)
 	result := make([]runtimecontract.RunnerIntegrationGrant, 0, len(values))
 	for _, item := range values {
+		grantVersion, _ := strconv.ParseInt(item["grantVersion"], 10, 64)
+		connectionVersion, _ := strconv.ParseInt(item["connectionVersion"], 10, 64)
 		result = append(result, runtimecontract.RunnerIntegrationGrant{Ref: item["ref"], ConnectionRef: item["connectionRef"],
+			GrantVersion: grantVersion, ConnectionVersion: connectionVersion, ApprovalPolicy: item["approvalPolicy"],
 			DefinitionKey: item["definitionKey"], ConnectionName: item["connectionName"], CapabilityKey: item["capabilityKey"],
 			DefinitionVersion: item["definitionVersion"], DefinitionDigest: item["definitionDigest"],
 			Operation: item["operation"], InputSchema: item["inputSchema"], InputSchemaSHA256: item["inputSchemaSha256"],
@@ -1454,10 +1477,31 @@ func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, err
 	}
 	progress := truncate(payload.Progress, 2000)
+	if payload.Message != nil {
+		if payload.Progress != "" || !validPublishedMessage(payload.Message) {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		previous, readErr := latestRuntimeActivity(ctx, tx, scope, lease, "MESSAGE", payload.Message.Ref)
+		if readErr != nil {
+			return commandOutcome{}, readErr
+		}
+		if previous != nil {
+			if previous.Delta.Message == nil || *previous.Delta.Message != *payload.Message {
+				return commandOutcome{}, errs.ErrIdempotencyReuse
+			}
+			run, graph, readErr := repository.readRunGraphTx(ctx, tx, scope, stringMap(lease, "runRef"))
+			if readErr != nil {
+				return commandOutcome{}, readErr
+			}
+			return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: previous}, resourceKind: "RUN_NODE",
+				resourceRef: stringMap(lease, "nodeRef"), projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), summary: "i18n:RUNTIME_PROGRESS_RECORDED"}, nil
+		}
+		progress = "i18n:RUNTIME_PROGRESS_RECORDED"
+	}
 	if _, err := tx.Exec(ctx, queryRuntimeReportprogressUpdateRunNodesProgressSummaryVersion, lease["nodeID"], progress); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_PROGRESS", stringMap(lease, "nodeRef"), "", "", "", progress, "RUNNING", "RUNNING")
+	event, err := repository.emitRunEventWithActivity(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_PROGRESS", stringMap(lease, "nodeRef"), "", "", "", nil, payload.Message, progress, "RUNNING", "RUNNING")
 	if err != nil {
 		return commandOutcome{}, err
 	}

@@ -6,6 +6,7 @@ import {
   type EditablePlanOperation,
 } from "@/features/assistant/model";
 import { capabilityCandidates } from "@/features/integrations/grant-candidates";
+import { allowedIntegrationApprovalPolicies } from "@/features/integrations/ui/model";
 import {
   approvalScopeOptions,
   validApprovalScopeSelection,
@@ -66,6 +67,14 @@ const recipientKind = computed<"AGENT" | "WORKFLOW" | undefined>(() =>
 const recipientRef = computed(() => agentRef.value || workflowRef.value);
 const capabilityKey = computed(() => stringParameter("capabilityKey"));
 const enabled = computed(() => parameter("enabled"));
+const availableApprovalPolicies = computed(() =>
+  allowedIntegrationApprovalPolicies(candidate.value?.capability),
+);
+const selectedApprovalPolicy = computed(() =>
+  availableApprovalPolicies.value.find(
+    (policy) => policy === stringParameter("approvalPolicy"),
+  ),
+);
 const selectedCapability = computed(() =>
   connection.value?.capabilities.find(
     (item) => item.key === capabilityKey.value,
@@ -85,11 +94,12 @@ const approvalScopeParameterValid = computed(() => {
   );
 });
 const availableApprovalScopePaths = computed(() =>
-  approvalScopeOptions(candidate.value?.capability.inputSchema),
+  approvalScopeOptions(candidate.value?.capability.inputSchema).filter(
+    (path) => path.length <= 160,
+  ),
 );
 const approvalScopeValid = computed(() =>
-  selectedCapability.value?.approvalPolicy === "HUMAN_SCOPED" &&
-  enabled.value === true
+  selectedApprovalPolicy.value === "HUMAN_SCOPED"
     ? validApprovalScopeSelection(
         approvalScopePaths.value,
         availableApprovalScopePaths.value,
@@ -127,6 +137,7 @@ const valid = computed(() =>
   Boolean(
     targetMatches.value &&
     selectedCapability.value &&
+    selectedApprovalPolicy.value &&
     approvalScopeParameterValid.value &&
     approvalScopeValid.value &&
     (enabled.value === true
@@ -205,20 +216,13 @@ watch(
     enabled,
   ] as const,
   (
-    [projectRef, currentConnection, kind, targetRef, key, isEnabled],
+    [projectRef, currentConnection, kind, targetRef, key],
     _previous,
     onCleanup,
   ) => {
     candidate.value = undefined;
     candidateProblem.value = false;
-    if (
-      !projectRef ||
-      !currentConnection ||
-      !kind ||
-      !targetRef ||
-      !key ||
-      isEnabled !== true
-    )
+    if (!projectRef || !currentConnection || !kind || !targetRef || !key)
       return;
     const controller = new AbortController();
     onCleanup(() => controller.abort());
@@ -261,12 +265,26 @@ function changed(key: string, value: string | boolean | string[]): void {
   emit("dirty");
 }
 function chooseCapability(key: string): void {
+  const selected = connection.value?.capabilities.find(
+    (item) => item.key === key,
+  );
+  const allowed = allowedIntegrationApprovalPolicies(selected);
+  changed(
+    "approvalPolicy",
+    selected && allowed.includes(selected.approvalPolicy)
+      ? selected.approvalPolicy
+      : "",
+  );
   changed("approvalScopePaths", []);
   changed("capabilityKey", key);
 }
 function setEnabled(value: boolean): void {
-  if (!value) changed("approvalScopePaths", []);
   changed("enabled", value);
+}
+function chooseApprovalPolicy(policy: string): void {
+  if (!availableApprovalPolicies.value.some((item) => item === policy)) return;
+  changed("approvalScopePaths", []);
+  changed("approvalPolicy", policy);
 }
 function toggleApprovalScopePath(path: string, checked: boolean): void {
   if (!availableApprovalScopePaths.value.includes(path)) return;
@@ -336,11 +354,33 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
         />
         {{ $t("assistant.planEditor.grantEnable") }}
       </label>
+      <label class="field">
+        <span>{{ $t("integrations.approvalPolicy") }}</span>
+        <select
+          :id="`${fieldPrefix}-policy`"
+          :value="selectedApprovalPolicy ?? ''"
+          :disabled="
+            disabled || !versionMatches || !availableApprovalPolicies.length
+          "
+          @change="
+            chooseApprovalPolicy(($event.target as HTMLSelectElement).value)
+          "
+        >
+          <option value="" disabled>
+            {{ $t("integrations.chooseApprovalPolicy") }}
+          </option>
+          <option
+            v-for="policy in availableApprovalPolicies"
+            :key="policy"
+            :value="policy"
+          >
+            {{ $t(`integrations.approvalPolicies.${policy}`) }}
+          </option>
+        </select>
+        <small>{{ $t("integrations.approvalPolicySelectionHelp") }}</small>
+      </label>
       <fieldset
-        v-if="
-          selectedCapability?.approvalPolicy === 'HUMAN_SCOPED' &&
-          enabled === true
-        "
+        v-if="selectedApprovalPolicy === 'HUMAN_SCOPED'"
         class="assistant-grant-form__approval-scope"
       >
         <legend>{{ $t("integrations.approvalScopeTitle") }}</legend>

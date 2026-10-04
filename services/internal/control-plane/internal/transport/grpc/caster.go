@@ -362,6 +362,9 @@ func castIntegrationCapability(value entity.IntegrationCapability) *controlplane
 		ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy), ResourceKind: integrationResourceKind(value.ResourceKind),
 		InputSchema: value.InputSchema, InputSchemaSha256: value.InputSchemaSHA256,
 	}
+	for _, policy := range value.AllowedApprovalPolicies {
+		result.AllowedApprovalPolicies = append(result.AllowedApprovalPolicies, integrationApprovalPolicy(policy))
+	}
 	for _, field := range value.InputFields {
 		result.InputFields = append(result.InputFields, castIntegrationField(field))
 	}
@@ -515,7 +518,19 @@ func castRunDelta(value *entity.RunDelta) *controlplanev1.RunDelta {
 func castEvent(value entity.RunEvent) *controlplanev1.RunEvent {
 	event := &controlplanev1.RunEvent{Ref: value.Ref, RunRef: value.RunRef, Sequence: value.Sequence, Type: eventType(value.Type), NodeRef: value.NodeRef, EdgeRef: value.EdgeRef, GateRef: value.GateRef, ArtifactRef: value.ArtifactRef, Summary: value.Summary, Progress: value.Progress, RunState: runState(value.RunState), NodeState: nodeState(value.NodeState), OccurredAt: timestamp(value.OccurredAt), GraphRevision: value.GraphRevision, Run: castRunDelta(value.Delta.Run), Actor: &controlplanev1.RunEventActor{Kind: controlplanev1.RunEventActorKind(controlplanev1.RunEventActorKind_value["RUN_EVENT_ACTOR_KIND_"+value.Actor.Kind]), Ref: value.Actor.Ref, Name: value.Actor.Name}, MessageKind: controlplanev1.RunEventMessageKind(controlplanev1.RunEventMessageKind_value["RUN_EVENT_MESSAGE_KIND_"+value.MessageKind])}
 	if value.ToolCall != nil {
+		// Нулевая revision допустима только при чтении старого terminal receipt;
+		// новые команды проходят строгую owner lifecycle validation.
 		event.ToolCall = &controlplanev1.RunToolCall{Ref: value.ToolCall.Ref, Tool: value.ToolCall.Tool, SafeParameters: structure(value.ToolCall.SafeParameters), CapabilityRef: value.ToolCall.CapabilityRef, GrantRef: value.ToolCall.GrantRef, State: controlplanev1.RunToolCallState(controlplanev1.RunToolCallState_value["RUN_TOOL_CALL_STATE_"+value.ToolCall.State]), DurationMs: value.ToolCall.DurationMS, SafeResult: value.ToolCall.SafeResult, AuditRef: value.ToolCall.AuditRef}
+	}
+	if value.ToolCall != nil {
+		event.ToolCall.Revision = value.ToolCall.Revision
+	}
+	if execution := value.Delta.Execution; execution != nil {
+		event.Execution = &controlplanev1.RunEventExecution{RunRef: execution.RunRef, NodeRef: execution.NodeRef, SessionRef: execution.SessionRef,
+			TurnRef: execution.TurnRef, TurnNumber: execution.TurnNumber, Attempt: execution.Attempt}
+	}
+	if message := value.Delta.Message; message != nil {
+		event.Message = &controlplanev1.RunMessage{Ref: message.Ref, Phase: controlplanev1.RunMessagePhase(controlplanev1.RunMessagePhase_value["RUN_MESSAGE_PHASE_"+message.Phase]), Revision: message.Revision, Text: message.Text}
 	}
 	if value.Delta.Node != nil {
 		event.Node = castNode(*value.Delta.Node)
@@ -550,6 +565,8 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 		gate.DecidedBy = &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}
 	}
 	gate.SourceAttachmentSetRef = value.SourceAttachmentSetRef
+	gate.ScopeKind = runtimeSecretScopeKind(value.ScopeKind)
+	gate.OrganizationRef = value.OrganizationRef
 	for _, consequence := range value.DecisionConsequences {
 		gate.DecisionConsequences = append(gate.DecisionConsequences, &controlplanev1.OwnerGateDecisionConsequence{Decision: gateDecision(consequence.Decision), SafeSummary: consequence.SafeSummary, ExecutesExternalEffect: consequence.ExecutesExternalEffect, TerminalForRun: consequence.TerminalForRun})
 	}
@@ -614,7 +631,7 @@ func castDefinition(value entity.IntegrationDefinition) *controlplanev1.Integrat
 }
 func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
 	grant := &controlplanev1.IntegrationGrant{
-		Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
+		Ref: value.Ref, Version: value.Version, ConnectionVersion: value.ConnectionVersion, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
 		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
 		ResourceScope:      &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
 		ApprovalScopePaths: append([]string(nil), value.ApprovalScopePaths...),

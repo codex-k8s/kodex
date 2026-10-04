@@ -5,6 +5,8 @@ package generated
 type RunToolCallState string
 
 const (
+	RunToolCallStateRunning   RunToolCallState = "RUNNING"
 	RunToolCallStateSucceeded RunToolCallState = "SUCCEEDED"
 	RunToolCallStateFailed    RunToolCallState = "FAILED"
+	RunToolCallStateCancelled RunToolCallState = "CANCELLED"
 )

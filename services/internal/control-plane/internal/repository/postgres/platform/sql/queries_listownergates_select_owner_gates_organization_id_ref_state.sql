@@ -2,13 +2,18 @@
 WITH visible AS MATERIALIZED (
     SELECT g.ref,g.created_at
     FROM control_plane.owner_gates g
-    JOIN control_plane.projects p ON p.id=g.project_id
+    LEFT JOIN control_plane.projects p ON p.id=g.project_id
     JOIN control_plane.runs root ON root.id=g.root_run_id
     JOIN control_plane.run_nodes n ON n.id=g.node_id
     JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
     LEFT JOIN control_plane.run_nodes requester_node ON requester_node.id=n.parent_node_id
     LEFT JOIN control_plane.agents requester_agent ON requester_agent.id=requester_node.agent_id
     WHERE g.organization_id=$1::uuid
+      AND ((g.scope_kind='PROJECT' AND p.id IS NOT NULL) OR
+           (g.scope_kind='ORGANIZATION' AND $10='' AND $4 IN ('OWNER','ADMINISTRATOR')
+            AND control_plane.owned_organization_assistant_run(g.organization_id,g.root_run_id)
+            AND control_plane.catalog_resource_visible(g.organization_id,$5::uuid,'organization.manage','ORGANIZATION',
+                g.organization_id,NULL,NULL,'{}'::jsonb,transaction_timestamp())))
       AND ($10='' OR g.project_id::text=$10)
       AND ($2='' OR p.ref=$2)
       AND (cardinality($3::text[])=0 OR g.state=ANY($3::text[]))

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
-	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -25,12 +24,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject",
 			ExternalTenantID: "kodex-installation", CallerWorkload: workload, Operation: operation}, workload)
 	}
-	// Моделируем сохранённую connection предыдущего immutable shipped package
-	// в собственной disposable fixture, не меняя текущий shipped catalog.
-	legacy, ok := integrationpackage.ResolveShippedRevision(repository.integrationDefinitions["email"], "1.4.0", "df52f45643b6e4464cf20901b6c069b88dac671303dc31e04f23b3d1ad4006fd")
-	if !ok {
-		t.Fatal("legacy mailbox package unavailable")
-	}
+	// Фикстура использует текущие immutable package pins, без historical decoder.
 	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
 	if err != nil {
 		t.Fatalf("resolve legacy fixture principal: %v", err)
@@ -38,9 +32,6 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	currentScope, err := repository.resolveScope(ctx, resolvedOwner)
 	if err != nil {
 		t.Fatalf("resolve legacy fixture scope: %v", err)
-	}
-	if _, err := repository.pool.Exec(ctx, queryIntegrationPackageBindConnection, currentScope.organizationID, connection.Ref, legacy.Metadata.Version, legacy.Digest, legacy.RequiresConnectionCredential()); err != nil {
-		t.Fatalf("bind legacy fixture: %v", err)
 	}
 	connection, err = readConnection(ctx, repository.pool, currentScope, connection.Ref)
 	if err != nil {
@@ -120,13 +111,13 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "email-producer-agent", "Email operator")
 	granted, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-grant", ExpectedVersion: &connection.Version},
-		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}})
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}})
 	if err != nil || granted.Connection == nil {
 		t.Fatalf("grant email: %v", err)
 	}
 	granted, err = service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-read-grant", ExpectedVersion: &granted.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "email.message.list", AgentRef: agent.Ref, Enabled: true}})
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.list", AgentRef: agent.Ref, Enabled: true}})
 	if err != nil || granted.Connection == nil {
 		t.Fatalf("grant email read: %v", err)
 	}
@@ -240,7 +231,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	testEmailLateReport(t, ctx, repository, service, owner, runtime, gateway, email, report.Principal, execution, connection.Ref, bounded, input)
 	revoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-revoke", ExpectedVersion: &granted.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})
 	if err != nil || revoked.Connection == nil {
 		t.Fatalf("revoke email grant: %v", err)
 	}
@@ -249,7 +240,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-regrant", ExpectedVersion: &revoked.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}}); err != nil {
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.ResolveEmailAuthorization(ctx, email, input); !errors.Is(err, errs.ErrForbidden) {

@@ -7,7 +7,9 @@ SELECT conversation.id::text,
        context.allowed_operations || CASE
            WHEN control_plane.assistant_project_profile_creation_allowed(run.organization_id,
                run.initiated_by,conversation.project_id,conversation.assistant_scope,run.assistant_context_entity_kind)
-               THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[] ELSE '{}'::text[] END,
+               THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[] ELSE '{}'::text[] END
+       || control_plane.assistant_system_integration_grant_operations(run.organization_id,
+           run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,NULL::uuid),
        run.assistant_context_entity_kind,
        run.assistant_context_entity_ref,
        run.target_ref,

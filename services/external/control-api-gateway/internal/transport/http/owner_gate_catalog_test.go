@@ -14,7 +14,7 @@ import (
 
 func gateCatalogFixture() *cp.ListOwnerGatesResponse {
 	return &cp.ListOwnerGatesResponse{
-		Gates: []*cp.OwnerGate{{Ref: "gate_fixture01", ProjectRef: "prj_fixture01", Version: 3, State: cp.OwnerGateState_OWNER_GATE_STATE_APPROVED}},
+		Gates: []*cp.OwnerGate{{Ref: "gate_fixture01", ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", Version: 3, State: cp.OwnerGateState_OWNER_GATE_STATE_APPROVED}},
 		Total: 91,
 		Page:  &cp.PageInfo{NextPageToken: "opaque_snapshot_cursor"},
 	}
@@ -109,7 +109,7 @@ func TestOwnerGateCatalogRejectsMalformedReadback(t *testing.T) {
 		})
 	}
 	response := gateCatalogFixture()
-	response.Gates = append(response.Gates, &cp.OwnerGate{Ref: "gate_fixture02", ProjectRef: "prj_fixture01", Version: 1, State: cp.OwnerGateState_OWNER_GATE_STATE_APPROVED})
+	response.Gates = append(response.Gates, &cp.OwnerGate{Ref: "gate_fixture02", ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", Version: 1, State: cp.OwnerGateState_OWNER_GATE_STATE_APPROVED})
 	client := &catalogRPCRecorder{response: response}
 	w := httptest.NewRecorder()
 	catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/owner-gates?pageSize=1", nil))

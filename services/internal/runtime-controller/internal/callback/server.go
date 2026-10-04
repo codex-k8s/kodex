@@ -351,10 +351,6 @@ func (server *Server) nativeToolCall(writer http.ResponseWriter, request *http.R
 	requestContext, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
 	defer cancel()
 	response, err := server.control.Runtime.RecordRunToolCall(requestContext, projection)
-	if status.Code(err) == codes.AlreadyExists {
-		writer.WriteHeader(http.StatusNoContent)
-		return
-	}
 	if err != nil {
 		server.logger.WarnContext(request.Context(), "control-plane native tool projection request failed",
 			"tool", payload.Kind, "grpc_code", status.Code(err).String(), "failure_class", controlFailureClass(err))
@@ -383,17 +379,14 @@ func nativeToolCallProjection(input runtimecontract.RunnerInput, payload runtime
 	if err != nil {
 		return nil, errors.New("native tool call projection is invalid")
 	}
-	state := controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED
-	if payload.State == runtimecontract.NativeToolStateFailed {
-		state = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED
-	}
+	state := controlplanev1.RunToolCallState(controlplanev1.RunToolCallState_value["RUN_TOOL_CALL_STATE_"+payload.State])
 	correlationKey := "native:" + payload.CallID
 	digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, correlationKey)))
 	return &controlplanev1.RecordRunToolCallRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, correlationKey+":activity")},
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, correlationKey+":activity:"+strconv.FormatInt(payload.Revision, 10))},
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
 		CallRef: "tcl_" + hex.EncodeToString(digest[:16]), Tool: payload.Kind, SafeParameters: parameters,
-		State: state, DurationMs: payload.DurationMS, SafeResult: payload.SafeResult,
+		State: state, DurationMs: payload.DurationMS, SafeResult: payload.SafeResult, Revision: payload.Revision,
 	}, nil
 }
 
@@ -461,14 +454,24 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var payload runtimecontract.RunnerProgressRequest
-	if decode(request, &payload, runtimecontract.MaximumProgressTextBytes) != nil ||
-		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || !progressCodePattern.MatchString(payload.Progress) {
+	if decode(request, &payload, runtimecontract.MaximumRuntimeMessageBytes*6+2048) != nil ||
+		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
+		payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
+		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) {
 		http.Error(writer, "invalid runtime progress", http.StatusBadRequest)
 		return
 	}
 	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
 	defer cancel()
-	_, err := server.control.Runtime.ReportExecutionProgress(ctx, &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Progress: "i18n:" + payload.Progress})
+	projection := &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration}
+	if message := payload.Message; message != nil {
+		digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, "message:"+message.ItemID)))
+		projection.Message = &controlplanev1.RunMessage{Ref: "msg_" + hex.EncodeToString(digest[:16]),
+			Phase: controlplanev1.RunMessagePhase(controlplanev1.RunMessagePhase_value["RUN_MESSAGE_PHASE_"+message.Phase]), Revision: message.Revision, Text: message.Text}
+	} else {
+		projection.Progress = "i18n:" + payload.Progress
+	}
+	_, err := server.control.Runtime.ReportExecutionProgress(ctx, projection)
 	if err != nil {
 		writeControlError(writer, err)
 		return
@@ -586,6 +589,7 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, integrationCatalogTool(), integrationTool())
 	}
+	result = append(result, managedMCPTools(input)...)
 	return result
 }
 
@@ -599,14 +603,13 @@ func integrationTool() map[string]any {
 	}
 }
 
-// Старый полный набор полей принимается только для уже начатых ходов; новый
-// вызов привязывается к одному ref из подписанной RuntimeRevision.
+// Locator выбирает только один grant из точной owner RuntimeRevision.
 func integrationGrantForCall(input runtimecontract.RunnerInput, arguments map[string]any) (runtimecontract.RunnerIntegrationGrant, bool) {
-	if !onlyKeys(arguments, "grant_ref", "connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input") {
+	if !onlyKeys(arguments, "grant_ref", "input") || len(arguments) != 2 {
 		return runtimecontract.RunnerIntegrationGrant{}, false
 	}
 	if ref, selected := arguments["grant_ref"].(string); selected {
-		if ref == "" || len(arguments) != 2 {
+		if ref == "" {
 			return runtimecontract.RunnerIntegrationGrant{}, false
 		}
 		for _, grant := range input.IntegrationGrants {
@@ -615,21 +618,6 @@ func integrationGrantForCall(input runtimecontract.RunnerInput, arguments map[st
 			}
 		}
 		return runtimecontract.RunnerIntegrationGrant{}, false
-	}
-	if len(arguments) != 6 {
-		return runtimecontract.RunnerIntegrationGrant{}, false
-	}
-	connection, _ := arguments["connection_ref"].(string)
-	capability, _ := arguments["capability_key"].(string)
-	definitionVersion, _ := arguments["definition_version"].(string)
-	definitionDigest, _ := arguments["definition_digest"].(string)
-	inputSchemaDigest, _ := arguments["input_schema_sha256"].(string)
-	for _, grant := range input.IntegrationGrants {
-		if grant.ConnectionRef == connection && grant.CapabilityKey == capability &&
-			grant.DefinitionVersion == definitionVersion && grant.DefinitionDigest == definitionDigest &&
-			grant.InputSchemaSHA256 == inputSchemaDigest {
-			return grant, true
-		}
 	}
 	return runtimecontract.RunnerIntegrationGrant{}, false
 }
@@ -678,9 +666,24 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		server.writeMCPError(writer, rpc.ID, -32602, "Invalid params")
 		return
 	}
+	if params.Name == "invoke_integration" {
+		if _, valid := integrationGrantForCall(input, params.Arguments); !valid {
+			guidance := map[string]any{"error_code": "INTEGRATION_INPUT_INVALID", "retryable": true,
+				"guidance": "Read get_integration_catalog with {} and copy one exact grant_ref. Retry at most once with grant_ref and input matching its schema."}
+			encoded, _ := json.Marshal(guidance)
+			server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": guidance, "isError": true})
+			return
+		}
+	}
 	var result any
 	startedAt := time.Now()
 	err = nil
+	// До запуска effect сохраняется только закрытая безопасная проекция.
+	// Если owner отклонил полномочия, сам инструмент не вызывается.
+	if err := server.recordToolCallPhase(request.Context(), input, params.Name, params.Arguments, nil, nil, rpc.ID, 0, 1); err != nil {
+		server.writeMCPError(writer, rpc.ID, -32603, "Tool authorization unavailable")
+		return
+	}
 	switch params.Name {
 	case "get_configuration_catalog":
 		result, err = server.configurationCatalog(request.Context(), input, params.Arguments)
@@ -698,6 +701,12 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		result, err = server.delegate(request.Context(), input, params.Arguments, rpc.ID)
 	case "invoke_integration":
 		result, err = server.invoke(request.Context(), input, params.Arguments, rpc.ID)
+	case runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool:
+		var invokeArguments map[string]any
+		invokeArguments, err = managedMCPArguments(input, params.Name, params.Arguments)
+		if err == nil {
+			result, err = server.invoke(request.Context(), input, invokeArguments, rpc.ID)
+		}
 	case runtimecontract.FileToolSearch, runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolManifest:
 		result, err = server.callFileTool(request.Context(), input, params.Name, params.Arguments)
 	default:
@@ -1131,6 +1140,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		"CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE": "Создать рецепт образа Kodex",
 		"UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE": "Изменить рецепт образа Kodex",
 		"PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":   "Подготовить настройку модели помощника",
+		"CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT": "Изменить права интеграции Kodex",
 	}
 	label := labels[kind]
 	if strings.TrimSpace(name) == "" {
@@ -1161,7 +1171,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
 		return true
 	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		return true
@@ -1177,6 +1187,35 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 		return projectAssistantLocatorParametersAllowed(input, kind, parameters)
 	}
 	switch kind {
+	case "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
+		if !input.IsSystemAssistant() || input.AgentRef == "" || !onlyKeys(parameters, "connectionRef", "capabilityKey", "enabled", "approvalPolicy", "approvalScopePaths") ||
+			!assistantRequiredStrings(parameters, "connectionRef", "capabilityKey", "approvalPolicy") {
+			return false
+		}
+		enabled, ok := parameters["enabled"].(bool)
+		if !ok {
+			return false
+		}
+		policy := parameters["approvalPolicy"].(string)
+		if policy != "NONE" && policy != "HUMAN_EACH_EFFECT" && policy != "HUMAN_SCOPED" {
+			return false
+		}
+		if raw, supplied := parameters["approvalScopePaths"]; supplied {
+			paths, ok := assistantGrantScopePaths(raw)
+			if !ok || len(paths) > 16 || policy == "HUMAN_SCOPED" && enabled && len(paths) == 0 || (policy != "HUMAN_SCOPED" || !enabled) && len(paths) != 0 {
+				return false
+			}
+			seen := map[string]bool{}
+			for _, path := range paths {
+				if len(path) < 1 || len(path) > 200 || seen[path] {
+					return false
+				}
+				seen[path] = true
+			}
+		} else if policy == "HUMAN_SCOPED" && enabled {
+			return false
+		}
+		return true
 	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":
 		if !input.IsSystemAssistant() || input.AgentRef == "" || parameters == nil || parameters["systemAssistantRef"] != input.AgentRef {
 			return false
@@ -1266,6 +1305,25 @@ func projectAssistantLocatorParametersAllowed(input runtimecontract.RunnerInput,
 	return false
 }
 
+func assistantGrantScopePaths(raw any) ([]string, bool) {
+	switch values := raw.(type) {
+	case []string:
+		return values, true
+	case []any:
+		result := make([]string, len(values))
+		for index, value := range values {
+			item, ok := value.(string)
+			if !ok {
+				return nil, false
+			}
+			result[index] = item
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
 func assistantRequiredStrings(parameters map[string]any, fields ...string) bool {
 	for _, field := range fields {
 		value, ok := parameters[field].(string)
@@ -1286,7 +1344,7 @@ func assistantOptionalStrings(parameters map[string]any, fields ...string) bool 
 }
 
 func assistantServerAction(kind string) string {
-	if kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+	if kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		return "UPDATE"
 	}
 	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
@@ -1372,7 +1430,7 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 			return nil
 		}
 		return map[string]any{"kind": "INTEGRATION_CONNECTION", "name": context.EntityName}
-	} else if kind == "CHANGE_INTEGRATION_GRANT" {
+	} else if kind == "CHANGE_INTEGRATION_GRANT" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		connectionRef, _ := parameters["connectionRef"].(string)
 		if strings.TrimSpace(connectionRef) == "" {
 			return nil
@@ -1486,6 +1544,12 @@ func onlyKeys(values map[string]any, allowed ...string) bool {
 func (server *Server) recordToolCall(ctx context.Context, input runtimecontract.RunnerInput, tool string, arguments map[string]any,
 	result any, toolErr error, callID json.RawMessage, duration time.Duration,
 ) error {
+	return server.recordToolCallPhase(ctx, input, tool, arguments, result, toolErr, callID, duration, 2)
+}
+
+func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecontract.RunnerInput, tool string, arguments map[string]any,
+	result any, toolErr error, callID json.RawMessage, duration time.Duration, revision int64,
+) error {
 	parameters, capabilityRef, grantRef, ok := safeToolCallParameters(input, tool, arguments)
 	if !ok {
 		return errors.New("record tool call projection")
@@ -1498,15 +1562,19 @@ func (server *Server) recordToolCall(ctx context.Context, input runtimecontract.
 	if toolErr != nil {
 		state = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED
 	}
+	safeResult := safeToolCallResult(tool, result, toolErr)
+	if revision == 1 {
+		state, safeResult = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_RUNNING, ""
+	}
 	digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, string(callID))))
 	callRef := "tcl_" + hex.EncodeToString(digest[:16])
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
 	response, err := server.control.Runtime.RecordRunToolCall(requestContext, &controlplanev1.RecordRunToolCallRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID)+":activity")},
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID)+":activity:"+strconv.FormatInt(revision, 10))},
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
 		CallRef: callRef, Tool: tool, SafeParameters: structure, CapabilityRef: capabilityRef, GrantRef: grantRef,
-		State: state, DurationMs: duration.Milliseconds(), SafeResult: safeToolCallResult(tool, result, toolErr),
+		State: state, DurationMs: duration.Milliseconds(), SafeResult: safeResult, Revision: revision,
 	})
 	if err != nil {
 		server.logger.WarnContext(ctx, "control-plane tool projection request failed",
@@ -1553,6 +1621,13 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		if grant, ok := integrationGrantForCall(input, arguments); ok {
 			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
 		}
+	case runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool:
+		invokeArguments, err := managedMCPArguments(input, tool, arguments)
+		if err == nil {
+			if grant, ok := integrationGrantForCall(input, invokeArguments); ok {
+				return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
+			}
+		}
 	}
 	return nil, "", "", false
 }
@@ -1598,7 +1673,7 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 	if toolErr != nil {
 		return "TOOL_UNAVAILABLE"
 	}
-	if tool == "invoke_integration" {
+	if tool == "invoke_integration" || tool == runtimecontract.Context7ResolveTool || tool == runtimecontract.Context7QueryTool {
 		value, ok := result.(integrationToolResult)
 		rawDigest, digestErr := hex.DecodeString(value.inputSHA256)
 		if !ok || !safeInvocationRef(value.InvocationRef) || digestErr != nil || len(rawDigest) != sha256.Size || hex.EncodeToString(rawDigest) != value.inputSHA256 {

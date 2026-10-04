@@ -73,6 +73,16 @@ func (client *Client) Progress(ctx context.Context, input model.Input, code stri
 	return client.post(ctx, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress", runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Progress: code})
 }
 
+func (client *Client) PublishedMessage(ctx context.Context, input model.Input, message runtimecontract.RuntimeAgentMessage) error {
+	if err := message.Validate(); err != nil {
+		return errors.New("validate published message callback")
+	}
+	delivery, cancel := context.WithTimeout(ctx, callbackDeliveryTimeout)
+	defer cancel()
+	return client.postRetriable(delivery, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress",
+		runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Message: &message})
+}
+
 func (client *Client) Complete(ctx context.Context, input model.Input, payload runtimecontract.RunnerCompletionRequest) error {
 	if err := payload.Validate(); err != nil {
 		return errors.New("validate runtime completion: " + err.Error())

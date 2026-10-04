@@ -9,6 +9,7 @@ type RunToolCall struct {
 	CapabilityRef  *string          `json:"capabilityRef,omitempty"`
 	GrantRef       *string          `json:"grantRef,omitempty"`
 	State          RunToolCallState `json:"state"`
+	Revision       *int64           `json:"revision,omitempty"`
 	DurationMs     int64            `json:"durationMs"`
 	SafeResult     string           `json:"safeResult"`
 	AuditRef       string           `json:"auditRef"`

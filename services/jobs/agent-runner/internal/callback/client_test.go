@@ -232,7 +232,7 @@ func TestRecordNativeToolCallUsesExecutionScopedBoundedPayload(t *testing.T) {
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket"}
 	input := validWarmTurnFixture()
-	call := runtimecontract.NativeToolCall{CallID: "call-shell", Kind: runtimecontract.NativeToolKindShell,
+	call := runtimecontract.NativeToolCall{CallID: "call-shell", Revision: 2, Kind: runtimecontract.NativeToolKindShell,
 		State: runtimecontract.NativeToolStateSucceeded, DurationMS: 25, SafeResult: runtimecontract.NativeToolResultCompleted,
 		SafeParameters: map[string]any{"action_count": 1, "action_kinds": []string{"READ"}, "cwd_scope": "WORKSPACE", "exit_code": "ZERO", "source": "AGENT"}}
 	if err := client.RecordNativeToolCall(context.Background(), input, call); err != nil {
@@ -258,7 +258,7 @@ func TestRecordNativeToolCallRetriesTransientCallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond}}
-	call := runtimecontract.NativeToolCall{CallID: "call-shell", Kind: runtimecontract.NativeToolKindShell,
+	call := runtimecontract.NativeToolCall{CallID: "call-shell", Revision: 2, Kind: runtimecontract.NativeToolKindShell,
 		State: runtimecontract.NativeToolStateSucceeded, SafeResult: runtimecontract.NativeToolResultCompleted,
 		SafeParameters: map[string]any{"action_count": 1, "action_kinds": []string{"READ"}, "cwd_scope": "WORKSPACE", "exit_code": "ZERO", "source": "AGENT"}}
 	if err := client.RecordNativeToolCall(context.Background(), validWarmTurnFixture(), call); err != nil {
@@ -299,7 +299,7 @@ func TestRecordNativeToolCallRejectsUnsafeParametersBeforeTransport(t *testing.T
 		t.Fatal(err)
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket"}
-	call := runtimecontract.NativeToolCall{CallID: "call-shell", Kind: runtimecontract.NativeToolKindShell,
+	call := runtimecontract.NativeToolCall{CallID: "call-shell", Revision: 2, Kind: runtimecontract.NativeToolKindShell,
 		State: runtimecontract.NativeToolStateSucceeded, SafeResult: runtimecontract.NativeToolResultCompleted,
 		SafeParameters: map[string]any{"command": "print secret"}}
 	if err := client.RecordNativeToolCall(context.Background(), validWarmTurnFixture(), call); err == nil {

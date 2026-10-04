@@ -5038,6 +5038,44 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SystemAssistant" }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/system-assistant/integration-grant-candidates:
+    get:
+      tags: [Assistant]
+      operationId: getSystemAssistantIntegrationGrantCandidates
+      description: Exact общесистемный помощник назначается сервером; только активный владелец или администратор организации.
+      parameters:
+        - { name: connectionRef, in: query, required: true, schema: { $ref: "#/components/schemas/OpaqueRef" } }
+        - { $ref: "#/components/parameters/Query" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - { $ref: "#/components/parameters/PageToken" }
+      responses:
+        "200":
+          description: Безопасные capabilities и точные server-owned grant pins
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidates" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/system-assistant/integration-grants:
+    put:
+      tags: [Assistant]
+      operationId: changeSystemAssistantIntegrationGrant
+      description: Выдать или отозвать exact grant общесистемного помощника; If-Match является версией connection, а не источником authority.
+      parameters:
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantInput" }
+      responses:
+        "200":
+          description: Selected policy сохранена и аудирована в точном grant; активный effect блокирует изменение policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationConnection" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/system-assistant/commands:
     post:
       tags: [Assistant]
@@ -15109,6 +15147,8 @@ components:
               ],
           }
         toolCall: { $ref: "#/components/schemas/RunToolCall" }
+        execution: { $ref: "#/components/schemas/RunEventExecution" }
+        message: { $ref: "#/components/schemas/RunMessage" }
         occurredAt: { $ref: "#/components/schemas/Timestamp" }
         graphRevision: { type: integer, format: int64, minimum: 1 }
         run: { $ref: "#/components/schemas/RunDelta" }
@@ -15117,6 +15157,26 @@ components:
         gate: { $ref: "#/components/schemas/OwnerGate" }
         artifact: { $ref: "#/components/schemas/Artifact" }
         incident: { $ref: "#/components/schemas/Incident" }
+    RunEventExecution:
+      type: object
+      additionalProperties: false
+      required: [runRef, nodeRef, sessionRef, turnRef, turnNumber, attempt]
+      properties:
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        sessionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        turnRef: { $ref: "#/components/schemas/OpaqueRef" }
+        turnNumber: { type: integer, format: int64, minimum: 1 }
+        attempt: { type: integer, format: int32, minimum: 1 }
+    RunMessage:
+      type: object
+      additionalProperties: false
+      required: [ref, phase, revision, text]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        phase: { type: string, enum: [USER, COMMENTARY, FINAL] }
+        revision: { type: integer, format: int64, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 100000 }
     RunEventActor:
       type: object
       additionalProperties: false
@@ -15141,7 +15201,8 @@ components:
           { type: object, maxProperties: 32, additionalProperties: true }
         capabilityRef: { type: string, maxLength: 160 }
         grantRef: { $ref: "#/components/schemas/OpaqueRef" }
-        state: { type: string, enum: [SUCCEEDED, FAILED] }
+        state: { type: string, enum: [RUNNING, SUCCEEDED, FAILED, CANCELLED] }
+        revision: { type: integer, format: int64, minimum: 1 }
         durationMs:
           { type: integer, format: int64, minimum: 0, maximum: 86400000 }
         safeResult: { type: string, maxLength: 2000 }
@@ -15302,6 +15363,45 @@ components:
           }
         currentSequence: { type: integer, format: int64, minimum: 0 }
         complete: { type: boolean }
+    SystemAssistantIntegrationGrantInput:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, capabilityKey, enabled, approvalPolicy]
+      properties:
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        capabilityKey: { type: string, minLength: 1, maxLength: 160 }
+        enabled: { type: boolean }
+        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        approvalScopePaths: { type: array, uniqueItems: true, maxItems: 16, items: { type: string, minLength: 1, maxLength: 160 } }
+    SystemAssistantIntegrationGrantCandidate:
+      type: object
+      additionalProperties: false
+      required: [capability, grantable, reason, currentGrantVersion, currentGrantEnabled, currentApprovalScopePaths]
+      properties:
+        capability: { $ref: "#/components/schemas/IntegrationCapability" }
+        grantable: { type: boolean }
+        reason: { $ref: "#/components/schemas/IntegrationCandidateReason" }
+        currentGrantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        currentGrantVersion: { type: integer, format: int64, minimum: 0 }
+        currentGrantEnabled: { type: boolean }
+        currentApprovalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        currentApprovalScopePaths: { type: array, uniqueItems: true, maxItems: 16, items: { type: string, minLength: 1, maxLength: 160 } }
+    SystemAssistantIntegrationGrantCandidates:
+      type: object
+      additionalProperties: false
+      required: [scopeKind, organizationRef, assistantRef, assistantVersion, connectionRef, connectionVersion, definitionVersion, definitionDigest, items, total, nextPageToken]
+      properties:
+        scopeKind: { type: string, enum: [ORGANIZATION] }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantVersion: { type: integer, format: int64, minimum: 1 }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        definitionVersion: { type: string, minLength: 1, maxLength: 100 }
+        definitionDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate" } }
+        total: { type: integer, format: int64, minimum: 0 }
+        nextPageToken: { type: string, maxLength: 512 }
     OwnerGate:
       type: object
       additionalProperties: false
@@ -15309,7 +15409,8 @@ components:
         [
           ref,
           version,
-          projectRef,
+          scopeKind,
+          organizationRef,
           runRef,
           nodeRef,
           title,
@@ -15325,6 +15426,8 @@ components:
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
+        scopeKind: { type: string, enum: [ORGANIZATION, PROJECT] }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         runRef: { $ref: "#/components/schemas/OpaqueRef" }
         nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -16780,6 +16883,7 @@ components:
           approvalRequired,
           operation,
           approvalPolicy,
+          allowedApprovalPolicies,
           resourceKind,
           inputFields,
         ]
@@ -16792,6 +16896,12 @@ components:
         operation: { type: string, minLength: 1, maxLength: 120 }
         approvalPolicy:
           { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        allowedApprovalPolicies:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
         resourceKind:
           {
             type: string,
@@ -17506,9 +17616,10 @@ components:
     IntegrationGrantInput:
       type: object
       additionalProperties: false
-      required: [capabilityKey, enabled]
+      required: [capabilityKey, enabled, approvalPolicy]
       properties:
         capabilityKey: { type: string, minLength: 1, maxLength: 100 }
+        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
         agentRef: { $ref: "#/components/schemas/OpaqueRef" }
         workflowRef: { $ref: "#/components/schemas/OpaqueRef" }
         enabled: { type: boolean }
@@ -17549,6 +17660,7 @@ components:
                 UPDATE_WORKFLOW,
                 CHANGE_CAPABILITY,
                 CHANGE_INTEGRATION_GRANT,
+                CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT,
                 CREATE_SCHEDULE,
                 UPDATE_SCHEDULE,
                 LAUNCH_RUN,
@@ -17748,6 +17860,7 @@ components:
                   UPDATE_WORKFLOW,
                   CHANGE_CAPABILITY,
                   CHANGE_INTEGRATION_GRANT,
+                  CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT,
                   CREATE_SCHEDULE,
                   UPDATE_SCHEDULE,
                   LAUNCH_RUN,

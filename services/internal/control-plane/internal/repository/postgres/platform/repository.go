@@ -360,8 +360,9 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 				Key: capability.Key, Name: capability.Name, Description: capability.Description,
 				Operation: capability.Operation, Risk: capability.Risk,
 				ApprovalPolicy: capability.ApprovalPolicy, ResourceKind: capability.ResourceScope.Kind,
-				InputFields: integrationConfigurationFields(capability.InputFields),
-				InputSchema: string(inputSchema), InputSchemaSHA256: inputSchemaDigest,
+				AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...),
+				InputFields:             integrationConfigurationFields(capability.InputFields),
+				InputSchema:             string(inputSchema), InputSchemaSHA256: inputSchemaDigest,
 			})
 		}
 		fields := integrationConfigurationFields(definition.Spec.ConfigurationFields)

@@ -43,7 +43,7 @@ func integrationGateFixture() *cp.OwnerGate {
 		"inputDigest": strings.Repeat("c", 64), "inputBytes": 64, "risk": "WRITE", "approvalPolicy": "HUMAN_EACH_EFFECT", "contentComplete": true,
 		"fields": []any{map[string]any{"key": "body", "type": "STRING", "bytes": 13, "opaque": false, "value": "TYPE_original", "truncated": false}},
 	})
-	return &cp.OwnerGate{Ref: "gate_fixture01", Version: 4, ProjectRef: "prj_fixture01", State: cp.OwnerGateState_OWNER_GATE_STATE_APPROVED, Decision: cp.OwnerGateDecision_OWNER_GATE_DECISION_APPROVE,
+	return &cp.OwnerGate{Ref: "gate_fixture01", Version: 4, ProjectRef: "prj_fixture01", ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT, OrganizationRef: "org_fixture01", State: cp.OwnerGateState_OWNER_GATE_STATE_APPROVED, Decision: cp.OwnerGateDecision_OWNER_GATE_DECISION_APPROVE,
 		SourceAttachmentSetRef: "aset_source01", ResolutionAttachmentSetRef: "aset_resolution01",
 		AllowedDecisions: []cp.OwnerGateDecision{cp.OwnerGateDecision_OWNER_GATE_DECISION_APPROVE, cp.OwnerGateDecision_OWNER_GATE_DECISION_REJECT},
 		DecisionConsequences: []*cp.OwnerGateDecisionConsequence{

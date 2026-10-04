@@ -15,7 +15,7 @@ interface Diagnostic {
   route: string;
   state: string;
   runState: Record<string, { state: string }>;
-  runLoading: boolean;
+  runLoading: Record<string, boolean>;
   selectedRef?: string;
   conversations: AssistantConversation[];
   runs: Record<string, Run>;
@@ -118,7 +118,7 @@ for (const scope of ["SYSTEM", "PROJECT"] as const)
         )
         .toBe("live");
       await expect
-        .poll(async () => (await diagnostic(page)).runLoading)
+        .poll(async () => (await diagnostic(page)).runLoading[failedRunRef])
         .toBe(false);
       const beforeConflict = structuredClone([
         ...network.conversations.values(),

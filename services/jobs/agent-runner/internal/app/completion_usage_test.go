@@ -166,7 +166,7 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 			usage := runtimecontract.TokenUsage{TotalTokens: 70, InputTokens: 60, CachedInputTokens: 20, OutputTokens: 10, ReasoningOutputTokens: 3}
 			input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "synthetic task", RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3, LeaseRef: "lease_fixture", ExecutionBindingDigest: strings.Repeat("b", 64)}
 			result := codex.Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic result", Usage: usage,
-				ToolCalls: []runtimecontract.NativeToolCall{{CallID: "call-one", Kind: runtimecontract.NativeToolKindSleep, State: runtimecontract.NativeToolStateSucceeded,
+				ToolCalls: []runtimecontract.NativeToolCall{{CallID: "call-one", Revision: 2, Kind: runtimecontract.NativeToolKindSleep, State: runtimecontract.NativeToolStateSucceeded,
 					SafeResult: runtimecontract.NativeToolResultCompleted, DurationMS: 25, SafeParameters: map[string]any{"requested_duration_ms": int64(25)}}}}
 			wantCode := "PROVIDER_UNAVAILABLE"
 			wantUsage := usage
@@ -240,18 +240,23 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 					}
 					return preparedTurn{ctx: ctx, proxy: proxy, cancel: func() { cleaned = true }}, "", nil
 				},
-				execute: func(_ context.Context, _ model.Input, prompt []byte, socket, token string) (codex.Result, error) {
+				execute: func(_ context.Context, _ model.Input, prompt []byte, socket, token string, onActivity func(runtimecontract.RuntimeActivity) error) (codex.Result, error) {
 					executions++
 					mu.Lock()
-					defer mu.Unlock()
 					if !ready || progress != 1 || string(prompt) != input.Task || socket != proxy.SocketPath() || token != proxy.LocalBearerToken() {
 						t.Error("provider started before readiness or lost prepared binding")
 					}
+					mu.Unlock()
 					if strings.HasPrefix(mode, "cancelled") {
 						cancel()
 					}
 					if mode == "provider before effect" {
 						return codex.Result{}, errors.New("synthetic pre-effect failure")
+					}
+					if mode != "cancelled broker" {
+						if err := onActivity(runtimecontract.RuntimeActivity{ToolCall: &result.ToolCalls[0]}); err != nil {
+							return result, err
+						}
 					}
 					if strings.Contains(mode, "broker") {
 						if mode == "cancelled broker" {

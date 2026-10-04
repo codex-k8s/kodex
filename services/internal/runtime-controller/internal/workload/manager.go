@@ -854,11 +854,29 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 			continue
 		}
 		input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{
-			Ref: grant.GetRef(), ConnectionRef: grant.GetConnectionRef(), DefinitionKey: grant.GetDefinitionKey(),
+			Ref: grant.GetRef(), GrantVersion: grant.GetVersion(), ConnectionRef: grant.GetConnectionRef(), ConnectionVersion: grant.GetConnectionVersion(),
+			ApprovalPolicy: strings.TrimPrefix(grant.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_"), DefinitionKey: grant.GetDefinitionKey(),
 			DefinitionVersion: grant.GetDefinitionVersion(), DefinitionDigest: grant.GetDefinitionDigest(),
 			ConnectionName: grant.GetConnectionName(), CapabilityKey: grant.GetCapabilityKey(),
 			CapabilityName: grant.GetCapabilityName(), CapabilityDescription: grant.GetCapabilityDescription(),
 			Operation: grant.GetOperation(), InputSchema: grant.GetInputSchema(), InputSchemaSHA256: grant.GetInputSchemaSha256(), Risk: grant.GetRisk(),
+		})
+	}
+	for _, profile := range revision.GetManagedMcpProfiles() {
+		health := profile.GetHealth()
+		checkedAt := time.Time{}
+		if health.GetCheckedAt() != nil && health.GetCheckedAt().CheckValid() == nil {
+			checkedAt = health.GetCheckedAt().AsTime()
+		}
+		input.ManagedMCPProfiles = append(input.ManagedMCPProfiles, runtimecontract.ManagedMCPProfile{
+			Provider: profile.GetProvider(), Version: int64(profile.GetVersion()), Namespace: profile.GetNamespace(), Required: profile.GetRequired(),
+			ScopeKind: strings.TrimPrefix(profile.GetScopeKind().String(), "MANAGED_MCP_SCOPE_KIND_"), ScopeRef: profile.GetScopeRef(),
+			ResolveGrantRef: profile.GetResolveGrantRef(), QueryGrantRef: profile.GetQueryGrantRef(), Digest: profile.GetDigest(),
+			Health: runtimecontract.ManagedMCPHealthProof{TestRef: health.GetTestRef(), Generation: health.GetGeneration(), ConnectionRef: health.GetConnectionRef(),
+				ConnectionVersion: health.GetConnectionVersion(), ConfigurationSHA256: health.GetConfigurationSha256(),
+				CredentialRevisionRef: health.GetCredentialRevisionRef(), CredentialRevision: health.GetCredentialRevision(), CredentialSHA256: health.GetCredentialSha256(),
+				DefinitionKey: health.GetDefinitionKey(), DefinitionVersion: health.GetDefinitionVersion(), DefinitionDigest: health.GetDefinitionDigest(),
+				CheckedAt: checkedAt, Probe: health.GetProbe()},
 		})
 	}
 	input.AttachmentSetRef = revision.GetAttachmentSetRef()

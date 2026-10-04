@@ -56,7 +56,7 @@ func integrationGrantFixture() runtimecontract.RunnerIntegrationGrant {
 	inputSchema := `{"additionalProperties":false,"properties":{"value":{"maxLength":4096,"minLength":1,"type":"string"}},"required":["value"],"type":"object"}`
 	digest := sha256.Sum256([]byte(inputSchema))
 	return runtimecontract.RunnerIntegrationGrant{
-		Ref: "igr_12345678", ConnectionRef: "icon_12345678", DefinitionKey: "synthetic",
+		Ref: "igr_12345678", GrantVersion: 1, ConnectionRef: "icon_12345678", ConnectionVersion: 1, ApprovalPolicy: "HUMAN_EACH_EFFECT", DefinitionKey: "synthetic",
 		ConnectionName: "Synthetic", CapabilityKey: "synthetic.journal.write", CapabilityName: "Write journal",
 		CapabilityDescription: "Write one bounded journal value.", Risk: "WRITE", DefinitionVersion: "3.1.0",
 		DefinitionDigest: strings.Repeat("a", 64), Operation: "synthetic.journal.write", InputSchema: inputSchema,
@@ -65,11 +65,7 @@ func integrationGrantFixture() runtimecontract.RunnerIntegrationGrant {
 }
 
 func integrationArguments(grant runtimecontract.RunnerIntegrationGrant, value string) map[string]any {
-	return map[string]any{
-		"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey,
-		"definition_version": grant.DefinitionVersion, "definition_digest": grant.DefinitionDigest,
-		"input_schema_sha256": grant.InputSchemaSHA256, "input": map[string]any{"value": value},
-	}
+	return map[string]any{"grant_ref": grant.Ref, "input": map[string]any{"value": value}}
 }
 
 func integrationRefArguments(grant runtimecontract.RunnerIntegrationGrant, value string) map[string]any {
@@ -176,7 +172,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatal("assistant plan envelope lost the allowed operation types")
 	}
 	oneOf := assistantPlanOperationSchemas(input)
-	if len(oneOf) != 18 {
+	if len(oneOf) != 19 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
@@ -188,6 +184,9 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		byType[operationType] = properties["parameters"].(map[string]any)
 		operationByType[operationType] = properties
 		schemaByType[operationType] = operation
+	}
+	if byType["CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"] == nil {
+		t.Fatal("specialized system assistant integration grant operation is absent")
 	}
 	fileProperties := byType["CREATE_PROJECT_FILE"]["properties"].(map[string]any)
 	if fileProperties["projectRef"] == nil || fileProperties["fileName"] == nil ||
@@ -308,15 +307,24 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
 	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 0 ||
-		len(catalog["operation_types"].([]string)) != 18 {
+		len(catalog["operation_types"].([]string)) != 19 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
+	}
+	foundSystemGrant := false
+	for _, operation := range catalog["operation_types"].([]string) {
+		if operation == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+			foundSystemGrant = true
+		}
+	}
+	if !foundSystemGrant {
+		t.Fatal("specialized system assistant grant operation missing")
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
 		t.Fatal("configuration catalog accepted caller input")
 	}
 	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
 	if err != nil || len(compact.(map[string]any)["operation_schemas"].([]map[string]any)) != 0 ||
-		len(compact.(map[string]any)["operation_types"].([]string)) != 18 {
+		len(compact.(map[string]any)["operation_types"].([]string)) != 19 {
 		t.Fatalf("compact configuration catalog is invalid: %v", err)
 	}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN", "CREATE_WORKFLOW"}})

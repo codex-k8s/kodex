@@ -115,7 +115,7 @@ func TestRuntimeTurnContextWorkspaceAndRetriedCompletion(t *testing.T) {
 				prepare: func(ctx context.Context, _ model.Input, _ *callback.Client) (preparedTurn, string, error) {
 					return preparedTurn{ctx: ctx, proxy: proxy, cancel: func() { cleaned = true }}, "", nil
 				},
-				execute: func(ctx context.Context, actual model.Input, prompt []byte, socket, token string) (codex.Result, error) {
+				execute: func(ctx context.Context, actual model.Input, prompt []byte, socket, token string, _ func(runtimecontract.RuntimeActivity) error) (codex.Result, error) {
 					executions++
 					if !ready || actual.RuntimeRevisionDigest != input.RuntimeRevisionDigest || socket != proxy.SocketPath() || token != proxy.LocalBearerToken() {
 						t.Fatal("provider started outside its prepared execution")

@@ -120,7 +120,7 @@ func testInteractionDeliveryApproval(t *testing.T, ctx context.Context, reposito
 				}
 				_, err = service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 					Mutation: value.Mutation{IdempotencyKey: key + "-withdraw", ExpectedVersion: &connection.Version},
-					Payload:  command.IntegrationGrantInput{ConnectionRef: connectionRef, CapabilityKey: "mattermost.notifications", AgentRef: run.Target.Ref, Enabled: false}})
+					Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connectionRef, CapabilityKey: "mattermost.notifications", AgentRef: run.Target.Ref, Enabled: false}})
 				if err != nil {
 					t.Fatalf("withdraw delivery authority: %v", err)
 				}

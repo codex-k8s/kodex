@@ -1,4 +1,3 @@
-import { indexRunSessionOwnership } from "@/features/runs/run-session-graph";
 import type {
   Artifact,
   Run,
@@ -25,13 +24,183 @@ export interface RunActivityItem {
   toolCall?: RunEvent["toolCall"];
   artifactRef?: string;
   artifact?: Artifact;
+  execution?: RunEvent["execution"];
+  phase?: NonNullable<RunEvent["message"]>["phase"];
+  revision?: number;
+  historical: boolean;
 }
 
-const agentMessageKinds = new Set<RunEvent["messageKind"]>([
-  "ASSISTANT_MESSAGE",
-  "INTERMEDIATE_MESSAGE",
-  "FINAL_MESSAGE",
-]);
+interface ActivityContext {
+  initiator?: string;
+  target?: string;
+  platform?: string;
+  nodes?: readonly RunNode[];
+}
+
+export function isTranscriptNearBottom(position: {
+  scrollHeight: number;
+  clientHeight: number;
+  scrollTop: number;
+}): boolean {
+  return (
+    position.scrollHeight - position.clientHeight - position.scrollTop <= 96
+  );
+}
+
+// Привязка берётся только из опубликованного события, не из текущего графа.
+export function executionKey(
+  execution: RunEvent["execution"],
+): string | undefined {
+  if (
+    !execution ||
+    !execution.runRef ||
+    !execution.nodeRef ||
+    !execution.sessionRef ||
+    !execution.turnRef ||
+    !Number.isSafeInteger(execution.turnNumber) ||
+    execution.turnNumber < 1 ||
+    !Number.isSafeInteger(execution.attempt) ||
+    execution.attempt < 1
+  )
+    return undefined;
+  return JSON.stringify([
+    execution.runRef,
+    execution.nodeRef,
+    execution.sessionRef,
+    execution.turnRef,
+    execution.turnNumber,
+    execution.attempt,
+  ]);
+}
+
+export function buildRunTranscriptItems(
+  events: readonly RunEvent[],
+  context: ActivityContext = {},
+): RunActivityItem[] {
+  const nodes = new Map(context.nodes?.map((node) => [node.ref, node]));
+  const items: RunActivityItem[] = [];
+  const revisions = new Map<string, number>();
+  const positionByKey = new Map<string, number>();
+  const finalScopes = new Set(
+    events
+      .filter((event) => publishedRunMessage(event)?.phase === "FINAL")
+      .map((event) => executionKey(event.execution))
+      .filter(Boolean),
+  );
+  for (const event of [...events].sort(
+    (left, right) =>
+      left.sequence - right.sequence || left.ref.localeCompare(right.ref),
+  )) {
+    const scope = executionKey(event.execution);
+    if (
+      scope &&
+      !event.message &&
+      event.messageKind === "FINAL_MESSAGE" &&
+      finalScopes.has(scope)
+    )
+      continue;
+    const message = publishedRunMessage(event);
+    const tool =
+      scope &&
+      event.toolCall &&
+      event.toolCall.ref &&
+      typeof event.toolCall.revision === "number" &&
+      Number.isSafeInteger(event.toolCall.revision) &&
+      event.toolCall.revision >= 1
+        ? event.toolCall
+        : undefined;
+    const kind: RunActivityItem["kind"] = tool
+      ? "tool"
+      : message?.phase === "USER"
+        ? "initiator"
+        : message
+          ? "agent"
+          : "system";
+    const revision = tool?.revision ?? message?.revision;
+    const key =
+      scope && revision !== undefined
+        ? JSON.stringify([
+            scope,
+            tool ? "tool" : "message",
+            tool?.ref ?? message?.ref,
+          ])
+        : undefined;
+    const previousPosition = key ? positionByKey.get(key) : undefined;
+    if (key && revision !== undefined && revision <= (revisions.get(key) ?? 0))
+      continue;
+    const previous =
+      previousPosition !== undefined ? items[previousPosition] : undefined;
+    const presented = event as Partial<PresentedRunEvent>;
+    const item: RunActivityItem = {
+      id: previous?.id ?? key ?? event.ref,
+      kind,
+      actor:
+        event.actor?.name ??
+        (kind === "initiator"
+          ? context.initiator
+          : scope
+            ? (nodes.get(event.execution?.nodeRef ?? "")?.displayName ??
+              context.target)
+            : undefined) ??
+        context.platform ??
+        "",
+      summary: event.message
+        ? message?.text
+        : (presented.displaySummary ?? event.summary),
+      progress: message
+        ? undefined
+        : event.message
+          ? undefined
+          : (presented.displayProgress ?? event.progress),
+      nodeRef:
+        scope && event.messageKind !== "OWNER_GATE"
+          ? event.execution?.nodeRef
+          : undefined,
+      occurredAt: previous?.occurredAt ?? event.occurredAt,
+      sequence: previous?.sequence ?? event.sequence,
+      state: event.nodeState ?? event.runState,
+      messageKind: event.messageKind,
+      toolCall: tool,
+      artifactRef: event.artifactRef,
+      artifact: event.artifact,
+      execution: scope ? event.execution : undefined,
+      phase: message?.phase,
+      revision,
+      historical: !scope,
+    };
+    if (previousPosition !== undefined) items[previousPosition] = item;
+    else {
+      if (key) positionByKey.set(key, items.length);
+      items.push(item);
+    }
+    if (key && revision !== undefined) revisions.set(key, revision);
+  }
+  return items.sort(
+    (left, right) =>
+      Number(left.historical) - Number(right.historical) ||
+      (left.execution?.turnNumber ?? 0) - (right.execution?.turnNumber ?? 0) ||
+      (left.sequence ?? 0) - (right.sequence ?? 0) ||
+      left.id.localeCompare(right.id),
+  );
+}
+
+export function publishedRunMessage(event: RunEvent): RunEvent["message"] {
+  const message = event.message;
+  if (!message) return undefined;
+  const byteLength = new TextEncoder().encode(message.text).length;
+  const withinBudget =
+    message.phase === "USER"
+      ? Array.from(message.text).length <= 100000 && byteLength <= 400000
+      : byteLength <= 65536;
+  return executionKey(event.execution) &&
+    message.ref &&
+    Number.isSafeInteger(message.revision) &&
+    message.revision >= 1 &&
+    ["USER", "COMMENTARY", "FINAL"].includes(message.phase) &&
+    withinBudget
+    ? message
+    : undefined;
+}
 
 export function buildRunActivityItems(
   run: Run,
@@ -39,57 +208,23 @@ export function buildRunActivityItems(
   events: PresentedRunEvent[],
   initiatorSummary?: string,
 ): RunActivityItem[] {
-  const nodeByRef = new Map(nodes.map((node) => [node.ref, node]));
-  const sessionOwnership = indexRunSessionOwnership(nodes);
-  const items: RunActivityItem[] = [];
-  if (initiatorSummary?.trim()) {
-    items.push({
+  const items = buildRunTranscriptItems(events, {
+    nodes,
+    initiator: run.initiator.displayName,
+    target: run.target.displayName,
+    platform: run.title,
+  });
+  if (
+    initiatorSummary?.trim() &&
+    !items.some((item) => item.phase === "USER")
+  ) {
+    items.unshift({
       id: `initiator-${run.ref}`,
       kind: "initiator",
       actor: run.initiator.displayName,
       summary: initiatorSummary.trim(),
       occurredAt: run.createdAt,
-    });
-  }
-
-  for (const event of [...events].sort(
-    (left, right) => left.sequence - right.sequence,
-  )) {
-    const sessionNodeRef = event.nodeRef
-      ? sessionOwnership.get(event.nodeRef)
-      : undefined;
-    const node = sessionNodeRef ? nodeByRef.get(sessionNodeRef) : undefined;
-    const kind: RunActivityItem["kind"] = event.toolCall
-      ? "tool"
-      : event.actor?.kind === "USER" || event.messageKind === "USER_MESSAGE"
-        ? "initiator"
-        : agentMessageKinds.has(event.messageKind) ||
-            event.actor?.kind === "AGENT" ||
-            event.actor?.kind === "SYSTEM_ASSISTANT"
-          ? "agent"
-          : "system";
-    items.push({
-      id: event.ref,
-      kind,
-      actor:
-        event.actor?.name ??
-        (kind === "initiator"
-          ? run.initiator.displayName
-          : kind === "agent" || kind === "tool"
-            ? (node?.displayName ?? run.target.displayName)
-            : (node?.displayName ?? run.title)),
-      summary: event.displaySummary,
-      progress: event.displayProgress,
-      // Human Gate changes are run-wide owner decisions. They remain visible
-      // even when the timeline is narrowed to one agent session.
-      nodeRef: event.messageKind === "OWNER_GATE" ? undefined : sessionNodeRef,
-      occurredAt: event.occurredAt,
-      sequence: event.sequence,
-      state: event.nodeState ?? event.runState,
-      messageKind: event.messageKind,
-      toolCall: event.toolCall,
-      artifactRef: event.artifactRef,
-      artifact: event.artifact,
+      historical: true,
     });
   }
 

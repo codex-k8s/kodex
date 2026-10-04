@@ -21,6 +21,8 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.ResolveOwnerGate:
+		return repository.authorizeOwnerGateCommand(ctx, tx, current, input.Payload)
 	case command.RetryRun:
 		if handled, err := repository.authorizeAssistantRetry(ctx, tx, current, input); handled {
 			return err
@@ -79,6 +81,9 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 			return errs.ErrInvalid
 		}
 		return repository.authorizeIntegrationGrant(ctx, tx, current, payload)
+	case command.ChangeSystemAssistantIntegrationGrant:
+		_, _, err := repository.systemAssistantIntegrationGrantInput(ctx, tx, current, input.Payload)
+		return err
 	case command.PrepareRoleImageImpactPlan, command.RebindRoleImage:
 		return repository.authorizeRoleImageImpact(ctx, tx, current, input)
 	case command.PrepareRoleImageGitWriteBack, command.PrepareIntegrationDefinitionGitWriteBack, command.ApproveManagedConfigurationGitWriteBack, command.RejectManagedConfigurationGitWriteBack, command.CancelManagedConfigurationGitWriteBack:
@@ -143,6 +148,9 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	}
 	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 		return errs.ErrNotFound
+	}
+	if err := repository.authorizeSystemAssistantIntegrationGrantPlan(ctx, tx, current, input); err != nil {
+		return err
 	}
 	if input.Kind == command.ArchiveAgent {
 		payload, ok := input.Payload.(command.AgentInput)

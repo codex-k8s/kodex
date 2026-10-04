@@ -20,7 +20,9 @@ SELECT connection.name,
        admission.recipient_version,
        admission.reason,
        COALESCE(grant_row.enabled, false),
-       COALESCE(grant_row.approval_scope_paths, '{}'::text[])
+       COALESCE(grant_row.approval_scope_paths, '{}'::text[]),
+       COALESCE(grant_row.ref,''),COALESCE(grant_row.version,0),COALESCE(grant_row.approval_policy,''),
+       connection.definition_key,connection.definition_version,connection.definition_digest
 FROM admission
 JOIN control_plane.integration_connections connection
   ON connection.id = admission.connection_id

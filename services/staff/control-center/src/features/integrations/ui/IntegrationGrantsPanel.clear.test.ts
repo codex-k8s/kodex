@@ -7,6 +7,7 @@ import type {
   IntegrationGrantProjectCandidate,
   IntegrationGrantRecipientCandidate,
   IntegrationGrantCapabilityCandidate,
+  IntegrationCapability,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const loaders = vi.hoisted(() => ({
@@ -66,6 +67,7 @@ const capability: IntegrationGrantCapabilityCandidate = {
     resourceKind: "GITHUB_REPOSITORY",
     inputFields: [],
     approvalPolicy: "NONE",
+    allowedApprovalPolicies: ["NONE"],
   },
   grantable: true,
   reason: "READY",
@@ -98,6 +100,13 @@ interface State {
   recipientContextKey: Ref<string>;
   capabilityContextKey: Ref<string>;
   approvalScopePaths: Ref<string[]>;
+  selectedApprovalPolicy: Ref<
+    IntegrationCapability["approvalPolicy"] | undefined
+  >;
+  availableApprovalPolicies: Ref<
+    readonly IntegrationCapability["approvalPolicy"][]
+  >;
+  changeApprovalPolicy(value: string): void;
   projectCandidate: Ref<IntegrationGrantProjectCandidate | undefined>;
   recipientCandidate: Ref<IntegrationGrantRecipientCandidate | undefined>;
   capabilityCandidate: Ref<IntegrationGrantCapabilityCandidate | undefined>;
@@ -138,6 +147,7 @@ async function panel(selectedConnection = connection) {
   result.projectCandidate.value = project;
   result.recipientCandidate.value = recipient;
   result.capabilityCandidate.value = capability;
+  result.selectedApprovalPolicy.value = capability.capability.approvalPolicy;
   return { state: result, emit };
 }
 beforeEach(() => {
@@ -163,6 +173,7 @@ it.each([
     state.submit();
     expect(emit.mock.calls.some(([name]) => name === "save")).toBe(false);
     expect(state.capabilityCandidate.value).toBeUndefined();
+    expect(state.selectedApprovalPolicy.value).toBeUndefined();
     expect(emit).toHaveBeenCalledWith("update:capabilityKey", "");
     if (action !== "clearCapability") {
       expect(state.recipientCandidate.value).toBeUndefined();
@@ -260,6 +271,9 @@ it("подставляет действующую область Human Gate пр
     capability: {
       ...capability.capability,
       approvalPolicy: "HUMAN_SCOPED",
+      allowedApprovalPolicies: ["HUMAN_SCOPED"],
+      risk: "WRITE",
+      approvalRequired: true,
       inputSchema: JSON.stringify({
         type: "object",
         properties: {
@@ -278,6 +292,7 @@ it("подставляет действующую область Human Gate пр
   await state.loadCapabilities("", undefined, new AbortController().signal);
   state.chooseCapability({ ref: "read", title: "Чтение" });
   expect(state.approvalScopePaths.value).toEqual(["/body/id"]);
+  expect(state.selectedApprovalPolicy.value).toBe("HUMAN_SCOPED");
 
   scopedCapability.capability.inputSchema = JSON.stringify({
     type: "object",
@@ -290,4 +305,127 @@ it("подставляет действующую область Human Gate пр
   await state.loadCapabilities("", undefined, new AbortController().signal);
   state.chooseCapability({ ref: "read", title: "Чтение" });
   expect(state.approvalScopePaths.value).toEqual([]);
+});
+
+it("явно выбирает catalog default и отправляет выбранную allowed policy вместо implicit fallback", async () => {
+  const candidate: IntegrationGrantCapabilityCandidate = {
+    ...capability,
+    capability: {
+      ...capability.capability,
+      risk: "WRITE",
+      approvalRequired: true,
+      approvalPolicy: "HUMAN_EACH_EFFECT",
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"],
+    },
+  };
+  const { state, emit } = await panel();
+  loaders.capabilities.mockResolvedValue({ items: [candidate], total: 1 });
+  await state.loadCapabilities("", undefined, new AbortController().signal);
+  state.chooseCapability({ ref: "read", title: "Действие" });
+  expect(state.selectedApprovalPolicy.value).toBe("HUMAN_EACH_EFFECT");
+  state.submit();
+  expect(emit).toHaveBeenCalledWith(
+    "save",
+    expect.objectContaining({ approvalPolicy: "HUMAN_EACH_EFFECT" }),
+  );
+  state.changeApprovalPolicy("NONE");
+  emit.mockClear();
+  state.submit();
+  expect(emit).toHaveBeenCalledWith(
+    "save",
+    expect.objectContaining({ approvalPolicy: "NONE" }),
+  );
+  expect(state.availableApprovalPolicies.value).toEqual(
+    candidate.capability.allowedApprovalPolicies,
+  );
+  state.changeApprovalPolicy("UNKNOWN");
+  emit.mockClear();
+  state.submit();
+  expect(emit.mock.calls.some(([name]) => name === "save")).toBe(false);
+});
+
+it("не заменяет более недоступную current grant policy каталоговым default без выбора владельца", async () => {
+  const selectedConnection: IntegrationConnection = {
+    ...connection,
+    grants: [
+      {
+        ref: "grant_previous",
+        version: 1,
+        capabilityKey: "read",
+        agentRef: "agent",
+        targetName: "Агент",
+        enabled: true,
+        risk: "READ",
+        approvalPolicy: "NONE",
+        resourceScope: {
+          kind: "GITHUB_REPOSITORY",
+          values: { repository: "example" },
+          digest: "c".repeat(64),
+        },
+      },
+    ],
+  };
+  const candidate: IntegrationGrantCapabilityCandidate = {
+    ...capability,
+    currentGrantRef: "grant_previous",
+    currentGrantVersion: 1,
+    capability: {
+      ...capability.capability,
+      risk: "WRITE",
+      approvalRequired: true,
+      approvalPolicy: "HUMAN_EACH_EFFECT",
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"],
+    },
+  };
+  const { state, emit } = await panel(selectedConnection);
+  loaders.capabilities.mockResolvedValue({ items: [candidate], total: 1 });
+  await state.loadCapabilities("", undefined, new AbortController().signal);
+  state.chooseCapability({ ref: "read", title: "Действие" });
+  expect(state.selectedApprovalPolicy.value).toBeUndefined();
+  emit.mockClear();
+  state.submit();
+  expect(emit.mock.calls.some(([name]) => name === "save")).toBe(false);
+  state.changeApprovalPolicy("HUMAN_EACH_EFFECT");
+  state.submit();
+  expect(emit).toHaveBeenCalledWith(
+    "save",
+    expect.objectContaining({ approvalPolicy: "HUMAN_EACH_EFFECT" }),
+  );
+});
+
+it("Human Scoped требует явную область и смена policy отзывает прежний выбор параметров", async () => {
+  const { state, emit } = await panel();
+  state.capabilityCandidate.value = {
+    ...capability,
+    capability: {
+      ...capability.capability,
+      risk: "WRITE",
+      approvalRequired: true,
+      approvalPolicy: "HUMAN_EACH_EFFECT",
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT", "HUMAN_SCOPED"],
+      inputSchema: JSON.stringify({
+        type: "object",
+        properties: { ref: { type: "string" } },
+      }),
+    },
+  };
+  state.changeApprovalPolicy("HUMAN_SCOPED");
+  emit.mockClear();
+  state.submit();
+  expect(emit.mock.calls.some(([name]) => name === "save")).toBe(false);
+  state.approvalScopePaths.value = ["/ref"];
+  state.submit();
+  expect(emit).toHaveBeenCalledWith(
+    "save",
+    expect.objectContaining({
+      approvalPolicy: "HUMAN_SCOPED",
+      approvalScopePaths: ["/ref"],
+    }),
+  );
+  state.changeApprovalPolicy("HUMAN_EACH_EFFECT");
+  expect(state.approvalScopePaths.value).toEqual([]);
+  emit.mockClear();
+  state.submit();
+  const saved = emit.mock.calls.find(([name]) => name === "save");
+  expect(saved?.[1]).not.toHaveProperty("approvalScopePaths");
 });

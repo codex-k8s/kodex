@@ -48,11 +48,6 @@ func TestRuntimeMCPFailureCodeIsPreservedForCompletion(t *testing.T) {
 	}
 }
 
-type nativeToolRecorderStub struct {
-	calls []runtimecontract.NativeToolCall
-	err   error
-}
-
 func runnerInputArtifact(ref, fileName, mediaType, scope string, position, version int64, source string) runtimecontract.RunnerInputArtifact {
 	artifact := runtimecontract.RunnerInputArtifact{
 		Ref: ref, FileName: fileName, MediaType: mediaType,
@@ -96,11 +91,6 @@ func bindAttachmentCatalog(input model.Input) model.Input {
 		}
 	}
 	return input
-}
-
-func (stub *nativeToolRecorderStub) RecordNativeToolCall(_ context.Context, _ model.Input, call runtimecontract.NativeToolCall) error {
-	stub.calls = append(stub.calls, call)
-	return stub.err
 }
 
 func materializedInstructions(kind string, capabilities []string) string {
@@ -442,25 +432,5 @@ func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
 		strings.TrimSpace(response.Body.String()) != "workspace readiness denied: PATH_OUTSIDE_WORKSPACE" ||
 		strings.Contains(response.Body.String(), root) {
 		t.Fatalf("unsafe readiness response: status=%d body=%q", response.Code, response.Body.String())
-	}
-}
-
-func TestRecordNativeToolTimelinePreservesOrderAndStopsOnCallbackFailure(t *testing.T) {
-	calls := []runtimecontract.NativeToolCall{
-		{CallID: "call-1", Kind: runtimecontract.NativeToolKindWebSearch, State: runtimecontract.NativeToolStateSucceeded,
-			SafeResult: runtimecontract.NativeToolResultCompleted, SafeParameters: map[string]any{"action": "SEARCH", "query_count": 1}},
-		{CallID: "call-2", Kind: runtimecontract.NativeToolKindSleep, State: runtimecontract.NativeToolStateSucceeded,
-			DurationMS: 25, SafeResult: runtimecontract.NativeToolResultCompleted, SafeParameters: map[string]any{"requested_duration_ms": int64(25)}},
-	}
-	recorder := &nativeToolRecorderStub{}
-	if err := recordNativeToolTimeline(context.Background(), model.Input{}, recorder, calls); err != nil {
-		t.Fatalf("recordNativeToolTimeline() error = %v", err)
-	}
-	if len(recorder.calls) != 2 || recorder.calls[0].CallID != "call-1" || recorder.calls[1].CallID != "call-2" {
-		t.Fatalf("recorded calls = %#v", recorder.calls)
-	}
-	recorder = &nativeToolRecorderStub{err: errors.New("unavailable")}
-	if err := recordNativeToolTimeline(context.Background(), model.Input{}, recorder, calls); err == nil || len(recorder.calls) != 1 {
-		t.Fatalf("callback failure was not propagated: calls=%#v err=%v", recorder.calls, err)
 	}
 }

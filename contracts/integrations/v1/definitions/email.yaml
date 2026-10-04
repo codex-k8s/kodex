@@ -3,7 +3,7 @@
   "kind": "IntegrationPackage",
   "metadata": {
     "key": "email",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "origin": "SHIPPED"
   },
   "spec": {
@@ -62,6 +62,7 @@
         "operation": "email.delivery.health.read",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -101,6 +102,7 @@
         "operation": "email.mailbox.list",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -141,6 +143,7 @@
         "operation": "email.message.list",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -188,6 +191,7 @@
         "operation": "email.message.search",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -242,6 +246,7 @@
         "operation": "email.message.read",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -296,6 +301,7 @@
         "operation": "email.attachment.read",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -357,6 +363,7 @@
         "operation": "email.message.send",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -453,6 +460,7 @@
         "operation": "email.message.reply",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -563,6 +571,7 @@
         "operation": "email.message.reply_all",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -673,6 +682,7 @@
         "operation": "email.message.forward",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -783,6 +793,7 @@
         "operation": "email.message.delete",
         "risk": "DESTRUCTIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -851,6 +862,7 @@
         "operation": "email.message.status.read",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -912,6 +924,7 @@
         "operation": "email.thread.read",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -966,6 +979,7 @@
         "operation": "email.attachment.list",
         "risk": "READ",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1020,6 +1034,7 @@
         "operation": "email.message.mark_read",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1088,6 +1103,7 @@
         "operation": "email.message.mark_unread",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1156,6 +1172,7 @@
         "operation": "email.message.move",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1231,6 +1248,7 @@
         "operation": "email.message.archive",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1299,6 +1317,7 @@
         "operation": "email.draft.create",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1395,6 +1414,7 @@
         "operation": "email.draft.update",
         "risk": "SENSITIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1512,6 +1532,7 @@
         "operation": "email.draft.delete",
         "risk": "DESTRUCTIVE",
         "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": ["NONE"],
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [

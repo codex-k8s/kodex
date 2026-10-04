@@ -12,7 +12,7 @@ func promptIntegrationScope(grants []map[string]string, effective []string) map[
 	keys := make([]string, 0, len(grants))
 	for _, grant := range filterIntegrationGrants(grants, effective) {
 		version, _ := strconv.ParseInt(grant["grantVersion"], 10, 64)
-		items = append(items, map[string]any{"ref": grant["ref"], "version": version, "capability": grant["capabilityKey"], "name": grant["capabilityName"], "description": grant["capabilityDescription"]})
+		items = append(items, map[string]any{"ref": grant["ref"], "version": version, "approvalPolicy": grant["approvalPolicy"], "capability": grant["capabilityKey"], "name": grant["capabilityName"], "description": grant["capabilityDescription"]})
 		keys = append(keys, grant["capabilityKey"])
 	}
 	return map[string]any{"items": items, "summary": strings.Join(keys, ", ")}

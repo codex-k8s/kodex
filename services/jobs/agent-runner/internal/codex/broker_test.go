@@ -175,9 +175,9 @@ func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
 	if !strings.Contains(diagnostic.String(), "HOME_PREPARE") {
 		t.Fatalf("safe diagnostic = %q", diagnostic.String())
 	}
-	var envelope brokerResponse
-	if err := json.Unmarshal(response.Bytes(), &envelope); err != nil || envelope.OK || envelope.Failure != providerBrokerFailureProvider {
-		t.Fatalf("broker response = %#v, error = %v", envelope, err)
+	var frame brokerFrame
+	if err := json.Unmarshal(response.Bytes(), &frame); err != nil || frame.Version != providerBrokerVersion || frame.Kind != brokerFrameTerminal || frame.Terminal == nil || frame.Terminal.OK || frame.Terminal.Failure != providerBrokerFailureProvider {
+		t.Fatalf("broker response = %#v, error = %v", frame, err)
 	}
 }
 

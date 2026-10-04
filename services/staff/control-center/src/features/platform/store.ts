@@ -13,6 +13,7 @@ import {
   type RuntimeScopedResourceIdentity,
 } from "@/features/runtime/resource-scope";
 import { normalizeSecretPage } from "@/features/runtime-secrets/model";
+import { assertGateScope } from "@/features/workboard/gate-scope";
 import {
   addPlatformMembership,
   addProjectMembership,
@@ -182,6 +183,8 @@ export interface RealtimeCatalogSnapshot {
   nextPageToken?: string;
 }
 
+const runHistorySupersededMessage = "Run history read superseded";
+
 type QueryKey =
   | "bootstrap"
   | "overview"
@@ -199,7 +202,6 @@ type QueryKey =
   | "workflows"
   | "workflow"
   | "runs"
-  | "run"
   | "gates"
   | "gateCount"
   | "artifacts"
@@ -322,6 +324,9 @@ export const usePlatformStore = defineStore("platform", () => {
   const loading = reactive<Partial<Record<QueryKey, boolean>>>({});
   const problems = reactive<Partial<Record<QueryKey, AppProblem>>>({});
   const generation = new Map<QueryKey, number>();
+  const runLoading = reactive<Record<string, boolean>>({});
+  const runProblems = reactive<Partial<Record<string, AppProblem>>>({});
+  const runReadGeneration = new Map<string, number>();
   const consumedSearchPageTokens = new Set<string>();
   const consumedAuditPageTokens = new Set<string>();
   let platformReloadPromise: Promise<void> | undefined;
@@ -461,6 +466,8 @@ export const usePlatformStore = defineStore("platform", () => {
       (value) => {
         for (const run of value.activeRuns)
           assertRunOwner(run, bootstrap.value?.organizationRef);
+        for (const gate of value.pendingGates)
+          assertGateScope(gate, bootstrap.value?.organizationRef);
         overview.value = value;
         upsert(runs, value.activeRuns);
         upsert(gates, value.pendingGates);
@@ -805,18 +812,24 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function loadRun(ref: string): Promise<void> {
-    const current = (generation.get("run") ?? 0) + 1;
-    generation.set("run", current);
-    loading.run = true;
-    Reflect.deleteProperty(problems, "run");
+    const ownerSignal = ownerRequestSignal();
+    const current = (runReadGeneration.get(ref) ?? 0) + 1;
+    runReadGeneration.set(ref, current);
+    const active = () =>
+      !ownerSignal.aborted && runReadGeneration.get(ref) === current;
+    runLoading[ref] = true;
+    Reflect.deleteProperty(runProblems, ref);
     try {
-      const ownerSignal = ownerRequestSignal();
       const organizationRef = requireRuntimeOrganizationRef(
         bootstrap.value?.organizationRef,
       );
       const graphReadback = await unwrap(
-        getRunGraph({ path: { runRef: ref }, signal: requestSignal() }),
+        getRunGraph({
+          path: { runRef: ref },
+          signal: requestSignal(ownerSignal),
+        }),
       );
+      if (!active()) return;
       const workspace = graphReadback.data;
       assertOwnerRequest(ownerSignal);
       if (
@@ -830,8 +843,13 @@ export const usePlatformStore = defineStore("platform", () => {
         workspace.graph.runRef !== workspace.run.rootRunRef
       )
         throw new Error("Run workspace identity mismatch");
-      const history = await loadRunEventHistory(ref, workspace.graph.sequence);
-      if (generation.get("run") !== current) return;
+      const history = await loadRunEventHistory(
+        ref,
+        workspace.graph.sequence,
+        ownerSignal,
+        active,
+      );
+      if (!active()) return;
       assertOwnerRequest(ownerSignal);
       if (
         requireRuntimeOrganizationRef(bootstrap.value?.organizationRef) !==
@@ -848,26 +866,32 @@ export const usePlatformStore = defineStore("platform", () => {
       for (const event of history) bucket[event.sequence] = event;
       events[workspace.graph.runRef] = bucket;
     } catch (error) {
-      if (generation.get("run") === current) problems.run = asProblem(error);
+      if (active()) runProblems[ref] = asProblem(error);
     } finally {
-      if (generation.get("run") === current) loading.run = false;
+      if (active()) runLoading[ref] = false;
     }
   }
 
   async function loadRunEventHistory(
     ref: string,
     throughSequence: number,
+    ownerSignal: AbortSignal,
+    active: () => boolean,
   ): Promise<RunEvent[]> {
     const result: RunEvent[] = [];
     let afterSequence = 0;
     while (afterSequence < throughSequence) {
+      assertOwnerRequest(ownerSignal);
+      if (!active()) throw new Error(runHistorySupersededMessage);
       const response = await unwrap(
         listRunEvents({
           path: { runRef: ref },
           query: { afterSequence, limit: 500 },
-          signal: requestSignal(),
+          signal: requestSignal(ownerSignal),
         }),
       );
+      assertOwnerRequest(ownerSignal);
+      if (!active()) throw new Error(runHistorySupersededMessage);
       for (const event of response.data.items) {
         if (event.sequence > throughSequence) break;
         if (event.sequence !== afterSequence + 1)
@@ -903,6 +927,11 @@ export const usePlatformStore = defineStore("platform", () => {
               signal: requestSignal(),
             }),
           );
+          for (const gate of response.data.items) {
+            assertGateScope(gate, bootstrap.value?.organizationRef);
+            if (projectRef && gate.projectRef !== projectRef)
+              throw new Error("Owner gate project scope changed");
+          }
           values.push(...response.data.items);
           pageToken = response.data.nextPageToken || undefined;
           if (pageToken) {
@@ -1837,6 +1866,7 @@ export const usePlatformStore = defineStore("platform", () => {
     gate: OwnerGate,
     body: GateResolution,
   ): Promise<OwnerGate> {
+    assertGateScope(gate, bootstrap.value?.organizationRef);
     const result = await mutate(
       (headers) =>
         resolveOwnerGate({
@@ -1847,6 +1877,14 @@ export const usePlatformStore = defineStore("platform", () => {
         }),
       gate.version,
     );
+    assertGateScope(result.data.gate, bootstrap.value?.organizationRef);
+    if (
+      result.data.gate.ref !== gate.ref ||
+      result.data.gate.scopeKind !== gate.scopeKind ||
+      result.data.gate.organizationRef !== gate.organizationRef ||
+      result.data.gate.projectRef !== gate.projectRef
+    )
+      throw new Error("Owner gate resolution scope changed");
     gates[result.data.gate.ref] = result.data.gate;
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
@@ -1861,7 +1899,10 @@ export const usePlatformStore = defineStore("platform", () => {
             (current) => current.ref !== result.data.gate.ref,
           ),
         };
-      const project = projects[gate.projectRef];
+      const project =
+        gate.scopeKind === "PROJECT" && gate.projectRef
+          ? projects[gate.projectRef]
+          : undefined;
       if (project)
         project.pendingGateCount = Math.max(0, project.pendingGateCount - 1);
     }
@@ -2126,6 +2167,8 @@ export const usePlatformStore = defineStore("platform", () => {
     const value = snapshotRecord(response.overview, "overview.overview");
     for (const run of (value as Overview).activeRuns)
       assertRunOwner(run, bootstrap.value?.organizationRef);
+    for (const gate of (value as Overview).pendingGates)
+      assertGateScope(gate, bootstrap.value?.organizationRef);
     overview.value = value as Overview;
     upsert(runs, overview.value.activeRuns);
     upsert(gates, overview.value.pendingGates);
@@ -2284,6 +2327,11 @@ export const usePlatformStore = defineStore("platform", () => {
         reconcileRuns(snapshotArray<Run>(catalog, "runs"));
         {
           const gateValues = snapshotArray<OwnerGate>(catalog, "gates");
+          for (const gate of gateValues) {
+            assertGateScope(gate, bootstrap.value?.organizationRef);
+            if (scopeProjectRef && gate.projectRef !== scopeProjectRef)
+              throw new Error("Owner gate realtime project scope changed");
+          }
           if (scopeProjectRef)
             replaceScoped(
               gates,
@@ -2867,6 +2915,7 @@ export const usePlatformStore = defineStore("platform", () => {
     platformReloadPromise = undefined;
     platformReloadScope = undefined;
     generation.clear();
+    runReadGeneration.clear();
     for (const target of [
       runtimes,
       projects,
@@ -2895,6 +2944,8 @@ export const usePlatformStore = defineStore("platform", () => {
       platformMemberships,
       platformMembershipCandidates,
       conversations,
+      runLoading,
+      runProblems,
     ]) {
       for (const key of Object.keys(target))
         Reflect.deleteProperty(target, key);
@@ -3007,6 +3058,8 @@ export const usePlatformStore = defineStore("platform", () => {
     auditNextPageToken,
     loading,
     problems,
+    runLoading,
+    runProblems,
     projectList,
     projectTrashList,
     runList,

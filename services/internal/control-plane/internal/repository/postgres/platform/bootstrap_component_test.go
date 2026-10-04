@@ -3325,7 +3325,7 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 		t.Fatalf("construct integration service: %v", err)
 	}
 	definitions, _, actions, err := service.ListIntegrationDefinitions(ctx, owner, query.Filter{})
-	if err != nil || len(definitions) != 9 {
+	if err != nil || len(definitions) != 10 {
 		t.Fatalf("list integration definitions: definitions=%d err=%v", len(definitions), err)
 	}
 	if !contains(actions, "CREATE_CONNECTION") {
@@ -3368,38 +3368,38 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 	}
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-stale", ExpectedVersion: &created.Connection.Version},
-		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
 	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
 		t.Fatalf("stale integration connection version accepted: %v", err)
 	}
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-two-targets", ExpectedVersion: &connectedVersion},
-		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, WorkflowRef: "wfl_forged", Enabled: true},
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, WorkflowRef: "wfl_forged", Enabled: true},
 	}); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatalf("grant with two targets accepted: %v", err)
 	}
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-unknown-target", ExpectedVersion: &connectedVersion},
-		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: "agt_foreign", Enabled: true},
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: "agt_foreign", Enabled: true},
 	}); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("unknown integration target accepted: %v", err)
 	}
 	granted, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-create", ExpectedVersion: &connectedVersion},
-		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
 	})
 	if err != nil || granted.Connection == nil || granted.Connection.Version != connectedVersion+1 || len(granted.Connection.Grants) != 1 || granted.Connection.Grants[0].TargetName != agent.Name || !granted.Connection.Grants[0].Enabled {
 		t.Fatalf("create authoritative integration grant: connection=%#v err=%v", granted.Connection, err)
 	}
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-unknown-capability", ExpectedVersion: &granted.Connection.Version},
-		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "github.admin", AgentRef: agent.Ref, Enabled: true},
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: created.Connection.Ref, CapabilityKey: "github.admin", AgentRef: agent.Ref, Enabled: true},
 	}); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatalf("unknown integration capability accepted: %v", err)
 	}
 	revoked, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-revoke", ExpectedVersion: &granted.Connection.Version},
-		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: false},
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: false},
 	})
 	if err != nil || revoked.Connection == nil || len(revoked.Connection.Grants) != 1 || revoked.Connection.Grants[0].Enabled {
 		t.Fatalf("revoke integration grant: connection=%#v err=%v", revoked.Connection, err)
@@ -3431,7 +3431,7 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 	reenabledGrant, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "integration-grant-reenable", ExpectedVersion: &reenableVersion},
-		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref,
+		Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: created.Connection.Ref,
 			CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
 	})
 	if err != nil || reenabledGrant.Connection == nil || len(reenabledGrant.Connection.Grants) != 1 || !reenabledGrant.Connection.Grants[0].Enabled {
@@ -3612,7 +3612,7 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	readGranted, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "integration-effect-read-grant", ExpectedVersion: &connectedVersion},
-		Payload:  command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: true},
 	})
 	if err != nil || readGranted.Connection == nil || len(readGranted.Connection.Grants) != 1 ||
 		readGranted.Connection.Grants[0].Risk != "READ" || readGranted.Connection.Grants[0].ApprovalPolicy != "NONE" {
@@ -3621,7 +3621,7 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	granted, err := service.Execute(ctx, command.Command{
 		Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "integration-effect-write-grant", ExpectedVersion: &readGranted.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: true},
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_EACH_EFFECT", ConnectionRef: created.Connection.Ref, CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: true},
 	})
 	var writeGrant *entity.IntegrationGrant
 	if granted.Connection != nil {
@@ -3960,7 +3960,7 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "integration-revoke-before-claim", ExpectedVersion: &connection.Version},
-		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: false}})
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: false}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -5379,7 +5379,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 			Mutation: value.Mutation{IdempotencyKey: item.key + "-tool-call"}, Payload: command.RunToolCallInput{
 				LeaseRef: stringMap(coordinatorLease, "leaseRef"), Fence: stringMap(coordinatorLease, "fence"),
 				Generation: coordinatorLease["generation"].(int64), CallRef: "tcl_" + item.key,
-				Tool: "delegate_agent", CapabilityRef: "platform.run.delegate", State: "SUCCEEDED",
+				Tool: "delegate_agent", CapabilityRef: "platform.run.delegate", State: "SUCCEEDED", Revision: 2,
 				SafeResult: "delegate_agent:completed", SafeParameters: map[string]any{
 					"target_agent_ref": item.agent.Ref, "workflow_step_key": stepByAgent[item.agent.Ref],
 				},
@@ -6878,6 +6878,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		!reflect.DeepEqual(turn.Conversation.Context.AllowedOperations, []string{
 			"CREATE_PROJECT", "CREATE_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION",
 			"CREATE_PROJECT_ASSISTANT",
+			"CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT",
 		}) {
 		t.Fatalf("assistant turn returned incomplete conversation: %#v", turn.Conversation)
 	}
@@ -7040,7 +7041,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		Mutation: value.Mutation{IdempotencyKey: "assistant-tool-call-1"}, Payload: command.RunToolCallInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
 			CallRef: "tcl_assistant_plan_001", Tool: "propose_configuration_plan",
-			CapabilityRef: "platform.configuration.plan", State: "SUCCEEDED", SafeResult: "propose_configuration_plan:completed",
+			CapabilityRef: "platform.configuration.plan", State: "SUCCEEDED", Revision: 2, SafeResult: "propose_configuration_plan:completed",
 			SafeParameters: map[string]any{"operation_count": 1},
 		}})
 	if err != nil || toolCall.Event == nil || toolCall.Event.ToolCall == nil ||
@@ -7165,7 +7166,7 @@ func assertBootstrapReadback(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 	if organizationCount != 1 || ownerContractCount != 1 || systemAssistantCount != 1 ||
 		corePromptCount != 1 || assistantRuntimeCount != 1 || capabilityCount != 9 ||
-		integrationDefinitionCount != 9 || providerDefinitionCount != 1 || providerAccountCount != 1 ||
+		integrationDefinitionCount != 10 || providerDefinitionCount != 1 || providerAccountCount != 1 ||
 		providerCredentialRevisionCount != 1 || completedBootstrapCount != 1 {
 		t.Fatalf("unexpected bootstrap state: organization=%d owner_contract=%d assistant=%d core_prompt=%d runtime=%d capabilities=%d integrations=%d provider_definitions=%d provider_accounts=%d provider_credentials=%d completed=%d",
 			organizationCount, ownerContractCount, systemAssistantCount, corePromptCount,

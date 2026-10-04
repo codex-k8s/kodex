@@ -2,6 +2,7 @@ import type {
   IntegrationConnection,
   IntegrationDefinition,
   IntegrationGrant,
+  IntegrationCapability,
   NextAction,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -10,6 +11,29 @@ export type IntegrationsSection =
   | "CATALOG"
   | "GRANTS"
   | "APPROVALS";
+
+const approvalPolicies: readonly IntegrationCapability["approvalPolicy"][] = [
+  "NONE",
+  "HUMAN_EACH_EFFECT",
+  "HUMAN_SCOPED",
+];
+
+// Не расширяем разрешённый сервером набор и не подставляем fallback policy.
+export function allowedIntegrationApprovalPolicies(
+  capability?: IntegrationCapability,
+): readonly IntegrationCapability["approvalPolicy"][] {
+  const allowed = capability?.allowedApprovalPolicies;
+  if (
+    !capability ||
+    !Array.isArray(allowed) ||
+    allowed.length < 1 ||
+    allowed.some((policy) => !approvalPolicies.includes(policy)) ||
+    new Set(allowed).size !== allowed.length ||
+    !allowed.includes(capability.approvalPolicy)
+  )
+    return [];
+  return [...allowed];
+}
 
 export interface IntegrationPackagePresentation {
   key: string;

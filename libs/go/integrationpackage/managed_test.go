@@ -34,9 +34,6 @@ func TestManagedRevisionPreservesShippedAndRestrictsExecution(t *testing.T) {
 				if capability.Risk != "READ" {
 					continue
 				}
-				if baseline.Spec.Adapter != string(AdapterOpenAPIMCP) {
-					capability.ApprovalPolicy = string(ApprovalHumanEachEffect)
-				}
 				capability.Execution.TimeoutSeconds = 1
 				capability.Execution.MaxAttempts = 1
 				capabilities = append(capabilities, capability)

@@ -179,6 +179,9 @@ func projectAssistantOperation(operationType string) bool {
 }
 
 func assistantSelfConfigurationOperation(assistantRef, assistantScope string, operation entity.AssistantPlanOperation) bool {
+	if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+		return assistantScope == "SYSTEM" && assistantRef != ""
+	}
 	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
 		return assistantScope == "SYSTEM" || assistantScope == "PROJECT" && assistantString(operation.Parameters, "agentRef") == assistantRef
 	}
@@ -202,7 +205,7 @@ func assistantPlanDigest(summary string, rawOperations []byte) string {
 func assistantOperationType(value string) bool {
 	switch value {
 	case "CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
-		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
+		"CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
 		return true
@@ -213,7 +216,7 @@ func assistantOperationType(value string) bool {
 
 func assistantOperationMatchesContext(contextKind, contextRef string, operation entity.AssistantPlanOperation) bool {
 	switch operation.Type {
-	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
 		return true
 	case "PUBLISH_INTEGRATION_DEFINITION":
 		return contextKind == "" && contextRef == ""
@@ -258,6 +261,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Parameters == nil || len(operation.Parameters) > 100 {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+		return repository.hydrateSystemAssistantIntegrationGrant(ctx, tx, actorScope, operation)
 	}
 	if assistantProjectConfigurationOperation(operation) {
 		return repository.hydrateProjectAssistantConfiguration(ctx, tx, actorScope, operation)
@@ -549,10 +555,15 @@ func hydrateAssistantAgentCapabilityFields(agentRef, name, capabilityKey string,
 }
 
 type assistantIntegrationGrantSnapshot struct {
-	connectionName, recipientName, reason string
-	connectionVersion, recipientVersion   int64
-	enabled                               bool
-	approvalScopePaths                    []string
+	connectionName, recipientName, reason              string
+	connectionVersion, recipientVersion                int64
+	grantRef, approvalPolicy, selectedApprovalPolicy   string
+	grantVersion                                       int64
+	definitionKey, definitionVersion, definitionDigest string
+	defaultApprovalPolicy                              string
+	allowedApprovalPolicies                            []string
+	enabled                                            bool
+	approvalScopePaths                                 []string
 }
 
 func (repository *Repository) hydrateAssistantIntegrationGrant(
@@ -562,14 +573,15 @@ func (repository *Repository) hydrateAssistantIntegrationGrant(
 	projectRef string,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
-	if projectRef == "" || !onlyAssistantFields(operation.Parameters, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "approvalScopePaths") {
+	if projectRef == "" || !onlyAssistantFields(operation.Parameters, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "approvalScopePaths", "approvalPolicy") {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	connectionRef := assistantString(operation.Parameters, "connectionRef")
 	capabilityKey := assistantString(operation.Parameters, "capabilityKey")
 	agentRef, workflowRef := assistantString(operation.Parameters, "agentRef"), assistantString(operation.Parameters, "workflowRef")
 	enabled, enabledOK := assistantBoolValue(operation.Parameters, "enabled")
-	if connectionRef == "" || !validCapabilityKey(capabilityKey) || !enabledOK || (agentRef == "") == (workflowRef == "") {
+	selectedPolicy := assistantString(operation.Parameters, "approvalPolicy")
+	if connectionRef == "" || !validCapabilityKey(capabilityKey) || !enabledOK || !validIntegrationApprovalPolicy(selectedPolicy) || (agentRef == "") == (workflowRef == "") {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	recipientKind, recipientRef := "AGENT", agentRef
@@ -584,6 +596,15 @@ func (repository *Repository) hydrateAssistantIntegrationGrant(
 	if enabled && snapshot.reason != "READY" {
 		return entity.AssistantPlanOperation{}, errs.ErrConflict
 	}
+	definition, err := repository.integrationPackage(ctx, tx, actorScope.organizationID, connectionRef,
+		snapshot.definitionKey, snapshot.definitionVersion, snapshot.definitionDigest)
+	capability, found := definition.Capability(capabilityKey)
+	if err != nil || !found || !capability.AllowsApprovalPolicy(selectedPolicy) {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	snapshot.selectedApprovalPolicy = selectedPolicy
+	snapshot.defaultApprovalPolicy = capability.ApprovalPolicy
+	snapshot.allowedApprovalPolicies = append([]string{}, capability.AllowedApprovalPolicies...)
 	scopePaths := []string{}
 	if _, supplied := operation.Parameters["approvalScopePaths"]; supplied {
 		var ok bool
@@ -591,10 +612,17 @@ func (repository *Repository) hydrateAssistantIntegrationGrant(
 		if !ok || len(scopePaths) > 16 || !enabled && len(scopePaths) != 0 {
 			return entity.AssistantPlanOperation{}, errs.ErrInvalid
 		}
-	} else if enabled && snapshot.enabled {
+	} else if enabled && snapshot.enabled && selectedPolicy == snapshot.approvalPolicy {
 		scopePaths = append(scopePaths, snapshot.approvalScopePaths...)
 	}
-	if snapshot.enabled == enabled && reflect.DeepEqual(snapshot.approvalScopePaths, scopePaths) {
+	if enabled && selectedPolicy == "HUMAN_SCOPED" {
+		if capability.ValidateApprovalScopePaths(scopePaths) != nil {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+	} else if len(scopePaths) != 0 {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if snapshot.enabled == enabled && snapshot.approvalPolicy == selectedPolicy && reflect.DeepEqual(snapshot.approvalScopePaths, scopePaths) {
 		return entity.AssistantPlanOperation{}, errs.ErrConflict
 	}
 	return hydrateAssistantIntegrationGrantFields(connectionRef, capabilityKey, agentRef, workflowRef,
@@ -612,7 +640,9 @@ func (repository *Repository) readAssistantIntegrationGrantSnapshot(
 		actorScope.organizationID, actorScope.actorID, actorScope.authorityProjectID,
 		connectionRef, projectRef, recipientKind, recipientRef, capabilityKey,
 	).Scan(&result.connectionName, &result.connectionVersion, &result.recipientName, &result.recipientVersion,
-		&result.reason, &result.enabled, &result.approvalScopePaths)
+		&result.reason, &result.enabled, &result.approvalScopePaths,
+		&result.grantRef, &result.grantVersion, &result.approvalPolicy,
+		&result.definitionKey, &result.definitionVersion, &result.definitionDigest)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, errs.ErrNotFound
 	}
@@ -637,11 +667,11 @@ func hydrateAssistantIntegrationGrantFields(
 ) (entity.AssistantPlanOperation, error) {
 	if connectionRef == "" || !validCapabilityKey(capabilityKey) || snapshot.connectionName == "" || snapshot.recipientName == "" ||
 		snapshot.connectionVersion < 1 || snapshot.recipientVersion < 1 || (agentRef == "") == (workflowRef == "") ||
-		len(approvalScopePaths) > 16 || !enabled && len(approvalScopePaths) != 0 {
+		len(approvalScopePaths) > 16 || !enabled && len(approvalScopePaths) != 0 || !validIntegrationApprovalPolicy(snapshot.selectedApprovalPolicy) {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	parameters := map[string]any{"connectionRef": connectionRef, "capabilityKey": capabilityKey,
-		"enabled": enabled, "approvalScopePaths": append([]string{}, approvalScopePaths...)}
+		"enabled": enabled, "approvalScopePaths": append([]string{}, approvalScopePaths...), "approvalPolicy": snapshot.selectedApprovalPolicy}
 	if agentRef != "" {
 		parameters["agentRef"] = agentRef
 	} else {
@@ -649,12 +679,19 @@ func hydrateAssistantIntegrationGrantFields(
 	}
 	before := cloneAssistantFields(parameters)
 	before["enabled"] = snapshot.enabled
+	before["approvalPolicy"] = snapshot.approvalPolicy
 	before["approvalScopePaths"] = append([]string{}, snapshot.approvalScopePaths...)
 	before["recipientName"] = snapshot.recipientName
 	before["recipientVersion"] = snapshot.recipientVersion
 	after := cloneAssistantFields(parameters)
 	after["recipientName"] = snapshot.recipientName
 	after["recipientVersion"] = snapshot.recipientVersion
+	for _, fields := range []map[string]any{before, after} {
+		fields["grantRef"], fields["grantVersion"] = snapshot.grantRef, snapshot.grantVersion
+		fields["definitionKey"], fields["definitionVersion"], fields["definitionDigest"] = snapshot.definitionKey, snapshot.definitionVersion, snapshot.definitionDigest
+		fields["defaultApprovalPolicy"] = snapshot.defaultApprovalPolicy
+		fields["allowedApprovalPolicies"] = append([]string{}, snapshot.allowedApprovalPolicies...)
+	}
 	version := snapshot.connectionVersion
 	operation.Action = "UPDATE"
 	operation.Target = entity.AssistantPlanTarget{Kind: "INTEGRATION_CONNECTION", Ref: connectionRef, Name: snapshot.connectionName, Version: &version}
@@ -889,7 +926,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -965,7 +1002,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
-	case "CHANGE_INTEGRATION_GRANT", "TEST_INTEGRATION_CONNECTION":
+	case "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "TEST_INTEGRATION_CONNECTION":
 		expectedTargetKind = "INTEGRATION_CONNECTION"
 		expectedTargetRef = assistantString(operation.Parameters, "connectionRef")
 	case "ARCHIVE_WORKFLOW":
@@ -1031,6 +1068,9 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 }
 
 func assistantOperationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
+	if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+		return systemAssistantIntegrationGrantCommand(operation)
+	}
 	if assistantString(operation.Input, "projectAssistantRef") != "" {
 		return projectAssistantConfigurationCommand(operation)
 	}
@@ -1286,13 +1326,13 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		result.Mutation.ExpectedVersion = &expected
 		result.Payload = command.AgentBindingInput{AgentRef: assistantString(operation.Input, "agentRef"), BindingRef: assistantString(operation.Input, "capabilityKey"), Enabled: enabled}
 	case "CHANGE_INTEGRATION_GRANT":
-		if !onlyAssistantFields(operation.Input, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "expectedVersion", "approvalScopePaths") || !hasAssistantFields(operation.Input, "connectionRef", "capabilityKey", "enabled", "expectedVersion") {
+		if !onlyAssistantFields(operation.Input, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "expectedVersion", "approvalScopePaths", "approvalPolicy") || !hasAssistantFields(operation.Input, "connectionRef", "capabilityKey", "enabled", "expectedVersion", "approvalPolicy") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		enabled, enabledOK := assistantBoolValue(operation.Input, "enabled")
 		expected, expectedOK := assistantInt64(operation.Input, "expectedVersion")
 		payload := command.IntegrationGrantInput{ConnectionRef: assistantString(operation.Input, "connectionRef"), CapabilityKey: assistantString(operation.Input, "capabilityKey"),
-			AgentRef: assistantString(operation.Input, "agentRef"), WorkflowRef: assistantString(operation.Input, "workflowRef"), Enabled: enabled}
+			AgentRef: assistantString(operation.Input, "agentRef"), WorkflowRef: assistantString(operation.Input, "workflowRef"), Enabled: enabled, ApprovalPolicy: assistantString(operation.Input, "approvalPolicy")}
 		if _, present := operation.Input["approvalScopePaths"]; present {
 			paths, valid := assistantStringsValue(operation.Input, "approvalScopePaths")
 			if !valid || len(paths) > 16 || !enabled && len(paths) != 0 {
@@ -1300,7 +1340,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			}
 			payload.ApprovalScopePaths = paths
 		}
-		if !enabledOK || !expectedOK || expected < 1 || payload.ConnectionRef == "" || !validCapabilityKey(payload.CapabilityKey) || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
+		if !enabledOK || !expectedOK || expected < 1 || payload.ConnectionRef == "" || !validIntegrationApprovalPolicy(payload.ApprovalPolicy) || !validCapabilityKey(payload.CapabilityKey) || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.ChangeIntegrationGrant, payload

@@ -19,6 +19,8 @@ const (
 
 	NativeToolStateSucceeded = "SUCCEEDED"
 	NativeToolStateFailed    = "FAILED"
+	NativeToolStateRunning   = "RUNNING"
+	NativeToolStateCancelled = "CANCELLED"
 
 	NativeToolResultCompleted = "COMPLETED"
 	NativeToolResultFailed    = "FAILED"
@@ -29,11 +31,12 @@ const (
 
 var nativeToolCallIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$`)
 
-// NativeToolCall — безопасная проекция одного terminal native tool item Codex.
+// NativeToolCall — безопасная проекция жизненного цикла native tool item Codex.
 // Сырые команды, вывод, diff, URL, query, prompts и provider result в этот
 // контракт не входят.
 type NativeToolCall struct {
 	CallID         string         `json:"call_id"`
+	Revision       int64          `json:"revision"`
 	Kind           string         `json:"kind"`
 	State          string         `json:"state"`
 	DurationMS     int64          `json:"duration_ms"`
@@ -57,9 +60,9 @@ func (request RunnerNativeToolCallRequest) Validate() error {
 func (call NativeToolCall) Validate() error {
 	if !nativeToolCallIDPattern.MatchString(call.CallID) ||
 		!nativeToolKind(call.Kind) ||
-		(call.State != NativeToolStateSucceeded && call.State != NativeToolStateFailed) ||
+		!validNativeToolLifecycle(call) ||
 		call.DurationMS < 0 || call.DurationMS > 86_400_000 ||
-		!nativeToolResult(call.SafeResult) || !validNativeToolParameters(call.Kind, call.SafeParameters) {
+		!validNativeToolParameters(call.Kind, call.SafeParameters) {
 		return errors.New("native tool call is invalid")
 	}
 	encoded, err := json.Marshal(call.SafeParameters)
@@ -69,6 +72,19 @@ func (call NativeToolCall) Validate() error {
 		return errors.New("runner native tool call is invalid")
 	}
 	return nil
+}
+
+func validNativeToolLifecycle(call NativeToolCall) bool {
+	if call.State == NativeToolStateRunning {
+		return call.Revision == 1 && call.SafeResult == "" && call.DurationMS == 0
+	}
+	if call.Revision != 2 {
+		return false
+	}
+	if call.State == NativeToolStateCancelled {
+		return call.SafeResult == "CANCELLED"
+	}
+	return (call.State == NativeToolStateSucceeded || call.State == NativeToolStateFailed) && nativeToolResult(call.SafeResult)
 }
 
 func nativeToolKind(value string) bool {

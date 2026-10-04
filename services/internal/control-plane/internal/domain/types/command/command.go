@@ -145,6 +145,7 @@ const (
 	TestConnection                            Kind = "TEST_INTEGRATION_CONNECTION"
 	SetConnectionEnabled                      Kind = "SET_INTEGRATION_CONNECTION_ENABLED"
 	ChangeIntegrationGrant                    Kind = "CHANGE_INTEGRATION_GRANT"
+	ChangeSystemAssistantIntegrationGrant     Kind = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
 	CreateAssistantConversation               Kind = "CREATE_ASSISTANT_CONVERSATION"
 	UpdateAssistantConversation               Kind = "UPDATE_ASSISTANT_CONVERSATION_TITLE"
 	ArchiveAssistantConversation              Kind = "ARCHIVE_ASSISTANT_CONVERSATION"
@@ -396,8 +397,14 @@ type ConnectionInput struct {
 }
 type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string
+	ApprovalPolicy                                      string
 	ApprovalScopePaths                                  []string
 	Enabled                                             bool
+}
+type SystemAssistantIntegrationGrantInput struct {
+	ConnectionRef, CapabilityKey, ApprovalPolicy string
+	ApprovalScopePaths                           []string
+	Enabled                                      bool
 }
 type AssistantConversationInput struct {
 	ProjectRef, AssistantScope string
@@ -440,6 +447,7 @@ type LeaseInput struct {
 	Generation                        int64
 	Limit                             int32
 	Progress                          string
+	Message                           *entity.RunMessage
 }
 type ProviderCredentialRefreshInput struct {
 	LeaseRef, Fence, PreviousCredentialRevisionRef, PreviousContentSHA256 string
@@ -486,7 +494,7 @@ type ProposeRunMetadataInput struct {
 }
 type RunToolCallInput struct {
 	LeaseRef, Fence, CallRef, Tool, CapabilityRef, GrantRef, State, SafeResult string
-	Generation, DurationMS                                                     int64
+	Generation, DurationMS, Revision                                           int64
 	SafeParameters                                                             map[string]any
 }
 type SessionArchiveTaskInput struct {

@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-func checkCatalogFixture(t *testing.T, catalog []byte, names []string) error {
+func checkCatalogFixture(t *testing.T, catalog []byte, names []string, inputs ...runtimecontract.RunnerInput) error {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct{ Method string }
@@ -38,7 +38,7 @@ func checkCatalogFixture(t *testing.T, catalog []byte, names []string) error {
 	}))
 	defer server.Close()
 	endpoint, _ := url.Parse(server.URL)
-	return checkMCP(t.Context(), server.Client(), endpoint, "synthetic-capability", names)
+	return checkMCP(t.Context(), server.Client(), endpoint, "synthetic-capability", names, inputs...)
 }
 
 func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {

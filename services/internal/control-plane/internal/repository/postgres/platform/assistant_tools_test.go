@@ -889,7 +889,7 @@ func TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC(t *testing.
 	}
 
 	grant := entity.AssistantPlanOperation{Type: "CHANGE_INTEGRATION_GRANT", Summary: "Grant CRM read", Input: map[string]any{
-		"connectionRef": "con_12345678", "capabilityKey": "crm.read", "agentRef": "agt_12345678", "enabled": true, "expectedVersion": float64(4),
+		"connectionRef": "con_12345678", "capabilityKey": "crm.read", "agentRef": "agt_12345678", "enabled": true, "expectedVersion": float64(4), "approvalPolicy": "HUMAN_SCOPED",
 	}}
 	mapped, err = assistantOperationCommand(grant)
 	if err != nil || mapped.Kind != command.ChangeIntegrationGrant || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 4 {
@@ -937,6 +937,7 @@ func TestHydrateAssistantIntegrationGrantFieldsUsesAuthoritySnapshot(t *testing.
 	snapshot := assistantIntegrationGrantSnapshot{
 		connectionName: "GitHub", recipientName: "Разработчик", reason: "READY",
 		connectionVersion: 7, recipientVersion: 3, enabled: false, approvalScopePaths: []string{},
+		selectedApprovalPolicy: "HUMAN_SCOPED", defaultApprovalPolicy: "HUMAN_EACH_EFFECT", allowedApprovalPolicies: []string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"},
 	}
 	hydrated, err := hydrateAssistantIntegrationGrantFields(
 		"con_12345678", "github.read", "agt_12345678", "", snapshot, true,

@@ -219,7 +219,7 @@ describe("RunPage runtime presentation", () => {
         },
       },
     };
-    platform.problems.run = asProblem({
+    platform.runProblems[currentRun.ref] = asProblem({
       status: 503,
       code: "RUN_EVENTS_UNAVAILABLE",
       title: "История событий временно недоступна",

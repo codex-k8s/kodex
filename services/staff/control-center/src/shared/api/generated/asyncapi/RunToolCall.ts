@@ -9,6 +9,7 @@ export interface RunToolCall {
   capabilityRef?: string;
   grantRef?: string;
   state: RunToolCallState;
+  revision?: number;
   durationMs: number;
   safeResult: string;
   auditRef: string;

@@ -2,6 +2,7 @@ import { getOwnerGate } from "@/shared/api/generated/openapi/sdk.gen";
 import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/problem";
+import { hasValidGateScope } from "./gate-scope";
 
 export function gateSelection(
   references: string[],
@@ -16,6 +17,7 @@ export async function readAddressedGate(
   gateRef: string,
   projectRef: string | undefined,
   signal: AbortSignal,
+  organizationRef?: string,
 ): Promise<OwnerGate> {
   const combined = AbortSignal.any([signal, requestSignal()]);
   const gate = (
@@ -26,6 +28,7 @@ export async function readAddressedGate(
   combined.throwIfAborted();
   if (
     gate.ref !== gateRef ||
+    !hasValidGateScope(gate, organizationRef) ||
     (projectRef && gate.projectRef !== projectRef) ||
     !Number.isSafeInteger(gate.version) ||
     gate.version < 1 ||

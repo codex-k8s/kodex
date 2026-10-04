@@ -15,7 +15,13 @@ const scope = {
   projectRef: "project_one",
 };
 const gate = (ref: string, state: OwnerGate["state"] = "APPROVED") =>
-  ({ ref, state, projectRef: "project_one" }) as OwnerGate;
+  ({
+    ref,
+    state,
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
+    projectRef: "project_one",
+  }) as OwnerGate;
 const response = (items: OwnerGate[], total = 91, nextPageToken = "") => ({
   data: { items, total, nextPageToken },
   response: new Response(null, { status: 200 }),

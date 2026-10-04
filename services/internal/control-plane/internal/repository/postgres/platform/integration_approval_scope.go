@@ -44,7 +44,7 @@ func (repository *Repository) approveIntegrationScope(
 		return err
 	}
 	capability, ok := definition.Capability(capabilityKey)
-	if !ok || capability.ApprovalPolicy != policy || capability.Risk == "READ" ||
+	if !ok || !capability.AllowsApprovalPolicy(policy) || capability.Risk == "READ" ||
 		definition.Digest != definitionDigest {
 		return errs.ErrConflict
 	}

@@ -557,6 +557,7 @@ export type FriendlyPlanOperationType =
   | "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
   | "CHANGE_CAPABILITY"
   | "CHANGE_INTEGRATION_GRANT"
+  | "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
   | "CREATE_WORKFLOW"
   | "UPDATE_WORKFLOW"
   | "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
@@ -580,6 +581,8 @@ export type FriendlyPlanOperationType =
 export function friendlyPlanOperationType(
   operation: EditablePlanOperation,
 ): FriendlyPlanOperationType | undefined {
+  if (operation.value.type === "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT")
+    return operation.value.type;
   const operationType: FriendlyPlanOperationType = operation.value.type;
   let parameters: Record<string, unknown>;
   try {

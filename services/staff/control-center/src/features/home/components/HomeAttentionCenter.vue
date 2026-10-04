@@ -190,7 +190,11 @@ useCursorInfiniteScroll({
               <h4>{{ serverMessage(gate.title) }}</h4>
               <SafeSummary :content="gate.contextSummary" />
               <p>
-                <span>{{ projectName(gate.projectRef) }}</span>
+                <span>{{
+                  gate.scopeKind === "ORGANIZATION"
+                    ? $t("decisions.organizationScope")
+                    : projectName(gate.projectRef)
+                }}</span>
                 <span
                   >{{ $t("workboard.initiator") }}:
                   {{ gate.requestedBy.displayName }}</span

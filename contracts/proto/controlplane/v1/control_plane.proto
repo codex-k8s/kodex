@@ -81,6 +81,8 @@ service PlatformQueryService {
   rpc ListIntegrationGrantProjectCandidates(ListIntegrationGrantProjectCandidatesRequest) returns (ListIntegrationGrantProjectCandidatesResponse);
   rpc ListIntegrationGrantRecipientCandidates(ListIntegrationGrantRecipientCandidatesRequest) returns (ListIntegrationGrantRecipientCandidatesResponse);
   rpc ListIntegrationGrantCapabilityCandidates(ListIntegrationGrantCapabilityCandidatesRequest) returns (ListIntegrationGrantCapabilityCandidatesResponse);
+  // Кандидаты exact общесистемного помощника; owner и assistant назначаются сервером.
+  rpc GetSystemAssistantIntegrationGrantCandidates(GetSystemAssistantIntegrationGrantCandidatesRequest) returns (GetSystemAssistantIntegrationGrantCandidatesResponse);
   rpc GetIntegrationConnection(GetIntegrationConnectionRequest) returns (GetIntegrationConnectionResponse);
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
@@ -246,6 +248,8 @@ service PlatformCommandService {
   rpc TestIntegrationConnection(TestIntegrationConnectionRequest) returns (TestIntegrationConnectionResponse);
   rpc SetIntegrationConnectionEnabled(SetIntegrationConnectionEnabledRequest) returns (SetIntegrationConnectionEnabledResponse);
   rpc ChangeIntegrationGrant(ChangeIntegrationGrantRequest) returns (ChangeIntegrationGrantResponse);
+  // Выдача/отзыв exact grant общесистемного помощника без фиктивного проекта.
+  rpc ChangeSystemAssistantIntegrationGrant(ChangeSystemAssistantIntegrationGrantRequest) returns (ChangeSystemAssistantIntegrationGrantResponse);
   rpc PublishAgentRuntimeConfiguration(PublishAgentRuntimeConfigurationRequest) returns (PublishAgentRuntimeConfigurationResponse);
   rpc CreateConfigOverlayDraft(CreateConfigOverlayDraftRequest) returns (CreateConfigOverlayDraftResponse);
   rpc ValidateConfigOverlayDraft(ValidateConfigOverlayDraftRequest) returns (ValidateConfigOverlayDraftResponse);
@@ -669,6 +673,15 @@ enum RunToolCallState {
   RUN_TOOL_CALL_STATE_UNSPECIFIED = 0;
   RUN_TOOL_CALL_STATE_SUCCEEDED = 1;
   RUN_TOOL_CALL_STATE_FAILED = 2;
+  RUN_TOOL_CALL_STATE_RUNNING = 3;
+  RUN_TOOL_CALL_STATE_CANCELLED = 4;
+}
+
+enum RunMessagePhase {
+  RUN_MESSAGE_PHASE_UNSPECIFIED = 0;
+  RUN_MESSAGE_PHASE_USER = 1;
+  RUN_MESSAGE_PHASE_COMMENTARY = 2;
+  RUN_MESSAGE_PHASE_FINAL = 3;
 }
 
 enum OwnerGateState {
@@ -1181,6 +1194,26 @@ message RunEvent {
   RunEventActor actor = 21;
   RunEventMessageKind message_kind = 22;
   RunToolCall tool_call = 23;
+  // Координаты назначаются владельцем по исходному execution, не текущему UI.
+  RunEventExecution execution = 24;
+  RunMessage message = 25;
+}
+
+message RunEventExecution {
+  string run_ref = 1;
+  string node_ref = 2;
+  string session_ref = 3;
+  string turn_ref = 4;
+  int64 turn_number = 5;
+  int32 attempt = 6;
+}
+
+message RunMessage {
+  string ref = 1;
+  RunMessagePhase phase = 2;
+  int64 revision = 3;
+  // Только опубликованное сообщение, не reasoning; UTF-8, максимум 64 KiB.
+  string text = 4;
 }
 
 message RunEventActor {
@@ -1199,6 +1232,7 @@ message RunToolCall {
   int64 duration_ms = 7;
   string safe_result = 8;
   string audit_ref = 9;
+  int64 revision = 10;
 }
 
 message RunGraph {
@@ -1234,6 +1268,10 @@ message OwnerGate {
   repeated OwnerGateDecisionConsequence decision_consequences = 21;
   string source_attachment_set_ref = 22;
   IntegrationIntent integration_intent = 23;
+  // Область назначается owner из exact root/session/assistant lineage.
+  // ORGANIZATION разрешается только системному помощнику без project locator.
+  RuntimeResourceScopeKind scope_kind = 24;
+  string organization_ref = 25;
 }
 
 message OwnerGateDecisionConsequence {
@@ -1380,6 +1418,7 @@ message IntegrationCapability {
   repeated IntegrationConfigurationField input_fields = 10;
   string input_schema = 11;
   string input_schema_sha256 = 12;
+  repeated IntegrationApprovalPolicy allowed_approval_policies = 13;
 }
 
 message IntegrationConfigurationField {
@@ -1464,6 +1503,7 @@ message IntegrationGrant {
   string input_schema = 21;
   string input_schema_sha256 = 22;
   repeated string approval_scope_paths = 23;
+  int64 connection_version = 24;
 }
 
 message IntegrationConnection {
@@ -1549,6 +1589,8 @@ message AssistantPlanOperation {
     TYPE_UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE = 28;
     // Подготовить подтверждаемую атомарную настройку модели, аккаунтов и reasoning помощника.
     TYPE_PREPARE_ASSISTANT_RUNTIME_CONFIGURATION = 29;
+    // Подготовить exact integration grant системного помощника для human confirmation.
+    TYPE_CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT = 30;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -2906,9 +2948,50 @@ message ChangeIntegrationGrantRequest {
   string workflow_ref = 5;
   bool enabled = 6;
   repeated string approval_scope_paths = 7;
+  IntegrationApprovalPolicy approval_policy = 8;
 }
 message ChangeIntegrationGrantResponse {
   IntegrationConnection connection = 1;
+}
+
+message ChangeSystemAssistantIntegrationGrantRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  string capability_key = 3;
+  bool enabled = 4;
+  IntegrationApprovalPolicy approval_policy = 5;
+  repeated string approval_scope_paths = 6;
+}
+message ChangeSystemAssistantIntegrationGrantResponse {
+  IntegrationConnection connection = 1;
+}
+message GetSystemAssistantIntegrationGrantCandidatesRequest {
+  string connection_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message SystemAssistantIntegrationGrantCandidate {
+  IntegrationCapability capability = 1;
+  bool grantable = 2;
+  IntegrationCandidateReason reason = 3;
+  string current_grant_ref = 4;
+  int64 current_grant_version = 5;
+  IntegrationApprovalPolicy current_approval_policy = 6;
+  repeated string current_approval_scope_paths = 7;
+  bool current_grant_enabled = 8;
+}
+message GetSystemAssistantIntegrationGrantCandidatesResponse {
+  RuntimeResourceScopeKind scope_kind = 1;
+  string organization_ref = 2;
+  string assistant_ref = 3;
+  int64 assistant_version = 4;
+  string connection_ref = 5;
+  int64 connection_version = 6;
+  string definition_version = 7;
+  string definition_digest = 8;
+  repeated SystemAssistantIntegrationGrantCandidate items = 9;
+  int64 total = 10;
+  PageInfo page = 11;
 }
 
 message GetSystemAssistantRequest {}
@@ -3146,6 +3229,42 @@ enum RuntimeReasoningMode {
   RUNTIME_REASONING_MODE_UNSUPPORTED = 2;
 }
 
+enum ManagedMCPScopeKind {
+  MANAGED_MCP_SCOPE_KIND_UNSPECIFIED = 0;
+  MANAGED_MCP_SCOPE_KIND_SYSTEM = 1;
+  MANAGED_MCP_SCOPE_KIND_PROJECT = 2;
+  MANAGED_MCP_SCOPE_KIND_AGENT = 3;
+}
+
+message ManagedMCPHealthProof {
+  string test_ref = 1;
+  int64 generation = 2;
+  string connection_ref = 3;
+  int64 connection_version = 4;
+  string configuration_sha256 = 5;
+  string credential_revision_ref = 6;
+  int64 credential_revision = 7;
+  string credential_sha256 = 8;
+  string definition_key = 9;
+  string definition_version = 10;
+  string definition_digest = 11;
+  google.protobuf.Timestamp checked_at = 12;
+  string probe = 13;
+}
+
+message ManagedMCPProfile {
+  string provider = 1;
+  uint32 version = 2;
+  string namespace = 3;
+  bool required = 4;
+  ManagedMCPScopeKind scope_kind = 5;
+  string scope_ref = 6;
+  string resolve_grant_ref = 7;
+  string query_grant_ref = 8;
+  string digest = 9;
+  ManagedMCPHealthProof health = 10;
+}
+
 message RuntimeRevisionSnapshot {
   string ref = 1;
   int64 version = 2;
@@ -3230,6 +3349,7 @@ message RuntimeRevisionSnapshot {
   string prompt_service_template_digest = 75;
   string prompt_target_kind = 76;
   string assistant_profile_ref = 77;
+  repeated ManagedMCPProfile managed_mcp_profiles = 78;
 }
 
 enum RuntimeFilePurpose {
@@ -3575,6 +3695,8 @@ message ReportExecutionProgressRequest {
   string fence = 2;
   int64 generation = 3;
   string progress = 4;
+  // Сообщение публикуется отдельно от служебного progress, после completed item.
+  RunMessage message = 5;
 }
 message ReportExecutionProgressResponse {
   Run run = 1;
@@ -3828,6 +3950,7 @@ message RecordRunToolCallRequest {
   RunToolCallState state = 10;
   int64 duration_ms = 11;
   string safe_result = 12;
+  int64 revision = 13;
 }
 message RecordRunToolCallResponse {
   RunEvent event = 1;
@@ -4045,6 +4168,8 @@ message IntegrationInvocationClaim {
   string input_digest = 17;
   bytes definition_package = 18;
   IntegrationInvocationWorkMode work_mode = 19;
+  string grant_ref = 20;
+  int64 grant_version = 21;
 }
 message ClaimIntegrationInvocationsRequest {
   string workload_instance = 1;

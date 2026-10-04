@@ -658,7 +658,8 @@ func (server *Server) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.ChangeIntegrationGrant(r.Context(), &controlplanev1.ChangeIntegrationGrantRequest{Mutation: m, ConnectionRef: ref, CapabilityKey: body.CapabilityKey, AgentRef: stringValue(body.AgentRef), WorkflowRef: stringValue(body.WorkflowRef), Enabled: body.Enabled, ApprovalScopePaths: approvalScopePaths})
+	response, err := server.control.Command.ChangeIntegrationGrant(r.Context(), &controlplanev1.ChangeIntegrationGrantRequest{Mutation: m, ConnectionRef: ref, CapabilityKey: body.CapabilityKey, AgentRef: stringValue(body.AgentRef), WorkflowRef: stringValue(body.WorkflowRef), Enabled: body.Enabled, ApprovalScopePaths: approvalScopePaths,
+		ApprovalPolicy: controlplanev1.IntegrationApprovalPolicy(controlplanev1.IntegrationApprovalPolicy_value["INTEGRATION_APPROVAL_POLICY_"+string(body.ApprovalPolicy)])})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

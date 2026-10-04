@@ -15,7 +15,7 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover server refs and schemas. Omit operation_types for the index; request up to four schemas. Agent pages: 20, agent_query/offset; full fields only for current AGENT. Definition pages: 10, definition_query/offset. Fresh assistant_configuration_catalog is exclusive with other selectors and nonempty operation_types; MODELS requires account_ref. Names are not refs.",
+		"description": "Discover refs and up to four schemas; omit operation_types for index. Agent pages: 20; definition pages: 10. Fresh assistant_configuration_catalog excludes other selectors; MODELS requires account_ref. Names are not refs.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
@@ -177,7 +177,7 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "propose_configuration_plan",
-		"description": "Propose an editable Kodex draft for explicit user approval. First request the exact schema for each operation type from get_configuration_catalog. This compact envelope does not grant fields or authority; control-plane validates every specialized operation. This tool never applies a plan.",
+		"description": "Propose an editable draft for explicit user approval. Read exact schemas from get_configuration_catalog first. Control-plane validates each specialized operation; this tool never applies a plan or grants authority.",
 		"inputSchema": objectSchema([]string{"summary", "operations"}, map[string]any{
 			"summary": stringSchema(1, 2000),
 			"operations": map[string]any{"type": "array", "minItems": 1, "maxItems": 32,
@@ -402,6 +402,12 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
 	if input.IsSystemAssistant() {
+		result = append(result, assistantOperationSchema("CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", objectSchema(
+			[]string{"connectionRef", "capabilityKey", "enabled", "approvalPolicy"}, map[string]any{
+				"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "enabled": map[string]any{"type": "boolean"},
+				"approvalPolicy":     enumSchema("NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"),
+				"approvalScopePaths": map[string]any{"type": "array", "maxItems": 16, "uniqueItems": true, "items": stringSchema(1, 200)},
+			})))
 		result = append(result, assistantOperationSchema("CREATE_PROJECT_ASSISTANT", objectSchema(
 			[]string{"projectRef", "name", "purpose", "instructions"}, map[string]any{
 				"projectRef": projectRef, "name": stringSchema(1, 120), "purpose": stringSchema(1, 1000),
@@ -698,6 +704,7 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 	properties := map[string]any{
 		"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "agentRef": opaqueRefSchema(), "workflowRef": opaqueRefSchema(),
 		"enabled":            map[string]any{"type": "boolean"},
+		"approvalPolicy":     enumSchema("NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"),
 		"approvalScopePaths": map[string]any{"type": "array", "maxItems": 16, "uniqueItems": true, "items": stringSchema(1, 200)},
 	}
 	if context != nil && context.EntityRef != "" {
@@ -705,14 +712,14 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 		case "AGENT":
 			properties["agentRef"] = enumSchema(context.EntityRef)
 			delete(properties, "workflowRef")
-			return objectSchema([]string{"connectionRef", "capabilityKey", "agentRef", "enabled"}, properties)
+			return objectSchema([]string{"connectionRef", "capabilityKey", "agentRef", "enabled", "approvalPolicy"}, properties)
 		case "WORKFLOW":
 			properties["workflowRef"] = enumSchema(context.EntityRef)
 			delete(properties, "agentRef")
-			return objectSchema([]string{"connectionRef", "capabilityKey", "workflowRef", "enabled"}, properties)
+			return objectSchema([]string{"connectionRef", "capabilityKey", "workflowRef", "enabled", "approvalPolicy"}, properties)
 		}
 	}
-	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled"}, properties)
+	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled", "approvalPolicy"}, properties)
 	schema["oneOf"] = []map[string]any{
 		{"required": []string{"agentRef"}, "not": map[string]any{"required": []string{"workflowRef"}}},
 		{"required": []string{"workflowRef"}, "not": map[string]any{"required": []string{"agentRef"}}},
@@ -723,7 +730,7 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true

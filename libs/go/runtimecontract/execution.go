@@ -74,7 +74,10 @@ type RunnerDelegationTarget struct {
 // RunnerIntegrationGrant — безопасная проекция одной типизированной capability.
 type RunnerIntegrationGrant struct {
 	Ref                   string `json:"ref"`
+	GrantVersion          int64  `json:"grant_version"`
 	ConnectionRef         string `json:"connection_ref"`
+	ConnectionVersion     int64  `json:"connection_version"`
+	ApprovalPolicy        string `json:"approval_policy"`
 	DefinitionKey         string `json:"definition_key"`
 	ConnectionName        string `json:"connection_name"`
 	CapabilityKey         string `json:"capability_key"`
@@ -180,6 +183,7 @@ type RunnerInput struct {
 	SessionContext                    []RunnerSessionMessage    `json:"session_context,omitempty"`
 	DelegationTargets                 []RunnerDelegationTarget  `json:"delegation_targets,omitempty"`
 	IntegrationGrants                 []RunnerIntegrationGrant  `json:"integration_grants,omitempty"`
+	ManagedMCPProfiles                []ManagedMCPProfile       `json:"managed_mcp_profiles,omitempty"`
 	AssistantContext                  *RunnerAssistantContext   `json:"assistant_context,omitempty"`
 	AttachmentSetRef                  string                    `json:"attachment_set_ref,omitempty"`
 	AttachmentSetManifestDigest       string                    `json:"attachment_set_manifest_digest,omitempty"`
@@ -303,6 +307,9 @@ func (input RunnerInput) Validate() error {
 		input.EnvironmentImage.Reference != input.ImageReference || input.EnvironmentImage.Digest != input.ImageManifestDigest ||
 		(input.EnvironmentImage.ArtifactRef == "" || input.EnvironmentImage.RecipeRef == "" || input.EnvironmentImage.RecipeGeneration < 1) {
 		return errors.New("runner input is invalid")
+	}
+	if err := ValidateManagedMCPProfiles(input); err != nil {
+		return err
 	}
 	usesSTT := containsString(input.Capabilities, "platform.stt.use")
 	if usesSTT != (opaqueReferencePattern.MatchString(input.SystemSTTConfigurationRef) && opaqueReferencePattern.MatchString(input.SystemSTTConfigurationRevisionRef) && input.SystemSTTConfigurationVersion > 0 && sha256Pattern.MatchString(input.SystemSTTConfigurationDigest)) ||
@@ -433,6 +440,9 @@ func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
 	bindings := make(map[string]struct{}, len(grants))
 	for _, grant := range grants {
 		if !opaqueReferencePattern.MatchString(grant.Ref) || !opaqueReferencePattern.MatchString(grant.ConnectionRef) ||
+			grant.GrantVersion < 1 || grant.ConnectionVersion < 1 ||
+			!containsString([]string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"}, grant.ApprovalPolicy) ||
+			grant.Risk == "READ" && grant.ApprovalPolicy != "NONE" ||
 			grant.DefinitionKey == "" || len(grant.DefinitionKey) > 128 ||
 			grant.ConnectionName == "" || len(grant.ConnectionName) > 160 ||
 			grant.CapabilityKey == "" || len(grant.CapabilityKey) > 255 ||
@@ -656,8 +666,9 @@ func validPinnedImage(reference, digest string) bool {
 }
 
 type RunnerProgressRequest struct {
-	RuntimeRevisionDigest string `json:"runtime_revision_digest"`
-	Progress              string `json:"progress"`
+	RuntimeRevisionDigest string               `json:"runtime_revision_digest"`
+	Progress              string               `json:"progress"`
+	Message               *RuntimeAgentMessage `json:"message,omitempty"`
 }
 
 type RunnerArtifact struct {

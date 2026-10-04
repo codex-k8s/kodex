@@ -38,3 +38,11 @@ func (service *Service) ListIntegrationGrantCapabilityCandidates(ctx context.Con
 	}
 	return service.repository.ListIntegrationGrantCapabilityCandidates(ctx, p, input)
 }
+
+func (service *Service) GetSystemAssistantIntegrationGrantCandidates(ctx context.Context, p value.Principal, connectionRef, search string, page query.Page) (entity.SystemAssistantIntegrationGrantCandidates, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.SystemAssistantIntegrationGrantCandidates{}, err
+	}
+	return service.repository.GetSystemAssistantIntegrationGrantCandidates(ctx, p, connectionRef, search, page)
+}

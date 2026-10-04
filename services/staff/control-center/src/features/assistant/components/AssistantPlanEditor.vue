@@ -19,6 +19,8 @@ import { useI18n } from "vue-i18n";
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
 import AssistantCapabilityPlanForm from "@/features/assistant/components/AssistantCapabilityPlanForm.vue";
 import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
+import AssistantSystemIntegrationGrantPlanForm from "./AssistantSystemIntegrationGrantPlanForm.vue";
+import { systemIntegrationGrantReceiptRef } from "../system-integration-grant-plan";
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import AssistantSchedulePlanForm from "@/features/assistant/components/AssistantSchedulePlanForm.vue";
 import AssistantRuntimeConfigurationPlanForm from "./AssistantRuntimeConfigurationPlanForm.vue";
@@ -691,7 +693,9 @@ const friendlyInputsReady = computed(() =>
           scheduleFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CHANGE_CAPABILITY" ||
           capabilityFormValidity.value[operation.value.ref] === true) &&
-        (operation.value.type !== "CHANGE_INTEGRATION_GRANT" ||
+        ((operation.value.type !== "CHANGE_INTEGRATION_GRANT" &&
+          operation.value.type !==
+            "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT") ||
           integrationGrantValidity.value[operation.value.ref] === true) &&
         (!imageOperation(operation) || roleImageReady(operation)) &&
         (operation.value.type !== "CREATE_PROJECT_FILE" ||
@@ -1584,6 +1588,26 @@ function validationProblemLabel(problem: string): string {
               v-else-if="operation.value.type === 'CHANGE_INTEGRATION_GRANT'"
               :operation="operation"
               :project-ref="plan.projectRef"
+              :disabled="!editable"
+              @valid="integrationGrantValidity[operation.value.ref] = $event"
+              @dirty="integrationGrantTouched = true"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
+              "
+            />
+            <AssistantSystemIntegrationGrantPlanForm
+              v-else-if="
+                operation.value.type ===
+                'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT'
+              "
+              :operation="operation"
+              :applied-grant-ref="
+                systemIntegrationGrantReceiptRef(
+                  plan,
+                  operation.value.ref,
+                  receipt ?? plan.receipt,
+                )
+              "
               :disabled="!editable"
               @valid="integrationGrantValidity[operation.value.ref] = $event"
               @dirty="integrationGrantTouched = true"

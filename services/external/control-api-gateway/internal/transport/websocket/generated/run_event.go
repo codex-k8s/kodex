@@ -26,4 +26,6 @@ type RunEvent struct {
 	Actor         RunEventActor       `json:"actor"`
 	MessageKind   RunEventMessageKind `json:"messageKind"`
 	ToolCall      *RunToolCall        `json:"toolCall,omitempty"`
+	Execution     *RunEventExecution  `json:"execution,omitempty"`
+	Message       *RunMessage         `json:"message,omitempty"`
 }

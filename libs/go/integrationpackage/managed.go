@@ -53,9 +53,6 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 		return validateOpenAPIManagedRevision(candidate, shipped)
 	}
 	c, s := candidate.Spec, shipped.Spec
-	if legacy, ok := legacyManagedMailbox(shipped); ok && reflect.DeepEqual(c.Credential, legacy.Spec.Credential) {
-		s = legacy.Spec
-	}
 	if c.Adapter != s.Adapter || c.AdapterOwner != s.AdapterOwner || c.ExecutionRoute != s.ExecutionRoute ||
 		c.Readiness != s.Readiness || !reflect.DeepEqual(c.Credential, s.Credential) ||
 		!narrowNetworkDestinations(c.NetworkDestinations, s.NetworkDestinations) || !narrowFields(c.ConfigurationFields, s.ConfigurationFields) ||
@@ -66,7 +63,7 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 	for _, capability := range c.Capabilities {
 		base, exists := shipped.Capability(capability.Key)
 		if !exists || capability.Operation != base.Operation || capability.Risk != base.Risk ||
-			(base.ApprovalPolicy == string(ApprovalHumanEachEffect) && capability.ApprovalPolicy != base.ApprovalPolicy) ||
+			!narrowApprovalPolicies(capability.AllowedApprovalPolicies, base.AllowedApprovalPolicies) ||
 			!reflect.DeepEqual(capability.ResourceScope, base.ResourceScope) ||
 			!narrowFields(capability.InputFields, base.InputFields) || !reflect.DeepEqual(capability.OutputFields, base.OutputFields) ||
 			capability.Execution.Idempotency != base.Execution.Idempotency ||

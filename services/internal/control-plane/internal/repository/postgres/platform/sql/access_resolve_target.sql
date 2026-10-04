@@ -54,14 +54,17 @@ FROM (
     AND session.ref = @resource_ref
     AND (session.project_id IS NULL OR project.lifecycle NOT IN ('TRASHED', 'PURGE_PENDING'))
   UNION ALL
-  SELECT gate.id::text, p.id::text, p.ref, owner_subject.ref,
-         jsonb_build_object('PROJECT', p.ref, 'RUN', run.ref)
+  SELECT gate.id::text, COALESCE(p.id::text,''), COALESCE(p.ref,''), owner_subject.ref,
+         jsonb_strip_nulls(jsonb_build_object('PROJECT', p.ref, 'RUN', run.ref))
   FROM control_plane.owner_gates gate
-  JOIN control_plane.projects p ON p.id = gate.project_id AND p.lifecycle NOT IN ('TRASHED', 'PURGE_PENDING')
+  LEFT JOIN control_plane.projects p ON p.id = gate.project_id AND p.lifecycle NOT IN ('TRASHED', 'PURGE_PENDING')
   JOIN control_plane.runs run ON run.id = gate.root_run_id
   JOIN control_plane.subjects owner_subject ON owner_subject.id = run.initiated_by
   WHERE @resource_kind = 'OWNER_GATE' AND gate.organization_id = @organization_id::uuid
     AND gate.ref = @resource_ref
+    AND ((gate.scope_kind='PROJECT' AND p.id IS NOT NULL) OR
+         (gate.scope_kind='ORGANIZATION' AND gate.project_id IS NULL
+          AND control_plane.owned_organization_assistant_run(gate.organization_id,gate.root_run_id)))
   UNION ALL
   SELECT artifact.id::text, COALESCE(p.id::text, ''), COALESCE(p.ref, ''), owner_subject.ref,
          jsonb_strip_nulls(jsonb_build_object('PROJECT', p.ref, 'RUN', run.ref,

@@ -308,7 +308,7 @@ func TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess(t *t
 		{Provider: "openai", Model: "gpt-6-astra", EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{Command: "missing-kodex-tool"}}},
 		{Provider: "openai", Model: "gpt-6-astra", ConfigOverlay: "[mcp_servers.foreign]\nurl = \"https://example.invalid\""},
 	} {
-		if _, err := executeLocal(context.Background(), input, []byte("task"), ""); !errors.Is(err, ErrRuntimeProfile) {
+		if _, err := executeLocal(context.Background(), input, []byte("task"), "", nil); !errors.Is(err, ErrRuntimeProfile) {
 			t.Fatalf("selection reached credential/process boundary: %v", err)
 		}
 	}

@@ -609,35 +609,36 @@ func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
 
 // Defines values for AssistantContextDescriptorAllowedOperations.
 const (
-	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                         AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
-	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW                      AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT          AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
-	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                     AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
-	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT               AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
-	AssistantContextDescriptorAllowedOperationsCREATEAGENT                          AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT               AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
-	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION          AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                        AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT               AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_ASSISTANT"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                    AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
-	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE                AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT        AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                       AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
-	AssistantContextDescriptorAllowedOperationsCREATESYSTEMASSISTANTROLEIMAGERECIPE AssistantContextDescriptorAllowedOperations = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                       AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                            AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
-	AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION AssistantContextDescriptorAllowedOperations = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
-	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION    AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-	AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION         AssistantContextDescriptorAllowedOperations = "PUBLISH_INTEGRATION_DEFINITION"
-	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION            AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                          AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION          AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                        AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
-	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE                AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                       AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
-	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS    AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
-	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTROLEIMAGERECIPE AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                       AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                          AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
+	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW                       AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT           AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                      AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
+	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT                AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCHANGESYSTEMASSISTANTINTEGRATIONGRANT AssistantContextDescriptorAllowedOperations = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCREATEAGENT                           AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT                AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION           AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                         AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT                AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_ASSISTANT"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                     AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
+	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE                 AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT         AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                        AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsCREATESYSTEMASSISTANTROLEIMAGERECIPE  AssistantContextDescriptorAllowedOperations = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                        AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                             AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
+	AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION  AssistantContextDescriptorAllowedOperations = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
+	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION     AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION          AssistantContextDescriptorAllowedOperations = "PUBLISH_INTEGRATION_DEFINITION"
+	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION             AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                           AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION           AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                         AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE                 AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                        AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS     AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTROLEIMAGERECIPE  AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                        AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AssistantContextDescriptorAllowedOperations enum.
@@ -652,6 +653,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCHANGESYSTEMASSISTANTINTEGRATIONGRANT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEAGENT:
 		return true
@@ -804,35 +807,36 @@ func (e AssistantPlanOperationAction) Valid() bool {
 
 // Defines values for AssistantPlanOperationType.
 const (
-	AssistantPlanOperationTypeARCHIVEAGENT                         AssistantPlanOperationType = "ARCHIVE_AGENT"
-	AssistantPlanOperationTypeARCHIVEWORKFLOW                      AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
-	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT          AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
-	AssistantPlanOperationTypeCHANGECAPABILITY                     AssistantPlanOperationType = "CHANGE_CAPABILITY"
-	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT               AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
-	AssistantPlanOperationTypeCREATEAGENT                          AssistantPlanOperationType = "CREATE_AGENT"
-	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT               AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
-	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION          AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeCREATEPROJECT                        AssistantPlanOperationType = "CREATE_PROJECT"
-	AssistantPlanOperationTypeCREATEPROJECTASSISTANT               AssistantPlanOperationType = "CREATE_PROJECT_ASSISTANT"
-	AssistantPlanOperationTypeCREATEPROJECTFILE                    AssistantPlanOperationType = "CREATE_PROJECT_FILE"
-	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE                AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT        AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-	AssistantPlanOperationTypeCREATESCHEDULE                       AssistantPlanOperationType = "CREATE_SCHEDULE"
-	AssistantPlanOperationTypeCREATESYSTEMASSISTANTROLEIMAGERECIPE AssistantPlanOperationType = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeCREATEWORKFLOW                       AssistantPlanOperationType = "CREATE_WORKFLOW"
-	AssistantPlanOperationTypeLAUNCHRUN                            AssistantPlanOperationType = "LAUNCH_RUN"
-	AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION AssistantPlanOperationType = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
-	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION    AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-	AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION         AssistantPlanOperationType = "PUBLISH_INTEGRATION_DEFINITION"
-	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION            AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeUPDATEAGENT                          AssistantPlanOperationType = "UPDATE_AGENT"
-	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION          AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeUPDATEPROJECT                        AssistantPlanOperationType = "UPDATE_PROJECT"
-	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE                AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeUPDATESCHEDULE                       AssistantPlanOperationType = "UPDATE_SCHEDULE"
-	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS    AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
-	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTROLEIMAGERECIPE AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeUPDATEWORKFLOW                       AssistantPlanOperationType = "UPDATE_WORKFLOW"
+	AssistantPlanOperationTypeARCHIVEAGENT                          AssistantPlanOperationType = "ARCHIVE_AGENT"
+	AssistantPlanOperationTypeARCHIVEWORKFLOW                       AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
+	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT           AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	AssistantPlanOperationTypeCHANGECAPABILITY                      AssistantPlanOperationType = "CHANGE_CAPABILITY"
+	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT                AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCHANGESYSTEMASSISTANTINTEGRATIONGRANT AssistantPlanOperationType = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCREATEAGENT                           AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT                AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
+	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION           AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeCREATEPROJECT                         AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATEPROJECTASSISTANT                AssistantPlanOperationType = "CREATE_PROJECT_ASSISTANT"
+	AssistantPlanOperationTypeCREATEPROJECTFILE                     AssistantPlanOperationType = "CREATE_PROJECT_FILE"
+	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE                 AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT         AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantPlanOperationTypeCREATESCHEDULE                        AssistantPlanOperationType = "CREATE_SCHEDULE"
+	AssistantPlanOperationTypeCREATESYSTEMASSISTANTROLEIMAGERECIPE  AssistantPlanOperationType = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeCREATEWORKFLOW                        AssistantPlanOperationType = "CREATE_WORKFLOW"
+	AssistantPlanOperationTypeLAUNCHRUN                             AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION  AssistantPlanOperationType = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
+	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION     AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION          AssistantPlanOperationType = "PUBLISH_INTEGRATION_DEFINITION"
+	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION             AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEAGENT                           AssistantPlanOperationType = "UPDATE_AGENT"
+	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION           AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEPROJECT                         AssistantPlanOperationType = "UPDATE_PROJECT"
+	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE                 AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeUPDATESCHEDULE                        AssistantPlanOperationType = "UPDATE_SCHEDULE"
+	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS     AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTROLEIMAGERECIPE  AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeUPDATEWORKFLOW                        AssistantPlanOperationType = "UPDATE_WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
@@ -847,6 +851,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCHANGECAPABILITY:
 		return true
 	case AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT:
+		return true
+	case AssistantPlanOperationTypeCHANGESYSTEMASSISTANTINTEGRATIONGRANT:
 		return true
 	case AssistantPlanOperationTypeCREATEAGENT:
 		return true
@@ -1960,6 +1966,27 @@ func (e IntegrationCandidateReason) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationCapabilityAllowedApprovalPolicies.
+const (
+	IntegrationCapabilityAllowedApprovalPoliciesHUMANEACHEFFECT IntegrationCapabilityAllowedApprovalPolicies = "HUMAN_EACH_EFFECT"
+	IntegrationCapabilityAllowedApprovalPoliciesHUMANSCOPED     IntegrationCapabilityAllowedApprovalPolicies = "HUMAN_SCOPED"
+	IntegrationCapabilityAllowedApprovalPoliciesNONE            IntegrationCapabilityAllowedApprovalPolicies = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCapabilityAllowedApprovalPolicies enum.
+func (e IntegrationCapabilityAllowedApprovalPolicies) Valid() bool {
+	switch e {
+	case IntegrationCapabilityAllowedApprovalPoliciesHUMANEACHEFFECT:
+		return true
+	case IntegrationCapabilityAllowedApprovalPoliciesHUMANSCOPED:
+		return true
+	case IntegrationCapabilityAllowedApprovalPoliciesNONE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationCapabilityApprovalPolicy.
 const (
 	IntegrationCapabilityApprovalPolicyHUMANEACHEFFECT IntegrationCapabilityApprovalPolicy = "HUMAN_EACH_EFFECT"
@@ -2329,6 +2356,27 @@ func (e IntegrationGrantConnectionCandidateCredentialKind) Valid() bool {
 	case IntegrationGrantConnectionCandidateCredentialKindPASSWORD:
 		return true
 	case IntegrationGrantConnectionCandidateCredentialKindTOKEN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationGrantInputApprovalPolicy.
+const (
+	IntegrationGrantInputApprovalPolicyHUMANEACHEFFECT IntegrationGrantInputApprovalPolicy = "HUMAN_EACH_EFFECT"
+	IntegrationGrantInputApprovalPolicyHUMANSCOPED     IntegrationGrantInputApprovalPolicy = "HUMAN_SCOPED"
+	IntegrationGrantInputApprovalPolicyNONE            IntegrationGrantInputApprovalPolicy = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationGrantInputApprovalPolicy enum.
+func (e IntegrationGrantInputApprovalPolicy) Valid() bool {
+	switch e {
+	case IntegrationGrantInputApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case IntegrationGrantInputApprovalPolicyHUMANSCOPED:
+		return true
+	case IntegrationGrantInputApprovalPolicyNONE:
 		return true
 	default:
 		return false
@@ -3181,6 +3229,24 @@ func (e OwnerGateDecision) Valid() bool {
 	case OwnerGateDecisionREJECT:
 		return true
 	case OwnerGateDecisionREQUESTCHANGES:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerGateScopeKind.
+const (
+	OwnerGateScopeKindORGANIZATION OwnerGateScopeKind = "ORGANIZATION"
+	OwnerGateScopeKindPROJECT      OwnerGateScopeKind = "PROJECT"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateScopeKind enum.
+func (e OwnerGateScopeKind) Valid() bool {
+	switch e {
+	case OwnerGateScopeKindORGANIZATION:
+		return true
+	case OwnerGateScopeKindPROJECT:
 		return true
 	default:
 		return false
@@ -5389,6 +5455,27 @@ func (e RunInputTargetType) Valid() bool {
 	}
 }
 
+// Defines values for RunMessagePhase.
+const (
+	RunMessagePhaseCOMMENTARY RunMessagePhase = "COMMENTARY"
+	RunMessagePhaseFINAL      RunMessagePhase = "FINAL"
+	RunMessagePhaseUSER       RunMessagePhase = "USER"
+)
+
+// Valid indicates whether the value is a known member of the RunMessagePhase enum.
+func (e RunMessagePhase) Valid() bool {
+	switch e {
+	case RunMessagePhaseCOMMENTARY:
+		return true
+	case RunMessagePhaseFINAL:
+		return true
+	case RunMessagePhaseUSER:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunNodeState.
 const (
 	RunNodeStateCANCELLED RunNodeState = "CANCELLED"
@@ -5472,14 +5559,20 @@ func (e RunTargetType) Valid() bool {
 
 // Defines values for RunToolCallState.
 const (
+	RunToolCallStateCANCELLED RunToolCallState = "CANCELLED"
 	RunToolCallStateFAILED    RunToolCallState = "FAILED"
+	RunToolCallStateRUNNING   RunToolCallState = "RUNNING"
 	RunToolCallStateSUCCEEDED RunToolCallState = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the RunToolCallState enum.
 func (e RunToolCallState) Valid() bool {
 	switch e {
+	case RunToolCallStateCANCELLED:
+		return true
 	case RunToolCallStateFAILED:
+		return true
+	case RunToolCallStateRUNNING:
 		return true
 	case RunToolCallStateSUCCEEDED:
 		return true
@@ -5829,22 +5922,22 @@ func (e RuntimeVolumeKind) Valid() bool {
 
 // Defines values for RuntimeWebAccessMode.
 const (
-	ALLOWLISTFULL     RuntimeWebAccessMode = "ALLOWLIST_FULL"
-	ALLOWLISTREADONLY RuntimeWebAccessMode = "ALLOWLIST_READ_ONLY"
-	FULLPUBLIC        RuntimeWebAccessMode = "FULL_PUBLIC"
-	NONE              RuntimeWebAccessMode = "NONE"
+	RuntimeWebAccessModeALLOWLISTFULL     RuntimeWebAccessMode = "ALLOWLIST_FULL"
+	RuntimeWebAccessModeALLOWLISTREADONLY RuntimeWebAccessMode = "ALLOWLIST_READ_ONLY"
+	RuntimeWebAccessModeFULLPUBLIC        RuntimeWebAccessMode = "FULL_PUBLIC"
+	RuntimeWebAccessModeNONE              RuntimeWebAccessMode = "NONE"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeWebAccessMode enum.
 func (e RuntimeWebAccessMode) Valid() bool {
 	switch e {
-	case ALLOWLISTFULL:
+	case RuntimeWebAccessModeALLOWLISTFULL:
 		return true
-	case ALLOWLISTREADONLY:
+	case RuntimeWebAccessModeALLOWLISTREADONLY:
 		return true
-	case FULLPUBLIC:
+	case RuntimeWebAccessModeFULLPUBLIC:
 		return true
-	case NONE:
+	case RuntimeWebAccessModeNONE:
 		return true
 	default:
 		return false
@@ -6934,6 +7027,63 @@ const (
 func (e SystemAssistantSystem) Valid() bool {
 	switch e {
 	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy.
+const (
+	SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyHUMANEACHEFFECT SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy = "HUMAN_EACH_EFFECT"
+	SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyHUMANSCOPED     SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy = "HUMAN_SCOPED"
+	SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyNONE            SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy enum.
+func (e SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy) Valid() bool {
+	switch e {
+	case SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyHUMANSCOPED:
+		return true
+	case SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyNONE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemAssistantIntegrationGrantCandidatesScopeKind.
+const (
+	SystemAssistantIntegrationGrantCandidatesScopeKindORGANIZATION SystemAssistantIntegrationGrantCandidatesScopeKind = "ORGANIZATION"
+)
+
+// Valid indicates whether the value is a known member of the SystemAssistantIntegrationGrantCandidatesScopeKind enum.
+func (e SystemAssistantIntegrationGrantCandidatesScopeKind) Valid() bool {
+	switch e {
+	case SystemAssistantIntegrationGrantCandidatesScopeKindORGANIZATION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemAssistantIntegrationGrantInputApprovalPolicy.
+const (
+	HUMANEACHEFFECT SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_EACH_EFFECT"
+	HUMANSCOPED     SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_SCOPED"
+	NONE            SystemAssistantIntegrationGrantInputApprovalPolicy = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the SystemAssistantIntegrationGrantInputApprovalPolicy enum.
+func (e SystemAssistantIntegrationGrantInputApprovalPolicy) Valid() bool {
+	switch e {
+	case HUMANEACHEFFECT:
+		return true
+	case HUMANSCOPED:
+		return true
+	case NONE:
 		return true
 	default:
 		return false
@@ -8661,16 +8811,16 @@ func (e GetProviderAccountParamsUsagePurpose) Valid() bool {
 
 // Defines values for ListRunsParamsTargetType.
 const (
-	ListRunsParamsTargetTypeAGENT    ListRunsParamsTargetType = "AGENT"
-	ListRunsParamsTargetTypeWORKFLOW ListRunsParamsTargetType = "WORKFLOW"
+	AGENT    ListRunsParamsTargetType = "AGENT"
+	WORKFLOW ListRunsParamsTargetType = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the ListRunsParamsTargetType enum.
 func (e ListRunsParamsTargetType) Valid() bool {
 	switch e {
-	case ListRunsParamsTargetTypeAGENT:
+	case AGENT:
 		return true
-	case ListRunsParamsTargetTypeWORKFLOW:
+	case WORKFLOW:
 		return true
 	default:
 		return false
@@ -10131,18 +10281,22 @@ type IntegrationCandidateReason string
 
 // IntegrationCapability defines model for IntegrationCapability.
 type IntegrationCapability struct {
-	ApprovalPolicy    IntegrationCapabilityApprovalPolicy `json:"approvalPolicy"`
-	ApprovalRequired  bool                                `json:"approvalRequired"`
-	Description       string                              `json:"description"`
-	InputFields       []IntegrationConfigurationField     `json:"inputFields"`
-	InputSchema       *string                             `json:"inputSchema,omitempty"`
-	InputSchemaSha256 *string                             `json:"inputSchemaSha256,omitempty"`
-	Key               string                              `json:"key"`
-	Name              string                              `json:"name"`
-	Operation         string                              `json:"operation"`
-	ResourceKind      IntegrationCapabilityResourceKind   `json:"resourceKind"`
-	Risk              IntegrationCapabilityRisk           `json:"risk"`
+	AllowedApprovalPolicies []IntegrationCapabilityAllowedApprovalPolicies `json:"allowedApprovalPolicies"`
+	ApprovalPolicy          IntegrationCapabilityApprovalPolicy            `json:"approvalPolicy"`
+	ApprovalRequired        bool                                           `json:"approvalRequired"`
+	Description             string                                         `json:"description"`
+	InputFields             []IntegrationConfigurationField                `json:"inputFields"`
+	InputSchema             *string                                        `json:"inputSchema,omitempty"`
+	InputSchemaSha256       *string                                        `json:"inputSchemaSha256,omitempty"`
+	Key                     string                                         `json:"key"`
+	Name                    string                                         `json:"name"`
+	Operation               string                                         `json:"operation"`
+	ResourceKind            IntegrationCapabilityResourceKind              `json:"resourceKind"`
+	Risk                    IntegrationCapabilityRisk                      `json:"risk"`
 }
+
+// IntegrationCapabilityAllowedApprovalPolicies defines model for IntegrationCapability.AllowedApprovalPolicies.
+type IntegrationCapabilityAllowedApprovalPolicies string
 
 // IntegrationCapabilityApprovalPolicy defines model for IntegrationCapability.ApprovalPolicy.
 type IntegrationCapabilityApprovalPolicy string
@@ -10398,12 +10552,16 @@ type IntegrationGrantConnectionCandidatePage struct {
 
 // IntegrationGrantInput defines model for IntegrationGrantInput.
 type IntegrationGrantInput struct {
-	AgentRef           *OpaqueRef `json:"agentRef,omitempty"`
-	ApprovalScopePaths *[]string  `json:"approvalScopePaths,omitempty"`
-	CapabilityKey      string     `json:"capabilityKey"`
-	Enabled            bool       `json:"enabled"`
-	WorkflowRef        *OpaqueRef `json:"workflowRef,omitempty"`
+	AgentRef           *OpaqueRef                          `json:"agentRef,omitempty"`
+	ApprovalPolicy     IntegrationGrantInputApprovalPolicy `json:"approvalPolicy"`
+	ApprovalScopePaths *[]string                           `json:"approvalScopePaths,omitempty"`
+	CapabilityKey      string                              `json:"capabilityKey"`
+	Enabled            bool                                `json:"enabled"`
+	WorkflowRef        *OpaqueRef                          `json:"workflowRef,omitempty"`
 }
+
+// IntegrationGrantInputApprovalPolicy defines model for IntegrationGrantInput.ApprovalPolicy.
+type IntegrationGrantInputApprovalPolicy string
 
 // IntegrationGrantProjectCandidate defines model for IntegrationGrantProjectCandidate.
 type IntegrationGrantProjectCandidate struct {
@@ -10954,11 +11112,13 @@ type OwnerGate struct {
 	NextActions                []NextAction                   `json:"nextActions"`
 	NodeRef                    OpaqueRef                      `json:"nodeRef"`
 	OpenedAt                   Timestamp                      `json:"openedAt"`
-	ProjectRef                 OpaqueRef                      `json:"projectRef"`
+	OrganizationRef            OpaqueRef                      `json:"organizationRef"`
+	ProjectRef                 *OpaqueRef                     `json:"projectRef,omitempty"`
 	Ref                        OpaqueRef                      `json:"ref"`
 	RequestedBy                UserSummary                    `json:"requestedBy"`
 	ResolutionAttachmentSetRef *OpaqueRef                     `json:"resolutionAttachmentSetRef,omitempty"`
 	RunRef                     OpaqueRef                      `json:"runRef"`
+	ScopeKind                  OwnerGateScopeKind             `json:"scopeKind"`
 	SourceAttachmentSetRef     *OpaqueRef                     `json:"sourceAttachmentSetRef,omitempty"`
 	State                      OwnerGateState                 `json:"state"`
 	Title                      string                         `json:"title"`
@@ -10970,6 +11130,9 @@ type OwnerGateAllowedDecisions string
 
 // OwnerGateDecision defines model for OwnerGate.Decision.
 type OwnerGateDecision string
+
+// OwnerGateScopeKind defines model for OwnerGate.ScopeKind.
+type OwnerGateScopeKind string
 
 // OwnerGateState defines model for OwnerGate.State.
 type OwnerGateState string
@@ -12272,10 +12435,12 @@ type RunEvent struct {
 	ArtifactRef   *OpaqueRef           `json:"artifactRef,omitempty"`
 	Edge          *RunEdge             `json:"edge,omitempty"`
 	EdgeRef       *OpaqueRef           `json:"edgeRef,omitempty"`
+	Execution     *RunEventExecution   `json:"execution,omitempty"`
 	Gate          *OwnerGate           `json:"gate,omitempty"`
 	GateRef       *OpaqueRef           `json:"gateRef,omitempty"`
 	GraphRevision int64                `json:"graphRevision"`
 	Incident      *Incident            `json:"incident,omitempty"`
+	Message       *RunMessage          `json:"message,omitempty"`
 	MessageKind   *RunEventMessageKind `json:"messageKind,omitempty"`
 	Node          *RunNode             `json:"node,omitempty"`
 	NodeRef       *OpaqueRef           `json:"nodeRef,omitempty"`
@@ -12314,6 +12479,16 @@ type RunEventActor struct {
 // RunEventActorKind defines model for RunEventActor.Kind.
 type RunEventActorKind string
 
+// RunEventExecution defines model for RunEventExecution.
+type RunEventExecution struct {
+	Attempt    int32     `json:"attempt"`
+	NodeRef    OpaqueRef `json:"nodeRef"`
+	RunRef     OpaqueRef `json:"runRef"`
+	SessionRef OpaqueRef `json:"sessionRef"`
+	TurnNumber int64     `json:"turnNumber"`
+	TurnRef    OpaqueRef `json:"turnRef"`
+}
+
 // RunEventPage defines model for RunEventPage.
 type RunEventPage struct {
 	Complete        bool       `json:"complete"`
@@ -12344,6 +12519,17 @@ type RunInput struct {
 
 // RunInputTargetType defines model for RunInput.TargetType.
 type RunInputTargetType string
+
+// RunMessage defines model for RunMessage.
+type RunMessage struct {
+	Phase    RunMessagePhase `json:"phase"`
+	Ref      OpaqueRef       `json:"ref"`
+	Revision int64           `json:"revision"`
+	Text     string          `json:"text"`
+}
+
+// RunMessagePhase defines model for RunMessage.Phase.
+type RunMessagePhase string
 
 // RunNode defines model for RunNode.
 type RunNode struct {
@@ -12403,6 +12589,7 @@ type RunToolCall struct {
 	DurationMs     int64                  `json:"durationMs"`
 	GrantRef       *OpaqueRef             `json:"grantRef,omitempty"`
 	Ref            OpaqueRef              `json:"ref"`
+	Revision       *int64                 `json:"revision,omitempty"`
 	SafeParameters map[string]interface{} `json:"safeParameters"`
 	SafeResult     string                 `json:"safeResult"`
 	State          RunToolCallState       `json:"state"`
@@ -13517,6 +13704,51 @@ type SystemAssistantRuntimeState string
 
 // SystemAssistantSystem defines model for SystemAssistant.System.
 type SystemAssistantSystem bool
+
+// SystemAssistantIntegrationGrantCandidate defines model for SystemAssistantIntegrationGrantCandidate.
+type SystemAssistantIntegrationGrantCandidate struct {
+	Capability                IntegrationCapability                                          `json:"capability"`
+	CurrentApprovalPolicy     *SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy `json:"currentApprovalPolicy,omitempty"`
+	CurrentApprovalScopePaths []string                                                       `json:"currentApprovalScopePaths"`
+	CurrentGrantEnabled       bool                                                           `json:"currentGrantEnabled"`
+	CurrentGrantRef           *OpaqueRef                                                     `json:"currentGrantRef,omitempty"`
+	CurrentGrantVersion       int64                                                          `json:"currentGrantVersion"`
+	Grantable                 bool                                                           `json:"grantable"`
+	Reason                    IntegrationCandidateReason                                     `json:"reason"`
+}
+
+// SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy defines model for SystemAssistantIntegrationGrantCandidate.CurrentApprovalPolicy.
+type SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy string
+
+// SystemAssistantIntegrationGrantCandidates defines model for SystemAssistantIntegrationGrantCandidates.
+type SystemAssistantIntegrationGrantCandidates struct {
+	AssistantRef      OpaqueRef                                          `json:"assistantRef"`
+	AssistantVersion  int64                                              `json:"assistantVersion"`
+	ConnectionRef     OpaqueRef                                          `json:"connectionRef"`
+	ConnectionVersion int64                                              `json:"connectionVersion"`
+	DefinitionDigest  string                                             `json:"definitionDigest"`
+	DefinitionVersion string                                             `json:"definitionVersion"`
+	Items             []SystemAssistantIntegrationGrantCandidate         `json:"items"`
+	NextPageToken     string                                             `json:"nextPageToken"`
+	OrganizationRef   OpaqueRef                                          `json:"organizationRef"`
+	ScopeKind         SystemAssistantIntegrationGrantCandidatesScopeKind `json:"scopeKind"`
+	Total             int64                                              `json:"total"`
+}
+
+// SystemAssistantIntegrationGrantCandidatesScopeKind defines model for SystemAssistantIntegrationGrantCandidates.ScopeKind.
+type SystemAssistantIntegrationGrantCandidatesScopeKind string
+
+// SystemAssistantIntegrationGrantInput defines model for SystemAssistantIntegrationGrantInput.
+type SystemAssistantIntegrationGrantInput struct {
+	ApprovalPolicy     SystemAssistantIntegrationGrantInputApprovalPolicy `json:"approvalPolicy"`
+	ApprovalScopePaths *[]string                                          `json:"approvalScopePaths,omitempty"`
+	CapabilityKey      string                                             `json:"capabilityKey"`
+	ConnectionRef      OpaqueRef                                          `json:"connectionRef"`
+	Enabled            bool                                               `json:"enabled"`
+}
+
+// SystemAssistantIntegrationGrantInputApprovalPolicy defines model for SystemAssistantIntegrationGrantInput.ApprovalPolicy.
+type SystemAssistantIntegrationGrantInputApprovalPolicy string
 
 // SystemSTTConfiguration defines model for SystemSTTConfiguration.
 type SystemSTTConfiguration struct {
@@ -16276,6 +16508,21 @@ type CommandSystemAssistantParams struct {
 // CommandSystemAssistantJSONBodyAction defines parameters for CommandSystemAssistant.
 type CommandSystemAssistantJSONBodyAction string
 
+// GetSystemAssistantIntegrationGrantCandidatesParams defines parameters for GetSystemAssistantIntegrationGrantCandidates.
+type GetSystemAssistantIntegrationGrantCandidatesParams struct {
+	ConnectionRef OpaqueRef  `form:"connectionRef" json:"connectionRef"`
+	Query         *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize      *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken     *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ChangeSystemAssistantIntegrationGrantParams defines parameters for ChangeSystemAssistantIntegrationGrant.
+type ChangeSystemAssistantIntegrationGrantParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // CreateSystemSTTConfigurationDraftParams defines parameters for CreateSystemSTTConfigurationDraft.
 type CreateSystemSTTConfigurationDraftParams struct {
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
@@ -16765,6 +17012,9 @@ type UpdateSystemAssistantOwnerInstructionsJSONRequestBody UpdateSystemAssistant
 
 // CommandSystemAssistantJSONRequestBody defines body for CommandSystemAssistant for application/json ContentType.
 type CommandSystemAssistantJSONRequestBody CommandSystemAssistantJSONBody
+
+// ChangeSystemAssistantIntegrationGrantJSONRequestBody defines body for ChangeSystemAssistantIntegrationGrant for application/json ContentType.
+type ChangeSystemAssistantIntegrationGrantJSONRequestBody = SystemAssistantIntegrationGrantInput
 
 // CreateSystemSTTConfigurationDraftJSONRequestBody defines body for CreateSystemSTTConfigurationDraft for application/json ContentType.
 type CreateSystemSTTConfigurationDraftJSONRequestBody = ManagedConfigurationDraftInput
@@ -18684,6 +18934,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/system-assistant/commands)
 	CommandSystemAssistant(w http.ResponseWriter, r *http.Request, params CommandSystemAssistantParams)
+
+	// (GET /api/v1/system-assistant/integration-grant-candidates)
+	GetSystemAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request, params GetSystemAssistantIntegrationGrantCandidatesParams)
+
+	// (PUT /api/v1/system-assistant/integration-grants)
+	ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r *http.Request, params ChangeSystemAssistantIntegrationGrantParams)
 
 	// (GET /api/v1/system-stt-configuration)
 	GetSystemSTTConfiguration(w http.ResponseWriter, r *http.Request)
@@ -45874,6 +46130,181 @@ func (siw *ServerInterfaceWrapper) CommandSystemAssistant(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetSystemAssistantIntegrationGrantCandidates operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSystemAssistantIntegrationGrantCandidatesParams
+
+	// ------------- Required query parameter "connectionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "connectionRef", r.URL.Query(), &params.ConnectionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "connectionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemAssistantIntegrationGrantCandidates(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeSystemAssistantIntegrationGrant operation middleware
+func (siw *ServerInterfaceWrapper) ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeSystemAssistantIntegrationGrantParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeSystemAssistantIntegrationGrant(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSystemSTTConfiguration operation middleware
 func (siw *ServerInterfaceWrapper) GetSystemSTTConfiguration(w http.ResponseWriter, r *http.Request) {
 
@@ -47674,6 +48105,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.GetSystemAssistant)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.UpdateSystemAssistantOwnerInstructions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-assistant/commands", wrapper.CommandSystemAssistant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-assistant/integration-grant-candidates", wrapper.GetSystemAssistantIntegrationGrantCandidates)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/system-assistant/integration-grants", wrapper.ChangeSystemAssistantIntegrationGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-stt-configuration", wrapper.GetSystemSTTConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/drafts", wrapper.CreateSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/typed-drafts", wrapper.CreateTypedSystemSTTConfigurationDraft)

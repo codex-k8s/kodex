@@ -43,7 +43,12 @@ const serverMessage = useServerMessage();
     >
       <strong>{{ serverMessage(gate.title) }}</strong>
       <SafeSummary :content="gate.contextSummary" />
-      <small>{{ gate.requestedBy.displayName }}</small>
+      <small
+        >{{ gate.requestedBy.displayName
+        }}<template v-if="gate.scopeKind === 'ORGANIZATION'">
+          · {{ $t("decisions.organizationScope") }}</template
+        ></small
+      >
     </RouterLink>
     <div
       v-if="more"

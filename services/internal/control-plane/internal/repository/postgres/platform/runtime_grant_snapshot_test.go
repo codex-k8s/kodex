@@ -12,7 +12,7 @@ func TestRuntimeGrantSnapshotOwnerDigestMatchesWireFixture(t *testing.T) {
 	if err != nil || got != want {
 		t.Fatalf("owner snapshot digest does not match complete wire fixture: got=%s want=%s err=%v", got, want, err)
 	}
-	for _, key := range []string{"definitionVersion", "definitionDigest", "operation", "inputSchema", "inputSchemaSha256"} {
+	for _, key := range []string{"grantVersion", "connectionVersion", "approvalPolicy", "definitionVersion", "definitionDigest", "operation", "inputSchema", "inputSchemaSha256"} {
 		t.Run(key, func(t *testing.T) {
 			changed := fixture.Snapshot(t)
 			changed["integrationGrants"].([]map[string]string)[0][key] += "changed"
@@ -37,7 +37,7 @@ func testClaimedIntegrationGrantDigestPins(t *testing.T, snapshot map[string]any
 		t.Fatal("claimed integration grants missing")
 	}
 	for _, grant := range grants {
-		for _, key := range []string{"definitionVersion", "definitionDigest", "operation", "inputSchema", "inputSchemaSha256"} {
+		for _, key := range []string{"grantVersion", "connectionVersion", "approvalPolicy", "definitionVersion", "definitionDigest", "operation", "inputSchema", "inputSchemaSha256"} {
 			previous := grant[key]
 			if previous == "" {
 				t.Fatalf("claimed grant pin missing: %s", key)

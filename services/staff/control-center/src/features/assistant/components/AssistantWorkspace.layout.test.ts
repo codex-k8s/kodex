@@ -45,6 +45,26 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("объединяет owner-checked историю run в чат без отдельного cache и отпускает scoped subscriptions", () => {
+    expect(source).toContain("Object.values(platform.events[runRef] ?? {})");
+    expect(source).toContain("await platform.loadRun(runRef)");
+    expect(source).toContain("realtime.acquireRun(runRef)");
+    expect(source).toContain(
+      "for (const release of transcriptLeases.values()) release()",
+    );
+    expect(template).toContain(':events="conversationRunEvents"');
+    expect(template).toContain("hasHistoricalTurns");
+    expect(source).toContain("publishedRunMessage(event)");
+    expect(template).toContain('v-if="!turnHasPublishedMessage(turn)"');
+  });
+
+  it("сохраняет позицию чтения истории и предлагает кнопку новых сообщений", () => {
+    expect(source).toContain("if (!chatFollowing.value)");
+    expect(source).toContain("chatUnread.value = true");
+    expect(template).toContain('@scroll.passive="onChatScroll"');
+    expect(template).toContain('v-if="chatUnread"');
+    expect(template).toContain('$t("runs.newMessages")');
+  });
   it("подготовка настроек заполняет только черновик сообщения и не отправляет его", () => {
     const helper = source.slice(
       source.indexOf("function prepareAssistantSettings("),

@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: jira
-  version: 1.2.0
+  version: 1.2.1
   origin: SHIPPED
 spec:
   name: Jira
@@ -29,6 +29,7 @@ spec:
       operation: jira.project.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields: []
       outputFields:
@@ -42,6 +43,7 @@ spec:
       operation: jira.issue.search
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {key: query, type: STRING, format: PLAIN, required: true, maximumLength: 1024}
@@ -58,6 +60,7 @@ spec:
       operation: jira.issue.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {key: issue_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 80}
@@ -73,6 +76,7 @@ spec:
       operation: jira.issue.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {key: summary, type: STRING, format: PLAIN, required: true, maximumLength: 512}
@@ -87,6 +91,7 @@ spec:
       operation: jira.issue.comment.write
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {key: issue_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 80}
@@ -101,6 +106,7 @@ spec:
       operation: jira.issue.update_limited
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {key: issue_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 80}
@@ -116,6 +122,7 @@ spec:
       operation: jira.issue.link.write
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {key: inward_issue_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 80}
@@ -132,6 +139,7 @@ spec:
       operation: jira.project.user.search
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"query","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
@@ -148,6 +156,7 @@ spec:
       operation: jira.project.user.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"account_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -163,6 +172,7 @@ spec:
       operation: jira.issue.transition.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -177,6 +187,7 @@ spec:
       operation: jira.issue.transition.apply
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -190,6 +201,7 @@ spec:
       operation: jira.issue.comment.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -206,6 +218,7 @@ spec:
       operation: jira.issue.comment.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -220,6 +233,7 @@ spec:
       operation: jira.issue.comment.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -235,6 +249,7 @@ spec:
       operation: jira.issue.comment.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -248,6 +263,7 @@ spec:
       operation: jira.issue.link.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -262,6 +278,7 @@ spec:
       operation: jira.issue.link.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -278,6 +295,7 @@ spec:
       operation: jira.issue.link.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -291,6 +309,7 @@ spec:
       operation: jira.attachment.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -305,6 +324,7 @@ spec:
       operation: jira.attachment.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -322,6 +342,7 @@ spec:
       operation: jira.attachment.upload
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -341,6 +362,7 @@ spec:
       operation: jira.attachment.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
       inputFields:
         - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}

@@ -28,7 +28,7 @@ func TestRuntimeMCPCatalogWireProducer(t *testing.T) {
 	}
 	files := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, ProjectRef: "prj_fixture", LeaseRef: "lea_fixture", LeaseFence: "fence", LeaseGeneration: 1, FileCatalog: &runtimecontract.RuntimeFileCatalog{Ref: "vfc_fixture", Digest: strings.Repeat("a", 64), Purposes: []string{runtimecontract.FilePurposeProject}}}
 	email := files
-	email.IntegrationGrants = []runtimecontract.RunnerIntegrationGrant{{Ref: "igr_fixture", ConnectionRef: "int_fixture", DefinitionKey: "email", DefinitionVersion: "1.4.1", DefinitionDigest: strings.Repeat("b", 64), CapabilityKey: "email.message.send", Operation: "SEND", InputSchema: `{"type":"object","properties":{"subject":{"type":"string"}}}`, InputSchemaSHA256: strings.Repeat("c", 64)}}
+	email.IntegrationGrants = []runtimecontract.RunnerIntegrationGrant{{Ref: "igr_fixture", GrantVersion: 1, ConnectionRef: "int_fixture", ConnectionVersion: 1, ApprovalPolicy: "HUMAN_EACH_EFFECT", DefinitionKey: "email", DefinitionVersion: "1.4.1", DefinitionDigest: strings.Repeat("b", 64), CapabilityKey: "email.message.send", Operation: "SEND", InputSchema: `{"type":"object","properties":{"subject":{"type":"string"}}}`, InputSchemaSHA256: strings.Repeat("c", 64)}}
 	schemaDigest := sha256.Sum256([]byte(email.IntegrationGrants[0].InputSchema))
 	email.IntegrationGrants[0].InputSchemaSHA256 = hex.EncodeToString(schemaDigest[:])
 	inputs := []fixture{{Name: "ordinary", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeNone}}, {Name: "system-assistant", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem}},

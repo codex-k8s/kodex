@@ -16,7 +16,10 @@ func writeOwnerGatePage(w http.ResponseWriter, response *cp.ListOwnerGatesRespon
 	}
 	seen := map[string]bool{}
 	for _, gate := range response.Gates {
-		if gate == nil || !opaqueHTTPReference.MatchString(gate.Ref) || !opaqueHTTPReference.MatchString(gate.ProjectRef) ||
+		if gate == nil || !opaqueHTTPReference.MatchString(gate.Ref) || !opaqueHTTPReference.MatchString(gate.OrganizationRef) ||
+			gate.ScopeKind != cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION && gate.ScopeKind != cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT ||
+			gate.ScopeKind == cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_PROJECT && !opaqueHTTPReference.MatchString(gate.ProjectRef) ||
+			gate.ScopeKind == cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION && gate.ProjectRef != "" ||
 			project != "" && gate.ProjectRef != project || gate.Version < 1 || gate.Version > maximumSafeJSONInteger ||
 			gate.State < cp.OwnerGateState_OWNER_GATE_STATE_OPEN || gate.State > cp.OwnerGateState_OWNER_GATE_STATE_EXPIRED ||
 			state != cp.OwnerGateState_OWNER_GATE_STATE_UNSPECIFIED && gate.State != state ||

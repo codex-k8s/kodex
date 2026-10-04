@@ -7,7 +7,7 @@ import (
 
 func TestRunnerNativeToolCallRequestAllowsOnlyClosedSafeProjection(t *testing.T) {
 	valid := RunnerNativeToolCallRequest{RuntimeRevisionDigest: strings.Repeat("a", 64), NativeToolCall: NativeToolCall{
-		CallID: "call-1", Kind: NativeToolKindShell, State: NativeToolStateSucceeded, DurationMS: 10,
+		CallID: "call-1", Revision: 2, Kind: NativeToolKindShell, State: NativeToolStateSucceeded, DurationMS: 10,
 		SafeResult: NativeToolResultCompleted, SafeParameters: map[string]any{
 			"action_count": 1, "action_kinds": []string{"READ"}, "cwd_scope": "WORKSPACE", "exit_code": "ZERO", "source": "AGENT",
 		},

@@ -56,6 +56,8 @@ type Request struct {
 	Configuration, Input                                              map[string]any
 	ResourceScope                                                     map[string]string
 	Credential                                                        *CredentialRevision
+	GrantRef                                                          string
+	GrantVersion                                                      int64
 }
 
 type Receipt struct {
@@ -108,6 +110,7 @@ type Adapter struct {
 	githubBaseURL       *url.URL
 	providerHTTPClient  *http.Client
 	openAPIHTTPClient   *http.Client
+	context7HTTPClient  *http.Client
 	localOpenAPIClient  *http.Client
 	emailHTTPClient     *http.Client
 	syntheticClient     *http.Client
@@ -164,10 +167,15 @@ func New(config Config) (*Adapter, error) {
 	if err != nil {
 		return nil, err
 	}
+	context7Client, err := newContext7HTTPClient(config)
+	if err != nil {
+		return nil, err
+	}
 	return &Adapter{
-		proxyURL:        config.ProxyURL,
-		emailHTTPClient: emailClient,
-		credentials:     credentials, definitions: definitions,
+		proxyURL:           config.ProxyURL,
+		emailHTTPClient:    emailClient,
+		context7HTTPClient: context7Client,
+		credentials:        credentials, definitions: definitions,
 		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("GitHub redirect is forbidden") }},
 		githubBaseURL:    mustURL(githubAPIBaseURL),
 		providerHTTPClient: &http.Client{
@@ -230,6 +238,7 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 		ResourceKind:   resourceKind, ResourceScope: resourceScope, ResourceScopeDigest: resourceScopeDigest,
 		EffectKey: claim.GetEffectKey(), InputDigest: claim.GetInputDigest(), Configuration: configuration,
 		Input: input, Credential: credentialFromProto(claim.GetCredentialRevision()),
+		GrantRef: claim.GetGrantRef(), GrantVersion: claim.GetGrantVersion(),
 	}
 }
 
@@ -266,6 +275,9 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	configuration, err := normalizeStringMap(request.Configuration)
 	if err != nil || definition.ValidateConfiguration(configuration) != nil {
 		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	}
+	if definition.Spec.Adapter == "CONTEXT7" {
+		return adapter.testContext7(ctx, request)
 	}
 	capability, ok := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
 	if !ok || capability.ApprovalPolicy != "NONE" {
@@ -332,6 +344,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		result, err = adapter.executeHTTPSJSONRead(ctx, request, capability, configuration)
 	case "OPENAPI_MCP":
 		result, err = adapter.executeOpenAPI(ctx, request, capability, configuration, canonicalInput)
+	case "CONTEXT7":
+		result, err = adapter.executeContext7(ctx, request, capability, configuration, canonicalInput)
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
@@ -404,8 +418,7 @@ func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.
 	if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_ROUTE_NOT_OWNED"}
 	}
-	if definition.RequiresConnectionCredential() != (request.Credential != nil) &&
-		!(definition.HasLegacyEmailCredentialDescriptor(shipped) && validLegacyEmailCredentialMetadata(request.Credential)) {
+	if definition.RequiresConnectionCredential() != (request.Credential != nil) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
 	return definition, nil
@@ -418,13 +431,16 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	map[string]string,
 	error,
 ) {
+	if !request.healthCheck && (request.GrantRef == "" || request.GrantVersion < 1) {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_GRANT_INVALID"}
+	}
 	definition, err := adapter.validateDefinition(request)
 	if err != nil {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, err
 	}
 	capability, exists := definition.Capability(request.CapabilityKey)
 	if !exists || capability.Operation != request.Operation || capability.Risk != request.Risk ||
-		capability.ApprovalPolicy != request.ApprovalPolicy || capability.ResourceScope.Kind != request.ResourceKind ||
+		!capability.AllowsApprovalPolicy(request.ApprovalPolicy) || capability.ResourceScope.Kind != request.ResourceKind ||
 		request.EffectKey == "" || len(request.InputDigest) != sha256.Size*2 {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
@@ -446,6 +462,9 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	canonicalInput, err := capability.ValidateInput(encodedInput)
 	inputDigest := sha256.Sum256(canonicalInput)
 	if err != nil || hex.EncodeToString(inputDigest[:]) != request.InputDigest {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	if definition.ValidateInvocationApprovalPolicy(capability, request.ApprovalPolicy, canonicalInput) != nil {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	if strings.HasPrefix(request.Operation, "github.") || strings.HasPrefix(request.Operation, "gitlab.") {

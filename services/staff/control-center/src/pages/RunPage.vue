@@ -21,6 +21,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { requestAssistantRunDebug } from "@/features/assistant/events";
 import { isTerminalRun } from "@/features/workboard/model";
+import { hasValidGateScope } from "@/features/workboard/gate-scope";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
@@ -204,7 +205,11 @@ const gateList = computed(() =>
   ),
 );
 const openGateList = computed(() =>
-  gateList.value.filter((gate) => gate.state === "OPEN"),
+  gateList.value.filter(
+    (gate) =>
+      gate.state === "OPEN" &&
+      hasValidGateScope(gate, platform.bootstrap?.organizationRef),
+  ),
 );
 const artifactList = computed(() =>
   Object.values(platform.artifacts).filter((artifact) =>
@@ -308,12 +313,14 @@ const hasAuthoritativeSnapshot = computed(() =>
   Boolean(run.value && graph.value),
 );
 const fatalLoadProblem = computed(() =>
-  hasAuthoritativeSnapshot.value ? undefined : platform.problems.run,
+  hasAuthoritativeSnapshot.value
+    ? undefined
+    : platform.runProblems[runRef.value],
 );
 const refreshProblem = computed(() =>
   hasAuthoritativeSnapshot.value
     ? (artifactProblem.value ??
-      platform.problems.run ??
+      platform.runProblems[runRef.value] ??
       platform.problems.gates ??
       platform.problems.artifacts)
     : undefined,
@@ -388,7 +395,7 @@ async function refreshAuthoritativeState(ref: string): Promise<void> {
   if (runRef.value !== ref) return;
   await platform.loadRun(ref);
   if (runRef.value !== ref) return;
-  if (platform.problems.run) throw platform.problems.run;
+  if (platform.runProblems[ref]) throw platform.runProblems[ref];
   const snapshot = platform.runs[ref];
   if (!snapshot) return;
   const snapshotGraph =
@@ -757,7 +764,7 @@ onBeforeUnmount(() => {
         {{ $t("runs.retry") }}
       </button></template
     ><AsyncState
-      :loading="platform.loading.run && !hasAuthoritativeSnapshot"
+      :loading="platform.runLoading[runRef] && !hasAuthoritativeSnapshot"
       :problem="fatalLoadProblem"
       @retry="load"
     >
@@ -887,6 +894,10 @@ onBeforeUnmount(() => {
                 <p class="eyebrow">{{ $t("decisions.question") }}</p>
                 <h2>{{ gateDisplayTitle(gate) }}</h2>
                 <dl>
+                  <div v-if="gate.scopeKind === 'ORGANIZATION'">
+                    <dt>{{ $t("decisions.scope") }}</dt>
+                    <dd>{{ $t("decisions.organizationScope") }}</dd>
+                  </div>
                   <div>
                     <dt>{{ $t("decisions.requestedBy") }}</dt>
                     <dd>{{ gate.requestedBy.displayName }}</dd>

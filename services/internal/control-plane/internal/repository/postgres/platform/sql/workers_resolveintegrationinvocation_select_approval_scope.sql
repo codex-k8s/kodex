@@ -1,7 +1,7 @@
 -- name: workers_resolveintegrationinvocation_select_approval_scope :one
 SELECT id::text
 FROM control_plane.integration_approval_scopes
-WHERE organization_id=$1::uuid AND project_id=$2::uuid
+WHERE organization_id=$1::uuid AND project_id IS NOT DISTINCT FROM NULLIF($2,'')::uuid
   AND connection_id=$3::uuid AND grant_id=$4::uuid
   AND root_run_id=$5::uuid AND agent_id=$6::uuid
   AND capability_key=$7 AND grant_version=$8

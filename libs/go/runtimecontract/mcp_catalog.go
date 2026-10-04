@@ -11,6 +11,9 @@ func RuntimeFileToolsAvailable(input RunnerInput) bool {
 // Producer schema остаются у runtime-controller; wire regression проверяет его
 // фактический tools/list против этого consumer-профиля.
 func RuntimeMCPToolNames(input RunnerInput) []string {
+	if ValidateManagedMCPProfiles(input) != nil {
+		return nil
+	}
 	result := []string{"propose_run_metadata"}
 	if RuntimeFileToolsAvailable(input) {
 		result = append(result, FileToolSearch, FileToolMetadata, FileToolPreview, FileToolManifest)
@@ -23,6 +26,9 @@ func RuntimeMCPToolNames(input RunnerInput) []string {
 	}
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, "get_integration_catalog", "invoke_integration")
+	}
+	if len(input.ManagedMCPProfiles) != 0 {
+		result = append(result, Context7ResolveTool, Context7QueryTool)
 	}
 	return result
 }

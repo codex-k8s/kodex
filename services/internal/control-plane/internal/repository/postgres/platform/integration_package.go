@@ -90,7 +90,8 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 		item.Capabilities = append(item.Capabilities, entity.IntegrationCapability{
 			Key: capability.Key, Name: capability.Name, Description: capability.Description,
 			Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy,
-			ResourceKind: capability.ResourceScope.Kind, InputFields: integrationConfigurationFields(capability.InputFields),
+			AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...),
+			ResourceKind:            capability.ResourceScope.Kind, InputFields: integrationConfigurationFields(capability.InputFields),
 			InputSchema: string(schema), InputSchemaSHA256: digest,
 		})
 		if capability.Operation == definition.Spec.HealthCheck.Operation {

@@ -13,8 +13,21 @@ var integrationEffectKeyPattern = regexp.MustCompile(`^eff_[a-f0-9]{32}$`)
 func validateOwnerGateProjection(gate map[string]any) error {
 	ref, _ := gate["ref"].(string)
 	project, _ := gate["projectRef"].(string)
+	organization, _ := gate["organizationRef"].(string)
 	version, _ := gate["version"].(float64)
-	if !fileTargetRef(ref) || !fileTargetRef(project) || version < 1 || version > float64(maximumSafeJSONInteger) || version != float64(int64(version)) {
+	if !fileTargetRef(ref) || !fileTargetRef(organization) || version < 1 || version > float64(maximumSafeJSONInteger) || version != float64(int64(version)) {
+		return errOwnerGateShape
+	}
+	switch gate["scopeKind"] {
+	case "ORGANIZATION":
+		if _, present := gate["projectRef"]; present {
+			return errOwnerGateShape
+		}
+	case "PROJECT":
+		if !fileTargetRef(project) {
+			return errOwnerGateShape
+		}
+	default:
 		return errOwnerGateShape
 	}
 	switch gate["state"] {

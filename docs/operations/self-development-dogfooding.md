@@ -123,6 +123,19 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 переходы детализируются перед изменением соответствующих контрактов. Нельзя
 считать зелёный Pod, скриншот или unit-тест доказательством живого Workflow.
 
+### Жизненный цикл переписки и инструментов
+
+| Переход | Проверка и атомарный результат владельца | История и потребитель |
+| --- | --- | --- |
+| Native/MCP tool started | Exact lease/fence/generation + session/turn/attempt/input/revision; stable call ref и revision 1, RUNNING, audit/event/receipt | Одна раскрываемая запись действия; сырые аргументы не выдаются |
+| Published message completed | Только COMMENTARY/FINAL completed item, UTF-8 до 64 KiB, стабильный item ref; owner назначает execution/actor, immutable event | Полный текст в отдельном message body, не в сокращённом summary; reasoning исключён |
+| Tool completed | Тот же call/execution, монотонная revision, неизменный тип и authority; bounded безопасный результат | Обновление той же записи SUCCEEDED/FAILED, исходные события неизменяемы |
+| Exact replay / lost ACK | Тот же item/revision/content возвращает прежний receipt; иной content закрыто отклоняется | Дедупликация по immutable event и item/execution/revision |
+| Cancel/delete/terminal/expiry | Прежняя owner-транзакция отзывает execution и закрывает незавершённые activity; stale callback не создаёт новых фактов | Сохранённая история остаётся доступна только по прежнему eligibility; отмена не превращается в успех |
+| Retry/continuation | Новые turn/attempt и свежая RuntimeRevision, прежние items не переписываются | Exact tuple разделяет попытки и дочерние сессии |
+| Rejoin/reload/gap | Прежний защищённый run event read и непрерывный cursor, без нового cache/authority | Порядок внутри Run по sequence; между assistant turns по owner turnNumber |
+| UI consumer acquire/release | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию |
+
 ## Журнал
 
 04.10.2026: задания прочитаны, уточнения владельца внесены; код ещё не изменён,
@@ -139,3 +152,75 @@ GitHub head SHA. Реализация и новый живой QA пока NOT R
 а MCP — после завершения вызова. Исправление должно сохранять исходную
 хронологию, точные session/turn/attempt и состояния вызова. Служебный summary
 ограничен 2000 символами и не заменяет полный bounded текст сообщения.
+
+04.10.2026, bootstrap в работе, base SHA
+`4633e75c774758aa97f1364390b15ce000b31328`, изменённое дерево (ещё не immutable
+release): typed MCP/Context7 profiles и новая upstream health receipt,
+explicit grant policy, специализированный SYSTEM grant plan и организационные
+решения; streaming COMMENTARY/FINAL и tool RUNNING → terminal вместо
+пакетной публикации после хода; общий transcript и независимые Run read leases.
+
+PASS — адресные disposable PostgreSQL health/activity проверки (4.955 s,
+`/tmp/kodex-activity-health-pg-target3.log`), SYSTEM grants/typed plan (6.611 s,
+`/tmp/kodex-system-assistant-grants-pg-target4.log`); runtimecontract,
+runner app/callback/Codex/readiness, controller callback/workload, полный
+HTTP gateway (10.189 s), адресные race/vet; frontend 229 адресных tests,
+полный typecheck/build, scoped lint/format, authority и AsyncAPI codegen.
+Предупреждения Vite о размере chunk не являются ошибкой сборки.
+
+FAIL → исправление стенда — старый render повторно использовал завершённый
+migration Job; его Complete не доказывает применение новых migrations.
+Новый SDK сначала отсутствовал в read-only Pod module cache; штатный
+repo-owned cache prime выполнен с Go 1.26.6. Нужны свежий render,
+миграции и новый runner с exact source/image/admission readback.
+Chrome рабочая вкладка обновляется; реальные ИИ-сценарии нового этапа,
+визуальная приёмка transcript, STT/device-code/staging/production — NOT RUN.
+Checkbox 2–15 пока не отмечены: synthetic PASS не заменяет живой dogfooding.
+
+04.10.2026, то же изменённое дерево на base `4633e75c`:
+PASS — повторный disposable PostgreSQL health/activity прогон (4.708 s,
+`/tmp/kodex-activity-health-pg-target4.log`), включая отказ terminal tool с
+revision 1; адресные CP/gRPC unit (0.054/0.043 s), полный integrationpackage
+(3.086 s), runtimecontract (0.068 s), AsyncAPI model boundary.
+FAIL — compound SYSTEM grant regression обнаружил, что `CancelRun` оставляет
+READY integration invocation открытым. Исправление должно закрывать его в той
+же owner-транзакции по семантике terminal graph, без обхода fixture или
+ослабления проверки активной работы. Проверка исправления ещё NOT RUN.
+Живой Chrome показывает unavailable до применения новых миграций;
+backend log подтверждает bootstrap failure на новом adapter constraint.
+Это не визуальный PASS; сохранение SSO-сессии пока UNKNOWN.
+
+PASS — 13 герметичных fixture-проверок нового `render-current-local.sh`,
+shellcheck и syntax checks. Скрипт связывает чистый HEAD с фактическими
+trusted source mounts, читает точные image pins и свежий API endpoint,
+создаёт новые приватные render/log; не выполняет apply/bootstrap и не
+записывает authority state. Штатная подготовка caches существующим renderer
+явно допускается. Реальное выполнение renderer ещё NOT RUN.
+
+04.10.2026 07:38:42 UTC: PASS — read-only host→Pod SHA256 равен до/внутри/после
+чтения для `runtime_activity.go`, `system_assistant_integration_endpoints.go`,
+`RunTranscript.vue`, `callback/managed_mcp.go`. Проверены owner chains
+Pod→ReplicaSet→Deployment, без выбора совпадающих по labels завершённых Jobs.
+CP/GW/controller используют read-only root `/workspace`, frontend — свой
+read-only subtree. CP NOT READY (bootstrap constraint), остальные три READY.
+Доказательство относится к изменяемому дереву на этот момент, не к immutable
+SHA, image acceptance или живому пользовательскому сценарию.
+
+PASS — исправленный CancelRun и compound grant plan: actual disposable
+PostgreSQL target8 (16.364 s, `/tmp/kodex-system-assistant-grants-pg-target8.log`).
+SYSTEM/PROJECT READY invocation закрывается, начатый WRITE получает
+UNKNOWN_OUTCOME, lease/fence снимаются, scoped approvals отзываются;
+replay не дублирует receipt/audit/outbox, поздний completion отклоняется.
+Пять разных capabilities одного connection применяются атомарно;
+внешний конфликт откатывает все пять. Исходный target7 FAIL сохранён.
+PASS — читаемые RU/EN подписи инструментов: ещё 20 frontend tests,
+полный typecheck и scoped lint/format. Визуальная проверка пока NOT RUN.
+
+PASS — финальный disposable PostgreSQL target10 (12.594 s,
+`/tmp/kodex-system-assistant-grants-pg-target10.log`): Type30 объявляется в
+fresh SYSTEM create/read/rejoin и immutable runtime context только при
+точной текущей authority. PROJECT и отозванный owner не получают действие.
+Повтор exact grant в одной revision не проходит VALID; пять разных grants
+по-прежнему применяются атомарно. Добавлена forward-only миграция 007.
+Исходный target9 fixture FAIL сохранён; текущие compile/diff checks PASS.
+Владелец самостоятельно восстановил SSO, повторную авторизацию не выполняли.

@@ -420,6 +420,19 @@ UI/Git revision. Выдача capability проверяет полномочия
 созданного grant. Selector исполнения дополнительно проверяет существующий
 grant и пересечение текущих полномочий с фактическим пакетом и этапом Workflow.
 Право выдать разрешение не является доказательством возможности его исполнить.
+Capability пакета назначает default и обязательное непустое уникальное
+`allowedApprovalPolicies`. Grant сохраняет явно выбранную policy из этого
+множества; свежая immutable RuntimeRevision и invocation закрепляют exact
+grant/version/selected policy во всех режимах. CP, gateway и adapter сверяют
+выбор с фактической pinned package revision, не с её default. Автономная
+запись `NONE` разрешена только закрытым collaborative GitHub operation keys;
+`review.create` в этом режиме допускает только `COMMENT`, не решение владельца.
+Destructive операции не получают автономный grant. Изменение policy/path
+при незавершённом effect закрыто отклоняется; `UNKNOWN_OUTCOME` требует
+штатного reconciliation. Исторические shipped package/Email descriptors
+не декодируются через fallback и не переписываются: нужны новая каноническая
+revision соединения и свежие exact grants. Исторический terminal receipt
+остаётся read-only и не возобновляет effect.
 Общий каталог соединений применяет `integration.view` к каждой строке до
 выдачи; фильтр UI, cursor и idempotency receipt не заменяют эту проверку.
 

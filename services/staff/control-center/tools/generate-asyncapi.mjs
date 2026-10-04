@@ -120,6 +120,9 @@ function scalarGoType(schema) {
   if (schema.type === "object" && schema.additionalProperties === true) {
     return "map[string]any";
   }
+  if (schema.type === "object" && schema.additionalProperties?.type === "string") {
+    return "map[string]string";
+  }
   fail(`Unsupported Go schema shape: ${JSON.stringify(schema)}`);
 }
 
@@ -162,6 +165,9 @@ function scalarTypescriptType(schema) {
   if (schema.type === "boolean") return "boolean";
   if (schema.type === "object" && schema.additionalProperties === true) {
     return "Record<string, unknown>";
+  }
+  if (schema.type === "object" && schema.additionalProperties?.type === "string") {
+    return "Record<string, string>";
   }
   fail(`Unsupported TypeScript schema shape: ${JSON.stringify(schema)}`);
 }
