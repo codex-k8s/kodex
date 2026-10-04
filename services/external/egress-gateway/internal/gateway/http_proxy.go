@@ -217,6 +217,9 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		return
 	}
 	upstream := upstreamRequest(request, target)
+	upstreamContext, cancelUpstream := context.WithCancelCause(server.context)
+	defer cancelUpstream(nil)
+	upstream = upstream.WithContext(upstreamContext)
 	var tlsFailed atomic.Bool
 	if route != "" {
 		log.Printf(runtimeProxyProviderDiscoveryLog, route, "POLICY", "ALLOWED", "NONE", "NONE")
@@ -282,10 +285,7 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 			io.Closer
 		}{io.TeeReader(response.Body, capture), response.Body}
 	}
-	writeErr := connection.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds)))
-	if writeErr == nil {
-		writeErr = response.Write(connection)
-	}
+	writeErr := writeProxyHTTPResponse(connection, response, limits, providerResponsesIsSSE(responsesDiagnostic, response), upstreamContext, cancelUpstream)
 	if writeErr != nil {
 		responsesDiagnostic.body(response.StatusCode, writeErr)
 		if capture != nil {

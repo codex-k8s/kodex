@@ -75,7 +75,7 @@ func providerResponsesPolicyFailure(request *http.Request, target connect.Target
 			switch {
 			case len(request.Header.Values("Sec-WebSocket-Protocol")) != 0:
 				return "WS_SUBPROTOCOL"
-			case len(request.Header.Values("Sec-WebSocket-Extensions")) != 0:
+			case !validWebSocketExtensionOffer(request.Header):
 				return "WS_EXTENSIONS"
 			default:
 				return "WS_HANDSHAKE"

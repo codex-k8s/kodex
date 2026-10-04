@@ -633,3 +633,50 @@ status, upgrade/body/pump outcome; никакие URL/headers/body/raw errors н
 `72b4fd09bcd760e02d80fe8dd7ef64eb0df171fdd89c2887902a8bb7d7dbdc34`.
 Gateway hot process стартовал после добавления helper; новая реальная
 диагностика и отсутствие двойного индикатора на активном ходе пока NOT RUN.
+
+04.10.2026 11:10–11:12 UTC, hot source checkpoint `a6046212`:
+PROVEN — пятнадцатый реальный ход: RESPONSES/WSS policy DENIED с точной
+закрытой причиной WS_EXTENSIONS; после повторов HTTP fallback ALLOWED/200.
+Опубликован настоящий COMMENTARY и выполнен get_configuration_catalog,
+затем дополнительные read tools. Это частичная inference/tool-chain проверка,
+а не успешная самонастройка. HTTP stream содержит COMPLETED, IO и TIMEOUT;
+IO рядом с окончанием tool call сам по себе не доказывает транспортный дефект.
+История четырнадцатого хода после rejoin также раскрыла опубликованные
+COMMENTARY и группы из 9+4 завершённых MCP calls до failed terminal:
+уточнение прежнего вывода, model inference частично была, весь ход FAILED.
+FAIL — live screenshot теперь показывает один индикатор, но «Работает» рядом
+с терминальным tool «Завершён» и дубль технического summary. Исправляется
+выбор действительно активной записи и компактное отображение tool labels.
+Полные инструкции/окружение/сеть пока не доступны помощнику из обзорного
+каталога по его промежуточному ответу; проверяется authoritative read path,
+без выдуманной настройки или ручной подмены Configuration Plan.
+
+04.10.2026 11:22–11:33 UTC, hot дерево поверх `a604621257d6e7978f30b1a69af8a39208997929`:
+FAIL — пятнадцатый ход `run_9_Y8aWBHD4YzHthMduSJMI_N` завершился
+11:13:46 UTC; authoritative read: FAILED/version2/PROVIDER_RESPONSE_INVALID.
+Самонастройка и Configuration Plan не выполнены.
+PROVEN — continuous SSE unit воспроизвёл прежний общий write deadline:
+активный поток длительнее 200 мс обрывался. После per-Write deadline и отдельного
+bounded upstream idle/cancel проверка PASS; timeout policy не расширена.
+PASS — объединённый gateway unit (1.061 s), race ×2 (6.104 s), vet/diffcheck.
+Закрытый RFC7692 negotiation допускает фактический SDK offer, сохраняет
+compressed frames и прежние exact destination/authority boundaries.
+Host/Pod SHA256 новых helpers совпадают: proxy_stream.go
+`bcc3aa9451a22afd3ea1d300d54c6cb8df87797acb0f4fb35d3f25fefc7ef217`,
+provider_websocket_extensions.go
+`ebf532f69bbf645b7057348a38871c6cd01880105e71279b560a17931f6f0e38`.
+PASS — frontend active-item/tool-label delta: 147 адресных unit, typecheck,
+lint/format/diffcheck, build 8.11 s (прежнее предупреждение размера bundle).
+PASS — шестнадцатый реальный no-effect ход, метка QA-MARKER-SSE-16:
+`run_zwm11QXVizYgXmZc05gSzpfw`, authoritative SUCCEEDED/version2,
+published FINAL «готов», 11:30:55 UTC. Runner image остаётся exact c61e7f.
+PASS — Chrome screenshot `/tmp/kodex-chat-real-final-sse16.png` просмотрен:
+USER справа, агент слева, нет лишнего banner/ложного «Работает» после FINAL;
+Console без ошибок. Это транспортный smoke, не полная самонастройка.
+FAIL/UNKNOWN — WSS получает ALLOWED/101/UPGRADE ACCEPTED, но клиент сразу
+закрывает поток; итоговый ответ пришёл HTTP fallback. WSS end-to-end не PASS.
+HTTP body IO рядом с успешным FINAL не объявляется дефектом без отдельного
+доказательства. Пустой terminal progress header и raw provider error token
+остаются UX замечаниями, исправление локализации в работе.
+NOT RUN — полный own-configuration read, SYSTEM/PROJECT plans и следующие
+dogfooding этапы; текущая работа не заменяет эти критерии частичным успехом.

@@ -38,7 +38,7 @@ func validWebSocketRequest(request *http.Request) bool {
 		len(request.Header.Values("Connection")) == 1 && strings.EqualFold(strings.TrimSpace(request.Header.Get("Connection")), "upgrade") &&
 		len(request.Header.Values("Sec-WebSocket-Version")) == 1 && request.Header.Get("Sec-WebSocket-Version") == "13" &&
 		len(request.Header.Values("Sec-WebSocket-Key")) == 1 && err == nil && len(key) == 16 &&
-		len(request.Header.Values("Sec-WebSocket-Protocol")) == 0 && len(request.Header.Values("Sec-WebSocket-Extensions")) == 0
+		len(request.Header.Values("Sec-WebSocket-Protocol")) == 0 && validWebSocketExtensionOffer(request.Header)
 }
 
 func validWebSocketResponse(response *http.Response, request *http.Request) bool {
@@ -48,7 +48,7 @@ func validWebSocketResponse(response *http.Response, request *http.Request) bool
 		len(response.Header.Values("Connection")) == 1 && strings.EqualFold(strings.TrimSpace(response.Header.Get("Connection")), "upgrade") &&
 		len(response.Header.Values("Sec-WebSocket-Accept")) == 1 &&
 		response.Header.Get("Sec-WebSocket-Accept") == base64.StdEncoding.EncodeToString(digest[:]) &&
-		len(response.Header.Values("Sec-WebSocket-Protocol")) == 0 && len(response.Header.Values("Sec-WebSocket-Extensions")) == 0
+		len(response.Header.Values("Sec-WebSocket-Protocol")) == 0 && validWebSocketExtensionResponse(response.Header, request.Header)
 }
 
 // Upgraded stream имеет прежние CONNECT/host/SNI/CA проверки. Закрывается при

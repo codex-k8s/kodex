@@ -142,6 +142,17 @@ func TestProviderResponsesPolicyFailureKeepsExistingDenial(t *testing.T) {
 	}
 }
 
+func TestProviderResponsesValidExtensionDoesNotMaskHandshakeFailure(t *testing.T) {
+	request := syntheticUpgradeRequest(t, "api.openai.com")
+	request.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; client_max_window_bits")
+	request.Header.Set("Sec-WebSocket-Key", "private-invalid-key-sentinel")
+	target := connect.Target{Hostname: "api.openai.com", Port: 443}
+	access := runtimecontract.RuntimeProxyAccess{ProviderAccess: true}
+	if proxyRequestAllowed(request, target, access) || providerResponsesPolicyFailure(request, target, access) != "WS_HANDSHAKE" {
+		t.Fatal("valid extension masked malformed handshake")
+	}
+}
+
 func TestProviderResponsesDiagnosticNeverLogsExternalValues(t *testing.T) {
 	output := captureProviderResponsesLogs(t)
 	diagnostic := providerResponsesDiagnostic{mode: "WSS"}

@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.5.5
+version: 1.5.6
 updated: 2026-10-04
 ---
 
@@ -609,6 +609,47 @@ status и WebSocket не получают искусственного body ил
 метаданные проходят строгую bounded type/enum проверку и отбрасываются;
 account origin, environment paths или plugin IDs из такого ответа не
 назначают authority, workspace текущей попытки или сетевые grants.
+
+Provider Responses WebSocket допускает только закрытый профиль RFC 7692
+`permessage-deflate`: отсутствие extension либо один header не более 256 байт,
+один extension и не более четырёх уникальных параметров. Разрешены только
+`server_no_context_takeover`, `client_no_context_takeover` без значения,
+`server_max_window_bits` с числом 9..15 и `client_max_window_bits` без значения
+в offer либо с числом 9..15. В response оба window parameters имеют числовое
+значение. Используются только lowercase tokens и канонические decimal числа
+без leading zero; quoted values, неизвестные/повторные параметры, несколько
+headers/extensions, control characters и превышение bounds закрыто отклоняются.
+Диапазон 9..15 принадлежит закреплённому Codex 0.160.0 tungstenite fork, а не
+является заявлением поддержки всего диапазона RFC 8..15.
+
+Response связан с фактическим request: unsolicited extension запрещён;
+отсутствие extension означает отказ сервера от compression и допустимо.
+`client_max_window_bits` разрешён только при его наличии в offer и не превышает
+явный offer bound. Явный `server_max_window_bits` требует такой же либо меньший
+response bound; предложенный `server_no_context_takeover` требует подтверждения.
+RFC допускает дополнительные известные server/client no-context ограничения
+и server window без соответствующего offer; это не разрешает произвольные
+extensions. Любой subprotocol остаётся запрещён. Header negotiation сохраняется,
+compressed frames передаются непрозрачно и побайтно, без decompression в gateway.
+Прежние exact CONNECT/host/path/method/SNI/CA, ProviderAccess, DNS/public-IP,
+NetworkPolicy, resource limits, idle/write/shutdown и cancel/join проверки
+остаются обязательными; extension не выдаёт WebAccess или новый destination.
+
+Для точных provider Responses routes HTTP-ответ200 с единственным корректным
+`Content-Type: text/event-stream` получает `WriteTimeout` на каждый socket
+Write, а не на полную длительность активного SSE. Отдельный `IdleTimeout`
+ограничивает каждое upstream body Read; idle и остановка lifecycle отменяют
+upstream transport и закрывают поток в прежних bounded shutdown границах.
+Значения timeout policy не увеличиваются. Другие provider ответы, неизвестные
+Content-Type и произвольные non-provider/non-SSE paths сохраняют прежний
+write deadline; stream diagnostics не содержат headers, body и raw errors.
+
+Первичные источники: Codex
+[`rust-v0.160.0 websocket_config`](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/codex-api/src/endpoint/responses_websocket.rs#L514-L520),
+его pinned tungstenite
+[`4fffad30 default offer`](https://github.com/openai-oss-forks/tungstenite-rs/blob/4fffad30fe373adbdcffab9545e9e9bf4f2fc19f/src/handshake/client.rs#L400-L426),
+[`supported windows`](https://github.com/openai-oss-forks/tungstenite-rs/blob/4fffad30fe373adbdcffab9545e9e9bf4f2fc19f/src/extensions/compression/deflate/config.rs#L33-L43)
+и [RFC7692 §7.1](https://www.rfc-editor.org/rfc/rfc7692.html#section-7.1).
 
 ## Многоуровневая межсервисная авторизация
 

@@ -4,8 +4,8 @@ title: Runtime, сессии и запуски
 type: architecture
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-08-28
+version: 1.2.1
+updated: 2026-10-04
 ---
 
 # Runtime, сессии и запуски
@@ -68,6 +68,27 @@ RuntimeRevision создаётся заново перед каждым turn, re
 перечисленных зависимостей. Provider account фиксируется в Session и остаётся
 неизменным между turns; новая credential revision указывается явно и не
 подменяет account affinity.
+
+## Provider Responses transport
+
+Runtime proxy допускает provider WebSocket только с прежним server-owned
+ProviderAccess, exact HTTPS origins/paths `api.openai.com:443/v1/responses`
+и `chatgpt.com:443/backend-api/codex/responses`, методом GET и проверенным
+RFC6455 handshake. Generic WebAccess не разрешает Upgrade. TLS/SNI/CA,
+публичный DNS snapshot, destination policy и resource/lifecycle bounds не
+заменяются предложенным extension.
+
+Закреплённый Codex 0.160.0 предлагает
+`permessage-deflate; client_max_window_bits`. Gateway принимает только
+закрытый bounded token-only negotiation профиль
+[GUIDE-DOC-003](../guides/distributed-security.md): один extension header
+≤256 байт, один `permessage-deflate`, ≤4 уникальных known parameters,
+window bits 9..15 и response, связанный с фактическим offer. Unknown/duplicate
+extension или parameter, malformed value, unsolicited response и subprotocol
+закрыто отклоняются до opaque stream. Отсутствующий response extension
+допускает uncompressed stream. Gateway сохраняет headers и compressed frames
+побайтно, не распаковывает payload и не делает их authority. Отказ negotiation
+диагностируется только закрытой категорией, без headers/body/provider values.
 
 ## Delegation и callback
 
