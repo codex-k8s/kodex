@@ -35,7 +35,7 @@ const (
 	providerRefreshCommitTimeout = 40 * time.Second
 	providerSandboxProbeTimeout  = 5 * time.Second
 	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
-	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s"
+	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s"
 )
 
 var (
@@ -255,6 +255,29 @@ func providerSafeFailureClass(err error) string {
 	return string(classifyProviderBrokerFailure(err))
 }
 
+func logProviderSafeFailure(stage providerExecutionStage, err error) {
+	detail, code := "NONE", int64(0)
+	notification := "NONE"
+	var failure *appServerCallFailure
+	if errors.As(err, &failure) {
+		switch failure.detail {
+		case "REQUEST_WRITE", "CONTEXT_CANCELLED", "STREAM_CLOSED", "STREAM_INVALID",
+			"NOTIFICATION_INVALID", "REQUEST_REJECTED", "RESPONSE_CORRELATION", "MESSAGE_KIND", "RPC_ERROR":
+			detail = failure.detail
+			if detail == "RPC_ERROR" {
+				code = failure.code
+			}
+			if detail == "NOTIFICATION_INVALID" {
+				notification = "UNKNOWN"
+				if _, allowed := serverNotificationMethods[failure.notification]; allowed {
+					notification = failure.notification
+				}
+			}
+		}
+	}
+	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err), detail, code, notification)
+}
+
 // ServeProviderBroker запускается только в container UID 10002 без Kubernetes
 // token, application grants, mTLS keys, MCP bearer и handoff signing key.
 func ServeProviderBroker(ctx context.Context) error {
@@ -289,7 +312,7 @@ func ServeProviderBroker(ctx context.Context) error {
 			return errors.New("accept isolated Codex provider request")
 		}
 		if err := serveBrokerRequest(ctx, connection); err != nil {
-			log.Printf(providerSafeFailureLog, providerStageOf(err), providerSafeFailureClass(err))
+			logProviderSafeFailure(providerStageOf(err), err)
 			_ = connection.Close()
 			continue
 		}
@@ -387,7 +410,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, execute, credentialrelay.Commit)
 	if err != nil {
-		log.Printf(providerSafeFailureLog, providerStageOf(err), providerSafeFailureClass(err))
+		logProviderSafeFailure(providerStageOf(err), err)
 		return writeProviderBrokerResultFailure(frames, result, err)
 	}
 	if result.Outcome != "SUCCEEDED" {
@@ -401,7 +424,7 @@ func writeProviderBrokerFailure(connection io.Writer, err error) error {
 }
 
 func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecutionStage, err error) error {
-	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err))
+	logProviderSafeFailure(stage, err)
 	return writeProviderBrokerFailure(connection, err)
 }
 

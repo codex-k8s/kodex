@@ -200,6 +200,32 @@ func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
 	}
 }
 
+func TestProviderSafeFailureDetailsRemainClosed(t *testing.T) {
+	var diagnostic bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&diagnostic)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "RPC code", err: protocolError("account/read", json.RawMessage(`{"code":-32603,"message":"private-upstream-detail"}`)), want: "detail: RPC_ERROR; rpc_code: -32603"},
+		{name: "notification", err: callFailure("NOTIFICATION_INVALID", errors.New("private-upstream-detail")), want: "detail: NOTIFICATION_INVALID; rpc_code: 0"},
+		{name: "unknown detail", err: &appServerCallFailure{detail: "private-upstream-detail", code: 42, err: errors.New("private-upstream-detail")}, want: "detail: NONE; rpc_code: 0"},
+		{name: "registered notification", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "account/updated", err: errors.New("private-upstream-detail")}, want: "notification: account/updated"},
+		{name: "unknown notification", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "notification: UNKNOWN"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			diagnostic.Reset()
+			logProviderSafeFailure(providerStageAccountRead, atProviderStage(providerStageAccountRead, test.err))
+			if strings.Contains(diagnostic.String(), "private-upstream-detail") || !strings.Contains(diagnostic.String(), test.want) {
+				t.Fatalf("unsafe or incomplete provider diagnostic: %q", diagnostic.String())
+			}
+		})
+	}
+}
+
 func providerTurnFixture(t *testing.T, authentication []byte) (model.Input, string) {
 	t.Helper()
 	root := t.TempDir()

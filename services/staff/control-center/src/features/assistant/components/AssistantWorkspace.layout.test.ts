@@ -168,6 +168,26 @@ describe("AssistantWorkspace layout", () => {
     expect(template).not.toContain("assistant-plan-card__parameters");
   });
 
+  it("fallback реплики владельца справа, агента и квитанции слева с переносом длинного текста", () => {
+    const rule = (selector: string) =>
+      styles.slice(styles.indexOf(`${selector} {`)).split("}")[0];
+    expect(template).toContain(
+      "`assistant-message--${turn.role.toLowerCase()}`",
+    );
+    expect(rule(".assistant-message")).toContain("margin-left: 0");
+    expect(rule(".assistant-message")).toContain("margin-right: auto");
+    expect(rule(".assistant-message")).toContain("max-width: 100%");
+    expect(rule(".assistant-message")).toContain("overflow-wrap: anywhere");
+    expect(rule(".assistant-message--user")).toContain("margin-left: auto");
+    expect(rule(".assistant-message--user")).toContain("margin-right: 0");
+    expect(rule(".assistant-message--system_receipt")).not.toContain(
+      "width: 100%",
+    );
+    expect(styles.slice(styles.indexOf("@media (max-width: 720px)"))).toMatch(
+      /\.assistant-message\s*\{\s*width: 94%/,
+    );
+  });
+
   it("передаёт точный Project context в файловый composer", () => {
     const attachmentComposer = template.slice(
       template.indexOf("<AttachmentComposer"),

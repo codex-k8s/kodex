@@ -3361,20 +3361,26 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .assistant-message {
+  box-sizing: border-box;
   width: min(86%, 760px);
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: auto;
   margin-bottom: 14px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+  overflow-wrap: anywhere;
 }
 .assistant-message--user {
   margin-left: auto;
+  margin-right: 0;
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 .assistant-message--system_receipt {
-  width: 100%;
   background: var(--panel);
 }
 .assistant-message--with-plan {

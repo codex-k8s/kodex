@@ -579,6 +579,15 @@ token, а запрос нового токена закрыто отклоняе
 env, exact egress, ограниченный вывод, deadline и cancel/join до удаления
 временного credential state; inherited proxy bypass и прямой fallback запрещены.
 
+Закрытый реестр provider transport проверяется по закреплённой версии SDK:
+в него входят точные обязательные bootstrap/account-discovery маршруты,
+а не только inference endpoint. Read-only discovery не расширяет shell/WebAccess
+агента, не разрешает соседние paths, HTTP writes или WebSocket upgrade.
+Добавление маршрута требует доказательства host/path/method из первичного
+источника и отрицательных проверок boundary; неизвестный маршрут закрыто
+отклоняется. Диагностика отказа содержит только закрытый этап/класс/route и
+числовой RPC code, не account payload, URL/query, headers или credentials.
+
 ## Многоуровневая межсервисная авторизация
 
 mTLS подтверждает transport peer, но не заменяет обязательный bearer token,

@@ -16,14 +16,66 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/connect"
 	internalpolicy "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
+
+func TestProviderAccountDiscoveryKeepsExactProxyBoundary(t *testing.T) {
+	const discovery = "/backend-api/wham/accounts/check"
+	for _, test := range []struct {
+		name, host, path, method string
+		provider, allowed        bool
+	}{
+		{name: "exact provider GET", host: "chatgpt.com", path: discovery, method: http.MethodGet, provider: true, allowed: true},
+		{name: "no provider authority", host: "chatgpt.com", path: discovery, method: http.MethodGet},
+		{name: "write rejected", host: "chatgpt.com", path: discovery, method: http.MethodPost, provider: true},
+		{name: "other path rejected", host: "chatgpt.com", path: discovery + "/other", method: http.MethodGet, provider: true},
+		{name: "other host rejected", host: "api.openai.com", path: discovery, method: http.MethodGet, provider: true},
+		{name: "encoded path rejected", host: "chatgpt.com", path: "/backend-api/wham/accounts/%63heck", method: http.MethodGet, provider: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := url.Parse(test.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := &http.Request{Method: test.method, Host: test.host, URL: parsed, RequestURI: test.path, Header: make(http.Header)}
+			access := runtimecontract.RuntimeProxyAccess{ProviderAccess: test.provider, WebAccess: runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone}}
+			if got := proxyRequestAllowed(request, connect.Target{Hostname: test.host, Port: 443}, access); got != test.allowed {
+				t.Fatalf("account discovery proxy eligibility=%t, want %t", got, test.allowed)
+			}
+			request.Header.Set("Connection", "Upgrade")
+			request.Header.Set("Upgrade", "websocket")
+			if proxyRequestAllowed(request, connect.Target{Hostname: test.host, Port: 443}, access) {
+				t.Fatal("account discovery acquired WebSocket authority")
+			}
+		})
+	}
+}
+
+func TestProviderDiscoveryDiagnosticContainsOnlyClosedRoute(t *testing.T) {
+	access := runtimecontract.RuntimeProxyAccess{ProviderAccess: true}
+	target := connect.Target{Hostname: "chatgpt.com", Port: 443}
+	request := &http.Request{Method: http.MethodGet, URL: &url.URL{Path: "/backend-api/wham/config/bundle", RawQuery: "private=must-not-log"}}
+	if got := deniedProviderDiscoveryRoute(request, target, access); got != "CONFIG_BUNDLE" {
+		t.Fatalf("closed discovery route=%q", got)
+	}
+	request.URL.Path = "/private-account-path"
+	if got := deniedProviderDiscoveryRoute(request, target, access); got != "" {
+		t.Fatalf("unknown path was exposed: %q", got)
+	}
+	request.URL.Path = "/backend-api/wham/accounts/check"
+	access.ProviderAccess = false
+	if got := deniedProviderDiscoveryRoute(request, target, access); got != "" {
+		t.Fatalf("unverified provider route classified: %q", got)
+	}
+}
 
 func TestAuthenticatedProxyTerminatesTLSAndForwardsAllowedRequest(t *testing.T) {
 	proxyCA, proxyRoots := proxyAuthorityFixture(t)

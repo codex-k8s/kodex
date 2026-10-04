@@ -134,7 +134,7 @@ func normalizeDialOutcome(value string) string {
 
 func normalizeStage(value string) string {
 	switch value {
-	case "accept", "connect", "clienthello", "dns", "dial", "tunnel", "shutdown":
+	case "accept", "connect", "clienthello", "dns", "dial", "tunnel", "proxy", "shutdown":
 		return value
 	default:
 		return "unknown"
@@ -145,7 +145,8 @@ func normalizeReason(value string) string {
 	switch value {
 	case "none", "malformed", "method", "authority", "body", "credentials", "oversized", "policy",
 		"missing_sni", "duplicate_sni", "sni_mismatch", "ech", "timeout", "nxdomain", "truncated",
-		"bounds", "special_address", "empty", "connection_limit", "dial_failure", "io", "shutdown", "not_ready":
+		"bounds", "special_address", "empty", "connection_limit", "dial_failure", "io", "shutdown", "not_ready",
+		"certificate", "tls", "sni", "request", "upstream":
 		return value
 	default:
 		return "unknown"

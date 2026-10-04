@@ -274,3 +274,41 @@ PASS — bootstrap ordering и однократная передача сним�
 probe закрыто отклоняются. Полная frontend build повторена после freeze:
 PASS (7.29 s), предупреждение о размере bundle сохранено.
 Живой повтор SYSTEM turn после нового image digest ещё NOT RUN.
+
+04.10.2026 08:38–08:42 UTC, checkpoint
+`7fb8340b4e2427e733f6808e73c95db2b349da1a`:
+PASS — runner exact digest
+`sha256:d30f832f76fb2527ba4f147f6a0a3e98127861d911a719db35f94481183cff2c`,
+fresh render и supply-chain/core repo-owned activation. CP/GW/FE/controller
+READY с аннотацией этого SHA; source mounts и hashes проверены через точную
+Pod→RS→Deployment UID chain, warm spec.image=imageID нового digest.
+FAIL — повтор SYSTEM self-configuration
+`run_WR3j6LlwtTRzOWVGHacgUtEG`: ACCOUNT_READ, закрытый класс PROVIDER.
+Это не ACCOUNT_RESPONSE_SCHEMA; исходная причина не доказана. Ни план, ни
+успешный inference не созданы. Добавляется безопасный closed detail/RPC code,
+без сырых account/upstream diagnostics. Live повтор после диагностики NOT RUN.
+
+По просьбе владельца в hot-reload дереве изменена общая чатовая вёрстка:
+USER справа, сообщения агента/инструменты/статусы слева; adaptive width,
+long text wrapping. PASS — 79 unit tests, typecheck/scoped lint/format,
+Chrome screenshot `/tmp/kodex-chat-bubbles-hot.png`, Console без ошибок.
+Source hashes host=Pod подтверждены; это dirty hot-reload, не immutable
+image/commit acceptance. Старый SYSTEM failure сохранён в истории.
+
+04.10.2026 08:50–08:52 UTC, hot-reload дерево после `7fb8340b`:
+PASS — точный provider discovery GET
+`chatgpt.com/backend-api/wham/accounts/check` подтверждён первичным
+[кодом Codex rust-v0.160.0](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/backend-client/src/client.rs#L398-L405).
+Provider grant не расширяет пользовательский WebAccess; соседние paths,
+методы/hosts/WebSocket закрыты. Runtimecontract unit/full/race/vet PASS.
+PASS — полный egress gateway tests (0.228 s) и observability (0.007 s);
+новые закрытые metric labels сохраняют unknown для произвольных значений.
+Первый новый gateway target до добавления discovery route был FAIL, финальный
+target PASS. Safe provider call diagnostics unit PASS (4.591 s), frontend
+build после чатовой вёрстки PASS (7.29 s).
+FAIL — третий живой self-configuration
+`run_dL83A_39p_6phhSj1-gKsiuY`: ACCOUNT_READ/PROVIDER сохранился; добавление
+discovery route само по себе не устранило отказ. Модель/plan ещё NOT RUN.
+Прокси hot-reload обновлён; точный safe RPC detail требует нового runner image.
+Метка `QA_SELF_CONFIG_20261004_0852` отправлена штатным UI, materialized input
+ещё не доказан. Необязательный config/bundle без actual trace не разрешён.

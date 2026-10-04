@@ -102,6 +102,21 @@ type streamEvent struct {
 	err     error
 }
 
+// Причина транспортного отказа закрыта и не содержит payload провайдера.
+type appServerCallFailure struct {
+	detail       string
+	code         int64
+	notification string
+	err          error
+}
+
+func (failure *appServerCallFailure) Error() string { return failure.err.Error() }
+func (failure *appServerCallFailure) Unwrap() error { return failure.err }
+
+func callFailure(detail string, err error) error {
+	return &appServerCallFailure{detail: detail, err: err}
+}
+
 type appServer struct {
 	command        *exec.Cmd
 	stdin          io.WriteCloser
@@ -533,39 +548,39 @@ func (server *appServer) call(ctx context.Context, state *protocolState, method 
 	server.nextID++
 	id := server.nextID
 	if err := server.write(map[string]any{"id": id, "method": method, "params": params}); err != nil {
-		return nil, err
+		return nil, callFailure("REQUEST_WRITE", err)
 	}
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, context.Canceled
+			return nil, callFailure("CONTEXT_CANCELLED", context.Canceled)
 		case event, open := <-server.messages:
 			if !open {
-				return nil, errors.New("Codex app-server closed its response stream")
+				return nil, callFailure("STREAM_CLOSED", errors.New("Codex app-server closed its response stream"))
 			}
 			if event.err != nil {
-				return nil, event.err
+				return nil, callFailure("STREAM_INVALID", event.err)
 			}
 			switch event.message.kind {
 			case messageNotification:
 				if err := state.notification(event.message.method, event.message.payload); err != nil {
-					return nil, err
+					return nil, &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: event.message.method, err: err}
 				}
 			case messageRequest:
 				if err := server.handleRequest(state, event.message); err != nil {
-					return nil, err
+					return nil, callFailure("REQUEST_REJECTED", err)
 				}
 			case messageResponse, messageError:
 				responseID, err := numericRequestID(event.message.id)
 				if err != nil || responseID != id {
-					return nil, errors.New("Codex app-server response correlation failed")
+					return nil, callFailure("RESPONSE_CORRELATION", errors.New("Codex app-server response correlation failed"))
 				}
 				if event.message.kind == messageError {
 					return nil, protocolError(method, event.message.payload)
 				}
 				return event.message.payload, nil
 			default:
-				return nil, errors.New("Codex app-server message kind is invalid")
+				return nil, callFailure("MESSAGE_KIND", errors.New("Codex app-server message kind is invalid"))
 			}
 		}
 	}
@@ -576,7 +591,8 @@ func protocolError(method string, raw json.RawMessage) error {
 	if err != nil {
 		return errors.New("Codex app-server returned an invalid protocol error")
 	}
-	return fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)
+	return &appServerCallFailure{detail: "RPC_ERROR", code: code,
+		err: fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)}
 }
 
 func (server *appServer) waitTerminal(ctx context.Context, state *protocolState) error {

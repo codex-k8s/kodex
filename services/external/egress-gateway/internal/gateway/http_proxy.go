@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -19,6 +20,24 @@ import (
 )
 
 var errProxyHeaderTooLarge = errors.New("runtime proxy request header is too large")
+
+const runtimeProxyProviderDiscoveryDeniedLog = "Runtime proxy rejected provider discovery route: %s"
+
+// Только известные provider paths преобразуются в закрытую диагностику.
+// Host, URL/query, headers, body и identity запроса не записываются.
+func deniedProviderDiscoveryRoute(request *http.Request, target connect.Target, access runtimecontract.RuntimeProxyAccess) string {
+	if !access.ProviderAccess || target.Hostname != "chatgpt.com" || request == nil || request.URL == nil || request.Method != http.MethodGet {
+		return ""
+	}
+	switch request.URL.Path {
+	case "/backend-api/wham/accounts/check":
+		return "ACCOUNTS_CHECK"
+	case "/backend-api/wham/config/bundle":
+		return "CONFIG_BUNDLE"
+	default:
+		return ""
+	}
+}
 
 func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target connect.Target, access runtimecontract.RuntimeProxyAccess, limits policy.Limits) {
 	if reader.Buffered() != 0 || server.interceptCA == nil {
@@ -61,6 +80,9 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		return
 	}
 	if !proxyRequestAllowed(request, target, access) {
+		if route := deniedProviderDiscoveryRoute(request, target, access); route != "" {
+			log.Printf(runtimeProxyProviderDiscoveryDeniedLog, route)
+		}
 		_ = request.Body.Close()
 		writeProxyError(connection, http.StatusForbidden, limits)
 		server.metrics.Connection("rejected", "proxy", "policy")

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToString } from "@vue/server-renderer";
 import { createSSRApp, h } from "vue";
 import { describe, expect, it, vi } from "vitest";
@@ -185,4 +186,65 @@ describe("RunTranscript: безопасный runtime text", () => {
       }
     },
   );
+});
+
+describe("RunTranscript: стороны сообщений", () => {
+  const source = readFileSync(
+    new URL("./RunTranscript.vue", import.meta.url),
+    "utf8",
+  );
+  const styles = source.slice(source.indexOf("<style scoped>"));
+  const rule = (selector: string) =>
+    styles.slice(styles.indexOf(`\n${selector} {`) + 1).split("}")[0];
+
+  it("показывает USER справа, COMMENTARY/FINAL, инструменты и статусы слева без изменения порядка", async () => {
+    const items: RunActivityItem[] = [
+      { id: "owner", kind: "initiator", phase: "USER", summary: "Мой запрос" },
+      { id: "comment", kind: "agent", phase: "COMMENTARY", summary: "Работаю" },
+      { id: "final", kind: "agent", phase: "FINAL", summary: "Готово" },
+      { id: "tool", kind: "tool", summary: "Действие инструмента" },
+      { id: "status", kind: "system", summary: "Статус" },
+    ].map((item) => ({
+      ...item,
+      actor: "Автор",
+      historical: false,
+      occurredAt: "2026-10-04T10:00:00Z",
+    })) as RunActivityItem[];
+    const app = createSSRApp({
+      render: () => h(RunTranscript, { items, embedded: true }),
+    });
+    app.use(i18n);
+    const html = await renderToString(app);
+    expect(
+      [
+        ...html.matchAll(
+          /class="run-activity-item run-activity-item--([a-z]+)"/g,
+        ),
+      ].map((match) => match[1]),
+    ).toEqual(["initiator", "agent", "agent", "tool", "system"]);
+    expect(rule(".run-activity-item")).toContain("justify-self: start");
+    expect(rule(".run-activity-item--initiator")).toContain(
+      "justify-self: end",
+    );
+    expect(
+      rule(".run-activity-item--initiator > .run-activity-item__icon"),
+    ).toContain("grid-column: 2");
+    expect(
+      rule(".run-activity-item--initiator > .run-activity-item__content"),
+    ).toContain("grid-column: 1");
+  });
+
+  it("ограничивает ширину реплик и групп инструментов и переносит длинный текст на узком экране", () => {
+    expect(rule(".run-activity-item")).toContain("width: min(86%, 760px)");
+    expect(rule(".run-activity-item")).toContain("min-width: 0");
+    expect(rule(".run-activity-item__content")).toContain(
+      "overflow-wrap: anywhere",
+    );
+    expect(styles).toMatch(
+      /\.run-transcript__tool-group\s*\{[^}]*width: min\(96%, 1180px\)[^}]*justify-self: start/,
+    );
+    expect(styles.slice(styles.indexOf("@media (max-width: 720px)"))).toMatch(
+      /\.run-activity-item\s*\{\s*width: 94%/,
+    );
+  });
 });

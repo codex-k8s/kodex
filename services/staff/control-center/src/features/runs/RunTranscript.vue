@@ -400,6 +400,21 @@ function bytes(value: number): string {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 8px;
+  width: min(86%, 760px);
+  min-width: 0;
+  justify-self: start;
+}
+.run-activity-item--initiator {
+  grid-template-columns: minmax(0, 1fr) 28px;
+  justify-self: end;
+}
+.run-activity-item--initiator > .run-activity-item__icon {
+  grid-column: 2;
+  grid-row: 1;
+}
+.run-activity-item--initiator > .run-activity-item__content {
+  grid-column: 1;
+  grid-row: 1;
 }
 .run-activity-item__icon {
   display: grid;
@@ -466,6 +481,13 @@ small {
   background: var(--panel);
   border-radius: 6px;
 }
+.run-transcript__tool-group {
+  box-sizing: border-box;
+  width: min(96%, 1180px);
+  min-width: 0;
+  justify-self: start;
+  overflow-wrap: anywhere;
+}
 summary {
   cursor: pointer;
 }
@@ -488,5 +510,13 @@ summary {
   display: block;
   margin: 12px auto 0;
   background: var(--surface);
+}
+@media (max-width: 720px) {
+  .run-transcript:not(.run-transcript--embedded) {
+    padding: 10px;
+  }
+  .run-activity-item {
+    width: 94%;
+  }
 }
 </style>
