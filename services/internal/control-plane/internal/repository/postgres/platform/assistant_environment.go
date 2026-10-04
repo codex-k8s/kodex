@@ -99,6 +99,7 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 			"domainPattern": rule.DomainPattern,
 			"protocol":      rule.Protocol,
 			"port":          rule.Port,
+			"httpMethods":   append([]string(nil), rule.HTTPMethods...),
 		})
 	}
 	if webRules == nil {

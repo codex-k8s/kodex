@@ -19,6 +19,7 @@ import type {
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem } from "@/shared/api/problem";
+import { runNodePresentationKey } from "@/features/runs/run-owner";
 import { runPath } from "@/shared/routes";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
@@ -29,9 +30,10 @@ const props = withDefaults(
     node: RunNode;
     nodes: RunNode[];
     artifacts: Artifact[];
-    projectRef: string;
+    projectRef?: string;
     run?: Run;
     agent?: Agent;
+    executionLabel?: "ASSISTANT" | "EMPLOYEE" | "SESSION";
   }>(),
   { run: undefined, agent: undefined },
 );
@@ -40,7 +42,14 @@ const emit = defineEmits<{
   activity: [nodeRef: string];
   details: [];
 }>();
-const { locale } = useI18n();
+const { locale, t } = useI18n();
+const roleLabel = computed(() =>
+  props.executionLabel === "ASSISTANT" || props.executionLabel === "SESSION"
+    ? t(runNodePresentationKey(props.executionLabel, props.node.type))
+    : props.agent?.name ||
+      props.node.role ||
+      t(`runs.nodeTypes.${props.node.type}`),
+);
 
 const parentNode = computed(() =>
   props.nodes.find((node) => node.ref === props.node.parentNodeRef),
@@ -88,7 +97,7 @@ function formatDate(value: string): string {
         <h2>{{ node.displayName }}</h2>
         <p>
           {{ $t(sessionNode ? "runs.sessionNode" : "runs.controlNode") }} ·
-          {{ agent?.name || node.role || $t(`runs.nodeTypes.${node.type}`) }}
+          {{ roleLabel }}
         </p>
       </div>
       <StatusBadge :state="node.state" />

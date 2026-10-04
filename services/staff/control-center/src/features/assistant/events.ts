@@ -194,7 +194,7 @@ export function requestAssistantRoleImageBuildDebug(
 }
 
 export function requestAssistantRunDebug(run: Run, nodes: RunNode[]): void {
-  if (run.state !== "FAILED") return;
+  if (run.state !== "FAILED" || run.target.type === "SYSTEM_ASSISTANT") return;
   const request: AssistantRunDebugRequest = {
     kind: "RUN_DEBUG",
     runRef: run.ref,

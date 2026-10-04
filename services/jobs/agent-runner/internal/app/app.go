@@ -71,7 +71,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return err
 	}
 	if mode == workspaceCanaryMode {
-		err := workspacepolicy.RunCanary(lifecycleContext, input.WorkspaceRoot, input.WorkspacePolicy)
+		err := runWorkspaceCanary(lifecycleContext, input)
 		result := "OK"
 		if err != nil {
 			result = workspacepolicy.DenialReason(err)

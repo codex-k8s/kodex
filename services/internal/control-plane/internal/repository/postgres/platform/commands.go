@@ -2166,6 +2166,9 @@ func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("read run snapshot: %w", err)
 	}
+	if err := attachRunAssistantPin(ctx, tx, scope, &run); err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	graph := entity.RunGraph{RunRef: run.RootRunRef, Revision: run.GraphRevision, Sequence: run.EventSequence}
 	rows, err := tx.Query(ctx, queryCommandsReadrungraphtxSelectRunNodesOrganizationIdRootRunIdRef, scope.organizationID, runRef)
 	if err != nil {

@@ -1019,6 +1019,9 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 		}, func(item entity.Run) entity.AccessScope {
 			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUN", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
 		}, func(tx pgx.Tx, item *entity.Run, allowed func(string) bool) error {
+			if err := attachRunAssistantPin(ctx, tx, scope, item); err != nil {
+				return err
+			}
 			item.NextActions = runActions(item.State, allowed("run.cancel") || allowed("run.cancel.own"), false)
 			return projectArtifactResults(ctx, tx, scope, &command.Result{Run: item})
 		}, func(ctx context.Context, tx pgx.Tx) (int64, error) {
@@ -1055,7 +1058,7 @@ func scanRunWithPrefix(row rowScanner, actorScoped bool, prefix ...any) (entity.
 	var item entity.Run
 	var input, usage []byte
 	var canCancel, canLaunch bool
-	destinations := append(prefix, &item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.TitleSource, &item.ActivitySummary, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputAttachmentSetRef, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt)
+	destinations := append(prefix, &item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.TitleSource, &item.ActivitySummary, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Target.Version, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputAttachmentSetRef, &item.ArtifactRefs, &item.GateRefs, &usage, &item.CreatedAt, &item.StartedAt, &item.FinishedAt)
 	if actorScoped {
 		destinations = append(destinations, &canCancel, &canLaunch)
 	} else {
@@ -1273,6 +1276,17 @@ func (repository *Repository) applyResultActionPermissions(
 		}
 	}
 	if result.Run != nil {
+		if result.Run.Target.Type == "SYSTEM_ASSISTANT" {
+			// Receipt помощника не выдаёт прежнюю owner identity: pin и target
+			// version читаются по защищённому актуальному пути. Обычный launch
+			// уже авторизован командой и не требует отдельного права run.view.
+			currentRun, err := repository.readRunWithIncidents(ctx, runner, scope, result.Run.Ref)
+			if err != nil {
+				return err
+			}
+			result.Run.AssistantPin = currentRun.AssistantPin
+			result.Run.Target = currentRun.Target
+		}
 		result.Run.NextActions = runActions(result.Run.State, permissions.canCancelRuns, permissions.canLaunchRuns)
 		if err := repository.applyContinuationAction(ctx, runner, scope, result.Run); err != nil {
 			return err
@@ -1365,6 +1379,9 @@ func (repository *Repository) GetRun(ctx context.Context, principal value.Princi
 func (repository *Repository) readRunWithIncidents(ctx context.Context, runner queryRunner, scope scope, ref string) (entity.Run, error) {
 	item, err := scanRun(runner.QueryRow(ctx, queryQueriesGetrunSelectRunsOrganizationIdRefProjectId, scope.organizationID, ref, scope.actorID, scope.authorityProjectID), true)
 	if err != nil {
+		return entity.Run{}, err
+	}
+	if err := attachRunAssistantPin(ctx, runner, scope, &item); err != nil {
 		return entity.Run{}, err
 	}
 	if err := projectArtifactResults(ctx, runner, scope, &command.Result{Run: &item}); err != nil {

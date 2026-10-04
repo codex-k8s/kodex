@@ -467,9 +467,11 @@ func castWorkflow(value entity.Workflow) *controlplanev1.Workflow {
 	return result
 }
 func castRunTarget(value entity.RunTarget) *controlplanev1.RunTarget {
-	target := &controlplanev1.RunTarget{DisplayName: value.Name}
+	target := &controlplanev1.RunTarget{DisplayName: value.Name, TargetVersion: value.Version}
 	if value.Type == "WORKFLOW" {
 		target.Target = &controlplanev1.RunTarget_WorkflowRef{WorkflowRef: value.Ref}
+	} else if value.Type == "SYSTEM_ASSISTANT" {
+		target.Target = &controlplanev1.RunTarget_SystemAssistantRef{SystemAssistantRef: value.Ref}
 	} else {
 		target.Target = &controlplanev1.RunTarget_AgentRef{AgentRef: value.Ref}
 	}
@@ -488,6 +490,13 @@ func castRun(value entity.Run) *controlplanev1.Run {
 	result := &controlplanev1.Run{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, SessionRef: value.SessionRef, RootRunRef: value.RootRunRef, ParentRunRef: value.ParentRunRef, RetryOfRunRef: value.RetryOfRunRef, Target: castRunTarget(value.Target), Title: value.Title, TitleSource: value.TitleSource, ActivitySummary: value.ActivitySummary, InputSummary: value.Task, State: runState(value.State), Source: runSource(value.Source), Initiator: &controlplanev1.UserSummary{DisplayName: value.InitiatorName}, Attempt: value.Attempt, GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), InputAttachmentSetRef: value.InputAttachmentSetRef, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
 	for _, incident := range value.Incidents {
 		result.Incidents = append(result.Incidents, castIncident(incident))
+	}
+	if pin := value.AssistantPin; pin != nil {
+		result.AssistantPin = &controlplanev1.AssistantRunPin{
+			Scope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+pin.Scope]), OrganizationRef: pin.OrganizationRef,
+			ConversationRef: pin.ConversationRef, AssistantRef: pin.AssistantRef,
+			ProjectRef: pin.ProjectRef, ProfileRef: pin.ProfileRef,
+		}
 	}
 	return result
 }

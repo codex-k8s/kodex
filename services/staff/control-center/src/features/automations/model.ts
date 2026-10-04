@@ -36,6 +36,13 @@ export function scheduleMatchesFilter(
 
 export function scheduleInput(schedule: Schedule): ScheduleInput {
   const targetType = schedule.target.type;
+  if (targetType !== "AGENT" && targetType !== "WORKFLOW")
+    throw new AppProblem({
+      status: 502,
+      code: "SCHEDULE_TARGET_UNSUPPORTED",
+      retryable: false,
+      kind: "unavailable",
+    });
   if (!isSchedulePreset(schedule.preset))
     throw new AppProblem({
       status: 502,

@@ -2195,6 +2195,7 @@ const ru = {
       AGENT_DELEGATION: "Делегирование ИИ-сотрудника",
       MATTERMOST: "Mattermost",
     },
+    assistantNode: "Помощник Kodex",
     nodeTypes: {
       ROOT_PROCESS: "Запуск",
       AGENT_EXECUTION: "ИИ-сотрудник",
@@ -6541,6 +6542,7 @@ const en = {
       AGENT_DELEGATION: "AI employee delegation",
       MATTERMOST: "Mattermost",
     },
+    assistantNode: "Kodex assistant",
     nodeTypes: {
       ROOT_PROCESS: "Run",
       AGENT_EXECUTION: "AI employee",

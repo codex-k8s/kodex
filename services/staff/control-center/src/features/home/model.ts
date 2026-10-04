@@ -31,7 +31,10 @@ export function homePriorityProjectRefs(
     string,
     { gates: number; runs: number; failures: number }
   >();
-  const count = (ref: string, kind: "gates" | "runs" | "failures") => {
+  const count = (
+    ref: string | undefined,
+    kind: "gates" | "runs" | "failures",
+  ) => {
     if (!ref) return;
     const current = projects.get(ref) ?? { gates: 0, runs: 0, failures: 0 };
     current[kind] += 1;

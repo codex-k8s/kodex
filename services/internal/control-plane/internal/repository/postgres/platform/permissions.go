@@ -122,7 +122,9 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	if permission == "" {
 		return errs.ErrNotFound
 	}
-	if input.Kind == command.ResolveOwnerGate && current.authorityProjectID != "" && current.authorityProjectID != target.projectID {
+	// Project-signed bearer не получает глобальный lifecycle Run, даже если
+	// actor имеет OWNER. Boundary проверяется до OCC и idempotency receipt.
+	if (input.Kind == command.ResolveOwnerGate || input.Kind == command.CancelRun || input.Kind == command.RetryRun) && current.authorityProjectID != "" && current.authorityProjectID != target.projectID {
 		return errs.ErrNotFound
 	}
 	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {

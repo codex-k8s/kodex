@@ -8,8 +8,16 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
+
+func runWorkspaceCanary(ctx context.Context, input model.Input) error {
+	if err := workspacepolicy.RunCanary(ctx, input.WorkspaceRoot, input.WorkspacePolicy); err != nil {
+		return err
+	}
+	return workspacepolicy.RunEnvironmentCanary(ctx, input.WorkspaceRoot, input.EnvironmentPolicy)
+}
 
 const (
 	workspaceCanaryMode          = "runtime-workspace-canary"

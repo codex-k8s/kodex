@@ -94,6 +94,7 @@ export type RunGraphNodeSurface = "session" | "control";
 
 export interface RunGraphNodeData {
   node: RunNode;
+  executionLabel?: "ASSISTANT" | "EMPLOYEE" | "SESSION";
   retryAttempt?: number;
   surface: RunGraphNodeSurface;
   selected: boolean;
@@ -128,6 +129,9 @@ export interface RunGraphFlowElements {
 }
 
 export interface RunGraphFlowOptions {
+  executionLabels?: Readonly<
+    Record<string, "ASSISTANT" | "EMPLOYEE" | "SESSION">
+  >;
   selectedRef?: string;
   futureRefs: ReadonlySet<string>;
   activeRefs: ReadonlySet<string>;
@@ -185,6 +189,7 @@ export function createRunGraphFlowElements(
         },
         data: {
           node,
+          executionLabel: options.executionLabels?.[node.ref],
           retryAttempt,
           surface,
           selected,

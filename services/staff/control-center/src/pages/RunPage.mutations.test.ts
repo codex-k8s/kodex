@@ -19,6 +19,9 @@ async function page() {
   const pinia = createPinia();
   setActivePinia(pinia);
   const platform = usePlatformStore();
+  platform.bootstrap = { organizationRef: "org_synthetic" } as NonNullable<
+    typeof platform.bootstrap
+  >;
   const run = {
     ref: "run_one",
     rootRunRef: "run_one",

@@ -37,7 +37,7 @@ type AccessPolicy interface {
 
 type AuthenticatedAccessPolicy interface {
 	AccessPolicy
-	AuthorizeAuthenticated(string, int, string) (runtimecontract.RuntimeWebAccess, bool)
+	AuthorizeAuthenticated(string, int, string) (runtimecontract.RuntimeProxyAccess, bool)
 }
 
 // MailAccess принадлежит только почтовому listener: общий TLSMode не делает
@@ -248,7 +248,7 @@ func (server *Server) handle(client net.Conn) {
 	var request connect.Request
 	var reader *bufio.Reader
 	var err error
-	var webAccess runtimecontract.RuntimeWebAccess
+	var webAccess runtimecontract.RuntimeProxyAccess
 	if server.authenticated {
 		request, reader, err = connect.ParseAuthenticated(client, limits.MaximumHeaderBytes, duration(limits.HeaderTimeoutMilliseconds), func(hostname string, port int, credential string) bool {
 			var allowed bool
@@ -281,7 +281,7 @@ func (server *Server) handle(client net.Conn) {
 		return
 	}
 	_ = client.SetWriteDeadline(time.Time{})
-	if server.authenticated && (webAccess.Mode == runtimecontract.RuntimeWebAccessAllowlistReadOnly || webAccess.Mode == runtimecontract.RuntimeWebAccessAllowlistFull) {
+	if server.authenticated {
 		server.proxyTLS(client, reader, target, webAccess, limits)
 		return
 	}

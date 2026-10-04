@@ -37,7 +37,9 @@ const activitySummaryByState: Record<Run["state"], string> = {
 function run(
   ref: string,
   state: Run["state"],
-  options: Partial<Run> = {},
+  options: Partial<Omit<Run, "source" | "target" | "assistantPin">> & {
+    target?: Run["target"] & { type: "AGENT" | "WORKFLOW" };
+  } = {},
 ): Run {
   return {
     ref,

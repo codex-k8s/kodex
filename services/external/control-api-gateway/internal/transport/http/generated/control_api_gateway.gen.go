@@ -919,6 +919,54 @@ func (e AssistantPlanReceiptOutcome) Valid() bool {
 	}
 }
 
+// Defines values for AssistantRunPinScope.
+const (
+	AssistantRunPinScopePROJECT AssistantRunPinScope = "PROJECT"
+	AssistantRunPinScopeSYSTEM  AssistantRunPinScope = "SYSTEM"
+)
+
+// Valid indicates whether the value is a known member of the AssistantRunPinScope enum.
+func (e AssistantRunPinScope) Valid() bool {
+	switch e {
+	case AssistantRunPinScopePROJECT:
+		return true
+	case AssistantRunPinScopeSYSTEM:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AssistantRunPin0Scope.
+const (
+	AssistantRunPin0ScopeSYSTEM AssistantRunPin0Scope = "SYSTEM"
+)
+
+// Valid indicates whether the value is a known member of the AssistantRunPin0Scope enum.
+func (e AssistantRunPin0Scope) Valid() bool {
+	switch e {
+	case AssistantRunPin0ScopeSYSTEM:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AssistantRunPin1Scope.
+const (
+	AssistantRunPin1ScopePROJECT AssistantRunPin1Scope = "PROJECT"
+)
+
+// Valid indicates whether the value is a known member of the AssistantRunPin1Scope enum.
+func (e AssistantRunPin1Scope) Valid() bool {
+	switch e {
+	case AssistantRunPin1ScopePROJECT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AssistantScope.
 const (
 	AssistantScopePROJECT AssistantScope = "PROJECT"
@@ -4948,6 +4996,36 @@ func (e RunTitleSource) Valid() bool {
 	}
 }
 
+// Defines values for Run1Source.
+const (
+	Run1SourceSYSTEMASSISTANT Run1Source = "SYSTEM_ASSISTANT"
+)
+
+// Valid indicates whether the value is a known member of the Run1Source enum.
+func (e Run1Source) Valid() bool {
+	switch e {
+	case Run1SourceSYSTEMASSISTANT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Run1TargetType.
+const (
+	Run1TargetTypeSYSTEMASSISTANT Run1TargetType = "SYSTEM_ASSISTANT"
+)
+
+// Valid indicates whether the value is a known member of the Run1TargetType enum.
+func (e Run1TargetType) Valid() bool {
+	switch e {
+	case Run1TargetTypeSYSTEMASSISTANT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunAttachmentEligibilityReason.
 const (
 	RunAttachmentEligibilityReasonAGENTCAPABILITYREQUIRED RunAttachmentEligibilityReason = "AGENT_CAPABILITY_REQUIRED"
@@ -5355,14 +5433,17 @@ func (e RunNodeType) Valid() bool {
 
 // Defines values for RunTargetType.
 const (
-	RunTargetTypeAGENT    RunTargetType = "AGENT"
-	RunTargetTypeWORKFLOW RunTargetType = "WORKFLOW"
+	RunTargetTypeAGENT           RunTargetType = "AGENT"
+	RunTargetTypeSYSTEMASSISTANT RunTargetType = "SYSTEM_ASSISTANT"
+	RunTargetTypeWORKFLOW        RunTargetType = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the RunTargetType enum.
 func (e RunTargetType) Valid() bool {
 	switch e {
 	case RunTargetTypeAGENT:
+		return true
+	case RunTargetTypeSYSTEMASSISTANT:
 		return true
 	case RunTargetTypeWORKFLOW:
 		return true
@@ -8562,16 +8643,16 @@ func (e GetProviderAccountParamsUsagePurpose) Valid() bool {
 
 // Defines values for ListRunsParamsTargetType.
 const (
-	AGENT    ListRunsParamsTargetType = "AGENT"
-	WORKFLOW ListRunsParamsTargetType = "WORKFLOW"
+	ListRunsParamsTargetTypeAGENT    ListRunsParamsTargetType = "AGENT"
+	ListRunsParamsTargetTypeWORKFLOW ListRunsParamsTargetType = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the ListRunsParamsTargetType enum.
 func (e ListRunsParamsTargetType) Valid() bool {
 	switch e {
-	case AGENT:
+	case ListRunsParamsTargetTypeAGENT:
 		return true
-	case WORKFLOW:
+	case ListRunsParamsTargetTypeWORKFLOW:
 		return true
 	default:
 		return false
@@ -9323,6 +9404,37 @@ type AssistantPlanTarget struct {
 	Ref     *OpaqueRef `json:"ref,omitempty"`
 	Version *int64     `json:"version,omitempty"`
 }
+
+// AssistantRunPin Серверная read-only identity точного диалога, организации и помощника;
+// не является authority и не принимается mutation-командами.
+type AssistantRunPin struct {
+	AssistantRef    OpaqueRef            `json:"assistantRef"`
+	ConversationRef OpaqueRef            `json:"conversationRef"`
+	OrganizationRef OpaqueRef            `json:"organizationRef"`
+	ProfileRef      *OpaqueRef           `json:"profileRef,omitempty"`
+	ProjectRef      *OpaqueRef           `json:"projectRef,omitempty"`
+	Scope           AssistantRunPinScope `json:"scope"`
+	union           json.RawMessage
+}
+
+// AssistantRunPinScope defines model for AssistantRunPin.Scope.
+type AssistantRunPinScope string
+
+// AssistantRunPin0 defines model for .
+type AssistantRunPin0 struct {
+	Scope *AssistantRunPin0Scope `json:"scope,omitempty"`
+}
+
+// AssistantRunPin0Scope defines model for AssistantRunPin.0.Scope.
+type AssistantRunPin0Scope string
+
+// AssistantRunPin1 defines model for .
+type AssistantRunPin1 struct {
+	Scope *AssistantRunPin1Scope `json:"scope,omitempty"`
+}
+
+// AssistantRunPin1Scope defines model for AssistantRunPin.1.Scope.
+type AssistantRunPin1Scope string
 
 // AssistantScope defines model for AssistantScope.
 type AssistantScope string
@@ -12002,37 +12114,42 @@ type RoleImageRecipeUpdateInput struct {
 
 // Run defines model for Run.
 type Run struct {
-	ActivitySummary       string         `json:"activitySummary"`
-	ArtifactRefs          []OpaqueRef    `json:"artifactRefs"`
-	Attempt               int            `json:"attempt"`
-	CreatedAt             Timestamp      `json:"createdAt"`
-	CurrentActivity       *string        `json:"currentActivity,omitempty"`
-	FinishedAt            *Timestamp     `json:"finishedAt,omitempty"`
-	GateRefs              []OpaqueRef    `json:"gateRefs"`
-	GraphRevision         int64          `json:"graphRevision"`
-	Incidents             *[]Incident    `json:"incidents,omitempty"`
-	Initiator             UserSummary    `json:"initiator"`
-	InputAttachmentSetRef *OpaqueRef     `json:"inputAttachmentSetRef,omitempty"`
-	InputSummary          *string        `json:"inputSummary,omitempty"`
-	LastEventSequence     int64          `json:"lastEventSequence"`
-	NextActions           []NextAction   `json:"nextActions"`
-	ParentRunRef          *OpaqueRef     `json:"parentRunRef,omitempty"`
-	ProjectRef            OpaqueRef      `json:"projectRef"`
-	Ref                   OpaqueRef      `json:"ref"`
-	ResultSummary         *string        `json:"resultSummary,omitempty"`
-	RetryOfRunRef         *OpaqueRef     `json:"retryOfRunRef,omitempty"`
-	RootRunRef            OpaqueRef      `json:"rootRunRef"`
-	SafeErrorCode         *string        `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage      *string        `json:"safeErrorMessage,omitempty"`
-	SessionRef            OpaqueRef      `json:"sessionRef"`
-	Source                RunSource      `json:"source"`
-	StartedAt             *Timestamp     `json:"startedAt,omitempty"`
-	State                 RunState       `json:"state"`
-	Target                RunTarget      `json:"target"`
-	Title                 string         `json:"title"`
-	TitleSource           RunTitleSource `json:"titleSource"`
-	Usage                 TokenUsage     `json:"usage"`
-	Version               int64          `json:"version"`
+	ActivitySummary string      `json:"activitySummary"`
+	ArtifactRefs    []OpaqueRef `json:"artifactRefs"`
+
+	// AssistantPin Серверная read-only identity точного диалога, организации и помощника;
+	// не является authority и не принимается mutation-командами.
+	AssistantPin          *AssistantRunPin `json:"assistantPin,omitempty"`
+	Attempt               int              `json:"attempt"`
+	CreatedAt             Timestamp        `json:"createdAt"`
+	CurrentActivity       *string          `json:"currentActivity,omitempty"`
+	FinishedAt            *Timestamp       `json:"finishedAt,omitempty"`
+	GateRefs              []OpaqueRef      `json:"gateRefs"`
+	GraphRevision         int64            `json:"graphRevision"`
+	Incidents             *[]Incident      `json:"incidents,omitempty"`
+	Initiator             UserSummary      `json:"initiator"`
+	InputAttachmentSetRef *OpaqueRef       `json:"inputAttachmentSetRef,omitempty"`
+	InputSummary          *string          `json:"inputSummary,omitempty"`
+	LastEventSequence     int64            `json:"lastEventSequence"`
+	NextActions           []NextAction     `json:"nextActions"`
+	ParentRunRef          *OpaqueRef       `json:"parentRunRef,omitempty"`
+	ProjectRef            *OpaqueRef       `json:"projectRef,omitempty"`
+	Ref                   OpaqueRef        `json:"ref"`
+	ResultSummary         *string          `json:"resultSummary,omitempty"`
+	RetryOfRunRef         *OpaqueRef       `json:"retryOfRunRef,omitempty"`
+	RootRunRef            OpaqueRef        `json:"rootRunRef"`
+	SafeErrorCode         *string          `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage      *string          `json:"safeErrorMessage,omitempty"`
+	SessionRef            OpaqueRef        `json:"sessionRef"`
+	Source                RunSource        `json:"source"`
+	StartedAt             *Timestamp       `json:"startedAt,omitempty"`
+	State                 RunState         `json:"state"`
+	Target                RunTarget        `json:"target"`
+	Title                 string           `json:"title"`
+	TitleSource           RunTitleSource   `json:"titleSource"`
+	Usage                 TokenUsage       `json:"usage"`
+	Version               int64            `json:"version"`
+	union                 json.RawMessage
 }
 
 // RunSource defines model for Run.Source.
@@ -12043,6 +12160,29 @@ type RunState string
 
 // RunTitleSource defines model for Run.TitleSource.
 type RunTitleSource string
+
+// Run0 defines model for .
+type Run0 struct {
+	Target *struct {
+		Type interface{} `json:"type,omitempty"`
+	} `json:"target,omitempty"`
+}
+
+// Run1 Ход помощника содержит назначаемую сервером привязку. PROJECT
+// требует projectRef и profileRef; SYSTEM без проекта не выдаёт
+// пустую строку projectRef. Gateway сверяет pin с Run.target/project.
+type Run1 struct {
+	Source *Run1Source `json:"source,omitempty"`
+	Target *struct {
+		Type *Run1TargetType `json:"type,omitempty"`
+	} `json:"target,omitempty"`
+}
+
+// Run1Source defines model for Run.1.Source.
+type Run1Source string
+
+// Run1TargetType defines model for Run.1.Target.Type.
+type Run1TargetType string
 
 // RunAttachmentEligibility defines model for RunAttachmentEligibility.
 type RunAttachmentEligibility struct {
@@ -16626,6 +16766,165 @@ type UpdateWorkflowDraftJSONRequestBody = WorkflowInput
 // CommandWorkflowJSONRequestBody defines body for CommandWorkflow for application/json ContentType.
 type CommandWorkflowJSONRequestBody = WorkflowCommand
 
+// AsAssistantRunPin0 returns the union data inside the AssistantRunPin as a AssistantRunPin0
+func (t AssistantRunPin) AsAssistantRunPin0() (AssistantRunPin0, error) {
+	var body AssistantRunPin0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAssistantRunPin0 overwrites any union data inside the AssistantRunPin as the provided AssistantRunPin0
+func (t *AssistantRunPin) FromAssistantRunPin0(v AssistantRunPin0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAssistantRunPin0 performs a merge with any union data inside the AssistantRunPin, using the provided AssistantRunPin0
+func (t *AssistantRunPin) MergeAssistantRunPin0(v AssistantRunPin0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAssistantRunPin1 returns the union data inside the AssistantRunPin as a AssistantRunPin1
+func (t AssistantRunPin) AsAssistantRunPin1() (AssistantRunPin1, error) {
+	var body AssistantRunPin1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAssistantRunPin1 overwrites any union data inside the AssistantRunPin as the provided AssistantRunPin1
+func (t *AssistantRunPin) FromAssistantRunPin1(v AssistantRunPin1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAssistantRunPin1 performs a merge with any union data inside the AssistantRunPin, using the provided AssistantRunPin1
+func (t *AssistantRunPin) MergeAssistantRunPin1(v AssistantRunPin1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AssistantRunPin) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["assistantRef"], err = json.Marshal(t.AssistantRef)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'assistantRef': %w", err)
+	}
+
+	object["conversationRef"], err = json.Marshal(t.ConversationRef)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'conversationRef': %w", err)
+	}
+
+	object["organizationRef"], err = json.Marshal(t.OrganizationRef)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'organizationRef': %w", err)
+	}
+
+	if t.ProfileRef != nil {
+		object["profileRef"], err = json.Marshal(t.ProfileRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'profileRef': %w", err)
+		}
+	}
+
+	if t.ProjectRef != nil {
+		object["projectRef"], err = json.Marshal(t.ProjectRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'projectRef': %w", err)
+		}
+	}
+
+	object["scope"], err = json.Marshal(t.Scope)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'scope': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *AssistantRunPin) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["assistantRef"]; found {
+		err = json.Unmarshal(raw, &t.AssistantRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'assistantRef': %w", err)
+		}
+	}
+
+	if raw, found := object["conversationRef"]; found {
+		err = json.Unmarshal(raw, &t.ConversationRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'conversationRef': %w", err)
+		}
+	}
+
+	if raw, found := object["organizationRef"]; found {
+		err = json.Unmarshal(raw, &t.OrganizationRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'organizationRef': %w", err)
+		}
+	}
+
+	if raw, found := object["profileRef"]; found {
+		err = json.Unmarshal(raw, &t.ProfileRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'profileRef': %w", err)
+		}
+	}
+
+	if raw, found := object["projectRef"]; found {
+		err = json.Unmarshal(raw, &t.ProjectRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'projectRef': %w", err)
+		}
+	}
+
+	if raw, found := object["scope"]; found {
+		err = json.Unmarshal(raw, &t.Scope)
+		if err != nil {
+			return fmt.Errorf("error reading 'scope': %w", err)
+		}
+	}
+
+	return err
+}
+
 // AsIntegrationDefinitionShippedCopyInput returns the union data inside the IntegrationDefinitionConfigurationCopyInput as a IntegrationDefinitionShippedCopyInput
 func (t IntegrationDefinitionConfigurationCopyInput) AsIntegrationDefinitionShippedCopyInput() (IntegrationDefinitionShippedCopyInput, error) {
 	var body IntegrationDefinitionShippedCopyInput
@@ -16871,6 +17170,505 @@ func (t RoleImageConfigurationCopyInput) MarshalJSON() ([]byte, error) {
 
 func (t *RoleImageConfigurationCopyInput) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsRun0 returns the union data inside the Run as a Run0
+func (t Run) AsRun0() (Run0, error) {
+	var body Run0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRun0 overwrites any union data inside the Run as the provided Run0
+func (t *Run) FromRun0(v Run0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRun0 performs a merge with any union data inside the Run, using the provided Run0
+func (t *Run) MergeRun0(v Run0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsRun1 returns the union data inside the Run as a Run1
+func (t Run) AsRun1() (Run1, error) {
+	var body Run1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRun1 overwrites any union data inside the Run as the provided Run1
+func (t *Run) FromRun1(v Run1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRun1 performs a merge with any union data inside the Run, using the provided Run1
+func (t *Run) MergeRun1(v Run1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t Run) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["activitySummary"], err = json.Marshal(t.ActivitySummary)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'activitySummary': %w", err)
+	}
+
+	if t.ArtifactRefs != nil {
+		object["artifactRefs"], err = json.Marshal(t.ArtifactRefs)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'artifactRefs': %w", err)
+		}
+	}
+
+	if t.AssistantPin != nil {
+		object["assistantPin"], err = json.Marshal(t.AssistantPin)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'assistantPin': %w", err)
+		}
+	}
+
+	object["attempt"], err = json.Marshal(t.Attempt)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'attempt': %w", err)
+	}
+
+	object["createdAt"], err = json.Marshal(t.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'createdAt': %w", err)
+	}
+
+	if t.CurrentActivity != nil {
+		object["currentActivity"], err = json.Marshal(t.CurrentActivity)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'currentActivity': %w", err)
+		}
+	}
+
+	if t.FinishedAt != nil {
+		object["finishedAt"], err = json.Marshal(t.FinishedAt)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'finishedAt': %w", err)
+		}
+	}
+
+	if t.GateRefs != nil {
+		object["gateRefs"], err = json.Marshal(t.GateRefs)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'gateRefs': %w", err)
+		}
+	}
+
+	object["graphRevision"], err = json.Marshal(t.GraphRevision)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'graphRevision': %w", err)
+	}
+
+	if t.Incidents != nil {
+		object["incidents"], err = json.Marshal(t.Incidents)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'incidents': %w", err)
+		}
+	}
+
+	object["initiator"], err = json.Marshal(t.Initiator)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'initiator': %w", err)
+	}
+
+	if t.InputAttachmentSetRef != nil {
+		object["inputAttachmentSetRef"], err = json.Marshal(t.InputAttachmentSetRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'inputAttachmentSetRef': %w", err)
+		}
+	}
+
+	if t.InputSummary != nil {
+		object["inputSummary"], err = json.Marshal(t.InputSummary)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'inputSummary': %w", err)
+		}
+	}
+
+	object["lastEventSequence"], err = json.Marshal(t.LastEventSequence)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'lastEventSequence': %w", err)
+	}
+
+	if t.NextActions != nil {
+		object["nextActions"], err = json.Marshal(t.NextActions)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'nextActions': %w", err)
+		}
+	}
+
+	if t.ParentRunRef != nil {
+		object["parentRunRef"], err = json.Marshal(t.ParentRunRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'parentRunRef': %w", err)
+		}
+	}
+
+	if t.ProjectRef != nil {
+		object["projectRef"], err = json.Marshal(t.ProjectRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'projectRef': %w", err)
+		}
+	}
+
+	object["ref"], err = json.Marshal(t.Ref)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'ref': %w", err)
+	}
+
+	if t.ResultSummary != nil {
+		object["resultSummary"], err = json.Marshal(t.ResultSummary)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'resultSummary': %w", err)
+		}
+	}
+
+	if t.RetryOfRunRef != nil {
+		object["retryOfRunRef"], err = json.Marshal(t.RetryOfRunRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'retryOfRunRef': %w", err)
+		}
+	}
+
+	object["rootRunRef"], err = json.Marshal(t.RootRunRef)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'rootRunRef': %w", err)
+	}
+
+	if t.SafeErrorCode != nil {
+		object["safeErrorCode"], err = json.Marshal(t.SafeErrorCode)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'safeErrorCode': %w", err)
+		}
+	}
+
+	if t.SafeErrorMessage != nil {
+		object["safeErrorMessage"], err = json.Marshal(t.SafeErrorMessage)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'safeErrorMessage': %w", err)
+		}
+	}
+
+	object["sessionRef"], err = json.Marshal(t.SessionRef)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'sessionRef': %w", err)
+	}
+
+	object["source"], err = json.Marshal(t.Source)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'source': %w", err)
+	}
+
+	if t.StartedAt != nil {
+		object["startedAt"], err = json.Marshal(t.StartedAt)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'startedAt': %w", err)
+		}
+	}
+
+	object["state"], err = json.Marshal(t.State)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'state': %w", err)
+	}
+
+	object["target"], err = json.Marshal(t.Target)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'target': %w", err)
+	}
+
+	object["title"], err = json.Marshal(t.Title)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'title': %w", err)
+	}
+
+	object["titleSource"], err = json.Marshal(t.TitleSource)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'titleSource': %w", err)
+	}
+
+	object["usage"], err = json.Marshal(t.Usage)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'usage': %w", err)
+	}
+
+	object["version"], err = json.Marshal(t.Version)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'version': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *Run) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["activitySummary"]; found {
+		err = json.Unmarshal(raw, &t.ActivitySummary)
+		if err != nil {
+			return fmt.Errorf("error reading 'activitySummary': %w", err)
+		}
+	}
+
+	if raw, found := object["artifactRefs"]; found {
+		err = json.Unmarshal(raw, &t.ArtifactRefs)
+		if err != nil {
+			return fmt.Errorf("error reading 'artifactRefs': %w", err)
+		}
+	}
+
+	if raw, found := object["assistantPin"]; found {
+		err = json.Unmarshal(raw, &t.AssistantPin)
+		if err != nil {
+			return fmt.Errorf("error reading 'assistantPin': %w", err)
+		}
+	}
+
+	if raw, found := object["attempt"]; found {
+		err = json.Unmarshal(raw, &t.Attempt)
+		if err != nil {
+			return fmt.Errorf("error reading 'attempt': %w", err)
+		}
+	}
+
+	if raw, found := object["createdAt"]; found {
+		err = json.Unmarshal(raw, &t.CreatedAt)
+		if err != nil {
+			return fmt.Errorf("error reading 'createdAt': %w", err)
+		}
+	}
+
+	if raw, found := object["currentActivity"]; found {
+		err = json.Unmarshal(raw, &t.CurrentActivity)
+		if err != nil {
+			return fmt.Errorf("error reading 'currentActivity': %w", err)
+		}
+	}
+
+	if raw, found := object["finishedAt"]; found {
+		err = json.Unmarshal(raw, &t.FinishedAt)
+		if err != nil {
+			return fmt.Errorf("error reading 'finishedAt': %w", err)
+		}
+	}
+
+	if raw, found := object["gateRefs"]; found {
+		err = json.Unmarshal(raw, &t.GateRefs)
+		if err != nil {
+			return fmt.Errorf("error reading 'gateRefs': %w", err)
+		}
+	}
+
+	if raw, found := object["graphRevision"]; found {
+		err = json.Unmarshal(raw, &t.GraphRevision)
+		if err != nil {
+			return fmt.Errorf("error reading 'graphRevision': %w", err)
+		}
+	}
+
+	if raw, found := object["incidents"]; found {
+		err = json.Unmarshal(raw, &t.Incidents)
+		if err != nil {
+			return fmt.Errorf("error reading 'incidents': %w", err)
+		}
+	}
+
+	if raw, found := object["initiator"]; found {
+		err = json.Unmarshal(raw, &t.Initiator)
+		if err != nil {
+			return fmt.Errorf("error reading 'initiator': %w", err)
+		}
+	}
+
+	if raw, found := object["inputAttachmentSetRef"]; found {
+		err = json.Unmarshal(raw, &t.InputAttachmentSetRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'inputAttachmentSetRef': %w", err)
+		}
+	}
+
+	if raw, found := object["inputSummary"]; found {
+		err = json.Unmarshal(raw, &t.InputSummary)
+		if err != nil {
+			return fmt.Errorf("error reading 'inputSummary': %w", err)
+		}
+	}
+
+	if raw, found := object["lastEventSequence"]; found {
+		err = json.Unmarshal(raw, &t.LastEventSequence)
+		if err != nil {
+			return fmt.Errorf("error reading 'lastEventSequence': %w", err)
+		}
+	}
+
+	if raw, found := object["nextActions"]; found {
+		err = json.Unmarshal(raw, &t.NextActions)
+		if err != nil {
+			return fmt.Errorf("error reading 'nextActions': %w", err)
+		}
+	}
+
+	if raw, found := object["parentRunRef"]; found {
+		err = json.Unmarshal(raw, &t.ParentRunRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'parentRunRef': %w", err)
+		}
+	}
+
+	if raw, found := object["projectRef"]; found {
+		err = json.Unmarshal(raw, &t.ProjectRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'projectRef': %w", err)
+		}
+	}
+
+	if raw, found := object["ref"]; found {
+		err = json.Unmarshal(raw, &t.Ref)
+		if err != nil {
+			return fmt.Errorf("error reading 'ref': %w", err)
+		}
+	}
+
+	if raw, found := object["resultSummary"]; found {
+		err = json.Unmarshal(raw, &t.ResultSummary)
+		if err != nil {
+			return fmt.Errorf("error reading 'resultSummary': %w", err)
+		}
+	}
+
+	if raw, found := object["retryOfRunRef"]; found {
+		err = json.Unmarshal(raw, &t.RetryOfRunRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'retryOfRunRef': %w", err)
+		}
+	}
+
+	if raw, found := object["rootRunRef"]; found {
+		err = json.Unmarshal(raw, &t.RootRunRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'rootRunRef': %w", err)
+		}
+	}
+
+	if raw, found := object["safeErrorCode"]; found {
+		err = json.Unmarshal(raw, &t.SafeErrorCode)
+		if err != nil {
+			return fmt.Errorf("error reading 'safeErrorCode': %w", err)
+		}
+	}
+
+	if raw, found := object["safeErrorMessage"]; found {
+		err = json.Unmarshal(raw, &t.SafeErrorMessage)
+		if err != nil {
+			return fmt.Errorf("error reading 'safeErrorMessage': %w", err)
+		}
+	}
+
+	if raw, found := object["sessionRef"]; found {
+		err = json.Unmarshal(raw, &t.SessionRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'sessionRef': %w", err)
+		}
+	}
+
+	if raw, found := object["source"]; found {
+		err = json.Unmarshal(raw, &t.Source)
+		if err != nil {
+			return fmt.Errorf("error reading 'source': %w", err)
+		}
+	}
+
+	if raw, found := object["startedAt"]; found {
+		err = json.Unmarshal(raw, &t.StartedAt)
+		if err != nil {
+			return fmt.Errorf("error reading 'startedAt': %w", err)
+		}
+	}
+
+	if raw, found := object["state"]; found {
+		err = json.Unmarshal(raw, &t.State)
+		if err != nil {
+			return fmt.Errorf("error reading 'state': %w", err)
+		}
+	}
+
+	if raw, found := object["target"]; found {
+		err = json.Unmarshal(raw, &t.Target)
+		if err != nil {
+			return fmt.Errorf("error reading 'target': %w", err)
+		}
+	}
+
+	if raw, found := object["title"]; found {
+		err = json.Unmarshal(raw, &t.Title)
+		if err != nil {
+			return fmt.Errorf("error reading 'title': %w", err)
+		}
+	}
+
+	if raw, found := object["titleSource"]; found {
+		err = json.Unmarshal(raw, &t.TitleSource)
+		if err != nil {
+			return fmt.Errorf("error reading 'titleSource': %w", err)
+		}
+	}
+
+	if raw, found := object["usage"]; found {
+		err = json.Unmarshal(raw, &t.Usage)
+		if err != nil {
+			return fmt.Errorf("error reading 'usage': %w", err)
+		}
+	}
+
+	if raw, found := object["version"]; found {
+		err = json.Unmarshal(raw, &t.Version)
+		if err != nil {
+			return fmt.Errorf("error reading 'version': %w", err)
+		}
+	}
+
 	return err
 }
 

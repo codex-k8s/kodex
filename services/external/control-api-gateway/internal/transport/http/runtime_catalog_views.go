@@ -106,6 +106,10 @@ func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) erro
 		return invalidRuntimeCatalogView("maximum_depth")
 	}
 	switch item := message.Interface().(type) {
+	case *cp.Run:
+		if !validRunIdentity(item) {
+			return invalidRuntimeCatalogView("run_identity")
+		}
 	case *cp.Project:
 		if !validProjectCard(item) {
 			return invalidRuntimeCatalogView("project")

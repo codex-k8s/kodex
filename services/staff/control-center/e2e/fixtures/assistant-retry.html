@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Повтор хода помощника</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from "vue";
+      import { createPinia } from "pinia";
+      import { createRouter, createMemoryHistory } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import "../../src/app/styles/base.css";
+      import Fixture from "./AssistantRetryFixture.vue";
+      import RunPage from "../../src/pages/RunPage.vue";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          {
+            path: "/",
+            component: { render: () => h("p", "Проверка повторного хода") },
+          },
+          { path: "/runs/:runRef", name: "run", component: RunPage },
+          {
+            path: "/projects/:projectRef/runs/:runRef",
+            name: "project-run",
+            component: RunPage,
+          },
+        ],
+      });
+      await router.push("/");
+      await router.isReady();
+      i18n.global.locale.value =
+        new URLSearchParams(location.search).get("locale") === "en"
+          ? "en"
+          : "ru";
+      createApp(Fixture).use(createPinia()).use(router).use(i18n).mount("#app");
+    </script>
+  </body>
+</html>

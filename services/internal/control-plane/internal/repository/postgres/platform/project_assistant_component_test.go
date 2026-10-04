@@ -256,6 +256,21 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		stringMap(lease, "agentRef") != first.AgentRef || stringMap(lease, "projectRef") != firstProject.Ref {
 		t.Fatalf("fresh runtime lost project assistant pin: %#v", lease)
 	}
+	expectedTarget, err := service.GetAgentRuntimeConfiguration(ctx, owner, first.AgentRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectRun, err := service.GetRun(ctx, owner, stringMap(lease, "runRef"))
+	if err != nil || projectRun.AssistantPin == nil {
+		t.Fatalf("project run authoritative pin: %v", err)
+	}
+	pin := *projectRun.AssistantPin
+	if pin.Scope != "PROJECT" || pin.OrganizationRef != expectedTarget.Environment.OrganizationRef || pin.ConversationRef != firstConversation.Ref ||
+		pin.AssistantRef != first.AgentRef || pin.ProjectRef != firstProject.Ref || pin.ProfileRef != first.Ref ||
+		projectRun.Target.Type != "SYSTEM_ASSISTANT" || projectRun.Target.Ref != first.AgentRef || projectRun.Target.Version != expectedTarget.AgentVersion ||
+		expectedTarget.AgentVersion < 1 {
+		t.Fatal("project run lost exact assistant owner/profile/target version")
+	}
 	searchReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.resources.search",

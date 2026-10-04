@@ -14717,7 +14717,7 @@ components:
       additionalProperties: false
       required: [type, ref, displayName, version]
       properties:
-        type: { type: string, enum: [AGENT, WORKFLOW] }
+        type: { type: string, enum: [AGENT, WORKFLOW, SYSTEM_ASSISTANT] }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         displayName: { type: string, maxLength: 160 }
         version: { type: integer, format: int64, minimum: 1 }
@@ -14749,7 +14749,6 @@ components:
         [
           ref,
           version,
-          projectRef,
           sessionRef,
           rootRunRef,
           target,
@@ -14772,6 +14771,7 @@ components:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantPin: { $ref: "#/components/schemas/AssistantRunPin" }
         sessionRef: { $ref: "#/components/schemas/OpaqueRef" }
         rootRunRef: { $ref: "#/components/schemas/OpaqueRef" }
         parentRunRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -14842,6 +14842,42 @@ components:
             maxItems: 100,
             items: { $ref: "#/components/schemas/Incident" },
           }
+      oneOf:
+        - required: [projectRef]
+          properties:
+            target:
+              properties:
+                type: { enum: [AGENT, WORKFLOW] }
+          not: { required: [assistantPin] }
+        - required: [assistantPin]
+          properties:
+            source: { type: string, enum: [SYSTEM_ASSISTANT] }
+            target:
+              properties:
+                type: { type: string, enum: [SYSTEM_ASSISTANT] }
+          description: |
+            Ход помощника содержит назначаемую сервером привязку. PROJECT
+            требует projectRef и profileRef; SYSTEM без проекта не выдаёт
+            пустую строку projectRef. Gateway сверяет pin с Run.target/project.
+    AssistantRunPin:
+      type: object
+      additionalProperties: false
+      description: |
+        Серверная read-only identity точного диалога, организации и помощника;
+        не является authority и не принимается mutation-командами.
+      required: [scope, organizationRef, conversationRef, assistantRef]
+      properties:
+        scope: { type: string, enum: [SYSTEM, PROJECT] }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        conversationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        profileRef: { $ref: "#/components/schemas/OpaqueRef" }
+      oneOf:
+        - properties: { scope: { type: string, enum: [SYSTEM] } }
+          not: { required: [profileRef] }
+        - required: [projectRef, profileRef]
+          properties: { scope: { type: string, enum: [PROJECT] } }
     RunNode:
       type: object
       additionalProperties: false

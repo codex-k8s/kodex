@@ -322,6 +322,8 @@ func TestOrganizationRoleImagesComponent(t *testing.T) {
 	if err != nil || len(terminalDetail.Builds) != 1 || terminalDetail.Builds[0].Stage != "DEAD_LETTER" || terminalDetail.Builds[0].LeaseExpiresAt != nil || terminalDetail.Builds[0].AuthorityGeneration != 0 || terminalDetail.Builds[0].LeaseTokenSHA256 != "" {
 		t.Fatalf("terminal expiry closure was rolled back without next claim: %v", err)
 	}
+	testRoleImageExpiryOutcome(t, ctx, repository, resolved, owner, worker, "")
+	testRoleImageExpiryOutcome(t, ctx, repository, resolved, owner, worker, project.Project.Ref)
 }
 
 type organizationImageQueryTracer struct{ t *testing.T }

@@ -5,6 +5,7 @@ SELECT schedule.ref, revision.ref, revision.revision,
        COALESCE(run.presentation_metadata->>'activitySummary', ''), run.task, run.state, run.source,
        run.result_summary, run.safe_error_code, run.safe_error_message, subject.display_name,
        run.target_type, run.target_ref, COALESCE(agent.name, workflow.name, assistant.name, run.target_ref),
+       COALESCE(agent.version, workflow.version, assistant.version, 0),
        run.attempt, run.graph_revision, run.event_sequence, run.version, run.input,
        COALESCE(input_attachment_set.ref, ''),
        COALESCE((SELECT array_agg(artifact.ref ORDER BY artifact.created_at)
@@ -24,9 +25,9 @@ JOIN control_plane.runs root ON root.id = run.root_run_id
 LEFT JOIN control_plane.runs parent ON parent.id = run.parent_run_id
 LEFT JOIN control_plane.runs retry ON retry.id = run.retry_of_run_id
 JOIN control_plane.subjects subject ON subject.id = run.initiated_by
-LEFT JOIN control_plane.agents agent ON run.target_type IN ('AGENT', 'SYSTEM_ASSISTANT') AND agent.ref = run.target_ref
-LEFT JOIN control_plane.workflows workflow ON run.target_type = 'WORKFLOW' AND workflow.ref = run.target_ref
-LEFT JOIN control_plane.agents assistant ON run.target_type = 'SYSTEM_ASSISTANT' AND assistant.system_key = 'system-assistant'
+LEFT JOIN control_plane.agents agent ON run.target_type IN ('AGENT', 'SYSTEM_ASSISTANT') AND agent.ref = run.target_ref AND agent.organization_id = run.organization_id
+LEFT JOIN control_plane.workflows workflow ON run.target_type = 'WORKFLOW' AND workflow.ref = run.target_ref AND workflow.organization_id = run.organization_id
+LEFT JOIN control_plane.agents assistant ON run.target_type = 'SYSTEM_ASSISTANT' AND assistant.system_key = 'system-assistant' AND assistant.organization_id = run.organization_id
 LEFT JOIN control_plane.attachment_sets input_attachment_set ON input_attachment_set.id = run.input_attachment_set_id
 WHERE schedule.organization_id = @organization_id::uuid
   AND schedule.ref = @schedule_ref

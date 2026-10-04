@@ -1,3 +1,4 @@
+-- name: role_image_configuration_owner :one
 SELECT recipe.ref,recipe.scope_kind,organization.ref,COALESCE(project.ref,'')
 FROM control_plane.managed_configuration_sets configuration
 JOIN control_plane.managed_role_image_recipes mapping ON mapping.organization_id=configuration.organization_id

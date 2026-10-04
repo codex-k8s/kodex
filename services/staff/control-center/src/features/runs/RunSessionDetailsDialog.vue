@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
 import { indexRunSessionOwnership } from "@/features/runs/run-session-graph";
+import { runNodePresentationKey } from "@/features/runs/run-owner";
 import type {
   Agent,
   Artifact,
@@ -26,11 +27,17 @@ const props = withDefaults(
     events: PresentedRunEvent[];
     artifacts: Artifact[];
     agent?: Agent;
+    executionLabel?: "ASSISTANT" | "EMPLOYEE" | "SESSION";
   }>(),
   { rootRun: undefined, agent: undefined },
 );
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
-const { locale } = useI18n();
+const { locale, t } = useI18n();
+const roleLabel = computed(() =>
+  props.executionLabel === "ASSISTANT" || props.executionLabel === "SESSION"
+    ? t(runNodePresentationKey(props.executionLabel, props.node.type))
+    : props.node.role || t(`runs.nodeTypes.${props.node.type}`),
+);
 const revisionDiffOpen = ref(false);
 
 const parentNode = computed(() =>
@@ -118,7 +125,7 @@ function eventKind(
           <small>{{
             $t(sessionNode ? "runs.sessionNode" : "runs.controlNode")
           }}</small>
-          <strong>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</strong>
+          <strong>{{ roleLabel }}</strong>
           <p>
             {{
               node.progressSummary ||
@@ -153,7 +160,7 @@ function eventKind(
               </div>
               <div>
                 <dt>{{ $t("agents.role") }}</dt>
-                <dd>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</dd>
+                <dd>{{ roleLabel }}</dd>
               </div>
               <div v-if="parentNode">
                 <dt>{{ $t("common.source") }}</dt>

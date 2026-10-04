@@ -20,7 +20,7 @@ import (
 
 var errProxyHeaderTooLarge = errors.New("runtime proxy request header is too large")
 
-func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target connect.Target, access runtimecontract.RuntimeWebAccess, limits policy.Limits) {
+func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target connect.Target, access runtimecontract.RuntimeProxyAccess, limits policy.Limits) {
 	if reader.Buffered() != 0 || server.interceptCA == nil {
 		server.metrics.Connection("rejected", "proxy", "malformed")
 		return
@@ -49,8 +49,6 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		server.metrics.Connection("rejected", "proxy", "not_ready")
 		return
 	}
-	transport := server.proxyTransport(target, limits)
-	defer transport.CloseIdleConnections()
 	if server.draining.Load() || connection.SetReadDeadline(time.Now().Add(duration(limits.IdleTimeoutMilliseconds))) != nil {
 		return
 	}
@@ -68,11 +66,31 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		server.metrics.Connection("rejected", "proxy", "policy")
 		return
 	}
-	response, roundTripErr := transport.RoundTrip(upstreamRequest(request, target))
+	upstream := upstreamRequest(request, target)
+	websocket := hasWebSocketUpgrade(request.Header)
+	transport := server.proxyTransport(target, limits)
+	// RFC 6455 Upgrade требует HTTP/1.1, а не HTTP/2 extended CONNECT.
+	transport.ForceAttemptHTTP2 = !websocket
+	defer transport.CloseIdleConnections()
+	if websocket {
+		upstream.Header.Set("Connection", "Upgrade")
+		upstream.Header.Set("Upgrade", "websocket")
+	}
+	response, roundTripErr := transport.RoundTrip(upstream)
 	if roundTripErr != nil {
 		_ = request.Body.Close()
 		writeProxyError(connection, http.StatusBadGateway, limits)
 		server.metrics.Connection("failed", "proxy", "upstream")
+		return
+	}
+	if response.StatusCode == http.StatusSwitchingProtocols {
+		if !websocket || !validWebSocketResponse(response, request) {
+			_ = response.Body.Close()
+			writeProxyError(connection, http.StatusBadGateway, limits)
+			server.metrics.Connection("rejected", "proxy", "policy")
+			return
+		}
+		server.forwardWebSocket(connection, requests, response, limits)
 		return
 	}
 	stripHopByHop(response.Header)
@@ -122,7 +140,7 @@ func (reader *boundedProxyHeaderReader) Read(buffer []byte) (int, error) {
 	return read, err
 }
 
-func proxyRequestAllowed(request *http.Request, target connect.Target, access runtimecontract.RuntimeWebAccess) bool {
+func proxyRequestAllowed(request *http.Request, target connect.Target, access runtimecontract.RuntimeProxyAccess) bool {
 	if request == nil || request.Method == http.MethodConnect || request.URL == nil || request.URL.IsAbs() || request.RequestURI == "" {
 		return false
 	}
@@ -137,7 +155,14 @@ func proxyRequestAllowed(request *http.Request, target connect.Target, access ru
 		host = parsedHost
 	}
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	return host == target.Hostname && runtimecontract.RuntimeWebAccessAllowsRequest(access, host, request.Method)
+	if host != target.Hostname || request.URL.RawPath != "" {
+		return false
+	}
+	if hasWebSocketUpgrade(request.Header) {
+		return access.ProviderAccess && runtimecontract.RuntimeProviderAllowsWebSocket(host, request.URL.Path, request.Method) && validWebSocketRequest(request)
+	}
+	return access.ProviderAccess && runtimecontract.RuntimeProviderAllowsRequest(host, request.URL.Path, request.Method) ||
+		runtimecontract.RuntimeWebAccessAllowsRequest(access.WebAccess, host, request.Method)
 }
 
 func upstreamRequest(request *http.Request, target connect.Target) *http.Request {

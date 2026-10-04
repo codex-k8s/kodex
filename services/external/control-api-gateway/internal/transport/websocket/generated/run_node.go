@@ -15,7 +15,7 @@ type RunNode struct {
 	Attempt          int          `json:"attempt"`
 	InputSummary     *string      `json:"inputSummary,omitempty"`
 	ProgressSummary  *string      `json:"progressSummary,omitempty"`
-	IntegrationNames []string     `json:"integrationNames,omitempty"`
+	IntegrationNames []string     `json:"integrationNames,omitzero"`
 	ArtifactRefs     []string     `json:"artifactRefs"`
 	ChildRunRefs     []string     `json:"childRunRefs"`
 	CallbackSummary  *string      `json:"callbackSummary,omitempty"`

@@ -138,8 +138,8 @@ func (stub authenticatedPolicyStub) Allows(string, int) bool { return false }
 func (stub authenticatedPolicyStub) Limits() internalpolicy.Limits {
 	return fakePolicy{}.Limits()
 }
-func (stub authenticatedPolicyStub) AuthorizeAuthenticated(host string, port int, credential string) (runtimecontract.RuntimeWebAccess, bool) {
-	return stub.access, host == "example.com" && port == 443 && credential == "fixture"
+func (stub authenticatedPolicyStub) AuthorizeAuthenticated(host string, port int, credential string) (runtimecontract.RuntimeProxyAccess, bool) {
+	return runtimecontract.RuntimeProxyAccess{WebAccess: stub.access}, host == "example.com" && port == 443 && credential == "fixture"
 }
 
 type securedReader struct {

@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"syscall"
 
@@ -98,7 +97,7 @@ type historyConfig struct {
 type shellEnvironmentPolicy struct {
 	Inherit               string            `toml:"inherit"`
 	IgnoreDefaultExcludes bool              `toml:"ignore_default_excludes"`
-	IncludeOnly           []string          `toml:"include_only"`
+	Filters               map[string]string `toml:"filters"`
 	Set                   map[string]string `toml:"set"`
 }
 
@@ -152,18 +151,29 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	}
 	environmentSet := map[string]string{"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp"}
 	environmentNames := map[string]struct{}{"PATH": {}, "HOME": {}}
+	if _, err := runtimeTransportEnvironment(); err != nil {
+		return err
+	}
+	for _, name := range runtimeTransportEnvironmentNames {
+		environmentNames[name] = struct{}{}
+	}
 	for _, item := range input.EnvironmentValues {
+		if !runtimecontract.ValidRuntimeEnvironmentName(item.Name) {
+			return errors.New("runtime environment variable is reserved")
+		}
 		environmentSet[item.Name] = item.Value
 		environmentNames[item.Name] = struct{}{}
 	}
 	for _, item := range input.SecretProjections {
+		if !runtimecontract.ValidRuntimeEnvironmentName(item.Name) {
+			return errors.New("runtime environment variable is reserved")
+		}
 		environmentNames[item.Name] = struct{}{}
 	}
-	includeOnly := make([]string, 0, len(environmentNames))
+	filters := make(map[string]string, len(environmentNames))
 	for name := range environmentNames {
-		includeOnly = append(includeOnly, name)
+		filters[name] = "include"
 	}
-	slices.Sort(includeOnly)
 	config := runtimeConfig{Model: input.Model, ModelReasoningEffort: input.EffectiveReasoningEffort,
 		Personality: overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
@@ -178,7 +188,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 				"/proc":        "deny",
 			}, Network: codexNetworkPolicy(input.EnvironmentPolicy.Network.WebAccess)}},
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "all", IgnoreDefaultExcludes: true,
-			IncludeOnly: includeOnly, Set: environmentSet},
+			Filters: filters, Set: environmentSet},
 		MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
 			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN", DefaultToolsApprovalMode: "approve",
 			Required: true, StartupTimeoutSeconds: 15,
@@ -194,13 +204,25 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		decoded.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
 		!metadata.IsDefined("features", "code_mode_host") || decoded.Features.CodeModeHost ||
-		!slices.Equal(decoded.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) ||
+		len(decoded.Features.CodeMode.DirectOnlyToolNamespaces) != 1 || decoded.Features.CodeMode.DirectOnlyToolNamespaces[0] != "mcp__kodex" ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
-		decoded.ShellEnvironmentPolicy.Inherit != "all" || !slices.Equal(decoded.ShellEnvironmentPolicy.IncludeOnly, includeOnly) ||
+		decoded.ShellEnvironmentPolicy.Inherit != "all" || !sameEnvironmentFilters(decoded.ShellEnvironmentPolicy.Filters, filters) ||
 		decoded.Permissions[permissionProfileName].Filesystem[filepath.Join(input.CodexHome, "auth.json")] != "deny" {
 		return errors.New("validate Codex configuration")
 	}
 	return replacePrivateFile(filepath.Join(input.CodexHome, "config.toml"), raw.Bytes())
+}
+
+func sameEnvironmentFilters(actual, expected map[string]string) bool {
+	if len(actual) != len(expected) {
+		return false
+	}
+	for name, value := range expected {
+		if actual[name] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func codexNetworkPolicy(access runtimecontract.RuntimeWebAccess) *networkPolicy {

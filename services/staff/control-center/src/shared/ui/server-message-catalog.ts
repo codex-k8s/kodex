@@ -718,6 +718,10 @@ export const serverTokenTranslations = {
     "Сборка образа роли завершена",
     "Role image build completed",
   ],
+  ROLE_IMAGE_BUILD_LEASE_EXPIRED: [
+    "Срок работы сборщика истёк; сборка завершена с ошибкой",
+    "Build worker lease expired; build failed",
+  ],
   ROLE_IMAGE_PROMOTED: [
     "Образ роли допущен к использованию",
     "Role image promoted",

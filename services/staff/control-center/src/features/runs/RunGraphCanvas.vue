@@ -28,6 +28,7 @@ import "@vue-flow/minimap/dist/style.css";
 
 import RunGraphEdge from "@/features/runs/RunGraphEdge.vue";
 import RunGraphNode from "@/features/runs/RunGraphNode.vue";
+import { runNodePresentationKey } from "@/features/runs/run-owner";
 import {
   createRunGraphFlowElements,
   runGraphFitViewOptions,
@@ -52,12 +53,14 @@ const props = withDefaults(
     selectedRef?: string;
     futureNodeRefs?: string[];
     activeNodeRefs?: string[];
+    executionLabels?: Record<string, "ASSISTANT" | "EMPLOYEE" | "SESSION">;
     compact?: boolean;
   }>(),
   {
     selectedRef: undefined,
     futureNodeRefs: () => [],
     activeNodeRefs: () => [],
+    executionLabels: () => ({}),
     compact: false,
   },
 );
@@ -114,6 +117,7 @@ const flowElements = computed(() =>
     selectedRef: props.selectedRef,
     futureRefs: futureRefs.value,
     activeRefs: activeRefs.value,
+    executionLabels: props.executionLabels,
     nodeAccessibleLabel,
     edgeAccessibleLabel,
   }),
@@ -366,12 +370,28 @@ function nodeAccessibleLabel(node: RunNode, retryAttempt?: number): string {
   return [
     retryAttempt
       ? t("runs.graphRunAttempt", { attempt: retryAttempt })
-      : t(`runs.nodeTypes.${node.type}`),
+      : nodeKindLabel(node),
     node.displayName,
-    node.role,
+    nodeRoleLabel(node),
     t(`states.${node.state}`),
   ].join(" · ");
 }
+function nodeKindLabel(node: RunNode): string {
+  return t(runNodePresentationKey(props.executionLabels[node.ref], node.type));
+}
+function nodeRoleLabel(node: RunNode): string {
+  const label = props.executionLabels[node.ref];
+  return label === "ASSISTANT" || label === "SESSION"
+    ? nodeKindLabel(node)
+    : node.role || nodeKindLabel(node);
+}
+const agentLegendLabels = computed(() => [
+  ...new Set(
+    props.nodes
+      .filter((node) => node.type === "AGENT_EXECUTION")
+      .map(nodeKindLabel),
+  ),
+]);
 
 function moveOutlineFocus(event: KeyboardEvent): void {
   if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -590,9 +610,11 @@ function compareNodes(left: RunNode, right: RunNode): number {
                 ? $t("runs.graphRunAttempt", {
                     attempt: retryAttempts.get(item.node.ref),
                   })
-                : $t("runs.nodeTypes." + item.node.type)
+                : nodeKindLabel(item.node)
             }}
-            <template v-if="item.node.role"> · {{ item.node.role }}</template>
+            <template v-if="item.node.role">
+              · {{ nodeRoleLabel(item.node) }}</template
+            >
           </small>
           <small v-if="item.node.progressSummary || item.node.inputSummary">
             {{ item.node.progressSummary || item.node.inputSummary }}
@@ -641,11 +663,12 @@ function compareNodes(left: RunNode, right: RunNode): number {
           {{ $t("runs.nodeTypes.ROOT_PROCESS") }}
         </span>
         <span
-          v-if="nodes.some((node) => node.type === 'AGENT_EXECUTION')"
+          v-for="label in agentLegendLabels"
+          :key="label"
           class="graph-legend__item"
         >
           <Bot :size="14" aria-hidden="true" />
-          {{ $t("runs.nodeTypes.AGENT_EXECUTION") }}
+          {{ label }}
         </span>
         <StatusBadge
           v-for="state in legendStates"

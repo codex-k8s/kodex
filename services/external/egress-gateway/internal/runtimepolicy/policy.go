@@ -24,18 +24,17 @@ func New(base *policy.Active, key []byte) (*Active, error) {
 
 func (active *Active) Allows(string, int) bool { return false }
 
-func (active *Active) AuthorizeAuthenticated(hostname string, port int, credential string) (runtimecontract.RuntimeWebAccess, bool) {
+func (active *Active) AuthorizeAuthenticated(hostname string, port int, credential string) (runtimecontract.RuntimeProxyAccess, bool) {
 	if port != 443 {
-		return runtimecontract.RuntimeWebAccess{}, false
+		return runtimecontract.RuntimeProxyAccess{}, false
 	}
 	claims, err := runtimecontract.VerifyRuntimeWebAccessGrant(active.key, credential)
 	if err != nil || claims.WorkloadRef == "" || claims.NetworkDigest == strings.Repeat("0", 64) {
-		return runtimecontract.RuntimeWebAccess{}, false
+		return runtimecontract.RuntimeProxyAccess{}, false
 	}
-	if active.base.Allows(hostname, port) {
-		return claims.WebAccess, true
-	}
-	return claims.WebAccess, runtimecontract.RuntimeWebAccessAllowsHost(claims.WebAccess, hostname)
+	access := runtimecontract.RuntimeProxyAccess{WebAccess: claims.WebAccess,
+		ProviderAccess: runtimecontract.RuntimeProviderAllowsHost(hostname) && active.base.Allows(hostname, port)}
+	return access, access.ProviderAccess || runtimecontract.RuntimeWebAccessAllowsHost(claims.WebAccess, hostname)
 }
 
 func (active *Active) Limits() policy.Limits { return active.base.Limits() }

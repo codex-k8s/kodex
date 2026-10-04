@@ -1945,6 +1945,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		corev1.VolumeMount{Name: "runtime-egress-trust", MountPath: "/var/run/config/kodex/runtime/egress-trust"},
 		corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"},
 	)
+	environmentMounts := make([]corev1.VolumeMount, 0, len(input.EnvironmentPolicy.Volumes))
 	for _, item := range input.EnvironmentPolicy.Volumes {
 		volumeName := "environment-" + shortHash(item.Name)
 		source := &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(*resource.NewQuantity(item.SizeMiB<<20, resource.BinarySI))}
@@ -1952,8 +1953,9 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			source.Medium = corev1.StorageMediumMemory
 		}
 		volumes = append(volumes, corev1.Volume{Name: volumeName, VolumeSource: corev1.VolumeSource{EmptyDir: source}})
-		roleMounts = append(roleMounts, corev1.VolumeMount{Name: volumeName, MountPath: item.MountPath})
+		environmentMounts = append(environmentMounts, corev1.VolumeMount{Name: volumeName, MountPath: item.MountPath})
 	}
+	roleMounts = append(roleMounts, environmentMounts...)
 	serviceAccountName := manager.config.RunnerServiceAccount
 	if mode == "turn" {
 		serviceAccountName = input.EffectiveKubernetesAccess.ServiceAccountName
@@ -1966,7 +1968,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			{Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment},
 		},
 		Ports: []corev1.ContainerPort{{Name: "runtime-health", ContainerPort: 9090}}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: roleMounts,
-		Resources:    resources,
+		Resources:    smallResources(),
 		StartupProbe: httpProbe("/readyz", "runtime-health", 2, 60), ReadinessProbe: httpProbe("/readyz", "runtime-health", 5, 3), LivenessProbe: httpProbe("/healthz", "runtime-health", 10, 3)}
 	provider := corev1.Container{Name: "provider-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
@@ -1986,7 +1988,8 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			{Name: "provider-tmp", MountPath: "/tmp"},
 			{Name: "runtime-egress-trust", MountPath: "/var/run/config/kodex/runtime/egress-trust", ReadOnly: true},
 		}...),
-		Resources: smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
+		Resources: resources, ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
+	provider.VolumeMounts = append(provider.VolumeMounts, environmentMounts...)
 	relay := corev1.Container{Name: "provider-credential-relay", Image: manager.config.DefaultRoleImageReference, ImagePullPolicy: corev1.PullIfNotPresent,
 		Args: []string{"runtime-provider-credential-relay"},
 		Env: []corev1.EnvVar{

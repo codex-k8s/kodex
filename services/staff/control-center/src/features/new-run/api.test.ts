@@ -44,7 +44,9 @@ function artifact(overrides: Partial<Artifact> = {}): Artifact {
   };
 }
 
-function run(overrides: Partial<Run> = {}): Run {
+function run(
+  overrides: Partial<Omit<Run, "source" | "target" | "assistantPin">> = {},
+): Run {
   return {
     ref: "run_1",
     version: 1,

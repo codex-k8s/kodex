@@ -138,8 +138,8 @@ func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEn
 	webRules := make([]runtimecontract.RuntimeWebAccessRule, 0, len(webRulesRaw))
 	for _, rawRule := range webRulesRaw {
 		rule, valid := rawRule.(map[string]any)
-		if !valid || !onlyAssistantFields(rule, "domainPattern", "protocol", "port") ||
-			!hasAssistantFields(rule, "domainPattern", "protocol", "port") {
+		if !valid || !onlyAssistantFields(rule, "domainPattern", "protocol", "port", "httpMethods") ||
+			!hasAssistantFields(rule, "domainPattern", "protocol", "port", "httpMethods") {
 			return runtimecontract.RuntimeEnvironmentPolicy{}, false
 		}
 		domain, domainOK := rule["domainPattern"].(string)
@@ -148,8 +148,20 @@ func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEn
 		if !domainOK || !protocolOK || !portOK || port < 1 || port > 65535 {
 			return runtimecontract.RuntimeEnvironmentPolicy{}, false
 		}
+		methodsRaw, methodsOK := rule["httpMethods"].([]any)
+		if !methodsOK || len(methodsRaw) == 0 || len(methodsRaw) > 7 {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		methods := make([]string, 0, len(methodsRaw))
+		for _, rawMethod := range methodsRaw {
+			method, valid := rawMethod.(string)
+			if !valid || !contains([]string{"DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"}, method) {
+				return runtimecontract.RuntimeEnvironmentPolicy{}, false
+			}
+			methods = append(methods, method)
+		}
 		webRules = append(webRules, runtimecontract.RuntimeWebAccessRule{
-			DomainPattern: domain, Protocol: protocol, Port: int32(port),
+			DomainPattern: domain, Protocol: protocol, Port: int32(port), HTTPMethods: methods,
 		})
 	}
 	policy, err := runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{

@@ -707,6 +707,17 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 			LocalizeSafeErrors(item, localize)
 		}
 	case map[string]any:
+		// AssistantRunPin содержит literal identity, а не enum-подобные
+		// пользовательские строки. Нормализуется только его closed scope.
+		_, pinConversation := current["conversationRef"]
+		_, pinAssistant := current["assistantRef"]
+		_, pinOrganization := current["organizationRef"]
+		if pinConversation && pinAssistant && pinOrganization {
+			if text, ok := current["scope"].(string); ok {
+				current["scope"] = normalizeEnum(text)
+			}
+			return
+		}
 		for key, item := range current {
 			if key == "integrationIntent" {
 				continue
@@ -814,6 +825,7 @@ func normalize(value any) {
 			}
 			delete(current, "agentRef")
 			delete(current, "workflowRef")
+			delete(current, "systemAssistantRef")
 		}
 		if _, isWorkflow := current["publishedVersion"]; isWorkflow {
 			flattenWorkflow(current)
@@ -955,18 +967,25 @@ func requiredCollectionKeys(value map[string]any) []string {
 }
 
 func target(value map[string]any) (string, any, bool) {
-	// RunTarget является закрытым oneof с двумя собственными scalar-полями.
+	// RunTarget является закрытым oneof с тремя собственными scalar-полями.
 	// RunNode, WorkflowStep и grant тоже имеют agentRef, поэтому неизвестный
 	// ключ закрыто исключает такую map из target-нормализации.
 	for key := range value {
 		switch key {
-		case "agentRef", "workflowRef", "displayName", "targetVersion":
+		case "agentRef", "workflowRef", "systemAssistantRef", "displayName", "targetVersion":
 		default:
 			return "", nil, false
 		}
 	}
 	agentRef, hasAgent := value["agentRef"]
 	workflowRef, hasWorkflow := value["workflowRef"]
+	systemRef, hasSystem := value["systemAssistantRef"]
+	if hasSystem {
+		if hasAgent || hasWorkflow {
+			return "", nil, false
+		}
+		return "SYSTEM_ASSISTANT", systemRef, true
+	}
 	if hasAgent == hasWorkflow {
 		return "", nil, false
 	}

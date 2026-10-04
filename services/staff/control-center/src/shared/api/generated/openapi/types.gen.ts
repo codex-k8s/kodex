@@ -2632,7 +2632,7 @@ export type WorkflowPage = {
 };
 
 export type RunTarget = {
-    type: 'AGENT' | 'WORKFLOW';
+    type: 'AGENT' | 'WORKFLOW' | 'SYSTEM_ASSISTANT';
     ref: OpaqueRef;
     displayName: string;
     version: number;
@@ -2648,10 +2648,20 @@ export type TokenUsage = {
     modelContextWindow: number;
 };
 
-export type Run = {
+export type Run = ({
+    target?: {
+        type?: 'AGENT' | 'WORKFLOW';
+    };
+} | {
+    source?: 'SYSTEM_ASSISTANT';
+    target?: {
+        type?: 'SYSTEM_ASSISTANT';
+    };
+}) & {
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    projectRef?: OpaqueRef;
+    assistantPin?: AssistantRunPin;
     sessionRef: OpaqueRef;
     rootRunRef: OpaqueRef;
     parentRunRef?: OpaqueRef;
@@ -2680,6 +2690,19 @@ export type Run = {
     finishedAt?: Timestamp;
     nextActions: Array<NextAction>;
     incidents?: Array<Incident>;
+};
+
+export type AssistantRunPin = ({
+    scope?: 'SYSTEM';
+} | {
+    scope?: 'PROJECT';
+}) & {
+    scope: 'SYSTEM' | 'PROJECT';
+    organizationRef: OpaqueRef;
+    conversationRef: OpaqueRef;
+    assistantRef: OpaqueRef;
+    projectRef?: OpaqueRef;
+    profileRef?: OpaqueRef;
 };
 
 export type RunNode = {

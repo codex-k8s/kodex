@@ -8,6 +8,7 @@ import {
 import { requestSignal } from "@/shared/api/client";
 import {
   assertRuntimeResourceIdentity,
+  requireRuntimeOrganizationRef,
   organizationRuntimeResourceScope,
   type RuntimeScopedResourceIdentity,
 } from "@/features/runtime/resource-scope";
@@ -157,6 +158,7 @@ import {
 } from "@/shared/api/problem";
 import { readWithRetry } from "@/shared/api/read-retry";
 import {
+  assertOwnerRequest,
   ownerRequestSignal,
   resetOwnerRequests,
 } from "@/shared/api/owner-lifetime";
@@ -167,6 +169,11 @@ import {
 } from "@/features/platform/run-reducer";
 import { instructionCommandInput } from "@/features/platform/instruction-command";
 import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
+import {
+  assertAssistantRetryIdentity,
+  assertRunOwner,
+  sameAssistantRunPin,
+} from "@/features/runs/run-owner";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 export interface RealtimeCatalogSnapshot {
@@ -385,6 +392,8 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   function reconcileRuns(values: Run[]): void {
+    for (const value of values)
+      assertRunOwner(value, bootstrap.value?.organizationRef);
     // loadRuns читает только короткую сводную страницу. Отсутствие Run в ней
     // не является авторитетным доказательством удаления: подробная страница и
     // realtime могут держать более старый или не попавший в первые строки Run.
@@ -450,6 +459,8 @@ export const usePlatformStore = defineStore("platform", () => {
           )
         ).data,
       (value) => {
+        for (const run of value.activeRuns)
+          assertRunOwner(run, bootstrap.value?.organizationRef);
         overview.value = value;
         upsert(runs, value.activeRuns);
         upsert(gates, value.pendingGates);
@@ -799,12 +810,34 @@ export const usePlatformStore = defineStore("platform", () => {
     loading.run = true;
     Reflect.deleteProperty(problems, "run");
     try {
+      const ownerSignal = ownerRequestSignal();
+      const organizationRef = requireRuntimeOrganizationRef(
+        bootstrap.value?.organizationRef,
+      );
       const graphReadback = await unwrap(
         getRunGraph({ path: { runRef: ref }, signal: requestSignal() }),
       );
       const workspace = graphReadback.data;
+      assertOwnerRequest(ownerSignal);
+      if (
+        requireRuntimeOrganizationRef(bootstrap.value?.organizationRef) !==
+        organizationRef
+      )
+        throw new Error("Run request organization changed");
+      assertRunOwner(workspace.run, organizationRef);
+      if (
+        workspace.run.ref !== ref ||
+        workspace.graph.runRef !== workspace.run.rootRunRef
+      )
+        throw new Error("Run workspace identity mismatch");
       const history = await loadRunEventHistory(ref, workspace.graph.sequence);
       if (generation.get("run") !== current) return;
+      assertOwnerRequest(ownerSignal);
+      if (
+        requireRuntimeOrganizationRef(bootstrap.value?.organizationRef) !==
+        organizationRef
+      )
+        throw new Error("Run request organization changed");
 
       upsert(runs, [workspace.run]);
       graphs[workspace.graph.runRef] = mergeRunGraph(
@@ -997,13 +1030,36 @@ export const usePlatformStore = defineStore("platform", () => {
       : uploadOrganizationArtifactFile(file, signal);
   }
 
-  async function readArtifact(artifactRef: string): Promise<Artifact> {
+  async function readArtifact(
+    artifactRef: string,
+    parentSignal?: AbortSignal,
+    expectedProjectRef?: string,
+  ): Promise<Artifact> {
+    const ownerSignal = ownerRequestSignal();
+    const organizationRef = requireRuntimeOrganizationRef(
+      bootstrap.value?.organizationRef,
+    );
+    const signal = requestSignal(parentSignal);
+    assertOwnerRequest(ownerSignal);
     const result = await unwrap(
       getArtifact({
         path: { artifactRef },
-        signal: requestSignal(),
+        signal,
+        cache: "no-store",
       }),
     );
+    assertOwnerRequest(ownerSignal);
+    signal.throwIfAborted();
+    if (
+      requireRuntimeOrganizationRef(bootstrap.value?.organizationRef) !==
+      organizationRef
+    )
+      throw new Error("Artifact request organization changed");
+    if (
+      result.data.ref !== artifactRef ||
+      (expectedProjectRef && result.data.projectRef !== expectedProjectRef)
+    )
+      throw new Error("Artifact readback identity mismatch");
     upsert(artifacts, [result.data]);
     return result.data;
   }
@@ -1724,6 +1780,11 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function changeRun(run: Run, body: RunCommand): Promise<Run> {
+    const ownerSignal = ownerRequestSignal();
+    const organizationRef = requireRuntimeOrganizationRef(
+      bootstrap.value?.organizationRef,
+    );
+    assertRunOwner(run, organizationRef);
     const result = await mutateWithRetry(
       (headers) =>
         commandRun({
@@ -1734,6 +1795,22 @@ export const usePlatformStore = defineStore("platform", () => {
         }),
       run.version,
     );
+    assertOwnerRequest(ownerSignal);
+    if (
+      requireRuntimeOrganizationRef(bootstrap.value?.organizationRef) !==
+      organizationRef
+    )
+      throw new Error("Run mutation organization changed");
+    assertRunOwner(result.data.run, organizationRef);
+    if (result.data.graph.runRef !== result.data.run.rootRunRef)
+      throw new Error("Run mutation graph identity mismatch");
+    if (body.action === "RETRY")
+      assertAssistantRetryIdentity(run, result.data.run);
+    else if (
+      result.data.run.ref !== run.ref ||
+      !sameAssistantRunPin(run, result.data.run)
+    )
+      throw new Error("Run mutation owner identity mismatch");
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     return result.data.run;
@@ -2047,6 +2124,8 @@ export const usePlatformStore = defineStore("platform", () => {
     if (!("overview" in snapshot)) return;
     const response = snapshotRecord(snapshot.overview, "overview");
     const value = snapshotRecord(response.overview, "overview.overview");
+    for (const run of (value as Overview).activeRuns)
+      assertRunOwner(run, bootstrap.value?.organizationRef);
     overview.value = value as Overview;
     upsert(runs, overview.value.activeRuns);
     upsert(gates, overview.value.pendingGates);

@@ -111,6 +111,7 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+import { runPath } from "@/shared/routes";
 
 const props = withDefaults(
   defineProps<{
@@ -885,6 +886,15 @@ async function openProjectAssistantEditor(tab = "instructions"): Promise<void> {
     params: { projectRef: profile.projectRef, agentRef: profile.agentRef },
     query: { tab },
   });
+}
+
+async function openAssistantTurnRun(runRef: string): Promise<void> {
+  const conversation = store.selectedConversation;
+  if (!conversation?.turns.some((turn) => turn.runRef === runRef)) return;
+  const target = runPath(runRef, conversation.projectRef);
+  await close();
+  if (open.value) return;
+  await router.push(target);
 }
 
 async function saveAssistantInstructions(): Promise<void> {
@@ -1899,6 +1909,19 @@ onBeforeUnmount(() => {
                         : "Kodex"
                   }}</strong>
                   <StatusBadge :state="turn.state" />
+                  <RouterLink
+                    v-if="turn.runRef"
+                    class="button assistant-message__run-link"
+                    :to="
+                      runPath(
+                        turn.runRef,
+                        store.selectedConversation?.projectRef,
+                      )
+                    "
+                    @click.prevent="openAssistantTurnRun(turn.runRef)"
+                  >
+                    {{ $t("assistant.launchedRun.open") }}
+                  </RouterLink>
                 </header>
                 <SafeMarkdown :content="turn.content" />
                 <section v-if="turn.plan" class="assistant-plan-card">
@@ -3143,6 +3166,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.assistant-message > header {
+  flex-wrap: wrap;
+}
+.assistant-message__run-link {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .assistant-plan-card {
   display: grid;

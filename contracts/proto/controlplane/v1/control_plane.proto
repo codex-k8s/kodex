@@ -996,6 +996,8 @@ message RunTarget {
   oneof target {
     string agent_ref = 1;
     string workflow_ref = 2;
+    // Отдельная identity assistant turn, не маскируется обычным AGENT.
+    string system_assistant_ref = 5;
   }
   string display_name = 3;
   int64 target_version = 4;
@@ -1012,6 +1014,23 @@ message TokenUsage {
   int64 output_tokens = 5;
   int64 reasoning_output_tokens = 6;
   int64 model_context_window = 7;
+}
+
+// AssistantRunPin — серверная read-only привязка хода к точному диалогу и
+// помощнику. Не является grant и не принимается mutation-командами.
+message AssistantRunPin {
+  // SYSTEM либо PROJECT из persisted conversation, unknown/none отклоняются.
+  AssistantScope scope = 1;
+  // Организация выводится из owner boundary запуска, не из клиентского payload.
+  string organization_ref = 2;
+  // Диалог разрешается по exact organization/session/assistant identity.
+  string conversation_ref = 3;
+  // Точный agent должен совпадать с Run.target.ref и session target.
+  string assistant_ref = 4;
+  // Проект — exact context проекта Run, отсутствует у системного хода без проекта.
+  string project_ref = 5;
+  // PROJECT требует exact profile того же project/agent; SYSTEM запрещает поле.
+  string profile_ref = 6;
 }
 
 message Run {
@@ -1055,6 +1074,9 @@ message Run {
   string title_source = 30;
   string activity_summary = 31;
   string input_attachment_set_ref = 32;
+  // Только SYSTEM_ASSISTANT target с SYSTEM_ASSISTANT source; server-owned
+  // conversation pin различает системную и проектную конфигурации помощника.
+  AssistantRunPin assistant_pin = 33;
 }
 
 message RunNode {

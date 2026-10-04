@@ -591,29 +591,29 @@ spec:
           'RuntimeDefault'
       message: managed role Pod container securityContext is invalid
     - expression: >-
-        size(variables.roleContainers[0].resources.requests) == 3 &&
-        size(variables.roleContainers[0].resources.limits) == 3 &&
-        quantity(string(variables.roleContainers[0].resources.requests.cpu)).compareTo(quantity('100m')) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests.cpu)).compareTo(quantity('8')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits.cpu)).compareTo(
-          quantity(string(variables.roleContainers[0].resources.requests.cpu))) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits.cpu)).compareTo(quantity('16')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests.memory)).compareTo(quantity('128Mi')) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests.memory)).compareTo(quantity('32Gi')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits.memory)).compareTo(
-          quantity(string(variables.roleContainers[0].resources.requests.memory))) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits.memory)).compareTo(quantity('64Gi')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage'])).compareTo(
+        size(variables.providerContainers[0].resources.requests) == 3 &&
+        size(variables.providerContainers[0].resources.limits) == 3 &&
+        quantity(string(variables.providerContainers[0].resources.requests.cpu)).compareTo(quantity('100m')) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.requests.cpu)).compareTo(quantity('8')) <= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits.cpu)).compareTo(
+          quantity(string(variables.providerContainers[0].resources.requests.cpu))) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits.cpu)).compareTo(quantity('16')) <= 0 &&
+        quantity(string(variables.providerContainers[0].resources.requests.memory)).compareTo(quantity('128Mi')) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.requests.memory)).compareTo(quantity('32Gi')) <= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits.memory)).compareTo(
+          quantity(string(variables.providerContainers[0].resources.requests.memory))) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits.memory)).compareTo(quantity('64Gi')) <= 0 &&
+        quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage'])).compareTo(
           quantity('256Mi')) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage'])).compareTo(
+        quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage'])).compareTo(
           quantity('20Gi')) <= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits['ephemeral-storage'])).compareTo(
-          quantity(string(variables.roleContainers[0].resources.requests['ephemeral-storage']))) >= 0 &&
-        quantity(string(variables.roleContainers[0].resources.limits['ephemeral-storage'])).compareTo(
+        quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage'])).compareTo(
+          quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage']))) >= 0 &&
+        quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage'])).compareTo(
           quantity('100Gi')) <= 0
       message: managed role Pod resources are outside the approved policy
     - expression: >-
-        [variables.providerContainers[0], variables.relayContainers[0],
+        [variables.roleContainers[0], variables.relayContainers[0],
           object.spec.initContainers[1]].all(container,
           size(container.resources.requests) == 2 &&
           size(container.resources.limits) == 2 &&
@@ -771,7 +771,9 @@ spec:
            !['KODEX_', 'CODEX_', 'OPENAI_', 'OTEL_', 'AWS_', 'AZURE_',
              'GOOGLE_', 'KUBERNETES_'].exists(prefix, item.name.startsWith(prefix)) &&
            !(item.name in ['PATH', 'PWD', 'SHELL', 'USER', 'LOGNAME',
-             'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR']) &&
+             'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'ALL_PROXY',
+             'NODE_TLS_REJECT_UNAUTHORIZED', 'GIT_SSL_NO_VERIFY',
+             'PYTHONHTTPSVERIFY', 'CURL_SSL_BACKEND']) &&
            ((has(item.valueFrom) && has(item.valueFrom.secretKeyRef)) ||
             (!has(item.valueFrom) && size(item.value) <= 8192))))
       message: provider runtime contains an unsupported environment variable
@@ -891,6 +893,25 @@ spec:
     - expression: >-
         variables.allContainers.all(container,
           !has(container.volumeMounts) || container.volumeMounts.all(mount,
+            !mount.name.matches('^environment-[a-f0-9]{16}$') ||
+            (container.name in ['role-runtime', 'provider-runtime'] &&
+             !has(mount.subPath) && !has(mount.subPathExpr) &&
+             !has(mount.mountPropagation) &&
+             (!has(mount.readOnly) || mount.readOnly == false)))) &&
+        object.spec.volumes.filter(volume,
+          volume.name.matches('^environment-[a-f0-9]{16}$')).all(volume,
+          size(variables.roleContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)) == 1 &&
+          size(variables.providerContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)) == 1 &&
+          variables.roleContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)[0].mountPath ==
+          variables.providerContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)[0].mountPath)
+      message: runtime environment volumes must have exact shared driver and executor mounts
+    - expression: >-
+        variables.allContainers.all(container,
+          !has(container.volumeMounts) || container.volumeMounts.all(mount,
             !mount.mountPath.startsWith('/workspace/context/') &&
             (mount.mountPath != '/workspace/context' || mount.name == 'runtime-context') &&
             (mount.name != 'runtime-context' ||
@@ -901,7 +922,8 @@ spec:
         variables.providerContainers[0].volumeMounts.all(mount,
           mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'provider-auth', 'provider-socket',
-            'provider-credential-relay', 'provider-tmp', 'runtime-egress-trust']) &&
+            'provider-credential-relay', 'provider-tmp', 'runtime-egress-trust'] ||
+          mount.name.matches('^environment-[a-f0-9]{16}$')) &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'workspace' && mount.mountPath == '/workspace' &&
           (!has(mount.readOnly) || mount.readOnly == false))) == 1 &&

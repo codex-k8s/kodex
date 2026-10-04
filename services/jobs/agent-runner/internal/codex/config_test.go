@@ -39,6 +39,7 @@ func TestProviderSandboxProbeUsesBoundedBubblewrapBoundary(t *testing.T) {
 }
 
 func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
+	setRuntimeTransportFixture(t)
 	workspace := t.TempDir()
 	home := filepath.Join(workspace, ".kodex", "state", "codex-home")
 	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
@@ -84,6 +85,7 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 }
 
 func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
+	setRuntimeTransportFixture(t)
 	for sandbox, expected := range map[string]string{"read-only": ":read-only", "workspace-write": ":workspace"} {
 		t.Run(sandbox, func(t *testing.T) {
 			workspace := t.TempDir()
@@ -119,6 +121,8 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 }
 
 func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
+	setRuntimeTransportFixture(t)
+	t.Setenv("CRM_TOKEN", "synthetic-secret-must-not-persist")
 	workspace := t.TempDir()
 	home := filepath.Join(workspace, ".kodex", "state", "codex-home")
 	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
@@ -148,9 +152,20 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	if config.ModelReasoningEffort != "high" || config.History.Persistence != "none" ||
 		config.ShellEnvironmentPolicy.Set["APP_MODE"] != "review" ||
 		config.ShellEnvironmentPolicy.Set["CRM_TOKEN"] != "" ||
-		!slices.Equal(config.ShellEnvironmentPolicy.IncludeOnly, []string{"APP_MODE", "CRM_TOKEN", "HOME", "PATH"}) ||
-		slices.Contains(config.ShellEnvironmentPolicy.IncludeOnly, "KODEX_MCP_PROXY_TOKEN") {
+		len(config.ShellEnvironmentPolicy.Filters) != 4+len(runtimeTransportEnvironmentNames) ||
+		config.ShellEnvironmentPolicy.Filters["CRM_TOKEN"] != "include" ||
+		config.ShellEnvironmentPolicy.Filters["APP_MODE"] != "include" ||
+		config.ShellEnvironmentPolicy.Filters["KODEX_MCP_PROXY_TOKEN"] != "" {
 		t.Fatalf("unexpected effective config: %#v", config)
+	}
+	for _, name := range runtimeTransportEnvironmentNames {
+		if config.ShellEnvironmentPolicy.Filters[name] != "include" || config.ShellEnvironmentPolicy.Set[name] != "" {
+			t.Fatalf("transport variable %s is missing or persisted", name)
+		}
+	}
+	if strings.Contains(string(raw), "synthetic-secret-must-not-persist") || strings.Contains(string(raw), "fixture.signature") ||
+		strings.Contains(string(raw), "include_only") {
+		t.Fatal("configuration persisted credentials or legacy environment filters")
 	}
 }
 

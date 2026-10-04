@@ -108,7 +108,9 @@ function required<T>(value: T | undefined): T {
   return value;
 }
 
-async function render(): Promise<string> {
+async function render(
+  executionLabels: Record<string, "ASSISTANT" | "EMPLOYEE" | "SESSION"> = {},
+): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunGraphCanvas, {
@@ -117,6 +119,7 @@ async function render(): Promise<string> {
         selectedRef: "node_agent",
         futureNodeRefs: ["node_agent"],
         activeNodeRefs: ["node_root"],
+        executionLabels,
       }),
   });
   app.use(
@@ -137,6 +140,7 @@ async function render(): Promise<string> {
             minimap: "Мини-карта графа",
             waitingForActivity: "Ожидает начала работы",
             sessionNode: "Сессия",
+            assistantNode: "Помощник Kodex",
             controlNode: "Контрольный этап",
             graphRunAttempt: "Запуск №{attempt}",
             graphNodes: "Узлы: {count}",
@@ -258,6 +262,16 @@ describe("RunGraphCanvas", () => {
     expect(html).not.toContain("Ошибка");
     expect(html).not.toContain("graph-edge-label");
     expect(html).not.toContain(">DELEGATED_TO<");
+  });
+  it("легенда различает доказанного помощника, сотрудника и неизвестную сессию", async () => {
+    const assistant = await render({ node_agent: "ASSISTANT" });
+    expect(assistant).toContain("Помощник Kodex");
+    expect(assistant).not.toContain("ИИ-сотрудник</span>");
+    const unknown = await render({ node_agent: "SESSION" });
+    expect(unknown).toContain("Сессия");
+    const employee = await render({ node_agent: "EMPLOYEE" });
+    expect(employee).toContain("ИИ-сотрудник");
+    expect(employee).not.toContain("Помощник Kodex");
   });
 
   it("отмечает будущие и активные узлы без подмены состояния", () => {

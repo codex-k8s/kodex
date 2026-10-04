@@ -210,6 +210,11 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 			retried.Run.RetryOfRunRef != previous.Ref || retried.Run.Attempt != previous.Attempt+1 {
 			t.Fatalf("retry did not preserve exact assistant lineage: run=%#v err=%v", retried.Run, err)
 		}
+		if previous.AssistantPin == nil || retried.Run.AssistantPin == nil || *previous.AssistantPin != *retried.Run.AssistantPin ||
+			retried.Run.AssistantPin.Scope != "SYSTEM" || retried.Run.AssistantPin.ConversationRef != a.Ref || retried.Run.AssistantPin.AssistantRef != assistant.Ref ||
+			retried.Run.AssistantPin.OrganizationRef == "" || retried.Run.AssistantPin.ProfileRef != "" || retried.Run.AssistantPin.ProjectRef != "" {
+			t.Fatal("assistant retry changed the immutable conversation/profile pin")
+		}
 		retryClaims := claim("retry-a", 10)
 		if len(retryClaims) != 1 || stringMap(retryClaims[0], "runRef") != retried.Run.Ref ||
 			stringMap(retryClaims[0], "sessionRef") != a.SessionRef || stringMap(retryClaims[0], "runtimeRevisionRef") == stringMap(aFirst, "runtimeRevisionRef") {
@@ -218,6 +223,17 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 		assertRun(stringMap(bFirst, "runRef"), "RUNNING")
 		assertLateRejected(aFirst, "retry")
 		completeClaimedExecutionWithSummary(t, ctx, service, worker, retryClaims[0], "parallel-lifecycle-retry", false, "Only conversation A retry result")
+		terminal, err := service.GetRun(ctx, owner, retried.Run.Ref)
+		if err != nil || terminal.AssistantPin == nil || terminal.Target.Version < 1 {
+			t.Fatalf("terminal assistant retry pin: %v", err)
+		}
+		replay, err := service.Execute(ctx, command.Command{Kind: command.RetryRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "parallel-lifecycle-retry-a", ExpectedVersion: &previous.Version},
+			Payload:  command.RunCommandInput{RunRef: previous.Ref}})
+		if err != nil || replay.Run == nil || replay.Run.AssistantPin == nil || *replay.Run.AssistantPin != *terminal.AssistantPin ||
+			replay.Run.Target != terminal.Target || replay.Run.State != retried.Run.State || replay.Run.Ref != terminal.Ref {
+			t.Fatalf("receipt retry view lost fresh authoritative pin or rewrote its saved state: %v", err)
+		}
 	})
 	readA = readConversation(a.Ref)
 	archived := execute(command.ArchiveAssistantConversation, owner, "archive-a", &readA.Version, command.AssistantConversationArchiveInput{ConversationRef: a.Ref})

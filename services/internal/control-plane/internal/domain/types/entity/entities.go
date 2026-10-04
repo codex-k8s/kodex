@@ -468,7 +468,10 @@ type WorkflowLaunchReadiness struct {
 	WorkflowVersion                                      int64
 }
 
-type RunTarget struct{ Type, Ref, Name string }
+type RunTarget struct {
+	Type, Ref, Name string
+	Version         int64
+}
 
 type TokenUsage struct {
 	TotalTokens           int64 `json:"total_tokens"`
@@ -488,6 +491,10 @@ func (usage TokenUsage) Valid() bool {
 		usage.ReasoningOutputTokens <= usage.OutputTokens
 }
 
+type AssistantRunPin struct {
+	Scope, OrganizationRef, ConversationRef, AssistantRef, ProjectRef, ProfileRef string
+}
+
 type Run struct {
 	Ref, ProjectRef, SessionRef, RootRunRef, ParentRunRef, RetryOfRunRef string
 	InputAttachmentSetRef                                                string
@@ -500,6 +507,7 @@ type Run struct {
 	Usage                                                                TokenUsage
 	ArtifactRefs, GateRefs, NextActions                                  []string
 	Incidents                                                            []Incident
+	AssistantPin                                                         *AssistantRunPin
 	CreatedAt                                                            time.Time
 	StartedAt, FinishedAt                                                *time.Time
 }

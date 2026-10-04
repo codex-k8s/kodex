@@ -3,6 +3,7 @@ package platform
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -260,5 +261,118 @@ func assistantTestEnvironmentPolicy() map[string]any {
 		},
 		"volumes": []any{}, "networkDestinations": []any{"DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"},
 		"kubernetesAccess": "NONE",
+	}
+}
+
+func TestAssistantEnvironmentHTTPMethodsRoundTrip(t *testing.T) {
+	t.Parallel()
+	jsonFields := func(input map[string]any) map[string]any {
+		t.Helper()
+		raw, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result map[string]any
+		if err := json.Unmarshal(raw, &result); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	input := assistantTestEnvironmentPolicy()
+	input["webAccess"] = map[string]any{"mode": "ALLOWLIST_FULL", "rules": []any{
+		map[string]any{"domainPattern": "docs.example.test", "protocol": "HTTPS", "port": float64(443), "httpMethods": []any{"POST", "GET"}},
+	}}
+	policy, valid := assistantEnvironmentPolicy(map[string]any{"policy": input})
+	if !valid || !reflect.DeepEqual(policy.Network.WebAccess.Rules[0].HTTPMethods, []string{"GET", "POST"}) {
+		t.Fatal("canonical HTTP method set was not preserved")
+	}
+	specification := entity.RuntimeEnvironmentDraftSpecification{Name: "Original", Policy: policy}
+	raw, err := json.Marshal(specification)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var safe map[string]any
+	if err := json.Unmarshal(raw, &safe); err != nil {
+		t.Fatal(err)
+	}
+	before := map[string]any{"environmentRef": "renv_exact", "projectRef": "prj_exact", "name": "Original", "description": "",
+		"imageArtifactRef": "", "versionRef": "renvv_exact", "versionDigest": "digest-exact", "specification": safe,
+		"policyInput": assistantEnvironmentPolicyInput(policy)}
+	operation, err := hydrateAssistantEnvironmentFields(before, 7, entity.AssistantPlanOperation{Type: "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+		Key: "methods", Title: "Сохранить методы", Summary: "Точный набор методов", Parameters: map[string]any{"environmentRef": "renv_exact", "name": "Updated", "policy": input}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation, err = normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := operation
+	edited.Parameters = cloneAssistantFields(operation.Parameters)
+	edited.Parameters["description"] = "Edited"
+	operation, err = rehydrateEditedAssistantEnvironment(operation, edited)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation, err = normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	methods := mapped.Payload.(command.RuntimeEnvironmentDraftInput).Specification.Policy.Network.WebAccess.Rules[0].HTTPMethods
+	if !reflect.DeepEqual(methods, []string{"GET", "POST"}) {
+		t.Fatal("prepare/edit/apply changed the HTTP method set")
+	}
+	roundTrip := jsonFields(map[string]any{"policy": assistantEnvironmentPolicyInput(policy)})
+	decoded, valid := assistantEnvironmentPolicy(roundTrip)
+	if !valid || !reflect.DeepEqual(decoded, policy) {
+		t.Fatal("editable policy round trip lost HTTP methods")
+	}
+	systemBefore := cloneAssistantFields(before)
+	systemBefore["projectRef"], systemBefore["systemAssistantRef"] = "", "agt_system"
+	systemOperation, err := hydrateAssistantEnvironmentFields(systemBefore, 7, entity.AssistantPlanOperation{Type: "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+		Key: "system-methods", Title: "Сохранить методы Kodex", Summary: "Точный набор методов", Parameters: map[string]any{
+			"environmentRef": "renv_exact", "systemAssistantRef": "agt_system", "name": "Updated", "policy": input}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	systemOperation, err = normalizeAssistantOperation(systemOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	systemMapped, err := assistantOperationCommand(systemOperation)
+	if err != nil || systemMapped.Kind != command.CreateOrganizationRuntimeEnvironmentDraft ||
+		!reflect.DeepEqual(systemMapped.Payload.(command.RuntimeEnvironmentDraftInput).Specification.Policy.Network.WebAccess.Rules[0].HTTPMethods, []string{"GET", "POST"}) {
+		t.Fatalf("system assistant draft lost canonical HTTP methods: %v", err)
+	}
+	for _, test := range []struct {
+		name   string
+		change func(map[string]any, map[string]any)
+	}{
+		{"missing", func(_ map[string]any, rule map[string]any) { delete(rule, "httpMethods") }},
+		{"empty", func(_ map[string]any, rule map[string]any) { rule["httpMethods"] = []any{} }},
+		{"duplicate", func(_ map[string]any, rule map[string]any) { rule["httpMethods"] = []any{"GET", "GET"} }},
+		{"unknown", func(_ map[string]any, rule map[string]any) { rule["httpMethods"] = []any{"TRACE"} }},
+		{"lowercase", func(_ map[string]any, rule map[string]any) { rule["httpMethods"] = []any{"get"} }},
+		{"type", func(_ map[string]any, rule map[string]any) { rule["httpMethods"] = []any{true} }},
+		{"nested-unknown", func(_ map[string]any, rule map[string]any) { rule["extra"] = true }},
+		{"read-only-post", func(web map[string]any, _ map[string]any) { web["mode"] = "ALLOWLIST_READ_ONLY" }},
+		{"none-rules", func(web map[string]any, _ map[string]any) { web["mode"] = "NONE" }},
+		{"full-public-rules", func(web map[string]any, _ map[string]any) { web["mode"] = "FULL_PUBLIC" }},
+		{"wrong-protocol", func(_ map[string]any, rule map[string]any) { rule["protocol"] = "HTTP" }},
+		{"wrong-port", func(_ map[string]any, rule map[string]any) { rule["port"] = float64(8443) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := jsonFields(input)
+			web := candidate["webAccess"].(map[string]any)
+			rule := web["rules"].([]any)[0].(map[string]any)
+			test.change(web, rule)
+			if _, valid := assistantEnvironmentPolicy(map[string]any{"policy": candidate}); valid {
+				t.Fatal("invalid HTTP access rule was accepted")
+			}
+		})
 	}
 }

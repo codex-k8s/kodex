@@ -529,7 +529,8 @@ func TestMessageMapMaterializesZeroTokenUsage(t *testing.T) {
 	t.Parallel()
 
 	value, err := messageMap(&controlplanev1.Run{
-		Ref:   "run-example",
+		Ref:        "run-example",
+		ProjectRef: "prj_fixture01", Target: targetProto("AGENT", "agt_fixture01"),
 		Usage: &controlplanev1.TokenUsage{},
 	})
 	if err != nil {
@@ -717,7 +718,8 @@ func TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget(t *testing.
 	t.Parallel()
 	value, err := messageMap(&controlplanev1.GetRunGraphResponse{
 		Run: &controlplanev1.Run{
-			Ref: "run_example001",
+			Ref:        "run_example001",
+			ProjectRef: "prj_fixture01",
 			Target: func() *controlplanev1.RunTarget {
 				target := targetProto("AGENT", "agt_example001")
 				target.TargetVersion = 2
