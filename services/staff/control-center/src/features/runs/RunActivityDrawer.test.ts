@@ -166,7 +166,7 @@ async function render(
             toolDuration: "Длительность: {duration} мс",
             expandMessage: "Показать полностью",
             collapseMessage: "Свернуть",
-            unscopedHistory: "Служебная история без точной привязки",
+            earlierServiceHistory: "Показать предыдущие служебные записи",
             toolGroup: "Вызовы инструментов: {count}",
             nodeTypes: { EXTERNAL_ACTION: "Внешнее действие" },
           },
@@ -268,7 +268,8 @@ describe("RunActivityDrawer", () => {
       [node],
       [{ ...event, execution: undefined, message: undefined }],
     );
-    expect(html).toContain("Служебная история без точной привязки");
+    expect(html).toContain("Показать предыдущие служебные записи");
+    expect(html).not.toContain("Служебная история без точной привязки");
     expect(html).not.toContain('data-turn-ref="trn_example"');
     expect(html).not.toContain('data-phase="COMMENTARY"');
   });

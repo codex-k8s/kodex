@@ -370,6 +370,124 @@ func TestRequiredMCPStatusRejectsCatalogDrift(t *testing.T) {
 	}
 }
 
+func TestCodex160MCPStatusMetadataIsBoundedAndNonAuthoritative(t *testing.T) {
+	const private = "private-mcp-status-sentinel"
+	for _, capabilities := range []any{nil, map[string]any{"tools": map[string]any{"listChanged": true}, "private": private}, private, []any{true, private}, false} {
+		var response map[string]any
+		if json.Unmarshal(mcpStatusResponse("connected", []string{"delegate_agent"}), &response) != nil {
+			t.Fatal("decode synthetic MCP fixture")
+		}
+		entry := response["data"].([]any)[0].(map[string]any)
+		entry["httpOrigin"], entry["serverCapabilities"] = "https://metadata-only.invalid", capabilities
+		state := newProtocolState(testThreadID)
+		state.threadID = testThreadID
+		ready, err := state.bindRequiredMCPStatus(marshalProtocolFixture(t, response), []string{"delegate_agent"})
+		if err != nil || !ready || !state.requiredMCPReady || state.threadID != testThreadID || bytes.Contains(marshalProtocolFixture(t, state.result), []byte(private)) {
+			t.Fatal("known MCP metadata rejected, exposed or changed authority")
+		}
+		ready, err = state.bindRequiredMCPStatus(marshalProtocolFixture(t, response), []string{"delegate_agent", "missing_tool"})
+		if ready || !errors.Is(err, ErrRequiredMCPUnavailable) {
+			t.Fatal("arbitrary capabilities expanded authoritative tool catalog")
+		}
+	}
+}
+
+func TestCodex160MCPStatusMetadataFailsClosed(t *testing.T) {
+	const private = "private-mcp-status-sentinel"
+	for _, test := range []struct {
+		name, field string
+		value       any
+		unavailable bool
+	}{
+		{"origin type", "httpOrigin", true, false},
+		{"origin bound", "httpOrigin", strings.Repeat(private, 200), false},
+		{"capabilities bound", "serverCapabilities", strings.Repeat(private, 3000), false},
+		{"tools error type", "toolsError", map[string]any{"private": private}, false},
+		{"tools error bound", "toolsError", strings.Repeat(private, 3000), false},
+		{"tools error nonnull", "toolsError", private, true},
+		{"tools error empty", "toolsError", "", true},
+		{"unknown metadata", private, private, false},
+		{"auth mismatch", "authStatus", "unsupported", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var response map[string]any
+			if json.Unmarshal(mcpStatusResponse("connected", []string{"delegate_agent"}), &response) != nil {
+				t.Fatal("decode synthetic MCP fixture")
+			}
+			response["data"].([]any)[0].(map[string]any)[test.field] = test.value
+			state := newProtocolState(testThreadID)
+			state.threadID = testThreadID
+			ready, err := state.bindRequiredMCPStatus(marshalProtocolFixture(t, response), []string{"delegate_agent"})
+			if ready || err == nil || strings.Contains(err.Error(), private) || state.requiredMCPReady || test.unavailable && !errors.Is(err, ErrRequiredMCPUnavailable) {
+				t.Fatal("invalid MCP status accepted, exposed private data or lost discovery failure")
+			}
+		})
+	}
+	for _, field := range []string{"httpOrigin", "serverCapabilities", "toolsError"} {
+		encoded := bytes.Replace(mcpStatusResponse("connected", []string{"delegate_agent"}), []byte(`"`+field+`":null`), []byte(`"`+field+`":null,"`+field+`":null`), 1)
+		state := newProtocolState(testThreadID)
+		state.threadID = testThreadID
+		ready, err := state.bindRequiredMCPStatus(encoded, []string{"delegate_agent"})
+		if ready || err == nil || state.requiredMCPReady {
+			t.Fatal("duplicate MCP metadata accepted")
+		}
+	}
+	entry := json.RawMessage{}
+	var response struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(mcpStatusResponse("connected", []string{"delegate_agent"}), &response) != nil {
+		t.Fatal("decode synthetic MCP inventory")
+	}
+	entry = response.Data[0]
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	ready, err := state.bindRequiredMCPStatus(marshalProtocolFixture(t, map[string]any{"data": []json.RawMessage{entry, entry}, "nextCursor": nil}), []string{"delegate_agent"})
+	if ready || err == nil || state.requiredMCPReady {
+		t.Fatal("duplicate required MCP inventory bound readiness before complete validation")
+	}
+}
+
+func TestCodex160MCPAppUiIsTypedDiscardedAndTupleBound(t *testing.T) {
+	const private = "private-mcp-ui-sentinel"
+	for _, ui := range []any{nil, map[string]any{"resourceUri": private, "preferredModelDisplayMode": "inline"}, map[string]any{"resourceUri": private, "preferredModelDisplayMode": "fullscreen"}} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		emitted := false
+		state.onActivity = func(runtimecontract.RuntimeActivity) error { emitted = true; return nil }
+		item := map[string]any{"id": "call-mcp", "server": "kodex", "tool": "delegate_agent", "status": "completed", "arguments": map[string]any{"token": private}, "result": map[string]any{"content": private}, "mcpAppUi": ui, "type": "mcpToolCall"}
+		event := map[string]any{"completedAtMs": 1, "item": item, "threadId": testThreadID, "turnId": testTurnID}
+		if err := state.notification("item/completed", marshalProtocolFixture(t, event)); err != nil || emitted || len(state.result.ToolCalls) != 0 || bytes.Contains(marshalProtocolFixture(t, state.result), []byte(private)) {
+			t.Fatal("known MCP UI metadata rejected, exposed or duplicated authoritative tool activity")
+		}
+		event["turnId"] = testThreadID
+		if err := state.notification("item/completed", marshalProtocolFixture(t, event)); err == nil {
+			t.Fatal("MCP UI metadata bypassed exact turn tuple")
+		}
+	}
+}
+
+func TestCodex160MCPAppUiRejectsUnknownTypesAndBounds(t *testing.T) {
+	const private = "private-mcp-ui-sentinel"
+	for _, ui := range []any{
+		private, []any{}, true, map[string]any{},
+		map[string]any{"resourceUri": nil, "preferredModelDisplayMode": "inline"},
+		map[string]any{"resourceUri": strings.Repeat(private, 200), "preferredModelDisplayMode": "inline"},
+		map[string]any{"resourceUri": private, "preferredModelDisplayMode": nil},
+		map[string]any{"resourceUri": private, "preferredModelDisplayMode": private},
+		map[string]any{"resourceUri": private, "preferredModelDisplayMode": "inline", private: private},
+	} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		item := map[string]any{"id": "call-mcp", "server": "kodex", "tool": "delegate_agent", "status": "completed", "arguments": map[string]any{}, "mcpAppUi": ui, "type": "mcpToolCall"}
+		event := map[string]any{"completedAtMs": 1, "item": item, "threadId": testThreadID, "turnId": testTurnID}
+		err := state.notification("item/completed", marshalProtocolFixture(t, event))
+		if err == nil || strings.Contains(err.Error(), private) {
+			t.Fatal("invalid MCP UI metadata accepted or exposed")
+		}
+	}
+}
+
 func TestMCPStartupNotificationValidatesStructuredFailure(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	valid := raw(`{"error":"","failureReason":"reauthenticationRequired","name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
@@ -393,6 +511,7 @@ func mcpStatusResponse(runtimeStatus string, tools []string) json.RawMessage {
 	encoded, err := json.Marshal(map[string]any{
 		"data": []map[string]any{{
 			"authStatus": "bearerToken", "name": "kodex", "pluginId": nil,
+			"httpOrigin": nil, "serverCapabilities": nil, "toolsError": nil,
 			"resourceTemplates": []any{}, "resources": []any{}, "runtimeStatus": runtimeStatus,
 			"serverInfo": nil, "tools": catalog,
 		}},

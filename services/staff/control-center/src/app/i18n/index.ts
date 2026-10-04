@@ -2188,9 +2188,9 @@ const ru = {
     newMessages: "Новые сообщения ↓",
     earlierServiceHistory: "Показать предыдущие служебные записи",
     toolGroup: "Вызовы инструментов: {count}",
+    workIndicator: "Работает",
+    serviceProgress: "Этапы выполнения: {count}",
     transcriptTurn: "Ход {turn} · попытка {attempt}",
-    unscopedHistory:
-      "Служебная история без точной привязки к ходу и попытке. Эти записи не объединяются с сообщениями текущей сессии.",
     messagePhases: {
       USER: "Задание",
       COMMENTARY: "Ход работы",
@@ -6620,9 +6620,9 @@ const en = {
     newMessages: "New messages ↓",
     earlierServiceHistory: "Show earlier service records",
     toolGroup: "Tool calls: {count}",
+    workIndicator: "Working",
+    serviceProgress: "Execution steps: {count}",
     transcriptTurn: "Turn {turn} · attempt {attempt}",
-    unscopedHistory:
-      "Service history without an exact turn and attempt scope. These records are not merged with current session messages.",
     messagePhases: { USER: "Task", COMMENTARY: "Progress", FINAL: "Answer" },
     runtimeProgress: {
       workloadScheduled: "Task handed to the worker",

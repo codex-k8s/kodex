@@ -6,6 +6,9 @@ import {
   isTranscriptNearBottom,
   publishedRunMessage,
   assistantTurnHasAuthoritativeActivity,
+  activeTranscriptItemId,
+  presentRunTranscriptItems,
+  type RunActivityItem,
   type PresentedRunEvent,
 } from "@/features/runs/run-activity";
 import type {
@@ -13,6 +16,283 @@ import type {
   Run,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
+
+describe("компактное представление exact хода", () => {
+  const execution = {
+    runRef: "run_exact",
+    nodeRef: "nod_exact",
+    sessionRef: "ses_exact",
+    turnRef: "trn_exact",
+    turnNumber: 1,
+    attempt: 1,
+  };
+  const item = (
+    id: string,
+    changes: Partial<RunActivityItem> = {},
+  ): RunActivityItem => ({
+    id,
+    kind: "system",
+    actor: "Kodex",
+    occurredAt: "2026-10-04T10:00:00Z",
+    historical: false,
+    execution: { ...execution },
+    eventType: "TURN_PROGRESS",
+    summary: "MODEL_REQUEST_RUNNING",
+    state: "RUNNING",
+    ...changes,
+  });
+
+  it("сводит запуск и прогресс в одну запись, не меняя исходную историю", () => {
+    const items = [
+      item("start", { eventType: "TURN_STARTED" }),
+      item("schedule", { summary: "WORKLOAD_SCHEDULED" }),
+      item("model"),
+    ];
+    const original = JSON.stringify(items);
+    const presented = presentRunTranscriptItems(items);
+    expect(presented).toHaveLength(1);
+    expect(presented[0]).toMatchObject({
+      id: "start",
+      working: true,
+      serviceHistory: items,
+    });
+    expect(JSON.stringify(items)).toBe(original);
+  });
+
+  it("оставляет USER/COMMENTARY/FINAL/tool на своих местах и активирует только последнее сообщение", () => {
+    const items = [
+      item("user", { kind: "initiator", phase: "USER" }),
+      item("start"),
+      item("comment", {
+        kind: "agent",
+        phase: "COMMENTARY",
+        summary: "Проверяю",
+      }),
+      item("tool", {
+        kind: "tool",
+        toolCall: {
+          ref: "call_exact",
+          tool: "CODEX_SHELL",
+          state: "RUNNING",
+          durationMs: 0,
+          revision: 1,
+          safeParameters: {},
+          safeResult: "",
+          auditRef: "audit_exact",
+        },
+      }),
+    ];
+    const presented = presentRunTranscriptItems(items);
+    expect(presented.map((entry) => entry.id)).toEqual([
+      "user",
+      "start",
+      "comment",
+      "tool",
+    ]);
+    expect(
+      presented.filter((entry) => entry.working).map((entry) => entry.id),
+    ).toEqual(["tool"]);
+    expect(
+      presentRunTranscriptItems([
+        ...items,
+        item("final", {
+          kind: "agent",
+          phase: "FINAL",
+          state: "SUCCEEDED",
+          summary: "Готово",
+        }),
+      ]).some((entry) => entry.working),
+    ).toBe(false);
+  });
+
+  it("оставляет одну terminal ошибку, предпочитая информативное итоговое событие", () => {
+    const items = [
+      item("start"),
+      item("error", {
+        eventType: "TURN_COMPLETED",
+        messageKind: "FINAL_MESSAGE",
+        state: "FAILED",
+        summary: "Провайдер недоступен",
+      }),
+      item("node", {
+        eventType: "NODE_STATE_CHANGED",
+        state: "FAILED",
+        summary: "Ошибка",
+      }),
+      item("run", {
+        eventType: "RUN_STATE_CHANGED",
+        state: "FAILED",
+        summary: "Ошибка",
+      }),
+    ];
+    const presented = presentRunTranscriptItems(items);
+    expect(presented).toHaveLength(1);
+    expect(presented[0]).toMatchObject({
+      summary: "Провайдер недоступен",
+      state: "FAILED",
+      working: false,
+      serviceHistory: items,
+    });
+  });
+
+  it.each([
+    ["runRef", "run_foreign"],
+    ["nodeRef", "nod_foreign"],
+    ["sessionRef", "ses_foreign"],
+    ["turnRef", "trn_foreign"],
+    ["turnNumber", 2],
+    ["attempt", 2],
+  ] as const)("не объединяет чужой %s", (key, value) => {
+    const entries = presentRunTranscriptItems([
+      item("own"),
+      item("other", { execution: { ...execution, [key]: value } }),
+    ]);
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => entry.serviceHistory?.length)).toEqual([
+      1, 1,
+    ]);
+    expect(entries.filter((entry) => entry.working)).toHaveLength(1);
+  });
+
+  it("не приписывает UNSCOPED историю и не объединяет owner gate или артефакт", () => {
+    const entries = [
+      item("old-one", { historical: true, execution: undefined }),
+      item("old-two", { historical: true, execution: undefined }),
+      item("gate", { messageKind: "OWNER_GATE" }),
+      item("artifact", { messageKind: "ARTIFACT", artifactRef: "art_exact" }),
+    ];
+    expect(presentRunTranscriptItems(entries).map((entry) => entry.id)).toEqual(
+      entries.map((entry) => entry.id),
+    );
+    expect(
+      presentRunTranscriptItems(entries.slice(0, 2)).some(
+        (entry) => entry.working,
+      ),
+    ).toBe(false);
+    expect(
+      presentRunTranscriptItems(entries).some((entry) => entry.serviceHistory),
+    ).toBe(false);
+  });
+
+  it("старые running этапы не получают активный статус после нового turn/attempt", () => {
+    const items = [
+      item("old"),
+      item("current", {
+        execution: {
+          ...execution,
+          turnRef: "trn_next",
+          turnNumber: 2,
+          attempt: 2,
+        },
+      }),
+    ];
+    expect(activeTranscriptItemId(items)).toBe("current");
+    expect(
+      presentRunTranscriptItems(items)
+        .filter((entry) => entry.working)
+        .map((entry) => entry.id),
+    ).toEqual(["current"]);
+  });
+
+  it("распознаёт actual INTERMEDIATE progress по исходному коду даже после локализации caller", () => {
+    const base = required(events[0]);
+    const chain: PresentedRunEvent[] = [
+      {
+        ...base,
+        ref: "evt_user",
+        sequence: 1,
+        type: "TURN_QUEUED",
+        messageKind: "USER_MESSAGE",
+        message: {
+          ref: "msg_user",
+          phase: "USER",
+          revision: 1,
+          text: "Запрос",
+        },
+        summary: "Запрос",
+        displaySummary: "Запрос",
+        nodeState: "QUEUED",
+      },
+      {
+        ...base,
+        ref: "evt_start",
+        sequence: 2,
+        type: "TURN_STARTED",
+        messageKind: "STATE",
+        message: undefined,
+        summary: "RUN_STARTED",
+        displaySummary: "Выполняется",
+        nodeState: "RUNNING",
+      },
+      {
+        ...base,
+        ref: "evt_schedule",
+        sequence: 3,
+        message: undefined,
+        summary: "WORKLOAD_SCHEDULED",
+        displaySummary: "Запуск передан исполнителю",
+        nodeState: "RUNNING",
+      },
+      {
+        ...base,
+        ref: "evt_model",
+        sequence: 4,
+        message: undefined,
+        summary: "MODEL_REQUEST_RUNNING",
+        displaySummary: "Подготовка и выполнение запроса к модели",
+        nodeState: "RUNNING",
+      },
+    ];
+    const items = buildRunTranscriptItems(chain);
+    expect(items.slice(2).map((entry) => entry.serviceProgressCode)).toEqual([
+      "WORKLOAD_SCHEDULED",
+      "MODEL_REQUEST_RUNNING",
+    ]);
+    const running = presentRunTranscriptItems(items);
+    expect(running).toHaveLength(2);
+    expect(running[1]?.serviceHistory).toHaveLength(3);
+    expect(running.filter((entry) => entry.working)).toHaveLength(1);
+    const failure: PresentedRunEvent = {
+      ...base,
+      ref: "evt_completed",
+      sequence: 5,
+      type: "TURN_COMPLETED",
+      messageKind: "FINAL_MESSAGE",
+      message: undefined,
+      summary: "RUNTIME_PROVIDER_UNAVAILABLE",
+      displaySummary: "Провайдер недоступен",
+      nodeState: "FAILED",
+    };
+    const terminal = presentRunTranscriptItems(
+      buildRunTranscriptItems([...chain, failure]),
+    );
+    expect(terminal).toHaveLength(2);
+    expect(terminal[1]).toMatchObject({
+      summary: "Провайдер недоступен",
+      working: false,
+      state: "FAILED",
+    });
+    expect(terminal[1]?.serviceHistory).toHaveLength(4);
+    const commentary = {
+      ...base,
+      ref: "evt_commentary",
+      sequence: 6,
+      summary: "MODEL_REQUEST_RUNNING",
+      displaySummary: "ignored",
+      nodeState: "RUNNING" as const,
+    };
+    expect(
+      presentRunTranscriptItems(buildRunTranscriptItems([commentary]))[0],
+    ).toMatchObject({
+      phase: "COMMENTARY",
+      summary: "Собираю подтверждённые факты",
+    });
+    expect(
+      presentRunTranscriptItems(buildRunTranscriptItems([commentary]))[0]
+        ?.serviceHistory,
+    ).toBeUndefined();
+  });
+});
 
 const run: Run = {
   ref: "run_example",

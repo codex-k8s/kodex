@@ -196,9 +196,6 @@ const transcriptTurns = computed(() =>
     (turn) => turn.plan || !turnHasPublishedMessage(turn),
   ),
 );
-const hasHistoricalTurns = computed(() =>
-  transcriptTurns.value.some((turn) => !turnHasPublishedMessage(turn)),
-);
 const transcriptLeases = new Map<string, () => void>();
 let transcriptReadGeneration = 0;
 const systemResourceScope = computed(() =>
@@ -2035,12 +2032,6 @@ onBeforeUnmount(() => {
                   :events="conversationRunEvents"
                   embedded
                 />
-                <p
-                  v-if="hasHistoricalTurns"
-                  class="assistant-transcript-history"
-                >
-                  {{ $t("runs.unscopedHistory") }}
-                </p>
                 <article
                   v-for="turn in transcriptTurns"
                   :key="turn.ref"
@@ -3349,10 +3340,6 @@ onBeforeUnmount(() => {
 .assistant-setup-guide button {
   min-width: 0;
   width: 100%;
-}
-.assistant-transcript-history {
-  color: var(--muted);
-  font-size: 0.8rem;
 }
 .assistant-transcript-message--collapsed {
   display: -webkit-box;

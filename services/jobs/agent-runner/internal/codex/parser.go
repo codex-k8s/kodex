@@ -515,13 +515,29 @@ func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredT
 		return false, errors.New("Codex app-server MCP status inventory is invalid")
 	}
 	found := false
+	connected := false
 	for _, entry := range entries {
 		server, err := decodeObject(entry, schema(
 			[]string{"authStatus", "name", "resourceTemplates", "resources", "tools"},
-			"authStatus", "name", "pluginId", "resourceTemplates", "resources", "runtimeStatus", "serverInfo", "tools",
+			"authStatus", "httpOrigin", "name", "pluginId", "resourceTemplates", "resources", "runtimeStatus", "serverCapabilities", "serverInfo", "tools", "toolsError",
 		))
 		if err != nil {
 			return false, errors.New("Codex app-server MCP status entry is invalid")
+		}
+		// Новые метаданные rust-v0.160.0 не назначают endpoint или capabilities:
+		// authority по-прежнему определяется exact thread, auth и набором tools.
+		if origin, present := server["httpOrigin"]; present && !bytes.Equal(bytes.TrimSpace(origin), []byte("null")) && !validThreadMetadataString(origin, 4096) {
+			return false, errors.New("Codex app-server MCP origin metadata is invalid")
+		}
+		if capabilities, present := server["serverCapabilities"]; present && (len(capabilities) > 64<<10 || !utf8.Valid(capabilities) || !json.Valid(capabilities)) {
+			return false, errors.New("Codex app-server MCP capability metadata is invalid")
+		}
+		toolsFailed := false
+		if diagnostic, present := server["toolsError"]; present && !bytes.Equal(bytes.TrimSpace(diagnostic), []byte("null")) {
+			if !validThreadMetadataString(diagnostic, maximumDiagnosticBytes) {
+				return false, errors.New("Codex app-server MCP tool diagnostic is invalid")
+			}
+			toolsFailed = true
 		}
 		name, err := decodeBoundedString(server["name"], 128)
 		if err != nil {
@@ -534,6 +550,9 @@ func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredT
 			return false, errors.New("Codex app-server required MCP status is duplicated")
 		}
 		found = true
+		if toolsFailed {
+			return false, ErrRequiredMCPUnavailable
+		}
 		runtimeStatus := ""
 		if rawStatus, present := server["runtimeStatus"]; present && !bytes.Equal(rawStatus, []byte("null")) {
 			runtimeStatus, err = decodeBoundedString(rawStatus, 32)
@@ -548,18 +567,22 @@ func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredT
 			if authErr != nil || authStatus != "bearerToken" || toolsErr != nil || !sameStringSet(toolNames, requiredTools) {
 				return false, ErrRequiredMCPUnavailable
 			}
-			state.requiredMCPReady = true
-			state.requiredMCPStatus = "ready"
-			return true, nil
+			connected = true
 		case "notStarted", "starting":
-			return false, nil
 		case "authenticationRequired", "failed", "cancelled", "disabled", "":
 			return false, ErrRequiredMCPUnavailable
 		default:
 			return false, errors.New("Codex app-server MCP runtime status is invalid")
 		}
 	}
-	return false, ErrRequiredMCPUnavailable
+	if !found {
+		return false, ErrRequiredMCPUnavailable
+	}
+	if connected {
+		state.requiredMCPReady = true
+		state.requiredMCPStatus = "ready"
+	}
+	return connected, nil
 }
 
 func decodeDynamicObjectKeys(raw json.RawMessage, maximum int) ([]string, error) {
@@ -768,6 +791,9 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 		return errors.New("Codex app-server thread item id is invalid")
 	}
 	if typeName == "mcpToolCall" {
+		if ui, present := fields["mcpAppUi"]; present && !validMCPAppUi(ui) {
+			return errors.New("Codex app-server MCP UI metadata is invalid")
+		}
 		// MCP callbacks уже проецируются runtime-controller вместе с capability
 		// и grant. Повторная запись app-server item создала бы дубль аудита.
 		return nil
@@ -857,6 +883,21 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 		return state.publishActivity(runtimecontract.RuntimeActivity{Message: &message})
 	}
 	return nil
+}
+
+func validMCPAppUi(raw json.RawMessage) bool {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return true
+	}
+	if len(raw) > 16<<10 {
+		return false
+	}
+	fields, err := decodeObject(raw, schema([]string{"preferredModelDisplayMode", "resourceUri"}, "preferredModelDisplayMode", "resourceUri"))
+	if err != nil || !validThreadMetadataString(fields["resourceUri"], 4096) {
+		return false
+	}
+	mode, err := decodeBoundedString(fields["preferredModelDisplayMode"], 32)
+	return err == nil && (mode == "inline" || mode == "fullscreen")
 }
 
 func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[string]json.RawMessage, completedAtMS int64, running ...bool) (runtimecontract.NativeToolCall, bool, error) {
@@ -1619,7 +1660,7 @@ func stringSet(values ...string) map[string]struct{} {
 var itemFieldUniverse = []string{
 	"action", "agentPath", "agentThreadId", "agentsStates", "aggregatedOutput", "appContext", "arguments", "changes", "clientId",
 	"command", "commandActions", "content", "contentItems", "cwd", "delivery", "durationMs", "error", "exitCode", "failure", "fragments", "id",
-	"kind", "memoryCitation", "model", "mcpAppResourceUri", "namespace", "path", "phase", "pluginId", "processId",
+	"kind", "memoryCitation", "model", "mcpAppResourceUri", "mcpAppUi", "namespace", "path", "phase", "pluginId", "processId",
 	"output", "prompt", "query", "questions", "readOnlyHint", "reasoningEffort", "receiverThreadIds", "result", "results", "review", "revisedPrompt", "savedPath", "scriptPath", "server",
 	"senderThreadId", "source", "status", "success", "summary", "text", "tool", "transparentBackground", "type",
 }
@@ -1705,7 +1746,7 @@ var threadItemSchemas = map[string]objectSchema{
 	"reasoning":           schema([]string{"id", "type"}, "content", "id", "summary", "type"),
 	"commandExecution":    schema([]string{"command", "commandActions", "cwd", "id", "status", "type"}, "aggregatedOutput", "command", "commandActions", "cwd", "durationMs", "exitCode", "id", "pluginId", "processId", "scriptPath", "source", "status", "type"),
 	"fileChange":          schema([]string{"changes", "id", "status", "type"}, "changes", "id", "status", "type"),
-	"mcpToolCall":         schema([]string{"arguments", "id", "server", "status", "tool", "type"}, "appContext", "arguments", "durationMs", "error", "id", "mcpAppResourceUri", "pluginId", "readOnlyHint", "result", "server", "status", "tool", "type"),
+	"mcpToolCall":         schema([]string{"arguments", "id", "server", "status", "tool", "type"}, "appContext", "arguments", "durationMs", "error", "id", "mcpAppResourceUri", "mcpAppUi", "pluginId", "readOnlyHint", "result", "server", "status", "tool", "type"),
 	"dynamicToolCall":     schema([]string{"arguments", "id", "status", "tool", "type"}, "arguments", "contentItems", "durationMs", "id", "namespace", "status", "success", "tool", "type"),
 	"collabAgentToolCall": schema([]string{"agentsStates", "id", "receiverThreadIds", "senderThreadId", "status", "tool", "type"}, "agentsStates", "id", "model", "prompt", "reasoningEffort", "receiverThreadIds", "senderThreadId", "status", "tool", "type"),
 	"subAgentActivity":    schema([]string{"agentPath", "agentThreadId", "id", "kind", "type"}, "agentPath", "agentThreadId", "id", "kind", "type"),

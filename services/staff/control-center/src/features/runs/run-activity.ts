@@ -29,6 +29,8 @@ export interface RunActivityItem {
   phase?: NonNullable<RunEvent["message"]>["phase"];
   revision?: number;
   historical: boolean;
+  eventType?: RunEvent["type"];
+  serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
 }
 
 interface ActivityContext {
@@ -168,6 +170,10 @@ export function buildRunTranscriptItems(
       phase: message?.phase,
       revision,
       historical: !scope,
+      eventType: event.type,
+      serviceProgressCode:
+        transcriptServiceProgressCode(event.summary) ??
+        transcriptServiceProgressCode(event.progress),
     };
     if (previousPosition !== undefined) items[previousPosition] = item;
     else {
@@ -201,6 +207,176 @@ export function publishedRunMessage(event: RunEvent): RunEvent["message"] {
     withinBudget
     ? message
     : undefined;
+}
+
+const activeTranscriptStates = new Set([
+  "CREATED",
+  "QUEUED",
+  "PENDING",
+  "READY",
+  "CLAIMED",
+  "RUNNING",
+]);
+const terminalTranscriptStates = new Set([
+  "SUCCEEDED",
+  "FAILED",
+  "CANCELLED",
+  "SKIPPED",
+]);
+const serviceStartEvents = new Set([
+  "RUN_CREATED",
+  "TURN_QUEUED",
+  "TURN_STARTED",
+]);
+const serviceProgressEvents = new Set([
+  "TURN_PROGRESS",
+  "RUN_STATE_CHANGED",
+  "NODE_STATE_CHANGED",
+]);
+const serviceTerminalEvents = new Set([
+  "TURN_COMPLETED",
+  "RUN_STATE_CHANGED",
+  "NODE_STATE_CHANGED",
+]);
+const serviceProgressCodes = new Set([
+  "WORKLOAD_SCHEDULED",
+  "MODEL_REQUEST_RUNNING",
+]);
+
+function transcriptServiceProgressCode(
+  value: string | undefined,
+): RunActivityItem["serviceProgressCode"] {
+  const code = value?.trim().replace(/^i18n:/, "");
+  return code === "WORKLOAD_SCHEDULED" || code === "MODEL_REQUEST_RUNNING"
+    ? code
+    : undefined;
+}
+
+export interface PresentedTranscriptItem extends RunActivityItem {
+  working: boolean;
+  serviceHistory?: readonly RunActivityItem[];
+}
+
+function isTranscriptService(item: RunActivityItem): boolean {
+  return Boolean(
+    !item.historical &&
+    executionKey(item.execution) &&
+    item.kind === "system" &&
+    !item.phase &&
+    !item.toolCall &&
+    !item.artifact &&
+    !item.artifactRef &&
+    (!item.messageKind ||
+      ["STATE", "FINAL_MESSAGE"].includes(item.messageKind) ||
+      (item.eventType === "TURN_PROGRESS" &&
+        item.messageKind === "INTERMEDIATE_MESSAGE" &&
+        Boolean(
+          item.serviceProgressCode ??
+          transcriptServiceProgressCode(item.summary),
+        ))) &&
+    (serviceStartEvents.has(item.eventType ?? "") ||
+      (serviceProgressEvents.has(item.eventType ?? "") &&
+        activeTranscriptStates.has(item.state ?? "")) ||
+      serviceProgressCodes.has(
+        item.serviceProgressCode ??
+          transcriptServiceProgressCode(item.summary) ??
+          "",
+      ) ||
+      (terminalTranscriptStates.has(item.state ?? "") &&
+        (serviceTerminalEvents.has(item.eventType ?? "") ||
+          item.messageKind === "FINAL_MESSAGE"))),
+  );
+}
+
+// Это только представление: исходные события, revisions и их порядок не меняются.
+// Работающий статус принадлежит последней записи текущего exact хода/попытки.
+export function activeTranscriptItemId(
+  items: readonly RunActivityItem[],
+): string | null {
+  const current = new Map<string, NonNullable<RunActivityItem["execution"]>>();
+  const closed = new Set<string>();
+  const states = new Map<string, string>();
+  const sessionKey = (execution: NonNullable<RunActivityItem["execution"]>) =>
+    JSON.stringify([execution.runRef, execution.nodeRef, execution.sessionRef]);
+  for (const item of items) {
+    const scope = executionKey(item.execution);
+    if (!scope || !item.execution || item.historical) continue;
+    const key = sessionKey(item.execution);
+    const previous = current.get(key);
+    if (
+      !previous ||
+      item.execution.turnNumber > previous.turnNumber ||
+      (item.execution.turnNumber === previous.turnNumber &&
+        item.execution.attempt > previous.attempt)
+    )
+      current.set(key, item.execution);
+    if (!item.toolCall && !item.artifact) {
+      if (
+        item.phase === "FINAL" ||
+        terminalTranscriptStates.has(item.state ?? "")
+      )
+        closed.add(scope);
+      if (item.state) states.set(scope, item.state);
+    }
+  }
+  const candidates = items.filter((item) => {
+    const scope = executionKey(item.execution);
+    return (
+      scope &&
+      item.execution &&
+      !item.historical &&
+      item.kind !== "initiator" &&
+      !closed.has(scope) &&
+      executionKey(current.get(sessionKey(item.execution))) === scope &&
+      (activeTranscriptStates.has(states.get(scope) ?? "") ||
+        item.toolCall?.state === "RUNNING")
+    );
+  });
+  return candidates.at(-1)?.id ?? null;
+}
+
+export function presentRunTranscriptItems(
+  items: readonly RunActivityItem[],
+  activeItemId: string | null = activeTranscriptItemId(items),
+): PresentedTranscriptItem[] {
+  const services = new Map<
+    string,
+    { items: RunActivityItem[]; last: number }
+  >();
+  items.forEach((item, index) => {
+    if (!isTranscriptService(item)) return;
+    const key = executionKey(item.execution);
+    if (!key) return;
+    const group = services.get(key) ?? { items: [], last: index };
+    group.items.push(item);
+    group.last = index;
+    services.set(key, group);
+  });
+  return items.flatMap((item, index) => {
+    if (!isTranscriptService(item))
+      return [{ ...item, working: item.id === activeItemId }];
+    const key = executionKey(item.execution);
+    const group = key ? services.get(key) : undefined;
+    if (!group) return [{ ...item, working: item.id === activeItemId }];
+    if (group.last !== index) return [];
+    const terminal = group.items.filter((entry) =>
+      terminalTranscriptStates.has(entry.state ?? ""),
+    );
+    const representative =
+      [...terminal]
+        .reverse()
+        .find((entry) => entry.messageKind === "FINAL_MESSAGE") ??
+      terminal.at(-1) ??
+      item;
+    return [
+      {
+        ...representative,
+        id: group.items[0]?.id ?? item.id,
+        working: group.items.some((entry) => entry.id === activeItemId),
+        serviceHistory: group.items,
+      },
+    ];
+  });
 }
 
 // Summary из истории заменяется только событием exact persisted USER/run/node

@@ -53,7 +53,7 @@ async function render(
 
 function title(html: string): string {
   return (
-    /class="run-tool-event"[^]*?<header[^>]*>\s*<strong[^>]*>([^]*?)<\/strong>/.exec(
+    /class="run-activity-item__content"[^]*?<header[^>]*>\s*<strong[^>]*>([^]*?)<\/strong>/.exec(
       html,
     )?.[1] ?? ""
   );
@@ -131,6 +131,23 @@ describe("RunTranscript: названия native инструментов", () =
     );
     expect(title(await render("CODEX_FUTURE_TOOL"))).toBe("CODEX_FUTURE_TOOL");
   });
+
+  it.each([
+    ["CODEX_SHELL", "lucide-terminal"],
+    ["CODEX_FILE_CHANGE", "lucide-file-text"],
+    ["CODEX_WEB_SEARCH", "lucide-globe"],
+    ["CODEX_IMAGE_VIEW", "lucide-image"],
+    ["CODEX_SLEEP", "lucide-clock"],
+  ])(
+    "показывает отдельный значок и компактные закрытые детали для %s",
+    async (tool, icon) => {
+      const html = await render(tool);
+      expect(html).toContain(icon);
+      expect(html).toContain("run-activity-item--compact");
+      expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+      expect(html.match(/data-state="SUCCEEDED"/g)).toHaveLength(1);
+    },
+  );
 });
 
 describe("RunTranscript: безопасный runtime text", () => {
@@ -218,7 +235,7 @@ describe("RunTranscript: стороны сообщений", () => {
     expect(
       [
         ...html.matchAll(
-          /class="run-activity-item run-activity-item--([a-z]+)"/g,
+          /class="run-activity-item run-activity-item--([a-z]+)(?: [^"]*)?"/g,
         ),
       ].map((match) => match[1]),
     ).toEqual(["initiator", "agent", "agent", "tool", "system"]);
@@ -245,6 +262,155 @@ describe("RunTranscript: стороны сообщений", () => {
     );
     expect(styles.slice(styles.indexOf("@media (max-width: 720px)"))).toMatch(
       /\.run-activity-item\s*\{\s*width: 94%/,
+    );
+  });
+});
+
+describe("RunTranscript: компактная работа", () => {
+  const execution = {
+    runRef: "run_exact",
+    nodeRef: "nod_exact",
+    sessionRef: "ses_exact",
+    turnRef: "trn_exact",
+    turnNumber: 1,
+    attempt: 1,
+  };
+  function progress(
+    id: string,
+    changes: Partial<RunActivityItem> = {},
+  ): RunActivityItem {
+    return {
+      id,
+      kind: "system",
+      actor: "Kodex",
+      summary: "MODEL_REQUEST_RUNNING",
+      eventType: "TURN_PROGRESS",
+      state: "RUNNING",
+      historical: false,
+      occurredAt: "2026-10-04T10:00:00Z",
+      execution: { ...execution },
+      sequence: 1,
+      ...changes,
+    };
+  }
+  async function transcript(items: RunActivityItem[]): Promise<string> {
+    const app = createSSRApp({
+      render: () => h(RunTranscript, { items, embedded: true }),
+    });
+    app.use(i18n);
+    return renderToString(app);
+  }
+
+  it("показывает один доступный индикатор с тремя точками, этапы закрыты по умолчанию", async () => {
+    const html = await transcript([
+      progress("start", { eventType: "TURN_STARTED" }),
+      progress("schedule", { summary: "WORKLOAD_SCHEDULED" }),
+      progress("model"),
+    ]);
+    expect(html.match(/class="run-activity-item /g)).toHaveLength(1);
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html.match(/<i[^>]*>/g)).toHaveLength(3);
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain('class="run-transcript__service-history"');
+    expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+    expect(html).not.toContain('data-state="RUNNING"');
+    const header = html.match(/<header[^>]*>([^]*?)<\/header>/)?.[1] ?? "";
+    expect(header).not.toMatch(/#1|Ход 1|попытка 1/);
+  });
+
+  it("переносит работу на последнюю COMMENTARY, сохраняя полный FINAL и единственную terminal ошибку", async () => {
+    const comment = progress("comment", {
+      kind: "agent",
+      phase: "COMMENTARY",
+      summary: "Проверяю " + "длинный текст ".repeat(30),
+    });
+    const items = [progress("start"), comment];
+    const html = await transcript(items);
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html).toMatch(/data-phase="COMMENTARY"[^]*?role="status"/);
+    expect(html).toContain("run-activity-item__message--commentary");
+    expect(html).toContain('aria-expanded="false"');
+    const failed = await transcript([
+      ...items,
+      progress("failure", {
+        eventType: "TURN_COMPLETED",
+        messageKind: "FINAL_MESSAGE",
+        state: "FAILED",
+        summary: "RUNTIME_PROVIDER_UNAVAILABLE",
+      }),
+      progress("state", {
+        eventType: "RUN_STATE_CHANGED",
+        state: "FAILED",
+        summary: "RUNTIME_PROVIDER_UNAVAILABLE",
+      }),
+    ]);
+    expect(failed).not.toContain('role="status"');
+    expect(failed.match(/data-state="FAILED"/g)).toHaveLength(1);
+    const complete = await transcript([
+      ...items,
+      progress("final", {
+        kind: "agent",
+        phase: "FINAL",
+        state: "SUCCEEDED",
+        summary: "Итог " + "полный текст ".repeat(30),
+      }),
+    ]);
+    expect(complete).not.toContain('role="status"');
+    expect(complete).not.toMatch(
+      /data-phase="FINAL"[^]*?run-activity-item__message--collapsed/,
+    );
+  });
+
+  it("старую историю оставляет отдельной без технического баннера", async () => {
+    const html = await transcript([
+      progress("old", { execution: undefined, historical: true }),
+    ]);
+    expect(html).not.toContain('role="status"');
+    expect(html).not.toMatch(
+      /Служебная история без точной|Эти записи не объединяются|runs\.unscopedHistory/,
+    );
+    expect(html).toContain("run-transcript__historical");
+  });
+
+  it("actual INTERMEDIATE этапы с локализованным summary не возвращают отдельные progress cards", async () => {
+    const items = [
+      progress("start", {
+        eventType: "TURN_STARTED",
+        messageKind: "STATE",
+        summary: "Выполняется",
+      }),
+      progress("schedule", {
+        messageKind: "INTERMEDIATE_MESSAGE",
+        summary: "Запуск передан исполнителю",
+        serviceProgressCode: "WORKLOAD_SCHEDULED",
+      }),
+      progress("model", {
+        messageKind: "INTERMEDIATE_MESSAGE",
+        summary: "Подготовка и выполнение запроса к модели",
+        serviceProgressCode: "MODEL_REQUEST_RUNNING",
+      }),
+    ];
+    const html = await transcript(items);
+    expect(html.match(/class="run-activity-item /g)).toHaveLength(1);
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html).not.toContain('class="run-transcript__execution"');
+    expect(html).toContain("Этапы выполнения: 3");
+  });
+
+  it("сохраняет анимацию и отключает её при reduced motion, tool preview ограничен", () => {
+    const source = readFileSync(
+      new URL("./RunTranscript.vue", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain("@keyframes transcript-working");
+    expect(source).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[^]*?animation: none/,
+    );
+    expect(source).toMatch(
+      /\.run-transcript__preview\s*\{[^}]*-webkit-line-clamp: 2/,
+    );
+    expect(source).toMatch(
+      /\.run-activity-item--compact > article\s*\{[^}]*padding: 6px 10px/,
     );
   });
 });

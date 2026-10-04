@@ -449,3 +449,67 @@ PASS. Initialize и TurnStart/Turn совпадают с exact installed schema;
 Chrome screenshot `/tmp/kodex-model-request-preparation-hot.png` проверен:
 локализованный нейтральный progress, сообщения агента слева, без наложений;
 старый terminal отказ сохранён в истории, не объявляется новым результатом.
+
+04.10.2026 09:56–10:11 UTC, checkpoint
+`406bb59c3696d3e7734e5740161e77bec528e8cc`:
+PASS — runner build/provenance: image digest
+`sha256:d1eeee86fb610a2b0201f8c65977651361b335052221b4def71e5616989408c5`,
+binary SHA256 `d4395f02f57ddb9e0cebd177f8d09fcbc66d3e1d0ec62658d3c2e40ffe87ddca`,
+provenance SHA256 `1b525c0cbe6778653bf48ba7ebdb15348f040794105728b346d6283bd09505bc`.
+PASS — clean-tree render, authority revision 1, fingerprint
+`993b765bac8eb85b2c73e01481ce313ca73e4793be5b7f1103132d750e03e692`.
+PASS — repo-owned selected activation control-plane, egress-gateway,
+staff-control-center и supply-chain; warm spec/imageID совпадают с новым
+runner digest. FAIL — новый control-api-gateway не прошёл startup:
+`connect realtime NATS consumer`; прежний ready Pod продолжает обслуживать
+API. Исследуется отдельно, desired source annotation не объявляется успешным
+rollout.
+FAIL — реальный десятый запуск `run_EzMxfD1RpNxmZxhenLonrdE8` завершился
+ошибкой. accounts/check: ALLOWED/2XX/COMPLETED/IDENTITY/JSON/SCHEMA_OK_LIST;
+точный последующий provider stage UNKNOWN: Pod уже удалён до чтения логов.
+FAIL — адресный повтор 10:10 UTC, Pod `runtime-turn-74353ff21a2a0056`:
+закрытый safe log `MCP_READINESS`, class `PROVIDER`, detail `NONE`.
+Account/read и thread binding пройдены; inference/самонастройка ещё не
+доказаны. Исправляется точный MCP readiness boundary без ослабления схемы.
+По замечаниям владельца в работе компактная индикация вместо нескольких
+служебных карточек, значки commentary/tools и удаление технического пояснения
+о привязке служебной истории из обычного чата. Проверки изоляции сохраняются;
+визуальная приёмка этих новых правок пока NOT RUN.
+
+04.10.2026 10:12 UTC:
+PASS — control-api-gateway восстановился штатным restart: новый Pod Ready,
+старый ReplicaSet replicas=0, Deployment ready/updated/available=1.
+Причина первоначального NATS connect failure UNKNOWN; общее предположение
+о singleton consumer отвергнуто: отказ был до создания JetStream consumer.
+Исследуется задержка перезапуска Air child, production readiness не ослаблена.
+PROVEN — MCP_READINESS schema mismatch: закреплённый Codex сериализует
+httpOrigin, serverCapabilities, toolsError, в том числе null; наш строгий
+allowlist не содержит этих трёх известных полей. Адресное исправление и
+regression в работе; raw MCP payload/секреты не читались и не публиковались.
+
+04.10.2026 10:13–10:21 UTC, hot-reload дерево после `406bb59c`:
+FAIL→PASS — exact MCP status nullable metadata и обычное mcpAppUi:null
+закреплённого SDK теперь принимаются строгой bounded схемой и отбрасываются.
+Non-null toolsError, unknown/type/bounds/duplicate закрыто отклоняются;
+readiness назначается только после полной проверки inventory, включая
+дубликаты kodex. Полный Codex unit PASS (4.529 s), адресный race PASS (1.261 s),
+format/vet/diffcheck PASS. Следующий живой повтор пока NOT RUN.
+PASS — техническое пояснение о привязке истории удалено; неиспользуемые
+RU/EN строки и CSS убраны. Host/Pod Workspace SHA256 совпадают:
+`b34325964996fedfa3032616c61333bedd5d507f4333d23b01ee580fed2f6893`
+(первый промежуточный readback до удаления неиспользуемого CSS).
+FAIL→PASS — финальный скрин выявил реальные TURN_PROGRESS с messageKind
+INTERMEDIATE_MESSAGE, которые synthetic fixture не учитывал. Теперь
+closed serviceProgressCode сохраняется из исходного события до локализации;
+один exact ход/попытка отображает одну компактную служебную запись с четырьмя
+этапами в закрытых деталях. Published COMMENTARY/FINAL и инструменты не
+объединяются со служебными этапами; UNSCOPED записи не получают чужую привязку.
+Скрин `/tmp/kodex-chat-compact-regression-recheck.png` проверен:
+нет технического баннера, лишних progress-карточек, #sequence и строки
+turn/attempt в обычном отображении. USER справа, агент слева; desktop
+horizontal overflow отсутствует, Chrome Console без ошибок. Анимация на
+реальном активном ходе, mobile и новые реальные tool/commentary пока NOT RUN.
+PASS — финальное frontend дерево: 111 адресных unit tests (4 файла, 2.20 s),
+scoped ESLint, typecheck, Prettier и diff-check. Root полный Codex unit
+повторно PASS (4.528 s). Новые provider и окончательный runner activation
+не подменяются этими локальными результатами.
