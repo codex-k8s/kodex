@@ -14,11 +14,13 @@ const conversationalMessageKinds = new Set<RunEvent["messageKind"]>([
 export function runtimeProgressKey(
   value: string | undefined,
 ): string | undefined {
-  switch (value?.trim()) {
+  switch (value?.trim().replace(/^i18n:/, "")) {
     case "WORKLOAD_SCHEDULED":
       return "runs.runtimeProgress.workloadScheduled";
     case "MODEL_REQUEST_RUNNING":
       return "runs.runtimeProgress.modelRequestRunning";
+    case "RUNTIME_PROVIDER_UNAVAILABLE":
+      return "runs.runtimeProgress.providerUnavailable";
     default:
       return undefined;
   }

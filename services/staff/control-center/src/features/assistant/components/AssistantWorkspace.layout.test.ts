@@ -54,7 +54,7 @@ describe("AssistantWorkspace layout", () => {
     );
     expect(template).toContain(':events="conversationRunEvents"');
     expect(template).toContain("hasHistoricalTurns");
-    expect(source).toContain("publishedRunMessage(event)");
+    expect(source).toContain("assistantTurnHasAuthoritativeActivity(");
     expect(template).toContain('v-if="!turnHasPublishedMessage(turn)"');
   });
 

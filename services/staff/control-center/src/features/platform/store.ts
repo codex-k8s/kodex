@@ -434,20 +434,23 @@ export const usePlatformStore = defineStore("platform", () => {
     for (const value of values) target[key(value)] = value;
   }
 
+  function applyAuthenticatedBootstrap(value: BootstrapState): void {
+    requireRuntimeOrganizationRef(value.organizationRef);
+    if (
+      bootstrap.value?.organizationRef !== value.organizationRef ||
+      bootstrap.value.platformRole !== value.platformRole
+    )
+      clearOrganizationCatalogs();
+    bootstrap.value = value;
+    assistant.value = value.assistant;
+  }
+
   async function loadBootstrap(): Promise<void> {
     await query(
       "bootstrap",
       async () =>
         (await unwrap(getBootstrapState({ signal: requestSignal() }))).data,
-      (value) => {
-        if (
-          bootstrap.value?.organizationRef !== value.organizationRef ||
-          bootstrap.value.platformRole !== value.platformRole
-        )
-          clearOrganizationCatalogs();
-        bootstrap.value = value;
-        assistant.value = value.assistant;
-      },
+      applyAuthenticatedBootstrap,
     );
   }
 
@@ -3065,6 +3068,7 @@ export const usePlatformStore = defineStore("platform", () => {
     runList,
     gateList,
     loadBootstrap,
+    applyAuthenticatedBootstrap,
     loadOverview,
     search,
     loadMoreSearch,

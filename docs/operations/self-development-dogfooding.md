@@ -224,3 +224,53 @@ fresh SYSTEM create/read/rejoin и immutable runtime context только при
 по-прежнему применяются атомарно. Добавлена forward-only миграция 007.
 Исходный target9 fixture FAIL сохранён; текущие compile/diff checks PASS.
 Владелец самостоятельно восстановил SSO, повторную авторизацию не выполняли.
+
+04.10.2026 08:06–08:14 UTC, checkpoint
+`b1dca181a546b5600226c1e0f27882f9c8c297d4`:
+PASS — новый runner собран repo-owned скриптом, exact image digest
+`sha256:f0edb963a68c42dbdb8fc90b8795de5b7a66c991fc659f6404e6ca99d58b118e`;
+свежий private render, миграции фактически до `20261004000700`, supply-chain
+readback и новая runtime contract revision 2. Все 29 публичных admission
+policy fields совпали с render; exact source/host/Pod hashes для CP/GW/FE и
+controller. CP/GW/FE/IG/controller READY на новых Pod. Первый rollout GW
+FAIL по timeout подключения NATS, после штатного startup restart READY;
+первоначальный FAIL не заменён задним числом.
+
+PASS — адресные runner tests повторены на exact checkpoint (Codex 4.505 s,
+app 14.637 s, callback 0.149 s, readiness 0.053 s). Browser SSO callback,
+bootstrap и session ticket HTTP 200, Console без ошибок. Вход завершён
+существующей SSO-сессией, без ввода пароля и device-code.
+
+FAIL — первый реальный SYSTEM self-configuration turn
+`run_jb9Xo0PXGGRigLOrqCgAf_Fi` остановился до inference на ACCOUNT_READ.
+Offline stable schema установленного Codex 0.160.0 содержит `promax`,
+которого не было в строгом decoder. Исправление enum и positive/negative
+unit PASS; связь именно с этим live failure ещё UNKNOWN до повторного хода.
+FAIL — hard reload после первого SYSTEM run зацикливает realtime reducer:
+организация bootstrap ещё не загружена при обработке RUN snapshot.
+Нельзя ослаблять owner pin check; исправляется порядок authoritative bootstrap.
+На скриншоте также технические progress codes и дублирующий terminal summary;
+требуется адресное исправление представления и повторный визуальный readback.
+Чекбоксы 2–15 остаются неотмеченными: живой self-configuration ещё не выполнен.
+
+04.10.2026 08:19–08:26 UTC, исправляемое дерево после checkpoint `b1dca181`:
+PASS — повторный Chrome hard reload восстанавливает SYSTEM transcript,
+WebSocket показывает «Подключено», Console без ошибок; bootstrap/session,
+run graph/history HTTP 200. Скриншот
+`/tmp/kodex-system-history-fixed-hot.png`: progress/failure локализованы,
+terminal ошибка не дублируется неподписанным summary. 95 адресных frontend
+tests, полный typecheck/scoped lint/format соответствующей области PASS.
+Новые bootstrap ordering/one-shot transfer tests ещё проверяются; начальный
+build на редактируемых fixtures FAIL и требует повторного запуска после freeze.
+PASS — полный runner Codex (4.501 s), app (14.738 s), callback (0.154 s),
+readiness (0.050 s). Для диагностики добавлен закрытый класс отказа без
+сырого ответа, account metadata или provider error text в логах.
+Новый runner ещё не активирован; успешный реальный повторный ход NOT RUN.
+
+04.10.2026 08:30 UTC, финальное дерево перед фиксацией:
+PASS — bootstrap ordering и однократная передача снимка: 110 адресных tests
+в 5 файлах, полный typecheck, scoped ESLint и Prettier. Возврат из публичного
+раздела сохраняет свежий realtime snapshot; foreign organization и отменённый
+probe закрыто отклоняются. Полная frontend build повторена после freeze:
+PASS (7.29 s), предупреждение о размере bundle сохранено.
+Живой повтор SYSTEM turn после нового image digest ещё NOT RUN.

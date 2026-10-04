@@ -131,3 +131,58 @@ describe("RunTranscript: названия native инструментов", () =
     expect(title(await render("CODEX_FUTURE_TOOL"))).toBe("CODEX_FUTURE_TOOL");
   });
 });
+
+describe("RunTranscript: безопасный runtime text", () => {
+  it.each(["ru", "en"] as const)(
+    "локализует raw progress/failure в %s без второго fallback",
+    async (locale) => {
+      const items: RunActivityItem[] = [
+        "WORKLOAD_SCHEDULED",
+        "MODEL_REQUEST_RUNNING",
+        "RUNTIME_PROVIDER_UNAVAILABLE",
+      ].map((summary, index) => ({
+        id: `evt_${String(index)}`,
+        kind: "system",
+        actor: "Помощник",
+        summary,
+        historical: false,
+        occurredAt: "2026-10-04T10:00:00Z",
+        messageKind: "STATE",
+        state: index === 2 ? "FAILED" : "RUNNING",
+        execution: {
+          runRef: "run_exact",
+          nodeRef: "nod_exact",
+          sessionRef: "ses_exact",
+          turnRef: "trn_exact",
+          turnNumber: 1,
+          attempt: 1,
+        },
+      }));
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        const app = createSSRApp({
+          render: () => h(RunTranscript, { items, embedded: true }),
+        });
+        app.use(i18n);
+        const html = await renderToString(app);
+        expect(html).not.toMatch(
+          /WORKLOAD_SCHEDULED|MODEL_REQUEST_RUNNING|RUNTIME_PROVIDER_UNAVAILABLE|runs\.runtimeProgress|unscopedHistory/,
+        );
+        expect(html).toContain(
+          locale === "ru"
+            ? "Модель обрабатывает запрос"
+            : "Model is processing the request",
+        );
+        expect(html).toContain(
+          locale === "ru"
+            ? "Провайдер модели временно недоступен"
+            : "The model provider is temporarily unavailable",
+        );
+        expect(html.match(/data-state="FAILED"/g)).toHaveLength(1);
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+    },
+  );
+});

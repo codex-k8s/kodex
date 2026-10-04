@@ -15,10 +15,15 @@ import {
   isTranscriptNearBottom,
   type RunActivityItem,
 } from "@/features/runs/run-activity";
+import {
+  presentRuntimeText,
+  runtimeProgressKey,
+} from "@/features/runs/runtime-text";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 
 const props = withDefaults(
   defineProps<{
@@ -30,6 +35,23 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ download: [artifact: Artifact] }>();
 const { locale, t } = useI18n();
+const serverMessage = useServerMessage();
+const displayItems = computed(() =>
+  props.items.map((item) => {
+    if (item.phase) return item;
+    const text = (value: string | undefined) => {
+      const key = runtimeProgressKey(value);
+      return key
+        ? t(key)
+        : presentRuntimeText(value, serverMessage, item.messageKind);
+    };
+    return {
+      ...item,
+      summary: text(item.summary),
+      progress: text(item.progress),
+    };
+  }),
+);
 const nativeTools = new Set([
   "CODEX_SHELL",
   "CODEX_FILE_CHANGE",
@@ -71,7 +93,7 @@ const sections = computed(() =>
   [false, true].map((historical) => {
     const groups: { id: string; items: RunActivityItem[]; tools: boolean }[] =
       [];
-    const entries = props.items.filter(
+    const entries = displayItems.value.filter(
       (entry) => entry.historical === historical,
     );
     for (const item of historical

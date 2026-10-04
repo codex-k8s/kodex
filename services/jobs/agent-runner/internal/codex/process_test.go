@@ -357,6 +357,8 @@ func TestClassifyAccountReadResponse(t *testing.T) {
 		{name: "explicit authentication required", raw: json.RawMessage(`{"account":null,"requiresOpenaiAuth":true}`), wantErr: true, wantAuth: true},
 		{name: "API key account", raw: json.RawMessage(`{"account":{"type":"apiKey"},"requiresOpenaiAuth":true}`)},
 		{name: "ChatGPT account", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"pro"},"requiresOpenaiAuth":true}`)},
+		{name: "ChatGPT Pro Max account", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"promax"},"requiresOpenaiAuth":true}`)},
+		{name: "unknown ChatGPT plan remains invalid", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"future-plan"},"requiresOpenaiAuth":true}`), wantErr: true},
 		{name: "external Bedrock account", raw: json.RawMessage(`{"account":{"type":"amazonBedrock","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false}`)},
 		{name: "provider without OpenAI account", raw: json.RawMessage(`{"requiresOpenaiAuth":false}`)},
 		{name: "transport unavailable", callErr: availabilityErr, wantErr: true},

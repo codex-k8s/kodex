@@ -2199,6 +2199,8 @@ const ru = {
     runtimeProgress: {
       workloadScheduled: "Задание передано исполнителю",
       modelRequestRunning: "Модель обрабатывает запрос",
+      providerUnavailable:
+        "Провайдер модели временно недоступен. Ход завершён с ошибкой.",
     },
     artifactUnavailable:
       "Событие файла получено, но его безопасное описание недоступно.",
@@ -6625,6 +6627,8 @@ const en = {
     runtimeProgress: {
       workloadScheduled: "Task handed to the worker",
       modelRequestRunning: "Model is processing the request",
+      providerUnavailable:
+        "The model provider is temporarily unavailable. The turn failed.",
     },
     artifactUnavailable:
       "A file event was received, but its safe descriptor is unavailable.",

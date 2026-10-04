@@ -35,6 +35,7 @@ const (
 	providerRefreshCommitTimeout = 40 * time.Second
 	providerSandboxProbeTimeout  = 5 * time.Second
 	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
+	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s"
 )
 
 var (
@@ -245,6 +246,15 @@ func classifyProviderBrokerFailure(err error) providerBrokerFailure {
 	}
 }
 
+// Закрытая диагностическая классификация не передаёт исходный ответ,
+// аккаунт, credential или текст ошибки внешнего провайдера в логи.
+func providerSafeFailureClass(err error) string {
+	if errors.Is(err, errAccountReadResponseInvalid) {
+		return "ACCOUNT_RESPONSE_SCHEMA"
+	}
+	return string(classifyProviderBrokerFailure(err))
+}
+
 // ServeProviderBroker запускается только в container UID 10002 без Kubernetes
 // token, application grants, mTLS keys, MCP bearer и handoff signing key.
 func ServeProviderBroker(ctx context.Context) error {
@@ -279,7 +289,7 @@ func ServeProviderBroker(ctx context.Context) error {
 			return errors.New("accept isolated Codex provider request")
 		}
 		if err := serveBrokerRequest(ctx, connection); err != nil {
-			log.Printf("Codex provider request failed at safe stage: %s", providerStageOf(err))
+			log.Printf(providerSafeFailureLog, providerStageOf(err), providerSafeFailureClass(err))
 			_ = connection.Close()
 			continue
 		}
@@ -377,7 +387,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, execute, credentialrelay.Commit)
 	if err != nil {
-		log.Printf("Codex provider request failed at safe stage: %s", providerStageOf(err))
+		log.Printf(providerSafeFailureLog, providerStageOf(err), providerSafeFailureClass(err))
 		return writeProviderBrokerResultFailure(frames, result, err)
 	}
 	if result.Outcome != "SUCCEEDED" {
@@ -391,7 +401,7 @@ func writeProviderBrokerFailure(connection io.Writer, err error) error {
 }
 
 func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecutionStage, err error) error {
-	log.Printf("Codex provider request failed at safe stage: %s", stage)
+	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err))
 	return writeProviderBrokerFailure(connection, err)
 }
 

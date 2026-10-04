@@ -1,5 +1,6 @@
 import type {
   Artifact,
+  AssistantTurn,
   Run,
   RunEvent,
   RunNode,
@@ -200,6 +201,62 @@ export function publishedRunMessage(event: RunEvent): RunEvent["message"] {
     withinBudget
     ? message
     : undefined;
+}
+
+// Summary из истории заменяется только событием exact persisted USER/run/node
+// binding. Receipt ASSISTANT имеет собственный ref: он не является turnRef.
+export function assistantTurnHasAuthoritativeActivity(
+  turn: AssistantTurn,
+  turns: readonly AssistantTurn[],
+  run: Run | undefined,
+  nodes: readonly RunNode[],
+  events: readonly RunEvent[],
+): boolean {
+  if (!run || turn.runRef !== run.ref || turn.role === "SYSTEM_RECEIPT")
+    return false;
+  const anchors = turns.filter(
+    (item) => item.role === "USER" && item.runRef === run.ref,
+  );
+  if (anchors.length !== 1) return false;
+  const anchor = anchors[0];
+  if (!anchor) return false;
+  if (turn.role === "USER" && turn.ref !== anchor.ref) return false;
+  return events.some((event) => {
+    const execution = event.execution;
+    if (
+      !executionKey(execution) ||
+      !execution ||
+      event.runRef !== run.ref ||
+      execution.runRef !== run.ref ||
+      execution.sessionRef !== run.sessionRef ||
+      execution.turnRef !== anchor.ref ||
+      execution.turnNumber !== anchor.sequence ||
+      execution.attempt !== run.attempt
+    )
+      return false;
+    const node = nodes.find(
+      (item) => item.ref === execution.nodeRef && item.runRef === run.ref,
+    );
+    if (
+      !node ||
+      node.turnRef !== anchor.ref ||
+      node.attempt !== execution.attempt ||
+      node.type !== "AGENT_EXECUTION"
+    )
+      return false;
+    const message = publishedRunMessage(event);
+    if (turn.role === "USER") return message?.phase === "USER";
+    if (message?.phase === "FINAL") return true;
+    // Успешная служебная запись не заменяет ещё не полученный полный ответ.
+    return (
+      (turn.state === "FAILED" &&
+        event.type === "TURN_COMPLETED" &&
+        event.nodeState === "FAILED") ||
+      (turn.state === "CANCELLED" &&
+        event.nodeState === "CANCELLED" &&
+        event.type === "TURN_COMPLETED")
+    );
+  });
 }
 
 export function buildRunActivityItems(

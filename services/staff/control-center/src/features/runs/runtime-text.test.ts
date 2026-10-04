@@ -15,6 +15,12 @@ describe("presentRuntimeText", () => {
     expect(runtimeProgressKey("MODEL_REQUEST_RUNNING")).toBe(
       "runs.runtimeProgress.modelRequestRunning",
     );
+    expect(runtimeProgressKey("RUNTIME_PROVIDER_UNAVAILABLE")).toBe(
+      "runs.runtimeProgress.providerUnavailable",
+    );
+    expect(runtimeProgressKey("i18n:RUNTIME_PROVIDER_UNAVAILABLE")).toBe(
+      "runs.runtimeProgress.providerUnavailable",
+    );
     expect(runtimeProgressKey("ARBITRARY_INTERNAL_STATUS")).toBeUndefined();
   });
   it("скрывает служебные коды и внутренние ссылки runtime", () => {

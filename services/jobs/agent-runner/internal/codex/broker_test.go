@@ -158,6 +158,25 @@ func TestProviderBrokerFailurePreservesSafeClass(t *testing.T) {
 	}
 }
 
+func TestProviderSafeFailureClassDoesNotExposeDiagnostics(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "account schema", err: atProviderStage(providerStageAccountRead, errAccountReadResponseInvalid), want: "ACCOUNT_RESPONSE_SCHEMA"},
+		{name: "authentication", err: atProviderStage(providerStageAccountRead, ErrProviderAuthentication), want: "AUTHENTICATION"},
+		{name: "external diagnostic", err: errors.New("fixture secret and account details must stay private"), want: "PROVIDER"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := providerSafeFailureClass(test.err); got != test.want {
+				t.Fatalf("safe provider failure class = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
 	var response bytes.Buffer
 	var diagnostic bytes.Buffer

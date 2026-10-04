@@ -5,9 +5,14 @@ import {
   buildRunTranscriptItems,
   isTranscriptNearBottom,
   publishedRunMessage,
+  assistantTurnHasAuthoritativeActivity,
   type PresentedRunEvent,
 } from "@/features/runs/run-activity";
-import type { Run, RunNode } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  AssistantTurn,
+  Run,
+  RunNode,
+} from "@/shared/api/generated/openapi/types.gen";
 
 const run: Run = {
   ref: "run_example",
@@ -102,6 +107,156 @@ function required<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Required test fixture is missing");
   return value;
 }
+
+describe("assistantTurnHasAuthoritativeActivity", () => {
+  const user: AssistantTurn = {
+    ref: "trn_example",
+    sequence: 1,
+    role: "USER",
+    content: "Задание",
+    state: "COMPLETED",
+    runRef: run.ref,
+    createdAt: run.createdAt,
+  };
+  const receipt: AssistantTurn = {
+    ...user,
+    ref: "trn_result",
+    sequence: 2,
+    role: "ASSISTANT",
+    state: "FAILED",
+    content: "RUNTIME_PROVIDER_UNAVAILABLE",
+  };
+  const boundNode = { ...node, turnRef: user.ref, state: "FAILED" as const };
+  const failure: PresentedRunEvent = {
+    ...required(events[0]),
+    message: undefined,
+    type: "TURN_COMPLETED",
+    messageKind: "FINAL_MESSAGE",
+    summary: receipt.content,
+    displaySummary: receipt.content,
+    nodeState: "FAILED",
+    runState: "FAILED",
+  };
+  const check = (
+    event = failure,
+    currentRun: Run | undefined = run,
+    currentNode: RunNode = boundNode,
+    turns = [user, receipt],
+    turn = receipt,
+  ) =>
+    assistantTurnHasAuthoritativeActivity(
+      turn,
+      turns,
+      currentRun,
+      [currentNode],
+      [event],
+    );
+
+  it("заменяет terminal summary exact failure без догадки по receipt ref/sequence", () => {
+    expect(check()).toBe(true);
+    expect(buildRunTranscriptItems([failure])).toMatchObject([
+      { historical: false, state: "FAILED", summary: receipt.content },
+    ]);
+  });
+  it("после rejoin убирает только соответствующий fallback и сохраняет старую историю", () => {
+    expect(
+      assistantTurnHasAuthoritativeActivity(
+        receipt,
+        [user, receipt],
+        run,
+        [boundNode],
+        [],
+      ),
+    ).toBe(false);
+    expect(check()).toBe(true);
+    expect(
+      check(failure, run, boundNode, [user, receipt], {
+        ...receipt,
+        runRef: "run_old",
+      }),
+    ).toBe(false);
+  });
+  it.each([
+    "runRef",
+    "nodeRef",
+    "sessionRef",
+    "turnRef",
+    "turnNumber",
+    "attempt",
+  ] as const)("не подавляет summary для другой execution.%s", (field) => {
+    const execution = required(failure.execution);
+    const changed = {
+      ...execution,
+      [field]: typeof execution[field] === "number" ? 2 : "foreign_ref",
+    };
+    expect(check({ ...failure, execution: changed })).toBe(false);
+  });
+  it("сохраняет unsigned history и summary при неполном owner read", () => {
+    expect(check({ ...failure, execution: undefined })).toBe(false);
+    expect(
+      assistantTurnHasAuthoritativeActivity(
+        receipt,
+        [user, receipt],
+        undefined,
+        [],
+        [failure],
+      ),
+    ).toBe(false);
+    expect(check(failure, run, { ...boundNode, turnRef: undefined })).toBe(
+      false,
+    );
+    expect(check(failure, run, boundNode, [receipt])).toBe(false);
+    expect(
+      check(failure, run, boundNode, [
+        user,
+        { ...user, ref: "trn_other" },
+        receipt,
+      ]),
+    ).toBe(false);
+  });
+  it("сохраняет неизвестную attempt/node и отдельный SYSTEM_RECEIPT", () => {
+    expect(check(failure, { ...run, attempt: 2 })).toBe(false);
+    expect(check(failure, run, { ...boundNode, attempt: 2 })).toBe(false);
+    expect(
+      check(failure, run, boundNode, [user, receipt], {
+        ...receipt,
+        role: "SYSTEM_RECEIPT",
+      }),
+    ).toBe(false);
+  });
+  it("не выдаёт progress/другой terminal state за ответ или отказ", () => {
+    expect(
+      check({
+        ...failure,
+        type: "TURN_PROGRESS",
+        messageKind: "INTERMEDIATE_MESSAGE",
+        nodeState: "RUNNING",
+      }),
+    ).toBe(false);
+    expect(check({ ...failure, nodeState: "SUCCEEDED" })).toBe(false);
+    expect(
+      check(failure, run, boundNode, [user, receipt], {
+        ...receipt,
+        state: "COMPLETED",
+      }),
+    ).toBe(false);
+  });
+  it("скрывает USER/FINAL fallback только по точному опубликованному сообщению", () => {
+    const message = {
+      ref: "msg_exact",
+      phase: "USER" as const,
+      revision: 1,
+      text: user.content,
+    };
+    expect(
+      check({ ...failure, message }, run, boundNode, [user, receipt], user),
+    ).toBe(true);
+    expect(check(failure, run, boundNode, [user, receipt], user)).toBe(false);
+    expect(check({ ...failure, message: { ...message, phase: "FINAL" } })).toBe(
+      true,
+    );
+  });
+});
 
 describe("buildRunActivityItems", () => {
   it("сохраняет полный USER текст больше 64 KiB в авторитетном бюджете 100000 символов", () => {

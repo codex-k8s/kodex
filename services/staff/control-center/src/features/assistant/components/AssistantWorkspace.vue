@@ -87,9 +87,10 @@ import {
 } from "@/features/assistant/workspace-state";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import {
-  publishedRunMessage,
+  assistantTurnHasAuthoritativeActivity,
   isTranscriptNearBottom,
 } from "@/features/runs/run-activity";
+import { runtimeProgressKey } from "@/features/runs/runtime-text";
 import RuntimeSecretDraftDialog from "@/features/runtime-secrets/RuntimeSecretDraftDialog.vue";
 import type { RuntimeSecretDraftSuggestion } from "@/features/runtime-secrets/model";
 import { consumeRuntimeSecretReauthSuggestion } from "@/features/runtime-secrets/reauth-suggestion";
@@ -173,21 +174,22 @@ const conversationRunEvents = computed(() =>
   ),
 );
 function turnHasPublishedMessage(turn: AssistantTurn): boolean {
-  const phase =
-    turn.role === "USER"
-      ? "USER"
-      : turn.role === "ASSISTANT"
-        ? "FINAL"
-        : undefined;
-  return (
-    !!phase &&
-    conversationRunEvents.value.some(
-      (event) =>
-        publishedRunMessage(event) &&
-        event.execution?.runRef === turn.runRef &&
-        publishedRunMessage(event)?.phase === phase,
-    )
+  const run = turn.runRef ? platform.runs[turn.runRef] : undefined;
+  const graph = run
+    ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
+    : undefined;
+  return assistantTurnHasAuthoritativeActivity(
+    turn,
+    store.selectedConversation?.turns ?? [],
+    run,
+    graph?.nodes ?? [],
+    conversationRunEvents.value,
   );
+}
+function transcriptTurnContent(turn: AssistantTurn): string {
+  const key =
+    turn.role !== "USER" ? runtimeProgressKey(turn.content) : undefined;
+  return key ? t(key) : turn.content;
 }
 const transcriptTurns = computed(() =>
   (store.selectedConversation?.turns ?? []).filter(
@@ -2076,7 +2078,7 @@ onBeforeUnmount(() => {
                   </header>
                   <SafeMarkdown
                     v-if="!turnHasPublishedMessage(turn)"
-                    :content="turn.content"
+                    :content="transcriptTurnContent(turn)"
                     :class="{
                       'assistant-transcript-message--collapsed':
                         turn.content.length > 1200 &&

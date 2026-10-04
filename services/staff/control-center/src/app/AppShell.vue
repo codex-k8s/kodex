@@ -38,6 +38,7 @@ import {
   routeProjectRef,
 } from "@/app/navigation-context";
 import { resolveShellRealtimeState } from "@/app/realtime-presentation";
+import { synchronizeSessionBootstrap } from "@/app/session-bootstrap";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
 import { useAssistantStore } from "@/features/assistant/store";
@@ -83,6 +84,7 @@ const realtime = useRealtimeStore();
 const roleImages = useRoleImagesStore();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
+synchronizeSessionBootstrap(session, platform);
 useSpeechInput();
 const { locale, t } = useI18n();
 const serverMessage = useServerMessage();
@@ -546,7 +548,9 @@ onBeforeUnmount(() => {
   realtime.closePlatform();
   runtime.clear();
   access.clearOwnerState();
-  platform.clearOwnerState();
+  // Public route не меняет владельца. Сохраняем единственный актуальный
+  // bootstrap; logout/ошибка сессии по-прежнему закрывают owner state.
+  if (session.phase !== "authenticated") platform.clearOwnerState();
 });
 </script>
 
