@@ -23,6 +23,11 @@
         history: createMemoryHistory(),
         routes: [
           {
+            path: "/organization/role-images/:recipeRef",
+            name: "system-role-image",
+            component: AssistantRoleImageBuildFixture,
+          },
+          {
             path: "/projects/:projectRef/role-images/:recipeRef",
             name: "role-image",
             component: AssistantRoleImageBuildFixture,

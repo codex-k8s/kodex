@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,9 +69,32 @@ func TestImpactOwnerSnapshotProtocolUpgrade(t *testing.T) {
 	}
 	testHistoricalImpactOwnerQueries(t, ctx, config)
 	version, err := goose.GetDBVersionContext(ctx, database)
-	if err != nil || version != 20261004000100 {
+	if err != nil || version != latestEmbeddedImpactUpgradeMigration(t) {
 		t.Fatalf("unexpected migration version: %d, error=%v", version, err)
 	}
+}
+
+func latestEmbeddedImpactUpgradeMigration(t *testing.T) int64 {
+	t.Helper()
+	entries, err := migrations.ReadDir("migrations")
+	if err != nil {
+		t.Fatal("read embedded migration registry")
+	}
+	var latest int64
+	for _, entry := range entries {
+		prefix, _, found := strings.Cut(entry.Name(), "_")
+		version, err := strconv.ParseInt(prefix, 10, 64)
+		if entry.IsDir() || !found || err != nil || version <= 0 || !strings.HasSuffix(entry.Name(), ".sql") {
+			t.Fatal("embedded migration registry is invalid")
+		}
+		if version > latest {
+			latest = version
+		}
+	}
+	if latest < 20261004000100 {
+		t.Fatal("impact owner upgrade migration is unavailable")
+	}
+	return latest
 }
 
 // Это доказательство SQL-входа владельца, не RPC или выдачи полномочий.

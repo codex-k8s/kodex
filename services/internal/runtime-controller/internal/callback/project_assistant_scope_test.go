@@ -33,7 +33,7 @@ func TestProjectAssistantCanPrepareOnlyProjectSelfConfiguration(t *testing.T) {
 			t.Fatal("ambiguous duplicate project self operation")
 		}
 		seen[kind] = true
-		parameters := properties["parameters"].(map[string]any)["properties"].(map[string]any)
+		parameters := assistantOrdinaryParametersSchema(properties["parameters"].(map[string]any))["properties"].(map[string]any)
 		if _, present := parameters["systemAssistantRef"]; present {
 			t.Fatal("project environment operation carried organization assistant authority")
 		}
@@ -138,7 +138,7 @@ func TestProjectSelfCatalogPersistsAcrossForeignScreenContexts(t *testing.T) {
 					continue
 				}
 				ownCount++
-				parameters := schema["properties"].(map[string]any)["parameters"].(map[string]any)["properties"].(map[string]any)
+				parameters := assistantOrdinaryParametersSchema(schema["properties"].(map[string]any)["parameters"].(map[string]any))["properties"].(map[string]any)
 				field, want := "agentRef", input.AgentRef
 				if op == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 					field, want = "environmentRef", input.RuntimeEnvironmentRef

@@ -281,6 +281,9 @@ func rehydrateEditedAssistantEnvironment(original, edited entity.AssistantPlanOp
 func (repository *Repository) assistantEnvironmentSnapshotMatches(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (bool, error) {
+	if assistantProjectConfigurationOperation(operation) {
+		return repository.projectAssistantConfigurationSnapshotMatches(ctx, tx, actorScope, operation)
+	}
 	systemAssistantRef := assistantString(operation.Parameters, "systemAssistantRef")
 	effectiveProjectRef := projectRef
 	if systemAssistantRef != "" {

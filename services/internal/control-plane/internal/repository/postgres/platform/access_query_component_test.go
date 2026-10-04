@@ -73,7 +73,7 @@ func testPublicAccessQueryScopes(t *testing.T, ctx context.Context, repository *
 		name, target string
 		allowed      []bool
 	}{
-		{"organization", `{"kind":"ORGANIZATION"}`, []bool{false, true, true}},
+		{"organization", `{"kind":"ORGANIZATION"}`, []bool{true, true, true}},
 		{"project", fmt.Sprintf(`{"kind":"PROJECT","projectRef":%q}`, project.Ref), []bool{true, true, true}},
 		{"resource kind", fmt.Sprintf(`{"kind":"RESOURCE_KIND","projectRef":%q,"resourceKind":"ROLE_IMAGE"}`, project.Ref), []bool{true, true, true}},
 		{"resource instance", fmt.Sprintf(`{"kind":"RESOURCE_INSTANCE","projectRef":%q,"resourceKind":"PROJECT","resourceRef":%q}`, project.Ref, project.Ref), []bool{true, true, true}},
@@ -129,6 +129,36 @@ func testPublicAccessQueryScopes(t *testing.T, ctx context.Context, repository *
 			}
 		})
 	}
+	t.Run("organization image owner boundary is not a custom grant", func(t *testing.T) {
+		orgRole := createRoleImageAccessRole(t, ctx, service, owner, "query-org-image-role", "Synthetic organization image grant", []string{"organization.manage", "image.build", "image.source.view", "image.source.manage"}, []string{"ORGANIZATION"})
+		createRoleImageAccessBinding(t, ctx, service, owner, "query-org-image-binding", subjects[0].Ref, orgRole.CurrentVersion.Ref, entity.AccessScope{Kind: "ORGANIZATION"})
+		for _, actor := range []value.Principal{viewer, owner} {
+			result, err := read(actor, `{"target":{"kind":"ORGANIZATION"},"permissionKeys":["image.build","image.source.view","image.source.manage"]}`)
+			if err != nil || len(result.Decisions) != 3 {
+				t.Fatalf("organization image access query: %v", err)
+			}
+			for _, decision := range result.Decisions {
+				if decision.Allowed != (actor.ActorID == owner.ActorID) {
+					t.Fatal("custom member grant advertised protected organization image access")
+				}
+			}
+		}
+		if _, err := repository.pool.Exec(ctx, queryOrganizationImageComponentOwner, ownerScope.organizationID, ownerScope.actorID, "ADMINISTRATOR"); err != nil {
+			t.Fatal(err)
+		}
+		result, err := read(owner, `{"target":{"kind":"ORGANIZATION"},"permissionKeys":["image.build","image.source.view","image.source.manage"]}`)
+		if err != nil || len(result.Decisions) != 3 {
+			t.Fatal("administrator organization image query failed")
+		}
+		for _, decision := range result.Decisions {
+			if !decision.Allowed {
+				t.Fatal("administrator create image permission absent")
+			}
+		}
+		if _, err := repository.pool.Exec(ctx, queryOrganizationImageComponentOwner, ownerScope.organizationID, ownerScope.actorID, "OWNER"); err != nil {
+			t.Fatal(err)
+		}
+	})
 	t.Run("foreign tenant authority", func(t *testing.T) {
 		foreign := viewer
 		foreign.AuthorityTenant = "20000000-0000-4000-8000-000000009999"

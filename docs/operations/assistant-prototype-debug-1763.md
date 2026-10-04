@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.326
+version: 1.0.328
 updated: 2026-10-04
 ---
 
@@ -6952,40 +6952,40 @@ GitHub checks не считается `PASS`.
 - [ ] Полная системная настройка: модель/аккаунт/reasoning, образ, проверенные
       инструменты, окружение, несекретные переменные, привязки секретов, ресурсы,
       тома, сетевой доступ и инструкции. Доступ — владелец/администратор.
-- [ ] Отдельная конфигурация помощника проекта использует ресурсы только своего
+- [x] Отдельная конфигурация помощника проекта использует ресурсы только своего
       проекта. Системные секреты, grants и полномочия не копируются автоматически.
-- [ ] Несколько диалогов исполняются одновременно: отдельные session, workspace,
+- [x] Несколько диалогов исполняются одновременно: отдельные session, workspace,
       execution, leases/grants и история. Warm runtime переиспользуется только
       при совпадении exact session/config; занятый единичный warm-процесс не
       превращается в общую очередь всех чатов. Исполнители создаются по спросу,
       не запускать десять постоянных Pod ради значения DEFAULT 10.
-- [ ] Внутри одного диалога остаётся один активный ход: QUEUE добавляет сообщение
+- [x] Внутри одного диалога остаётся один активный ход: QUEUE добавляет сообщение
       после текущего, INTERRUPT_ACTIVE прерывает только его граф. Stop, delete,
       retry, lease expiry и отзыв доступа изолированы по диалогу; завершение
       корня атомарно закрывает принадлежащие ему дочерние работы.
-- [ ] В чате и настройках явно различимы системный и проектный помощники;
+- [x] В чате и настройках явно различимы системный и проектный помощники;
       каждый диалог сохраняет собственные черновик, состояние и привязку.
       Смена проекта/чата не перепривязывает историю или активный ход и не
       останавливает фоновые чаты. События WebSocket обновляют точный диалог
       без polling и мигания; после reconnect выполняется корректный rejoin.
-- [ ] Scheduler/controller согласуют общий лимит аккаунта с ресурсами кластера
+- [x] Scheduler/controller согласуют общий лимит аккаунта с ресурсами кластера
       и ёмкостью controller. Claim атомарно проверяет свободные слоты, не
       переподписывает один session и не допускает превышения при гонках.
       В UI различимы очередь, выполнение и ожидание мощности; отдельный чат
       не блокирует остальные. Внешние rate/usage limits обрабатываются отдельно,
       лимит Kodex 10 не выдаётся за гарантию десяти запросов провайдеру.
-- [ ] Системный помощник подготавливает изменения себе и проектному помощнику;
+- [x] Системный помощник подготавливает изменения себе и проектному помощнику;
       настроенный проектный помощник — себе. Полномочия определяет текущий actor,
       а не имя помощника, текст запроса или идентификатор из tool payload.
-- [ ] Все пути подготовки создают один versioned draft с объяснением изменений,
+- [x] Все пути подготовки создают один versioned draft с объяснением изменений,
       проверкой и редактируемой штатной формой. Публикация требует отдельного
       подтверждения; текст секрета вводится только в защищённую форму.
-- [ ] Onboarding сохраняет настройку системного помощника вторым шагом; сначала
+- [x] Onboarding сохраняет настройку системного помощника вторым шагом; сначала
       видны основные действия, расширенные параметры доступны под раскрытием.
       Настройку можно закончить раньше и затем вернуться к ней.
 - [x] Подпись модели: локализованная дата каталога Kodex без account ref и сырых
       timestamps; reasoning отсортирован от меньшего к большему.
-- [ ] READ_OWN_EXECUTION полностью удалён из контрактов, типов, настройки и
+- [x] READ_OWN_EXECUTION полностью удалён из контрактов, типов, настройки и
       выдачи runtime-прав; совместимость со старым профилем не поддерживается.
 - [ ] Contract/codegen, Go/unit/disposable PostgreSQL, frontend/lint/typecheck/build,
       итоговый render, hot-reload readback и Chrome MCP со скриншотами, Console и
@@ -7783,3 +7783,308 @@ oracle 65 конфигурационных ресурсов также PASS. Loc
 unit/lint/forced typecheck/e2eTS/synthetic build PASS; полный повтор выполняется
 на следующем checkpoint. Protected workspace canary расширен без inference;
 публичный `make test-agent-runner` после расширения PASS.
+
+### 04.10.2026 — checkpoint 2c0a и оставшаяся полная самонастройка
+
+Checkpoint `2c0a554778669e44007941234d5d37ab2b2703c6` опубликован в том же
+Draft PR #1790. Основной checklist ещё не закрыт.
+
+- [x] На чистом SHA contract/codegen/SQL boundary, install/release render,
+      authority ABI/codegen, CP/gateway/controller/egress/runtimecontract
+      unit/vet и runner unit/vet — PASS. Mandatory disposable PostgreSQL:
+      10 suites PASS 115,393 с, Avatar PASS 1,553 с, SKIP нет;
+      `/tmp/kodex-product-review-2c0a554-postgres.log`.
+- [x] Frontend на этом SHA: 327 suites / 2205 tests, lint, forced typecheck,
+      E2E TypeScript, обе сборки; Chromium 47/47 и Firefox retry 4/4 — PASS.
+      Первый default-workers unit завершился FAIL по i18n-scanner timeout
+      5 с при общей CPU нагрузке. Повтор с workers=2 прошёл без изменения
+      timeout, исходный FAIL сохранён. Снимки RU desktop / EN mobile просмотрены.
+- [x] Repo-owned runner build/import, supply-chain build, итоговый private
+      render, supply-chain apply/readback и пять выбранных core workload.
+      Exact runner: `sha256:94777bbda54e7c1b36712183994363981c6b0ee22a017f4be5563c461d12d842`.
+      Политики обновлены до controller; все 12 VAP/binding exact specs совпали
+      с render с ограниченной нормализацией Kubernetes defaults.
+- [x] Control-plane, secret-broker, gateway, frontend, egress и controller
+      получили exact source revision; контрольные файлы host/Pod совпали.
+      Первый gateway rollout timeout — FAIL; после startup restart он стал
+      Ready, отдельный repo-owned gateway readback — PASS. Это не подмена
+      первого результата успешным повтором.
+- [x] Controller заменён: UID `b6c6c6c1-b29d-4064-a45e-1a0e5261f95d` →
+      `a74834bd-e411-47a8-b4de-7664a072770d`; warm Pod также заменён на
+      UID `4d8c0ee2-2c76-4481-9c3e-0d24022599f1`. Все три его контейнера
+      используют новый exact runner digest. Session PVC
+      `runtime-session-d973c67782fa1001` сохранил UID
+      `dacbe5d1-3e2c-4e24-82fc-5f2c8edfc33e` и Bound. Это проверка lifecycle
+      и идентичности PVC, не чтение пользовательских файлов или доказательство
+      десяти живых исполнителей.
+- [x] Защищённая native canary в role-runtime и provider-runtime вернула
+      именно `OK`; UID/digest/Ready проверены до и после. В живой default
+      конфигурации environment volumes — 0; положительные disk/tmpfs варианты
+      доказаны отдельным native disposable component, не выданы за live mounts.
+- [x] Live Chrome после hard reload: realtime LIVE, attempt 0, помощник READY,
+      Console error/warn нет, bootstrap/session/ticket HTTP 200, overflow нет.
+      Локальный screenshot сохранён и просмотрен; screenshot MCP-вызов завис
+      после сохранения файла и был остановлен, факт отмены не скрыт.
+- [x] Независимые architecture/security review на SHA — PASS. Продуктовый
+      review — FAIL по двум недостижимым путям ниже; остальные проверенные
+      сценарии не объявлены проваленными или полностью принятыми.
+- [ ] Системный помощник подготавливает создание/изменение собственного
+      ORGANIZATION Dockerfile через специализированный подтверждаемый план,
+      с тем же managed build/admission/promotion, что штатный UI.
+- [ ] SYSTEM и PROJECT помощники подготавливают модель/account/reasoning
+      через один versioned plan и отдельное подтверждение; нет расширения
+      generic UPDATE_AGENT и caller-issued scope/owner полномочий.
+- [ ] Fresh bounded discovery даёт допустимые target/profile/account/model
+      и organizational recipe refs, чтобы помощник не угадывал opaque IDs.
+- [ ] Проверки новой волны, новый checkpoint и повтор local activation/review.
+- [ ] Штатная сборка и admission/promotion собственного ORGANIZATION образа
+      через Chrome без запуска агента; полного live доказательства пока нет.
+
+Карта новой волны 3.7: exact controller lease/fence/generation → принадлежащий
+серверу run/conversation/assistant tuple → root actor с текущими правами →
+`ProposeAssistantPlan`/редактирование плана → immutable plan revision. Новые
+типы: `CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE`,
+`UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE`,
+`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`. UI читает и редактирует только
+пользовательские параметры; organization/scope/profile/versions/catalog pins
+назначает CP. Validate не пишет image/model. Human apply разрешает существующий
+target до OCC/receipt и в одной owner-транзакции выполняет canonical ORG
+image command либо runtime-config + overlay publication, receipt/audit/events.
+Replay не создаёт второй build/revision. PROJECT источник настраивает только
+своего помощника; SYSTEM источник — себя либо доступный assistant профиль
+проекта, не произвольного сотрудника. Scope не выводится из пустого projectRef.
+
+Модель и reasoning проверяются совместно по prospective current catalog;
+прочие TOML настройки сохраняются. Ручной overlay draft, catalog/target/version
+drift и отзыв доступа закрыто отклоняют сохранённый план, не лечатся скрытым
+fallback. Активные turns/grants/history/RuntimeRevision не переписываются;
+новая конфигурация применяется к следующим ходам. Image build/cancel/retry/
+expiry/admit/promote сохраняют существующий fenced lifecycle. Сам reject
+плана не создаёт image/model эффектов. Fresh read не выдаёт credentials,
+secret values или owner authority.
+
+NOT RUN: реальные ИИ, STT, device-code, staging/production. Следующий полный
+QA документ до достижения текущей цели не читается.
+
+### 04.10.2026 — незавершённая волна 3.7: каталог и полная самонастройка
+
+Следующие результаты относятся к рабочему дереву поверх `2c0a554`, а не
+к новому неизменяемому SHA. Итоговые проверки и активация будут повторены
+после фиксации всех изменений этой волны.
+
+- [x] Proto generation/lint/build/codegen — PASS. OpenAPI generation повторён
+      после устранения дублированного типа операции; gateway проверяет все
+      зарегистрированные Proto operation types против HTTP-контракта.
+      Первый запуск нового теста не скомпилировался из-за неверного обращения
+      к отсутствующему полю receipt; исправленная проверка — PASS.
+- [x] AsyncAPI, authority codegen/ABI и web-only release render — PASS.
+      Первый SQL-boundary запуск пришёлся на незавершённое добавление embedded
+      SQL и дал FAIL; после согласования дерева повтор — PASS.
+- [x] FE scoped-проверки versioned model/image form — PASS: 87 unit и
+      16 synthetic Chromium, forced typecheck, E2E TypeScript, lint и сборка.
+      Production-форма сохраняет неизменяемый `runtimeProfilePin` и все
+      server-owned scope/version pins. Просмотрен снимок 390 px: переполнения нет.
+- [x] Тестовая scheduler-upgrade БД теперь создаётся из пустого canonical
+      bootstrap-шаблона: Goose table/sequence принадлежат owner, migrator
+      получает только штатные точные grants. Первоначальная upgrade-проверка
+      была FAIL по правам метаданных, а не по бизнес-переходу. Повтор публичного
+      filtered entrypoint — PASS; impact upgrade через новую migration также
+      PASS. Полный компонентный набор новой волны ещё не принят.
+- [ ] Независимый preflight нашёл конфликт каталога: callback разрешал только
+      восемь известных reasoning labels, хотя canonical каталог поддерживает
+      новые значения вроде `adaptive`. Требуется единая структурная проверка,
+      сохранение bounded/duplicate/default checks и положительный fenced test.
+- [ ] Chrome ORG image-create: owner получил source view/manage, но
+      `image.build` был DENIED; source скрыт и создание недоступно. Исправляется
+      canonical registry/engine новой forward-only migration, без UI-обхода.
+      Query и command должны одинаково отклонять MEMBER с custom grant.
+- [ ] SYSTEM → PROJECT окружение/инструкции с общего экрана пока недостижимы.
+      Расширяются только специализированные пути помощника через locator
+      `projectAssistantRef`: сервер разрешает действительный профиль, actor,
+      проект, agent и опубликованное окружение до версии/receipt. Обычные
+      сотрудники не получают обход screen context. Fresh `ASSISTANTS` отдаёт
+      безопасный `runtime_environment_ref`, не полномочия или secret values.
+- [ ] Финальная компонентная матрица, неизменяемый checkpoint, независимые
+      review, повтор полной baseline и repo-owned local activation.
+- [ ] Штатная ORG image build/admission/promotion в Chrome без inference.
+
+Самонастройка отвергает существующий ручной overlay draft и drift выбранного
+runtime profile. Изменения модели и reasoning атомарны; активный RuntimeRevision
+не переписывается. Prompt `v44` исправляет обещание немедленной публикации
+окружения: apply создаёт draft, после чего нужны отдельные validate/impact/publish.
+Предыдущие immutable prompt revisions не редактируются.
+
+Chrome MCP список вкладок запрашивается регулярно; чужая вкладка сохранена.
+Секреты не раскрыты. Реальные ИИ, STT, device-code и staging/production — NOT RUN.
+
+Дополнительный preflight той же волны:
+
+- [ ] Явное восстановление STALE-плана новой ревизией: строгий DRAFT не
+      перебазируется, изменённые caller owner/locator pins отвергаются,
+      после видимого STALE сервер заново снимает snapshot. Первоначально новые
+      три типа отвергали и разрешённое восстановление либо передавали owner
+      поля в proposal decoder; компонентная проверка исправления продолжается.
+- [ ] FE model form должна поддерживать пустую степень как default exact
+      каталога, в том числе non-reasoning модель, и пересечение всех выбранных
+      аккаунтов. Неполученный/просроченный каталог не считается unsupported.
+      До исправления такую модель нельзя было сохранить; добавлены native
+      synthetic варианты с явным выбором default и двумя аккаунтами.
+- [ ] FE recognition закрытого контекстного реестра: отсутствовали
+      `CREATE_PROJECT_ASSISTANT`, `CREATE_INSTRUCTION_DRAFT` и
+      `UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS`, что отклоняло весь разрешённый
+      server context. Добавляются только известные типы; клиент по-прежнему
+      не назначает allowed operations и отклоняет неизвестный тип.
+- [x] Дополненный Proto с field 17: generation и lint/build/codegen — PASS.
+      Новый immutable prompt `v45` описывает точный проектный путь и явную
+      новую ревизию STALE. Prompt/materialization повтор — PASS; первый тест
+      был FAIL из-за ошибочного буквального oracle, исправлена только строка
+      ожидаемой формулировки, не ослаблена проверка запрета обхода контекста.
+
+Image UPDATE в targeted оснастке сначала не проходил из-за склеенного
+Dockerfile без перевода строки; после исправления fixture прошёл до ошибки
+другого fixture oracle (неверное имя outbox column). Это не доказанные дефекты
+production builder и не успешная приёмка всего компонентного набора.
+
+### 04.10.2026 — сквозные проверки текущего дерева 3.7
+
+Проверки ниже — scoped preflight поверх `2c0a554`, не новая итоговая
+SHA-приёмка. Основной checklist остаётся незавершённым.
+
+- [x] Runtime-controller unit/vet — PASS. Fenced callback принимает будущую
+      допустимую reasoning label из canonical каталога, но отклоняет malformed,
+      duplicate и неправильный default; сохраняется предел 16 значений и
+      canonical длина 64. Закрытые helper schema не расширяют обычные операции
+      сотрудников. `/tmp/kodex-assistant-project-locator-controller-unit.log`.
+- [x] Targeted disposable CP-повтор №13 — PASS, 9,565 с: новые model/image
+      операции, каталоги, ручной overlay/profile drift, явный STALE refresh,
+      lost acknowledgement и отзыв владельца. Повтор №15 — PASS, 10,095 с:
+      SYSTEM с общего экрана готовит окружение, привязку и инструкции PROJECT
+      помощника; PROJECT готовит только свои. Это ещё не полный набор.
+- [x] FE model/context scoped-повтор — PASS: 5 suites / 138 tests и 24 native
+      synthetic Chromium сценария, lint, forced typecheck, E2E TypeScript,
+      сборка. Non-reasoning модель поддерживает явный catalog default;
+      несколько аккаунтов — пересечение допустимых reasoning labels. Снимки
+      390/1440 px просмотрены исполнителем, без реального inference.
+- [ ] Первая новая helper UI browser-матрица — 8 PASS / 8 FAIL: incomplete
+      test bootstrap и видимый test-only JSON расширяли страницу. Оснастка
+      исправлена, повтор и визуальный readback ещё выполняются.
+- [ ] Составной план model → image воспроизвёл собственный version conflict.
+      Исправление переносит только точный canonical результат предыдущей
+      операции того же агрегата в этой owner-транзакции. Исходный immutable
+      план не меняется, внешний drift не перебазируется. Нужны положительные
+      порядки операций, rollback позднего отказа и отрицательный внешний drift.
+- [ ] После изменения PROJECT помощника исходный SYSTEM диалог не должен
+      становиться проектным в HTTP response или финальном plan event: область
+      операции и область истории различаются. Проверяется исходный общий
+      диалог и диалог проекта A при изменении помощника B; исключение — прежний
+      одиночный CREATE_PROJECT с явным штатным переходом.
+- [ ] Каталог повторяет canonical read eligibility: PROVIDER_ACCOUNTS —
+      `provider.account.view` для каждого экземпляра; MODELS —
+      `organization.view`, как штатный ListModelCapabilities. В engine нет
+      DENY-binding: отрицательная оснастка использует отсутствие ALLOW, а не
+      выдуманный тип запрета. Управление помощником не выдаёт право чтения
+      аккаунтов. Проверяется отдельный instance ALLOW и закрытый отказ.
+- [ ] FE helper scope использует неизменяемые server pins целевого PROJECT
+      профиля, а не projectRef исходной SYSTEM истории. Для обычных операций
+      screen/project boundary сохраняется; malformed helper locator не
+      превращается в обычную операцию. Итоговый повтор ещё предстоит.
+
+Chrome MCP доступ подтверждён после нового owner approval; список вкладок
+проверяется регулярно. Реальные ИИ, STT, device-code и staging/production —
+NOT RUN. Документ следующей полной QA-цели по-прежнему не читался.
+
+Дополнительный canonical per-account тест выявил несогласованность: registry
+и API разрешают `RESOURCE_INSTANCE / PROVIDER_ACCOUNT`, а исторический
+`access_bindings_scope_shape` для project=NULL разрешает только INTEGRATION
+и ARTIFACT. Подтверждено по исходникам обеих applied migrations; они не меняются.
+Согласована новая forward-only migration с exact precondition, добавляющая
+только PROVIDER_ACCOUNT. Положительный instance ALLOW создаётся штатной
+owner-командой, не прямой тестовой записью; остальные boundary не расширяются.
+
+- [x] Targeted CP №25 — PASS, 14,590 с: собственные model/image изменения,
+      проектные окружение/инструкции/привязка, допустимые составные порядки,
+      исходный SYSTEM проект A отдельно от helper B, instance ALLOW аккаунта.
+      `/tmp/kodex-assistant-self-configuration-targeted-25.log`.
+- [x] Helper UI — PASS, 5 suites / 105 tests и 32 native Chromium варианта,
+      forced typecheck/lint/E2E TypeScript/сборка. Проверены общий SYSTEM диалог
+      и SYSTEM диалог проекта A → helper B; DRAFT/APPLIED, 390/1440 px,
+      owner/locator/receipt tamper, Console/Network и отсутствие overflow.
+      Первые 8 FAIL и следующие 2 FAIL сохранены; исправлялись bootstrap,
+      test-only JSON и отсутствующий ETag оснастки, guards не ослаблялись.
+      `/tmp/kodex-fe-project-helper-final-browser.log`. Небольшая RU/EN правка
+      подписей помощника ещё требует адресного повтора.
+- [ ] Независимое review выявило скрытый DRAFT refresh выбранного alternate
+      runtime profile/account catalog. Теперь до редактирования читается и
+      сравнивается исходный frozen dependency snapshot; STALE восстанавливается
+      только явно новой ревизией. Alternate-profile negative проходит;
+      catalog negative сначала FAIL: повторное identical observation seed
+      может не менять canonical revision/digest. Требуется доказать реальный
+      новый pin до проверки отказа, не ослаблять oracle или production guard.
+
+Повтор contract/Proto/AsyncAPI/authority ABI/SQL-boundary текущего дерева —
+PASS; `/tmp/kodex-assistant-3-7-contract-current.log`. Полный итоговый SHA,
+baseline и local activation остаются впереди.
+
+### 04.10.2026 — завершение 3.7 по изменённому решению владельца
+
+Владелец остановил субагентов текущей задачи, отменил отдельные итоговые
+review и новый полный baseline-повтор. Оставшийся путь: Chrome MCP, визуальная
+проверка, Console/Network и логи backend; исправления на hot reload, затем
+commit/push и слияние #1790. После слияния — новая цель по
+`.agents/full-qa-task.md`; этот документ заранее не читался. Для следующей
+цели разрешены основной агент и четыре субагента, с соблюдением фактического
+лимита одновременно доступных слотов. Чужие вкладки не закрываются;
+список вкладок MCP запрашивается регулярно.
+
+Доказательства 3.7 относятся к рабочему дереву поверх
+`2c0a554778669e44007941234d5d37ab2b2703c6`, а не к ещё не созданному commit:
+
+- [x] Targeted CP №33 — PASS, 17,557 с; реальная смена обоих catalog pins
+      доказана до проверки закрытого отказа. DRAFT не обновляет зависимости
+      скрыто; STALE требует явно новой ревизии. Составные порядки и поздний
+      rollback, SYSTEM source A → PROJECT target B и instance account ALLOW
+      проверены. `/tmp/kodex-assistant-self-configuration-targeted-33.log`.
+- [x] Полный обязательный disposable PostgreSQL набор — PASS: 10 suites,
+      121,027 с, Avatar 1,334 с, SKIP нет.
+      `/tmp/kodex-assistant-3-7-full-postgres.log`, SHA-256
+      `1273b2ecacfb3de029cb4553b5b22f03cd5b9bda05736cd625e02185a7a358dd`.
+- [x] Полный frontend набор — PASS: 329 suites / 2238 tests; lint, forced
+      typecheck, E2E TypeScript, сборка. Helper copy-повтор — 106 tests и
+      32 Chromium варианта; модель — 24 Chromium варианта. RU/EN снимки
+      390/1440 px просмотрены; guards не ослаблялись. Этот набор предшествует
+      последней адресной локализации picker, проверенной отдельно в Chrome.
+- [x] Ошибка gateway usertext registry устранена добавлением RU/EN
+      `ROLE_IMAGE_BUILD_LEASE_EXPIRED`; адресный повтор PASS. Общий Go loop
+      не объявлен PASS: последний вызов использовал неверный путь egress-модуля.
+- [x] Forward-only migrations `20261004000200` и `20261004000300` применены
+      repo-owned migrate-stage; исторические applied migrations не изменялись.
+- [x] Chrome: onboarding, системная модель/reasoning и полная форма окружения
+      без горизонтального переполнения. Скриншоты onboarding/settings сохранены
+      и просмотрены; подготовленный текст самонастройки очищен без отправки.
+      Необработанный `i18n:SYSTEM_BASE_ROLE_IMAGE` в picker исправлен штатным
+      server-message локализатором; повторное открытие показывает перевод.
+- [x] Контрольные файлы CP/gateway/controller/frontend совпадают host/Pod;
+      все четыре workload Ready. После rollout соединение восстановлено,
+      последние scoped Console error/warn и backend error/warn отсутствуют.
+- [ ] Live organizational image build/admission/promotion: первые две сборки
+      завершились REJECTED из-за устаревшего скрипта допуска в ConfigMap.
+      Repo-owned supply-chain stage теперь обновляет exact
+      `kodex-system/kodex-image-admission` при остановленном controller и
+      сравнивает всю `.data` с render. Хеш скрипта после apply совпал с repo:
+      `08404e8021059ca89ad4852e02ac563c39e0a2d1679ee26860bc5ba829dd2f29`.
+      Supply-chain apply/readback PASS; кратковременные builder startup retries
+      не скрыты. Следующие сборки дошли до финального допуска, но REJECTED
+      ещё расследуется по отчёту сканера. Ослабление policy не применяется.
+
+Реальный inference, STT, device-code, staging/production — NOT RUN. Новый
+итоговый review и повтор полного baseline — NOT RUN по решению владельца,
+а не PASS. Ранее успешные scoped проверки не выдаются за новую SHA-приёмку.
+
+Отчёт следующей scan-phase подтвердил корректный закрытый отказ: пять
+fix-available High matches — gRPC `v1.82.1` (два GHSA) и libpcre2 `10.42-1`
+(три CVE). Причина первоначального provenance mismatch уже устранена;
+оставшийся отказ не обходится. Runner переводится на проверенную checksum
+`google.golang.org/grpc v1.83.1`; явная установка libpcre2 обновляет библиотеку
+из pinned Debian base до доступной исправленной версии. Проверены Context7
+`/grpc/grpc-go` README/versioning и официальный Go module checksum/origin.
+Это отдельный checkpoint исправления; новая сборка/digest/admission ещё впереди.

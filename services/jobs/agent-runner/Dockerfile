@@ -47,9 +47,11 @@ RUN set -eu; \
 
 FROM docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS local-runtime
 
+# Явное включение libpcre2 обновляет уже установленную в pinned base библиотеку:
+# иначе установка новых инструментов оставляет её прежнюю уязвимую версию.
 RUN set -eu; \
 	apt-get update; \
-	apt-get install -y --no-install-recommends bubblewrap ca-certificates git openssh-client tini; \
+	apt-get install -y --no-install-recommends bubblewrap ca-certificates git libpcre2-8-0 openssh-client tini; \
 	groupadd --gid 10001 kodex; \
 	useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin kodex; \
 	mkdir -p /home/kodex /workspace /codex-home /run/secrets/kodex/runtime/provider; \
@@ -168,6 +170,7 @@ RUN set -eu; \
 		git \
 		jq \
 		less \
+		libpcre2-8-0 \
 		make \
 		netcat-openbsd \
 		openssl \

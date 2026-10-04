@@ -290,6 +290,10 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		return repository.createAssistantRoleImage(ctx, tx, scope, payload)
+	case command.CreateSystemAssistantRoleImageRecipe, command.UpdateSystemAssistantRoleImageRecipe:
+		return repository.applySystemAssistantImage(ctx, tx, scope, input)
+	case command.PublishAssistantRuntimeConfig:
+		return repository.publishAssistantRuntimeConfiguration(ctx, tx, scope, input)
 	case command.UpdateAssistantRoleImageRecipe:
 		return repository.updateAssistantRoleImage(ctx, tx, scope, input)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:

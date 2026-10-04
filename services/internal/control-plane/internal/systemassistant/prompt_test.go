@@ -8,11 +8,26 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v42" {
+	if CorePromptRevision != "system-assistant-core-v45" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
 		"get_configuration_catalog",
+		"`assistant_configuration_catalog`",
+		"`CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE`",
+		"`UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE`",
+		"`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`",
+		"PROJECT — только самого себя",
+		"Доступ Kubernetes не выдаётся",
+		"Применение подтверждённого плана создаёт только редактируемый черновик окружения",
+		"просмотреть влияние на привязки и подтвердить публикацию",
+		"`runtimeProfilePin`",
+		"внутренние `providerCatalogPins`",
+		"runtime_environment_ref",
+		"projectAssistantRef",
+		"а не обход контекста обычного сотрудника",
+		"не выдавай скрытый rebase",
+		"текущие запуски продолжают работать со своими неизменяемыми ревизиями",
 		"find_platform_resources",
 		"точным относительным `route`",
 		"Пользователь сам нажимает ссылку",
@@ -78,6 +93,9 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
+		"scoped режим Kubernetes-доступа",
+		"Для привилегированного Kubernetes-доступа",
+		"Не назначай себе проектный образ, инструменты или Secret",
 		"Граф этапов, назначенные сотрудники, входные поля и опубликованная версия остаются прежними",
 		"Пользовательский Dockerfile и Git-owned рецепт помощник не перезаписывает",
 		"Операция меняет только название, описание и ссылку на проверенный образ",

@@ -78,6 +78,9 @@ const (
 	PublishInstructions                       Kind = "PUBLISH_INSTRUCTION_DRAFT"
 	RollbackInstructions                      Kind = "ROLLBACK_INSTRUCTIONS"
 	PublishAgentRuntimeConfig                 Kind = "PUBLISH_AGENT_RUNTIME_CONFIGURATION"
+	PublishAssistantRuntimeConfig             Kind = "PUBLISH_ASSISTANT_RUNTIME_CONFIGURATION"
+	CreateSystemAssistantRoleImageRecipe      Kind = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	UpdateSystemAssistantRoleImageRecipe      Kind = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 	CreateConfigOverlayDraft                  Kind = "CREATE_CONFIG_OVERLAY_DRAFT"
 	ValidateConfigOverlayDraft                Kind = "VALIDATE_CONFIG_OVERLAY_DRAFT"
 	PublishConfigOverlayDraft                 Kind = "PUBLISH_CONFIG_OVERLAY_DRAFT"
@@ -266,6 +269,21 @@ type AgentAvatarInput struct{ AgentRef, ArtifactRef string }
 type AgentRuntimeConfigurationInput struct {
 	AgentRef, RuntimeProfileRef, Model, ProviderPolicyMode string
 	ProviderAccounts                                       []entity.ProviderAccountCandidate
+}
+
+// AssistantRuntimeConfigurationInput назначается владельцем versioned плана,
+// а не обычным endpoint публикации конфигурации сотрудника.
+type AssistantRuntimeConfigurationInput struct {
+	RuntimeProfilePin                                           entity.AssistantRuntimeProfilePin
+	Configuration                                               AgentRuntimeConfigurationInput
+	ReasoningEffort                                             string
+	ScopeKind, OrganizationRef, ProjectRef, AssistantProfileRef string
+}
+
+type SystemAssistantRoleImageInput struct {
+	SystemAssistantRef, OrganizationRef, RecipeRef, Name string
+	AgentVersion                                         int64
+	Environment                                          entity.RoleEnvironmentSelection
 }
 type ConfigOverlayInput struct {
 	AgentRef, Content, PublishedOverlayRef string

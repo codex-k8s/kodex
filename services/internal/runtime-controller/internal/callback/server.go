@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
@@ -846,8 +847,15 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		title, _ := operation["title"].(string)
 		operationSummary, _ := operation["summary"].(string)
 		parameters, _ := operation["parameters"].(map[string]any)
+		if !assistantConfigurationParametersAllowed(input, kind, parameters) {
+			return nil, invalidAssistantPlan("operation_scope_or_parameters")
+		}
 		before, beforeOK := operation["before"].(map[string]any)
 		after, afterOK := operation["after"].(map[string]any)
+		if kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || projectAssistantLocatorOperation(kind, parameters) {
+			before, beforeOK = map[string]any{}, true
+			after, afterOK = parameters, true
+		}
 		if serverHydrated {
 			if !beforeOK {
 				before, beforeOK = map[string]any{}, true
@@ -1100,26 +1108,29 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		name, _ = parameters["projectRef"].(string)
 	}
 	labels := map[string]string{
-		"CREATE_PROJECT":                       "Создать Проект",
-		"CREATE_PROJECT_FILE":                  "Создать файл",
-		"UPDATE_PROJECT":                       "Изменить Проект",
-		"CREATE_AGENT":                         "Создать ИИ-сотрудника",
-		"CREATE_PROJECT_ASSISTANT":             "Настроить помощника Проекта",
-		"UPDATE_AGENT":                         "Изменить ИИ-сотрудника",
-		"CREATE_INSTRUCTION_DRAFT":             "Подготовить инструкции ИИ-сотрудника",
-		"BIND_AGENT_RUNTIME_ENVIRONMENT":       "Назначить окружение ИИ-сотрудника",
-		"CREATE_WORKFLOW":                      "Создать Процесс",
-		"CREATE_INTEGRATION_CONNECTION":        "Создать подключение",
-		"UPDATE_INTEGRATION_CONNECTION":        "Изменить подключение",
-		"CREATE_SCHEDULE":                      "Создать автоматизацию",
-		"UPDATE_WORKFLOW":                      "Изменить процесс",
-		"UPDATE_SCHEDULE":                      "Изменить автоматизацию",
-		"CREATE_RUNTIME_ENVIRONMENT_DRAFT":     "Создать черновик среды",
-		"PREPARE_RUNTIME_ENVIRONMENT_REVISION": "Подготовить новую ревизию среды",
-		"CREATE_ROLE_IMAGE_RECIPE":             "Создать рецепт образа",
-		"UPDATE_ROLE_IMAGE_RECIPE":             "Изменить рецепт образа",
-		"PUBLISH_INTEGRATION_DEFINITION":       "Опубликовать интеграцию",
-		"UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS": "Изменить инструкции Kodex",
+		"CREATE_PROJECT":                            "Создать Проект",
+		"CREATE_PROJECT_FILE":                       "Создать файл",
+		"UPDATE_PROJECT":                            "Изменить Проект",
+		"CREATE_AGENT":                              "Создать ИИ-сотрудника",
+		"CREATE_PROJECT_ASSISTANT":                  "Настроить помощника Проекта",
+		"UPDATE_AGENT":                              "Изменить ИИ-сотрудника",
+		"CREATE_INSTRUCTION_DRAFT":                  "Подготовить инструкции ИИ-сотрудника",
+		"BIND_AGENT_RUNTIME_ENVIRONMENT":            "Назначить окружение ИИ-сотрудника",
+		"CREATE_WORKFLOW":                           "Создать Процесс",
+		"CREATE_INTEGRATION_CONNECTION":             "Создать подключение",
+		"UPDATE_INTEGRATION_CONNECTION":             "Изменить подключение",
+		"CREATE_SCHEDULE":                           "Создать автоматизацию",
+		"UPDATE_WORKFLOW":                           "Изменить процесс",
+		"UPDATE_SCHEDULE":                           "Изменить автоматизацию",
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT":          "Создать черновик среды",
+		"PREPARE_RUNTIME_ENVIRONMENT_REVISION":      "Подготовить новую ревизию среды",
+		"CREATE_ROLE_IMAGE_RECIPE":                  "Создать рецепт образа",
+		"UPDATE_ROLE_IMAGE_RECIPE":                  "Изменить рецепт образа",
+		"PUBLISH_INTEGRATION_DEFINITION":            "Опубликовать интеграцию",
+		"UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":      "Изменить инструкции Kodex",
+		"CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE": "Создать рецепт образа Kodex",
+		"UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE": "Изменить рецепт образа Kodex",
+		"PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":   "Подготовить настройку модели помощника",
 	}
 	label := labels[kind]
 	if strings.TrimSpace(name) == "" {
@@ -1150,6 +1161,8 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
+	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+		return true
 	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		return true
 	default:
@@ -1157,7 +1170,125 @@ func assistantServerHydratedOperation(kind string) bool {
 	}
 }
 
+// Здесь проверяется форма locator, а не authority: текущие права, профиль,
+// scope, версии и каталог повторно разрешает control-plane в owner-транзакции.
+func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, kind string, parameters map[string]any) bool {
+	if _, supplied := parameters["projectAssistantRef"]; supplied {
+		return projectAssistantLocatorParametersAllowed(input, kind, parameters)
+	}
+	switch kind {
+	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":
+		if !input.IsSystemAssistant() || input.AgentRef == "" || parameters == nil || parameters["systemAssistantRef"] != input.AgentRef {
+			return false
+		}
+		if kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
+			return onlyKeys(parameters, "systemAssistantRef", "name", "environmentKey", "dockerfile") &&
+				assistantRequiredStrings(parameters, "name", "environmentKey", "dockerfile")
+		}
+		return onlyKeys(parameters, "systemAssistantRef", "recipeRef", "name", "environmentKey", "dockerfile") &&
+			assistantRequiredStrings(parameters, "recipeRef") && assistantOptionalStrings(parameters, "name", "environmentKey", "dockerfile") && len(parameters) > 2
+	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+		if !input.IsAssistant() || input.AgentRef == "" || parameters == nil ||
+			!onlyKeys(parameters, "agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts") ||
+			!assistantRequiredStrings(parameters, "agentRef", "runtimeProfileRef", "model", "providerPolicyMode") {
+			return false
+		}
+		if input.AssistantScope == runtimecontract.AssistantScopeProject && parameters["agentRef"] != input.AgentRef {
+			return false
+		}
+		effort, ok := parameters["reasoningEffort"].(string)
+		if !ok || effort != "" && runtimecontract.ValidateEffectiveReasoningEffort("", effort, runtimecontract.ReasoningSupported) != nil {
+			return false
+		}
+		mode := parameters["providerPolicyMode"].(string)
+		if mode != "FIXED" && mode != "LEAST_USED" && mode != "WEIGHTED" {
+			return false
+		}
+		accounts, ok := parameters["providerAccounts"].([]any)
+		if !ok || len(accounts) < 1 || len(accounts) > 128 || mode == "FIXED" && len(accounts) != 1 {
+			return false
+		}
+		for _, raw := range accounts {
+			account, ok := raw.(map[string]any)
+			if !ok || !onlyKeys(account, "accountRef", "weight") || !assistantRequiredStrings(account, "accountRef") {
+				return false
+			}
+			weight, ok := exactJSONInt64(account["weight"])
+			if !ok || weight > 100 || mode != "WEIGHTED" && weight != 1 {
+				return false
+			}
+		}
+		return true
+	default:
+		return true
+	}
+}
+
+func projectAssistantLocatorOperation(kind string, parameters map[string]any) bool {
+	_, supplied := parameters["projectAssistantRef"]
+	return supplied && (kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION")
+}
+
+func projectAssistantLocatorParametersAllowed(input runtimecontract.RunnerInput, kind string, parameters map[string]any) bool {
+	ref, ok := parameters["projectAssistantRef"].(string)
+	if !ok || !input.IsAssistant() || input.AgentRef == "" || !validAssistantResourceRef(ref) ||
+		input.AssistantScope == runtimecontract.AssistantScopeProject && ref != input.AgentRef || !projectAssistantLocatorOperation(kind, parameters) {
+		return false
+	}
+	schema := projectAssistantOperationParameters(input, kind)
+	keys := make([]string, 0, len(schema["properties"].(map[string]any)))
+	for key := range schema["properties"].(map[string]any) {
+		keys = append(keys, key)
+	}
+	if !onlyKeys(parameters, keys...) {
+		return false
+	}
+	switch kind {
+	case "CREATE_INSTRUCTION_DRAFT":
+		instructions, ok := parameters["instructions"].(string)
+		return ok && assistantPlanTextWithinLimit(instructions, 65536) && utf8.RuneCountInString(instructions) >= 20
+	case "BIND_AGENT_RUNTIME_ENVIRONMENT":
+		environmentRef, ok := parameters["environmentRef"].(string)
+		return ok && validAssistantResourceRef(environmentRef)
+	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
+		if raw, exists := parameters["environmentRef"]; exists {
+			environmentRef, ok := raw.(string)
+			if !ok || !validAssistantResourceRef(environmentRef) {
+				return false
+			}
+		}
+		for _, branch := range schema["anyOf"].([]map[string]any) {
+			if _, supplied := parameters[branch["required"].([]string)[0]]; supplied {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func assistantRequiredStrings(parameters map[string]any, fields ...string) bool {
+	for _, field := range fields {
+		value, ok := parameters[field].(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func assistantOptionalStrings(parameters map[string]any, fields ...string) bool {
+	for _, field := range fields {
+		if _, exists := parameters[field]; exists && !assistantRequiredStrings(parameters, field) {
+			return false
+		}
+	}
+	return true
+}
+
 func assistantServerAction(kind string) string {
+	if kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+		return "UPDATE"
+	}
 	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
 		return "UPDATE"
 	}
@@ -1189,7 +1320,24 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 	if parameters == nil {
 		return nil
 	}
+	if projectAssistantLocatorOperation(kind, parameters) {
+		targetKind := "AGENT"
+		if kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+			targetKind = "ENVIRONMENT"
+		}
+		return map[string]any{"kind": targetKind, "name": parameters["projectAssistantRef"]}
+	}
 	targetKind := strings.TrimPrefix(kind, "CREATE_")
+	if kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+		ref, _ := parameters["agentRef"].(string)
+		if strings.TrimSpace(ref) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "AGENT", "name": strings.TrimSpace(ref)}
+	}
+	if kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
+		targetKind = "ROLE_IMAGE_RECIPE"
+	}
 	if kind == "CREATE_PROJECT_FILE" {
 		name, _ := parameters["fileName"].(string)
 		if strings.TrimSpace(name) == "" {
@@ -1198,7 +1346,7 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 		return map[string]any{"kind": "ARTIFACT", "name": strings.TrimSpace(name)}
 	} else if kind == "UPDATE_PROJECT" {
 		targetKind = "PROJECT"
-	} else if kind == "UPDATE_ROLE_IMAGE_RECIPE" {
+	} else if kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 		ref, _ := parameters["recipeRef"].(string)
 		if strings.TrimSpace(ref) == "" {
 			return nil

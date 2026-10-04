@@ -204,6 +204,8 @@ ROLE_IMAGE_RECIPE_CHANGED:
   other: Конфигурация среды роли обновлена
 ROLE_IMAGE_BUILD_COMPLETED:
   other: Образ среды роли собран
+ROLE_IMAGE_BUILD_LEASE_EXPIRED:
+  other: Срок выполнения сборки образа истёк
 ROLE_IMAGE_PROMOTION_REQUESTED:
   other: Продвижение образа среды роли запрошено
 ROLE_IMAGE_PROMOTED:

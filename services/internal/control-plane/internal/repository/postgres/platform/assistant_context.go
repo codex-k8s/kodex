@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -16,6 +17,9 @@ var queryAssistantContextProjection string
 
 //go:embed sql/assistant_conversation_context.sql
 var queryAssistantConversationContext string
+
+//go:embed sql/assistant_configuration__plan_owner.sql
+var queryAssistantConfigurationPlanOwner string
 
 func (repository *Repository) assistantConversationContext(ctx context.Context, tx pgx.Tx, current scope, conversationRef, planRef string) (entity.AssistantContextDescriptor, string, error) {
 	var descriptor entity.AssistantContextDescriptor
@@ -59,5 +63,44 @@ func (repository *Repository) authorizeAssistantContextCommand(ctx context.Conte
 		return errs.ErrInvalid
 	}
 	_, _, err := repository.assistantConversationContext(ctx, tx, current, conversationRef, planRef)
-	return err
+	if err != nil {
+		return err
+	}
+	if planRef != "" && (input.Kind == command.UpdateAssistantPlan || input.Kind == command.ValidateAssistantPlan || input.Kind == command.ApplyAssistantPlan) {
+		var raw []byte
+		if err := tx.QueryRow(ctx, queryAssistantConfigurationPlanOwner, pgx.StrictNamedArgs{"organization_id": current.organizationID, "plan_ref": planRef}).Scan(&conversationRef, &raw); errors.Is(err, pgx.ErrNoRows) {
+			return errs.ErrNotFound
+		} else if err != nil {
+			return errs.ErrUnavailable
+		}
+		var operations []entity.AssistantPlanOperation
+		if json.Unmarshal(raw, &operations) != nil {
+			return errs.ErrUnavailable
+		}
+		if err := repository.constrainAssistantPlanScope(ctx, tx, &current, conversationRef, operations); err != nil {
+			return err
+		}
+		for _, operation := range operations {
+			if assistantProjectConfigurationOperation(operation) {
+				if _, err := repository.authorizeProjectAssistantConfiguration(ctx, tx, current, operation, true); err != nil {
+					return err
+				}
+			}
+			if !assistantProjectConfigurationOperation(operation) && operation.Type != "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" && operation.Type != "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" && operation.Type != "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+				continue
+			}
+			operation, err := normalizeAssistantOperation(operation)
+			if err != nil {
+				return err
+			}
+			planned, err := assistantOperationCommand(operation)
+			if err != nil {
+				return err
+			}
+			if err := repository.authorizeCommand(ctx, tx, current, planned); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

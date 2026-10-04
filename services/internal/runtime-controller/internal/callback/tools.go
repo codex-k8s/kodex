@@ -15,24 +15,27 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover server-owned context and permitted operation types. Omit operation_types or pass [] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target. Only the agent matching the current AGENT context has complete purpose and role_description; other agent fields are previews. For integration setup, request definition_query (empty string lists the first page) and optional definition_offset; definitions are read from control-plane in pages of at most 10. Names are display data; use only exact opaque refs in plans.",
+		"description": "Discover server refs and schemas. Omit operation_types for the index; request up to four schemas. Agent pages: 20, agent_query/offset; full fields only for current AGENT. Definition pages: 10, definition_query/offset. Fresh assistant_configuration_catalog is exclusive with other selectors and nonempty operation_types; MODELS requires account_ref. Names are not refs.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
-			"agent_query":       stringSchema(0, 80),
-			"agent_offset":      map[string]any{"type": "integer", "minimum": 0, "maximum": 128},
-			"definition_query":  stringSchema(0, 80),
-			"definition_offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 10000},
+			"agent_query":                     stringSchema(0, 80),
+			"agent_offset":                    map[string]any{"type": "integer", "minimum": 0, "maximum": 128},
+			"definition_query":                stringSchema(0, 80),
+			"definition_offset":               map[string]any{"type": "integer", "minimum": 0, "maximum": 10000},
+			"assistant_configuration_catalog": assistantConfigurationCatalogInputSchema(input),
 		}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "agents"}, map[string]any{
 			"current_project_ref": map[string]any{"type": "string"}, "agents": map[string]any{"type": "array", "maxItems": maximumAssistantCatalogAgents, "items": map[string]any{"type": "object"}},
-			"agent_total":             map[string]any{"type": "integer", "minimum": 0},
-			"agent_next_offset":       map[string]any{"type": "integer", "minimum": 0},
-			"context":                 map[string]any{"type": "object"},
-			"operation_types":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"operation_schemas":       map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
-			"integration_definitions": map[string]any{"type": "array", "maxItems": 10, "items": map[string]any{"type": "object"}},
-			"definition_next_offset":  map[string]any{"type": "integer", "minimum": 0},
+			"agent_total":                     map[string]any{"type": "integer", "minimum": 0},
+			"agent_next_offset":               map[string]any{"type": "integer", "minimum": 0},
+			"context":                         map[string]any{"type": "object"},
+			"current_runtime":                 assistantCurrentRuntimeSchema(),
+			"operation_types":                 map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"operation_schemas":               map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+			"integration_definitions":         map[string]any{"type": "array", "maxItems": 10, "items": map[string]any{"type": "object"}},
+			"definition_next_offset":          map[string]any{"type": "integer", "minimum": 0},
+			"assistant_configuration_catalog": map[string]any{"type": "object", "maxProperties": 8},
 		}),
 	}
 }
@@ -58,7 +61,7 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.IsAssistant() || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset") {
+	if !input.IsAssistant() || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset", "assistant_configuration_catalog") {
 		return nil, errors.New("configuration catalog is not available")
 	}
 	agentQuery := ""
@@ -163,6 +166,7 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		"context":             context,
 		"operation_types":     operationTypes,
 		"operation_schemas":   schemas,
+		"current_runtime":     assistantCurrentRuntime(input),
 	}
 	if end < len(matching) {
 		result["agent_next_offset"] = end
@@ -371,11 +375,11 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		})),
 		assistantOperationSchema("CREATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"projectRef", "agentRef", "name"}, map[string]any{
 			"projectRef": projectRef, "agentRef": opaqueRefSchema(), "name": stringSchema(1, 160),
-			"environmentKey": stringSchema(1, 96), "dockerfile": stringSchema(1, 65536),
+			"environmentKey": assistantRoleEnvironmentKeySchema(), "dockerfile": stringSchema(1, 65536),
 		})),
 		assistantOperationSchema("UPDATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"recipeRef"}, map[string]any{
 			"recipeRef": opaqueRefSchema(), "name": stringSchema(1, 160),
-			"environmentKey": stringSchema(1, 96), "dockerfile": stringSchema(1, 65536),
+			"environmentKey": assistantRoleEnvironmentKeySchema(), "dockerfile": stringSchema(1, 65536),
 		})),
 		assistantOperationSchema("ARCHIVE_AGENT", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),
@@ -405,6 +409,28 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			})))
 	}
 	selfInstructionsOperation := input.IsSystemAssistant() && input.AgentRef != ""
+	selfConfigurationOperation := input.IsAssistant() && input.AgentRef != ""
+	if selfConfigurationOperation {
+		configurationAgentRef := opaqueRefSchema()
+		if input.AssistantScope == runtimecontract.AssistantScopeProject {
+			configurationAgentRef = enumSchema(input.AgentRef)
+		}
+		result = append(result, assistantOperationSchema("PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", assistantRuntimeConfigurationSchema(configurationAgentRef)))
+	}
+	if selfInstructionsOperation {
+		updateImageSchema := objectSchema([]string{"systemAssistantRef", "recipeRef"}, map[string]any{
+			"systemAssistantRef": enumSchema(input.AgentRef), "recipeRef": opaqueRefSchema(),
+			"name": stringSchema(1, 160), "environmentKey": assistantRoleEnvironmentKeySchema(), "dockerfile": stringSchema(1, 65536),
+		})
+		updateImageSchema["anyOf"] = []map[string]any{{"required": []string{"name"}}, {"required": []string{"environmentKey"}}, {"required": []string{"dockerfile"}}}
+		result = append(result,
+			assistantOperationSchema("CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", objectSchema(
+				[]string{"systemAssistantRef", "name", "environmentKey", "dockerfile"}, map[string]any{
+					"systemAssistantRef": enumSchema(input.AgentRef), "name": stringSchema(1, 160),
+					"environmentKey": assistantRoleEnvironmentKeySchema(), "dockerfile": stringSchema(1, 65536),
+				})),
+			assistantOperationSchema("UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", updateImageSchema))
+	}
 	if selfInstructionsOperation {
 		result = append(result, assistantOperationSchema("UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", objectSchema(
 			[]string{"systemAssistantRef", "instructions"}, map[string]any{
@@ -435,7 +461,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			environmentRevisionInputSchema(projectSelfTargetSchema(input, "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "ENVIRONMENT", input.RuntimeEnvironmentRef), nil)))
 	}
 	if input.AssistantContext == nil {
-		return result
+		return withProjectAssistantOperations(input, result)
 	}
 	if input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef != "" && !projectSelfOperation {
 		result = append(result, assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(enumSchema(input.AssistantContext.EntityRef))))
@@ -461,7 +487,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "SCHEDULE" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_SCHEDULE", scheduleUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
-	if len(input.AssistantContext.AllowedOperations) == 0 && !projectSelfOperation && !projectSelfEnvironmentOperation {
+	if len(input.AssistantContext.AllowedOperations) == 0 && !projectSelfOperation && !projectSelfEnvironmentOperation && !selfInstructionsOperation && !selfConfigurationOperation {
 		return nil
 	}
 	allowed := make(map[string]struct{}, len(input.AssistantContext.AllowedOperations))
@@ -474,12 +500,94 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		if _, ok := allowed[kind]; ok ||
 			selfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
 			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
+			selfInstructionsOperation && (kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE") ||
+			selfConfigurationOperation && kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" ||
 			projectSelfOperation && (kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT") ||
 			projectSelfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 			filtered = append(filtered, operation)
 		}
 	}
-	return filtered
+	return withProjectAssistantOperations(input, filtered)
+}
+
+// Locator помощника не заменяет authority: CP разрешает профиль и текущие pins.
+// Обычная экранная команда и адресная команда помощника — непересекающиеся формы.
+func withProjectAssistantOperations(input runtimecontract.RunnerInput, schemas []map[string]any) []map[string]any {
+	if !input.IsAssistant() || input.AgentRef == "" {
+		return schemas
+	}
+	for _, kind := range []string{"CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION"} {
+		parameters := projectAssistantOperationParameters(input, kind)
+		merged := false
+		for _, schema := range schemas {
+			properties := schema["properties"].(map[string]any)
+			if properties["type"].(map[string]any)["const"] == kind {
+				properties["parameters"] = map[string]any{"oneOf": []map[string]any{properties["parameters"].(map[string]any), parameters}}
+				merged = true
+				break
+			}
+		}
+		if !merged {
+			schemas = append(schemas, assistantOperationSchema(kind, parameters))
+		}
+	}
+	return schemas
+}
+
+func projectAssistantOperationParameters(input runtimecontract.RunnerInput, kind string) map[string]any {
+	ref := opaqueRefSchema()
+	if input.AssistantScope == runtimecontract.AssistantScopeProject {
+		ref = enumSchema(input.AgentRef)
+	}
+	var schema map[string]any
+	switch kind {
+	case "CREATE_INSTRUCTION_DRAFT":
+		schema = objectSchema([]string{"projectAssistantRef", "instructions"}, map[string]any{
+			"projectAssistantRef": ref, "instructions": assistantAgentInstructionsSchema(),
+		})
+	case "BIND_AGENT_RUNTIME_ENVIRONMENT":
+		schema = objectSchema([]string{"projectAssistantRef", "environmentRef"}, map[string]any{
+			"projectAssistantRef": ref, "environmentRef": opaqueRefSchema(),
+		})
+	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
+		schema = environmentRevisionInputSchema(opaqueRefSchema(), nil)
+		schema["properties"].(map[string]any)["projectAssistantRef"] = ref
+		schema["required"] = []string{"projectAssistantRef"}
+	default:
+		return nil
+	}
+	schema["description"] = "Use the actual project assistant agent ref from ASSISTANTS, not a profile ref or ordinary employee. PROJECT can configure only itself; SYSTEM can configure an eligible project helper from any screen. Do not mix agentRef, systemAssistantRef, projectRef or owner fields. CP assigns versions and authority. For revision, environmentRef is optional; CP resolves the currently bound published environment and verifies any supplied locator."
+	return schema
+}
+
+func assistantRuntimeConfigurationSchema(agentRef map[string]any) map[string]any {
+	schema := objectSchema([]string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts"}, map[string]any{
+		"agentRef": agentRef, "runtimeProfileRef": assistantRuntimeProfileKeySchema(), "model": stringSchema(1, 128),
+		"reasoningEffort": map[string]any{"type": "string", "minLength": 0, "maxLength": 64, "pattern": `^(?:[a-z][a-z0-9_-]{0,63})?$`}, "providerPolicyMode": enumSchema("FIXED", "LEAST_USED", "WEIGHTED"),
+		"providerAccounts": map[string]any{"type": "array", "minItems": 1, "maxItems": 128,
+			"items": objectSchema([]string{"accountRef", "weight"}, map[string]any{
+				"accountRef": opaqueRefSchema(), "weight": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
+			})},
+	})
+	schema["description"] = "Prepare a reviewed assistant model configuration, not a TOML patch. Use exact refs from the server catalog. SYSTEM may configure itself or a project assistant; PROJECT may configure only itself. Empty reasoningEffort selects the eligible catalog default. FIXED requires one account; weights must be 1 unless policy is WEIGHTED. Control-plane verifies current catalog eligibility and assigns all versions and pins. Never include credentials or owner fields."
+	return schema
+}
+
+func assistantCurrentRuntimeSchema() map[string]any {
+	return map[string]any{"type": "object", "maxProperties": 5}
+}
+
+func assistantRuntimeProfileKeySchema() map[string]any {
+	return map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{8,128}$", "maxLength": 128}
+}
+
+func assistantRoleEnvironmentKeySchema() map[string]any {
+	return map[string]any{"type": "string", "pattern": assistantCatalogEnvironmentKeyPattern.String(), "maxLength": 100}
+}
+
+func assistantCurrentRuntime(input runtimecontract.RunnerInput) map[string]any {
+	return map[string]any{"agent_ref": input.AgentRef, "runtime_profile_ref": input.RuntimeProfileRef,
+		"provider_account_ref": input.ProviderAccountRef, "model": input.Model, "reasoning_effort": input.EffectiveReasoningEffort}
 }
 
 func projectSelfTargetSchema(input runtimecontract.RunnerInput, operation, kind, ownRef string) map[string]any {
@@ -615,7 +723,7 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true

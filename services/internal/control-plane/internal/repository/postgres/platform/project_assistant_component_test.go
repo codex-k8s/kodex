@@ -279,6 +279,9 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	if err != nil || len(results) != 0 {
 		t.Fatalf("project assistant search escaped project scope: results=%#v err=%v", results, err)
 	}
+	t.Run("project helper model configuration and safe discovery", func(t *testing.T) {
+		testAssistantConfigurationPipeline(t, ctx, repository, service, owner, worker, searchReader, lease, "PROJECT")
+	})
 	plan := executeWorkerAssistantPlan(t, ctx, service, worker, lease, "project-assistant-self-instructions", entity.AssistantPlanOperation{
 		Key: "own-instructions", Type: "CREATE_INSTRUCTION_DRAFT", Title: "Prepare assistant instructions", Summary: "Prepare own instructions for human review",
 		Parameters: map[string]any{"agentRef": first.AgentRef, "instructions": "Use only this project and ask for human publication."},
@@ -321,7 +324,7 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		}
 		project := execute(command.CreateProject, "planned-project", command.ProjectInput{Name: "Planned assistant project", Language: "en"}).Project
 		conversation := execute(command.CreateAssistantConversation, "system-planner", command.AssistantConversationInput{
-			AssistantScope: "SYSTEM", ProjectRef: project.Ref, Context: entity.AssistantContextDescriptor{EntityKind: "PROJECT", EntityRef: project.Ref},
+			AssistantScope: "SYSTEM",
 		}).Conversation
 		turn := execute(command.AddAssistantTurn, "system-planner-turn", command.AssistantTurnInput{
 			ConversationRef: conversation.Ref, Content: "Synthetic isolated assistant setup", DeliveryMode: "QUEUE",
@@ -364,6 +367,28 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		if err != nil || profile.ProjectRef != project.Ref || profile.AgentRef == system.Ref {
 			t.Fatalf("published profile reused system identity: %#v %v", profile, err)
 		}
+		t.Run("system helper image and model configuration", func(t *testing.T) {
+			testAssistantConfigurationPipeline(t, ctx, repository, service, owner, worker, searchReader, lease, "SYSTEM")
+		})
+		t.Run("system project context remains distinct from helper target", func(t *testing.T) {
+			source := execute(command.CreateProject, "system-source-project", command.ProjectInput{Name: "Separate system source project", Language: "en"}).Project
+			conversation := execute(command.CreateAssistantConversation, "system-source-conversation", command.AssistantConversationInput{AssistantScope: "SYSTEM", ProjectRef: source.Ref, Context: entity.AssistantContextDescriptor{EntityKind: "PROJECT", EntityRef: source.Ref}}).Conversation
+			turn := execute(command.AddAssistantTurn, "system-source-turn", command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: "Synthetic cross-project helper configuration", DeliveryMode: "QUEUE"}).Conversation
+			claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "system-source-claim"}, Payload: command.LeaseInput{WorkloadInstance: "system-source-claim", Limit: 10}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var sourceLease map[string]any
+			for _, item := range claimed.RuntimeItems {
+				if stringMap(item, "sessionRef") == turn.SessionRef {
+					sourceLease = item
+				}
+			}
+			if sourceLease == nil {
+				t.Fatal("system source project claim missing")
+			}
+			testAssistantProjectConfiguration(t, ctx, repository, service, owner, worker, searchReader, sourceLease, "SYSTEM", source.Ref)
+		})
 	})
 	t.Run("project purge closes assistant graph without foreign deletion", func(t *testing.T) {
 		project := execute(command.CreateProject, "purge-project", command.ProjectInput{Name: "Assistant purge project", Language: "en"}).Project
@@ -407,7 +432,7 @@ func executeWorkerAssistantPlan(t *testing.T, ctx context.Context, service *plat
 			Summary: operation.Summary, Operations: []entity.AssistantPlanOperation{operation},
 		}})
 	if err != nil {
-		t.Fatalf("prepare synthetic assistant plan: %v", err)
+		t.Fatalf("prepare synthetic assistant plan %s: %v", key, err)
 	}
 	return result
 }

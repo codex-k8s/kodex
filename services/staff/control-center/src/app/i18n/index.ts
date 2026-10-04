@@ -3721,6 +3721,20 @@ const ru = {
     stop: "Остановить текущий ход",
     settings: {
       title: "Настройки Kodex",
+      prepare: "Настроить с помощником",
+      prepareImage: "Подготовить образ с помощником",
+      prepareHelp:
+        "Сначала подготовим сообщение. Проверьте его и отправьте; изменения применятся только после подтверждения плана.",
+      preparePrompts: {
+        RUNTIME:
+          "Помоги настроить модель, степень рассуждений и политику аккаунтов помощника {agentRef}. Область: {scope}, проект: {projectRef}, профиль: {profileRef}. Сначала выясни желаемые параметры и проверь доступный каталог, затем подготовь PREPARE_ASSISTANT_RUNTIME_CONFIGURATION для отдельного подтверждения. Не применяй изменения автоматически.",
+        ENVIRONMENT:
+          "Помоги настроить образ, инструменты, переменные, привязки секретов и доступы помощника {agentRef}. Область: {scope}, проект: {projectRef}, профиль: {profileRef}. Подготовь подтверждаемый черновик окружения; публикацию подтверждаем отдельно. Значения секретов не запрашивай в чате.",
+        IMAGE:
+          "Помоги создать или изменить Docker-образ помощника {agentRef}. Область: {scope}, проект: {projectRef}, профиль: {profileRef}. Сначала уточни программы и инструменты. Для SYSTEM используй CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE или UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE, для PROJECT — операции образов проекта. Покажи Dockerfile в плане для отдельного подтверждения. Проверка и продвижение образа остаются обязательными; секреты не включай в Dockerfile.",
+        INSTRUCTIONS:
+          "Помоги уточнить инструкции помощника {agentRef}. Область: {scope}, проект: {projectRef}, профиль: {profileRef}. Подготовь подтверждаемый план, сохрани системные ограничения и текущие привязки. Изменения не применяй автоматически.",
+      },
       description:
         "Та же конфигурация модели, окружения и инструкций, что у ИИ-сотрудников.",
       runtime: "Модель и выполнение",
@@ -3947,6 +3961,9 @@ const ru = {
     },
     instructionDraft: {
       title: "Черновик инструкций сотрудника",
+      helperTitle: "Черновик инструкций помощника",
+      helperChanged:
+        "Текущий черновик уже отличается от плана. Проверьте помощника перед публикацией.",
       loadFailed:
         "Не удалось проверить сохранённый черновик. Обновите состояние.",
       saved: "Черновик сохранён. Проверьте шаблон и отдельно опубликуйте его.",
@@ -4060,6 +4077,13 @@ const ru = {
       projectLanguage: "Язык проекта",
       agentRole: "Роль сотрудника",
       agentInstructions: "Инструкции сотруднику",
+      helperInstructions: "Инструкции помощнику",
+      helperInstructionDraftNextSteps:
+        "План сохранит только черновик инструкций помощника. После применения проверьте его в настройках помощника и опубликуйте отдельно.",
+      helperInstructionDraftPrepared:
+        "Черновик инструкций помощника сохранён. Проверьте его в настройках помощника и опубликуйте отдельно.",
+      helperEnvironmentDraftPrepared:
+        "Черновик новой ревизии окружения сохранён. Проверьте его влияние и опубликуйте отдельно.",
       systemAssistantInstructions: "Дополнительные инструкции Kodex",
       agentCapabilities: "Возможности сотрудника",
       capabilityAgent: "Сотрудник",
@@ -4139,6 +4163,18 @@ const ru = {
       bindingNextSteps:
         "После изменения выбора сохраните план и повторно проверьте его перед применением.",
       roleImageAgent: "Образ для сотрудника",
+      systemImageBoundary:
+        "Образ общесистемного помощника. Область и привязка к помощнику закреплены сервером и здесь не меняются. Сборка, проверка и продвижение выполняются штатным процессом.",
+      systemImageNextSteps:
+        "После подтверждения начнётся сборка нового поколения образа. Дождитесь проверки, отдельно подтвердите продвижение и выберите образ в окружении помощника. Текущие ходы сохранят прежний образ.",
+      runtimeConfigurationBoundary:
+        "Настройки модели применятся только к закреплённому помощнику и следующим ходам. После сохранения и проверки плана отдельно подтвердите применение; текущие ходы сохранят прежнюю конфигурацию.",
+      runtimeConfigurationUnavailable:
+        "Не удалось подтвердить привязку помощника или каталог. Обновите план; изменения пока недоступны.",
+      reasoningCatalogDefault: "По умолчанию из каталога",
+      reasoningUnsupported: "Модель без степени рассуждения",
+      reasoningUnsupportedHelp:
+        "Эта модель не поддерживает настройку степени рассуждения. Выберите пустое значение, чтобы сохранить план без неё.",
       roleImageName: "Название образа",
       roleImageAgentUnavailable: "Сотрудник не найден в доступном каталоге",
       roleImageAgentFixed:
@@ -8056,6 +8092,20 @@ const en = {
     stop: "Stop the current turn",
     settings: {
       title: "Kodex settings",
+      prepare: "Configure with assistant",
+      prepareImage: "Prepare image with assistant",
+      prepareHelp:
+        "We will prepare a message first. Review and send it; changes require a separate plan confirmation.",
+      preparePrompts: {
+        RUNTIME:
+          "Help configure the model, reasoning effort and account policy for assistant {agentRef}. Scope: {scope}, project: {projectRef}, profile: {profileRef}. First clarify the desired settings and verify the available catalog, then prepare PREPARE_ASSISTANT_RUNTIME_CONFIGURATION for separate confirmation. Do not apply changes automatically.",
+        ENVIRONMENT:
+          "Help configure the image, tools, public variables, secret bindings and access for assistant {agentRef}. Scope: {scope}, project: {projectRef}, profile: {profileRef}. Prepare a confirmed environment draft; publication requires a separate confirmation. Do not request secret values in chat.",
+        IMAGE:
+          "Help create or change the Docker image for assistant {agentRef}. Scope: {scope}, project: {projectRef}, profile: {profileRef}. First clarify required programs and tools. For SYSTEM use CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE or UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE; for PROJECT use project image operations. Present the Dockerfile in a plan for separate confirmation. Image validation and promotion remain mandatory; do not include secrets in the Dockerfile.",
+        INSTRUCTIONS:
+          "Help refine instructions for assistant {agentRef}. Scope: {scope}, project: {projectRef}, profile: {profileRef}. Prepare a confirmed plan preserving system restrictions and current bindings. Do not apply changes automatically.",
+      },
       description:
         "The same model, environment and instruction controls used for AI employees.",
       runtime: "Model and runtime",
@@ -8280,6 +8330,9 @@ const en = {
     },
     instructionDraft: {
       title: "Employee instruction draft",
+      helperTitle: "Assistant instruction draft",
+      helperChanged:
+        "The current draft already differs from the plan. Check the assistant before publishing.",
       loadFailed: "Could not verify the saved draft. Refresh its state.",
       saved: "Draft saved. Validate the template and publish it separately.",
       changed:
@@ -8390,6 +8443,13 @@ const en = {
       projectLanguage: "Project language",
       agentRole: "Employee role",
       agentInstructions: "Employee instructions",
+      helperInstructions: "Assistant instructions",
+      helperInstructionDraftNextSteps:
+        "The plan saves only an assistant instruction draft. After applying it, review the draft in assistant settings and publish it separately.",
+      helperInstructionDraftPrepared:
+        "The assistant instruction draft was saved. Review it in assistant settings and publish it separately.",
+      helperEnvironmentDraftPrepared:
+        "The new environment revision draft was saved. Review its impact and publish it separately.",
       systemAssistantInstructions: "Additional Kodex instructions",
       agentCapabilities: "Employee capabilities",
       capabilityAgent: "Employee",
@@ -8469,6 +8529,18 @@ const en = {
       bindingNextSteps:
         "If you change the selection, save the plan and validate it again before applying.",
       roleImageAgent: "Image for employee",
+      systemImageBoundary:
+        "System assistant image. The server-pinned scope and assistant cannot be changed here. Building, verification and promotion use the standard pipeline.",
+      systemImageNextSteps:
+        "Confirmation queues the new image generation for building. Wait for verification, separately confirm promotion, then select the image in the assistant environment. Current turns keep their existing image.",
+      runtimeConfigurationBoundary:
+        "Model settings apply only to the pinned assistant and future turns. Save and validate the plan, then separately confirm application; current turns keep their existing configuration.",
+      runtimeConfigurationUnavailable:
+        "The assistant binding or catalog could not be verified. Refresh the plan; changes are unavailable for now.",
+      reasoningCatalogDefault: "Catalog default",
+      reasoningUnsupported: "Model without reasoning effort",
+      reasoningUnsupportedHelp:
+        "This model does not support a reasoning effort setting. Choose the empty value to save the plan without it.",
       roleImageName: "Image name",
       roleImageAgentUnavailable: "Employee not found in the accessible catalog",
       roleImageAgentFixed:

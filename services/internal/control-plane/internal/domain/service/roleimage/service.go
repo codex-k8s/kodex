@@ -82,6 +82,13 @@ func ValidateManagedRecipe(projectRef, roleRef, name string, input entity.RoleIm
 	return nil
 }
 
+func ValidateManagedOrganizationRecipe(name string, input entity.RoleImageRecipeInput) error {
+	if !validDisplayName(name) || validateRecipe(input) != nil {
+		return errs.ErrInvalid
+	}
+	return nil
+}
+
 func (service *Service) ListEnvironments(ctx context.Context, principal value.Principal) ([]Environment, error) {
 	principal, err := service.resolvePrincipal(ctx, principal)
 	if err != nil {

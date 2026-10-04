@@ -15,19 +15,29 @@ import (
 //go:embed testdata/scheduler_upgrade.sql
 var schedulerUpgradeFixture string
 
+//go:embed testdata/sql/scheduler_upgrade_metadata.sql
+var schedulerUpgradeMetadataFixture string
+
 func TestScheduleProtocolUpgrade(t *testing.T) {
 	dsn := os.Getenv("KODEX_CONTROL_PLANE_MIGRATION_TEST_DSN")
 	if dsn == "" {
 		t.Skip("disposable migration database is required")
 	}
 	config, err := pgx.ParseConfig(dsn)
-	if err != nil {
+	if err != nil || config.Host != "127.0.0.1" || config.Port < 1024 ||
+		config.Database != "control_plane_scheduler_upgrade" || config.User != "control_plane_migrator" ||
+		config.Password != "" || config.TLSConfig != nil || len(config.Fallbacks) != 0 ||
+		os.Getenv("KODEX_CONTROL_PLANE_MIGRATION_TEST_DISPOSABLE") != "dedicated-loopback-container" {
 		t.Fatal("invalid migration test configuration")
 	}
 	database := stdlib.OpenDB(*config)
 	defer database.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
+	var metadataValid bool
+	if err := database.QueryRowContext(ctx, schedulerUpgradeMetadataFixture).Scan(&metadataValid); err != nil || !metadataValid {
+		t.Fatal("canonical disposable migration metadata is invalid")
+	}
 	goose.SetBaseFS(migrations)
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatal(err)
@@ -88,7 +98,7 @@ func TestScheduleProtocolUpgrade(t *testing.T) {
 	).Scan(&unrelatedModel); err != nil {
 		t.Fatal(err)
 	}
-	if defaultModel != "gpt-5.6-sol" || defaultVersion != 10 || unrelatedModel != "synthetic" {
+	if defaultModel != "gpt-6.1-sol" || defaultVersion != 11 || unrelatedModel != "synthetic" {
 		t.Fatalf("runtime profile upgrade invariants: default=%q version=%d unrelated=%q", defaultModel, defaultVersion, unrelatedModel)
 	}
 	if err := readback.Commit(); err != nil {

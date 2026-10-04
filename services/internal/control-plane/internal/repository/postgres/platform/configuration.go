@@ -1269,6 +1269,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	created := []string{}
 	operationReceipts := []entity.AssistantPlanOperationReceipt{}
 	appliedAgentVersions := map[string]int64{}
+	appliedBindingPins := map[string]map[string]any{}
 	var projectID, projectRef string
 	for _, operation := range operations {
 		if !operation.Selected {
@@ -1277,6 +1278,9 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		agentVersionKey := assistantPlanAgentVersionKey(operation)
 		if version, carried := appliedAgentVersions[agentVersionKey]; carried {
 			operation = rebaseAssistantPlanAgentVersion(operation, version)
+		}
+		if pins, carried := appliedBindingPins[agentVersionKey]; carried && assistantProjectConfigurationOperation(operation) {
+			operation = carryAssistantPlanBindingPins(operation, pins)
 		}
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
@@ -1303,6 +1307,18 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			return commandOutcome{}, err
 		}
 		var outcome commandOutcome
+		if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
+			matching, matchErr := repository.systemAssistantImageSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+			matching, matchErr := repository.assistantRuntimeConfigurationSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if operation.Type == "UPDATE_WORKFLOW" {
 			var matching bool
 			matching, err = repository.assistantWorkflowUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
@@ -1332,7 +1348,11 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			}
 		}
 		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
-			err = repository.lockAssistantBindingEnvironment(ctx, operationEffectsTx, scope, conversationProjectRef,
+			bindingProjectRef := conversationProjectRef
+			if assistantProjectConfigurationOperation(operation) {
+				bindingProjectRef = assistantString(operation.Parameters, "projectRef")
+			}
+			err = repository.lockAssistantBindingEnvironment(ctx, operationEffectsTx, scope, bindingProjectRef,
 				assistantString(operation.Parameters, "environmentRef"))
 			if err == nil {
 				var matching bool
@@ -1403,6 +1423,12 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		if agentVersionKey != "" && outcome.result.Agent != nil && outcome.result.Agent.Ref == agentVersionKey && outcome.result.Agent.Version > 0 {
 			appliedAgentVersions[agentVersionKey] = outcome.result.Agent.Version
 		}
+		if view := outcome.result.RuntimeConfiguration; agentVersionKey != "" && view != nil && view.Configuration.AgentRef == agentVersionKey && view.AgentVersion > 0 {
+			appliedAgentVersions[agentVersionKey] = view.AgentVersion
+			if planned.Kind == command.BindAgentRuntimeEnvironment {
+				appliedBindingPins[agentVersionKey] = map[string]any{"runtimeEnvironmentBindingRef": view.EnvironmentBinding.Ref, "runtimeEnvironmentVersionRef": view.EnvironmentBinding.VersionRef, "runtimeEnvironmentDigest": view.Environment.CurrentVersion.Digest}
+			}
+		}
 		if outcome.projectID != "" {
 			projectID, projectRef = outcome.projectID, outcome.projectRef
 		}
@@ -1426,11 +1452,13 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		_ = effectTx.Rollback(ctx)
 		return commandOutcome{}, fmt.Errorf("commit assistant plan operation effects: %w", errs.ErrConflict)
 	}
+	responseConversationProjectRef := conversationProjectRef
 	if conversationProjectRef == "" && assistantPlanCreatesSingleProject(operations) && projectID != "" && projectRef != "" {
 		if err := repository.promoteAssistantConversationProject(ctx, effectTx, scope, conversationRef, projectID, projectRef); err != nil {
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
+		responseConversationProjectRef = projectRef
 	}
 	if _, err := effectTx.Exec(ctx, queryConfigurationApplyassistantplancommandUpdateAssistantPlansStateVersionAppliedAt, planID); err != nil {
 		_ = effectTx.Rollback(ctx)
@@ -1448,8 +1476,8 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	plan := entity.AssistantPlan{Ref: payload.PlanRef, ConversationRef: conversationRef, ProjectRef: conversationProjectRef,
 		Summary: summary, State: "APPLIED", Version: version + 1, Revision: revision, ValidatedRevision: validatedRevision,
 		ContentDigest: digest, Operations: operations, AppliedAt: timePointer(time.Now().UTC())}
-	conversation := entity.AssistantConversation{Ref: conversationRef, ProjectRef: projectRef}
-	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt, CreatedRefs: created}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_APPLIED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	conversation := entity.AssistantConversation{Ref: conversationRef, ProjectRef: responseConversationProjectRef}
+	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt, CreatedRefs: created}, projectID: mustProjectID(ctx, tx, scope.organizationID, responseConversationProjectRef), projectRef: responseConversationProjectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_APPLIED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
 func assistantPlanCreatesSingleProject(operations []entity.AssistantPlanOperation) bool {

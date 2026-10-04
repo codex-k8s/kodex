@@ -430,7 +430,7 @@ func TestSystemAssistantCanProposeOwnEnvironmentRevisionOutsideEnvironmentContex
 	if parameters == nil {
 		t.Fatal("system assistant environment operation is not discoverable")
 	}
-	fields := parameters["properties"].(map[string]any)
+	fields := assistantOrdinaryParametersSchema(parameters)["properties"].(map[string]any)
 	if fields["environmentRef"].(map[string]any)["enum"].([]string)[0] != input.RuntimeEnvironmentRef ||
 		fields["systemAssistantRef"].(map[string]any)["enum"].([]string)[0] != input.AgentRef {
 		t.Fatalf("system assistant environment schema is not pinned: %#v", fields)

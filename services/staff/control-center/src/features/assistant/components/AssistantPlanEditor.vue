@@ -21,6 +21,7 @@ import AssistantCapabilityPlanForm from "@/features/assistant/components/Assista
 import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import AssistantSchedulePlanForm from "@/features/assistant/components/AssistantSchedulePlanForm.vue";
+import AssistantRuntimeConfigurationPlanForm from "./AssistantRuntimeConfigurationPlanForm.vue";
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
 import AssistantEnvironmentRevisionForm from "@/features/assistant/components/AssistantEnvironmentRevisionForm.vue";
 import AssistantEnvironmentFieldsForm from "@/features/assistant/components/AssistantEnvironmentFieldsForm.vue";
@@ -47,10 +48,13 @@ import { usePlatformStore } from "@/features/platform/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
   editableOperations,
+  editableAssistantOperationProjectRef,
+  hasAssistantProjectHelperLocator,
   friendlyPlanOperationType,
   honestEditedPlanSummaries,
   operationActionLabel,
   operationInputs,
+  systemAssistantImageOperationScope,
   operationParameter,
   operationTargetLabel,
   updateOperationParameter,
@@ -120,6 +124,21 @@ const selectedImages = ref<Record<string, AsyncEntityOption>>({});
 const roleImageAgentNames = ref<Record<string, string>>({});
 const roleImageEnvironments = ref<RoleEnvironment[]>([]);
 const roleImageCatalogProblem = ref(false);
+const assistantRuntimeValidity = ref<Record<string, boolean>>({});
+const assistantRuntimeTouched = ref(false);
+function systemImageOperation(operation: EditablePlanOperation): boolean {
+  return (
+    operation.value.type === "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" ||
+    operation.value.type === "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+  );
+}
+function imageOperation(operation: EditablePlanOperation): boolean {
+  return (
+    systemImageOperation(operation) ||
+    operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
+    operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
+  );
+}
 const projectTextMediaTypes = [
   "text/plain",
   "text/markdown",
@@ -135,6 +154,21 @@ const projectBinaryMediaTypes = [
 const maximumProjectFileBytes = 1 << 20;
 function roleImageReady(operation: EditablePlanOperation): boolean {
   if (roleImageCatalogProblem.value) return false;
+  if (systemImageOperation(operation)) {
+    try {
+      const input = operationInputs([operation])[0];
+      if (
+        !input ||
+        !systemAssistantImageOperationScope(
+          input,
+          platform.bootstrap?.organizationRef,
+        )
+      )
+        return false;
+    } catch {
+      return false;
+    }
+  }
   if (
     operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" &&
     !roleImageAgentNames.value[fieldValue(operation, "agentRef")]
@@ -337,6 +371,8 @@ function resetDraft(): void {
   capabilityFormTouched.value = false;
   integrationGrantValidity.value = {};
   integrationGrantTouched.value = false;
+  assistantRuntimeTouched.value = false;
+  assistantRuntimeValidity.value = {};
   inputProblem.value = "";
 }
 
@@ -509,11 +545,12 @@ watch(
       (operation) => operation.type === "CREATE_ROLE_IMAGE_RECIPE",
     );
     if (
-      !projectRef ||
       !plan.operations.some(
         (operation) =>
           operation.type === "CREATE_ROLE_IMAGE_RECIPE" ||
-          operation.type === "UPDATE_ROLE_IMAGE_RECIPE",
+          operation.type === "UPDATE_ROLE_IMAGE_RECIPE" ||
+          operation.type === "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" ||
+          operation.type === "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE",
       )
     )
       return;
@@ -522,7 +559,7 @@ watch(
     void (async () => {
       try {
         const names: Record<string, string> = {};
-        if (createRoleImage) {
+        if (createRoleImage && projectRef) {
           const visitedTokens = new Set<string>();
           let pageToken: string | undefined;
           do {
@@ -579,6 +616,7 @@ const draftMatchesSavedPlan = computed(() => {
       !scheduleFormTouched.value &&
       !capabilityFormTouched.value &&
       !integrationGrantTouched.value &&
+      !assistantRuntimeTouched.value &&
       JSON.stringify(operationInputs(operations.value)) ===
         JSON.stringify(
           operationInputs(editableOperations(props.plan.operations)),
@@ -598,11 +636,16 @@ const friendlyInputsReady = computed(() =>
   operations.value.every(
     (operation) =>
       !operation.value.selected ||
-      ((!(
-        operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
-        operation.value.type === "UPDATE_INTEGRATION_CONNECTION"
-      ) ||
-        !Object.keys(connectionProblems(operation)).length) &&
+      ((operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
+        Boolean(environmentResourceScope(operation))) &&
+        ((operation.value.type !== "CREATE_INSTRUCTION_DRAFT" &&
+          operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT") ||
+          Boolean(operationProjectRef(operation))) &&
+        (!(
+          operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+          operation.value.type === "UPDATE_INTEGRATION_CONNECTION"
+        ) ||
+          !Object.keys(connectionProblems(operation)).length) &&
         (operation.value.type !== "LAUNCH_RUN" ||
           runFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_WORKFLOW" &&
@@ -635,6 +678,8 @@ const friendlyInputsReady = computed(() =>
           )) &&
         (operation.value.type !== "UPDATE_AGENT" ||
           agentProfileValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" ||
+          assistantRuntimeValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_INSTRUCTION_DRAFT" ||
           fieldValue(operation, "instructions").trim().length >= 20) &&
         (operation.value.type !== "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
@@ -648,9 +693,7 @@ const friendlyInputsReady = computed(() =>
           capabilityFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CHANGE_INTEGRATION_GRANT" ||
           integrationGrantValidity.value[operation.value.ref] === true) &&
-        ((operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
-          operation.value.type !== "UPDATE_ROLE_IMAGE_RECIPE") ||
-          roleImageReady(operation)) &&
+        (!imageOperation(operation) || roleImageReady(operation)) &&
         (operation.value.type !== "CREATE_PROJECT_FILE" ||
           projectFileReady(operation))),
   ),
@@ -798,9 +841,35 @@ function isSystemAssistantEnvironment(
 ): boolean {
   return fieldValue(operation, "systemAssistantRef").length > 0;
 }
+function operationProjectRef(
+  operation: EditablePlanOperation,
+): string | undefined {
+  return editableAssistantOperationProjectRef(
+    props.plan,
+    operation,
+    platform.bootstrap?.organizationRef,
+  );
+}
+function isProjectAssistantHelper(operation: EditablePlanOperation): boolean {
+  return Boolean(
+    hasAssistantProjectHelperLocator(operation.value) &&
+    operationProjectRef(operation),
+  );
+}
 function environmentResourceScope(
   operation: EditablePlanOperation,
 ): RuntimeResourceScope | undefined {
+  try {
+    const current = operationInputs([operation])[0];
+    if (
+      !current ||
+      (hasAssistantProjectHelperLocator(current) &&
+        !operationProjectRef(operation))
+    )
+      return;
+  } catch {
+    return;
+  }
   if (isSystemAssistantEnvironment(operation)) {
     if (
       fieldValue(operation, "systemAssistantRef") !==
@@ -809,9 +878,8 @@ function environmentResourceScope(
       return;
     return systemResourceScope.value;
   }
-  return props.plan.projectRef
-    ? { kind: "PROJECT", projectRef: props.plan.projectRef }
-    : undefined;
+  const projectRef = operationProjectRef(operation);
+  return projectRef ? { kind: "PROJECT", projectRef } : undefined;
 }
 function loadEnvironmentImagePage(
   operation: EditablePlanOperation,
@@ -1365,7 +1433,7 @@ function validationProblemLabel(problem: string): string {
             v-if="friendlyPlanOperationType(operation)"
             class="assistant-plan-friendly"
           >
-            <p class="assistant-plan-friendly__hint">
+            <p v-if="editable" class="assistant-plan-friendly__hint">
               {{ $t("assistant.planEditor.friendlyHint") }}
             </p>
             <AssistantLaunchRunForm
@@ -1402,6 +1470,10 @@ function validationProblemLabel(problem: string): string {
               <AssistantEnvironmentRevisionForm
                 :operation="operation"
                 :disabled="!editable"
+                :helper-applied="
+                  plan.state === 'APPLIED' &&
+                  isProjectAssistantHelper(operation)
+                "
                 @valid="environmentFormValidity[operation.value.ref] = $event"
                 @dirty="environmentFormTouched = true"
                 @parameter="
@@ -1434,7 +1506,7 @@ function validationProblemLabel(problem: string): string {
               </label>
               <AssistantEnvironmentFieldsForm
                 :operation="operation"
-                :project-ref="plan.projectRef || ''"
+                :project-ref="operationProjectRef(operation) || ''"
                 :disabled="!editable"
                 :resource-scope="environmentResourceScope(operation)"
                 :secret-catalog="resourceCatalogs?.secrets"
@@ -1447,7 +1519,7 @@ function validationProblemLabel(problem: string): string {
               />
               <AssistantEnvironmentToolsForm
                 :operation="operation"
-                :project-ref="plan.projectRef || ''"
+                :project-ref="operationProjectRef(operation) || ''"
                 :selected-image="selectedImage(operation)"
                 :resource-scope="environmentResourceScope(operation)"
                 :image-catalog="resourceCatalogs?.images"
@@ -1475,7 +1547,7 @@ function validationProblemLabel(problem: string): string {
                 operation.value.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT'
               "
               :operation="operation"
-              :project-ref="plan.projectRef"
+              :project-ref="operationProjectRef(operation)"
               :disabled="!editable"
               @valid="bindingFormValidity[operation.value.ref] = $event"
               @dirty="bindingFormTouched = true"
@@ -1599,6 +1671,8 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
+                  operation.value.type !==
+                    'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION' &&
                   operation.value.type !== 'CREATE_INSTRUCTION_DRAFT' &&
                   operation.value.type !==
                     'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
@@ -1627,6 +1701,8 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
+                  operation.value.type !==
+                    'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION' &&
                   operation.value.type !== 'CREATE_INSTRUCTION_DRAFT' &&
                   operation.value.type !==
                     'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
@@ -1979,6 +2055,12 @@ function validationProblemLabel(problem: string): string {
               <template
                 v-else-if="operation.value.target.kind === 'ROLE_IMAGE_RECIPE'"
               >
+                <p
+                  v-if="systemImageOperation(operation)"
+                  class="assistant-plan-friendly__hint"
+                >
+                  {{ $t("assistant.planEditor.systemImageBoundary") }}
+                </p>
                 <div
                   v-if="operation.value.type === 'CREATE_ROLE_IMAGE_RECIPE'"
                   class="field"
@@ -2070,13 +2152,29 @@ function validationProblemLabel(problem: string): string {
                 <p v-if="editable" class="assistant-plan-friendly__hint">
                   {{
                     $t(
-                      operation.value.type === "CREATE_ROLE_IMAGE_RECIPE"
-                        ? "assistant.planEditor.roleImageCreateNextSteps"
-                        : "assistant.planEditor.roleImageUpdateNextSteps",
+                      systemImageOperation(operation)
+                        ? "assistant.planEditor.systemImageNextSteps"
+                        : operation.value.action === "CREATE"
+                          ? "assistant.planEditor.roleImageCreateNextSteps"
+                          : "assistant.planEditor.roleImageUpdateNextSteps",
                     )
                   }}
                 </p>
               </template>
+              <AssistantRuntimeConfigurationPlanForm
+                v-else-if="
+                  operation.value.type ===
+                  'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'
+                "
+                :operation="operation"
+                :disabled="!editable"
+                @valid="assistantRuntimeValidity[operation.value.ref] = $event"
+                @dirty="assistantRuntimeTouched = true"
+                @parameter="
+                  (key, value) =>
+                    updateOperationParameter(operation, key, value)
+                "
+              />
               <template v-else-if="operation.value.type === 'CREATE_AGENT'">
                 <AgentFormFields
                   :name="fieldValue(operation, 'name')"
@@ -2145,14 +2243,20 @@ function validationProblemLabel(problem: string): string {
               >
                 <TemplateSourceField
                   :model-value="fieldValue(operation, 'instructions')"
-                  :label="$t('assistant.planEditor.agentInstructions')"
-                  :disabled="!editable"
+                  :label="
+                    $t(
+                      isProjectAssistantHelper(operation)
+                        ? 'assistant.planEditor.helperInstructions'
+                        : 'assistant.planEditor.agentInstructions',
+                    )
+                  "
+                  :disabled="!editable || !operationProjectRef(operation)"
                   :target="
-                    props.plan.projectRef &&
+                    operationProjectRef(operation) &&
                     operation.value.target.ref &&
                     operation.value.expectedVersion
                       ? {
-                          projectRef: props.plan.projectRef,
+                          projectRef: operationProjectRef(operation)!,
                           targetKind: 'AGENT',
                           targetRef: operation.value.target.ref,
                           context: {
@@ -2167,7 +2271,15 @@ function validationProblemLabel(problem: string): string {
                   "
                 />
                 <p class="assistant-plan-friendly__hint">
-                  {{ $t("assistant.planEditor.instructionDraftNextSteps") }}
+                  {{
+                    $t(
+                      isProjectAssistantHelper(operation)
+                        ? plan.state === "APPLIED"
+                          ? "assistant.planEditor.helperInstructionDraftPrepared"
+                          : "assistant.planEditor.helperInstructionDraftNextSteps"
+                        : "assistant.planEditor.instructionDraftNextSteps",
+                    )
+                  }}
                 </p>
               </template>
               <template

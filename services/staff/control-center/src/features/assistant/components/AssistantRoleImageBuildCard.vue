@@ -29,7 +29,30 @@ const { t } = useI18n();
 const platform = usePlatformStore();
 const localizeServerMessage = useServerMessage();
 const target = computed(() =>
-  assistantRoleImageBuildTarget(props.plan, props.operationRef),
+  assistantRoleImageBuildTarget(
+    props.plan,
+    props.operationRef,
+    platform.bootstrap?.organizationRef,
+  ),
+);
+const resourceAddress = computed(
+  () => target.value?.resourceScope ?? target.value?.projectRef,
+);
+const targetRoute = computed(() =>
+  target.value?.resourceScope
+    ? {
+        name: "system-role-image",
+        params: { recipeRef: target.value.recipeRef },
+        query: { assistantForm: "1" },
+      }
+    : {
+        name: "role-image",
+        params: {
+          projectRef: target.value?.projectRef,
+          recipeRef: target.value?.recipeRef,
+        },
+        query: { assistantForm: "1" },
+      },
 );
 const detail = ref<RoleImageRecipeDetail>();
 const loading = ref(false);
@@ -125,6 +148,7 @@ watch(
     promotionProblem.value = false;
     promotionReceipt.value = undefined;
     attemptedArtifactRef.value = undefined;
+    loading.value = false;
     if (!value) return;
     const controller = new AbortController();
     let refreshRequested = false;
@@ -141,7 +165,7 @@ watch(
       loading.value = true;
       try {
         const next = await loadRoleImageDetail(
-          value.projectRef,
+          value.resourceScope ?? value.projectRef,
           value.recipeRef,
           controller.signal,
         );
@@ -149,7 +173,12 @@ watch(
         if (controller.signal.aborted) return;
         if (
           next.recipe.ref !== value.recipeRef ||
-          next.recipe.projectRef !== value.projectRef ||
+          (value.resourceScope
+            ? next.recipe.scopeKind !== "ORGANIZATION" ||
+              next.recipe.organizationRef !==
+                value.resourceScope.organizationRef ||
+              next.recipe.projectRef !== ""
+            : next.recipe.projectRef !== value.projectRef) ||
           next.builds.some((item) => item.recipeRef !== value.recipeRef)
         )
           throw new Error("Role image build scope mismatch");
@@ -180,6 +209,12 @@ watch(
     if (target.value) void refresh?.();
   },
 );
+watch(
+  () => platform.organizationRoleImageRealtimeRevision,
+  () => {
+    if (target.value?.resourceScope) void refresh?.();
+  },
+);
 
 async function stopBuild(): Promise<void> {
   const current = detail.value?.recipe;
@@ -187,6 +222,7 @@ async function stopBuild(): Promise<void> {
   if (
     !current ||
     !exact ||
+    !resourceAddress.value ||
     !cancellable.value ||
     !build.value ||
     !current.nextActions.includes("CANCEL_BUILD") ||
@@ -197,10 +233,11 @@ async function stopBuild(): Promise<void> {
     }))
   )
     return;
+  if (target.value !== exact) return;
   stopping.value = true;
   try {
     await commandRoleImage(
-      exact.projectRef,
+      exact.resourceScope ?? exact.projectRef,
       current,
       "CANCEL_BUILD",
       build.value.ref,
@@ -219,6 +256,7 @@ async function promoteCandidate(): Promise<void> {
   const artifact = candidate.value;
   if (
     !exact ||
+    !resourceAddress.value ||
     !recipe ||
     !artifact ||
     !canPromoteRoleImage(recipe, artifact) ||
@@ -228,13 +266,14 @@ async function promoteCandidate(): Promise<void> {
     !(await requestConfirmation(t("assistant.roleImageBuild.promoteConfirm")))
   )
     return;
+  if (target.value !== exact) return;
   // После неопределённого ответа нельзя повторять state-changing command.
   attemptedArtifactRef.value = artifact.ref;
   promoting.value = true;
   promotionProblem.value = false;
   try {
     const receipt = await promoteRoleImageArtifact(
-      exact.projectRef,
+      exact.resourceScope ?? exact.projectRef,
       recipe,
       artifact.ref,
       artifact.provenanceSha256,
@@ -365,18 +404,7 @@ async function promoteCandidate(): Promise<void> {
       >
         {{ $t("common.refresh") }}
       </button>
-      <RouterLink
-        class="button"
-        :to="{
-          name: 'role-image',
-          params: {
-            projectRef: target.projectRef,
-            recipeRef: target.recipeRef,
-          },
-          query: { assistantForm: '1' },
-        }"
-        @click="emit('navigate')"
-      >
+      <RouterLink class="button" :to="targetRoute" @click="emit('navigate')">
         {{ $t("assistant.roleImageBuild.open") }}
       </RouterLink>
       <button

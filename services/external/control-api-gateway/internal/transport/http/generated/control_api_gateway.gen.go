@@ -609,32 +609,35 @@ func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
 
 // Defines values for AssistantContextDescriptorAllowedOperations.
 const (
-	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                      AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
-	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW                   AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT       AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
-	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                  AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
-	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT            AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
-	AssistantContextDescriptorAllowedOperationsCREATEAGENT                       AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT            AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
-	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                     AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT            AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_ASSISTANT"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                 AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
-	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT     AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                    AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
-	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                    AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                         AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
-	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-	AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION      AssistantContextDescriptorAllowedOperations = "PUBLISH_INTEGRATION_DEFINITION"
-	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION         AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                       AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                     AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
-	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                    AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
-	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
-	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                    AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                         AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
+	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW                      AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT          AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                     AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
+	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT               AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCREATEAGENT                          AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT               AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION          AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                        AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT               AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_ASSISTANT"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                    AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
+	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE                AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT        AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                       AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsCREATESYSTEMASSISTANTROLEIMAGERECIPE AssistantContextDescriptorAllowedOperations = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                       AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                            AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
+	AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION AssistantContextDescriptorAllowedOperations = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
+	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION    AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION         AssistantContextDescriptorAllowedOperations = "PUBLISH_INTEGRATION_DEFINITION"
+	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION            AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                          AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION          AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                        AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE                AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                       AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS    AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTROLEIMAGERECIPE AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                       AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AssistantContextDescriptorAllowedOperations enum.
@@ -668,9 +671,13 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATESCHEDULE:
 		return true
+	case AssistantContextDescriptorAllowedOperationsCREATESYSTEMASSISTANTROLEIMAGERECIPE:
+		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW:
 		return true
 	case AssistantContextDescriptorAllowedOperationsLAUNCHRUN:
+		return true
+	case AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION:
 		return true
@@ -689,6 +696,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTROLEIMAGERECIPE:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW:
 		return true
@@ -795,32 +804,35 @@ func (e AssistantPlanOperationAction) Valid() bool {
 
 // Defines values for AssistantPlanOperationType.
 const (
-	AssistantPlanOperationTypeARCHIVEAGENT                      AssistantPlanOperationType = "ARCHIVE_AGENT"
-	AssistantPlanOperationTypeARCHIVEWORKFLOW                   AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
-	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT       AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
-	AssistantPlanOperationTypeCHANGECAPABILITY                  AssistantPlanOperationType = "CHANGE_CAPABILITY"
-	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT            AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
-	AssistantPlanOperationTypeCREATEAGENT                       AssistantPlanOperationType = "CREATE_AGENT"
-	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT            AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
-	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeCREATEPROJECT                     AssistantPlanOperationType = "CREATE_PROJECT"
-	AssistantPlanOperationTypeCREATEPROJECTASSISTANT            AssistantPlanOperationType = "CREATE_PROJECT_ASSISTANT"
-	AssistantPlanOperationTypeCREATEPROJECTFILE                 AssistantPlanOperationType = "CREATE_PROJECT_FILE"
-	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE             AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT     AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-	AssistantPlanOperationTypeCREATESCHEDULE                    AssistantPlanOperationType = "CREATE_SCHEDULE"
-	AssistantPlanOperationTypeCREATEWORKFLOW                    AssistantPlanOperationType = "CREATE_WORKFLOW"
-	AssistantPlanOperationTypeLAUNCHRUN                         AssistantPlanOperationType = "LAUNCH_RUN"
-	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-	AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION      AssistantPlanOperationType = "PUBLISH_INTEGRATION_DEFINITION"
-	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION         AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeUPDATEAGENT                       AssistantPlanOperationType = "UPDATE_AGENT"
-	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeUPDATEPROJECT                     AssistantPlanOperationType = "UPDATE_PROJECT"
-	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE             AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeUPDATESCHEDULE                    AssistantPlanOperationType = "UPDATE_SCHEDULE"
-	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
-	AssistantPlanOperationTypeUPDATEWORKFLOW                    AssistantPlanOperationType = "UPDATE_WORKFLOW"
+	AssistantPlanOperationTypeARCHIVEAGENT                         AssistantPlanOperationType = "ARCHIVE_AGENT"
+	AssistantPlanOperationTypeARCHIVEWORKFLOW                      AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
+	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT          AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	AssistantPlanOperationTypeCHANGECAPABILITY                     AssistantPlanOperationType = "CHANGE_CAPABILITY"
+	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT               AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCREATEAGENT                          AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT               AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
+	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION          AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeCREATEPROJECT                        AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATEPROJECTASSISTANT               AssistantPlanOperationType = "CREATE_PROJECT_ASSISTANT"
+	AssistantPlanOperationTypeCREATEPROJECTFILE                    AssistantPlanOperationType = "CREATE_PROJECT_FILE"
+	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE                AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT        AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantPlanOperationTypeCREATESCHEDULE                       AssistantPlanOperationType = "CREATE_SCHEDULE"
+	AssistantPlanOperationTypeCREATESYSTEMASSISTANTROLEIMAGERECIPE AssistantPlanOperationType = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeCREATEWORKFLOW                       AssistantPlanOperationType = "CREATE_WORKFLOW"
+	AssistantPlanOperationTypeLAUNCHRUN                            AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION AssistantPlanOperationType = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
+	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION    AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION         AssistantPlanOperationType = "PUBLISH_INTEGRATION_DEFINITION"
+	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION            AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEAGENT                          AssistantPlanOperationType = "UPDATE_AGENT"
+	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION          AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEPROJECT                        AssistantPlanOperationType = "UPDATE_PROJECT"
+	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE                AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeUPDATESCHEDULE                       AssistantPlanOperationType = "UPDATE_SCHEDULE"
+	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS    AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTROLEIMAGERECIPE AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeUPDATEWORKFLOW                       AssistantPlanOperationType = "UPDATE_WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
@@ -854,9 +866,13 @@ func (e AssistantPlanOperationType) Valid() bool {
 		return true
 	case AssistantPlanOperationTypeCREATESCHEDULE:
 		return true
+	case AssistantPlanOperationTypeCREATESYSTEMASSISTANTROLEIMAGERECIPE:
+		return true
 	case AssistantPlanOperationTypeCREATEWORKFLOW:
 		return true
 	case AssistantPlanOperationTypeLAUNCHRUN:
+		return true
+	case AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION:
 		return true
 	case AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION:
 		return true
@@ -875,6 +891,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeUPDATESCHEDULE:
 		return true
 	case AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS:
+		return true
+	case AssistantPlanOperationTypeUPDATESYSTEMASSISTANTROLEIMAGERECIPE:
 		return true
 	case AssistantPlanOperationTypeUPDATEWORKFLOW:
 		return true

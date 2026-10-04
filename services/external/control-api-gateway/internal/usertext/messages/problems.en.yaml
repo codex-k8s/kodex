@@ -204,6 +204,8 @@ ROLE_IMAGE_RECIPE_CHANGED:
   other: The role environment configuration was updated
 ROLE_IMAGE_BUILD_COMPLETED:
   other: The role environment image was built
+ROLE_IMAGE_BUILD_LEASE_EXPIRED:
+  other: The image build execution lease expired
 ROLE_IMAGE_PROMOTION_REQUESTED:
   other: Role environment image promotion requested
 ROLE_IMAGE_PROMOTED:

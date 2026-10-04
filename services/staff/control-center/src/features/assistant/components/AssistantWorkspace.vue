@@ -939,6 +939,30 @@ function suggestSetup(prompt: string): void {
   message.value = prompt;
   void nextTick(() => composer.value?.focus());
 }
+function prepareAssistantSettings(
+  kind: "RUNTIME" | "ENVIRONMENT" | "IMAGE" | "INSTRUCTIONS",
+): void {
+  const agentRef = activeSettingsAgentRef.value;
+  if (
+    !agentRef ||
+    !activeSettingsCanEdit.value ||
+    !canSend.value ||
+    message.value.trim()
+  )
+    return;
+  const scope = store.assistantScope;
+  const profile = store.projectAssistant;
+  if (scope === "PROJECT" && (!profile || profile.agentRef !== agentRef))
+    return;
+  const prompt = t(`assistant.settings.preparePrompts.${kind}`, {
+    agentRef,
+    scope,
+    projectRef: scope === "PROJECT" ? (profile?.projectRef ?? "") : "",
+    profileRef: scope === "PROJECT" ? (profile?.ref ?? "") : "",
+  });
+  settingsOpen.value = false;
+  suggestSetup(prompt);
+}
 
 function handleAssistantLink(event: MouseEvent): void {
   if (
@@ -1122,6 +1146,7 @@ async function applyPlan(): Promise<void> {
         break;
       case "CREATE_AGENT":
       case "UPDATE_AGENT":
+      case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
       case "ARCHIVE_AGENT":
       case "CHANGE_CAPABILITY":
       case "BIND_AGENT_RUNTIME_ENVIRONMENT":
@@ -1134,6 +1159,8 @@ async function applyPlan(): Promise<void> {
         break;
       case "CREATE_ROLE_IMAGE_RECIPE":
       case "UPDATE_ROLE_IMAGE_RECIPE":
+      case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":
+      case "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":
         kinds.add("ROLE_IMAGE_RECIPE");
         break;
       case "CREATE_SCHEDULE":
@@ -1976,7 +2003,11 @@ onBeforeUnmount(() => {
                     v-for="operation in turn.plan.operations.filter(
                       (item) =>
                         item.type === 'CREATE_ROLE_IMAGE_RECIPE' ||
-                        item.type === 'UPDATE_ROLE_IMAGE_RECIPE',
+                        item.type === 'UPDATE_ROLE_IMAGE_RECIPE' ||
+                        item.type ===
+                          'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' ||
+                        item.type ===
+                          'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE',
                     )"
                     :key="`build-${operation.ref}`"
                     :plan="turn.plan"
@@ -2342,6 +2373,30 @@ onBeforeUnmount(() => {
           </button>
         </nav>
         <div class="assistant-settings-dialog__body">
+          <section class="assistant-settings-dialog__prepare">
+            <p>{{ $t("assistant.settings.prepareHelp") }}</p>
+            <button
+              class="button"
+              type="button"
+              :disabled="
+                !activeSettingsCanEdit || !canSend || Boolean(message.trim())
+              "
+              @click="prepareAssistantSettings(settingsTab)"
+            >
+              <Sparkles :size="16" />{{ $t("assistant.settings.prepare") }}
+            </button>
+            <button
+              v-if="settingsTab === 'ENVIRONMENT'"
+              class="button"
+              type="button"
+              :disabled="
+                !activeSettingsCanEdit || !canSend || Boolean(message.trim())
+              "
+              @click="prepareAssistantSettings('IMAGE')"
+            >
+              <Sparkles :size="16" />{{ $t("assistant.settings.prepareImage") }}
+            </button>
+          </section>
           <AgentRuntimePanel
             v-if="settingsTab === 'RUNTIME' && activeSettingsAgentRef"
             :agent-ref="activeSettingsAgentRef"
@@ -2575,6 +2630,16 @@ onBeforeUnmount(() => {
   min-height: 0;
   padding: 20px 24px 28px;
   overflow: auto;
+}
+.assistant-settings-dialog__prepare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.assistant-settings-dialog__prepare p {
+  flex: 1 1 100%;
 }
 .assistant-settings-dialog__instructions {
   display: grid;

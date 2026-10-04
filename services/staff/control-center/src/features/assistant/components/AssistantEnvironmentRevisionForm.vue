@@ -9,6 +9,7 @@ import {
 const props = defineProps<{
   operation: EditablePlanOperation;
   disabled: boolean;
+  helperApplied?: boolean;
 }>();
 const fieldPrefix = `assistant-environment-${useId()}`;
 const emit = defineEmits<{
@@ -49,7 +50,7 @@ function changeText(key: string, event: Event): void {
 
 <template>
   <div class="assistant-environment-revision">
-    <p class="assistant-plan-friendly__hint">
+    <p v-if="!helperApplied" class="assistant-plan-friendly__hint">
       {{
         $t(
           systemAssistantEnvironment
@@ -87,9 +88,11 @@ function changeText(key: string, event: Event): void {
     <p>
       {{
         $t(
-          systemAssistantEnvironment
-            ? "assistant.planEditor.systemEnvironmentNextSteps"
-            : "assistant.planEditor.environmentRevisionNextSteps",
+          helperApplied
+            ? "assistant.planEditor.helperEnvironmentDraftPrepared"
+            : systemAssistantEnvironment
+              ? "assistant.planEditor.systemEnvironmentNextSteps"
+              : "assistant.planEditor.environmentRevisionNextSteps",
         )
       }}
     </p>

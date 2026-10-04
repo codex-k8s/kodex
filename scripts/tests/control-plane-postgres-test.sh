@@ -97,10 +97,13 @@ run_migration() {
   cd -- "$repository_root/services/internal/control-plane"
   if [[ -n "${KODEX_CONTROL_PLANE_TEST_FILTER:-}" ]]; then
     psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
-      -c 'CREATE DATABASE control_plane_scheduler_upgrade OWNER control_plane_owner' >/dev/null
+      -c 'CREATE DATABASE control_plane_scheduler_upgrade WITH TEMPLATE control_plane OWNER control_plane_owner' >/dev/null
+    # Копируем ещё пустую canonical bootstrap-БД: Goose table/sequence принадлежат
+    # owner, migrator получает только точные grants. NOINHERIT не заменяет это.
     psql "postgresql://postgres@127.0.0.1:${port}/control_plane_scheduler_upgrade?sslmode=disable" --no-password -v ON_ERROR_STOP=1 \
-      -c 'GRANT USAGE, CREATE ON SCHEMA public TO control_plane_migrator' >/dev/null
+      -c 'REVOKE CONNECT ON DATABASE control_plane_scheduler_upgrade FROM PUBLIC; GRANT CONNECT, TEMPORARY ON DATABASE control_plane_scheduler_upgrade TO control_plane_migrator; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE, CREATE ON SCHEMA public TO control_plane_owner, control_plane_migrator' >/dev/null
     KODEX_CONTROL_PLANE_MIGRATION_TEST_DSN="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane_scheduler_upgrade?sslmode=disable" \
+      KODEX_CONTROL_PLANE_MIGRATION_TEST_DISPOSABLE=dedicated-loopback-container \
       env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -count=1 -timeout=90s ./cmd/cli -run '^TestScheduleProtocolUpgrade$'
   fi
   run_migration up

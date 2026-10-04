@@ -441,6 +441,18 @@ func (repository *Repository) QueryEffectiveAccess(ctx context.Context, principa
 			return entity.EffectiveAccess{}, errs.ErrInvalid
 		}
 		decision := access.Evaluate(subject.AccessSubject, permissionKey, resolvedTarget.scope, resolvedTarget.ownerSubjectRef, bindings, result.EvaluatedAt)
+		organizationImage := resolvedTarget.scope.ResourceKind == "ORGANIZATION" || resolvedTarget.scope.ResourceKind == "ROLE_IMAGE" && resolvedTarget.projectID == ""
+		if organizationImage && (permissionKey == "image.build" || permissionKey == "image.source.view" || permissionKey == "image.source.manage") {
+			var organizationID, organizationRef, actorID, actorRef, actorName, role string
+			if err := tx.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, subject.Ref, current.organizationRef).Scan(&organizationID, &organizationRef, &actorID, &actorRef, &actorName, &role); err != nil {
+				return entity.EffectiveAccess{}, errs.ErrNotFound
+			}
+			organizationDecision := access.Evaluate(subject.AccessSubject, "organization.manage", organizationTarget(current.organizationRef), "", bindings, result.EvaluatedAt)
+			if current.authorityProjectID != "" || role != "OWNER" && role != "ADMINISTRATOR" || !organizationDecision.Allowed {
+				decision.Allowed = false
+				decision.Explanation = []entity.AccessExplanationStep{{Code: "ORGANIZATION_OWNER_REQUIRED"}}
+			}
+		}
 		// Ответ сохраняет проверенный public scope; внутренний locator нужен только evaluator.
 		decision.Target = target
 		result.Decisions = append(result.Decisions, decision)

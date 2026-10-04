@@ -20,7 +20,24 @@
       configureApiClient();
       const router = createRouter({
         history: createMemoryHistory(),
-        routes: [{ path: "/:pathMatch(.*)*", component: Fixture }],
+        routes: [
+          {
+            path: "/projects/:projectRef/agents/:agentRef",
+            name: "agent",
+            component: Fixture,
+          },
+          {
+            path: "/projects/:projectRef/environments/:environmentRef",
+            name: "runtime-environment",
+            component: Fixture,
+          },
+          {
+            path: "/projects/:projectRef/environments/new",
+            name: "runtime-environment-new",
+            component: Fixture,
+          },
+          { path: "/:pathMatch(.*)*", component: Fixture },
+        ],
       });
       await router.push("/organization/assistant/environment");
       i18n.global.locale.value =

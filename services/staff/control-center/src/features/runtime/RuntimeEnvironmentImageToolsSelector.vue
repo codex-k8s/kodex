@@ -10,6 +10,7 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 import RuntimeEnvironmentToolsEditor from "./RuntimeEnvironmentToolsEditor.vue";
 import {
   assertPromotedRuntimeImage,
@@ -37,8 +38,14 @@ const emit = defineEmits<{
   "availability-change": [ready: boolean];
 }>();
 const { t } = useI18n();
+const localizeServerMessage = useServerMessage();
 const artifact = ref<RoleImageArtifact>();
 const selected = ref<RuntimeImageOption>();
+const localizedSelected = computed(() =>
+  selected.value
+    ? { ...selected.value, title: localizeServerMessage(selected.value.title) }
+    : undefined,
+);
 const loading = ref(false);
 const problem = ref<AppProblem>();
 const scopeKey = computed(() => runtimeResourceScopeKey(props.resourceScope));
@@ -139,19 +146,26 @@ watch(
 );
 onBeforeUnmount(invalidate);
 
-function loadPage(
+async function loadPage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
   pageSize?: number,
 ) {
-  return props.catalog.loadPage(
+  const page = await props.catalog.loadPage(
     props.resourceScope,
     query,
     cursor,
     signal,
     pageSize,
   );
+  return {
+    ...page,
+    items: page.items.map((option) => ({
+      ...option,
+      title: localizeServerMessage(option.title),
+    })),
+  };
 }
 </script>
 
@@ -161,7 +175,7 @@ function loadPage(
       <span>{{ $t("runtime.exactImage") }}</span>
       <AsyncEntityPicker
         :model-value="imageArtifactRef"
-        :selected="selected"
+        :selected="localizedSelected"
         :context-key="scopeKey"
         :load-page="loadPage"
         :placeholder="$t('runtime.choosePromotedImage')"

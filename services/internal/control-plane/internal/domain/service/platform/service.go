@@ -923,6 +923,29 @@ func (service *Service) ListAssistantIntegrationDefinitions(ctx context.Context,
 	}
 	return service.repository.ListAssistantIntegrationDefinitions(ctx, p, leaseRef, fence, generation, strings.TrimSpace(search), offset)
 }
+
+func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.AssistantConfigurationCatalogResponse{}, err
+	}
+	if p.CallerWorkload != "runtime-controller" || p.Permission != "platform.runtime.assistant.resources.search" ||
+		strings.TrimSpace(leaseRef) == "" || strings.TrimSpace(fence) == "" || generation < 1 {
+		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrForbidden
+	}
+	validKind := false
+	switch input.Kind {
+	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS":
+		validKind = true
+	}
+	if !validKind || len(input.AssistantRef) < 8 || len(input.AssistantRef) > 128 || len([]rune(input.Query)) > 80 || input.Offset < 0 || input.Offset > 10000 ||
+		(input.Kind != "MODELS" && input.AccountRef != "") || (input.Kind == "MODELS" && (len(input.AccountRef) < 8 || len(input.AccountRef) > 128)) ||
+		(input.Kind != "MODELS" && input.Kind != "PROVIDER_ACCOUNTS" && input.RuntimeProfileRef != "") || len(input.RuntimeProfileRef) > 128 {
+		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
+	}
+	input.Query = strings.TrimSpace(input.Query)
+	return service.repository.ListAssistantConfigurationCatalog(ctx, p, leaseRef, fence, generation, input)
+}
 func (service *Service) OpenExecutionArtifactTransfer(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {
 	return service.readExecutionArtifact(ctx, p, leaseRef, fence, generation, artifactRef, "platform.runtime.execution.artifact.stream")
 }
@@ -1334,6 +1357,8 @@ func knownCommand(kind command.Kind) bool {
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
 		command.CreateAssistantRoleImageRecipe, command.UpdateAssistantRoleImageRecipe,
+		command.CreateSystemAssistantRoleImageRecipe, command.UpdateSystemAssistantRoleImageRecipe,
+		command.PublishAssistantRuntimeConfig,
 		command.SetAgentAvatar, command.RemoveAgentAvatar,
 		command.PrepareInstructionsImpact, command.PreparePromptTemplateImpact,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,

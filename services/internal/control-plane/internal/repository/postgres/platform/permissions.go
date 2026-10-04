@@ -43,6 +43,20 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 			return errs.ErrInvalid
 		}
 		return repository.authorizeAssistantRoleImage(ctx, tx, current, payload)
+	case command.CreateSystemAssistantRoleImageRecipe, command.UpdateSystemAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.SystemAssistantRoleImageInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		_, err := repository.authorizeSystemAssistantImage(ctx, tx, current, payload, input.Kind == command.UpdateSystemAssistantRoleImageRecipe)
+		return err
+	case command.PublishAssistantRuntimeConfig:
+		payload, ok := input.Payload.(command.AssistantRuntimeConfigurationInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		_, err := repository.authorizeAssistantRuntimeConfiguration(ctx, tx, current, payload)
+		return err
 	case command.UpdateAssistantRoleImageRecipe:
 		payload, ok := input.Payload.(command.AssistantRoleImageUpdateInput)
 		if !ok {

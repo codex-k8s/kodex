@@ -340,6 +340,7 @@ type Repository interface {
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)
 	SearchAssistantResources(context.Context, value.Principal, string, string, int64, string) ([]entity.SearchResult, bool, error)
 	ListAssistantIntegrationDefinitions(context.Context, value.Principal, string, string, int64, string, int32) ([]entity.AssistantIntegrationDefinition, int32, error)
+	ListAssistantConfigurationCatalog(context.Context, value.Principal, string, string, int64, entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error)
 	SearchExecutionFiles(context.Context, value.Principal, query.ExecutionFileContext, string, query.Page) (entity.ExecutionFilePage, error)
 	GetExecutionFileMetadata(context.Context, value.Principal, query.ExecutionFileContext, query.ExecutionFileRef) (entity.ExecutionFileMetadata, error)
 	PreviewExecutionFile(context.Context, value.Principal, query.ExecutionFileContext, query.ExecutionFileRef, int32) (entity.ExecutionFilePreview, error)

@@ -74,6 +74,28 @@ it("показывает поздно загруженное имя текуще
 });
 
 describe("assistant route context", () => {
+  it.each([
+    "CREATE_PROJECT_ASSISTANT",
+    "CREATE_INSTRUCTION_DRAFT",
+    "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS",
+  ])(
+    "распознаёт серверную %s, не выдавая дополнительных операций",
+    (operation) => {
+      expect(readableContextOperations([operation])).toEqual([operation]);
+      expect(
+        readableContextOperations([operation, "UNKNOWN_COMMAND"]),
+      ).toBeUndefined();
+      expect(
+        resolveAssistantContext(
+          route("/projects/prj_sales/agents/agt_sales", {
+            projectRef: "prj_sales",
+            agentRef: "agt_sales",
+          }),
+          sources,
+        ).descriptor.allowedOperations,
+      ).toEqual([]);
+    },
+  );
   it("показывает только объявленные владельцем операции и не придумывает unknown", () => {
     expect(readableContextOperations(["LAUNCH_RUN"])).toEqual(["LAUNCH_RUN"]);
     expect(

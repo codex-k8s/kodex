@@ -16,6 +16,11 @@ import type {
   RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
+import { usePlatformStore } from "@/features/platform/store";
+import {
+  assertRuntimeResourceIdentity,
+  validRuntimeResourceIdentity,
+} from "@/features/runtime/resource-scope";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 
@@ -29,6 +34,7 @@ const emit = defineEmits<{
   dirty: [];
   parameter: [key: string, value: string];
 }>();
+const platform = usePlatformStore();
 const agent = ref<Agent>();
 const environment = ref<RuntimeEnvironmentSet>();
 const agentProblem = ref(false);
@@ -67,11 +73,15 @@ const valid = computed(() =>
 watch(valid, (value) => emit("valid", value), { immediate: true });
 
 watch(
-  [() => props.projectRef, agentRef] as const,
-  ([projectRef, ref], _previous, onCleanup) => {
+  [
+    () => props.projectRef,
+    agentRef,
+    () => platform.bootstrap?.organizationRef,
+  ] as const,
+  ([projectRef, ref, organizationRef], _previous, onCleanup) => {
     agent.value = undefined;
     agentProblem.value = false;
-    if (!projectRef || !ref) return;
+    if (!projectRef || !ref || !organizationRef) return;
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     void unwrap(
@@ -91,11 +101,15 @@ watch(
 );
 
 watch(
-  [() => props.projectRef, environmentRef] as const,
-  ([projectRef, ref], _previous, onCleanup) => {
+  [
+    () => props.projectRef,
+    environmentRef,
+    () => platform.bootstrap?.organizationRef,
+  ] as const,
+  ([projectRef, ref, organizationRef], _previous, onCleanup) => {
     environment.value = undefined;
     environmentProblem.value = false;
-    if (!projectRef || !ref) return;
+    if (!projectRef || !ref || !organizationRef) return;
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     void unwrap(
@@ -105,7 +119,15 @@ watch(
       }),
     )
       .then(({ data }) => {
-        if (!controller.signal.aborted) environment.value = data;
+        if (controller.signal.aborted) return;
+        assertRuntimeResourceIdentity(
+          { kind: "PROJECT", projectRef },
+          data,
+          organizationRef,
+        );
+        if (data.ref !== ref)
+          throw new Error("Assistant binding environment readback mismatch");
+        environment.value = data;
       })
       .catch(() => {
         if (!controller.signal.aborted) environmentProblem.value = true;
@@ -120,21 +142,31 @@ async function loadEnvironments(
   signal: AbortSignal,
   pageSize = 30,
 ): Promise<AsyncEntityOptionPage> {
-  if (!props.projectRef) return { items: [] };
+  const projectRef = props.projectRef;
+  const organizationRef = platform.bootstrap?.organizationRef;
+  if (!projectRef || !organizationRef) return { items: [] };
   const page = (
     await unwrap(
       listRuntimeEnvironmentSets({
-        path: { projectRef: props.projectRef },
+        path: { projectRef },
         query: { query, pageSize, ...(cursor ? { pageToken: cursor } : {}) },
         signal: requestSignal(signal),
       }),
     )
   ).data;
+  if (
+    signal.aborted ||
+    projectRef !== props.projectRef ||
+    organizationRef !== platform.bootstrap?.organizationRef
+  )
+    return { items: [] };
   return {
     items: page.items
       .filter(
         (item) =>
           item.projectRef === props.projectRef &&
+          item.scopeKind === "PROJECT" &&
+          validRuntimeResourceIdentity(item, organizationRef) &&
           item.state === "ACTIVE" &&
           item.ready,
       )

@@ -7,6 +7,7 @@ import {
   assistantSystemEnvironmentDraftTarget,
 } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
+import { readAssistantProjectHelper } from "@/features/assistant/project-helper-readback";
 import { organizationRuntimeResourceScope } from "@/features/runtime/resource-scope";
 import { readEnvironmentDraft } from "@/features/runtime/environment-drafts";
 import type {
@@ -27,7 +28,11 @@ const organizationScope = computed(() =>
 const target = computed(() =>
   systemTarget.value
     ? undefined
-    : assistantEnvironmentDraftTarget(props.plan, props.operationRef),
+    : assistantEnvironmentDraftTarget(
+        props.plan,
+        props.operationRef,
+        platform.bootstrap?.organizationRef,
+      ),
 );
 const draft = ref<RuntimeEnvironmentDraft>();
 const loading = ref(false);
@@ -109,6 +114,16 @@ watch(
       if (controller.signal.aborted) return;
       loading.value = true;
       try {
+        const operation = props.plan.operations.find(
+          (item) => item.ref === props.operationRef,
+        );
+        if (operation && exact)
+          await readAssistantProjectHelper(
+            props.plan,
+            operation,
+            platform.bootstrap?.organizationRef,
+            controller.signal,
+          );
         const next = await readEnvironmentDraft(
           address,
           draftRef,
@@ -118,6 +133,11 @@ watch(
         if (controller.signal.aborted) return;
         if (system && next.environmentRef !== system.environmentRef)
           throw new Error("System assistant draft environment mismatch");
+        if (
+          operation?.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION" &&
+          next.environmentRef !== operation.target.ref
+        )
+          throw new Error("Assistant revision draft environment mismatch");
         draft.value = next;
         problem.value = false;
       } catch {

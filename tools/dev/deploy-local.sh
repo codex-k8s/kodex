@@ -1251,7 +1251,19 @@ wait_stable_workloads() {
 readback_local_image_supply_chain() {
   local expected_policy actual_policy policy_resource controller workloads expected_deployments
   local expected_digest actual_digest catalog_expected_digest catalog_actual_digest
+  local expected_admission_configuration actual_admission_configuration
   local target_registry promoted_pull_host resource name
+  expected_admission_configuration=$(yq -o=json -I=0 '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-image-admission") | .data
+  ' "$render" | jq -cS '.')
+  [[ -n "$expected_admission_configuration" && "$expected_admission_configuration" != null ]] ||
+    fail 'rendered image admission runtime configuration is absent'
+  actual_admission_configuration=$(kubectl -n "$namespace" get \
+    configmap/kodex-image-admission -o json | jq -cS '.data') ||
+    fail 'live image admission runtime configuration is absent'
+  [[ "$actual_admission_configuration" == "$expected_admission_configuration" ]] ||
+    fail 'live image admission runtime configuration readback mismatch'
   expected_policy=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
       .metadata.name == "kodex-image-admission-policy") | .data
@@ -1577,6 +1589,12 @@ PY
       ensure_seed_secrets
       pause_local_image_admission_controller
       cleanup_local_image_admission_runs
+      # Claim/scan/sign/admit/promote читают общий скрипт и policy-фильтры:
+      # новый builder не должен обслуживаться прежней схемой provenance.
+      apply_render image-admission-runtime-configuration '
+        select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+          .metadata.name == "kodex-image-admission")
+      '
       reconcile_local_immutable_image_admission_policy
       apply_render image-admission-owner-intent '
         select(

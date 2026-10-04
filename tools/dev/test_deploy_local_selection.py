@@ -94,6 +94,31 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], accepted)
         self.assertIn("runtime materialization admission readback mismatch", stage)
 
+    def test_supply_chain_admission_script_is_updated_while_controller_is_paused(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        match = re.search(r"apply_render image-admission-runtime-configuration\s+'([^']*)'", stage)
+        self.assertIsNotNone(match)
+        self.assertLess(stage.index('cleanup_local_image_admission_runs'), match.start())
+        self.assertLess(match.start(), stage.index('apply_render image-supply-chain-controllers'))
+        accepted = {"kind": "ConfigMap", "metadata": {"name": "kodex-image-admission", "namespace": "kodex-system"}}
+        rejected = [
+            {"kind": kind, "metadata": {"name": name, "namespace": namespace}}
+            for kind, name, namespace in (
+                ("Secret", "kodex-image-admission", "kodex-system"),
+                ("ConfigMap", "kodex-image-admission", "other-project"),
+                ("ConfigMap", "kodex-image-admission-shadow", "kodex-system"),
+                ("ConfigMap", "kodex-image-admission-policy", "kodex-system"),
+            )
+        ]
+        result = subprocess.run(
+            ["jq", "-c", match.group(1)], text=True, capture_output=True, timeout=5,
+            input="\n".join(json.dumps(item) for item in [accepted] + rejected),
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], [accepted])
+        self.assertIn("live image admission runtime configuration readback mismatch", source)
+
     def test_materialization_readback_accepts_only_approved_api_defaults(self):
         source = SCRIPT.read_text()
         match = re.search(

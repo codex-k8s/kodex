@@ -8,6 +8,55 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("локализует помощника только в закрытом helper context и объясняет уже сохранённый черновик", () => {
+    expect(source).toContain("isProjectAssistantHelper(operation)");
+    expect(source).toContain("assistant.planEditor.helperInstructions");
+    expect(source).toContain("assistant.planEditor.agentInstructions");
+    expect(source).toContain(
+      "assistant.planEditor.helperInstructionDraftPrepared",
+    );
+    expect(source).toContain(
+      "assistant.planEditor.helperInstructionDraftNextSteps",
+    );
+    expect(source).toContain(':helper-applied="');
+    const card = readFileSync(
+      new URL("./AssistantInstructionDraftCard.vue", import.meta.url),
+      "utf8",
+    );
+    expect(card).toContain("assistantProjectHelperScope(");
+    expect(card).toContain("assistant.instructionDraft.helperTitle");
+    expect(card).toContain("assistant.instructionDraft.title");
+    const revision = readFileSync(
+      new URL("./AssistantEnvironmentRevisionForm.vue", import.meta.url),
+      "utf8",
+    );
+    expect(revision).toContain(
+      "assistant.planEditor.helperEnvironmentDraftPrepared",
+    );
+    expect(revision).toContain('v-if="!helperApplied"');
+  });
+  it("не предлагает редактировать уже применённый или readonly план", () => {
+    expect(source).toMatch(
+      /<p v-if="editable" class="assistant-plan-friendly__hint">\s*{{ \$t\("assistant\.planEditor\.friendlyHint"\) }}/,
+    );
+  });
+  it("показывает модель помощника штатной формой без прямой публикации", () => {
+    expect(source).toContain("<AssistantRuntimeConfigurationPlanForm");
+    expect(source).toContain(
+      "assistantRuntimeValidity.value[operation.value.ref] === true",
+    );
+    const form = readFileSync(
+      new URL("./AssistantRuntimeConfigurationPlanForm.vue", import.meta.url),
+      "utf8",
+    );
+    expect(form).toContain("ProviderModelSelector");
+    expect(form).toContain("ProviderAccountSelector");
+    expect(form).not.toContain("saveAgentRuntime");
+    expect(form).not.toContain("publishAgentRuntimeConfiguration");
+    expect(form).toContain(
+      "assistantRuntimePlanOwner(input, platform.bootstrap?.organizationRef)",
+    );
+  });
   it("сначала показывает штатную форму и оставляет пояснения доступными по запросу", () => {
     expect(source).toContain("const showPlanDetails = ref(false)");
     expect(source).toContain("showPlanDetails.value = false");

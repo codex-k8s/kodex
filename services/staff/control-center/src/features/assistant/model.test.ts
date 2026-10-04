@@ -217,6 +217,45 @@ describe("assistant role image build target", () => {
     });
     expect(assistantRoleImageBuildTarget(plan, "op_other")).toBeUndefined();
   });
+  it("общесистемный образ не выводит scope из projectRef плана", () => {
+    const owner = {
+      scopeKind: "ORGANIZATION",
+      organizationRef: "org_synthetic",
+      systemAssistantRef: "agt_system",
+    };
+    const systemPlan: AssistantPlan = {
+      ...plan,
+      operations: [
+        {
+          ...imageOperation,
+          type: "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE",
+          parameters: owner,
+          after: owner,
+        },
+      ],
+    };
+    expect(
+      assistantRoleImageBuildTarget(systemPlan, "op_image", "org_synthetic"),
+    ).toEqual({
+      resourceScope: { kind: "ORGANIZATION", organizationRef: "org_synthetic" },
+      recipeRef: "rimg_exact",
+    });
+    expect(
+      assistantRoleImageBuildTarget(systemPlan, "op_image"),
+    ).toBeUndefined();
+    expect(
+      assistantRoleImageBuildTarget(systemPlan, "op_image", "org_foreign"),
+    ).toBeUndefined();
+    const first = systemPlan.operations[0];
+    if (!first) throw new Error("Missing system image operation");
+    const mixed = {
+      ...systemPlan,
+      operations: [{ ...first, after: { ...owner, projectRef: "" } }],
+    };
+    expect(
+      assistantRoleImageBuildTarget(mixed, "op_image", "org_synthetic"),
+    ).toBeUndefined();
+  });
 
   it("наблюдает новую сборку только у точно обновлённого рецепта", () => {
     const updated = {

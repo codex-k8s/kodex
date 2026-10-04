@@ -1543,6 +1543,12 @@ message AssistantPlanOperation {
     TYPE_UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS = 25;
     // Подготовить отдельного помощника проекта без копирования системных grants.
     TYPE_CREATE_PROJECT_ASSISTANT = 26;
+    // Подготовить собственный организационный образ системного помощника.
+    TYPE_CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE = 27;
+    // Подготовить новую сборку его организационного рецепта по exact version.
+    TYPE_UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE = 28;
+    // Подготовить подтверждаемую атомарную настройку модели, аккаунтов и reasoning помощника.
+    TYPE_PREPARE_ASSISTANT_RUNTIME_CONFIGURATION = 29;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -1851,12 +1857,68 @@ message SearchAssistantResourcesRequest {
   bool integration_definition_catalog = 5;
   string definition_query = 6;
   int32 definition_offset = 7;
+  // Отдельный read-only каталог конфигурации помощника; несовместим с другими режимами.
+  AssistantConfigurationCatalogRequest assistant_configuration_catalog = 8;
 }
 message SearchAssistantResourcesResponse {
   repeated SearchResult results = 1;
   bool truncated = 2;
   repeated AssistantIntegrationDefinition definitions = 3;
   int32 next_definition_offset = 4;
+  AssistantConfigurationCatalogResponse assistant_configuration_catalog = 5;
+}
+
+enum AssistantConfigurationCatalogKind {
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_UNSPECIFIED = 0;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_ASSISTANTS = 1;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_RUNTIME_PROFILES = 2;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_PROVIDER_ACCOUNTS = 3;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_MODELS = 4;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_IMAGE_RECIPES = 5;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS = 6;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_ENVIRONMENTS = 7;
+}
+
+message AssistantConfigurationCatalogRequest {
+  AssistantConfigurationCatalogKind kind = 1;
+  // Это locator; полномочия и scope разрешает сервер из состояния и lease.
+  string assistant_ref = 2;
+  string query = 3;
+  int32 offset = 4;
+  string account_ref = 5;
+  string runtime_profile_ref = 6;
+}
+
+message AssistantConfigurationCatalogEntry {
+  string ref = 1;
+  string name = 2;
+  string provider = 3;
+  string model = 4;
+  int64 version = 5;
+  int64 recipe_generation = 6;
+  string reference = 7;
+  string manifest_digest = 8;
+  string catalog_revision = 9;
+  string catalog_digest = 10;
+  repeated string reasoning_efforts = 11;
+  string default_reasoning_effort = 12;
+  string scope_kind = 13;
+  string organization_ref = 14;
+  string project_ref = 15;
+  string assistant_profile_ref = 16;
+  // Только ASSISTANTS: locator опубликованного окружения; не источник прав.
+  string runtime_environment_ref = 17;
+}
+
+message AssistantConfigurationCatalogResponse {
+  AssistantConfigurationCatalogKind kind = 1;
+  string assistant_ref = 2;
+  string scope_kind = 3;
+  string organization_ref = 4;
+  string project_ref = 5;
+  string assistant_profile_ref = 6;
+  repeated AssistantConfigurationCatalogEntry entries = 7;
+  int32 next_offset = 8;
 }
 
 enum VFSNodeKind {

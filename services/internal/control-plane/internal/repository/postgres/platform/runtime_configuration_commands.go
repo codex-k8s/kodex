@@ -352,6 +352,12 @@ func validRuntimeConfigurationAgent(agent lockedRuntimeAgent) bool {
 }
 
 func (repository *Repository) publishAgentRuntimeConfiguration(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	return repository.publishAgentRuntimeConfigurationWithOverlay(ctx, tx, scope, input, nil)
+}
+
+// preparedOverlay применим только к атомарной специализированной публикации
+// помощника; обычная публикация всегда сверяет текущий опубликованный overlay.
+func (repository *Repository) publishAgentRuntimeConfigurationWithOverlay(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, preparedOverlay *string) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AgentRuntimeConfigurationInput)
 	if !ok || payload.AgentRef == "" || payload.RuntimeProfileRef == "" || input.Mutation.ExpectedVersion == nil ||
 		!validModel(payload.Model) || !validProviderPolicy(payload.ProviderPolicyMode, payload.ProviderAccounts) {
@@ -386,6 +392,9 @@ func (repository *Repository) publishAgentRuntimeConfiguration(ctx context.Conte
 	_, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
 	if err != nil {
 		return commandOutcome{}, err
+	}
+	if preparedOverlay != nil {
+		overlay = *preparedOverlay
 	}
 	accounts, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, provider, payload.Model, overlay, accounts, true)
 	if err != nil {

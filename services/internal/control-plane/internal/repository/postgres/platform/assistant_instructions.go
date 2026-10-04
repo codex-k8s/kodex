@@ -82,6 +82,9 @@ func (repository *Repository) assistantInstructionDraftSnapshotMatches(
 	ctx context.Context, tx pgx.Tx, actorScope scope, projectRef string,
 	operation entity.AssistantPlanOperation,
 ) (bool, error) {
+	if assistantProjectConfigurationOperation(operation) {
+		return repository.projectAssistantConfigurationSnapshotMatches(ctx, tx, actorScope, operation)
+	}
 	var name, purpose, roleDescription, avatarURL string
 	var version int64
 	err := tx.QueryRow(ctx, queryConfigurationHydrateassistantoperationSelectAgent,

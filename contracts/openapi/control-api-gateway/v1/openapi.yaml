@@ -17567,6 +17567,9 @@ components:
                 CREATE_ROLE_IMAGE_RECIPE,
                 UPDATE_ROLE_IMAGE_RECIPE,
                 UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS,
+                CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+                UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+                PREPARE_ASSISTANT_RUNTIME_CONFIGURATION,
               ],
           }
         action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, EXECUTE] }
@@ -17763,6 +17766,9 @@ components:
                   BIND_AGENT_RUNTIME_ENVIRONMENT,
                   CREATE_ROLE_IMAGE_RECIPE,
                   UPDATE_ROLE_IMAGE_RECIPE,
+                  CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+                  UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+                  PREPARE_ASSISTANT_RUNTIME_CONFIGURATION,
                 ],
             }
     AssistantPlanReceipt:

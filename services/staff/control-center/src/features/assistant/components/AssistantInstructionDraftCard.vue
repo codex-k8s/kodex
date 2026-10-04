@@ -8,14 +8,37 @@ import type {
   AssistantPlan,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
+import {
+  assistantInstructionDraftTarget,
+  assistantProjectHelperScope,
+} from "@/features/assistant/model";
+import { readAssistantProjectHelper } from "@/features/assistant/project-helper-readback";
+import { usePlatformStore } from "@/features/platform/store";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
+const platform = usePlatformStore();
+const target = computed(() =>
+  assistantInstructionDraftTarget(
+    props.plan,
+    props.operationRef,
+    platform.bootstrap?.organizationRef,
+  ),
+);
 const operation = computed(() =>
   props.plan.operations.find(
     (item) =>
       item.ref === props.operationRef &&
       item.type === "CREATE_INSTRUCTION_DRAFT",
   ),
+);
+const projectHelper = computed(
+  () =>
+    operation.value &&
+    assistantProjectHelperScope(
+      props.plan,
+      operation.value,
+      platform.bootstrap?.organizationRef,
+    ),
 );
 const agent = ref<Agent>();
 const loading = ref(false);
@@ -29,18 +52,13 @@ const currentDraft = computed(
 let refresh: (() => Promise<void>) | undefined;
 
 watch(
-  operation,
-  (value, _previous, onCleanup) => {
+  [operation, target, () => platform.bootstrap?.organizationRef],
+  ([value, exact, organizationRef], _previous, onCleanup) => {
     agent.value = undefined;
     loading.value = false;
     problem.value = false;
-    if (
-      !value?.target.ref ||
-      !props.plan.projectRef ||
-      props.plan.state !== "APPLIED"
-    )
-      return;
-    const agentRef = value.target.ref;
+    if (!value || !exact) return;
+    const agentRef = exact.agentRef;
     const controller = new AbortController();
     onCleanup(() => {
       controller.abort();
@@ -50,17 +68,25 @@ watch(
       if (controller.signal.aborted) return;
       loading.value = true;
       try {
-        const next = (
-          await unwrap(
-            getAgent({
-              path: { agentRef },
-              signal: requestSignal(controller.signal),
-            }),
-          )
-        ).data;
+        const helper = await readAssistantProjectHelper(
+          props.plan,
+          value,
+          organizationRef,
+          controller.signal,
+        );
+        const next =
+          helper ??
+          (
+            await unwrap(
+              getAgent({
+                path: { agentRef },
+                signal: requestSignal(controller.signal),
+              }),
+            )
+          ).data;
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
         if (controller.signal.aborted) return;
-        if (next.ref !== agentRef || next.projectRef !== props.plan.projectRef)
+        if (next.ref !== agentRef || next.projectRef !== exact.projectRef)
           throw new Error("Assistant instruction draft readback mismatch");
         agent.value = next;
         problem.value = false;
@@ -80,11 +106,17 @@ watch(
 
 <template>
   <section
-    v-if="operation && plan.state === 'APPLIED'"
+    v-if="operation && target"
     class="instruction-draft-card"
     aria-live="polite"
   >
-    <strong>{{ $t("assistant.instructionDraft.title") }}</strong>
+    <strong>{{
+      $t(
+        projectHelper
+          ? "assistant.instructionDraft.helperTitle"
+          : "assistant.instructionDraft.title",
+      )
+    }}</strong>
     <p v-if="loading && !agent">{{ $t("common.loading") }}</p>
     <p v-if="problem" class="field-error" role="alert">
       {{ $t("assistant.instructionDraft.loadFailed") }}
@@ -92,9 +124,11 @@ watch(
     <p v-if="agent">
       {{
         $t(
-          currentDraft
-            ? "assistant.instructionDraft.saved"
-            : "assistant.instructionDraft.changed",
+          projectHelper && !currentDraft
+            ? "assistant.instructionDraft.helperChanged"
+            : currentDraft
+              ? "assistant.instructionDraft.saved"
+              : "assistant.instructionDraft.changed",
         )
       }}
     </p>
@@ -108,12 +142,13 @@ watch(
         {{ $t("common.refresh") }}
       </button>
       <RouterLink
+        v-if="agent && !problem"
         class="button button--primary"
         :to="{
           name: 'agent',
           params: {
-            projectRef: plan.projectRef,
-            agentRef: operation.target.ref,
+            projectRef: target.projectRef,
+            agentRef: target.agentRef,
           },
           query: { tab: 'instructions', assistantForm: '1' },
         }"

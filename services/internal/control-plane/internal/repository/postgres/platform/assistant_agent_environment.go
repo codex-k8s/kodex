@@ -146,6 +146,9 @@ func (repository *Repository) rehydrateEditedAssistantBinding(ctx context.Contex
 func (repository *Repository) assistantAgentBindingSnapshotMatches(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (bool, error) {
+	if assistantProjectConfigurationOperation(operation) {
+		return repository.projectAssistantConfigurationSnapshotMatches(ctx, tx, actorScope, operation)
+	}
 	before, version, err := repository.readAssistantAgentBindingSnapshot(ctx, tx, actorScope, projectRef, operation.Target.Ref)
 	if err != nil {
 		return false, err

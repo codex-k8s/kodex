@@ -143,7 +143,13 @@ func (repository *Repository) constrainAssistantPlanScope(ctx context.Context, t
 		return errs.ErrNotFound
 	}
 	for _, operation := range operations {
+		if assistantProjectConfigurationOperation(operation) && assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref {
+			return errs.ErrForbidden
+		}
 		if !projectAssistantOperation(operation.Type) {
+			return errs.ErrForbidden
+		}
+		if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" && assistantString(operation.Parameters, "agentRef") != assistant.Ref {
 			return errs.ErrForbidden
 		}
 	}

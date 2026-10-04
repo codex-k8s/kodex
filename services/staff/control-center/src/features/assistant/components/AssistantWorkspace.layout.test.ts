@@ -45,6 +45,17 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("подготовка настроек заполняет только черновик сообщения и не отправляет его", () => {
+    const helper = source.slice(
+      source.indexOf("function prepareAssistantSettings("),
+      source.indexOf("function handleAssistantLink("),
+    );
+    expect(helper).toContain("message.value.trim()");
+    expect(helper).toContain("suggestSetup(prompt)");
+    expect(helper).not.toContain("store.send(");
+    expect(helper).not.toContain("store.apply(");
+    expect(template).toContain("prepareAssistantSettings('IMAGE')");
+  });
   it("открывает точный run сообщения после подтверждённого закрытия чата", () => {
     expect(template).toContain('v-if="turn.runRef"');
     expect(template).toContain("openAssistantTurnRun(turn.runRef)");

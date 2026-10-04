@@ -49,7 +49,7 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 	if err != nil {
 		return nil, err
 	}
-	if len(response.GetResults()) > maximumAssistantSearchResults {
+	if response == nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 || len(response.GetResults()) > maximumAssistantSearchResults {
 		return nil, errors.New("assistant resource search result is invalid")
 	}
 	items := make([]map[string]any, 0, len(response.GetResults()))
