@@ -50,6 +50,27 @@ describe("Выбор образа и проверенных инструмент
     ).not.toThrow();
   });
 
+  it("допускает promoted образ с нативным Chromium и сохраняет его проверенную команду", () => {
+    const value = artifact({
+      verifiedToolInventory: verifiedInventoryFixture(),
+    });
+    const chromium = value.verifiedToolInventory.platforms[0]?.tools.find(
+      (tool) => tool.name === "chromium",
+    );
+    if (!chromium) throw new Error("Missing synthetic Chromium observation");
+    chromium.path = "/usr/lib/chromium/chromium";
+    expect(() => assertPromotedRuntimeImage(value, expected)).not.toThrow();
+    const tools = [
+      {
+        name: "Chromium",
+        command: "chromium",
+        description: "Браузер",
+        usageHint: "--version",
+      },
+    ];
+    expect(toolsForRuntimeImage(tools, value)).toEqual(tools);
+  });
+
   it.each([
     { ref: "imgart_other" },
     { recipeRef: "imgrecipe_other" },

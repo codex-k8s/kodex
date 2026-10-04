@@ -53,6 +53,40 @@ describe("owner-verified inventory для выбора команд", () => {
     expect(verifiedImageTools(value)).toEqual([]);
     expect(verifiedImageTools()).toEqual([]);
   });
+  it("принимает точный нативный путь Chromium в проверенном inventory", () => {
+    const value = artifact();
+    value.verifiedToolInventory = verifiedInventoryFixture();
+    const chromium = value.verifiedToolInventory.platforms[0]?.tools.find(
+      (tool) => tool.name === "chromium",
+    );
+    if (!chromium) throw new Error("Missing synthetic Chromium observation");
+    chromium.path = "/usr/lib/chromium/chromium";
+
+    expect(verifiedImageInventoryAvailable(value)).toBe(true);
+    expect(verifiedImageTools(value)).toContainEqual({
+      name: "chromium",
+      version: "1.2.3",
+    });
+  });
+  it.each([
+    "/usr/lib/chromium/chromium-helper",
+    "/usr/lib/chromium/../chromium/chromium",
+    "/usr/lib/chromium/chromium/",
+    "/usr/lib/chromium-other/chromium",
+    "/usr/lib/chromium",
+    "/usr/lib/other/chromium",
+  ])("не расширяет допуск на соседние пути %s", (path) => {
+    const value = artifact();
+    value.verifiedToolInventory = verifiedInventoryFixture();
+    const chromium = value.verifiedToolInventory.platforms[0]?.tools.find(
+      (tool) => tool.name === "chromium",
+    );
+    if (!chromium) throw new Error("Missing synthetic Chromium observation");
+    chromium.path = path;
+
+    expect(verifiedImageInventoryAvailable(value)).toBe(false);
+    expect(verifiedImageTools(value)).toEqual([]);
+  });
   it("пересекает VERIFIED платформы, допускает разные хеши архитектур и не разрешает PROBE_FAILED", () => {
     const value = artifact();
     const second = structuredClone(value.verifiedToolInventory.platforms[0]);

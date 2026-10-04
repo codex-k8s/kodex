@@ -1742,3 +1742,23 @@ ROOT targeted platform unit PASS на явном Go1.26.6/GOENVoff/GOWORKoff .12
 ROOT frontend ESLint PASS и 191 targeted unit PASS, diff-check PASS.
 SYSTEM template fix перенесён в основной mounted source; actual native repeat
 пока NOT RUN. Чужие вкладки не изменены, own22 hard reload22:55:36.
+
+04.10.2026 23:04 UTC, backend source `29daba6ef86830d3527bd1cf9a03e5398f402e05`
+и новый frontend tree поверх него:
+PASS — BOT commit/push/readback backend fixes; host/Pod/host source hashes
+control-plane, archive и frontend совпали на стабильном29daba6e. Native QA38E
+run_JIl8DU_OupvBQwaNVa5jte7N в прежней сессии завершился успешно и подготовил
+pln_j6WGRv9Z2yXVIOI_QaVu8YSe. В UI просмотрен exact FROM runner807, штатно
+VALID→APPLIED/version3, recipe version5/generation4. Никакой host plan injection.
+Новый normal build imgbld_usNBhbmyxh-atLVOwMQ9ORbZ COMPLETED100; actual scanner
+Running. Admission/all38/promotion пока NOT RUN, прежний REJECTED не обойдён.
+PASS — frontend canonical Chromium path допускает только точный
+/usr/lib/chromium/chromium, соседние/relative/trailing paths закрыто отказаны.
+ROOT36 unit PASS.451s, затем integrated store+inventory70 PASS.682s; ESLint PASS.
+PASS — SYSTEM saved dialog восстанавливается только из scope/pin-checked realtime
+snapshot; ручной выбор сохраняется, чужойproject/profile не принимается.
+Baseline3FAIL → isolated38PASS.722s; actual hard reload23:03 сохранил выбранный
+cnv_bzJIqB622JCONoMbExKA5XXd. Console чиста. За пределами первого snapshot page
+автоматическое восстановление пока NOT SUPPORTED, новых polling/GET нет.
+Нативный applied plan screenshot просмотрен. Checkbox2–15 остаются OPEN;
+SYSTEM environment publish, PROJECT настройка и полный QA ещё не завершены.

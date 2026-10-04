@@ -552,6 +552,27 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     // истории помощника. PROJECT продолжает собственный авторитетный cursor.
     if (assistantScope.value === "SYSTEM")
       nextPageToken.value = sourceNextPageToken;
+    if (
+      selectedRef.value === undefined &&
+      typeof window !== "undefined" &&
+      !historyQuery.value &&
+      historyState.value === "ACTIVE"
+    ) {
+      const retained = restoreAssistantConversationRef(
+        sourceProjectRef,
+        undefined,
+        assistantScope.value,
+      );
+      // Storage хранит только предпочтение: выбирать можно лишь диалог,
+      // уже прошедший scope/pin-проверки авторитетного снимка.
+      if (
+        retained &&
+        visible.some(
+          (value) => value.ref === retained && value.state === "ACTIVE",
+        )
+      )
+        selectedRef.value = retained;
+    }
     selectMatchingConversation();
   }
 

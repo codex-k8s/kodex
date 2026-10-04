@@ -64,7 +64,10 @@ export function verifiedImageInventoryAvailable(
         if (tool.path || tool.version || tool.sha256) return false;
         continue;
       }
-      const command = executablePath.exec(tool.path)?.[1];
+      const command =
+        tool.path === "/usr/lib/chromium/chromium"
+          ? "chromium"
+          : executablePath.exec(tool.path)?.[1];
       if (!command || commands.has(command) || !digest.test(tool.sha256))
         return false;
       commands.add(command);

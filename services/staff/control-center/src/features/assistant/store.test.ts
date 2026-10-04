@@ -425,6 +425,149 @@ describe("assistant workspace store", () => {
     expect(store.selectedConversation?.title).toBe(selected.title);
   });
 
+  it.each([undefined, "prj_sales"])(
+    "восстанавливает сохранённый SYSTEM диалог из scoped realtime snapshot %s",
+    (scope) => {
+      const selected = { ...conversation(), projectRef: scope };
+      const newer = {
+        ...selected,
+        ref: "cnv_newer",
+        updatedAt: "2026-09-26T00:00:00Z",
+      };
+      vi.stubGlobal("window", {
+        sessionStorage: {
+          getItem: (key: string) =>
+            key ===
+            `kodex.assistant.workspace.conversation.SYSTEM.${scope ?? "all"}`
+              ? selected.ref
+              : "cnv_foreign_scope",
+        },
+      });
+      const store = useAssistantStore();
+      store.setContext(context, scope);
+      store.applyRealtimeSnapshot(systemAssistant(), [newer, selected], scope);
+
+      expect(store.selectedRef).toBe(selected.ref);
+      expect(readConversationsMock).not.toHaveBeenCalled();
+      store.selectedRef = newer.ref;
+      store.applyRealtimeSnapshot(systemAssistant(), [selected, newer], scope);
+      expect(store.selectedRef).toBe(newer.ref);
+    },
+  );
+
+  it("не принимает сохранённый ref с чужим project или assistant pin", () => {
+    vi.stubGlobal("window", {
+      sessionStorage: { getItem: () => "cnv_foreign" },
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    const foreign = { ...conversation(), ref: "cnv_foreign" };
+    for (const invalid of [
+      { ...foreign, projectRef: "prj_other" },
+      { ...foreign, assistantRef: "agt_other" },
+      { ...foreign, assistantProfileRef: "asstp_foreign" },
+      { ...projectConversation(), ref: foreign.ref },
+    ]) {
+      store.selectedRef = undefined;
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [invalid, conversation()],
+        "prj_sales",
+      );
+      expect(store.selectedRef).toBe("cnv_sales");
+    }
+    expect(readConversationsMock).not.toHaveBeenCalled();
+  });
+
+  it("восстанавливает PROJECT выбор только с точным профилем и отдельным storage ключом", async () => {
+    const selected = projectConversation();
+    const newer = {
+      ...selected,
+      ref: "cnv_project_newer",
+      updatedAt: "2026-09-26T00:00:00Z",
+    };
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.conversation.PROJECT.prj_sales"
+            ? selected.ref
+            : "cnv_system_saved",
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [newer, selected] });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales", false, "PROJECT");
+    const before = readConversationsMock.mock.calls.length;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [newer, selected, conversation()],
+      "prj_sales",
+    );
+    expect(store.selectedRef).toBe(selected.ref);
+    expect(store.conversations.map((value) => value.ref)).toEqual([
+      newer.ref,
+      selected.ref,
+    ]);
+    expect(readConversationsMock).toHaveBeenCalledTimes(before);
+    store.selectedRef = newer.ref;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [selected, newer],
+      "prj_sales",
+    );
+    expect(store.selectedRef).toBe(newer.ref);
+  });
+
+  it("восстанавливает выбор после пустого initial snapshot и смены scope, не после ручного выбора", () => {
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key.endsWith(".prj_other") ? "cnv_other_selected" : "cnv_sales",
+      },
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.applyRealtimeSnapshot(systemAssistant(), [], "prj_sales");
+    expect(store.selectedRef).toBeUndefined();
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+    );
+    expect(store.selectedRef).toBe("cnv_sales");
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    const other = { ...conversation(), projectRef: "prj_other" };
+    const selected = { ...other, ref: "cnv_other_selected" };
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [other, selected],
+      "prj_other",
+    );
+    expect(store.selectedRef).toBe(selected.ref);
+  });
+
+  it("не восстанавливает архивный сохранённый диалог в ACTIVE истории", () => {
+    vi.stubGlobal("window", {
+      sessionStorage: { getItem: () => "cnv_archived" },
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    const archived = {
+      ...conversation(),
+      ref: "cnv_archived",
+      state: "ARCHIVED" as const,
+    };
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation(), archived],
+      "prj_sales",
+    );
+    expect(store.selectedRef).toBe("cnv_sales");
+  });
+
   it("не ломает историю, если сохранённый диалог исчез из длинного списка", async () => {
     vi.stubGlobal("window", {
       sessionStorage: {
