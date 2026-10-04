@@ -50,6 +50,11 @@ describe("AssistantWorkspace layout", () => {
       'v-if="showWorkingFallback && !store.loading && !store.problem"',
     );
     expect(source).toContain("assistantTranscriptReplacesWorkingFallback(");
+    const typingStyle = styles
+      .slice(styles.indexOf(".assistant-message--typing {"))
+      .split("}")[0];
+    expect(typingStyle).toContain("padding: 6px 10px");
+    expect(typingStyle).toContain("border: 0");
     expect(source).toContain(
       "store.selectedConversation?.turns.at(-1)?.runRef",
     );
@@ -73,6 +78,10 @@ describe("AssistantWorkspace layout", () => {
     expect(template).not.toContain("runs.unscopedHistory");
     expect(source).not.toContain("hasHistoricalTurns");
     expect(source).toContain("assistantTurnHasAuthoritativeActivity(");
+    expect(source).toContain('turn.role === "ASSISTANT"');
+    expect(source).toContain(
+      "assistantFailureMessageKey(turn.content, turn.state)",
+    );
     expect(template).toContain('v-if="!turnHasPublishedMessage(turn)"');
   });
 

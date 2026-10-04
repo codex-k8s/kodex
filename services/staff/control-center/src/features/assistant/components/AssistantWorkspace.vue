@@ -90,6 +90,7 @@ import {
   assistantTurnHasAuthoritativeActivity,
   assistantTerminalTranscriptScopes,
   assistantTranscriptReplacesWorkingFallback,
+  assistantFailureMessageKey,
   isTranscriptNearBottom,
 } from "@/features/runs/run-activity";
 import { runtimeProgressKey } from "@/features/runs/runtime-text";
@@ -204,6 +205,11 @@ function turnHasPublishedMessage(turn: AssistantTurn): boolean {
   );
 }
 function transcriptTurnContent(turn: AssistantTurn): string {
+  const failureKey =
+    turn.role === "ASSISTANT"
+      ? assistantFailureMessageKey(turn.content, turn.state)
+      : undefined;
+  if (failureKey) return t(failureKey);
   const key =
     turn.role !== "USER" ? runtimeProgressKey(turn.content) : undefined;
   return key ? t(key) : turn.content;
@@ -3411,6 +3417,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   color: var(--muted);
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  font-size: 0.85rem;
 }
 .assistant-typing-dots {
   display: inline-flex;

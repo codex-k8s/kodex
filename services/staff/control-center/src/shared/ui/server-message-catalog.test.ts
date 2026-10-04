@@ -28,6 +28,24 @@ function closedCases(path: string, functionName: string): string[] {
 }
 
 describe("полнота закрытого реестра server tokens", () => {
+  it("покрывает закрытый terminal outcome runner, включая неподтверждённый результат", () => {
+    const runner = readFileSync(
+      new URL(
+        "../../../../../jobs/agent-runner/internal/codex/parser.go",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const terminal = runner.match(/func TerminalPresentation\([^]*?\n}/)?.[0];
+    expect(terminal).toBeTruthy();
+    const tokens = [
+      ...(terminal ?? "").matchAll(/i18n:([A-Z][A-Z0-9_]*)/g),
+    ].map((match) => match[1] ?? "");
+    expect(new Set(tokens).size).toBe(7);
+    expect(tokens.filter((token) => !serverMessageTokens.has(token))).toEqual(
+      [],
+    );
+  });
   it("покрывает literal tokens исполняемого владельца, включая SQL", () => {
     const required = new Set<string>();
     for (const entry of readdirSync(ownerRoot, {

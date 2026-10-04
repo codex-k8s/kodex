@@ -9,6 +9,7 @@ import {
   activeTranscriptItemId,
   assistantTerminalTranscriptScopes,
   assistantTranscriptReplacesWorkingFallback,
+  assistantFailureMessageKey,
   presentRunTranscriptItems,
   type RunActivityItem,
   type PresentedRunEvent,
@@ -20,6 +21,41 @@ import type {
   RunEvent,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
+
+describe("закрытая локализация failed результата", () => {
+  it.each([
+    "PROVIDER_RESULT_UNVERIFIABLE",
+    "PROVIDER_RESULT_UNKNOWN",
+    "PROVIDER_AUTHENTICATION_REQUIRED",
+    "PROVIDER_USAGE_LIMIT_EXCEEDED",
+    "PROVIDER_OVERLOADED",
+    "PROVIDER_POLICY_DENIED",
+    "RUNTIME_CONFIGURATION_STALE",
+    "RUNTIME_PROVIDER_UNAVAILABLE",
+  ])("локализует только точный FAILED %s", (code) => {
+    expect(assistantFailureMessageKey(code, "FAILED")).toBe(
+      `serverMessages.${code}`,
+    );
+    expect(assistantFailureMessageKey(`i18n:${code}`, "FAILED")).toBe(
+      `serverMessages.${code}`,
+    );
+    expect(assistantFailureMessageKey(code, "SUCCEEDED")).toBeUndefined();
+    expect(
+      assistantFailureMessageKey(`Ошибка ${code}`, "FAILED"),
+    ).toBeUndefined();
+  });
+  it("не интерпретирует unknown/error payload или substring как известную ошибку", () => {
+    expect(
+      assistantFailureMessageKey("i18n:PROVIDER_FUTURE_ERROR", "FAILED"),
+    ).toBeUndefined();
+    expect(
+      assistantFailureMessageKey(
+        '{"error":"PROVIDER_RESULT_UNVERIFIABLE"}',
+        "FAILED",
+      ),
+    ).toBeUndefined();
+  });
+});
 
 describe("компактное представление exact хода", () => {
   const execution = {
@@ -197,6 +233,32 @@ describe("компактное представление exact хода", () =>
         .map((entry) => entry.id),
     ).toEqual(["current"]);
   });
+
+  it.each(["SUCCEEDED", "FAILED", "CANCELLED"] as const)(
+    "terminal tool %s не получает Working и не возвращает его старому прогрессу",
+    (state) => {
+      const items = [
+        item("service"),
+        item("completed", {
+          kind: "tool",
+          toolCall: {
+            ref: "call_completed",
+            tool: "get_configuration_catalog",
+            state,
+            revision: 2,
+            durationMs: 10,
+            safeParameters: {},
+            safeResult: "get_configuration_catalog:completed",
+            auditRef: "audit_exact",
+          },
+        }),
+      ];
+      expect(activeTranscriptItemId(items)).toBeNull();
+      expect(
+        presentRunTranscriptItems(items).some((entry) => entry.working),
+      ).toBe(false);
+    },
+  );
 
   it("распознаёт actual INTERMEDIATE progress по исходному коду даже после локализации caller", () => {
     const base = required(events[0]);
@@ -788,6 +850,89 @@ describe("terminal receipt раньше terminal RunEvent", () => {
         [progress],
       ),
     ).toBe(false);
+  });
+});
+
+describe("working fallback после tool", () => {
+  it("между завершённым tool и следующим вызовом оставляет только нижний fallback", () => {
+    const user: AssistantTurn = {
+      ref: "trn_example",
+      sequence: 1,
+      role: "USER",
+      state: "RUNNING",
+      runRef: run.ref,
+      runVersion: run.version,
+      content: "Запрос",
+      createdAt: run.createdAt,
+    };
+    const pending: AssistantConversation = {
+      ref: "cnv_example",
+      version: 1,
+      title: "Диалог",
+      state: "ACTIVE",
+      assistantScope: "SYSTEM",
+      assistantRef: run.target.ref,
+      projectRef: run.projectRef,
+      titleSource: "SERVER_DEFAULT",
+      titleRevision: 1,
+      context: {
+        route: "/",
+        entityKind: "",
+        entityRef: "",
+        entityName: "",
+        allowedOperations: [],
+      },
+      turns: [user],
+      updatedAt: run.createdAt,
+    };
+    const ownedRun: Run = {
+      ...run,
+      source: "SYSTEM_ASSISTANT",
+      target: { ...run.target, type: "SYSTEM_ASSISTANT" },
+      assistantPin: {
+        scope: "SYSTEM",
+        organizationRef: "org_example",
+        assistantRef: run.target.ref,
+        conversationRef: pending.ref,
+        projectRef: run.projectRef,
+      },
+    };
+    const progress = {
+      ...required(events[0]),
+      message: undefined,
+      nodeState: "RUNNING" as const,
+    };
+    const completed = {
+      ...progress,
+      ref: "evt_tool",
+      sequence: 3,
+      type: "TOOL_CALL_RECORDED" as const,
+      messageKind: "TOOL_CALL" as const,
+      toolCall: {
+        ref: "call_exact",
+        tool: "get_configuration_catalog",
+        safeParameters: {},
+        state: "SUCCEEDED" as const,
+        revision: 2,
+        durationMs: 10,
+        safeResult: "get_configuration_catalog:completed",
+        auditRef: "audit_exact",
+      },
+    };
+    expect(
+      assistantTranscriptReplacesWorkingFallback(
+        pending,
+        "org_example",
+        ownedRun,
+        [{ ...node, turnRef: user.ref }],
+        [progress, completed],
+      ),
+    ).toBe(false);
+    const items = buildRunTranscriptItems([progress, completed]);
+    expect(activeTranscriptItemId(items)).toBeNull();
+    expect(presentRunTranscriptItems(items).some((item) => item.working)).toBe(
+      false,
+    );
   });
 });
 

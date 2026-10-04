@@ -244,6 +244,27 @@ const serviceProgressCodes = new Set([
   "WORKLOAD_SCHEDULED",
   "MODEL_REQUEST_RUNNING",
 ]);
+const assistantFailureMessageCodes = new Set([
+  "PROVIDER_RESULT_UNVERIFIABLE",
+  "PROVIDER_RESULT_UNKNOWN",
+  "PROVIDER_AUTHENTICATION_REQUIRED",
+  "PROVIDER_USAGE_LIMIT_EXCEEDED",
+  "PROVIDER_OVERLOADED",
+  "PROVIDER_POLICY_DENIED",
+  "RUNTIME_CONFIGURATION_STALE",
+  "RUNTIME_PROVIDER_UNAVAILABLE",
+]);
+
+export function assistantFailureMessageKey(
+  value: string | undefined,
+  state: string | undefined,
+): string | undefined {
+  if (state !== "FAILED") return undefined;
+  const code = value?.trim().replace(/^i18n:/, "");
+  return code && assistantFailureMessageCodes.has(code)
+    ? `serverMessages.${code}`
+    : undefined;
+}
 
 function transcriptServiceProgressCode(
   value: string | undefined,
@@ -335,7 +356,10 @@ export function activeTranscriptItemId(
         item.toolCall?.state === "RUNNING")
     );
   });
-  return candidates.at(-1)?.id ?? null;
+  const latest = candidates.at(-1);
+  return latest?.toolCall && latest.toolCall.state !== "RUNNING"
+    ? null
+    : (latest?.id ?? null);
 }
 
 // Terminal receipt может прийти раньше terminal RunEvent. Привязка проверяется

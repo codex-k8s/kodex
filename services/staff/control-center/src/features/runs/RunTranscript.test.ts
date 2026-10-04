@@ -16,6 +16,7 @@ async function render(
   tool: string,
   safeParameters: Record<string, unknown> = {},
   locale: "ru" | "en" = "ru",
+  safeResult = "",
 ): Promise<string> {
   const item: RunActivityItem = {
     id: "tool-example",
@@ -31,7 +32,7 @@ async function render(
         state: "SUCCEEDED" as const,
         revision: 1,
         durationMs: 10,
-        safeResult: "",
+        safeResult,
         auditRef: "audit_example",
       },
       {
@@ -151,6 +152,55 @@ describe("RunTranscript: названия native инструментов", () =
       expect(html.match(/data-state="SUCCEEDED"/g)).toHaveLength(1);
     },
   );
+});
+
+describe("RunTranscript: managed инструменты", () => {
+  it.each([
+    ["get_configuration_catalog", "Каталог настроек", "Configuration catalog"],
+    ["propose_configuration_plan", "Настройки помощника", "Assistant settings"],
+    ["get_integration_catalog", "Каталог интеграций", "Integration catalog"],
+    ["find_platform_resources", "Поиск ресурсов", "Resource search"],
+    ["propose_assistant_metadata", "Название диалога", "Conversation title"],
+    ["propose_run_metadata", "Описание запуска", "Run description"],
+    ["delegate_agent", "Передача задания", "Task delegation"],
+    ["invoke_integration", "Вызов интеграции", "Integration call"],
+    ["search_files", "Поиск файлов", "File search"],
+    ["get_file_metadata", "Сведения о файле", "File information"],
+    ["preview_file", "Просмотр файла", "File preview"],
+    ["get_file_manifest", "Список файлов", "File list"],
+    ["context7_resolve_library_id", "Поиск библиотеки", "Library search"],
+    ["context7_query_docs", "Документация библиотеки", "Library documentation"],
+  ])(
+    "%s имеет понятное exact название и не повторяет completed в preview",
+    async (tool, ru, en) => {
+      for (const [locale, expected] of [
+        ["ru", ru],
+        ["en", en],
+      ] as const) {
+        const html = await render(tool, {}, locale, `${tool}:completed`);
+        expect(title(html)).toBe(expected);
+        expect(html).not.toContain(
+          'class="safe-markdown run-transcript__preview"',
+        );
+        expect(html).toContain(`${tool}:completed`);
+        expect(html).toMatch(new RegExp(`<code[^>]*>${tool}</code>`));
+      }
+    },
+  );
+  it("сохраняет содержательный результат и unknown completed", async () => {
+    const meaningful = await render(
+      "get_configuration_catalog",
+      {},
+      "ru",
+      "Доступны две модели",
+    );
+    expect(meaningful).toContain("run-transcript__preview");
+    expect(meaningful).toContain("Доступны две модели");
+    expect(
+      await render("custom_lookup", {}, "ru", "custom_lookup:completed"),
+    ).toContain("run-transcript__preview");
+    expect(title(await render("tool\nunsafe"))).toBe("Вызов инструмента");
+  });
 });
 
 describe("RunTranscript: безопасный runtime text", () => {
@@ -423,6 +473,86 @@ describe("RunTranscript: компактная работа", () => {
     expect(parallel.match(/role="status"/g)).toHaveLength(1);
     expect(parallel).toContain('data-turn-ref="trn_parallel"');
   });
+
+  it("завершённый tool не показывает Working рядом с badge и не зажигает старые service dots", async () => {
+    const html = await transcript([
+      progress("service"),
+      progress("tool", {
+        kind: "tool",
+        toolCall: {
+          ref: "call_exact",
+          tool: "get_configuration_catalog",
+          safeParameters: {},
+          state: "SUCCEEDED",
+          revision: 2,
+          durationMs: 10,
+          safeResult: "get_configuration_catalog:completed",
+          auditRef: "audit_exact",
+        },
+      }),
+    ]);
+    expect(html).not.toContain('role="status"');
+    expect(html.match(/data-state="SUCCEEDED"/g)).toHaveLength(1);
+    expect(html).toContain("Каталог настроек");
+    expect(html).not.toContain("run-transcript__preview");
+  });
+
+  it.each(["ru", "en"] as const)(
+    "FAILED FINAL локализует exact machinecode в %s, не переписывая published user/commentary/success",
+    async (locale) => {
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        for (const code of [
+          "PROVIDER_RESULT_UNVERIFIABLE",
+          "PROVIDER_RESULT_UNKNOWN",
+          "PROVIDER_AUTHENTICATION_REQUIRED",
+          "PROVIDER_USAGE_LIMIT_EXCEEDED",
+          "PROVIDER_OVERLOADED",
+          "PROVIDER_POLICY_DENIED",
+          "RUNTIME_CONFIGURATION_STALE",
+          "RUNTIME_PROVIDER_UNAVAILABLE",
+        ]) {
+          const html = await transcript([
+            progress("failed", {
+              kind: "agent",
+              phase: "FINAL",
+              state: "FAILED",
+              summary: `i18n:${code}`,
+            }),
+          ]);
+          expect(html).toContain(i18n.global.t(`serverMessages.${code}`));
+          expect(html).not.toContain(code);
+          expect(html).not.toContain('role="status"');
+        }
+        const code = "PROVIDER_RESULT_UNVERIFIABLE";
+        for (const item of [
+          progress("user", { kind: "initiator", phase: "USER", summary: code }),
+          progress("comment", {
+            kind: "agent",
+            phase: "COMMENTARY",
+            summary: code,
+          }),
+          progress("success", {
+            kind: "agent",
+            phase: "FINAL",
+            state: "SUCCEEDED",
+            summary: code,
+          }),
+          progress("prose", {
+            kind: "agent",
+            phase: "FINAL",
+            state: "FAILED",
+            summary: `Модель объяснила код ${code}`,
+          }),
+        ]) {
+          expect(await transcript([item])).toContain(item.summary);
+        }
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+    },
+  );
 
   it("сохраняет анимацию и отключает её при reduced motion, tool preview ограничен", () => {
     const source = readFileSync(

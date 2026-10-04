@@ -6,6 +6,38 @@ import {
 
 // Закрытый реестр безопасных сообщений владельца состояния: ru, en.
 export const serverTokenTranslations = {
+  PROVIDER_RESULT_UNVERIFIABLE: [
+    "Не удалось подтвердить ответ модели. Начните новый ход.",
+    "The model response could not be verified. Start a new turn.",
+  ],
+  PROVIDER_RESULT_UNKNOWN: [
+    "Не удалось получить подтверждённый ответ модели. Начните новый ход.",
+    "A verified model response was not received. Start a new turn.",
+  ],
+  PROVIDER_AUTHENTICATION_REQUIRED: [
+    "Для продолжения нужно подключить аккаунт модели.",
+    "Connect a model account to continue.",
+  ],
+  PROVIDER_USAGE_LIMIT_EXCEEDED: [
+    "Достигнут лимит использования модели. Проверьте квоту аккаунта.",
+    "The model usage limit was reached. Check the account quota.",
+  ],
+  PROVIDER_OVERLOADED: [
+    "Модель временно перегружена. Повторите запрос позже.",
+    "The model is temporarily overloaded. Try again later.",
+  ],
+  PROVIDER_POLICY_DENIED: [
+    "Запрос отклонён политикой провайдера. Проверьте настройки доступа.",
+    "The provider policy rejected the request. Check the access settings.",
+  ],
+  RUNTIME_CONFIGURATION_STALE: [
+    "Настройки запуска изменились. Начните новый ход.",
+    "The run settings changed. Start a new turn.",
+  ],
+  RUNTIME_PROVIDER_UNAVAILABLE: [
+    "Провайдер модели временно недоступен. Повторите запрос позже.",
+    "The model provider is temporarily unavailable. Try again later.",
+  ],
   RUNTIME_LEASE_EXPIRED: [
     "Срок аренды исполнения истёк",
     "Runtime lease expired",

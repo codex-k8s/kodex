@@ -18,6 +18,7 @@ import { useI18n } from "vue-i18n";
 import {
   executionKey,
   activeTranscriptItemId,
+  assistantFailureMessageKey,
   isTranscriptNearBottom,
   presentRunTranscriptItems,
   type RunActivityItem,
@@ -52,7 +53,13 @@ const activeItemId = computed(() =>
 );
 const displayItems = computed(() =>
   presentRunTranscriptItems(props.items, activeItemId.value).map((item) => {
-    if (item.phase) return item;
+    if (item.phase) {
+      const key =
+        item.phase === "FINAL"
+          ? assistantFailureMessageKey(item.summary, item.state)
+          : undefined;
+      return key ? { ...item, summary: t(key) } : item;
+    }
     const text = (value: string | undefined) => {
       const key = runtimeProgressKey(value);
       return key
@@ -112,9 +119,39 @@ const nativeTools = new Set([
   "CODEX_IMAGE_GENERATION",
   "CODEX_SLEEP",
 ]);
+const managedTools = new Set([
+  "get_configuration_catalog",
+  "propose_configuration_plan",
+  "get_integration_catalog",
+  "find_platform_resources",
+  "propose_assistant_metadata",
+  "propose_run_metadata",
+  "delegate_agent",
+  "invoke_integration",
+  "search_files",
+  "get_file_metadata",
+  "preview_file",
+  "get_file_manifest",
+  "context7_resolve_library_id",
+  "context7_query_docs",
+]);
+function toolPreview(
+  toolCall: NonNullable<RunActivityItem["toolCall"]>,
+): string | undefined {
+  return toolCall.state === "SUCCEEDED" &&
+    managedTools.has(toolCall.tool) &&
+    toolCall.safeResult === `${toolCall.tool}:completed`
+    ? undefined
+    : toolCall.safeResult || undefined;
+}
 
 function toolLabel(toolCall: NonNullable<RunActivityItem["toolCall"]>): string {
-  if (!nativeTools.has(toolCall.tool)) return toolCall.tool;
+  if (managedTools.has(toolCall.tool))
+    return t(`runs.managedToolNames.${toolCall.tool}`);
+  if (!nativeTools.has(toolCall.tool))
+    return /^[A-Za-z0-9_.:/-]{1,128}$/.test(toolCall.tool)
+      ? toolCall.tool
+      : t("runs.nativeToolNames.CODEX_DYNAMIC_TOOL");
   const label = t(`runs.nativeToolNames.${toolCall.tool}`);
   if (toolCall.tool === "CODEX_DYNAMIC_TOOL") {
     const { namespace, tool } = toolCall.safeParameters;
@@ -406,13 +443,18 @@ function bytes(value: number): string {
                   </section>
                   <section v-if="item.toolCall" class="run-tool-event">
                     <SafeMarkdown
-                      v-if="item.toolCall.safeResult"
-                      :content="item.toolCall.safeResult"
+                      v-if="toolPreview(item.toolCall)"
+                      :content="toolPreview(item.toolCall) ?? ''"
                       class="run-transcript__preview"
                     />
                     <details>
                       <summary>{{ $t("runs.toolParameters") }}</summary>
-                      <p v-if="nativeTools.has(item.toolCall.tool)">
+                      <p
+                        v-if="
+                          nativeTools.has(item.toolCall.tool) ||
+                          managedTools.has(item.toolCall.tool)
+                        "
+                      >
                         {{ $t("runs.toolTechnicalId") }}:
                         <code>{{ item.toolCall.tool }}</code>
                       </p>
