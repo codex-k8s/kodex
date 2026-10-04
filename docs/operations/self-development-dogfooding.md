@@ -554,3 +554,44 @@ rerun=false, штатный reload/shutdown и startup/readiness budgets сох�
 ранний mobile screenshot во время rollout попал в временный API unavailable
 и не считается успешной проверкой переписки. Живой повтор нового runner
 и имитация late-terminal race в браузере ещё NOT RUN.
+
+04.10.2026 10:38–10:50 UTC, checkpoint
+`22c8f84af7fb0ce0cad6329f890c726e6a1ce824`:
+PASS — frontend build (7.60 s, прежнее предупреждение bundle), clean runner
+build: image `sha256:c4c8f3319be5f682669ca0ad92f684ead77726be63581c04b1d06cf3519d96eb`,
+binary SHA256 `578396dbdb95f8cebdb9470843e484700cb0d389660ed89e8b89cfd66af7d6f1`,
+provenance SHA256 `2043796046edfed80a1899867fbcb4527648bcccb8908ea8d4cbc0da23678573`.
+PASS — clean render, authority revision 1, fingerprint
+`e5fc312d57a2d8e3dd415d856142062e3549b8dc0bfb3e616e33fbb90d0a1f1a`;
+selected CP/GW/FE/egress и supply-chain activation завершились успешно.
+Три warm Pod были Ready с exact c4c8 spec/imageID перед реальным повтором;
+core Deployments ready/updated=1 после активации.
+FAIL — тринадцатый реальный ход `run_hjBe7sP6rpiljgI7ZKVoA3NT`, Pod
+`runtime-turn-cdff6818c53240e5`: 10:45:46 UTC закрытый safe log
+TERMINAL_WAIT / PROVIDER / NOTIFICATION_INVALID / notification=error /
+notification_error=PROVIDER_ERROR / rpc_code=0. Account/read, thread, MCP и
+turn/start пройдены. Причина сужена до строгой схемы вложенной error notification;
+произвольный текст ошибки и provider payload не публиковались. Inference и
+самонастройка всё ещё FAIL/NOT RUN, а не PASS.
+PASS — screenshot `/tmp/kodex-chat-terminal-closure-live-22c8f84a.png`:
+после terminal receipt прежний индикатор не показывает «Работает» рядом с ошибкой;
+USER справа, агент слева, технического баннера о привязке истории нет.
+После hard reload Console без ошибок; временные 503 при rollout учтены отдельно.
+PASS — адресный synthetic WebSocket test: exact TLS 101, двунаправленная
+передача и join/close обеих сторон на двух разрешённых provider hosts.
+Статически подтверждён существующий WebSocket proxy path и предпочтение WSS
+закреплённым SDK. Реальный WSS/SSE запрос к модели и inference остаются UNKNOWN.
+
+04.10.2026 10:53 UTC, дерево после `22c8f84a`:
+FAIL→PASS — точные installed schema и pinned SDK thread_data.rs подтвердили
+обычный TurnError.misalignment:null (Option без skip_none), отсутствующий
+в нашем allowlist. Nullable metadata проверяются по закрытой bounded схеме
+и отбрасываются; steer не публикуется и не запускает continuation.
+willRetry:null теперь закрыто отклоняется как нарушение nonnullable boolean.
+Exact binding, unknown/duplicate/type/bounds/redaction и terminal classification
+fixtures PASS. Полный Codex unit PASS (4.544 s), адресный race PASS (1.199 s),
+vet/format/diffcheck PASS. Живой повтор нового runner пока NOT RUN.
+После hard reload UI: нет лишнего пояснения, false «Работает» и горизонтального
+overflow; terminal события догнали receipts, fallback-карточки исчезли.
+Chrome Console без ошибок; проверенные session/bootstrap/history/run запросы
+200. Скрин `/tmp/kodex-chat-no-service-binding-banner.png` просмотрен.

@@ -478,7 +478,7 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 			return errors.New("Codex app-server error notification is invalid")
 		}
 		var willRetry bool
-		if strictDecode(fields["willRetry"], &willRetry) != nil {
+		if bytes.Equal(bytes.TrimSpace(fields["willRetry"]), []byte("null")) || strictDecode(fields["willRetry"], &willRetry) != nil {
 			return errors.New("Codex app-server error retry flag is invalid")
 		}
 	case "warning":
@@ -1380,7 +1380,7 @@ type parsedTurnError struct {
 }
 
 func parseTurnError(raw json.RawMessage) (parsedTurnError, error) {
-	fields, err := decodeObject(raw, schema([]string{"message"}, "additionalDetails", "codexErrorInfo", "message"))
+	fields, err := decodeObject(raw, schema([]string{"message"}, "additionalDetails", "codexErrorInfo", "message", "misalignment"))
 	if err != nil {
 		return parsedTurnError{}, err
 	}
@@ -1392,11 +1392,42 @@ func parseTurnError(raw json.RawMessage) (parsedTurnError, error) {
 			return parsedTurnError{}, err
 		}
 	}
+	if metadata, present := fields["misalignment"]; present && !validMisalignmentMetadata(metadata) {
+		return parsedTurnError{}, errors.New("Codex app-server error metadata is invalid")
+	}
 	info := fields["codexErrorInfo"]
 	if bytes.Equal(info, []byte("null")) {
 		info = nil
 	}
 	return parsedTurnError{codexErrorInfo: info}, nil
+}
+
+// Пояснение и предлагаемое SDK продолжение проверяются по типу и отбрасываются:
+// они не назначают authority, не публикуются и не запускают следующий turn.
+func validMisalignmentMetadata(raw json.RawMessage) bool {
+	value := bytes.TrimSpace(raw)
+	if bytes.Equal(value, []byte("null")) {
+		return true
+	}
+	if len(value) > 24*maximumDiagnosticBytes {
+		return false
+	}
+	fields, err := decodeObject(value, schema(nil, "errorType", "detailedExplanation", "steer"))
+	if err != nil {
+		return false
+	}
+	for _, name := range []string{"errorType", "detailedExplanation"} {
+		if text, present := fields[name]; present && !bytes.Equal(bytes.TrimSpace(text), []byte("null")) && !validThreadMetadataString(text, maximumDiagnosticBytes) {
+			return false
+		}
+	}
+	if steer, present := fields["steer"]; present && !bytes.Equal(bytes.TrimSpace(steer), []byte("null")) {
+		instruction, err := decodeObject(steer, schema([]string{"message"}, "message"))
+		if err != nil || !validThreadMetadataString(instruction["message"], maximumDiagnosticBytes) {
+			return false
+		}
+	}
+	return true
 }
 
 func classifyCodexErrorInfo(raw json.RawMessage) string {

@@ -666,6 +666,65 @@ func TestUnknownTypedErrorNotificationWaitsForSafeTerminal(t *testing.T) {
 	}
 }
 
+func TestCodex160ErrorNotificationAllowsDiscardedMisalignment(t *testing.T) {
+	for _, metadata := range []string{`null`, `{}`, `{"errorType":null,"detailedExplanation":null,"steer":null}`,
+		`{"errorType":"private-sentinel","detailedExplanation":"private-sentinel","steer":{"message":"private-sentinel"}}`,
+		`{"errorType":"","detailedExplanation":"","steer":{"message":""}}`} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		err := state.notification("error", raw(`{"error":{"message":"diagnostic","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":null}},"additionalDetails":null,"misalignment":`+metadata+`},"threadId":"`+testThreadID+`","turnId":"`+testTurnID+`","willRetry":false}`))
+		if err != nil {
+			t.Fatal("SDK error metadata was rejected")
+		}
+		if state.terminals != 0 || state.result.Outcome != "" || state.result.FinalMessage != "" || len(state.agentMessages) != 0 {
+			t.Fatal("discarded error metadata affected lifecycle or public messages")
+		}
+		if err := state.notification("turn/started", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[],"status":"inProgress"}}`)); err != nil {
+			t.Fatal("fixture turn did not start")
+		}
+		if err := state.notification("turn/completed", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[],"status":"failed","error":{"message":"diagnostic","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":null}},"misalignment":`+metadata+`}}}`)); err != nil || state.terminals != 1 || state.result.Outcome != "FAILED" || state.result.FailureCode != "provider_transport_failure" || strings.Contains(state.result.FinalMessage, "private-sentinel") {
+			t.Fatal("metadata changed safe terminal classification or was published")
+		}
+	}
+}
+
+func TestCodex160ErrorMisalignmentRejectsTypesBoundsAndUnknownFields(t *testing.T) {
+	for _, metadata := range []string{`true`, `[]`, `"private-sentinel"`,
+		`{"errorType":false}`, `{"detailedExplanation":{}}`, `{"steer":false}`, `{"steer":{}}`,
+		`{"steer":{"message":null}}`, `{"steer":{"message":3}}`, `{"steer":{"message":"valid","private-sentinel":true}}`,
+		`{"private-sentinel":true}`, `{"errorType":null,"errorType":null}`,
+		`{"steer":{"message":"valid","message":"duplicate"}}`,
+		`{"errorType":"\xff"}`,
+		`{"errorType":"` + strings.Repeat("x", 24*maximumDiagnosticBytes+1) + `"}`,
+		`{"errorType":"` + strings.Repeat("x", maximumDiagnosticBytes+1) + `"}`,
+		`{"detailedExplanation":"` + strings.Repeat("x", maximumDiagnosticBytes+1) + `"}`,
+		`{"steer":{"message":"` + strings.Repeat("x", maximumDiagnosticBytes+1) + `"}}`} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		err := state.notification("error", raw(`{"error":{"message":"diagnostic","misalignment":`+metadata+`},"threadId":"`+testThreadID+`","turnId":"`+testTurnID+`","willRetry":false}`))
+		if err == nil || strings.Contains(err.Error(), "private-sentinel") || state.terminals != 0 {
+			t.Fatal("malformed error metadata was accepted or exposed")
+		}
+	}
+}
+
+func TestCodex160ErrorNotificationKeepsBindingAndBooleanClosed(t *testing.T) {
+	for _, mutation := range []string{
+		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"other","turnId":"` + testTurnID + `","willRetry":false}`,
+		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"` + testThreadID + `","turnId":"other","willRetry":false}`,
+		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","willRetry":null}`,
+		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","willRetry":"false"}`,
+		`{"error":{"message":"diagnostic","misalignment":null,"private-sentinel":true},"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","willRetry":false}`,
+	} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		err := state.notification("error", raw(mutation))
+		if err == nil || strings.Contains(err.Error(), "private-sentinel") || state.terminals != 0 {
+			t.Fatal("invalid SDK error binding or shape was accepted or exposed")
+		}
+	}
+}
+
 func TestWireParserRejectsUnknownAndDuplicateFields(t *testing.T) {
 	for _, value := range []string{
 		`{"id":1,"result":{},"authority":"payload"}`,
