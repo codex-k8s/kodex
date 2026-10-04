@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -94,17 +95,16 @@ func observe(ctx context.Context, root *os.Root, probe runtimecontract.ImageTool
 		clear(raw)
 		if version, ok := runProbe(ctx, path, probe.Args); ok {
 			item.Version, item.Status = version, "VERIFIED"
-		} else if probe.Name == "goimports" {
+		} else if probe.Name == "goimports" || probe.Name == "grpcurl" {
 			file, err := root.Open(strings.TrimPrefix(path, "/"))
 			if err == nil {
 				info, readErr := buildinfo.Read(file)
 				_ = file.Close()
 				readinessOutput, ready := runProbeReadiness(ctx, path, probe.Args)
 				clear(readinessOutput)
-				if readErr == nil && ready && info != nil {
-					match := versionPattern.FindStringSubmatch(" " + info.Main.Version)
-					if len(match) == 2 {
-						item.Version, item.Status = match[1], "VERIFIED"
+				if readErr == nil {
+					if version, ok := buildInfoProbeVersion(probe.Name, info, ready); ok {
+						item.Version, item.Status = version, "VERIFIED"
 					}
 				}
 			}
@@ -112,6 +112,31 @@ func observe(ctx context.Context, root *os.Root, probe runtimecontract.ImageTool
 		return item
 	}
 	return item
+}
+
+// Метаданные не заменяют successful readiness. Version берётся только из
+// actual executable, не из recipe, ожидаемого pin или dev banner.
+func buildInfoProbeVersion(name string, info *debug.BuildInfo, ready bool) (string, bool) {
+	if !ready || info == nil || info.Main.Replace != nil {
+		return "", false
+	}
+	module, command := "", ""
+	switch name {
+	case "goimports":
+		module, command = "golang.org/x/tools", "golang.org/x/tools/cmd/goimports"
+	case "grpcurl":
+		module, command = "github.com/fullstorydev/grpcurl", "github.com/fullstorydev/grpcurl/cmd/grpcurl"
+	default:
+		return "", false
+	}
+	if info.Main.Path != module || info.Path != command || !strings.HasPrefix(info.Main.Version, "v") {
+		return "", false
+	}
+	match := versionPattern.FindStringSubmatch(" " + info.Main.Version)
+	if len(match) != 2 || match[0] != " "+info.Main.Version || len(match[1]) > 80 {
+		return "", false
+	}
+	return match[1], true
 }
 
 type boundedOutput struct {
@@ -146,16 +171,20 @@ func runProbe(ctx context.Context, path string, args []string) (string, bool) {
 func runProbeReadiness(ctx context.Context, path string, args []string) ([]byte, bool) {
 	call, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	command := exec.CommandContext(call, path, args...)
+	runner, err := os.Executable()
+	if err != nil {
+		return nil, false
+	}
+	command := exec.CommandContext(call, runner, append([]string{SandboxExecMode, path}, args...)...)
 	command.Dir = "/"
-	command.Env = []string{"PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin", "HOME=/nonexistent", "LANG=C", "LC_ALL=C", "NO_COLOR=1", "COREPACK_ENABLE_NETWORK=0", "GOTOOLCHAIN=local"}
-	command.SysProcAttr = &syscall.SysProcAttr{Chroot: "/image", Credential: &syscall.Credential{Uid: 10001, Gid: 10001, NoSetGroups: true}, Setpgid: true}
+	command.Env = []string{"PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin", "HOME=/nonexistent", "LANG=C", "LC_ALL=C", "NO_COLOR=1", "COREPACK_ENABLE_NETWORK=0", "GOTOOLCHAIN=local", "GOROOT=/usr/local/go", "GOENV=off"}
+	command.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: 10001, Gid: 10001}, Setpgid: true}
 	command.Cancel = func() error { return syscall.Kill(-command.Process.Pid, syscall.SIGKILL) }
 	command.WaitDelay = 100 * time.Millisecond
 	var output boundedOutput
 	command.Stdout = &output
 	command.Stderr = &output
-	err := command.Run()
+	err = command.Run()
 	if command.Process != nil {
 		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
 	}

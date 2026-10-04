@@ -1642,3 +1642,60 @@ ROOT transcript108unit PASS.738s. Actual screenshot выявил missing fallbac
 translation key: runs.runFailedSummary вместо существующего
 workboard.runFailedSummary. Исправлен ключ; live повтор пока NOT RUN.
 Ошибка не объявляется устранённой только по unit assertion имени ключа.
+
+04.10.2026 22:03 UTC, readback clean
+`755451279e030386eba47adc7920cc6c56adea7d` до следующего исправления inventory:
+PASS — canonical render/apply control-plane, session-archive и supply-chain.
+Действующий scan policy допускает tmp32Gi; закрытые VAP/bindings и полный
+spec сверены. Builder получен node CRI через штатный TLS promoted pull host
+по exact digest `0c226c730e493b8830a538b4f9baaa1dae62bde48aa42c86ed20bc8d5390c9c3`;
+это уже не только предварительный import в node cache.
+PASS — host/Pod/host hashes CP image repair, archive controller и frontend
+совпали на stable clean SHA; mounted source не называется immutable release.
+PASS — QA_ARCHIVE_RESTORE_36C: RESTORE
+`sat_faffe855-5839-48c3-9d4b-b3223f22fc49` SUCCEEDED, затем реальное продолжение
+`run_FnowGalO3AosCdcEJ1wlLmGr` SUCCEEDED в прежней
+`ses_QQzu5ZZ1iOG0OAQqa9tzuR4x`. Actual prompt readback подтвердил exact task,
+INPUT/template/revision и модель gpt-6.1-sol/medium. Второй архивированный чат
+QA38C также успешно восстановлен и завершил ход.
+PASS — normal SYSTEM QA38C plan `pln_uZ8YpKj-V3IBLpmPrnNewa05`
+VALID→APPLIED/version3, recipe version4/generation3. Live mobile390 screenshot
+плана просмотрен: редактор300px с внутренней прокруткой, горизонтального
+overflow нет; desktop terminal fallback читабелен. Console после reload чиста.
+FAIL — собственный build `imgbld_-WMa-HiGtF9z0sINjPeAJ19X` COMPLETED,
+но actual admission artifact `imgart_ea_Xf9O3zmWMKp8OV8ON-wYO` REJECTED:
+38 required, 32 VERIFIED; git/go/goimports/grpcurl/chromium PROBE_FAILED,
+yarn MISSING. Общий inventory VERIFIED не выдаётся за допуск tools.
+Сборка FROM-only наследовала platform full runner498; отдельная bounded
+BuildKit диагностика exact498 воспроизвела tool hashes actual inventory.
+Причины: git требует отсутствующий в chroot /dev/null; Go без /proc требует
+явный GOROOT; Debian Chromium wrapper читает /proc, native executable успешно
+возвращает version; grpcurl успешно запускается, но dev-banner не имеет номера,
+actual ELF module version v1.9.3 подтверждён. goimports -h штатно exit2;
+readiness stdin EOF успешен. Yarn absolute symlink отклоняется os.Root.
+Исправления нового tree в работе; повтор all38/admission/promotion NOT RUN.
+Kernel sandbox fixture PASS: Landlock и syscall fence запрещают content и
+metadata mutations, native null доступен; actual BuildKit нового observer
+пока NOT RUN. Привилегии BuildKit/entitlements и критерии допуска не ослаблены.
+Для SOFTWARE_CHANGE выбран штатный bounded DAG28 шагов с пятью review waves;
+после полного PASS оставшиеся шаги выполняют подтверждённый successful NOOP,
+а не выдуманный conditional/skip API. Semantic findings передаются pinned
+артефактами; callback failure остаётся terminal failure, не review verdict.
+Chrome own22 сохраняется, foreign tabs не изменяются. Истекшая UI-сессия
+восстановлена штатным SSO; /api/v1/session200. Secret token rotation остаётся
+NOT RUN. Checkbox2–15 OPEN, полный QA и финальный dogfooding ещё NOT RUN.
+
+04.10.2026 22:19 UTC, исправление inventory поверх `755451279e030386eba47adc7920cc6c56adea7d`:
+PASS — новый trusted observer реально выполнен в существующем BuildKit над
+exact full base498, с network=none и read-only `/image`: 37/38 required VERIFIED;
+единственный MISSING — Yarn в прежнем immutable base. Native git/Go/Chromium,
+строгий Go ELF version fallback goimports/grpcurl и NodeJS CLI подтверждены.
+Для libuv stdout/stderr необходим только exact FIONBIO на проверенных fd1/2
+pipes; закрытый seccomp сохраняет запрет остальных ioctl и metadata mutations.
+Kernel unit fixtures проверяют неизменность bytes/mode и negative fd/request/
+high-bit aliases. npm diagnostic exit0 без permission/sandbox/uring/pipe errors.
+Yarn absolute links нормализованы в отдельном cached Dockerfile слое; пересборка,
+all38 inventory нового образа и штатный admission/promotion пока NOT RUN.
+PASS — imageinventory unit Go1.26.6 .042s; предыдущие whole agent-runner,
+runtimecontract, builder build unit/vet и девять Python profile tests успешны.
+Это адресная диагностика, не полный QA и не staging acceptance.

@@ -38,7 +38,9 @@ func ImageToolProbes() []ImageToolProbe {
 		probe("jq", "jq", "--version"), probe("yq", "yq", "--version"), probe("ripgrep", "rg", "--version"),
 		probe("make", "make", "--version"), probe("just", "just", "--version"),
 		{Name: "go", Paths: []string{"/usr/local/go/bin/go", "/usr/local/bin/go", "/usr/bin/go"}, Args: []string{"version"}, Required: true},
-		probe("goimports", "goimports", "-h"), probe("gofumpt", "gofumpt", "--version"),
+		// goimports -h штатно завершает usage с exit 2. Без args он проверяет
+		// форматирование stdin EOF с exit 0; version читается из Go buildinfo.
+		probe("goimports", "goimports"), probe("gofumpt", "gofumpt", "--version"),
 		probe("golangci-lint", "golangci-lint", "--version"), probe("staticcheck", "staticcheck", "-version"),
 		probe("goose", "goose", "--version"), probe("sqlc", "sqlc", "version"), probe("buf", "buf", "--version"),
 		probe("protoc", "protoc", "--version"), probe("protoc-gen-go", "protoc-gen-go", "--version"),
@@ -48,7 +50,9 @@ func ImageToolProbes() []ImageToolProbe {
 		probe("typescript", "tsc", "--version"), probe("eslint", "eslint", "--version"), probe("prettier", "prettier", "--version"),
 		probe("vite", "vite", "--version"), probe("vue-tsc", "vue-tsc", "--version"), probe("vitest", "vitest", "--version"),
 		probe("playwright", "playwright", "--version"),
-		{Name: "chromium", Paths: []string{"/usr/local/bin/chromium", "/usr/local/bin/chromium-browser", "/usr/local/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"}, Args: []string{"--version"}, Required: true},
+		// Debian wrapper читает /proc/cpuinfo, отсутствующий в image rootfs.
+		// Native executable проверяется первым, без запуска browser session.
+		{Name: "chromium", Paths: []string{"/usr/lib/chromium/chromium", "/usr/local/bin/chromium", "/usr/local/bin/chromium-browser", "/usr/local/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"}, Args: []string{"--version"}, Required: true},
 		{Name: "playwright-mcp", Paths: []string{"/usr/local/bin/playwright-mcp", "/usr/local/bin/mcp-server-playwright", "/usr/bin/playwright-mcp", "/usr/bin/mcp-server-playwright"}, Args: []string{"--version"}, Required: true},
 		probe("wscat", "wscat", "--version"), probe("codex", "codex", "--version"),
 		optional(probe("corepack", "corepack", "--version")), optional(probe("python3", "python3", "--version")), optional(probe("pip", "pip", "--version")),

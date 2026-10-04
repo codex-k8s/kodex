@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -48,5 +49,55 @@ func TestVersionProjectionDropsRawOutputAndBounds(t *testing.T) {
 func TestProbeModeRejectsCallerArgumentsBeforeReadingRuntime(t *testing.T) {
 	if Run(context.Background(), []string{"runner", Mode, "arbitrary"}) == nil {
 		t.Fatal("unknown probe arguments accepted")
+	}
+}
+
+func TestBuildInfoFallbackRequiresExactExecutableAndSuccessfulReadiness(t *testing.T) {
+	for _, name := range []string{"goimports", "grpcurl"} {
+		module := "golang.org/x/tools"
+		version := "v0.46.0"
+		if name == "grpcurl" {
+			module, version = "github.com/fullstorydev/grpcurl", "v1.9.3"
+		}
+		fixture := func() *debug.BuildInfo {
+			return &debug.BuildInfo{Path: module + "/cmd/" + name,
+				Main: debug.Module{Path: module, Version: version}}
+		}
+		if got, ok := buildInfoProbeVersion(name, fixture(), true); !ok || got != strings.TrimPrefix(version, "v") {
+			t.Fatalf("successful exact executable %s lost its observed version", name)
+		}
+		for _, tc := range []struct {
+			label string
+			ready bool
+			info  *debug.BuildInfo
+		}{
+			{"failed readiness", false, fixture()},
+			{"missing metadata", true, nil},
+		} {
+			if got, ok := buildInfoProbeVersion(name, tc.info, tc.ready); ok || got != "" {
+				t.Fatalf("%s invented a version for %s", tc.label, name)
+			}
+		}
+		for _, bad := range []string{"", "(devel)", "dev build <no version set>", "1.9.3", "v1.9.3 PRIVATE_SENTINEL", "PRIVATE_SENTINEL v1.9.3"} {
+			info := fixture()
+			info.Main.Version = bad
+			if got, ok := buildInfoProbeVersion(name, info, true); ok || got != "" {
+				t.Fatalf("unobserved or malformed version accepted for %s", name)
+			}
+		}
+		for _, mutate := range []func(*debug.BuildInfo){
+			func(info *debug.BuildInfo) { info.Main.Path = "foreign/module" },
+			func(info *debug.BuildInfo) { info.Path = module + "/cmd/other" },
+			func(info *debug.BuildInfo) { info.Main.Replace = &debug.Module{Path: "foreign/module"} },
+		} {
+			info := fixture()
+			mutate(info)
+			if got, ok := buildInfoProbeVersion(name, info, true); ok || got != "" {
+				t.Fatalf("foreign executable provenance accepted for %s", name)
+			}
+		}
+	}
+	if got, ok := buildInfoProbeVersion("foreign-tool", &debug.BuildInfo{}, true); ok || got != "" {
+		t.Fatal("unknown fallback tool accepted")
 	}
 }

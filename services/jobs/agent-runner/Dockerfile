@@ -287,6 +287,18 @@ RUN set -eu; \
 	codex-code-mode-host --help >/dev/null; \
 	rm -rf /var/lib/apt/lists/* /root/.cache
 
+# Относительные ссылки остаются внутри final rootfs при чтении через os.Root.
+# Отдельный слой сохраняет кеш установки полного toolchain.
+RUN set -eu; \
+	if [ -L /usr/local/bin/yarn ] && [ "$(readlink /usr/local/bin/yarn)" = "/opt/yarn-v${YARN_VERSION}/bin/yarn" ]; then \
+		for yarn_name in yarn yarnpkg; do \
+			test "$(readlink "/usr/local/bin/${yarn_name}")" = "/opt/yarn-v${YARN_VERSION}/bin/${yarn_name}"; \
+			test -x "/opt/yarn-v${YARN_VERSION}/bin/${yarn_name}"; \
+			ln -sfn "../../../opt/yarn-v${YARN_VERSION}/bin/${yarn_name}" "/usr/local/bin/${yarn_name}"; \
+		done; \
+	fi; \
+	test "$(yarn --version)" = "${YARN_VERSION}"
+
 RUN groupadd --gid "${KODEX_AGENT_RUNNER_GID}" kodex \
 	&& useradd --uid "${KODEX_AGENT_RUNNER_UID}" --gid "${KODEX_AGENT_RUNNER_GID}" --no-create-home --shell /usr/sbin/nologin kodex \
 	&& mkdir -p /home/kodex/.npm /home/kodex/.config /home/kodex/.cache /workspace /codex-home /run/secrets/kodex/runtime/provider \

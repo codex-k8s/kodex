@@ -16,6 +16,31 @@ func inventoryFixture() ImageToolInventory {
 	return ImageToolInventory{Schema: ImageInventoryBindingSchema, ImageDigest: "sha256:" + digest, ProvenanceSHA256: digest, Platforms: []ImagePlatformInventory{{PlatformDigest: "sha256:" + digest, ManifestSHA256: ImageInventorySHA256(raw), Manifest: manifest}}}
 }
 
+func TestGoimportsProbeUsesSuccessfulFormattingReadinessNotUsage(t *testing.T) {
+	for _, probe := range ImageToolProbes() {
+		if probe.Name != "goimports" {
+			continue
+		}
+		if len(probe.Args) != 0 || !probe.Required {
+			t.Fatal("goimports must format stdin EOF, not accept a failed usage probe")
+		}
+		return
+	}
+	t.Fatal("required goimports probe is absent")
+}
+
+func TestChromiumProbeObservesNativeExecutableBeforeDistributionWrapper(t *testing.T) {
+	for _, probe := range ImageToolProbes() {
+		if probe.Name == "chromium" {
+			if len(probe.Paths) == 0 || probe.Paths[0] != "/usr/lib/chromium/chromium" || len(probe.Args) != 1 || probe.Args[0] != "--version" || !probe.Required {
+				t.Fatal("native Chromium version probe is missing")
+			}
+			return
+		}
+	}
+	t.Fatal("required Chromium probe is absent")
+}
+
 func TestImageToolInventoryClosedSchemaAndBinding(t *testing.T) {
 	value := inventoryFixture()
 	raw, _ := json.Marshal(value)

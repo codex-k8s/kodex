@@ -4,8 +4,8 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.8.0
-updated: 2026-10-04
+version: 0.8.1
+updated: 2026-10-05
 ---
 
 # Образы и цепочка поставки
@@ -105,12 +105,34 @@ executable (`rg`, `tsc`), а не display name либо recipe input. Истор
 UNAVAILABLE artifact не разрешает добавлять tools; пустой поднабор не становится
 доказательством наличия программ.
 
-Server-owned BuildKit wrapper выполняет закрытый registry из trusted runner
-в отдельной стадии exact trusted runtime-base. Финализированный rootfs образа
-подключается read-only; bounded probes выполняются в chroot под UID10001,
-без сети и inherited environment. Команды, aliases и аргументы не поступают
-из Dockerfile. Parent за пределами недоверенного rootfs вычисляет executable
-SHA256 и сохраняет только bounded version, `MISSING`, `PROBE_FAILED` либо
+Server-owned BuildKit wrapper выполняет закрытый registry в отдельной стадии
+`FROM kodex-final-rootfs`. До неё защищённый runner переносится из exact trusted
+runtime-base: пользовательский runner не исполняется. Проверка использует
+нативные loader, библиотеки и расположение программ того же финализированного
+образа, а не ABI другого образа либо chroot. Exact `kodex-final-rootfs`
+дополнительно подключается read-only в `/image`; trusted parent вычисляет SHA256
+из этого дерева через `os.Root`. Абсолютные и выходящие за root symbolic links
+не получают обхода защиты ради обнаружения инструмента.
+
+Внешняя стадия выполняет probes с `--network=none`. Каждый инструмент запускается
+отдельным ограниченным subprocess с UID/GID10001, без дополнительных групп,
+capabilities и inherited environment, с закрытым registry exact path/arguments
+и явным `GOROOT=/usr/local/go`. До исполнения обязательны `no_new_privs`, Landlock
+ABI не ниже 3 и seccomp: Landlock запрещает изменение содержимого и структуры
+файлов, включая `TRUNCATE`; единственное разрешение записи относится к проверенному
+native `/dev/null`. Seccomp запрещает изменение прав, владельца, timestamps и
+extended attributes, опасные namespace/mount/root operations и обходы через
+`io_uring`.
+Для проверенных stdout/stderr pipes разрешён только `ioctl(fd=1|2, FIONBIO)`:
+он переключает nonblocking flag открытого pipe, но не разрешает изменение
+файла, metadata либо device ioctl. Иные fd, requests и их high-bit aliases
+закрыто отклоняются. Несовместимый ABI, identity либо отказ установки защиты закрыто
+отклоняют probe; повтор без sandbox или с дополнительными привилегиями запрещён.
+Это не утверждение о read-only всей стадии: trusted parent сохраняет bounded
+manifest вне `/image`, а недоверенный child отдельно ограничен ядром. Побочные
+эффекты чтения, включая atime, не считаются доказательством неизменности metadata.
+
+Parent сохраняет только bounded version, `MISSING`, `PROBE_FAILED` либо
 `VERIFIED`; raw stdout/stderr не сохраняется. Registry включает 38 обязательных
 программ из QA §31 и 12 дополнительных, отличающихся признаком `required`.
 `image-tool-inventory-validator` материализован в canonical tools/admission

@@ -160,6 +160,23 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         for executable in required:
             self.assertIn(executable, dockerfile)
 
+    def test_base_yarn_absolute_links_are_normalized_in_a_separate_full_layer(self):
+        dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
+        full = dockerfile.split(" AS full-runtime\n", 1)[1]
+        normalization = full.index('for yarn_name in yarn yarnpkg; do')
+        self.assertGreater(normalization, full.index('rm -rf /var/lib/apt/lists/* /root/.cache'))
+        self.assertLess(normalization, full.index('COPY --from=runner-build '))
+        self.assertIn('test "$(readlink "/usr/local/bin/${yarn_name}")" = "/opt/yarn-v${YARN_VERSION}/bin/${yarn_name}"', full)
+        self.assertIn('test -x "/opt/yarn-v${YARN_VERSION}/bin/${yarn_name}"', full)
+        self.assertIn('ln -sfn "../../../opt/yarn-v${YARN_VERSION}/bin/${yarn_name}" "/usr/local/bin/${yarn_name}"', full)
+        for name in ("yarn", "yarnpkg"):
+            target = f"../../../opt/yarn-v1.22.22/bin/{name}"
+            self.assertEqual(os.path.normpath(f"/usr/local/bin/{target}"), f"/opt/yarn-v1.22.22/bin/{name}")
+        self.assertIn('test "$(yarn --version)" = "${YARN_VERSION}"', full)
+        probe = (ROOT / "services/jobs/agent-runner/internal/imageinventory/probe.go").read_text()
+        self.assertIn('root.Open(strings.TrimPrefix(path, "/"))', probe)
+        self.assertNotIn('os.Open(path)', probe)
+
     def test_toolchain_and_full_download_layers_do_not_depend_on_runner_source(self):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
         stages = {}

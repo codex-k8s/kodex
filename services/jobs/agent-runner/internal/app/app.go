@@ -48,6 +48,9 @@ type health struct {
 }
 
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
+	if len(args) > 1 && args[1] == imageinventory.SandboxExecMode {
+		return imageinventory.RunSandboxedTool(args[2:])
+	}
 	if len(args) > 1 && args[1] == imageinventory.Mode {
 		return imageinventory.Run(lifecycleContext, args)
 	}
