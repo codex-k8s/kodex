@@ -777,3 +777,35 @@ USER_TEMPLATE и7 известных PLATFORM slots присутствуют; in
 managed MCP profiles0. Полные тексты и secret values не печатались.
 Это доказательство одного SYSTEM хода, не каждого будущего сотрудника;
 пункт5 полностью не отмечается.
+
+04.10.2026 12:14–12:25 UTC, дерево поверх `ed78b2ee`:
+PASS — реальный ownread20 `run_-gFm4luQORKdLofEzy8EsW20`:
+SUCCEEDED/version2, базовый каталог и CURRENT_CONFIGURATION оба завершены;
+FINAL подтверждает current_configuration/execution_snapshot и доступные
+инструкции/окружение. Предыдущий backend отказ17 не воспроизвёлся;
+его исходная причина остаётся UNKNOWN, не объявляется устранённой догадкой.
+PASS — SYSTEM self integration grant и environment теперь доступны вне
+своего экрана: closed self/screen union без дубликатов и без расширения
+PROJECT полномочий. Addressed regression FAIL→PASS; Go1.26.6 full callback
+root .921 s, detached .948 s/race×3 3.213 s/vet/gofmt/diffcheck PASS.
+Host/Pod tools.go SHA256:
+`051ab315895bee66a095866292c4ac26af341e2235cda79188971524cedabc84`.
+PASS — dev reload фильтрует нерелевантные test/tool changes, публикует
+ревизию после1500ms settle; generator RUNNING204, failed/expired503 и
+explicit successful rerun recovery. Generated output имеет repo-owned barrier.
+Root unit14 reload +42 boundary/integration, Node barrier4, typecheck,
+scoped lint/format/diffcheck PASS. Первая root команда npm run test не
+существует и не запускала suite; исправлена на test:unit, результаты выше.
+Detached same delta:40 reload/boundary+4 barrier+17 integration unit PASS.
+Root npm codegen PASS (OpenAPI4, AsyncAPI67 пар, integration schema),
+gofmt generated Go — netdiff0; two stale FE generated validator files
+штатно обновлены для CONTEXT7/allowedApprovalPolicies. Старый validator
+отклонял canonical Context7 package, regenerated принимает.
+Host/Pod vite.config.ts совпадают:
+`8c6c73b75e9d6be06bf9aa6d52e0a5503ebde4fea64405f1529aa512a206de44`.
+Chrome после generation/hard reload: revision/bootstrap200, диалог сохранён,
+Console error/warn0. Live204 во время короткой generation не был пойман,
+не объявляется отдельным PASS; lifecycle204/503 проверен synthetic.
+OPEN — manual hard reload во время неполного SDK может упасть до main
+bootstrap catch; отдельный dev-only entry fallback/recovery готовится.
+SYSTEM Configuration Plan пока не создан/не применён; этапы2–15 открыты.

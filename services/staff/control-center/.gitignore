@@ -7,3 +7,4 @@ test-results/
 .auth/
 *.tsbuildinfo
 .eslintcache
+.kodex-codegen/

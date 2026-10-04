@@ -31,7 +31,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "config:check": "node tools/check-runtime-config.mjs",
-    "generate:openapi": "openapi-ts -f openapi-ts.config.mjs",
+    "generate:openapi": "node tools/run-openapi-codegen.mjs",
     "validate:asyncapi": "node tools/generate-asyncapi.mjs --validate-only",
     "generate:asyncapi": "node tools/generate-asyncapi.mjs",
     "generate:integration-schema": "node tools/generate-integration-schema.mjs",

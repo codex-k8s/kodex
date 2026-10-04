@@ -298,7 +298,7 @@ check-control-api-gateway-asyncapi-codegen:
 	./tools/codegen/check-control-api-gateway-asyncapi.sh
 
 gen-openapi-ts:
-	cd services/staff/control-center && npm exec -- openapi-ts -f openapi-ts.config.mjs
+	cd services/staff/control-center && npm run generate:openapi
 
 .PHONY: test-contract-registry
 test-contract-registry:

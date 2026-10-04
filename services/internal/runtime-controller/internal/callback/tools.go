@@ -2,6 +2,7 @@ package callback
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -444,11 +445,21 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 				"instructions":       stringSchema(0, 20000),
 			})))
 	}
-	selfEnvironmentOperation := input.IsSystemAssistant() && input.AgentRef != "" && input.RuntimeEnvironmentRef != "" &&
-		(input.AssistantContext == nil || input.AssistantContext.EntityKind != "ENVIRONMENT")
+	selfEnvironmentOperation := input.IsSystemAssistant() && input.AgentRef != "" && input.RuntimeEnvironmentRef != ""
 	if selfEnvironmentOperation {
+		parameters := environmentRevisionInputSchema(enumSchema(input.RuntimeEnvironmentRef), enumSchema(input.AgentRef))
+		if screen := input.AssistantContext; screen != nil && screen.EntityKind == "ENVIRONMENT" && screen.EntityRef != "" &&
+			slices.Contains(screen.AllowedOperations, "PREPARE_RUNTIME_ENVIRONMENT_REVISION") {
+			parameters["required"] = []string{"environmentRef"}
+			parameters["properties"].(map[string]any)["environmentRef"] = enumSchema(input.RuntimeEnvironmentRef, screen.EntityRef)
+			// Присутствие self locator отделяет собственную среду от точной экранной.
+			parameters["allOf"] = []map[string]any{{"oneOf": []map[string]any{
+				{"required": []string{"systemAssistantRef"}, "properties": map[string]any{"environmentRef": enumSchema(input.RuntimeEnvironmentRef)}},
+				{"not": map[string]any{"required": []string{"systemAssistantRef"}}, "properties": map[string]any{"environmentRef": enumSchema(screen.EntityRef)}},
+			}}}
+		}
 		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
-			environmentRevisionInputSchema(enumSchema(input.RuntimeEnvironmentRef), enumSchema(input.AgentRef))))
+			parameters))
 	}
 	projectSelfOperation := input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != ""
 	if projectSelfOperation {
@@ -483,7 +494,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "WORKFLOW" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_WORKFLOW", workflowUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
-	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" && !projectSelfEnvironmentOperation {
+	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" && !projectSelfEnvironmentOperation && !selfEnvironmentOperation {
 		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
 			environmentRevisionInputSchema(enumSchema(input.AssistantContext.EntityRef), nil)))
 	}
@@ -504,6 +515,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	for _, operation := range result {
 		kind := operation["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
 		if _, ok := allowed[kind]; ok ||
+			selfInstructionsOperation && kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" ||
 			selfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
 			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
 			selfInstructionsOperation && (kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE") ||

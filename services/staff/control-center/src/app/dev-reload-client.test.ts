@@ -134,6 +134,52 @@ test("повторная установка заменяет цикл, нова�
   expect(f.reload).toHaveBeenCalledTimes(1);
   f.dispose();
 });
+
+test("pending generation и FAILED не меняют baseline; готовый SDK вызывает один reload", async () => {
+  vi.useFakeTimers();
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(response(1))
+    .mockResolvedValueOnce({
+      ...response(2),
+      status: 204,
+      text: () => Promise.resolve(""),
+    })
+    .mockResolvedValueOnce({ ...response(2), ok: false, status: 503 })
+    .mockResolvedValueOnce({
+      ...response(2),
+      status: 204,
+      text: () => Promise.resolve(""),
+    })
+    .mockResolvedValue(response(2));
+  const f = fixture(fetch);
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(f.reload).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(f.reload).toHaveBeenCalledTimes(1);
+  f.dispose();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test("первый документ во время generation перезагружается один раз после READY", async () => {
+  vi.useFakeTimers();
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ...response(1),
+      status: 204,
+      text: () => Promise.resolve(""),
+    })
+    .mockResolvedValue(response(1));
+  const f = fixture(fetch);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.reload).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(f.reload).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(f.reload).toHaveBeenCalledTimes(1);
+  f.dispose();
+});
 test("outage, foreign redirect, malformed body и HTTP failure не меняют baseline", async () => {
   vi.useFakeTimers();
   const fetch = vi

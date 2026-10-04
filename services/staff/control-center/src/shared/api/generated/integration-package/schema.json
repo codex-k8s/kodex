@@ -83,7 +83,8 @@
             "EMAIL_HTTPS",
             "HTTPS_JSON_READ",
             "OPENAPI_MCP",
-            "MATTERMOST_INTERACTION"
+            "MATTERMOST_INTERACTION",
+            "CONTEXT7"
           ]
         },
         "adapterOwner": {
@@ -442,6 +443,7 @@
         "operation",
         "risk",
         "approvalPolicy",
+        "allowedApprovalPolicies",
         "resourceScope",
         "inputFields",
         "outputFields",
@@ -478,6 +480,19 @@
             "HUMAN_EACH_EFFECT",
             "HUMAN_SCOPED"
           ]
+        },
+        "allowedApprovalPolicies": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "NONE",
+              "HUMAN_EACH_EFFECT",
+              "HUMAN_SCOPED"
+            ]
+          }
         },
         "resourceScope": {
           "$ref": "#/$defs/resourceScope"
