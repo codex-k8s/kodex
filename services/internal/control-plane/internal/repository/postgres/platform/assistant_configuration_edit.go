@@ -55,10 +55,20 @@ func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.
 		edited.Parameters = parameters
 		refreshed, err = repository.hydrateAssistantRuntimeConfiguration(ctx, tx, current, edited)
 	} else {
-		if !onlyAssistantFields(request, "systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "name", "environmentKey", "dockerfile") {
+		if !refreshStale {
+			frozen, normalizeErr := normalizeAssistantOperation(original)
+			if normalizeErr != nil {
+				return edited, normalizeErr
+			}
+			matching, snapshotErr := repository.systemAssistantImageSnapshotMatches(ctx, tx, current, frozen)
+			if snapshotErr != nil || !matching {
+				return edited, errs.ErrConflict
+			}
+		}
+		if !onlyAssistantFields(request, "systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "name", "environmentKey", "dockerfile", "specSha256") {
 			return edited, errs.ErrInvalid
 		}
-		for _, field := range []string{"systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef"} {
+		for _, field := range []string{"systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "specSha256"} {
 			if !assistantJSONEqual(request[field], original.Parameters[field]) {
 				return edited, errs.ErrForbidden
 			}

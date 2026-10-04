@@ -1455,6 +1455,17 @@ control-plane. Политика строится из фактического S
 
 ## Полнота deployable
 
+Восстановленный native history принадлежит фактическому writer/capture UID,
+а не UID контейнера, передающего запрос. В текущем Pod ABI Codex app-server
+и захват rollout исполняются в `provider-runtime` с UID10002; RESTORE создаёт
+файлы с тем же UID, group29000 и mode0640. Main runner UID10001 не получает
+CAP_CHOWN или право менять чужой rollout. Kernel-регрессия проверяет append
+новых history bytes и их последующий exact digest от UID10002, а чужой UID10001
+остаётся отрицательным случаем. SNAPSHOT/DELETE сохраняют прежние identities,
+claim/fence и минимальные capabilities. Уже созданный wrong-owner PVC не
+исправляется ручным chown: нужен штатный архив и новый owner-bound RESTORE
+с проверенным immutable archive receipt, без подмены terminal outcome.
+
 Материализованные общие input/knowledge отделены от приватного spool: non-root
 init защищает принадлежащие ему файлы и потомков через дескрипторы без symlink.
 Исключение chmod допускается только для точного root-owned корня тома из Pod ABI

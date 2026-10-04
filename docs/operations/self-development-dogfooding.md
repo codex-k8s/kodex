@@ -1528,3 +1528,44 @@ source, иначе restart нод может нарушить join/startup. На
 В работе closed INPUT_FETCH_REJECTED reason без значений входных данных и
 явное versioned обновление own SYSTEM recipe после смены server catalog pins.
 RequestBuild не переписывает immutable recipe автоматически; guard не обходится.
+
+04.10.2026 20:25 UTC, интеграционный tree поверх `09f7b7d9e80982606624f39dc05171f2fafe324c`:
+PASS — ROOT11 unit node publication verifier2.554s; фактический повтор на
+обеих нодах k3d-kodex PASS: manifest/config/все слои exact archive3ddb
+получены по установленному K3D_HOSTS route через TLS/SNI/CA/application
+identity, без node cache/config/PVC writes. Evidence NODE_HTTPS_GRAPH;
+общий DNS и CRI pull этой проверкой NOT CHECKED. Actual worker imageID
+и owner archive/delete completion доказаны отдельно на97fd.
+PASS — normal UI продолжение QA36 после ARCHIVED создало
+run_nQKlGUW-AEPH15Uv2geG-xGy с RESTORE SUCCEEDED/attempt1/NONE.
+FAIL — это не успешное завершение хода: после опубликованного FINAL с
+model gpt-6.1-sol/medium run завершился RUNTIME_PROVIDER_UNAVAILABLE.
+Source-proven причина-кандидат: RESTORE owner10001, а native writer/capture
+исполняется provider-runtime10002; чужой0640 файл не допускает append/chmod.
+Исправление exact owner и kernel regression в работе; actual повтор NOT RUN.
+PASS — ROOT build/runner unit .022s и server-only SYSTEM image spec pin unit
+.059s. Интегрированы закрытые причины materialization rejection без payload,
+Dockerfile byte-preservation и versioned repair старого own SYSTEM recipe.
+Detached PostgreSQL baseline FAIL13.118s → fixed full profile PASS21.342s:
+own active/UI-managed recipe/agent authority → сохранённый Before spec SHA →
+fresh server Params/After SHA → confirmed plan version/revision/OCC →
+canonical recipe UPDATE в owner transaction (generation, immutable input,
+audit/receipt/event). Catalog drift → STALE; DRAFT edit не лечит pins молча;
+caller-created pins, foreign locator и wrong OCC закрыто отклоняются.
+RequestBuild/claim/retry/expiry старый input не переписывают; текущий runtime
+не меняется. Новых API/migrations/legacy decoder нет. Actual repair/build/
+admission/promotion пока NOT RUN; normal native QA38 proposal запущен.
+Checkbox2–15 OPEN; incident token rotation всё ещё NOT RUN.
+
+04.10.2026 20:27 UTC, тот же интеграционный tree:
+Интегрирован exact native writer RESTORE10002; SNAPSHOT/DELETE identities,
+capabilities/claim/fence не расширены. Предыдущее утверждение журнала о
+runner10001 относится к историческому ошибочному fixture, не к фактическому
+provider writer. Detached controller/archive unit .041/.025s и Codex4.668s
+PASS; kernel disposable networkNONE/read-only rootfs actual2 cases PASS.06s:
+wrongUID10001 → provider10002 append EACCES/capture EPERM; correctUID10002 →
+append/fsync нового history frame и exact hash/size capture. Production
+capabilities DropALL, никаких ручных chown/SQL для существующего PVC.
+Codex race18.680s, controller/archive race1.165/1.097s, vet PASS. Root повтор
+и canonical image activation ещё в работе; actual resumed run SUCCESS
+пока NOT RUN и опубликованный FINAL не считается этим доказательством.

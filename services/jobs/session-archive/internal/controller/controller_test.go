@@ -178,7 +178,7 @@ func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T)
 	}
 }
 
-func TestWorkerIdentityKeepsRestoredSourceOwnedByRunner(t *testing.T) {
+func TestWorkerIdentityKeepsRestoredSourceOwnedByNativeWriter(t *testing.T) {
 	t.Parallel()
 	controller, err := New(fake.NewSimpleClientset(), testConfig())
 	if err != nil {
@@ -187,7 +187,7 @@ func TestWorkerIdentityKeepsRestoredSourceOwnedByRunner(t *testing.T) {
 	for _, scenario := range []struct {
 		kind string
 		uid  int64
-	}{{"SNAPSHOT", 10002}, {"RESTORE", 10001}, {"DELETE_OBJECT", 10002}, {"DELETE_PVC", 10002}} {
+	}{{"SNAPSHOT", 10002}, {"RESTORE", 10002}, {"DELETE_OBJECT", 10002}, {"DELETE_PVC", 10002}} {
 		t.Run(scenario.kind, func(t *testing.T) {
 			job := controller.job("session-archive-test", model.Task{Kind: scenario.kind, PVCName: "runtime-session-0123456789abcdef"}, "pvc-uid")
 			pod := job.Spec.Template.Spec

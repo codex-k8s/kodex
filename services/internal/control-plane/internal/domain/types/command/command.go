@@ -294,6 +294,7 @@ type AssistantRuntimeConfigurationInput struct {
 
 type SystemAssistantRoleImageInput struct {
 	SystemAssistantRef, OrganizationRef, RecipeRef, Name string
+	SpecSHA256                                           string
 	AgentVersion                                         int64
 	Environment                                          entity.RoleEnvironmentSelection
 }

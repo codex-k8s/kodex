@@ -49,6 +49,19 @@ class FixtureReader:
 
 
 class PublicationTests(unittest.TestCase):
+    def tearDown(self):
+        MODULE.enter_stage("UNKNOWN")
+
+    def test_stage_is_closed_without_private_command_diagnostics(self):
+        for stage in MODULE.STAGES:
+            MODULE.enter_stage(stage)
+            with self.assertRaises(MODULE.Failure) as failure:
+                MODULE.capture([sys.executable, "-c", "import sys;print('PRIVATE_SENTINEL',file=sys.stderr);sys.exit(4)"], time.monotonic()+5)
+            self.assertEqual(failure.exception.stage, stage)
+            self.assertEqual(str(failure.exception), "COMMAND_FAILED")
+        MODULE.enter_stage("PRIVATE_SENTINEL")
+        self.assertEqual(MODULE.Failure("COMMAND_FAILED").stage, "UNKNOWN")
+
     def test_node_file_ownership_matches_installer_not_arbitrary_uid(self):
         self.assertTrue(MODULE.valid_node_file_metadata("regular file:0:600", 1001))
         self.assertTrue(MODULE.valid_node_file_metadata("regular file:1001:600", 1001))
@@ -56,6 +69,19 @@ class PublicationTests(unittest.TestCase):
                          "symbolic link:1001:600", "directory:1001:600", "regular file:1001:400",
                          "PRIVATE_SENTINEL", "regular file:1001:600\nPRIVATE_SENTINEL"):
             self.assertFalse(MODULE.valid_node_file_metadata(metadata, 1001))
+
+    def test_exact_installed_hosts_route_not_generic_dns(self):
+        host, address = "pull.fixture.invalid", "172.18.0.2"
+        self.assertEqual(MODULE.node_host_route(b"127.0.0.1 localhost\n172.18.0.2 pull.fixture.invalid\n", host, address), address)
+        for raw in (b"", b"172.18.0.2 foreign.fixture.invalid\n", b"127.0.0.1 pull.fixture.invalid\n",
+                    b"172.18.0.3 pull.fixture.invalid\n", b"::1 pull.fixture.invalid\n",
+                    b"172.18.0.2 pull.fixture.invalid alias.invalid\n",
+                    b"172.18.0.2 pull.fixture.invalid\n172.18.0.2 pull.fixture.invalid\n",
+                    b"172.18.0.2 pull.fixture.invalid\n172.18.0.3 pull.fixture.invalid\n",
+                    b"172.18.0.2 pull.fixture.invalid\x00PRIVATE_SENTINEL\n", b"x"*65537):
+            with self.assertRaises(MODULE.Failure) as error:
+                MODULE.node_host_route(raw, host, address)
+            self.assertNotIn("SENTINEL", str(error.exception))
 
     def test_manifest_and_all_image_blobs_without_node_cache(self):
         reader = FixtureReader()
@@ -128,6 +154,7 @@ class PublicationTests(unittest.TestCase):
             self.assertIn("--network=container:k3d-kodex-agent-0", argv)
             self.assertIn("--pull=never", argv)
             self.assertIn("--read-only", argv)
+            self.assertIn("--user="+str(os.getuid())+":"+str(os.getgid()), argv)
             self.assertNotIn("SENTINEL", " ".join(argv))
             self.assertNotIn("--insecure", argv)
             self.assertEqual(Path(root, "curl.conf").stat().st_mode & 0o777, 0o600)
@@ -184,15 +211,17 @@ class PublicationTests(unittest.TestCase):
                 "docker": '''
 with (root/'argv.jsonl').open('a') as output: output.write(json.dumps(args)+'\\n')
 if args[:2] == ['image','inspect']: print('sha256:'+'a'*64)
+elif args[:2] == ['inspect','--format']: print('172.18.0.2')
 elif args[0] == 'inspect': print(json.dumps([{'State':{'Running':True},'Config':{'Labels':{'k3d.cluster':'kodex','k3d.role':'server' if 'server' in args[1] else 'agent'}}}]))
 elif args[0] == 'exec':
-    if args[2] == 'stat': print('regular file:'+str(os.getuid())+':600')
-    elif args[2] == 'getent': print('172.18.0.2 pull.fixture.invalid')
+    if args[2] == 'stat': print('regular file' if args[-1] == '/etc/hosts' else 'regular file:'+str(os.getuid())+':600')
+    elif args[-1] == '/etc/hosts': print('127.0.0.1 localhost\\n172.18.0.2 pull.fixture.invalid')
     elif args[-1] == '/etc/rancher/k3s/registries.yaml': print((root/'config.json').read_text())
     elif args[2] == 'cat': print('PRIVATE_CERT_SENTINEL')
     else: sys.exit(5)
 elif args[0] == 'run':
     assert '--read-only' in args and '--pull=never' in args and '--cap-drop=ALL' in args
+    assert '--user='+str(os.getuid())+':'+str(os.getgid()) in args
     assert any(value.startswith('--network=container:k3d-kodex-') for value in args)
     mount=args[args.index('--mount')+1]; source=mount.split('src=')[1].split(',dst=')[0]
     cfg=(Path(source)/'curl.conf').read_text()
@@ -227,6 +256,7 @@ else: sys.exit(6)
                      "FIXTURE_ROOT": root, "KUBECONFIG": "/home/s/.kube/config"})
             self.assertNotEqual(denied.returncode, 0)
             self.assertNotIn("SENTINEL", denied.stdout+denied.stderr)
+            self.assertEqual(json.loads(denied.stdout)["stage"], "NODE_CONFIG")
 
     def test_capture_bounds_timeout_and_private_stderr(self):
         with self.assertRaises(MODULE.Failure) as error:

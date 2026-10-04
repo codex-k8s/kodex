@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
+	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -634,6 +635,118 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatal("STALE image update did not refresh its versioned snapshot")
 	}
 	apply(validate(*imageRefreshed.Plan, "image-refresh-validate"), "image-refresh-apply")
+	// Обновление опубликованного каталога не переписывает исходный recipe.
+	// Только новый owner-confirmed UPDATE создаёт immutable input поколения 2.
+	beforeRepair, err := r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	environments := catalog.List()
+	environments[0].Input.SourceRevision = "revision-2"
+	environments[0].Input.SourceSHA256 = strings.Repeat("c", 64)
+	environments[0].Input.ContextRef = "oci://registry.internal/role-input@sha256:" + strings.Repeat("c", 64)
+	environments[0].Input.ContextSHA256 = strings.Repeat("c", 64)
+	environments[0].Input.ToolchainSHA256 = strings.Repeat("c", 64)
+	repairCatalog, err := roleimageservice.NewCatalog(environments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.ConfigureRoleImageCatalog(repairCatalog)
+	repairImage := image
+	repairImage.Parameters = map[string]any{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "environmentKey": "promotion"}
+	callerPinned := repairImage
+	callerPinned.Parameters = cloneAssistantFields(repairImage.Parameters)
+	callerPinned.Parameters["specSha256"] = strings.Repeat("c", 64)
+	_, callerPinErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-image-catalog-caller-pin"},
+		Payload:  command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation, Summary: repairImage.Summary, Operations: []entity.AssistantPlanOperation{callerPinned}}})
+	if !errors.Is(callerPinErr, errs.ErrInvalid) {
+		t.Fatal("caller assigned server-owned build specification pin")
+	}
+	repairPlan := propose(repairImage, "image-catalog-repair-proposal")
+	repairOperation := repairPlan.Operations[0]
+	if assistantString(repairOperation.Before, "specSha256") != beforeRepair.Recipe.SpecSHA256 ||
+		assistantString(repairOperation.After, "specSha256") == beforeRepair.Recipe.SpecSHA256 ||
+		!exactSHA256(assistantString(repairOperation.After, "specSha256")) ||
+		assistantString(repairOperation.After, "name") != beforeRepair.Recipe.Name ||
+		assistantImageDockerfile(repairOperation.After) != beforeRepair.Recipe.Input.Dockerfile {
+		t.Fatal("same textual selection did not pin an explicit immutable catalog repair")
+	}
+	stillFrozen, err := r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil || !assistantJSONEqual(stillFrozen.Recipe.Input, beforeRepair.Recipe.Input) {
+		t.Fatal("proposal auto-repinned the saved recipe")
+	}
+	for _, field := range []string{"specSha256", "organizationRef", "recipeRef"} {
+		forged := repairOperation
+		forged.Parameters = cloneAssistantFields(repairOperation.Parameters)
+		forged.Parameters[field] = strings.Repeat("d", 64)
+		v := repairPlan.Version
+		_, denied := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantPlan, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: prefix + "-image-repair-forged-" + field, ExpectedVersion: &v},
+			Payload:  command.AssistantPlanDraftInput{PlanRef: repairPlan.Ref, Summary: repairPlan.Summary, Operations: []entity.AssistantPlanOperation{forged}}})
+		if !errors.Is(denied, errs.ErrForbidden) {
+			t.Fatalf("caller changed immutable repair pin %s: %v", field, denied)
+		}
+	}
+	repairValidated := validate(repairPlan, "image-catalog-repair-validate")
+	wrongRepairVersion := repairValidated.Version + 99
+	_, wrongRepairErr := service.Execute(ctx, command.Command{Kind: command.ApplyAssistantPlan, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-image-catalog-repair-wrong-version", ExpectedVersion: &wrongRepairVersion},
+		Payload:  command.AssistantPlanInput{PlanRef: repairValidated.Ref, Revision: repairValidated.Revision}})
+	if !errors.Is(wrongRepairErr, errs.ErrVersionMismatch) {
+		t.Fatal("repair ignored confirmed plan OCC version")
+	}
+	draftRepair := propose(repairImage, "image-catalog-repair-draft-drift")
+	// Каталог, изменённый после человеческого подтверждения, не усыновляется.
+	environments[0].Input.SourceRevision = "revision-3"
+	environments[0].Input.SourceSHA256 = strings.Repeat("d", 64)
+	environments[0].Input.ContextSHA256 = strings.Repeat("d", 64)
+	environments[0].Input.ToolchainSHA256 = strings.Repeat("d", 64)
+	newCatalog, err := roleimageservice.NewCatalog(environments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.ConfigureRoleImageCatalog(newCatalog)
+	draftEditVersion := draftRepair.Version
+	_, draftEditErr := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantPlan, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-image-catalog-repair-draft-heal", ExpectedVersion: &draftEditVersion},
+		Payload:  command.AssistantPlanDraftInput{PlanRef: draftRepair.Ref, Summary: draftRepair.Summary, Operations: draftRepair.Operations}})
+	if !errors.Is(draftEditErr, errs.ErrConflict) {
+		t.Fatal("ordinary DRAFT edit silently refreshed changed catalog pins")
+	}
+	drifted := execute(command.ApplyAssistantPlan, "image-catalog-repair-drift", repairValidated, command.AssistantPlanInput{PlanRef: repairValidated.Ref, Revision: repairValidated.Revision})
+	if drifted.Plan == nil || drifted.Plan.State != "STALE" || drifted.PlanReceipt == nil || drifted.PlanReceipt.Outcome != "CONFLICT" {
+		t.Fatal("changed catalog silently replaced confirmed build input")
+	}
+	stillFrozen, err = r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil || !assistantJSONEqual(stillFrozen.Recipe.Input, beforeRepair.Recipe.Input) || len(stillFrozen.Builds) != len(beforeRepair.Builds) {
+		t.Fatal("stale repair mutated generation or enqueued a build")
+	}
+	freshRepair := execute(command.UpdateAssistantPlan, "image-catalog-repair-new-revision", *drifted.Plan, command.AssistantPlanDraftInput{PlanRef: drifted.Plan.Ref, Summary: drifted.Plan.Summary, Operations: drifted.Plan.Operations})
+	if freshRepair.Plan == nil || freshRepair.Plan.Revision != repairPlan.Revision+1 || freshRepair.Plan.State != "DRAFT" ||
+		assistantString(freshRepair.Plan.Operations[0].After, "specSha256") == assistantString(repairOperation.After, "specSha256") {
+		t.Fatal("explicit STALE repair did not freeze fresh server input in a new revision")
+	}
+	freshValidated := validate(*freshRepair.Plan, "image-catalog-repair-fresh-validate")
+	repaired := apply(freshValidated, "image-catalog-repair-fresh-apply")
+	afterRepair, err := r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil || afterRepair.Recipe.Generation != beforeRepair.Recipe.Generation+1 ||
+		afterRepair.Recipe.SpecSHA256 != assistantString(freshRepair.Plan.Operations[0].After, "specSha256") ||
+		afterRepair.Recipe.Input.SourceRevision != "revision-3" || afterRepair.Recipe.Input.ToolchainSHA256 != strings.Repeat("d", 64) ||
+		len(afterRepair.Builds) != len(beforeRepair.Builds)+1 || afterRepair.Builds[0].ConfigurationRevisionRef == "" || afterRepair.Builds[0].SpecSHA256 != afterRepair.Recipe.SpecSHA256 {
+		t.Fatal("confirmed catalog repair lost immutable input/generation/managed lineage")
+	}
+	repairReplay := execute(command.ApplyAssistantPlan, "image-catalog-repair-fresh-apply", freshValidated, command.AssistantPlanInput{PlanRef: freshValidated.Ref, Revision: freshValidated.Revision})
+	if !assistantJSONEqual(repaired.PlanReceipt, repairReplay.PlanReceipt) {
+		t.Fatal("repair replay changed its atomic receipt")
+	}
+	// Новый запрос той же спецификации не выдаётся за meaningful repair.
+	_, unchangedErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-image-catalog-repair-no-op"},
+		Payload:  command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation, Summary: repairImage.Summary, Operations: []entity.AssistantPlanOperation{repairImage}}})
+	if !errors.Is(unchangedErr, errs.ErrConflict) {
+		t.Fatal("unchanged catalog repair was accepted")
+	}
 	ownerScope, err := r.resolveScope(ctx, resolved)
 	if err != nil {
 		t.Fatal(err)

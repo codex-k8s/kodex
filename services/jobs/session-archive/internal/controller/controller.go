@@ -351,12 +351,9 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 		// геометрию путей для snapshot и restore.
 		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/workspace/.kodex/state"})
 	}
-	workerUID := int64(10002)
-	if task.Kind == "RESTORE" {
-		// Восстановленный rollout должен принадлежать runner: следующий capture
-		// проверяет его mode/group без CAP_CHOWN и не может менять чужой файл.
-		workerUID = 10001
-	}
+	// RESTORE создаёт rollout от UID native writer: app-server и capture
+	// исполняются в provider-runtime, а не в контейнере main runner.
+	const workerUID int64 = 10002
 	container := corev1.Container{Name: "worker", Image: controller.config.WorkerImage, Args: []string{"worker"},
 		Env: []corev1.EnvVar{{Name: "DEPLOYMENT_ENVIRONMENT", Value: controller.config.Environment},
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_ENDPOINT", Value: controller.config.ObjectStorageEndpoint},

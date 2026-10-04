@@ -61,8 +61,10 @@ func (repository *Repository) systemAssistantImageInput(ctx context.Context, tx 
 		if _, err := repository.managedRoleImageTarget(ctx, tx, current, input); err != nil {
 			return input, nil, err
 		}
-		baseline, err := repository.roleImageCatalogResolver(entity.RoleEnvironmentSelection{EnvironmentKey: previous.Input.EnvironmentKey, PackageKeys: previous.Input.PackageKeys, ToolKeys: previous.Input.ToolKeys, InstallationBlock: previous.Input.InstallationBlock, Dockerfile: previous.Input.Dockerfile})
-		if err != nil || roleImageDigest(baseline) != roleImageDigest(previous.Input) {
+		// Историческая спецификация проверяется как сохранённый immutable input,
+		// а не пересобирается новым каталогом. Новый input закрепляется отдельно
+		// в подтверждаемом плане; RequestBuild не обновляет эти зависимости.
+		if roleimageservice.ValidateManagedOrganizationRecipe(previous.Name, previous.Input) != nil || previous.SpecSHA256 != roleImageDigest(previous.Input) {
 			return input, nil, errs.ErrConflict
 		}
 		if input.Environment.EnvironmentKey == previous.Input.EnvironmentKey {
@@ -76,12 +78,18 @@ func (repository *Repository) systemAssistantImageInput(ctx context.Context, tx 
 		return input, nil, errs.ErrInvalid
 	}
 	input.Recipe = recipe
+	if payload.SpecSHA256 != "" && payload.SpecSHA256 != roleImageDigest(recipe) {
+		return input, previous, errs.ErrConflict
+	}
 	return input, previous, nil
 }
 
 func (repository *Repository) applySystemAssistantImage(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.SystemAssistantRoleImageInput)
 	if !ok {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	if !exactSHA256(payload.SpecSHA256) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	managedInput, _, err := repository.systemAssistantImageInput(ctx, tx, current, payload, input.Mutation, input.Kind == command.UpdateSystemAssistantRoleImageRecipe)
@@ -122,7 +130,7 @@ func (repository *Repository) hydrateSystemAssistantImage(ctx context.Context, t
 	}
 	payload := command.SystemAssistantRoleImageInput{SystemAssistantRef: ref, OrganizationRef: current.organizationRef, AgentVersion: target.version,
 		RecipeRef: assistantString(operation.Parameters, "recipeRef"), Name: assistantString(operation.Parameters, "name"),
-		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Parameters, "environmentKey"), Dockerfile: assistantString(operation.Parameters, "dockerfile")}}
+		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Parameters, "environmentKey"), Dockerfile: assistantImageDockerfile(operation.Parameters)}}
 	var before map[string]any
 	var version *int64
 	if update {
@@ -147,6 +155,7 @@ func (repository *Repository) hydrateSystemAssistantImage(ctx context.Context, t
 		version = &v
 		before = systemAssistantImageFields(payload, previous.Name, previous.Input.EnvironmentKey, previous.Input.Dockerfile)
 		before["recipeGeneration"] = previous.Generation
+		before["specSha256"] = previous.SpecSHA256
 		operation.Target = entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Ref: previous.Ref, Name: previous.Name, Version: version}
 		operation.Action = "UPDATE"
 	} else {
@@ -163,7 +172,7 @@ func (repository *Repository) hydrateSystemAssistantImage(ctx context.Context, t
 				return operation, err
 			}
 			payload.Environment = selection
-			if dockerfile := assistantString(operation.Parameters, "dockerfile"); dockerfile != "" {
+			if dockerfile := assistantImageDockerfile(operation.Parameters); dockerfile != "" {
 				payload.Environment.Dockerfile = dockerfile
 			}
 		}
@@ -175,7 +184,8 @@ func (repository *Repository) hydrateSystemAssistantImage(ctx context.Context, t
 		return operation, err
 	}
 	after := systemAssistantImageFields(payload, payload.Name, payload.Environment.EnvironmentKey, managedInput.Recipe.Dockerfile)
-	if update && assistantString(before, "name") == payload.Name && assistantString(before, "environmentKey") == payload.Environment.EnvironmentKey && assistantString(before, "dockerfile") == managedInput.Recipe.Dockerfile {
+	after["specSha256"] = roleImageDigest(managedInput.Recipe)
+	if update && assistantString(before, "name") == payload.Name && assistantString(before, "environmentKey") == payload.Environment.EnvironmentKey && assistantImageDockerfile(before) == managedInput.Recipe.Dockerfile && assistantString(before, "specSha256") == assistantString(after, "specSha256") {
 		return operation, errs.ErrConflict
 	}
 	operation.Before, operation.Parameters, operation.After = before, after, cloneAssistantFields(after)
@@ -191,18 +201,26 @@ func systemAssistantImageFields(payload command.SystemAssistantRoleImageInput, n
 	return fields
 }
 
+func assistantImageDockerfile(fields map[string]any) string {
+	// Dockerfile является байтовой частью immutable спецификации: TrimSpace
+	// изменяет digest между подтверждением и материализацией команды.
+	content, _ := fields["dockerfile"].(string)
+	return content
+}
+
 func systemAssistantImageCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	update := operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	if !onlyAssistantFields(operation.Input, "systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "name", "environmentKey", "dockerfile", "expectedVersion") || assistantString(operation.Input, "scopeKind") != "ORGANIZATION" {
+	if !onlyAssistantFields(operation.Input, "systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "name", "environmentKey", "dockerfile", "specSha256", "expectedVersion") || assistantString(operation.Input, "scopeKind") != "ORGANIZATION" {
 		return command.Command{}, errs.ErrInvalid
 	}
 	version, ok := assistantInt64(operation.Input, "agentVersion")
 	if !ok || version < 1 {
 		return command.Command{}, errs.ErrInvalid
 	}
+	specSHA256, _ := operation.Input["specSha256"].(string)
 	payload := command.SystemAssistantRoleImageInput{SystemAssistantRef: assistantString(operation.Input, "systemAssistantRef"), OrganizationRef: assistantString(operation.Input, "organizationRef"), AgentVersion: version,
-		RecipeRef: assistantString(operation.Input, "recipeRef"), Name: assistantString(operation.Input, "name"), Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey"), Dockerfile: assistantString(operation.Input, "dockerfile")}}
-	if payload.SystemAssistantRef == "" || payload.OrganizationRef == "" || payload.Name == "" || payload.Environment.EnvironmentKey == "" || payload.Environment.Dockerfile == "" || len(payload.Environment.Dockerfile) > 64<<10 {
+		RecipeRef: assistantString(operation.Input, "recipeRef"), Name: assistantString(operation.Input, "name"), SpecSHA256: specSHA256, Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey"), Dockerfile: assistantImageDockerfile(operation.Input)}}
+	if payload.SystemAssistantRef == "" || payload.OrganizationRef == "" || payload.Name == "" || !exactSHA256(payload.SpecSHA256) || payload.Environment.EnvironmentKey == "" || payload.Environment.Dockerfile == "" || len(payload.Environment.Dockerfile) > 64<<10 {
 		return command.Command{}, errs.ErrInvalid
 	}
 	result := command.Command{Kind: command.CreateSystemAssistantRoleImageRecipe, Payload: payload}
@@ -234,5 +252,6 @@ func (repository *Repository) systemAssistantImageSnapshotMatches(ctx context.Co
 	}
 	before := systemAssistantImageFields(payload, previous.Name, previous.Input.EnvironmentKey, previous.Input.Dockerfile)
 	before["recipeGeneration"] = previous.Generation
+	before["specSha256"] = previous.SpecSHA256
 	return assistantJSONEqual(before, operation.Before) && reflect.DeepEqual(operation.Parameters, operation.After), nil
 }

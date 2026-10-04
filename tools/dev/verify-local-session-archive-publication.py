@@ -26,10 +26,21 @@ LAYERS = {"application/vnd.oci.image.layer.v1.tar", "application/vnd.oci.image.l
 TLS_PATHS = {"ca_file": "/etc/rancher/k3s/kodex-registry/ca.crt",
              "cert_file": "/etc/rancher/k3s/kodex-registry/client.crt",
              "key_file": "/etc/rancher/k3s/kodex-registry/client.key"}
+STAGES = frozenset({"UNKNOWN", "STATE", "RENDER", "LIVE_DEPLOYMENT", "TOOLS_IMAGE",
+                    "NODE_INVENTORY", "NODE_CONTAINER", "FILE_METADATA", "NODE_CONFIG",
+                    "DNS", "NODE_ROUTE", "TLS_READ", "HTTPS_GRAPH"})
+active_stage = "UNKNOWN"
+
+
+def enter_stage(stage):
+    global active_stage
+    active_stage = stage if stage in STAGES else "UNKNOWN"
 
 
 class Failure(Exception):
-    pass
+    def __init__(self, code):
+        super().__init__(code)
+        self.stage = active_stage
 
 
 def require(ok, code):
@@ -122,6 +133,26 @@ def valid_node_file_metadata(metadata, operator_uid):
     return metadata in {"regular file:0:600", "regular file:"+str(operator_uid)+":600"}
 
 
+def node_host_route(raw, host, expected_address):
+    require(0 < len(raw) <= 65536 and all(value in (9, 10) or 32 <= value <= 126 for value in raw), "HOST_ROUTE_INVALID")
+    lines = raw.decode("ascii").splitlines()
+    require(len(lines) <= 1024, "HOST_ROUTE_INVALID")
+    matches = []
+    for line in lines:
+        fields = line.split("#", 1)[0].split()
+        if host in fields:
+            require(len(fields) == 2 and fields[1] == host, "HOST_ROUTE_INVALID")
+            try:
+                address = ipaddress.IPv4Address(fields[0])
+            except ValueError:
+                raise Failure("HOST_ROUTE_INVALID") from None
+            require(not address.is_loopback and not address.is_unspecified and not address.is_multicast and
+                    str(address) == expected_address, "HOST_ROUTE_INVALID")
+            matches.append(str(address))
+    require(len(matches) == 1, "HOST_ROUTE_INVALID")
+    return matches[0]
+
+
 def quote(value):
     return '"'+value.replace("\\", "\\\\").replace('"', '\\"')+'"'
 
@@ -145,7 +176,8 @@ class NodeReader:
         require(isinstance(maximum, int) and 0 < maximum <= MAX_BLOB, "DESCRIPTOR_INVALID")
         cidfile = self.directory / ("reader-"+uuid.uuid4().hex+".cid")
         argv = ["docker", "run", "--rm", "--cidfile", str(cidfile), "--pull=never", "--read-only", "--cap-drop=ALL",
-                "--security-opt=no-new-privileges", "--network=container:"+self.node, "--user=0:0",
+                "--security-opt=no-new-privileges", "--network=container:"+self.node,
+                "--user="+str(os.getuid())+":"+str(os.getgid()),
                 "--mount", "type=bind,src="+str(self.directory)+",dst=/work,readonly",
                 "--entrypoint=/usr/bin/curl", self.image, "--config", "/work/curl.conf",
                 "https://"+self.host+"/v2/kodex/session-archive/"+kind+"/"+digest]
@@ -238,6 +270,7 @@ def main():
     parser.add_argument("--render", type=Path, required=True)
     parser.add_argument("--timeout", type=int, default=360)
     args = parser.parse_args()
+    enter_stage("STATE")
     require(1 <= args.timeout <= 360, "BUDGET_INVALID")
     deadline = time.monotonic()+args.timeout
     require(os.environ.get("KUBECONFIG") == "/home/s/.kube/config", "KUBECONFIG_INVALID")
@@ -245,56 +278,68 @@ def main():
             args.render.is_absolute() and args.render.is_file() and not args.render.is_symlink(), "INPUT_INVALID")
     source_pin = (args.state_directory/"session-archive-image").read_text().strip()
     require(re.fullmatch(r"registry\.local\.kodex/kodex/session-archive@sha256:[a-f0-9]{64}", source_pin), "PIN_INVALID")
+    enter_stage("RENDER")
     rendered = document(capture(["yq", "-o=json", "-I=0", 'select(.kind == "Deployment" and .metadata.name == "session-archive")', str(args.render)], deadline))
     pin = deployment_pin(rendered)
     host, digest = PIN.fullmatch(pin).groups()
     require(digest != "sha256:"+"0"*64 and source_pin.split("@")[1] == digest, "PIN_MISMATCH")
+    enter_stage("LIVE_DEPLOYMENT")
     with tempfile.TemporaryDirectory(prefix="kodex-archive-kube-") as cache:
         live = document(capture(["kubectl", "--context", args.context, "--cache-dir", cache,
                                  "--request-timeout=10s", "-n", "kodex-system", "get",
                                  "deployment/session-archive", "-o=json"], deadline))
     require(deployment_pin(live) == pin, "LIVE_PIN_MISMATCH")
+    enter_stage("TOOLS_IMAGE")
     tag = (args.state_directory/"image-supply-chain-tools-docker-tag").read_text().strip()
     require(re.fullmatch(r"kodex-local/image-admission-tools:[a-f0-9]{64}", tag), "TOOLS_IMAGE_INVALID")
     image = capture(["docker", "image", "inspect", "--format={{.Id}}", tag], deadline).decode().strip()
     require(DIGEST.fullmatch(image), "TOOLS_IMAGE_INVALID")
+    enter_stage("NODE_INVENTORY")
     inventory = document(capture(["k3d", "node", "list", "-o", "json"], deadline))
     nodes = sorted(n["name"] for n in inventory if n.get("role") in {"server", "agent"} and re.fullmatch(r"k3d-kodex-(server|agent)-[0-9]+", n.get("name", "")))
     require(0 < len(nodes) <= 16 and len(nodes) == len(set(nodes)), "NODE_INVENTORY_INVALID")
+    enter_stage("NODE_CONTAINER")
+    load_balancer_address = capture(["docker", "inspect", "--format",
+        '{{(index .NetworkSettings.Networks "k3d-kodex").IPAddress}}', "k3d-kodex-serverlb"], deadline).decode().strip()
+    ipaddress.IPv4Address(load_balancer_address)
     for node in nodes:
+        enter_stage("NODE_CONTAINER")
         info = document(capture(["docker", "inspect", node], deadline))
         require(len(info) == 1 and info[0].get("State", {}).get("Running") is True and
                 info[0].get("Config", {}).get("Labels", {}).get("k3d.cluster") == "kodex" and
                 info[0].get("Config", {}).get("Labels", {}).get("k3d.role") in {"server", "agent"}, "NODE_IDENTITY_INVALID")
+        enter_stage("FILE_METADATA")
         for path in ["/etc/rancher/k3s/registries.yaml", *TLS_PATHS.values()]:
             metadata = capture(["docker", "exec", node, "stat", "-c", "%F:%u:%a", path], deadline).decode().strip()
             require(valid_node_file_metadata(metadata, os.getuid()), "NODE_IDENTITY_INVALID")
+        enter_stage("NODE_CONFIG")
         raw = capture(["docker", "exec", node, "cat", "/etc/rancher/k3s/registries.yaml"], deadline)
         config = document(capture(["yq", "-o=json", "-I=0", "."], deadline, raw))
         auth = credentials(config, host)
-        addresses = capture(["docker", "exec", node, "getent", "hosts", host], deadline).decode().splitlines()
-        require(len(addresses) == 1 and addresses[0].split()[1:] == [host], "DNS_INVALID")
-        address = str(ipaddress.IPv4Address(addresses[0].split()[0]))
-        require(not ipaddress.ip_address(address).is_loopback, "DNS_INVALID")
+        enter_stage("NODE_ROUTE")
+        require(capture(["docker", "exec", node, "stat", "-c", "%F", "/etc/hosts"], deadline).decode().strip() == "regular file", "HOST_ROUTE_INVALID")
+        address = node_host_route(capture(["docker", "exec", node, "cat", "/etc/hosts"], deadline), host, load_balancer_address)
         with tempfile.TemporaryDirectory(prefix="kodex-archive-https-") as name:
             directory = Path(name)
             directory.chmod(0o700)
+            enter_stage("TLS_READ")
             for key, path in TLS_PATHS.items():
                 data = capture(["docker", "exec", node, "cat", path], deadline)
                 require(0 < len(data) <= 64 << 10, "TLS_MATERIAL_INVALID")
                 (directory/key).write_bytes(data)
                 (directory/key).chmod(0o600)
+            enter_stage("HTTPS_GRAPH")
             count = verify_graph(NodeReader(node, image, directory, host, address, auth, deadline), digest)
         print(json.dumps({"status": "PASS", "evidence": "NODE_HTTPS_GRAPH", "node": node,
-                          "digest": digest, "manifestCount": count, "criPull": "NOT_CHECKED"}))
+                          "digest": digest, "manifestCount": count, "routeSource": "K3D_HOSTS", "criPull": "NOT_CHECKED"}))
 
 
 if __name__ == "__main__":
     try:
         main()
     except Failure as error:
-        print(json.dumps({"status": "FAIL", "code": str(error)}))
+        print(json.dumps({"status": "FAIL", "code": str(error), "stage": error.stage}))
         raise SystemExit(1) from None
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        print('{"status":"FAIL","code":"INPUT_OR_SHAPE_INVALID"}')
+        print(json.dumps({"status": "FAIL", "code": "INPUT_OR_SHAPE_INVALID", "stage": active_stage}))
         raise SystemExit(1) from None

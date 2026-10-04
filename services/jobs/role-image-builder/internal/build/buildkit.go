@@ -167,21 +167,37 @@ func (executor *Executor) Prepare(
 	input *controlplanev1.RoleImageBuildInput,
 	beforeContextValidation func() error,
 ) (*Prepared, string, error) {
-	if !validBuildOwner(input) || !plainSHA256(input.GetContextSha256()) || !plainSHA256(input.GetSourceSha256()) ||
-		!plainSHA256(input.GetSpecSha256()) || !plainSHA256(input.GetImmutableBuildSha256()) ||
-		input.GetFrontendSha256() != executor.config.ExpectedFrontendSHA256 || !digestPattern.MatchString(input.GetBaseImageDigest()) ||
-		!executor.allowedBases.Allows(input.GetBaseImageReference(), input.GetBaseImageDigest()) ||
-		input.GetBuilderSha256() != executor.config.ExpectedBuilderSHA256 ||
-		input.GetToolchainSha256() != executor.config.ExpectedToolchainSHA256 ||
-		input.GetRoleRuntimeContractRevision() != executor.config.RoleRuntimeContractRevision ||
-		input.GetRoleRuntimeContractSha256() != executor.config.RoleRuntimeContractSHA256 ||
-		!strings.HasPrefix(input.GetContextRef(), "oci://") ||
-		strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") || !validOwnerDockerfile(input) {
-		return nil, "INPUT_FETCH_REJECTED", ErrInvalidContext
+	reason := ""
+	switch {
+	case !validBuildOwner(input):
+		reason = inputReasonOwnerScope
+	case !plainSHA256(input.GetContextSha256()) || !plainSHA256(input.GetSourceSha256()) ||
+		!plainSHA256(input.GetSpecSha256()) || !plainSHA256(input.GetImmutableBuildSha256()):
+		reason = inputReasonSHASchema
+	case input.GetFrontendSha256() != executor.config.ExpectedFrontendSHA256:
+		reason = inputReasonFrontendPin
+	case !digestPattern.MatchString(input.GetBaseImageDigest()):
+		reason = inputReasonSHASchema
+	case !executor.allowedBases.Allows(input.GetBaseImageReference(), input.GetBaseImageDigest()):
+		reason = inputReasonBaseAllowlist
+	case input.GetBuilderSha256() != executor.config.ExpectedBuilderSHA256:
+		reason = inputReasonBuilderPin
+	case input.GetToolchainSha256() != executor.config.ExpectedToolchainSHA256:
+		reason = inputReasonToolchainPin
+	case input.GetRoleRuntimeContractRevision() != executor.config.RoleRuntimeContractRevision ||
+		input.GetRoleRuntimeContractSha256() != executor.config.RoleRuntimeContractSHA256:
+		reason = inputReasonRuntimeContract
+	case !strings.HasPrefix(input.GetContextRef(), "oci://"):
+		reason = inputReasonContextRef
+	case strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") || !validOwnerDockerfile(input):
+		reason = inputReasonOwnerDockerfile
+	}
+	if reason != "" {
+		return nil, "INPUT_FETCH_REJECTED", rejectInput(reason, ErrInvalidContext)
 	}
 	root, err := os.MkdirTemp(executor.config.WorkspaceRoot, "image-build-")
 	if err != nil {
-		return nil, "INPUT_FETCH_REJECTED", ErrInvalidContext
+		return nil, "INPUT_FETCH_REJECTED", rejectInput(inputReasonWorkspaceCreate, ErrInvalidContext)
 	}
 	prepared := &Prepared{root: root, contextDirectory: filepath.Join(root, "context"),
 		dockerfile: filepath.Join(root, "dockerfile"), installation: filepath.Join(root, "installation"),

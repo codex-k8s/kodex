@@ -103,7 +103,7 @@ func TestRestoreThenRunnerCaptureAcrossUIDs(t *testing.T) {
 	for _, scenario := range []struct {
 		name string
 		uid  uint32
-	}{{"OLD_RESTORE_OWNER", 10002}, {"RUNNER_RESTORE_OWNER", 10001}} {
+	}{{"WRONG_RESTORE_OWNER", 10001}, {"NATIVE_WRITER_RESTORE_OWNER", 10002}} {
 		t.Run(scenario.name, func(t *testing.T) {
 			workspace, err := os.MkdirTemp("", "kodex-session-restore-")
 			if err != nil {
@@ -139,7 +139,7 @@ func TestRestoreThenRunnerCaptureAcrossUIDs(t *testing.T) {
 			if owner.Uid != scenario.uid || owner.Gid != 29000 || stat.Mode().Perm() != 0o640 {
 				t.Fatal("restored source owner/group/mode differs from canonical worker identity")
 			}
-			run(runnerBinary, "TestRestoredRolloutCaptureFixture", 10001, scenario.name)
+			run(runnerBinary, "TestRestoredRolloutCaptureFixture", 10002, scenario.name)
 		})
 	}
 }
