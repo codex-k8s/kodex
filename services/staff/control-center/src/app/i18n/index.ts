@@ -3935,6 +3935,7 @@ const ru = {
     },
     environmentDraft: {
       title: "Окружение сотрудника",
+      systemTitle: "Общесистемное окружение",
       loadFailed:
         "Не удалось получить состояние черновика окружения. Повторите обновление.",
       incomplete:
@@ -8367,6 +8368,7 @@ const en = {
     },
     environmentDraft: {
       title: "Employee environment",
+      systemTitle: "System environment",
       loadFailed: "Could not load the environment draft. Refresh to try again.",
       incomplete:
         "This is still a draft. Select an admitted image, configure, validate, and publish the environment.",

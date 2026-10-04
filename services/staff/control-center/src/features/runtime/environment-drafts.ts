@@ -122,11 +122,9 @@ export async function publishEnvironmentDraft(
     publicationPlanIdentity(result.plan) !== publicationPlanIdentity(plan) ||
     result.plan.state !== "APPLIED" ||
     result.draft.ref !== draft.ref ||
-    result.draft.projectRef !== draft.projectRef ||
     result.draft.version !== draft.version + 1 ||
     result.draft.state !== "PUBLISHED" ||
     result.draft.publishedEnvironmentRef !== result.environment.ref ||
-    result.environment.projectRef !== draft.projectRef ||
     result.environment.currentVersion.ref !==
       result.plan.publishedRevisionRef ||
     result.environment.currentVersion.digest !== plan.targetDigest

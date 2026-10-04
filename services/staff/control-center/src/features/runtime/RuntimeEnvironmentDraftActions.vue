@@ -99,10 +99,12 @@ function checkDraft(value: RuntimeEnvironmentDraft): void {
     value,
     props.environment.organizationRef,
   );
-  if (
-    value.environmentRef !== props.environment.ref ||
-    value.expectedEnvironmentVersion !== props.environment.version
-  )
+  const sourceMatches =
+    value.state === "PUBLISHED"
+      ? value.publishedEnvironmentRef === props.environment.ref &&
+        value.expectedEnvironmentVersion < props.environment.version
+      : value.expectedEnvironmentVersion === props.environment.version;
+  if (value.environmentRef !== props.environment.ref || !sourceMatches)
     throw new Error("Assistant environment draft source version mismatch");
 }
 async function currentResult<T>(request: Promise<T>): Promise<T> {
@@ -148,7 +150,7 @@ async function resume(): Promise<void> {
       value.ref,
       window.sessionStorage,
     );
-    emit("draftLoaded", value);
+    if (value.state !== "PUBLISHED") emit("draftLoaded", value);
   });
 }
 async function save(): Promise<void> {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import AssistantEnvironmentBindingDialog from "@/features/assistant/components/AssistantEnvironmentBindingDialog.vue";
 import {
@@ -15,10 +16,13 @@ import type {
   RuntimeEnvironmentDraft,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
 const emit = defineEmits<{ navigate: [] }>();
 const platform = usePlatformStore();
+const { t } = useI18n();
+const serverMessage = useServerMessage();
 const systemTarget = computed(() =>
   assistantSystemEnvironmentDraftTarget(props.plan, props.operationRef),
 );
@@ -35,6 +39,16 @@ const target = computed(() =>
       ),
 );
 const draft = ref<RuntimeEnvironmentDraft>();
+const draftTitle = computed(() =>
+  t(
+    draft.value?.scopeKind === "ORGANIZATION"
+      ? "assistant.environmentDraft.systemTitle"
+      : "assistant.environmentDraft.title",
+  ),
+);
+const draftName = computed(() =>
+  draft.value ? serverMessage(draft.value.specification.name) : "",
+);
 const loading = ref(false);
 const problem = ref(false);
 const bindingOpen = ref(false);
@@ -161,7 +175,7 @@ watch(
     aria-live="polite"
   >
     <header>
-      <strong>{{ $t("assistant.environmentDraft.title") }}</strong>
+      <strong>{{ draftTitle }}</strong>
       <StatusBadge v-if="draft" :state="draft.state" />
     </header>
     <p v-if="loading && !draft">{{ $t("common.loading") }}</p>
@@ -169,7 +183,7 @@ watch(
       {{ $t("assistant.environmentDraft.loadFailed") }}
     </p>
     <template v-if="draft">
-      <p>{{ draft.specification.name }}</p>
+      <p>{{ draftName }}</p>
       <p v-if="draft.state === 'PUBLISHED'">
         {{ $t("assistant.environmentDraft.published") }}
       </p>

@@ -906,3 +906,69 @@ Actual22 причина до повторного live хода остаётся
 PASS — второй inline screenshot действительно показывает Главную: пять
 видимых строк, внутренний скролл и компактные блоки ниже; снимок просмотрен.
 Ранее полученный снимок чата не подменял эту проверку.
+
+04.10.2026 13:37–13:55 UTC, exact
+`c79b9c1dace449e65bffb0db909f7618f4bcc563`:
+PASS — actual SYSTEM Run23 `run_kq1DgkzFp9-83SsPSbPKtX5z` завершился
+SUCCEEDED, propose_configuration_plan создал
+`pln_fcK9J1mqKG65HV_Hr7-iSDml`. Четыре запрошенных типа после серверной
+проверки дали три полезные операции: полные инструкции, черновик окружения,
+Context7 connection. Unchanged runtime config исключён без пропуска generic
+Conflict. Исторические private inputs Run22 не восстановлены; идентичность
+аргументов двух попыток не заявляется.
+PASS — materialized prompt proof Run23 CAPTURED: exact run/node/session/
+turn/attempt/revision, инструкции/task/model medium, USER_TEMPLATE и семь
+платформенных slots. Artifacts0/managedMCPProfiles0 до подключения Context7.
+PASS — owner проверил revision1 в UI, validation VALID/version2, atomic
+application APPLIED/version3; authoritative SystemAssistant.ownerInstructions
+содержит QA_SYSTEM_SETUP_23, runtime вернулся READY. Секретов в плане нет.
+PASS — protected-secret-input на первом запуске READ_FAILED до mutation:
+Node не доверял системному CA по умолчанию. Public TLS probe установил
+UNABLE_TO_VERIFY_LEAF_SIGNATURE; NODE_USE_SYSTEM_CA=1 дал HTTP302 на обоих
+точных origins без TLS bypass. Fresh connection version1/configuredfalse
+подтвердил отсутствие записи. Следующий штатный scoped CLI дал PASS,
+fresh GET connection version2/credentialsConfiguredtrue. Состояние всё ещё
+NOT_CONNECTED: MCP test/grants не объявляются выполненными.
+PASS — owner UI продолжил точный renvd-черновик, fresh SSO gate закрыл
+validation без нового входа. После штатной повторной авторизации exact
+draftRef сохранился; validate → VALID, impact → PREPARED с нулём explicit
+consumers, publish → PUBLISHED/version3. Effective own environment
+`renv_aSMtfZ2vp9GgOHqTOZnGhWE4` теперь version15/ORGANIZATION;
+bootstrap binding следует current version. Модель gpt-6.1-sol сохранена.
+Console error/warn0. Screenshot в процессе; PASS изображения не заявляется.
+OPEN — helper terminal ранее не сохранял canonical session_storage, поэтому
+новые ходы теряли native provider tool history; отдельный lifecycle-safe fix
+с exact compatibility и archive restore metadata выполняется субагентом.
+OPEN — карточка результата показывает i18n:DEFAULT_RUNTIME_ENVIRONMENT и
+«Окружение сотрудника» для SYSTEM; адресный frontend fix выполняется отдельно.
+OPEN — BuildKit/admission ещё не производят verified tool inventory; декларация
+recipe.Tools не считается проверенным составом образа. Сквозная реализация
+manifest/probes/signature/persist/readback выполняется отдельно.
+Checkbox2–15 остаются открытыми: частичный этап не заменяет полный dogfooding.
+
+04.10.2026 13:56–14:04 UTC, tree поверх `c79b9c1d`:
+FAIL → FIXED — фактический screenshot публикации показал ложную ошибку,
+хотя POST publication200 и authoritative draft PUBLISHED. Организационный
+environment receipt не содержит optional projectRef, draft содержит пустую
+строку; лишнее raw сравнение отвергало квитанцию после side effect.
+Убраны только дублирующие raw projectRef сравнения после строгих canonical
+owner/scope checks; чужой org/project/scope по-прежнему закрыто отклоняется.
+Reload PUBLISHED draft теперь сверяет own published ref и монотонную source
+version вместо равенства старой source текущей опубликованной версии;
+историческая спецификация не перезаписывает актуальную форму.
+PASS — hot reload показывает «Опубликован», alert отсутствует. Штатный
+«Перезагрузить состояние» восстановил APPLIED impact receipt, очистил
+publication metadata без повторной mutation. Console error/warn0.
+PASS — SYSTEM applied card теперь «Общесистемное окружение» / «Основное
+окружение», без raw i18n token; PROJECT presentation/owner routing не менялись.
+Root25 scoped frontend tests PASS2.43 s, targeted eslint/prettier/typecheck
+PASS. Host/Pod hashes трёх production файлов совпали:
+environment-drafts.ts 5cc0c44c63a7b28892f2745fa6bfd06d1adceacffe41158e8acadb8b7548f640;
+RuntimeEnvironmentDraftActions.vue 2eff97b056dfb9f2c3b3c2a5ba4b2ca2f8680a222b97fd91ec989db61d9c50c8;
+AssistantEnvironmentDraftCard.vue df38dae34f82cca8151cfd9a5c8e2fac9b0304d72e37e2b1c2a2a4a2648038d7.
+PASS — actual Run24 `run_a8rMNq1T_3aS_jLxVy8ClMWX` SUCCEEDED;
+safe materialized prompt CAPTURED на exact session/turn/revision, template/
+model/medium/input marker, profiles0. Но plan не создан: из текущего
+environment route каталог не предоставляет TEST_INTEGRATION_CONNECTION
+и INTEGRATION_CONNECTIONS. Помощник корректно не выдумал полномочия и test.
+OPEN — штатный integration context/retry и последующие grants/readiness.

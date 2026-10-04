@@ -203,7 +203,10 @@ it("NOT_FOUND с новым validation digest не разрешает переп
   await value.reprepareMissingPlan();
   expect(api.prepareEnvironmentPublication).not.toHaveBeenCalled();
 });
-async function state(input = specification) {
+async function state(
+  input = specification,
+  extra: Record<string, unknown> = {},
+) {
   const i18n = createI18n({
     legacy: false,
     locale: "ru",
@@ -225,6 +228,7 @@ async function state(input = specification) {
     specification: input,
     canEdit: true,
     valid: true,
+    ...extra,
   })) as unknown as State;
 }
 it("Save draft не публикует среду и последовательно включает validation/impact", async () => {
@@ -298,3 +302,47 @@ it("lost publication ACK блокирует новую mutation и сохран�
 });
 
 beforeEach(() => initializeRuntimeOwnerFixture("org_fixture"));
+
+it("reload опубликованного собственного draft не требует прежнюю source version и не повторяет mutation", async () => {
+  api.readEnvironmentDraft.mockResolvedValue({
+    ...draft,
+    state: "PUBLISHED",
+    version: 3,
+    publishedEnvironmentRef: environment.ref,
+  });
+  const value = await state(specification, {
+    environment: { ...environment, version: 3 },
+    initialDraftRef: draft.ref,
+  });
+  expect(value.draft.value?.state).toBe("PUBLISHED");
+  expect(value.problem.value).toBeUndefined();
+  await value.validate();
+  await value.preview();
+  await value.publish([]);
+  expect(api.transitionEnvironmentDraft).not.toHaveBeenCalled();
+  expect(api.prepareEnvironmentPublication).not.toHaveBeenCalled();
+  expect(api.publishEnvironmentDraft).not.toHaveBeenCalled();
+});
+
+it("reload published draft не принимает чужой ref, scope или невозможную source version", async () => {
+  for (const invalid of [
+    { publishedEnvironmentRef: "environment_foreign" },
+    { organizationRef: "org_foreign" },
+    { expectedEnvironmentVersion: 3 },
+  ]) {
+    api.readEnvironmentDraft.mockResolvedValue({
+      ...draft,
+      state: "PUBLISHED",
+      version: 3,
+      publishedEnvironmentRef: environment.ref,
+      ...invalid,
+    });
+    const value = await state(specification, {
+      environment: { ...environment, version: 3 },
+      initialDraftRef: draft.ref,
+    });
+    expect(value.draft.value).toBeUndefined();
+    expect(value.problem.value).toBeDefined();
+  }
+  expect(api.publishEnvironmentDraft).not.toHaveBeenCalled();
+});

@@ -199,6 +199,69 @@ describe("серверные черновики окружений", () => {
     });
     expect(publishRequest.headers["Idempotency-Key"]).toBe("original-key");
   });
+  it("принимает ORGANIZATION receipt без optional projectRef и закрыто отклоняет чужой scope", async () => {
+    const current = {
+      ...draft("VALID", 3),
+      scopeKind: "ORGANIZATION" as const,
+      projectRef: "",
+    };
+    const plan = {
+      ref: "plan",
+      version: 1,
+      kind: "RUNTIME_ENVIRONMENT",
+      sourceVersion: 0,
+      draftRef: current.ref,
+      draftVersion: 3,
+      targetDigest: "target",
+      digest: "plan-digest",
+      total: 0,
+      state: "PREPARED",
+      createdAt: "2026-10-04T00:00:00Z",
+      expiresAt: "2099-10-04T00:00:00Z",
+    } as RevisionImpactPlan;
+    const receipt = {
+      draft: {
+        ...current,
+        version: 4,
+        state: "PUBLISHED",
+        publishedEnvironmentRef: "environment_synthetic",
+      },
+      environment: {
+        scopeKind: "ORGANIZATION",
+        organizationRef: current.organizationRef,
+        ref: "environment_synthetic",
+        currentVersion: { ref: "version", digest: "target" },
+      },
+      plan: {
+        ...plan,
+        version: 2,
+        state: "APPLIED",
+        publishedRevisionRef: "version",
+      },
+    };
+    const signal = new AbortController().signal;
+    sdk.publish.mockResolvedValue({ data: receipt, response: new Response() });
+    await expect(
+      publishEnvironmentDraft(current, plan, [], signal, "exact-key"),
+    ).resolves.toEqual(receipt);
+    for (const invalid of [
+      { ...receipt.environment, projectRef: "project_foreign" },
+      { ...receipt.environment, organizationRef: "org_foreign" },
+      {
+        ...receipt.environment,
+        scopeKind: "PROJECT",
+        projectRef: "project_foreign",
+      },
+    ]) {
+      sdk.publish.mockResolvedValue({
+        data: { ...receipt, environment: invalid },
+        response: new Response(),
+      });
+      await expect(
+        publishEnvironmentDraft(current, plan, [], signal, "exact-key"),
+      ).rejects.toThrow();
+    }
+  });
   it("отклоняет чужой scope и несовпадающий ETag без повторной команды", async () => {
     sdk.read.mockResolvedValue(
       result({ ...draft(), projectRef: "project_other" }),
