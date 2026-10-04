@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +16,46 @@ import (
 )
 
 const webSocketMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+var errProviderWebSocketHeaderBound = errors.New("websocket response headers exceed bounded serialization limit")
+
+type providerWebSocketHeaderBuffer struct {
+	data    []byte
+	maximum int
+}
+
+func (buffer *providerWebSocketHeaderBuffer) Write(data []byte) (int, error) {
+	if len(data) > buffer.maximum-len(buffer.data) {
+		return 0, errProviderWebSocketHeaderBound
+	}
+	buffer.data = append(buffer.data, data...)
+	return len(data), nil
+}
+
+// Сериализует прежний 101 без body до первого downstream Write. Один Write
+// убирает tiny TLS records, не переписывая headers или ослабляя SDK AttackCheck.
+// Буфер ограничен действующей policy и SDK bound; credential bytes очищаются.
+func writeProviderWebSocketHandshake(response *http.Response, writer io.Writer, maximum int) error {
+	if maximum <= 0 {
+		return errProviderWebSocketHeaderBound
+	}
+	if maximum > 64<<10 {
+		maximum = 64 << 10
+	}
+	buffer := providerWebSocketHeaderBuffer{data: make([]byte, 0, maximum), maximum: maximum}
+	defer func() { clear(buffer.data) }()
+	if err := response.Write(&buffer); err != nil {
+		return err
+	}
+	n, err := writer.Write(buffer.data)
+	if err != nil {
+		return err
+	}
+	if n != len(buffer.data) {
+		return io.ErrShortWrite
+	}
+	return nil
+}
 
 func headerToken(header http.Header, name, token string) bool {
 	for _, value := range header.Values(name) {
@@ -61,7 +102,7 @@ func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, re
 	response.Header.Del("Proxy-Authorization")
 	response.Header.Del("Proxy-Authenticate")
 	handshakeWriter := &providerWebSocketHandshakeWriter{Writer: client}
-	if client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))) != nil || response.Write(handshakeWriter) != nil {
+	if client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))) != nil || writeProviderWebSocketHandshake(response, handshakeWriter, limits.MaximumHeaderBytes) != nil {
 		diagnostic.upgrade("WRITE_FAILED", response.StatusCode)
 		return
 	}

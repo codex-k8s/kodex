@@ -631,6 +631,13 @@ RFC допускает дополнительные известные server/cl
 и server window без соответствующего offer; это не разрешает произвольные
 extensions. Любой subprotocol остаётся запрещён. Header negotiation сохраняется,
 compressed frames передаются непрозрачно и побайтно, без decompression в gateway.
+Downstream HTTP101 сначала сериализуется целиком в буфер не больше действующего
+`MaximumHeaderBytes` и 64KiB, затем передаётся одним bounded Write с прежним
+deadline. Переполнение отклоняется до первого downstream Write; credential bytes
+буфера очищаются. Это сохраняет те же wire headers, но не разбивает handshake на
+десятки крошечных TLS records, способных сработать как slow-read attack в
+закреплённом SDK. Проверка byte equality и overflow не заменяет живое доказательство
+обмена frames и завершения хода через WebSocket.
 Прежние exact CONNECT/host/path/method/SNI/CA, ProviderAccess, DNS/public-IP,
 NetworkPolicy, resource limits, idle/write/shutdown и cancel/join проверки
 остаются обязательными; extension не выдаёт WebAccess или новый destination.

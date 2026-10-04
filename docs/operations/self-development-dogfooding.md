@@ -722,3 +722,31 @@ fixtures (number interpolation), после явного String исправле
 текст/кнопки не пересекаются; desktop восстановлен. Визуальная проверка
 обязательна немедленно для каждого затронутого экрана — правило добавлено
 в раздел «Решения владельца и режим» этой действующей цели.
+
+04.10.2026 12:03–12:07 UTC, дерево поверх `553a6cca`:
+FAIL — реальный ход17 `run_8x0EyFR9woDPVRYiI968-fWF`: authoritative
+FAILED/version2/PROVIDER_RESPONSE_INVALID; опубликован COMMENTARY и20
+TOOL_CALL_RECORDED (10 пар), без подтверждаемого Configuration Plan.
+PROVEN — CURRENT_CONFIGURATION get_configuration_catalog отказал в backend:
+controller закрыто сообщает grpc Unavailable/control_unavailable. Owner read
+system assistant core-v45 и собственная runtime configuration HTTP200;
+точный внутренний отказ ещё UNKNOWN, добавляется typed stage диагностика.
+Public PROVIDER_RESPONSE_INVALID является общей presentation mapping для
+SDK codexErrorInfo=other, а не доказательством нарушения wire schema.
+PASS — bounded coalesced HTTP101: synthetic pinned AttackCheck tiny-write
+FAIL→PASS, прежние bytes, overflow до downstream Write, same deadline;
+Go1.26.6 full gateway unit1.225 s на объединённом дереве. Detached same delta:
+full unit4.01 s, race×3 7.605 s, target×10 0.856 s, vet/gofmt/diffcheck PASS.
+Host/Pod proxy_websocket.go совпадают:
+`435a11ccc4d47f91c20f898c731b1e8a49b582d20fe2609f0ae9da89a0c14ea0`.
+PASS — реальный no-effect ход18 `run_Ubx1G9_VGCEcgH1su5TErcVp`:
+12:06:10 WSS ALLOWED/101/UPGRADE ACCEPTED; 12:06:14 client_data=PRESENT,
+upstream_data=PRESENT, без HTTP fallback; authoritative SUCCEEDED/version2,
+published FINAL «готов». Это живое доказательство WSS-пути, не самонастройки.
+Chrome `/tmp/kodex-wss-coalesced-final18.png` просмотрен: USER справа,
+агент слева, tools свёрнуты, один FINAL без пустого service header;
+Console без error/warn, соответствующие API200. Full frontend build553
+PASS7.93 s с прежним предупреждением размера bundle.
+NOT RUN — actual materialized prompt proof: Pod17/18 завершились и удалены
+до bounded readback; unavailable не считается доказательством prompts.
+SYSTEM ownread/планы и дальнейшие dogfooding этапы остаются открытыми.
