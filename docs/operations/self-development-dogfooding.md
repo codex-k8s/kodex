@@ -1487,3 +1487,29 @@ PASS. Public cache contract и три cache/import regressions PASS. Public rend
 новый yq array-equality predicate. Fixture исправлена на exact jq cardinality,
 controller digest и worker env; boundary не ослаблена. Полный повтор render
 на закреплённом tree ещё NOT RUN, не объявляется PASS по отдельным suites.
+
+04.10.2026 19:59 UTC, checkpoint `97fd3552d720d95cb255506dcacd3a9160feae2e`:
+PASS — BOT commit/push и readback PR1798 exact97fd; Draft/OPEN сохранены.
+Canonical full runner498 rebuild/import с provenance37b11e3aa7c5ee8bae807ffadb961bc29a1f829175f6f2940a7d3e5d340f367a;
+canonical supply-chain all build/import PASS, builder6ffc700f9245e0b275c0469a14a155de49a475e9c85bb3c9f613c09c7dd2bbda.
+PASS — public protected web-only render на clean detached97fd, cache/import
+contract .611s и три named regressions10.252s; первоначальный FAIL устранён.
+PASS — fresh trusted render97fd Q2qvgr, fingerprint97056c8c443e9a9792c77bafa0a09a769d805759b9a539756be8572d8f989ef6,
+authority revision1; supply-chain stage с durable archive seed, core archive и
+core control-plane применены штатно. Все registry deployments/controller/builder
+Ready, protected SYSTEM READY. Это локальная активация, не full acceptance.
+PASS — actual archive worker UID80632d56-4abc-4219-aaa5-fae63ce8f29a
+session-archive-d95ebb55a6fa1299-wz45r Running/Ready на k3d-kodex-agent-0,
+exact promoted HTTPS imageID3ddb169c8eb4e63dde1d31f83fc45abbc9733326cc8af7704252d17f2c684592.
+Owner read200 QA36 session ses_QQzu5ZZ1iOG0OAQqa9tzuR4x ARCHIVED,
+latest DELETE_PVC sat_1d7a0a9a-d28b-4c4e-8651-e213e8ad0bd2 SUCCEEDED,
+attempt1/safeError NONE. Restore/restart ещё NOT RUN. Наличие Ready worker
+само по себе не заменяет owner completion; actual node full HTTPS graph
+проверка добавлена отдельно, root8 unit PASS2.022s, live ещё NOT RUN.
+FAIL — normal UI RequestBuild own recipe создал imgbld_nEGotnLn_1u04riIP4pezyo7,
+recipe version2/generation1. Build FAILED5%: MATERIALIZATION_FAILED,
+INPUT_FETCH_REJECTED, Immutable build input was rejected. Новый Docker build
+не начался; provenance/input rejection не обходится. Два дочерних исполнителя
+проверяют exact source/seed/owner pins и materializer failure path.
+Checkbox2–15 OPEN: собственный image38/admission/promotion, полный restore,
+PROJECT/сотрудники/Workflow пока не завершены.
