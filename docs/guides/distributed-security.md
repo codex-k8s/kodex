@@ -588,6 +588,22 @@ env, exact egress, ограниченный вывод, deadline и cancel/join 
 отклоняется. Диагностика отказа содержит только закрытый этап/класс/route и
 числовой RPC code, не account payload, URL/query, headers или credentials.
 
+Прокси с разными upstream/downstream HTTP versions формирует ответ в
+протоколе, согласованном с клиентом. Upstream HTTP/2 не сериализуется текстовой
+строкой `HTTP/2.0` в HTTP/1.1 connection; HTTP status, end-to-end headers и body
+сохраняются с корректным downstream framing. WebSocket upgrade проверяется и
+передаётся отдельным HTTP/1.1 path. Успешные upstream headers не доказывают
+доставку body: закрытая диагностика различает upstream response и завершённую
+либо ошибочную передачу до EOF, без содержимого/хеша ответа и credentials.
+Regression проверяет реальный HTTP/2 upstream и HTTP/1.1 downstream, а не
+только два HTTP/1.1 fixture endpoints.
+Ответ с неизвестной длиной и допустимым body получает явное HTTP/1.1 chunked
+framing с завершающим chunk и сохранением trailers. Закрытие сырого TCP
+соединения не заменяет завершение HTTP body: строгий TLS-клиент может отвергнуть
+close-delimited ответ без close_notify, даже после записи всех payload bytes.
+Regression использует streaming upstream без Content-Length; HEAD, no-body
+status и WebSocket не получают искусственного body или chunked encoding.
+
 ## Многоуровневая межсервисная авторизация
 
 mTLS подтверждает transport peer, но не заменяет обязательный bearer token,

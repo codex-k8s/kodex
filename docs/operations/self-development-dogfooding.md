@@ -351,3 +351,71 @@ runtime-secret operation этой оснасткой закрыто отклон
 самонастройки: подключение и план должен создать настоящий помощник.
 Новый runner build/activation и повторный live turn с закрытой причиной
 ещё NOT RUN на момент фиксации этого checkpoint.
+
+04.10.2026 09:12–09:26 UTC, checkpoint
+`d0f283cc2c1990d47f7fcfb376b09cae2bccd430`:
+PASS — repo-owned runner build: exact digest
+`sha256:2e31bf59610ee5c436f60e5c3ef10ce0cfdf90192af4a2993c3c185610a3dccf`,
+binary SHA256 `20ad03b676ae2179548a0d3c965413729f6bcb5e24b934cebfbdadeac9994537`.
+Первый fresh render FAIL: GO_TOOLCHAIN_MISMATCH; повтор с явным Go 1.26.6
+PASS. Supply-chain, CP и egress activation PASS; warm и turn imageID
+соответствуют новому digest. Подмена версии runner не использована.
+FAIL — пятый–седьмой SYSTEM turn: account/read по-прежнему отклоняется;
+новая причина DISCOVERY_FAILED, RPC_ERROR/-32603, notification NONE.
+Для пятого и шестого turn через фактический provider Pod доказаны SYSTEM
+scope, session/turn/runtime/image pins, совпадение инструкций и наличие
+`QA_SELF_CONFIG_20261004_0852` в materialized prompt/AGENTS.md. Auth не читался;
+MCP/integration grants пока 0, потому что самонастройка не выполнена.
+PASS — найден и воспроизведён отдельный proxy defect: HTTP/2 upstream
+сериализовался строкой HTTP/2.0 в HTTP/1.1 downstream. Regression сначала
+FAIL, после исправления PASS; весь egress module PASS. Hot host/Pod source
+hash совпал. Седьмой turn всё ещё FAIL, но три provider discovery запроса
+получили 2XX и UPSTREAM_BODY COMPLETED. Этот defect не объявляется единственной
+причиной отказа; успешные headers/body не доказывают SDK decode или inference.
+
+04.10.2026 09:31–09:34 UTC, hot-reload дерево после `d0f283cc`:
+PASS — ограниченная диагностика ответа accounts/check: только закрытые
+encoding/content-type/schema enums, буфер не более 1 MiB + 1 байт,
+обнуление до итоговых логов; фактический поток и headers не изменяются.
+Никакие account values, keys, decoder errors или хеши ответа не выдаются.
+Адресные proxy tests PASS (0.140 s), полный egress module PASS; shape helper
+targeted/full/race/vet PASS. Helper проверяет типы/defaults закреплённого
+SDK, а не authorization/routing или полную эквивалентность Rust decoder.
+FAIL — восьмой живой turn `run_T-5N0L5X6RkZaRRYA-gNVO1E`:
+ACCOUNT_READ/DISCOVERY_FAILED сохранился. Все три upstream ответа:
+2XX, body COMPLETED, encoding IDENTITY, type JSON, SCHEMA_OK_LIST.
+Actual warm binary отдельно подтвердил codex-cli 0.160.0.
+Следующая гипотеза — downstream framing/закрытие TLS для unknown-length
+upstream body; raw account response и credentials не извлекаются.
+Полная самонастройка, inference и дальнейший dogfooding ещё NOT RUN;
+чекбоксы 2–15 остаются открытыми.
+
+04.10.2026 09:38–09:41 UTC, hot-reload дерево после `d0f283cc`:
+FAIL→PASS — streaming HTTP/2 fixture без Content-Length воспроизвёл
+close-delimited downstream и потерю trailers при формально COMPLETED body.
+Исправление задаёт явный HTTP/1.1 chunked для unknown-length body; исключены
+HEAD, no-body statuses и upgrade. Полный egress module PASS (gateway 0.384 s),
+повторный regression PASS (0.038 s), адресный race PASS (1.976 s), vet PASS.
+Hash proxy host=Pod:
+`bb63ed8c25cb1a527a1ee90719cc71028735769a710be1c262c5c18a5ccf1089`.
+PASS — девятый turn `run_KeumAt2ApaWMlTDH9OFY3cJt` больше не получил
+DISCOVERY_FAILED/RPC_ERROR: app-server успешно вернул account/read после
+одного accounts/check 2XX, завершённого body, IDENTITY/JSON/SCHEMA_OK_LIST.
+FAIL — следующий отдельный boundary: ACCOUNT_RESPONSE_SCHEMA в нашем
+адаптере. Проверяется строгая схема закреплённого SDK, включая добавленный
+workspaceRouting. Это не успешный inference/self-configuration.
+Chrome Console без ошибок, bootstrap/session/ticket/graph/history HTTP 200.
+
+04.10.2026 09:42–09:46 UTC, финальное дерево перед следующим checkpoint:
+PASS — установленный warm binary выполнил только generate-json-schema:
+обычный и experimental GetAccountResponse подтверждают точный тип
+workspaceRouting; actual inference/auth операции при codegen не выполнялись.
+FAIL→PASS — synthetic account/read с workspaceRouting object/null отвергался
+прежним адаптером; теперь принимается строгое optional поле с тремя
+обязательными bounded strings и закрытым routing enum. Unknown/duplicate/
+missing/wrong-type/over-limit закрыто отклоняются, значения не сохраняются
+и не назначают account authority или сетевые grants. Отсутствие аккаунта
+по-прежнему приводит к authentication failure. Experimental capability
+не менялась; account/updated по первичному SDK содержит только прежние поля.
+Полный Codex PASS (4.474 s), targeted PASS (0.015 s), race PASS (1.086 s),
+vet/diffcheck PASS. Новый runner activation и живой повтор пока NOT RUN.

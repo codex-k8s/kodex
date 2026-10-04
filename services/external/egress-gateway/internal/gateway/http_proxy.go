@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -24,6 +25,66 @@ import (
 var errProxyHeaderTooLarge = errors.New("runtime proxy request header is too large")
 
 const runtimeProxyProviderDiscoveryLog = "Runtime proxy provider discovery: route=%s event=%s outcome=%s status_class=%s failure=%s"
+const runtimeProxyProviderDiscoveryShapeLog = "Runtime proxy provider discovery: route=ACCOUNTS_CHECK event=RESPONSE_SHAPE content_encoding=%s content_type=%s schema=%s"
+const maximumDiscoveryBodyBytes = 1 << 20
+
+type discoveryBodyCapture struct{ body []byte }
+
+func (capture *discoveryBodyCapture) Write(body []byte) (int, error) {
+	remaining := maximumDiscoveryBodyBytes + 1 - len(capture.body)
+	if remaining > 0 {
+		capture.body = append(capture.body, body[:min(len(body), remaining)]...)
+	}
+	return len(body), nil
+}
+
+func (capture *discoveryBodyCapture) clear() {
+	clear(capture.body)
+	capture.body = nil
+}
+
+func providerDiscoveryEncoding(response *http.Response) string {
+	if response.Uncompressed {
+		return "IDENTITY"
+	}
+	if len(response.Header.Values("Content-Encoding")) > 1 {
+		return "UNKNOWN"
+	}
+	switch strings.ToLower(strings.TrimSpace(response.Header.Get("Content-Encoding"))) {
+	case "", "identity":
+		return "IDENTITY"
+	case "gzip":
+		return "GZIP"
+	case "br":
+		return "BR"
+	case "zstd":
+		return "ZSTD"
+	case "deflate":
+		return "DEFLATE"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func providerDiscoveryContentType(response *http.Response) string {
+	if len(response.Header.Values("Content-Type")) != 1 {
+		return "UNKNOWN"
+	}
+	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if err != nil {
+		return "UNKNOWN"
+	}
+	switch {
+	case mediaType == "application/json" || strings.HasSuffix(mediaType, "+json"):
+		return "JSON"
+	case mediaType == "text/html":
+		return "HTML"
+	case mediaType == "text/plain":
+		return "TEXT"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 // Только известные provider paths преобразуются в закрытую диагностику.
 // Host, URL/query, headers, body и identity запроса не записываются.
@@ -85,6 +146,22 @@ func providerDiscoveryStatusClass(status int) string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+func providerDiscoveryBodyFailure(err error) string {
+	if errors.Is(err, context.Canceled) {
+		return "CANCELLED"
+	}
+	if errors.Is(err, context.DeadlineExceeded) || isTimeout(err) {
+		return "TIMEOUT"
+	}
+	return "IO"
+}
+
+func proxyResponseNeedsChunked(response *http.Response, method string) bool {
+	return response.ContentLength < 0 && response.Body != nil && response.Body != http.NoBody && method != http.MethodHead &&
+		response.StatusCode >= 200 && response.StatusCode != http.StatusNoContent &&
+		response.StatusCode != http.StatusResetContent && response.StatusCode != http.StatusNotModified
 }
 
 func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target connect.Target, access runtimecontract.RuntimeProxyAccess, limits policy.Limits) {
@@ -178,14 +255,55 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		return
 	}
 	stripHopByHop(response.Header)
+	// Downstream TLS допускает только HTTP/1.1, независимо от upstream ALPN.
+	response.Proto, response.ProtoMajor, response.ProtoMinor = "HTTP/1.1", 1, 1
+	if proxyResponseNeedsChunked(response, request.Method) {
+		response.TransferEncoding = []string{"chunked"}
+	}
 	response.Header.Set("Connection", "close")
 	response.Close = true
-	if err := connection.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))); err != nil || response.Write(connection) != nil {
+	var capture *discoveryBodyCapture
+	if route == "ACCOUNTS_CHECK" {
+		capture = &discoveryBodyCapture{body: make([]byte, 0, maximumDiscoveryBodyBytes+1)}
+		defer capture.clear()
+		response.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.TeeReader(response.Body, capture), response.Body}
+	}
+	writeErr := connection.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds)))
+	if writeErr == nil {
+		writeErr = response.Write(connection)
+	}
+	if writeErr != nil {
+		if capture != nil {
+			capture.clear()
+		}
+		if route != "" {
+			log.Printf(runtimeProxyProviderDiscoveryLog, route, "UPSTREAM_BODY", "FAILED", providerDiscoveryStatusClass(response.StatusCode), providerDiscoveryBodyFailure(writeErr))
+		}
 		_ = response.Body.Close()
 		server.metrics.Connection("failed", "proxy", "io")
 		return
 	}
+	var encoding, contentType, shape string
+	if capture != nil {
+		encoding, contentType = providerDiscoveryEncoding(response), providerDiscoveryContentType(response)
+		shape = "ENCODED_NOT_CHECKED"
+		if len(capture.body) > maximumDiscoveryBodyBytes {
+			shape = "BOUND_EXCEEDED"
+		} else if encoding == "IDENTITY" {
+			shape = classifyAccountsCheckShape(capture.body)
+		}
+		capture.clear()
+	}
 	_ = response.Body.Close()
+	if route != "" {
+		log.Printf(runtimeProxyProviderDiscoveryLog, route, "UPSTREAM_BODY", "COMPLETED", providerDiscoveryStatusClass(response.StatusCode), "NONE")
+	}
+	if capture != nil {
+		log.Printf(runtimeProxyProviderDiscoveryShapeLog, encoding, contentType, shape)
+	}
 	server.metrics.Connection("completed", "proxy", "none")
 }
 

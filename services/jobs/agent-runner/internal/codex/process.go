@@ -288,12 +288,15 @@ func classifyAccountReadResponse(raw json.RawMessage, callErr error) error {
 	if callErr != nil {
 		return callErr
 	}
-	fields, err := decodeObject(raw, schema([]string{"requiresOpenaiAuth"}, "account", "requiresOpenaiAuth"))
+	fields, err := decodeObject(raw, schema([]string{"requiresOpenaiAuth"}, "account", "requiresOpenaiAuth", "workspaceRouting"))
 	if err != nil {
 		return errAccountReadResponseInvalid
 	}
 	var requiresOpenAIAuth bool
 	if strictDecode(fields["requiresOpenaiAuth"], &requiresOpenAIAuth) != nil {
+		return errAccountReadResponseInvalid
+	}
+	if routing, present := fields["workspaceRouting"]; present && !validAccountReadWorkspaceRouting(routing) {
 		return errAccountReadResponseInvalid
 	}
 	account, present := fields["account"]
@@ -307,6 +310,39 @@ func classifyAccountReadResponse(raw json.RawMessage, callErr error) error {
 		return errAccountReadResponseInvalid
 	}
 	return nil
+}
+
+// Проверяется experimental response field протокола rust-v0.160.0. Значения
+// не сохраняются и не назначают account authority, origin или network policy.
+func validAccountReadWorkspaceRouting(raw json.RawMessage) bool {
+	if len(raw) > 16<<10 {
+		return false
+	}
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return true
+	}
+	fields, err := decodeObject(raw, schema(
+		[]string{"chatgptAccountId", "backendOrigin", "accountRoutingOverride"},
+		"chatgptAccountId", "backendOrigin", "accountRoutingOverride"))
+	if err != nil {
+		return false
+	}
+	if _, err := decodeBoundedString(fields["chatgptAccountId"], 512); err != nil {
+		return false
+	}
+	if _, err := decodeBoundedString(fields["backendOrigin"], 4096); err != nil {
+		return false
+	}
+	override, err := decodeBoundedString(fields["accountRoutingOverride"], 64)
+	if err != nil {
+		return false
+	}
+	switch override {
+	case "NO_CONSTRAINT", "us", "us_cr":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateAccountReadAccount(raw json.RawMessage) error {

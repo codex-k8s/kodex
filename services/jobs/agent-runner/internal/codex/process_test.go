@@ -367,6 +367,8 @@ func TestClassifyAccountReadResponse(t *testing.T) {
 		{name: "API key account", raw: json.RawMessage(`{"account":{"type":"apiKey"},"requiresOpenaiAuth":true}`)},
 		{name: "ChatGPT account", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"pro"},"requiresOpenaiAuth":true}`)},
 		{name: "ChatGPT Pro Max account", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"promax"},"requiresOpenaiAuth":true}`)},
+		{name: "ChatGPT workspace routing", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"promax"},"requiresOpenaiAuth":true,"workspaceRouting":{"chatgptAccountId":"synthetic-private-account","backendOrigin":"https://chatgpt.com/backend-api","accountRoutingOverride":"NO_CONSTRAINT"}}`)},
+		{name: "null workspace routing", raw: json.RawMessage(`{"account":{"type":"apiKey"},"requiresOpenaiAuth":true,"workspaceRouting":null}`)},
 		{name: "unknown ChatGPT plan remains invalid", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"future-plan"},"requiresOpenaiAuth":true}`), wantErr: true},
 		{name: "external Bedrock account", raw: json.RawMessage(`{"account":{"type":"amazonBedrock","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false}`)},
 		{name: "provider without OpenAI account", raw: json.RawMessage(`{"requiresOpenaiAuth":false}`)},
@@ -387,6 +389,69 @@ func TestClassifyAccountReadResponse(t *testing.T) {
 				t.Fatalf("errors.Is(error, ErrProviderAuthentication) = %v, want %v; error = %v", got, test.wantAuth, err)
 			}
 		})
+	}
+}
+
+func TestAccountReadWorkspaceRoutingClosedSchema(t *testing.T) {
+	t.Parallel()
+	const account = `{"account":{"type":"chatgpt","email":null,"planType":"pro"},"requiresOpenaiAuth":true,"workspaceRouting":`
+	const valid = `{"chatgptAccountId":"synthetic-private-account","backendOrigin":"https://chatgpt.com/backend-api","accountRoutingOverride":"NO_CONSTRAINT"}`
+	tests := []struct {
+		name, routing string
+		valid         bool
+	}{
+		{"null", `null`, true},
+		{"no_constraint", valid, true},
+		{"us", strings.Replace(valid, "NO_CONSTRAINT", "us", 1), true},
+		{"us_cr", strings.Replace(valid, "NO_CONSTRAINT", "us_cr", 1), true},
+		{"unknown_override", strings.Replace(valid, "NO_CONSTRAINT", "private-unknown", 1), false},
+		{"wrong_override_case", strings.Replace(valid, "NO_CONSTRAINT", "no_constraint", 1), false},
+		{"override_null", strings.Replace(valid, `"NO_CONSTRAINT"`, `null`, 1), false},
+		{"override_object", strings.Replace(valid, `"NO_CONSTRAINT"`, `{}`, 1), false},
+		{"override_number", strings.Replace(valid, `"NO_CONSTRAINT"`, `123`, 1), false},
+		{"empty_object", `{}`, false},
+		{"wrong_object_type", `[]`, false},
+		{"string", `"synthetic-private-account"`, false},
+		{"boolean", `false`, false},
+		{"number", `123`, false},
+		{"missing_account_id", `{"backendOrigin":"https://chatgpt.com/backend-api","accountRoutingOverride":"us"}`, false},
+		{"missing_origin", `{"chatgptAccountId":"synthetic-private-account","accountRoutingOverride":"us"}`, false},
+		{"missing_override", `{"chatgptAccountId":"synthetic-private-account","backendOrigin":"https://chatgpt.com/backend-api"}`, false},
+		{"null_account_id", strings.Replace(valid, `"synthetic-private-account"`, `null`, 1), false},
+		{"array_account_id", strings.Replace(valid, `"synthetic-private-account"`, `[]`, 1), false},
+		{"null_origin", strings.Replace(valid, `"https://chatgpt.com/backend-api"`, `null`, 1), false},
+		{"boolean_origin", strings.Replace(valid, `"https://chatgpt.com/backend-api"`, `true`, 1), false},
+		{"empty_account_id", strings.Replace(valid, `"synthetic-private-account"`, `""`, 1), false},
+		{"empty_origin", strings.Replace(valid, `"https://chatgpt.com/backend-api"`, `""`, 1), false},
+		{"account_id_limit", strings.Replace(valid, "synthetic-private-account", strings.Repeat("p", 512), 1), true},
+		{"account_id_over_limit", strings.Replace(valid, "synthetic-private-account", strings.Repeat("p", 513), 1), false},
+		{"origin_limit", strings.Replace(valid, "https://chatgpt.com/backend-api", strings.Repeat("p", 4096), 1), true},
+		{"origin_over_limit", strings.Replace(valid, "https://chatgpt.com/backend-api", strings.Repeat("p", 4097), 1), false},
+		{"unknown_field", strings.TrimSuffix(valid, "}") + `,"synthetic-private-field":"private-email@example.invalid"}`, false},
+		{"duplicate_account_id", strings.TrimSuffix(valid, "}") + `,"chatgptAccountId":"synthetic-private-account"}`, false},
+		{"duplicate_override", strings.TrimSuffix(valid, "}") + `,"accountRoutingOverride":"us"}`, false},
+		{"raw_over_limit", strings.Replace(valid, "{", "{"+strings.Repeat(" ", 16<<10), 1), false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			err := classifyAccountReadResponse(json.RawMessage(account+test.routing+`}`), nil)
+			if (err == nil) != test.valid {
+				t.Fatalf("closed account/read validation outcome is incorrect: valid=%t", test.valid)
+			}
+			if err != nil && !errors.Is(err, errAccountReadResponseInvalid) {
+				t.Fatal("invalid routing escaped the closed account/read schema error")
+			}
+			if err != nil && (strings.Contains(err.Error(), "synthetic-private") || strings.Contains(err.Error(), "@")) {
+				t.Fatal("account/read schema error leaked private fixture values")
+			}
+		})
+	}
+	if err := classifyAccountReadResponse(json.RawMessage(`{"account":null,"requiresOpenaiAuth":true,"workspaceRouting":null}`), nil); !errors.Is(err, ErrProviderAuthentication) {
+		t.Fatal("null workspace routing must not bypass required authentication")
+	}
+	if err := classifyAccountReadResponse(json.RawMessage(account+valid+`,"workspaceRouting":null}`), nil); !errors.Is(err, errAccountReadResponseInvalid) {
+		t.Fatal("duplicate top-level workspace routing must fail closed")
 	}
 }
 
