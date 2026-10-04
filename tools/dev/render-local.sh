@@ -550,6 +550,16 @@ ROLE_ENVIRONMENT_CATALOG_DIGEST="$role_environment_catalog_digest" yq -i '
   )
 ' "$render"
 
+# Локальный координатор быстрее замечает завершение Job, не меняя число
+# одновременно допущенных workspace и production retry/readiness бюджеты.
+yq -i '
+  with(select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "image-admission-controller");
+    (.spec.template.spec.containers[] | select(.name == "image-admission-controller") |
+      .env[] | select(.name == "IMAGE_ADMISSION_CONTROLLER_RECONCILE_INTERVAL").value) = "1s"
+  )
+' "$render"
+
 admission_policy_payload=$(yq -o=json -I=0 '
   select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
   .data | del(.orchestrationRevision, .policySHA256)

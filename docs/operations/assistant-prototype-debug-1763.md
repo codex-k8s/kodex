@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.329
+version: 1.0.330
 updated: 2026-10-04
 ---
 
@@ -8174,3 +8174,40 @@ scopeKind ORGANIZATION, projectRef пуст, imageArtifactRef совпадает
 Владелец дополнительно разрешил субагентов в текущей цели и запросил
 ускорение независимых сборок и подбор ресурсов по возможностям сервера.
 Эта дополнительная оптимизация выполняется в том же PR до слияния.
+
+Read-only source/Pod проверка последних исправлений: CP admission SHA-256
+`7966cf39011d802ea2bfdf3978965bed86e248cc0de791a7bfbad86c6c9f823a`,
+frontend i18n `3ac4ba4138daa633ba27cc18befcd1fa879451d6fe97316e65145234838fc0e8`;
+оба совпали host/Pod. Gateway usertext
+`f0b122bda443a4d6095c7a71e7aa8849fa84e5a032d6a164cd511949fea0f765`,
+controller catalog
+`ea4fa09ea780d8ea48c49432268a2eeceec62f50424109c12c91f1a8be3078b6`
+тоже совпали. Source mount указывает на `/home/s/projects/kodex`, все приложения
+Ready; проверочный warm Pod 3/3 использует exact `a323…` runner. Пустой
+последний минутный срез backend logs не выдаётся за доказательство сценария.
+
+Read-only capacity: один физический EPYC 16 cores/32 threads, 125 GiB RAM,
+available около 101 GiB, CPU idle около 79%. Обе k3d-ноды делят этот сервер;
+их allocatable нельзя складывать. Другой проект сохраняет собственный запас.
+BuildKit уже имеет request 8 CPU/8 GiB и limit 24 CPU/64 GiB, увеличения лимита
+без evidence насыщения не требуется. Рекомендован начальный параллелизм сборок 2,
+4 остаётся явно выбираемым режимом. Реплики stateful координаторов не умножаются.
+
+- [x] Независимые OCI build/export и tools load поддерживают `--build-jobs 1..4`
+      в `tools/dev/build-local-image-supply-chain.sh`; переносимый default 1,
+      для данного сервера рекомендован 2. Exact state writer lock, приватные
+      каталоги/логи, bounded cancel/join process groups и общий failure barrier
+      исключают публикацию указателей при ошибке сборки. Source fingerprint
+      сверяется до import; все digest readback предшествуют новым pointers.
+      Дополнительно исправлено подавление ошибки import в command substitution.
+- [x] Адресные герметичные проверки оптимизации — PASS: 9 tests / 12,110 с,
+      bash syntax, shellcheck и diff check. Реальные повторные OCI builds не
+      выполнялись; ускорение холодной сборки не измерено и не заявляется PASS.
+- [x] Resourcing preflight выполнен; увеличение BuildKit limits или replicas
+      не требуется. Локальный render уменьшает admission reconcile с 5s до 1s
+      в уже разрешённом валидатором диапазоне; workspace cardinality, authority,
+      retry и production-конфигурация не меняются.
+
+Первый render оптимизации закрылся SOURCE_DRIFT во время параллельного
+редактирования: apply не выполнялся. После завершения edits используется
+новый чистый checkpoint; этот отказ не выдается за успешный render.
