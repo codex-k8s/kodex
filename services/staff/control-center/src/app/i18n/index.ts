@@ -3953,7 +3953,16 @@ const ru = {
         "Черновик содержит проверенный образ. Проверьте параметры и опубликуйте окружение.",
       invalid:
         "Проверка не прошла. Откройте редактор и исправьте параметры окружения.",
-      published: "Окружение опубликовано. Привяжите его к нужному сотруднику.",
+      published: "Окружение опубликовано.",
+      bindingChecking: "Проверяем назначенное окружение Kodex.",
+      bindingUnavailable:
+        "Не удалось подтвердить назначенное окружение Kodex. Обновите состояние.",
+      systemBound:
+        "Окружение уже назначено Kodex. Применяемая версия: {revision}.",
+      systemBindingChanged:
+        "Kodex сейчас назначено другое окружение. Проверьте его текущие настройки.",
+      turnBoundary:
+        "Текущий ход сохраняет свою версию. Следующие ходы используют назначенное окружение по подтверждённым настройкам.",
       discarded: "Черновик окружения отброшен.",
       continue: "Продолжить настройку",
       bind: "Назначить сотруднику",
@@ -8396,8 +8405,16 @@ const en = {
         "The draft contains an admitted image. Review its settings and publish the environment.",
       invalid:
         "Validation failed. Open the editor and correct the environment configuration.",
-      published:
-        "The environment is published. Bind it to the intended employee.",
+      published: "The environment is published.",
+      bindingChecking: "Checking the environment assigned to Kodex.",
+      bindingUnavailable:
+        "Could not confirm the environment assigned to Kodex. Refresh its state.",
+      systemBound:
+        "This environment is already assigned to Kodex. Effective revision: {revision}.",
+      systemBindingChanged:
+        "Kodex is currently assigned a different environment. Check its current settings.",
+      turnBoundary:
+        "The current turn keeps its pinned revision. Subsequent turns use the assigned environment according to the confirmed settings.",
       discarded: "The environment draft was discarded.",
       continue: "Continue setup",
       bind: "Assign to employee",

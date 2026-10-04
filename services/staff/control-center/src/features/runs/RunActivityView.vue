@@ -11,6 +11,7 @@ const props = withDefaults(
     events: readonly RunEvent[];
     embedded?: boolean;
     closedExecutionKeys?: readonly string[];
+    activeItemId?: string | null;
   }>(),
   { embedded: false, closedExecutionKeys: () => [] },
 );
@@ -25,5 +26,6 @@ const items = computed(() =>
     :items="items"
     :embedded="embedded"
     :closed-execution-keys="closedExecutionKeys"
+    :active-item-id="activeItemId"
   />
 </template>

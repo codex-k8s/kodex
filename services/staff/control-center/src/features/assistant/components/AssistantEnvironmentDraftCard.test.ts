@@ -3,11 +3,19 @@ import { nextTick, type ComputedRef, type Ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AssistantPlan,
+  AgentRuntimeConfigurationView,
   RuntimeEnvironmentDraft,
 } from "@/shared/api/generated/openapi/types.gen";
 import { captureSetupState } from "@/test-utils/setup-harness";
 
-const api = vi.hoisted(() => ({ read: vi.fn(), helper: vi.fn() }));
+const api = vi.hoisted(() => ({
+  read: vi.fn(),
+  helper: vi.fn(),
+  runtime: vi.fn(),
+}));
+vi.mock("@/features/agents/detail/runtime-api", () => ({
+  loadAgentRuntime: api.runtime,
+}));
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 vi.mock("@/features/platform/store", () => ({
   usePlatformStore: () => ({
@@ -120,7 +128,39 @@ async function readCard(system: boolean, name: string) {
   return state as {
     draftTitle: ComputedRef<string>;
     draftName: ComputedRef<string>;
+    systemBindingMessage: ComputedRef<string | undefined>;
+    systemBinding: Ref<AgentRuntimeConfigurationView | undefined>;
+    systemBindingUnavailable: Ref<boolean>;
+    readSystemBinding(
+      assistantRef: string,
+      scope: { kind: "ORGANIZATION"; organizationRef: string },
+      signal: AbortSignal,
+    ): Promise<void>;
   };
+}
+
+const scope = {
+  kind: "ORGANIZATION",
+  organizationRef: "org_synthetic",
+} as const;
+function runtime(
+  environmentRef = "env_synthetic",
+): AgentRuntimeConfigurationView {
+  return {
+    configuration: { agentRef: "agt_system" },
+    environmentBinding: {
+      agentRef: "agt_system",
+      environmentRef,
+      versionRef: "renvv_effective",
+    },
+    environment: {
+      ref: environmentRef,
+      scopeKind: "ORGANIZATION",
+      organizationRef: scope.organizationRef,
+      projectRef: "",
+      currentVersion: { ref: "renvv_effective", revision: 7 },
+    },
+  } as AgentRuntimeConfigurationView;
 }
 
 describe("Карточка применённого окружения", () => {
@@ -173,5 +213,150 @@ describe("Карточка применённого окружения", () => {
       i18n.global.t("serverMessages.unsupported"),
     );
     expect(api.read).toHaveBeenCalledTimes(requests);
+  });
+
+  it.each(["ru", "en"] as const)(
+    "SYSTEM published показывает фактическое назначение и effective version в %s, не выдумывает binding mode",
+    async (locale) => {
+      const state = await readCard(true, "Окружение");
+      i18n.global.locale.value = locale;
+      api.runtime.mockResolvedValue(runtime());
+      state.systemBindingUnavailable.value = false;
+      await state.readSystemBinding(
+        "agt_system",
+        scope,
+        new AbortController().signal,
+      );
+      expect(state.systemBindingMessage.value).toBe(
+        i18n.global.t("assistant.environmentDraft.systemBound", {
+          revision: 7,
+        }),
+      );
+      expect(i18n.global.t("assistant.environmentDraft.published")).not.toMatch(
+        /Привяжите|Bind it|follow.current/i,
+      );
+      expect(state.systemBindingMessage.value).not.toContain("renvv_effective");
+      expect(state.systemBindingMessage.value).not.toMatch(/follow.current/i);
+      expect(api.runtime).toHaveBeenLastCalledWith(
+        "agt_system",
+        expect.any(AbortSignal),
+      );
+    },
+  );
+
+  it("другое фактически назначенное окружение не объявляется привязанным к опубликованному draft", async () => {
+    const state = await readCard(true, "Окружение");
+    api.runtime.mockResolvedValue(runtime("env_other"));
+    state.systemBindingUnavailable.value = false;
+    await state.readSystemBinding(
+      "agt_system",
+      scope,
+      new AbortController().signal,
+    );
+    expect(state.systemBindingMessage.value).toBe(
+      i18n.global.t("assistant.environmentDraft.systemBindingChanged"),
+    );
+  });
+
+  it("ошибка protected read и чужой/mismatched tuple дают только нейтральное неподтверждённое состояние", async () => {
+    const current = runtime();
+    for (const invalid of [
+      {
+        ...current,
+        configuration: { ...current.configuration, agentRef: "agt_foreign" },
+      },
+      {
+        ...current,
+        environmentBinding: {
+          ...current.environmentBinding,
+          agentRef: "agt_foreign",
+        },
+      },
+      {
+        ...current,
+        environmentBinding: {
+          ...current.environmentBinding,
+          environmentRef: "env_foreign",
+        },
+      },
+      {
+        ...current,
+        environmentBinding: {
+          ...current.environmentBinding,
+          versionRef: "renvv_other",
+        },
+      },
+      {
+        ...current,
+        environment: { ...current.environment, organizationRef: "org_foreign" },
+      },
+      {
+        ...current,
+        environment: {
+          ...current.environment,
+          scopeKind: "PROJECT",
+          projectRef: "prj_synthetic",
+        },
+      },
+      {
+        ...current,
+        environment: {
+          ...current.environment,
+          currentVersion: {
+            ...current.environment.currentVersion,
+            revision: 0,
+          },
+        },
+      },
+      undefined,
+    ]) {
+      const state = await readCard(true, "Окружение");
+      if (invalid) api.runtime.mockResolvedValue(invalid);
+      else api.runtime.mockRejectedValue(new Error("PRIVATE_SENTINEL"));
+      await state.readSystemBinding(
+        "agt_system",
+        scope,
+        new AbortController().signal,
+      );
+      expect(state.systemBinding.value).toBeUndefined();
+      expect(state.systemBindingMessage.value).toBe(
+        i18n.global.t("assistant.environmentDraft.bindingUnavailable"),
+      );
+      expect(state.systemBindingMessage.value).not.toContain(
+        "PRIVATE_SENTINEL",
+      );
+      expect(state.systemBindingMessage.value).not.toContain("Привяжите");
+    }
+  });
+
+  it("поздний protected read после закрытия lifetime не обновляет presentation", async () => {
+    const state = await readCard(true, "Окружение");
+    state.systemBindingUnavailable.value = false;
+    let resolve: ((value: AgentRuntimeConfigurationView) => void) | undefined;
+    api.runtime.mockReturnValue(
+      new Promise<AgentRuntimeConfigurationView>((done) => {
+        resolve = done;
+      }),
+    );
+    const controller = new AbortController();
+    const read = state.readSystemBinding(
+      "agt_system",
+      scope,
+      controller.signal,
+    );
+    controller.abort();
+    resolve?.(runtime());
+    await read;
+    expect(state.systemBinding.value).toBeUndefined();
+    expect(state.systemBindingUnavailable.value).toBe(false);
+    const calls = api.runtime.mock.calls.length;
+    await state.readSystemBinding("agt_system", scope, controller.signal);
+    expect(api.runtime).toHaveBeenCalledTimes(calls);
+  });
+
+  it("PROJECT published не заявляет назначение SYSTEM и сохраняет отдельную форму назначения", async () => {
+    const state = await readCard(false, "Окружение проекта");
+    expect(state.systemBindingMessage.value).toBeUndefined();
+    expect(api.runtime).not.toHaveBeenCalled();
   });
 });

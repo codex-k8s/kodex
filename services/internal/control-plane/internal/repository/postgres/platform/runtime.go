@@ -130,7 +130,7 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 func (repository *Repository) proposeAssistantMetadata(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ProposeAssistantMetadataInput)
 	title := strings.TrimSpace(payload.Title)
-	if !ok || title == "" || len([]rune(title)) > 160 {
+	if !ok || title == "" || len([]rune(title)) > 160 || genericAssistantConversationTitle(title) || assistantPublicTitleText(title) == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	lease, err := repository.lease(ctx, tx, machineScope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
@@ -1867,11 +1867,10 @@ func assistantConversationTitle(payload command.CompleteExecutionInput) string {
 	if !payload.Success {
 		return ""
 	}
-	text := strings.TrimSpace(payload.ResultSummary)
-	if text == "" || strings.HasPrefix(text, "i18n:") {
+	text := assistantPublicTitleText(payload.ResultSummary)
+	if genericAssistantConversationTitle(text) || len([]rune(text)) < 24 {
 		return ""
 	}
-	text = strings.TrimSpace(strings.TrimLeft(strings.Join(strings.Fields(text), " "), "#*->"))
 	const maximumRunes = 96
 	runes := []rune(text)
 	limit := min(len(runes), maximumRunes)

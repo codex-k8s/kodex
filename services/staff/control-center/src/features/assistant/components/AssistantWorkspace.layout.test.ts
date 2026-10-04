@@ -45,6 +45,22 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("помещает применённый план в одну компактную карточку без внешнего повторного статуса", () => {
+    expect(template).toContain("'assistant-message--applied-plan'");
+    expect(template).toContain("turn.plan?.state !== 'APPLIED'");
+    const applied = styles
+      .slice(styles.indexOf(".assistant-message--applied-plan {"))
+      .split("}")[0];
+    expect(applied).toContain("padding: 0");
+    expect(applied).toContain("border: 0");
+    expect(applied).toContain("background: transparent");
+    const record = template.slice(
+      template.indexOf("<AssistantPlanRecord"),
+      template.indexOf("</AssistantPlanRecord>"),
+    );
+    expect(record).toContain("turn.plan.state === 'APPLIED'");
+    expect(record).toContain(':content="transcriptTurnContent(turn)"');
+  });
   it("не дублирует exact активный transcript нижним working fallback", () => {
     expect(template).toContain(
       'v-if="showWorkingFallback && !store.loading && !store.problem"',
@@ -69,7 +85,12 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toContain(
       "for (const release of transcriptLeases.values()) release()",
     );
-    expect(template).toContain(':events="conversationRunEvents"');
+    expect(template).toContain('v-for="entry in chatTimeline"');
+    expect(template).toContain(':events="entry.events"');
+    expect(template).toContain(
+      ':active-item-id="entry.isolated ? null : chatActiveItemId"',
+    );
+    expect(source).toContain("buildAssistantChatTimeline(");
     expect(template).toContain(
       ':closed-execution-keys="closedTranscriptExecutionKeys"',
     );
@@ -82,7 +103,7 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toContain(
       "assistantFailureMessageKey(turn.content, turn.state)",
     );
-    expect(template).toContain('v-if="!turnHasPublishedMessage(turn)"');
+    expect(template).toContain("turn.plan?.state !== 'APPLIED'");
   });
 
   it("сохраняет позицию чтения истории и предлагает кнопку новых сообщений", () => {
@@ -503,8 +524,8 @@ describe("AssistantWorkspace layout", () => {
       'PROJECT: "assistant.planEditor.targetKinds.PROJECT"',
     );
     expect(template).not.toContain("operation.parameters");
-    expect(template).toContain(
-      "turn.plan.auditSummary.trim() !== turn.content.trim()",
+    expect(template).toMatch(
+      /turn\.plan\.auditSummary\.trim\(\) !==\s*turn\.content\.trim\(\)/,
     );
   });
 

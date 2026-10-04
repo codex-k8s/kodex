@@ -7079,9 +7079,9 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 			break
 		}
 	}
-	if completedConversation == nil || completedConversation.Title != "The configuration plan is ready for review." ||
-		completedConversation.TitleSource != "AGENT_PROPOSED" || completedConversation.TitleRevision != 3 {
-		t.Fatalf("assistant completion did not propose bounded title: %#v", completedConversation)
+	if completedConversation == nil || completedConversation.Title != "Create a sales project" ||
+		completedConversation.TitleSource != "SERVER_DEFAULT" || completedConversation.TitleRevision != 2 {
+		t.Fatalf("assistant completion overwrote the meaningful user title: %#v", completedConversation)
 	}
 	purgeImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "PURGE")
 	if err != nil || !purgeImpact.Permitted || purgeImpact.AttachmentCount < 1 ||

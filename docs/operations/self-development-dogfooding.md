@@ -1145,3 +1145,38 @@ alerts отсутствуют, горизонтального overflow нет. S
 До полного QA три дочерних исполнителя выполняют независимые UX-доработки:
 полезные названия чатов, компактная общая хронология и достоверная подсказка
 уже привязанного системного окружения. Root владеет Chrome и canonical rollout.
+
+04.10.2026 15:57 UTC, tree поверх `ebd30bff94244056894c941024d4d526120c92c0`:
+PASS — просмотрен screenshot `/tmp/kodex-integrations-list-1538.png`: одна
+CONNECTED строка, ложного empty state и overflow нет.
+PASS — canonical runner build/import exact source ebd30bff, manifest
+2664d2a0b4c53fa543cb0e8636a57e29ba81b3ca4a4c721629d5c9edbe709148;
+binary45b8801450be28439ce98d128a10f38d8f3a92d0e9bfcf4cb0b4f4a26113a518,
+provenanceaf1013eae130b8741ab6e1c15238b1bdaf7b374c787f2ce3bac58a1ce98cd569.
+Full supply-chain build jobs4, digest import/readback, fresh clean render,
+migrate015, explicit archive core, supply-chain и CP core завершились exit0.
+Actual archive Secret в runtime namespace immutable, exact keys access-key /
+secret-key; значения не выводились. Worker перешёл Running; подтверждение
+archive result/restore ещё OPEN, исчезновение Pod не является доказательством.
+Actual SYSTEM environment тот же renv, новая ревизия16: штатный bootstrap
+reconcile обновил managed base до2664; resources2000CPU/4096memory и LANG/LC_ALL
+сохранены, readytrue/blockers[]. Подозрение о recovery deadlock для этого
+окружения НЕ подтвердилось; generic stale custom artifact остаётся закрытым.
+Source/Pod workload manager и assistant runtime configuration hashes совпали.
+FAIL → PASS — browser runtime configuration GET502 INVALID_UPSTREAM_RESPONSE:
+producer overlay содержит5fields, gateway всё ещё допускал4. Strict boundary
+обновлён exact web_search profile и diagnostic key, не permissive decoder;
+fresh producer fixture воспроизвёл RED до исправления. Root unit .046 s,
+actual GET200 после hot reload, schema fields5 и own agent/binding совпадают.
+PASS — объединены detached naming, общая chat timeline и SYSTEM binding UX.
+Naming сохраняет содержательное USER название вместо generic «готов»;
+user-edited/generated названия не переписываются, historical backfill нет.
+First oversized PG filter FAIL в постороннем provider lifecycle, точный
+повтор naming subcase PASS3.979 s; unit/race/vet PASS у исполнителя.
+Chat receipt chronology привязана к exact owner/run/session/turn/attempt;
+один active indicator, unknown activity isolated, APPLIED наружные повторы
+убраны. SYSTEM published card показывает фактическую effective version;
+follow-current/pinned mode не выдумывается из недостающего wire field.
+Root78 frontend unit PASS4.04 s, полный typecheck PASS, naming unit .058 s.
+Actual visual новой timeline/binding, native resume, Context7 grants/calls и
+весь Workflow ещё OPEN; checkbox2–15 не закрыты по source/unit/Pod readiness.

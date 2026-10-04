@@ -1171,7 +1171,7 @@ func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.C
 		queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt,
 		conversationID, resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
 		resolvedContext.EntityName, resolvedContext.EntityVersion, resolvedContext.AllowedOperations,
-		payload.Content,
+		assistantUserMessageTitle(payload.Content),
 	).Scan(
 		&conversation.Title,
 		&conversation.TitleSource,
