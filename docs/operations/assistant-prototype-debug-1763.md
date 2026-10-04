@@ -8088,3 +8088,16 @@ fix-available High matches — gRPC `v1.82.1` (два GHSA) и libpcre2 `10.42-1
 из pinned Debian base до доступной исправленной версии. Проверены Context7
 `/grpc/grpc-go` README/versioning и официальный Go module checksum/origin.
 Это отдельный checkpoint исправления; новая сборка/digest/admission ещё впереди.
+
+Checkpoint `dfb6e42030786ecb49499425b95182b2ada2a234` опубликован. Новый
+runner `sha256:da8a365f19dd11c49ebabfcfe9ea6313aa4e60abc256790d51f78de1a1b681b9`
+с проверенным происхождением бинаря активирован repo-owned supply-chain/core;
+все три контейнера warm Pod используют этот digest и Ready. Native UI создал
+поколение 2 QA-образа; сборка COMPLETED. Scan устранил четыре blocking matches,
+но один gRPC GHSA остался: `v1.83.1` требует patch `v1.83.2`. Это не PASS
+допуска. Уточнение подтверждено [официальным advisory grpc-go](https://github.com/grpc/grpc-go/security/advisories/GHSA-2v4p-qf9q-27wj)
+и Go module checksum/origin. Применяется exact `v1.83.2`; policy не меняется.
+Во время переключения CP сохранение по старому каталогу закрыто отклонилось;
+после hard reload штатное создание поколения 2 прошло. Ошибочный вызов
+stage `core-runtime` был отклонён до изменений; повтор с поддерживаемым
+stage `core` завершился PASS. Эти первые отказы не скрываются.
