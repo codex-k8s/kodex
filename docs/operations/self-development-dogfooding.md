@@ -843,3 +843,25 @@ PASS fallback. Требуется fresh clean render и exact staff-only deploym
 OPEN — полный verified tool inventory образа отсутствует в producer/typed
 contract, recipe.Tools не подменяет inventory; безопасный сквозной план
 подготовлен отдельно. Checkbox2–15 не отмечаются.
+
+04.10.2026 13:00–13:13 UTC, exact `14134d385e600d45040b93da2472935790e78939`:
+PASS — clean fresh render и штатный apply только staff-control-center;
+frontend-bootstrap-sha256 live/render точно
+`0d190ad4d879852b5e6ab9606d4f88a8e1f8121db2d90ac0235723bb547ec587`.
+GET dev entry200 application/javascript, actual HTML использует entry/reload,
+не native main. Следующее изменение config подхвачено без ручного рестарта.
+PASS — controlled missing-module fault теперь показывает в actual DOM
+«Не удалось загрузить интерфейс» и «Повторить». Fault возвращён ровно одной
+строкой; git diff пустой. После reload интерфейс восстановлен, session200,
+draft0, Console error/warn0. Screenshot сохранения не завершился и файл
+не появился; визуальный screenshot PASS не заявляется.
+PASS — source/Pod callback/server и CP assistant_tools hashes совпадают;
+последующая actual SYSTEM попытка22 `run_I4aB8WR8rqpB_Ji2tUvwwrp9` началась
+на новом коде. Materialized prompt proof CAPTURED: exact
+run/node/session/turn/attempt/revision, instructions/task/model/medium,
+template и семь slots совпадают; artifacts0/managedMCPProfiles0.
+Попытка22 пока RUNNING, outcome/plan ещё не подтверждены.
+Временные selected credential projections удалены сразу после неуспешного
+file-input transfer; никаких secret values в журнале/Git/выводе не было.
+SSO owner login и отдельный штатный вход приложения восстановлены;
+зависший побочный login client остановлен без закрытия браузера/вкладок.
