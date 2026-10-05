@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSSRApp, h, type Ref } from "vue";
+import { createSSRApp, h, type ComputedRef, type Ref } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
@@ -60,6 +60,7 @@ function deferred<T>() {
 
 interface State {
   loading: Ref<boolean>;
+  pickerPlaceholder: ComputedRef<string>;
   artifact: Ref<RoleImageArtifact | undefined>;
   problem: Ref<AppProblem | undefined>;
   selected: Ref<RuntimeImageOption | undefined>;
@@ -76,7 +77,18 @@ async function setup(
     Component,
     (app) =>
       app.use(
-        createI18n({ legacy: false, locale: "ru", messages: { ru: {} } }),
+        createI18n({
+          legacy: false,
+          locale: "ru",
+          messages: {
+            ru: {
+              runtime: {
+                choosePromotedImage: "Выберите собранный и promoted образ",
+                loadingSelectedImage: "Загрузка выбранного образа…",
+              },
+            },
+          },
+        }),
       ),
     {
       resourceScope: { kind: "ORGANIZATION", organizationRef: "org_fixture" },
@@ -103,6 +115,52 @@ function catalog() {
 }
 
 describe("Состояния выбора собственного подтверждённого образа", () => {
+  it("ожидание текущего выбранного образа показывает загрузку, затем точное название", async () => {
+    const reader = catalog();
+    const pending =
+      deferred<Awaited<ReturnType<RuntimeImageCatalog["loadPage"]>>>();
+    reader.loadPage.mockReturnValue(pending.promise);
+    const state = await setup(reader, option.ref);
+    expect(state.loading.value).toBe(true);
+    expect(state.selected.value).toBeUndefined();
+    expect(state.pickerPlaceholder.value).toBe("Загрузка выбранного образа…");
+    pending.resolve({ items: [option] });
+    await vi.waitFor(() => expect(state.loading.value).toBe(false));
+    expect(state.selected.value?.title).toBe(option.title);
+    expect(state.pickerPlaceholder.value).toBe(
+      "Выберите собранный и promoted образ",
+    );
+  });
+  it("отказ чтения текущего образа не сохраняет ложное состояние загрузки", async () => {
+    const reader = catalog();
+    const pending =
+      deferred<Awaited<ReturnType<RuntimeImageCatalog["loadPage"]>>>();
+    reader.loadPage.mockReturnValue(pending.promise);
+    const state = await setup(reader, option.ref);
+    expect(state.pickerPlaceholder.value).toBe("Загрузка выбранного образа…");
+    pending.reject(new Error("Synthetic catalog failure"));
+    await vi.waitFor(() => expect(state.loading.value).toBe(false));
+    expect(state.problem.value).toBeDefined();
+    expect(state.artifact.value).toBeUndefined();
+    expect(state.selected.value).toBeUndefined();
+    expect(state.pickerPlaceholder.value).toBe(
+      "Выберите собранный и promoted образ",
+    );
+  });
+  it("первый выбор без закреплённого imageArtifactRef не выдаётся за загрузку выбранного образа", async () => {
+    const reader = catalog();
+    const pending =
+      deferred<Awaited<ReturnType<RuntimeImageCatalog["loadArtifact"]>>>();
+    reader.loadArtifact.mockReturnValue(pending.promise);
+    const state = await setup(reader);
+    const choosing = state.select(option);
+    expect(state.loading.value).toBe(true);
+    expect(state.pickerPlaceholder.value).toBe(
+      "Выберите собранный и promoted образ",
+    );
+    pending.resolve({ artifact: artifact(), recipeName: option.title });
+    await choosing;
+  });
   it("пустой выбор не начинает загрузку metadata или инструментов", async () => {
     const reader = catalog();
     const state = await setup(reader);

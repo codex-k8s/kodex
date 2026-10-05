@@ -11,17 +11,20 @@ updated: 2026-10-05
 # Текущее состояние
 
 05.10.2026 владелец явно возобновил работу после переноса хранилища.
-Перенос проверен; цель снова выполняется. Текущий checkpoint source:
-`6efc5104cb53d23d5c3ca9d507bbbf1da495ebba`. CEL-политики и SSA ownership
-диагностического script исправлены; штатный supply-chain apply/readback
-полностью завершён 05.10.2026 в16:30:31 UTC. Все пять Deployment имеют
-desired/ready/updated/available=1; admission controller возобновлён.
+Перенос проверен; цель снова выполняется. Последний опубликованный checkpoint:
+`5e345f1345c4b52a75e41170a83a211d707a47fc`. Новый полный runner и четыре
+supply-chain image собраны; fresh render и supply-chain apply/readback
+полностью завершены 05.10.2026 в17:59:24 UTC. Control plane, gateway и
+контроллеры Ready; отдельный core apply secret-broker завершился FAIL:
+startup проверка отвергает скопированный CLI. Исправляется доставка native
+executable из полного image, без ослабления pin или startup barrier.
 Native SYSTEM применил новый typed plan через UI, recipe v9/generation7;
 его build завершён. Полный отчёт READY, первый admission REJECTED по двум
 HIGH npm findings. OWNER UI принял exact риск для локального QA/dogfooding;
 вторая attempt ACCEPTED, собственный artifact PROMOTED. Начат SYSTEM40
 для назначения образа окружению. Inventory37/38 VERIFIED; npm PROBE_FAILED
-исследуется. Environment publish и новый runtime/prompt proof ещё NOT RUN.
+исправлен в новом base image. SYSTEM40 environment revision22 опубликован;
+новая generation собственного образа и actual provider prompt proof ещё NOT RUN.
 Ниже перечисленные старые checkpoints относятся к истории, а не к текущему HEAD.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).

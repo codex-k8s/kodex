@@ -1548,6 +1548,7 @@ const ru = {
       "Окружение закрепляет точную опубликованную версию образа и разрешает только проверенные программы.",
     exactImage: "Точная ревизия и хеш образа",
     choosePromotedImage: "Выберите собранный и promoted образ",
+    loadingSelectedImage: "Загрузка выбранного образа…",
     searchPromotedImage: "Найти promoted образ",
     promotedAndVerified: "Опубликован и проверен",
     verifiedTools: "Проверенные инструменты",
@@ -4261,7 +4262,7 @@ const ru = {
       environmentPolicyInvalid:
         "Политика окружения повреждена или содержит недопустимые поля. Попросите подготовить новый план.",
       environmentPolicySummary:
-        "CPU {cpuRequest}/{cpuLimit} mCPU · память {memoryRequest}/{memoryLimit} MiB · томов: {volumes} · дополнительный сетевой доступ выключен. Политика не изменяется.",
+        "CPU {cpuRequest}/{cpuLimit} mCPU · память {memoryRequest}/{memoryLimit} MiB · томов: {volumes} · интернет: {webMode} · правил: {webRules}. Политика не изменяется.",
       environmentPolicyReview:
         "Проверьте политику ресурсов и доступа: изменённые, непроверенные настройки и доступ к интернету показаны полностью. Применение плана не заменяет отдельное подтверждение публикации.",
       environmentPolicyFreshAuthentication:
@@ -6172,6 +6173,7 @@ const en = {
       "The environment must pin an exact promoted image digest and allow only verified executables.",
     exactImage: "Exact image revision and digest",
     choosePromotedImage: "Choose a built and promoted image",
+    loadingSelectedImage: "Loading the selected image…",
     searchPromotedImage: "Search promoted images",
     promotedAndVerified: "Promoted and verified",
     verifiedTools: "Verified tools",
@@ -8750,7 +8752,7 @@ const en = {
       environmentPolicyInvalid:
         "The environment policy is damaged or contains unsupported fields. Request a new plan.",
       environmentPolicySummary:
-        "CPU {cpuRequest}/{cpuLimit} mCPU · memory {memoryRequest}/{memoryLimit} MiB · volumes: {volumes} · additional network access is disabled. The policy is unchanged.",
+        "CPU {cpuRequest}/{cpuLimit} mCPU · memory {memoryRequest}/{memoryLimit} MiB · volumes: {volumes} · internet: {webMode} · rules: {webRules}. The policy is unchanged.",
       environmentPolicyReview:
         "Review resource and access policy: changed or unverified settings and internet access remain fully visible. Applying the plan does not replace separate publication approval.",
       environmentPolicyFreshAuthentication:

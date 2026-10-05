@@ -3210,3 +3210,57 @@ host launcher; disposable child теперь сбрасывает их до пр
 supply-chain render/apply/readback и secret-broker closure. Затем новый native
 recipe generation с exact rebuilt base, admission/promotion, повторное назначение
 и новый ход с actual receipt. Старый immutable gen7 не объявляется новым binary.
+
+### 05.10.2026 17:41–18:12 UTC — параллельная сборка и адресная активация
+
+Source `5e345f1345c4b52a75e41170a83a211d707a47fc`: full runner build/import PASS
+на обеих нодах; manifest
+`sha256:85b5c1f85fcf5187734368886361a0a51444e263847c5078d51050566da84732`,
+protected binary SHA256
+`75c8f3ae7fb2557b1cd5c826ba61381994b51fa90f870702f9fe56de56160a59`.
+Настоящий non-root npm smoke PASS, npm12.2.0. Четыре supply-chain image
+собраны параллельно (`build-jobs4`), build/import PASS. Fresh render PASS;
+его source fingerprint
+`49e0799032916f4a0743ed3bae2597d2e4314643ceb31e927643c9a6cd59a385`.
+
+Первый supply-chain apply остановился на штатном guard завершённого
+promotion Job. Job удалён native TTL controller, без ручного удаления;
+повторный canonical apply/readback полностью PASS в17:59:24 UTC.
+Control plane, gateway и runtime controller Ready/source5e. Новый warm Pod
+получил relay85b5, сохранив старый собственный promoted image1c82 по env22;
+эта комбинация не объявляется новым provider binary.
+
+Отдельный core apply secret-broker FAIL по startup barrier. Init использует
+exact85b5 и exit0, но копирует JS entrypoint полного Codex package вместо
+самодостаточного native executable. В корневом filesystem broker отсутствует
+closure этого wrapper; сообщение `provider model catalog source is unverified`
+не доказывает проблему remote каталога или аккаунта. Исправляется доставка
+native CLI, строгое сравнение версии остаётся обязательным.
+
+Поверх5e подключены два presentation-only frontend патча: неизменённая
+валидная read-only политика с10 правилами свёрнута; при загрузке выбранного
+образа отображается честный loading status. MAIN focused44 unit и отдельные
+88 catalog/layout tests, ESLint, vue-tsc и Prettier PASS. Chrome screenshot
+просмотрен: собственное название образа, опубликованный draft и continuation
+link; policy details closed, все47 полей сохраняются внутри, горизонтального
+overflow нет, Console error/warn нет. Relevant protected GET200 и realtime
+connected. Эти проверки не закрывают весь checklist2–15/6.1.
+
+18:15 UTC: native CLI repair интегрирован в render;10 positive/negative
+копирования и13 fresh-render tests PASS с полным закреплённым PATH. Первый
+запуск fresh-render tests с неполным PATH завершился FAIL из-за отсутствия
+render tool; это результат окружения запуска, а не ослабленная проверка.
+Тесты проверяют x64/arm64, local native, отсутствие optional package,
+неисполняемый/повреждённый файл, wrapper и неверную версию; отказ сохраняет
+прежний destination. bash syntax/diff-check PASS. Живое восстановление broker
+после этого патча ещё NOT RUN. MAIN frontend tests:44+88=132 PASS.
+
+Отдельный native create conversation после обновления получил HTTP412;
+он не объявлен успешным. FE не передаёт cached assistantVersion/If-Match в
+этой команде; source диагностика продолжается без speculative retry/bypass.
+
+Следующий шаг: завершить native CLI repair и core readback, затем SYSTEM41
+typed обновление recipe на fresh base85b5, новый admission/promotion и
+публикация окружения с actual provider ACK proof. После SYSTEM smokes
+используется один общий PROJECT image для помощника и шести ролей; authority,
+Secrets, grants и workspaces каждого получателя остаются независимыми.

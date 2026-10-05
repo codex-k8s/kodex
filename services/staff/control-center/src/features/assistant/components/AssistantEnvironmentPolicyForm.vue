@@ -171,7 +171,7 @@ const compact = computed(() => {
     props.operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
     problems.value.length > 0 ||
     !policy.value ||
-    policy.value.webAccess.mode !== "NONE"
+    !["NONE", "ALLOWLIST_READ_ONLY"].includes(policy.value.webAccess.mode)
   )
     return false;
   const before = parsePolicy(props.operation.value.before.policyInput);
@@ -207,6 +207,8 @@ function update(value: RuntimeEnvironmentPolicyInput): void {
             memoryRequest: policy.resources.memoryRequestMib,
             memoryLimit: policy.resources.memoryLimitMib,
             volumes: policy.volumes.length,
+            webMode: $t(`runtime.webAccessModeLabel.${policy.webAccess.mode}`),
+            webRules: policy.webAccess.rules.length,
           })
         }}</small>
       </summary>

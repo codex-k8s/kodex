@@ -683,7 +683,7 @@ OIDC_HOST="$oidc_host" yq -i '
         "image":strenv(RUNTIME_RUNNER_IMAGE),
         "imagePullPolicy":"IfNotPresent",
         "command":["/bin/sh","-ec"],
-        "args":["binary=/usr/local/bin/codex; test -x \"$binary\"; \"$binary\" --version >/dev/null; temporary=/codex/.codex.tmp; rm -f \"$temporary\"; cp \"$binary\" \"$temporary\"; chmod 0555 \"$temporary\"; mv -f \"$temporary\" /codex/codex"],
+        "args":["elf() { test \"$(od -An -tx1 -N4 \"$1\" | tr -d \" \\n\")\" = 7f454c46; }; binary=/usr/local/bin/codex; if ! elf \"$binary\"; then case \"$(uname -m)\" in x86_64) package=codex-linux-x64; triple=x86_64-unknown-linux-musl;; aarch64) package=codex-linux-arm64; triple=aarch64-unknown-linux-musl;; *) exit 1;; esac; binary=/opt/kodex/npm-toolchain/node_modules/@openai/$package/vendor/$triple/bin/codex; fi; test -x \"$binary\"; elf \"$binary\"; temporary=/codex/.codex.tmp; rm -f \"$temporary\"; cp \"$binary\" \"$temporary\"; chmod 0555 \"$temporary\"; elf \"$temporary\"; test \"$(\"$temporary\" --version 2>/dev/null)\" = \"codex-cli 0.160.0\"; mv -f \"$temporary\" /codex/codex"],
         "resources":{"requests":{"cpu":"10m","memory":"64Mi"},"limits":{"cpu":"100m","memory":"256Mi"}},
         "securityContext":{"runAsNonRoot":true,"runAsUser":10001,"runAsGroup":29000,"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
         "volumeMounts":[{"name":"codex-cli","mountPath":"/codex"}]
@@ -1447,6 +1447,8 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_imag
       .resources.limits.cpu == "100m" and
       .resources.limits.memory == "256Mi" and
       any(.args[]?; contains("binary=/usr/local/bin/codex")) and
+      any(.args[]?; contains("elf \"$temporary\"")) and
+      any(.args[]?; contains("\"$temporary\" --version 2>/dev/null")) and
       any(.args[]?; contains("mv -f \"$temporary\" /codex/codex")) and
       any(.volumeMounts[]?; .name == "codex-cli" and .mountPath == "/codex")) and
     any(.spec.template.spec.containers[]?;
