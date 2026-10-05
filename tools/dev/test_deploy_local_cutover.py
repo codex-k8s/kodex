@@ -76,6 +76,9 @@ class EvictedProofTest(unittest.TestCase):
         self.mutate = None
         self.boundaries = 0
         self.context = EVICTED.CONTEXT
+        self.workload = 'role-image-builder'
+        self.extra_pods = []
+        self.jobs = {}
         self.server = 'https://127.0.0.1:6443'
         self.docker_endpoint = 'unix:///var/run/docker.sock'
 
@@ -89,10 +92,11 @@ class EvictedProofTest(unittest.TestCase):
             self.boundaries += 1
             return json.dumps(self.namespace)
         if args[0] == 'kubectl':
-            if 'deployment/role-image-builder' in args: value = self.deployment
+            if 'deployment/' + self.workload in args: value = self.deployment
             elif 'replicasets' in args: value = {'items': [self.replica]}
-            elif 'pods' in args: value = {'items': [self.pod]}
+            elif 'pods' in args: value = {'items': [self.pod, *self.extra_pods]}
             elif 'nodes' in args: value = {'items': self.nodes}
+            elif any(value.startswith('job/') for value in args): value = self.jobs[next(value[4:] for value in args if value.startswith('job/'))]
             else: raise AssertionError(args)
             return json.dumps(value)
         if args[:3] == ['k3d', 'node', 'list']: return json.dumps(self.native)
@@ -112,7 +116,41 @@ class EvictedProofTest(unittest.TestCase):
         return json.dumps(self.containers)
 
     def proof(self):
-        return EVICTED.prove('role-image-builder', self.uid, self.selector, self.targets, self.command)
+        return EVICTED.prove(self.workload, self.uid, self.selector, self.targets, self.command)
+
+    def test_evicted_rs_and_terminal_job_mix_has_fresh_job_fence(self):
+        self.workload = 'control-plane'
+        self.selector = 'app=control-plane'
+        self.deployment['metadata']['name'] = self.workload
+        self.deployment['spec']['selector']['matchLabels'] = {'app': self.workload}
+        self.pod['metadata']['labels'] = {'app': self.workload}
+        self.replica['metadata']['ownerReferences'][0]['name'] = self.workload
+        job_uid = '72345678-1234-1234-1234-123456789abc'
+        job_name = 'control-plane-migrate-' + 'a' * 12
+        main = {'name': 'migrate', 'image': 'immutable', 'command': ['/workspace/tools/dev/run-go-command.sh'],
+                'args': ['services/internal/control-plane', './cmd/cli', 'up'],
+                'workingDir': '/workspace/services/internal/control-plane'}
+        spec = {'containers': [main], 'restartPolicy': 'Never', 'automountServiceAccountToken': False,
+                'serviceAccountName': 'control-plane-migrator'}
+        self.jobs[job_name] = {'metadata': {'name': job_name, 'namespace': 'kodex-system', 'uid': job_uid,
+            'annotations': {'kodex.dev/job-input-sha256': 'a' * 64}, 'labels': {
+                'app.kubernetes.io/name': 'control-plane', 'app.kubernetes.io/part-of': 'kodex',
+                'app.kubernetes.io/component': 'migration', 'kodex.dev/local-profile': 'hot-reload',
+                'kodex.dev/security-profile': 'trusted-cluster'}}, 'spec': {'parallelism': 1, 'completions': 1,
+                    'selector': {'matchLabels': {'batch.kubernetes.io/controller-uid': job_uid}},
+                    'template': {'spec': spec}}, 'status': {'succeeded': 1, 'conditions': [{'type': 'Complete', 'status': 'True'}]}}
+        self.extra_pods = [{'metadata': {'name': job_name + '-old', 'namespace': 'kodex-system',
+            'uid': '82345678-1234-1234-1234-123456789abc', 'labels': {'app': 'control-plane',
+                'batch.kubernetes.io/controller-uid': job_uid}, 'ownerReferences': [{
+                    'controller': True, 'apiVersion': 'batch/v1', 'kind': 'Job', 'name': job_name, 'uid': job_uid}]},
+            'spec': copy.deepcopy(spec), 'status': {'phase': 'Succeeded'}}]
+        self.assertEqual(self.proof()['status'], 'PASS')
+        self.boundaries = 0
+        def mutate(args):
+            if args[:3] == ['kubectl', 'get', 'namespace'] and self.boundaries == 1:
+                self.jobs[job_name]['metadata']['uid'] = self.other_uid
+        self.mutate = mutate
+        with self.assertRaises(ValueError): self.proof()
 
     def test_two_snapshots_all_nodes_and_fresh_boundary(self):
         result = self.proof()
@@ -224,6 +262,76 @@ class EvictedProofTest(unittest.TestCase):
 
 
 class CutoverTest(unittest.TestCase):
+    def test_exact_control_plane_completed_job_uid_path(self):
+        uid = '12345678-1234-1234-1234-123456789abc'
+        job_uid = '22345678-1234-1234-1234-123456789abc'
+        digest = 'a' * 64
+        command = functions('readback_local_quiesced_pods') + PREFIX + '''
+script_directory=$SOURCE_DIRECTORY
+kubectl() { case "$*" in *get\\ replicasets*) printf '{"items":[]}\\n';;
+  *get\\ job/*) printf '%s\\n' "$JOB";; *) return 99;; esac; }
+readback_local_quiesced_pods "$DEPLOYMENT_UID" control-plane app.kubernetes.io/name=control-plane "$PODS"
+'''
+        for component, name, main_name, args, service_account in (
+                ('migration', 'control-plane-migrate-', 'migrate', ['up'], 'control-plane-migrator'),
+                ('broker-bootstrap', 'control-plane-broker-bootstrap-', 'bootstrap', ['broker', 'bootstrap'], 'control-plane-broker-bootstrap')):
+            job_name = name + digest[:12]
+            main = {'name': main_name, 'image': 'immutable@sha256:' + digest,
+                    'command': ['/workspace/tools/dev/run-go-command.sh'],
+                    'args': ['services/internal/control-plane', './cmd/cli', *args],
+                    'workingDir': '/workspace/services/internal/control-plane'}
+            spec = {'containers': [main], 'restartPolicy': 'Never', 'automountServiceAccountToken': False,
+                    'serviceAccountName': service_account}
+            labels = {'app.kubernetes.io/name': 'control-plane', 'app.kubernetes.io/part-of': 'kodex',
+                      'app.kubernetes.io/component': component, 'kodex.dev/local-profile': 'hot-reload',
+                      'kodex.dev/security-profile': 'trusted-cluster'}
+            job = {'metadata': {'name': job_name, 'namespace': 'kodex-system', 'uid': job_uid,
+                'labels': labels, 'annotations': {'kodex.dev/job-input-sha256': digest}},
+                'spec': {'parallelism': 1, 'completions': 1,
+                    'selector': {'matchLabels': {'batch.kubernetes.io/controller-uid': job_uid}},
+                    'template': {'spec': spec}}, 'status': {'succeeded': 1,
+                        'conditions': [{'type': 'Complete', 'status': 'True'}]}}
+            pod = {'metadata': {'name': job_name + '-pod', 'namespace': 'kodex-system',
+                'uid': '32345678-1234-1234-1234-123456789abc',
+                'labels': dict(labels, **{'batch.kubernetes.io/controller-uid': job_uid}),
+                'ownerReferences': [{'apiVersion': 'batch/v1', 'kind': 'Job', 'name': job_name,
+                                     'uid': job_uid, 'controller': True}]}, 'spec': copy.deepcopy(spec),
+                'status': {'phase': 'Succeeded', 'containerStatuses': [{'name': main_name, 'ready': False,
+                    'started': False, 'state': {'terminated': {'reason': 'Completed', 'exitCode': 0,
+                                                              'finishedAt': '2026-10-05T08:00:00Z'}}}]}}
+            cases = [('canonical', pod, job, True)]
+            for case in ('foreign-name', 'missing-owner', 'cross-uid', 'foreign-namespace', 'foreign-component',
+                         'hash-prefix', 'active-job', 'incomplete-job', 'deleting-job', 'foreign-selector',
+                         'foreign-command', 'run-job', 'foreign-service-account', 'cronjob-owned',
+                         'running-main', 'missing-main-status', 'running-init', 'running-ephemeral'):
+                bad_pod, bad_job = copy.deepcopy(pod), copy.deepcopy(job)
+                if case == 'foreign-name': bad_pod['metadata']['ownerReferences'][0]['name'] = 'unrelated-job'
+                elif case == 'missing-owner': bad_pod['metadata'].pop('ownerReferences')
+                elif case == 'cross-uid': bad_job['metadata']['uid'] = uid
+                elif case == 'foreign-namespace': bad_job['metadata']['namespace'] = 'foreign'
+                elif case == 'foreign-component': bad_job['metadata']['labels']['app.kubernetes.io/component'] = 'run'
+                elif case == 'hash-prefix': bad_job['metadata']['annotations']['kodex.dev/job-input-sha256'] = 'b' * 64
+                elif case == 'active-job': bad_job['status']['active'] = 1
+                elif case == 'incomplete-job': bad_job['status'].pop('conditions')
+                elif case == 'deleting-job': bad_job['metadata']['deletionTimestamp'] = '2026-10-05T08:00:00Z'
+                elif case == 'foreign-selector': bad_job['spec']['selector']['matchLabels']['batch.kubernetes.io/controller-uid'] = uid
+                elif case == 'foreign-command': bad_job['spec']['template']['spec']['containers'][0]['command'] = ['/bin/sh']
+                elif case == 'run-job': bad_job['spec']['template']['spec']['containers'][0]['args'] = ['services/internal/control-plane', './cmd/control-plane']
+                elif case == 'foreign-service-account': bad_job['spec']['template']['spec']['serviceAccountName'] = 'foreign'
+                elif case == 'cronjob-owned': bad_job['metadata']['ownerReferences'] = [{'kind': 'CronJob'}]
+                elif case == 'running-main': bad_pod['status']['containerStatuses'][0]['state'] = {'running': {}}
+                elif case == 'missing-main-status': bad_pod['status'].pop('containerStatuses')
+                else:
+                    key = 'init' if case == 'running-init' else 'ephemeral'
+                    bad_pod['spec'][key + 'Containers'] = [{'name': 'live'}]
+                    bad_pod['status'][key + 'ContainerStatuses'] = [{'name': 'live', 'ready': False, 'state': {'running': {}}}]
+                cases.append((case, bad_pod, bad_job, False))
+            for case, selected_pod, selected_job, success in cases:
+                with self.subTest(component=component, case=case):
+                    result = run(command, SOURCE_DIRECTORY=str(SCRIPT.parent), DEPLOYMENT_UID=uid,
+                                 PODS={'items': [selected_pod]}, JOB=selected_job)
+                    self.assertEqual(result.returncode == 0, success, result.stderr)
+
     def test_evicted_requires_native_proof_and_outage_is_immediate(self):
         uid = '12345678-1234-1234-1234-123456789abc'
         rs_uid = '22345678-1234-1234-1234-123456789abc'

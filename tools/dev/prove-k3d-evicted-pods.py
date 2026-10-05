@@ -68,6 +68,66 @@ def owner(record, kind, name=None, uid=None):
     return reference
 
 
+def terminal_jobs(workload, pods, jobs):
+    require(workload == "control-plane" and isinstance(pods, list) and isinstance(jobs, list) and
+            len(pods) <= 10000 and len(jobs) <= 128)
+    resolved = {}
+    for job in jobs:
+        metadata, spec = job["metadata"], job["spec"]
+        name, uid = metadata["name"], metadata["uid"]
+        require(re.fullmatch(r"control-plane-(migrate|broker-bootstrap)-[a-f0-9]{12}", name) and UID.fullmatch(uid))
+        require(uid not in resolved and metadata["namespace"] == NAMESPACE and not metadata.get("deletionTimestamp"))
+        require(not metadata.get("ownerReferences"))
+        component = "migration" if name.startswith("control-plane-migrate-") else "broker-bootstrap"
+        labels = metadata.get("labels", {})
+        for key, value in {"app.kubernetes.io/name": "control-plane", "app.kubernetes.io/part-of": "kodex",
+                           "app.kubernetes.io/component": component, "kodex.dev/local-profile": "hot-reload",
+                           "kodex.dev/security-profile": "trusted-cluster"}.items():
+            require(labels.get(key) == value)
+        digest = metadata.get("annotations", {}).get("kodex.dev/job-input-sha256", "")
+        require(re.fullmatch(r"[a-f0-9]{64}", digest) and name.endswith("-" + digest[:12]))
+        require(type(spec.get("parallelism")) is int and spec["parallelism"] == 1 and
+                type(spec.get("completions")) is int and spec["completions"] == 1)
+        require(spec.get("selector") == {"matchLabels": {"batch.kubernetes.io/controller-uid": uid}})
+        status = job.get("status", {})
+        require(type(status.get("active", 0)) is int and status.get("active", 0) == 0 and
+                type(status.get("succeeded")) is int and status["succeeded"] == 1)
+        require(any(entry.get("type") == "Complete" and entry.get("status") == "True"
+                    for entry in status.get("conditions", [])))
+        require(not any(entry.get("type") == "Failed" and entry.get("status") == "True"
+                        for entry in status.get("conditions", [])))
+        template = spec["template"]["spec"]
+        require(template.get("restartPolicy") == "Never" and template.get("automountServiceAccountToken") is False)
+        require(template.get("serviceAccountName") == ("control-plane-migrator" if component == "migration" else "control-plane-broker-bootstrap"))
+        containers = template.get("containers", [])
+        require(len(containers) == 1)
+        main = containers[0]
+        require(main.get("name") == ("migrate" if component == "migration" else "bootstrap"))
+        require(main.get("command") == ["/workspace/tools/dev/run-go-command.sh"])
+        require(main.get("args") == ["services/internal/control-plane", "./cmd/cli",
+                                    *( ["up"] if component == "migration" else ["broker", "bootstrap"])])
+        require(main.get("workingDir") == "/workspace/services/internal/control-plane")
+        resolved[uid] = job
+    used = set()
+    for pod in pods:
+        references = [entry for entry in pod.get("metadata", {}).get("ownerReferences", []) if entry.get("controller") is True]
+        if len(references) == 1 and references[0].get("kind") == "Job":
+            reference = references[0]
+            require(reference.get("apiVersion") == "batch/v1" and reference.get("uid") in resolved)
+            job = resolved[reference["uid"]]
+            require(reference.get("name") == job["metadata"]["name"] and pod["metadata"]["namespace"] == NAMESPACE)
+            require(pod.get("status", {}).get("phase") == "Succeeded")
+            require(pod["metadata"].get("labels", {}).get("batch.kubernetes.io/controller-uid") == reference["uid"])
+            template = job["spec"]["template"]["spec"]
+            require(pod["spec"].get("serviceAccountName") == template["serviceAccountName"])
+            for key in ("containers", "initContainers", "ephemeralContainers"):
+                project = lambda values: [{field: value.get(field) for field in
+                    ("name", "image", "command", "args", "workingDir", "restartPolicy")} for value in (values or [])]
+                require(project(pod["spec"].get(key)) == project(template.get(key)))
+            used.add(reference["uid"])
+    require(used == set(resolved))
+
+
 class BoundedCommands:
     def __init__(self, cache):
         self.deadline = time.monotonic() + 30
@@ -202,6 +262,7 @@ def prove(workload, deployment_uid, selector, targets, command):
         require(isinstance(pods, list) and len(pods) <= 10000)
         inventory = []
         selected = {}
+        job_names = set()
         for pod in pods:
             metadata = pod["metadata"]
             require(metadata["namespace"] == NAMESPACE and UID.fullmatch(metadata["uid"]))
@@ -212,6 +273,16 @@ def prove(workload, deployment_uid, selector, targets, command):
             if pod.get("metadata", {}).get("name") not in names:
                 require(not (pod.get("status", {}).get("phase") == "Failed" and
                              pod["status"].get("reason") == "Evicted"))
+                references = [entry for entry in metadata.get("ownerReferences", []) if entry.get("controller") is True]
+                require(len(references) == 1)
+                if references[0].get("kind") == "Job":
+                    name = references[0].get("name", "")
+                    require(workload == "control-plane" and re.fullmatch(r"control-plane-(migrate|broker-bootstrap)-[a-f0-9]{12}", name))
+                    job_names.add(name)
+                else:
+                    reference = owner(pod, "ReplicaSet")
+                    require(reference["uid"] in replicas)
+                    owner(replicas[reference["uid"]], "Deployment", workload, deployment_uid)
                 continue
             metadata = pod["metadata"]
             require(metadata["name"] not in selected and metadata["namespace"] == NAMESPACE)
@@ -224,6 +295,9 @@ def prove(workload, deployment_uid, selector, targets, command):
             owner(replica, "Deployment", workload, deployment_uid)
             selected[metadata["name"]] = {"name": metadata["name"], "uid": metadata["uid"], "nodeName": pod["spec"].get("nodeName")}
         require(sorted(selected.values(), key=lambda item: item["name"]) == sorted(targets, key=lambda item: item["name"]))
+        jobs = [kube("-n", NAMESPACE, "get", "job/" + name) for name in sorted(job_names)]
+        if jobs:
+            terminal_jobs(workload, pods, jobs)
         nodes = kube("get", "nodes").get("items")
         require(isinstance(nodes, list) and len(nodes) == len(NODES))
         node_records = {}
@@ -252,7 +326,9 @@ def prove(workload, deployment_uid, selector, targets, command):
         require(len({entry["containerID"] for entry in node_records.values()}) == len(NODES))
         return {"namespaceUID": namespace["metadata"]["uid"], "deploymentSpec": spec, "nodes": node_records,
                 "targets": sorted(selected.values(), key=lambda item: item["name"]),
-                "podInventory": sorted(inventory, key=lambda item: item["uid"])}
+                "podInventory": sorted(inventory, key=lambda item: item["uid"]),
+                "jobs": [{"uid": job["metadata"]["uid"], "spec": job["spec"], "status": job["status"],
+                          "inputSHA256": job["metadata"]["annotations"]["kodex.dev/job-input-sha256"]} for job in jobs]}
 
     before = boundary()
     for _ in range(2):
@@ -292,4 +368,15 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["validate-terminal-jobs", "control-plane"]:
+        try:
+            raw = sys.stdin.buffer.read(MAXIMUM_BYTES + 1)
+            require(len(raw) <= MAXIMUM_BYTES)
+            value = decode(raw.decode("utf-8"))
+            require(set(value) == {"pods", "jobs"})
+            terminal_jobs("control-plane", value["pods"], value["jobs"])
+        except Exception:
+            print(FAILURE, file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
     sys.exit(main())

@@ -2521,3 +2521,28 @@ Running/Always sidecar, неполные/неизвестные statuses ост�
 ROOT45 focused tests PASS8.964s, optionalPG NOT RUN, bash/ShellCheck/diff PASS.
 Owner fresh08:50:22: все active counts0, published19/hash28e8bf55 unchanged.
 Четвёртая live попытка пока NOT RUN; итоговый stop barrier не объявлен PASS.
+
+05.10.2026 08:59 UTC, maintenance source1040e1a9:
+FAIL — четвёртая public попытка остановила все5 Deployment, но окончательное
+чтение CP selector также включило11 исторических Succeeded Job Pods миграции/
+broker-bootstrap. Их Job lineage нельзя выдавать за ReplicaSet lineage.
+Процесс отменён exact SIGTERM и joined; все5 остались0. History не удаляли,
+Job spec/UID не меняли. Fresh owner08:54:27 active counts0, published19/pins
+28e8bf55 unchanged. Нужен отдельный exact terminal Job read path.
+ROOT read-only native helper на CP historical Evicted Pod PASS:
+две runtime snapshots на обеих exact nodes, target sandbox/container/task0,
+orphanContainers0/unresolvedTasks0; свежая boundary неизменна. Это адресный
+process-absence proof, не PASS полного public maintenance либо нового image ABI.
+Browser bootstrap/session503 ожидаемы при stop; browser acceptance NOT RUN.
+
+05.10.2026 09:05 UTC, frozen terminal Job followup на1040e1a9:
+Patchbca9c1ef9a0604b7eab5e73ff64bb6c0d86c1534081d64e13efb734d8c2dfa2b
+разрешает только canonical completed migration/broker-bootstrap Jobs:
+authoritative exact UID, namespace/labels, input hash suffix, selectorUID,
+Complete/succeeded1/active0, exact command/module/SA/template и Pod binding.
+Полный stopped main/init/ephemeral proof сохранён. Evicted допускается только
+через RS→Deployment/native CRI path; mixed inventory Job UID/spec/status/input
+повторно сверяется в обеих boundary snapshots. Foreign/live/malformed Job
+отклоняется; jobs/history не удаляются. ROOT47 unit PASS11.089s (optionalPG
+NOT RUN), ShellCheck/bash-n/diff PASS; ROOT live11 canonical templates и hash
+suffixes TRUE. Пятая public maintenance попытка ещё NOT RUN.

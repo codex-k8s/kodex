@@ -376,14 +376,30 @@ readback_local_image_admission_crd() {
 }
 
 readback_local_quiesced_pods() {
-  local uid=$1 workload=$2 selector=$3 pods=$4 replica_sets evicted proof
+  local uid=$1 workload=$2 selector=$3 pods=$4 replica_sets evicted proof jobs='[]' job name job_names
   jq -e '.items | type == "array"' <<<"$pods" >/dev/null ||
     fail 'supply-chain quiesce Pod inventory is invalid'
   if jq -e '.items | length == 0' <<<"$pods" >/dev/null; then return 0; fi
   replica_sets=$(kubectl -n "$namespace" get replicasets -l "$selector" -o json) ||
     fail 'supply-chain quiesce ReplicaSet inventory is unavailable'
+  job_names=$(jq -r '[.items[].metadata.ownerReferences[]? | select(.controller == true and .kind == "Job") |
+    .name] | unique[]' <<<"$pods") || fail 'supply-chain quiesce Job references are invalid'
+  if [[ -n "$job_names" ]]; then
+    [[ "$workload" == control-plane ]] || fail 'supply-chain quiesce Job owner is unsupported'
+    while IFS= read -r name; do
+      [[ "$name" =~ ^control-plane-(migrate|broker-bootstrap)-[a-f0-9]{12}$ ]] ||
+        fail 'supply-chain quiesce Job name is unsupported'
+      job=$(kubectl -n "$namespace" get "job/$name" -o json) ||
+        fail 'supply-chain quiesce Job owner is unavailable'
+      jobs=$(jq -cn --argjson jobs "$jobs" --argjson job "$job" '$jobs + [$job]') ||
+        fail 'supply-chain quiesce Job owner is invalid'
+    done <<<"$job_names"
+    jq -cn --argjson pods "$pods" --argjson jobs "$jobs" '{pods:$pods.items,jobs:$jobs}' |
+      python3 "$script_directory/prove-k3d-evicted-pods.py" validate-terminal-jobs control-plane \
+        >/dev/null 2>/dev/null || fail 'supply-chain quiesce terminal Job owner proof failed'
+  fi
   if ! jq -e --arg uid "$uid" --arg workload "$workload" --arg namespace "$namespace" \
-    --arg selector "$selector" --argjson sets "$replica_sets" '
+    --arg selector "$selector" --argjson sets "$replica_sets" --argjson jobs "$jobs" '
     def controller: [.metadata.ownerReferences[]? | select(.controller == true)];
     def stopped($spec; $statuses; $regular_init):
       ($spec // []) as $containers | ($statuses // []) as $states |
@@ -411,15 +427,19 @@ readback_local_quiesced_pods() {
       (.metadata.labels as $actual | all($labels | to_entries[]; .value == $actual[.key])) and
       (.status.phase == "Succeeded" or .status.phase == "Failed") and
       (controller as $owners | ($owners | length) == 1 and
-        $owners[0].apiVersion == "apps/v1" and $owners[0].kind == "ReplicaSet" and
+        (($owners[0].apiVersion == "batch/v1" and $owners[0].kind == "Job" and
+          any($jobs[]; .metadata.uid == $owners[0].uid and .metadata.name == $owners[0].name and
+            .metadata.namespace == $namespace)) or
+        ($owners[0].apiVersion == "apps/v1" and $owners[0].kind == "ReplicaSet" and
         any($sets.items[];
           .metadata.namespace == $namespace and .metadata.uid == $owners[0].uid and
           .metadata.name == $owners[0].name and
           (controller as $parents | ($parents | length) == 1 and
             $parents[0].apiVersion == "apps/v1" and $parents[0].kind == "Deployment" and
-            $parents[0].uid == $uid and $parents[0].name == $workload))) and
+            $parents[0].uid == $uid and $parents[0].name == $workload))))) and
       (.spec.containers | type == "array" and length > 0) and
-      ((.status.phase == "Failed" and .status.reason == "Evicted") or
+      ((.status.phase == "Failed" and .status.reason == "Evicted" and
+        any(.metadata.ownerReferences[]?; .controller == true and .kind == "ReplicaSet")) or
         ((.status.reason != "NodeLost" and .status.reason != "ContainerStatusUnknown") and
           stopped(.spec.containers; .status.containerStatuses; false) and
           stopped(.spec.initContainers; .status.initContainerStatuses; true) and
