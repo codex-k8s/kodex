@@ -2359,3 +2359,51 @@ Unknown aliases, changed pins и pending build закрыто запрещают
 force/volume/global prune отсутствуют.13 адресных unit PASS.
 Live Docker prune до интеграции helper — NOT RUN; logical size слоёв
 не обозначается как реально освобождённое место.
+
+05.10.2026 07:25 UTC, ROOT isolated risk checkpoint
+`b34fd081cbdbee4050ba0a22fb4d9f4a85e841b6` (tree
+`5e17d3028da7eda68420c86356d641c2239b35cf`):
+101 source files объединяют four human OWNER/ADMIN report/risk operations,
+forward migration002, typed canonical report/risk, worker evidence v5,
+receipt v3, signature binding v2, authority policy89 и компактный интерфейс.
+Исходный scanner report передаётся в чистый projector как canonical base64:
+его SHA сохраняет original whitespace/newline, а не хэш JSON RawMessage.
+Последний worker SHA256
+`5e835394f75b34cca3447889f6607007404d8ec39128efad8b4d43ad26314072`.
+
+PASS — integrated runtimecontract unit0.145s, чистый CLI0.021s,
+gateway HTTP unit10.824s, CP role-image/gRPC unit0.030/0.649s,
+worker full14 packages (controller17.159s), Python diagnostic15 tests0.131s;
+frontend86 unit4.08s, scoped lint, forced TypeScript и production build9.26s.
+Vite предупреждает о крупных chunks; это предупреждение не скрыто.
+Полная evidence fixture PASS на exact worker SHA выше: обычный ACCEPTED,
+truthful REJECTED, новая risk attempt с сохранением original report/SBOM,
+foreign tuple, stale fence и unsigned receipt. Cosign fixture синтетическая:
+это НЕ доказательство реальной подписи, OCI admission или browser acceptance.
+Первые combined worker/CP проверки получили FAIL из-за отсутствующих
+kubectl/node в очищенном PATH; исправлен только launcher PATH, повторные
+полные адресные команды PASS. Source tests не ослаблялись.
+
+PASS — scoped disposable PostgreSQL на exact checkpoint b34fd081:
+risk2.90s, failure3.74s, organization3.54s, пакет10.226s; goose up/status/up
+до20261005000200 и worker/runner read-only queries PASS. Source manifest
+до/после совпадает, live DB не использовалась. Proto lint/build, реестр
+контрактов5 tests и policy codegen PASS. Runner-policy Node tests впервые
+достигли лимита60s (exit124), исход не объявлен PASS; отдельный bounded
+повтор в работе. Risk source пока не перенесён в MAIN
+hot-reload mount. Read-only preflight установил activation gap: supply-chain
+stage должен обновить CRD, exact claim/evidence NetworkPolicy и gateway
+до resume controllers. Исправление code-first в отдельном worktree.
+Migration002, policy89, новый worker и report UI на стенде — NOT RUN.
+Checkbox6.1 и полный dogfooding не отмечены; SYSTEM gen5 остаётся REJECTED.
+
+Housekeeping live на MAIN e5e94fd2: scoped Go cache/modcache leaves удалены
+штатным Go clean, allocated5,010,894,848 bytes; source/logs/proofs сохранены.
+Host Docker helper удалил3 exact obsolete IDs и закрыл дальнейшую очистку
+с CLEANUP_ABORTED; оставшиеся8 IDs KEEP, force/global prune не выполнялись.
+Logical image sizes не считаются freed bytes. Обе ноды Ready=True,
+DiskPressure=False; `/tmp` free180134 inode. Новая инвентаризация поручена
+субагенту с сохранением всех current/restore pins и процессов другого агента.
+Incidental repo `.kube/cache` не содержит config/key по metadata names;
+созданный discovery cache пока KEEP. Собственная вкладка22 регулярно reload,
+чужие29/41/42 не изменены.
