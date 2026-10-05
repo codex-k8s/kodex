@@ -12,19 +12,26 @@ updated: 2026-10-05
 
 05.10.2026 владелец явно возобновил работу после переноса хранилища.
 Перенос проверен; цель снова выполняется. Последний опубликованный checkpoint:
-`5e345f1345c4b52a75e41170a83a211d707a47fc`. Новый полный runner и четыре
+`8104899c21a13615aa01e1b1f1f9e0d912f5cade`. Новый полный runner и четыре
 supply-chain image собраны; fresh render и supply-chain apply/readback
 полностью завершены 05.10.2026 в17:59:24 UTC. Control plane, gateway и
-контроллеры Ready; отдельный core apply secret-broker завершился FAIL:
-startup проверка отвергает скопированный CLI. Исправляется доставка native
-executable из полного image, без ослабления pin или startup barrier.
+контроллеры Ready. Core repair secret-broker PASS18:18:45 UTC: доставлен
+exact native CLI0.160.0, без ослабления pin или startup barrier. Каталог
+провайдера штатно восстановился; прежний native create conversation HTTP412
+был закрытым отказом из-за expiry каталога, а не cached frontend version.
 Native SYSTEM применил новый typed plan через UI, recipe v9/generation7;
 его build завершён. Полный отчёт READY, первый admission REJECTED по двум
 HIGH npm findings. OWNER UI принял exact риск для локального QA/dogfooding;
 вторая attempt ACCEPTED, собственный artifact PROMOTED. Начат SYSTEM40
 для назначения образа окружению. Inventory37/38 VERIFIED; npm PROBE_FAILED
-исправлен в новом base image. SYSTEM40 environment revision22 опубликован;
-новая generation собственного образа и actual provider prompt proof ещё NOT RUN.
+исправлен в новом base image. SYSTEM40 environment revision22 опубликован.
+SYSTEM41 typed plan штатно создал generation8 на exact rebuilt base85b5;
+build COMPLETED, обязательные инструменты38/38 VERIFIED. Первый admission
+REJECTED по двум прежним HIGH findings, теперь точно локализованным в bundled
+pnpm11.11.0, а не обновлённом npm12.2.0. Для exact нового image/report через
+OWNER UI принято новое локальное решение риска; attempt2 ACCEPTED, generation8
+PROMOTED18:41 UTC. Запущен native SYSTEM42 для полного профиля. Новый
+environment/instructions/config publish и actual provider prompt proof NOT RUN.
 Ниже перечисленные старые checkpoints относятся к истории, а не к текущему HEAD.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).

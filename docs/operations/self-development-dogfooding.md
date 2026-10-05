@@ -3264,3 +3264,81 @@ typed обновление recipe на fresh base85b5, новый admission/prom
 публикация окружения с actual provider ACK proof. После SYSTEM smokes
 используется один общий PROJECT image для помощника и шести ролей; authority,
 Secrets, grants и workspaces каждого получателя остаются независимыми.
+
+### 05.10.2026 18:18–18:38 UTC — восстановление брокера и native SYSTEM41
+
+Source `8104899c21a13615aa01e1b1f1f9e0d912f5cade`: fresh render PASS,
+fingerprint `e2d112821b155d51f75514e6387ec75058f084a1957cdd98950744e549a9bd1f`.
+Canonical selected core apply/readback secret-broker PASS18:18:45 UTC.
+Deployment observed generation10, ready1; Pod UID
+`937a912b-e902-48f7-b362-5fb3dc116fb5`, init exit0, restart0.
+Actual native CLI0.160.0 и binary SHA256
+`12eb3e81114588aca3b7998f4f19e8997b056aca08e57a7ca7c8a3ec8c652aad`;
+host/Pod model catalog source hash совпал. JS wrapper не копируется;
+обязательные version/ELF guards сохранены.
+
+Каталог провайдера штатно перешёл EXPIRED→READY18:20:04 UTC.
+Истёкший immutable remote catalog объяснил HTTP412 native create conversation;
+ручной refresh/SQL, speculative frontend retry и обход authority не применялись.
+Новый native conversation и реальный SYSTEM41 успешно завершились.
+Conversation `cnv_H1KtR9qv3aY52ye37m2sDr4m`, turn
+`trn_ZWoyr9iz0_vxPIiWH3DTSWhr`, run `run_lo0xnHdZIDPvEv_4aw1R3heo`;
+6 tool calls COMPLETED. Plan `pln_8vPlVHrqdMb-VtKxBIL94ZMp`, revision1,
+единственный UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE подтверждён штатным UI.
+Recipe `imgrec_8fwVelZAPPnm993yRFYLuoc5` v11/generation8 имеет exact FROM85b5.
+Build `imgbld_svooDGdrx8Xmpz_ksY2oe2RH` COMPLETED/version17/100%18:25:24 UTC.
+
+Новый artifact `imgart_EZdtnfyjtj-vq4o9-_j9W5NU`, manifest
+`sha256:a1f1ba75c3ddec037ca1443aa228de105d20e1a1c39973999916777c720605cf`,
+inventory VERIFIED:38/38 обязательных, включая npm12.2.0. Первый admission
+REJECTED, полный READY отчёт4640 matches/2938 advisories/2 blocking;
+projection SHA256 `1e8a6b5cb2ccb8cc551ba40f10f530ad22b12d64380ad0b6cba5298539a4f88c`,
+evidence SHA256 `5e3a6cf17fbff20053f9da6d084ac92d4d33d3604ed04631de7ce0491d0aa93d`.
+Точные surviving OCI paths доказали tar7.5.19 и undici6.27.0 внутри
+`pnpm/dist/node_modules`, тогда как новый npm-cli содержит7.5.22/8.11.2.
+Это настоящие bundled dependencies, не cache/all-layers false positive;
+signed SBOM locations отдельно NOT RUN. Top-level overrides их не обновляют.
+
+OWNER UI принял новое exact локальное решение риска
+`imgrisk_5PMMHz-nQjOnHvEJPi8x2kFv`, только для данного immutable image/report/policy.
+Оба HIGH findings и459 HIGH/CRITICAL без исправления не скрыты;
+staging/production не разрешены. Integrity/provenance/ABI/signature guards
+сохранены; новая attempt `imgadm_Vmgu511Q3yJ6XjR8Z-ulfLv2` PENDING18:38 UTC.
+Предыдущий REJECTED receipt не переписан и старое gen7 risk decision не переиспользовано.
+Повторный admission, promotion и новый provider ACK остаются NOT RUN.
+
+Chrome hard reload, screenshot и Console проверены: compact report с двумя
+blocking rows, штатная модалка exact risk, relevant protected GET200,
+Console error/warn0. Это адресная локальная проверка, не полный65-section QA.
+
+18:41 UTC: повторный admission attempt2 ACCEPTED/version3, receipt SHA256
+`4671a9009f8e01d5128ff2c4814b1af7915d22c1ed364f5509bb2812e6a754d0`,
+evidence manifest
+`sha256:2f5c8e328de208b1d37ddf49c1fae4566a3f2bb029adbbc3d18a268aa3c772dc`.
+Native UI Publish POST202 запустил promotion; exact protected readback
+подтвердил recipe v12/generation8 и artifact v10 ACCEPTED/PROMOTED.
+Старое risk/evidence не переиспользовано. После POST202 интерфейс показал
+ошибку последующего чтения, хотя серверная операция и promotion успешны;
+этот UX FAIL расследуется отдельно, повторная mutation не отправлялась.
+
+Подключён frozen patch
+`ea9f60dc5c94d0846a7f008b75030455b8cf42c8c10451817e60aee9717e8328`,
+base810: apply response возвращает receipt отдельно от plan. Store проверяет
+exact conversation/plan/revision/state/outcome и присоединяет ту же receipt
+к cached plan; карточка дальнейшей настройки не требует history reload.
+В private tree116 focused unit/lint/vue-tsc PASS; в MAIN108 focused unit
+и ESLint/Prettier/vue-tsc PASS. Native SYSTEM42 готовит
+полный план среды/tools/instructions/Web Search; Apply/publish и actual
+provider input receipt нового образа пока NOT RUN.
+
+18:48 UTC: native SYSTEM42 plan `pln_jKnd2JxyZ-HyHJphYwUGI703` revision1
+проверен и APPLIED штатным UI, обе operation receipts APPLIED.
+UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS меняет только owner additional template;
+PREPARE_ASSISTANT_RUNTIME_CONFIGURATION сохраняет gpt-6.1-sol/medium/account
+и включает Web Search live. Exact apply response сразу связан с plan receipt
+в store; отдельное history GET подтвердило тот же результат.
+Среда намеренно не выдумана: IMAGE_ARTIFACTS server eligibility гарантирует
+ACCEPTED/PROMOTED, но entry projection не содержит candidate inventory.
+CURRENT_CONFIGURATION выдаёт inventory только текущего environment image.
+Этот воспроизведённый native self-configuration gap исправляется сквозно;
+назначение нового образа и provider ACK по-прежнему NOT RUN.

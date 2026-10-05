@@ -5,6 +5,7 @@ import type {
   AssistantContextDescriptor,
   AssistantConversation,
   AssistantPlan,
+  AssistantPlanReceipt,
   SystemAssistant,
   ListAssistantConversationsResponse,
   ProjectAssistantProfile,
@@ -41,6 +42,7 @@ vi.mock("@/features/assistant/api", () => ({
 }));
 
 import { useAssistantStore } from "@/features/assistant/store";
+import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
 
 const context: AssistantContextDescriptor = {
   route: "/projects/prj_sales",
@@ -1088,5 +1090,130 @@ describe("assistant workspace store", () => {
     );
     expect(store.selectedConversation?.title).toBe("Настройка отдела продаж");
     expect(store.selectedConversation?.turns[0]?.plan?.state).toBe("APPLIED");
+    expect(store.selectedConversation?.turns[0]?.plan?.receipt).toEqual(
+      receipt,
+    );
+  });
+
+  function systemImageApplication() {
+    const original = plan();
+    const owner = {
+      scopeKind: "ORGANIZATION",
+      organizationRef: "org_synthetic",
+      systemAssistantRef: "ast_system_assistant",
+      recipeRef: "imgrec_synthetic",
+    };
+    const selected = original.operations[0];
+    if (!selected) throw new Error("Plan fixture has no operation");
+    const source: AssistantPlan = {
+      ...original,
+      projectRef: undefined,
+      operations: [
+        {
+          ...selected,
+          type: "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE",
+          action: "UPDATE",
+          target: {
+            kind: "ROLE_IMAGE_RECIPE",
+            ref: owner.recipeRef,
+            name: "Собственный образ",
+            version: 10,
+          },
+          expectedVersion: 10,
+          parameters: owner,
+          after: owner,
+        },
+      ],
+    };
+    const receipt: AssistantPlanReceipt = {
+      ref: "rct_system_image",
+      planRef: source.ref,
+      planRevision: source.revision,
+      outcome: "APPLIED",
+      operationReceipts: [
+        {
+          operationRef: selected.ref,
+          resourceRef: owner.recipeRef,
+          outcome: "APPLIED",
+          auditRef: "aud_image",
+        },
+      ],
+      conflicts: [],
+      auditRefs: [],
+      createdResourceRefs: [owner.recipeRef],
+      createdAt: "2026-10-05T18:00:00Z",
+    };
+    return {
+      source,
+      response: {
+        conversation: { ref: source.conversationRef },
+        plan: {
+          ...source,
+          version: source.version + 1,
+          state: "APPLIED" as const,
+          applied: true,
+        },
+        receipt,
+        createdResourceRefs: [owner.recipeRef],
+      },
+    };
+  }
+
+  it("сразу связывает native SYSTEM UPDATE со сборкой через отдельную квитанцию ответа без reload", async () => {
+    const { source, response } = systemImageApplication();
+    expect(response.plan.receipt).toBeUndefined();
+    applyPlanDraftMock.mockResolvedValue(response);
+    const store = useAssistantStore();
+    store.conversations = [conversation(source)];
+    store.selectedRef = source.conversationRef;
+    const receipt = await store.apply(source);
+    const applied = store.selectedConversation?.turns[0]?.plan;
+    expect(applied?.receipt).toEqual(receipt);
+    expect(applied).toBeDefined();
+    if (!applied) throw new Error("Applied plan was not retained");
+    expect(
+      assistantRoleImageBuildTarget(applied, "op_sales", "org_synthetic"),
+    ).toEqual({
+      resourceScope: { kind: "ORGANIZATION", organizationRef: "org_synthetic" },
+      recipeRef: "imgrec_synthetic",
+    });
+    expect(
+      assistantRoleImageBuildTarget(applied, "op_sales", "org_foreign"),
+    ).toBeUndefined();
+    expect(readConversationsMock).not.toHaveBeenCalled();
+    expect(store.conversations.at(0)?.turns).toHaveLength(1);
+  });
+
+  it.each([
+    "receipt-plan",
+    "receipt-revision",
+    "plan-revision",
+    "plan-conversation",
+    "outcome",
+    "state",
+  ])("не присоединяет неверно связанную квитанцию: %s", async (kind) => {
+    const { source, response } = systemImageApplication();
+    if (kind === "receipt-plan") response.receipt.planRef = "pln_foreign";
+    if (kind === "receipt-revision") response.receipt.planRevision += 1;
+    if (kind === "plan-revision") {
+      response.plan.revision += 1;
+      response.receipt.planRevision = response.plan.revision;
+    }
+    if (kind === "plan-conversation")
+      response.plan.conversationRef = "cnv_foreign";
+    if (kind === "outcome") response.receipt.outcome = "CONFLICT";
+    const invalid =
+      kind === "state"
+        ? { ...response, plan: { ...response.plan, state: "VALID" as const } }
+        : response;
+    applyPlanDraftMock.mockResolvedValue(invalid);
+    const store = useAssistantStore();
+    store.conversations = [conversation(source)];
+    store.selectedRef = source.conversationRef;
+    await expect(store.apply(source)).rejects.toBeInstanceOf(AppProblem);
+    expect(store.receipt).toBeUndefined();
+    expect(store.selectedConversation?.turns[0]?.plan?.state).toBe("VALID");
+    expect(store.selectedConversation?.turns[0]?.plan?.receipt).toBeUndefined();
+    expect(readConversationsMock).not.toHaveBeenCalled();
   });
 });

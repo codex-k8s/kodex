@@ -710,13 +710,22 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       const value = await applyPlanDraft(plan);
       if (
         value.conversation.ref !== plan.conversationRef ||
-        value.plan.ref !== plan.ref
+        value.plan.ref !== plan.ref ||
+        value.plan.conversationRef !== plan.conversationRef ||
+        value.plan.revision !== plan.revision ||
+        value.receipt.planRef !== value.plan.ref ||
+        value.receipt.planRevision !== value.plan.revision ||
+        !(
+          (value.plan.state === "APPLIED" &&
+            value.receipt.outcome === "APPLIED") ||
+          (value.plan.state === "STALE" && value.receipt.outcome === "CONFLICT")
+        )
       )
         throw new Error("Assistant plan application response mismatch");
       receipt.value = value.receipt;
-      // Ответ применения содержит только ref диалога. Полный снимок придёт
-      // из авторитетного чтения при выходе из редактора плана.
-      replacePlan(value.plan);
+      // Ответ применения содержит отдельную авторитетную квитанцию и только
+      // ref диалога. Привязываем её к точной ревизии, не подменяя весь диалог.
+      replacePlan({ ...value.plan, receipt: value.receipt });
       return value.receipt;
     });
   }
