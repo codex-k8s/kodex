@@ -137,7 +137,7 @@ require_policy() {
   echo "$TRUSTED_ROLE_BASE_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
     fail "trusted role base repository is invalid"
   echo "$TRUSTED_ROLE_BASE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "trusted role base digest is invalid"
-  for tool in base64 cmp cosign grype image-admission-bridge image-tool-inventory-validator jq regctl sha256sum syft wc; do
+  for tool in base64 cmp cosign dd grype image-admission-bridge image-tool-inventory-validator jq regctl sha256sum syft wc; do
     command -v "$tool" >/dev/null || fail "admission image is incomplete"
   done
 }
@@ -451,14 +451,66 @@ native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 tool-inventory.json|application/vnd.kodex.image-tool-inventory-binding.v1+json
 tool-inventory.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-sbom.json|application/spdx+json
+sbom.json.part-0|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-1|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-2|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-3|application/vnd.kodex.sbom-byte-part.v1+octet-stream
 sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
+vulnerability.json.part-0|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-1|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-2|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-3|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
 vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 signature.binding.json|application/vnd.kodex.signature-binding.v1+json
 admission.receipt.json|application/vnd.kodex.admission-receipt.v2+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
 EOF
+}
+
+# Четыре фиксированные части сохраняют подписанные логические байты полностью.
+# Последняя непустая часть может быть короче; пустые части только завершают ряд.
+prepare_evidence_chunks() {
+  chunk_directory=$1
+  for chunk_name in sbom vulnerability; do
+    chunk_source="$chunk_directory/$chunk_name.json"
+    [ -f "$chunk_source" ] || fail "logical admission evidence is missing"
+    chunk_bytes=$(wc -c <"$chunk_source" | tr -d ' ')
+    [ "$chunk_bytes" -gt 0 ] && [ "$chunk_bytes" -le 67108864 ] ||
+      fail "logical admission evidence exceeds bound"
+    for chunk_index in 0 1 2 3; do
+      dd if="$chunk_source" of="$chunk_source.part-$chunk_index" \
+        bs=16777216 skip="$chunk_index" count=1 2>/dev/null ||
+        fail "admission evidence chunk creation failed"
+    done
+  done
+}
+
+reconstruct_evidence_chunks() {
+  chunk_directory=$1
+  for chunk_name in sbom vulnerability; do
+    chunk_next="$chunk_directory/$chunk_name.json.next"
+    chunk_last_size=16777216
+    chunk_total=0
+    : >"$chunk_next"
+    for chunk_index in 0 1 2 3; do
+      chunk_path="$chunk_directory/$chunk_name.json.part-$chunk_index"
+      [ -f "$chunk_path" ] || fail "admission evidence chunk is missing"
+      chunk_bytes=$(wc -c <"$chunk_path" | tr -d ' ')
+      [ "$chunk_bytes" -le 16777216 ] &&
+        { [ "$chunk_bytes" -eq 0 ] || [ "$chunk_last_size" -eq 16777216 ]; } ||
+        fail "admission evidence chunk sequence is invalid"
+      chunk_total=$((chunk_total + chunk_bytes))
+      chunk_last_size=$chunk_bytes
+      cat "$chunk_path" >>"$chunk_next" || fail "admission evidence chunk reconstruction failed"
+    done
+    [ "$chunk_total" -gt 0 ] || fail "logical admission evidence is empty"
+    if [ -f "$chunk_directory/$chunk_name.json" ]; then
+      cmp -s "$chunk_next" "$chunk_directory/$chunk_name.json" ||
+        fail "logical admission evidence differs from chunks"
+    fi
+    mv "$chunk_next" "$chunk_directory/$chunk_name.json" ||
+      fail "admission evidence chunk reconstruction failed"
+  done
 }
 
 verify_evidence_manifest() {
@@ -470,24 +522,31 @@ verify_evidence_manifest() {
   expected_policy_sha256=$6
   expected_entries=$(evidence_entries | jq -Rn \
     '[inputs | split("|") | {key:.[0],value:.[1]}] | from_entries')
+  expected_order=$(evidence_entries | jq -Rn '[inputs | split("|")[0]]')
   [ "sha256:$(sha256sum "$evidence_manifest" | awk '{print $1}')" = "$expected_manifest_digest" ] ||
     fail "admission evidence OCI manifest digest mismatch"
   jq -e --arg artifact "$expected_artifact" --arg image "$expected_image" \
     --arg policy "$expected_policy_revision" --arg policy_sha "$expected_policy_sha256" \
-    --argjson expected "$expected_entries" '
+    --argjson expected "$expected_entries" --argjson order "$expected_order" '
+    def canonical_parts($prefix):
+      [.layers[] | select(.annotations["org.opencontainers.image.title"] | startswith($prefix)) | .size] as $sizes |
+      ($sizes | length) == 4 and $sizes[0] > 0 and
+      all(range(1;4); . as $index |
+        $sizes[$index] == 0 or $sizes[$index - 1] == 16777216);
     (. | keys | sort) == (["annotations","artifactType","config","layers","mediaType","schemaVersion"] | sort) and
     .schemaVersion == 2 and .mediaType == "application/vnd.oci.image.manifest.v1+json" and
-    .artifactType == "application/vnd.kodex.image-admission-evidence.v3" and
-    .config == {mediaType:"application/vnd.kodex.image-admission-evidence.config.v3+json",
+    .artifactType == "application/vnd.kodex.image-admission-evidence.v4" and
+    .config == {mediaType:"application/vnd.kodex.image-admission-evidence.config.v4+json",
       digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2} and
     (.annotations | keys | sort) == (["kodex.dev/artifact-id","kodex.dev/evidence-schema",
       "kodex.dev/image-digest","kodex.dev/policy-revision","kodex.dev/policy-sha256"] | sort) and
-    .annotations["kodex.dev/evidence-schema"] == "kodex.dev/image-admission-evidence/v3" and
+    .annotations["kodex.dev/evidence-schema"] == "kodex.dev/image-admission-evidence/v4" and
     .annotations["kodex.dev/artifact-id"] == $artifact and
     .annotations["kodex.dev/image-digest"] == $image and
     .annotations["kodex.dev/policy-revision"] == $policy and
     .annotations["kodex.dev/policy-sha256"] == $policy_sha and
     (.layers | type == "array" and length == ($expected | length)) and
+    [.layers[].annotations["org.opencontainers.image.title"]] == $order and
     ([.layers[].annotations["org.opencontainers.image.title"]] | sort) == ($expected | keys | sort) and
     ([.layers[].annotations["org.opencontainers.image.title"]] | unique | length) == ($expected | length) and
     all(.layers[];
@@ -496,7 +555,8 @@ verify_evidence_manifest() {
       .mediaType == $expected[.annotations["org.opencontainers.image.title"]] and
       (.digest | test("^sha256:[a-f0-9]{64}$")) and
       (.size | type == "number" and . >= 0 and . <= 16777216)) and
-    ([.layers[].size] | add) <= 67108864
+    ([.layers[].size] | add) <= 67108864 and
+    canonical_parts("sbom.json.part-") and canonical_parts("vulnerability.json.part-")
   ' "$evidence_manifest" >/dev/null || fail "admission evidence OCI manifest binding mismatch"
 }
 
@@ -528,6 +588,7 @@ restore_evidence_entries() {
     mv "$temporary" "$evidence_directory/$evidence_name"
   done
   verify_evidence_files "$evidence_directory" "$evidence_manifest"
+  reconstruct_evidence_chunks "$evidence_directory"
 }
 
 verify_recovered_evidence() {
@@ -543,6 +604,7 @@ verify_recovered_evidence() {
   verify_evidence_manifest "$evidence_manifest" "$expected_manifest_digest" "$expected_artifact" "$expected_image" \
     "$expected_policy_revision" "$expected_policy_sha256"
   verify_evidence_files "$evidence_directory" "$evidence_manifest"
+  reconstruct_evidence_chunks "$evidence_directory"
   receipt="$evidence_directory/admission.receipt.json"
   signature_binding="$evidence_directory/signature.binding.json"
   [ "$(sha256sum "$receipt" | awk '{print $1}')" = "$expected_receipt" ] ||
@@ -626,13 +688,13 @@ verify_recovered_evidence() {
 publish_or_verify_evidence() {
   evidence_tag=$1
   evidence_manifest=$2
-  evidence_type=application/vnd.kodex.image-admission-evidence.v3
-  config_type=application/vnd.kodex.image-admission-evidence.config.v3+json
+  evidence_type=application/vnd.kodex.image-admission-evidence.v4
+  config_type=application/vnd.kodex.image-admission-evidence.config.v4+json
   printf '{}' >/work/evidence.config.json
   if ! regctl manifest get "$evidence_tag" --format raw-body >"$evidence_manifest" 2>/dev/null; then
     set -- --artifact-type "$evidence_type" --config-type "$config_type" \
       --config-file /work/evidence.config.json --file-title --strip-dirs \
-      --annotation "kodex.dev/evidence-schema=kodex.dev/image-admission-evidence/v3" \
+      --annotation "kodex.dev/evidence-schema=kodex.dev/image-admission-evidence/v4" \
       --annotation "kodex.dev/artifact-id=$artifact_id" \
       --annotation "kodex.dev/image-digest=$image_digest" \
       --annotation "kodex.dev/policy-revision=$POLICY_REVISION" \
@@ -964,6 +1026,7 @@ case "${1:-}" in
     for signature in image-digest provenance native-provenance tool-inventory sbom vulnerability; do
       [ -f "/work/$signature.sigstore.json" ] || : >"/work/$signature.sigstore.json"
     done
+    prepare_evidence_chunks /work
     evidence_total=0
     while IFS='|' read -r evidence_file evidence_media_type; do
       evidence_size=$(wc -c <"/work/$evidence_file" | tr -d ' ')

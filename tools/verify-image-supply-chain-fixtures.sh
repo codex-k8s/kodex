@@ -631,7 +631,9 @@ jq -e '
 ' "$temporary_directory/vulnerability-fixable.result.json" >/dev/null
 if rg -q -- 'admission\.evidence\.json' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" ||
-  (rg -- '--slurpfile' "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" |
+  (sed '/^emit_admission_diagnostic() {$/,/^}$/d' \
+    "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" |
+    rg -- '--slurpfile' |
     rg -v -- '--slurpfile (manifest /work/tool-manifest\.json|claim /work/owner-claim\.json)'); then
   echo "admission evidence still reserializes signed payloads" >&2
   exit 1
@@ -746,9 +748,15 @@ native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 tool-inventory.json|application/vnd.kodex.image-tool-inventory-binding.v1+json
 tool-inventory.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-sbom.json|application/spdx+json
+sbom.json.part-0|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-1|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-2|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-3|application/vnd.kodex.sbom-byte-part.v1+octet-stream
 sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
+vulnerability.json.part-0|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-1|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-2|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-3|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
 vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 signature.binding.json|application/vnd.kodex.signature-binding.v1+json
 admission.receipt.json|application/vnd.kodex.admission-receipt.v2+json
@@ -756,9 +764,33 @@ cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
 EOF
 }
 
+# Исполняем producer из исходника, а не отдельную копию разбиения fixture.
+prepare_evidence_chunks_fixture() {
+  chunks_function=$(awk '
+    $0 == "prepare_evidence_chunks() {" { found = 1 }
+    found { print }
+    found && $0 == "}" { exit }
+  ' "$admission_script")
+  [[ -n $chunks_function ]] || { echo 'evidence chunk producer is absent' >&2; exit 1; }
+  sh -eu -c 'fail() { echo "image admission failed: $1" >&2; exit 1; }
+    eval "$1"
+    prepare_evidence_chunks "$2"' fixture "$chunks_function" "$1"
+}
+
+production_entries_function=$(awk '
+  $0 == "evidence_entries() {" { found = 1 }
+  found { print }
+  found && $0 == "}" { exit }
+' "$admission_script")
+production_entries=$(sh -eu -c 'eval "$1"; evidence_entries' fixture "$production_entries_function")
+[[ "$production_entries" == "$(evidence_entries_fixture)" ]] || {
+  echo 'OCI v4 fixture entry registry differs from production' >&2; exit 1;
+}
+
 write_evidence_manifest_fixture() {
   evidence_directory=$1
   manifest_file=$2
+  prepare_evidence_chunks_fixture "$evidence_directory"
   layer_file=$manifest_file.layers
   : >"$layer_file"
   while IFS='|' read -r evidence_name evidence_media_type; do
@@ -775,12 +807,12 @@ EOF
   jq -Ssc --arg artifact artifact-1 --arg image "$image_digest" \
     --arg policy "$policy_revision" --arg policy_sha "$policy_sha256" \
     '{schemaVersion:2,mediaType:"application/vnd.oci.image.manifest.v1+json",
-      artifactType:"application/vnd.kodex.image-admission-evidence.v3",
-      config:{mediaType:"application/vnd.kodex.image-admission-evidence.config.v3+json",
+      artifactType:"application/vnd.kodex.image-admission-evidence.v4",
+      config:{mediaType:"application/vnd.kodex.image-admission-evidence.config.v4+json",
         digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2},
       layers:.,annotations:{
         "kodex.dev/artifact-id":$artifact,
-        "kodex.dev/evidence-schema":"kodex.dev/image-admission-evidence/v3",
+        "kodex.dev/evidence-schema":"kodex.dev/image-admission-evidence/v4",
         "kodex.dev/image-digest":$image,
         "kodex.dev/policy-revision":$policy,
         "kodex.dev/policy-sha256":$policy_sha}}' "$layer_file" >"$manifest_file"
@@ -854,6 +886,13 @@ cat >"$evidence_source/vulnerability.json" <<'EOF'
   "descriptor": { "configuration": { "fail-on-severity": "high" }, "name": "grype" }
 }
 EOF
+# Полные JSON остаются крупнее отдельного OCI layer; подпись закрепляет их целиком.
+jq -cn --slurpfile sbom "$evidence_source/sbom.json" \
+  '$sbom[0] + {retainedContent:("x" * 25663211)}' >"$evidence_source/sbom.next.json"
+mv "$evidence_source/sbom.next.json" "$evidence_source/sbom.json"
+jq -cn --slurpfile report "$evidence_source/vulnerability.json" \
+  '$report[0] + {retainedContent:("y" * 18000000)}' >"$evidence_source/vulnerability.next.json"
+mv "$evidence_source/vulnerability.next.json" "$evidence_source/vulnerability.json"
 provenance_sha=$(sha256sum "$evidence_source/provenance.json" | awk '{print $1}')
 # Canonical manifest fixture: все probes честно MISSING, capabilities не назначаются.
 jq -jcn --argjson names '["bash","curl","git","gh","jq","yq","ripgrep","make","just","go","goimports","gofumpt","golangci-lint","staticcheck","goose","sqlc","buf","protoc","protoc-gen-go","protoc-gen-go-grpc","grpcurl","mockgen","oapi-codegen","node","npm","pnpm","yarn","typescript","eslint","prettier","vite","vue-tsc","vitest","playwright","chromium","playwright-mcp","wscat","codex","corepack","python3","pip","kubectl","kustomize","helm","buildctl","docker","shellcheck","hadolint","govulncheck","gitleaks"]' \
@@ -930,6 +969,51 @@ $(evidence_entries_fixture)
 EOF
 [[ $(sha256sum "$evidence_recovered/admission.receipt.json" | awk '{print $1}') == "$receipt_sha" ]]
 [[ $(sha256sum "$evidence_recovered/signature.binding.json" | awk '{print $1}') == "$signature_sha" ]]
+[[ $(jq '.layers | length' "$evidence_manifest") == 21 ]]
+for logical_name in sbom vulnerability; do
+  cmp -s "$evidence_source/$logical_name.json" "$evidence_recovered/$logical_name.json" || {
+    echo 'chunked logical evidence did not retain all signed bytes' >&2; exit 1;
+  }
+done
+[[ $(wc -c <"$evidence_recovered/sbom.json") -gt 25663211 ]]
+[[ $(wc -c <"$evidence_recovered/sbom.json.part-0") == 16777216 ]]
+[[ ! -s "$evidence_recovered/sbom.json.part-2" && ! -s "$evidence_recovered/sbom.json.part-3" ]]
+jq '.artifactType = "application/vnd.kodex.image-admission-evidence.v3" |
+  .config.mediaType = "application/vnd.kodex.image-admission-evidence.config.v3+json" |
+  .annotations["kodex.dev/evidence-schema"] = "kodex.dev/image-admission-evidence/v3"' \
+  "$evidence_manifest" >"$temporary_directory/evidence-old-schema.json"
+expect_evidence_failure 'old v3 evidence schema' "$evidence_recovered" "$temporary_directory/evidence-old-schema.json"
+jq '.layers |= reverse' "$evidence_manifest" >"$temporary_directory/evidence-reordered.json"
+expect_evidence_failure 'reordered evidence chunks' "$evidence_recovered" "$temporary_directory/evidence-reordered.json"
+jq '(.layers[] | select(.annotations["org.opencontainers.image.title"] == "sbom.json.part-0") | .size) = 1' \
+  "$evidence_manifest" >"$temporary_directory/evidence-short-first.json"
+expect_evidence_failure 'short nonfinal evidence chunk' "$evidence_recovered" "$temporary_directory/evidence-short-first.json"
+jq '(.layers[] | select(.annotations["org.opencontainers.image.title"] == "sbom.json.part-2") | .size) = 1' \
+  "$evidence_manifest" >"$temporary_directory/evidence-nontrailing-empty.json"
+expect_evidence_failure 'nontrailing empty evidence chunk' "$evidence_recovered" "$temporary_directory/evidence-nontrailing-empty.json"
+jq '(.layers[] | select(.annotations["org.opencontainers.image.title"] == "sbom.json.part-0") | .size) = 16777217' \
+  "$evidence_manifest" >"$temporary_directory/evidence-oversized-chunk.json"
+expect_evidence_failure 'oversized evidence chunk' "$evidence_recovered" "$temporary_directory/evidence-oversized-chunk.json"
+jq '(.layers[] | select(.annotations["org.opencontainers.image.title"] | startswith("sbom.json.part-")) | .size) = 0' \
+  "$evidence_manifest" >"$temporary_directory/evidence-empty-logical.json"
+expect_evidence_failure 'empty logical chunk sequence' "$evidence_recovered" "$temporary_directory/evidence-empty-logical.json"
+jq '.layers |= map(.size = 16777216)' "$evidence_manifest" >"$temporary_directory/evidence-total-overflow.json"
+expect_evidence_failure 'evidence exceeding global 64Mi bound' "$evidence_recovered" "$temporary_directory/evidence-total-overflow.json"
+cp -a "$evidence_recovered" "$temporary_directory/evidence-chunk-mutated"
+printf 'x' >>"$temporary_directory/evidence-chunk-mutated/sbom.json.part-1"
+expect_evidence_failure 'mutated evidence chunk bytes' "$temporary_directory/evidence-chunk-mutated" "$evidence_manifest"
+cp -a "$evidence_recovered" "$temporary_directory/evidence-chunk-missing"
+rm "$temporary_directory/evidence-chunk-missing/sbom.json.part-3"
+expect_evidence_failure 'missing trailing empty chunk' "$temporary_directory/evidence-chunk-missing" "$evidence_manifest"
+# Producer не обрезает источник за пределами фиксированного четырёхчастного бюджета.
+mkdir "$temporary_directory/evidence-source-overflow"
+dd if=/dev/zero of="$temporary_directory/evidence-source-overflow/sbom.json" \
+  bs=16777216 count=4 2>/dev/null
+printf 'x' >>"$temporary_directory/evidence-source-overflow/sbom.json"
+printf '{}\n' >"$temporary_directory/evidence-source-overflow/vulnerability.json"
+if prepare_evidence_chunks_fixture "$temporary_directory/evidence-source-overflow" >/dev/null 2>&1; then
+  echo 'oversized logical source was truncated into accepted evidence chunks' >&2; exit 1;
+fi
 
 cp -a "$evidence_recovered" "$temporary_directory/evidence-byte-mutated"
 printf ' ' >>"$temporary_directory/evidence-byte-mutated/sbom.json"

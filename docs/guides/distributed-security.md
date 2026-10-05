@@ -1380,6 +1380,16 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   manifest задаёт закрытый набор layers с exact title, media type, size и
   digest, а recovery повторно проверяет descriptors, owner binding и detached
   signature над восстановленными байтами.
+- Размер транспортного layer не ограничивает полноту логического SBOM:
+  evidence v4 хранит SBOM и vulnerability report четырьмя фиксированными
+  последовательными частями. Каждая часть не больше 16MiB, сумма всех layers
+  не больше 64MiB; короткая последняя непустая часть допускает только пустые
+  завершающие части. Закрытый набор из 21 descriptor связывает exact title,
+  media type, порядок, размер и digest. Recovery сначала проверяет транспорт,
+  затем восстанавливает исходные байты и сверяет исходные hashes/signatures.
+  Урезание данных, увеличение бюджета и совместимый запасной decoder прежнего
+  формата запрещены; прежний неподходящий artifact требует новой штатной сборки
+  и допуска, а не перезаписи immutable evidence.
 - Materializer недоверенного build input принадлежит deployable, получает
   отдельную pull-only mTLS/application identity и destination-bound egress.
   Он принимает только exact OCI manifest digest и single-layer descriptor,

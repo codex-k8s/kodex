@@ -1939,3 +1939,28 @@ Live compact repeat, owner technical failure и публикация окруж�
 checkbox6/7 остаются OPEN. Frontend recipe polling source-only не обнаружен:
 повторный detail read запускает verified WebSocket invalidation, не timer;
 Network count сам по себе не доказательство polling.
+
+05.10.2026 01:35 UTC, sourcea5846a9eccdd1e23925af5da9ed4cfd6e6dcb0d5:
+FAIL — compact-only исправление не устраняет реальный отказ. Автоматический
+повтор runv20261005010944-419eead0348f27066754b8d3ebe75fba90422063 exact owner
+claim связан с buildimgbld_CJ3xGM6hyIxDJk0TUC9rRTwS/gen4,
+artifactimgart_6-L3lvI3FujW7mjYGft3qds1,
+manifestsha256:b4b7bf561b42761352423fc363e3300436ae43d244533f11f3d4b0f7a0447617.
+SCAN JobUIDb030de0b-1663-4714-8c98-348c7f9f37ce,
+PodUID0999402e-4666-457a-91db-8ecd268e4dba exit0 01:10:08→01:13:48;
+SIGN exit0 01:13:54→01:13:55; ADMIT exit1 01:14:01,
+closed ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND.
+Actual SBOM raw/full compact одинаково25,663,211bytes >16,777,216;
+конкретный offending member теперь доказан, vulnerability size UNKNOWN.
+Этот run не назван повтором другого build38J. Owner receipt по-прежнему UNKNOWN.
+PASS — ROOT публичные image-supply-chain fixtures (13 embedded Python) и Node13,
+shell syntax/diff-check для нового v4 delta: 21 фиксированный OCI layer,
+полные исходные SBOM/vulnerability bytes восстанавливаются побайтно с прежними
+подписями. Каждая часть<=16Mi, вся evidence<=64Mi; missing/tamper/order,
+noncanonical parts, oldv3 и превышение бюджета закрыто отклоняются.
+Совместимый v3 decoder/fallback не добавлен, old evidence не переписывается.
+Новый скрипт поставляется ConfigMap, binary rebuild для этого delta не нужен.
+Live v4 apply/admission/promote NOT RUN. Общий invariant закреплён в GUIDE-DOC-003.
+Frontend technical failure frozen: 75 адресных unit, lint/typecheck/format PASS
+в isolated tree419eead + согласованном generated snapshot; ROOT/browser NOT RUN.
+Отдельные backend Fail/Expire commands и recovery/cleanup ещё в реализации.
