@@ -48,6 +48,18 @@ test('точные baseline и candidate принадлежат разрешён
   assert.equal(output.data['provenance-policy.jq'], f.cm.data['provenance-policy.jq']);
   assert.equal(output.data['image-admission.sh'], candidate);
 });
+test('отсутствующий immutable означает Kubernetes default false без добавления поля', () => {
+  const f = fixture(); delete f.cm.immutable;
+  const h = harness(f);
+  assert.equal(refresh(f.options, candidate, h.io).status, 'APPLIED');
+  assert.equal(Object.hasOwn(JSON.parse(h.writes()[0].input), 'immutable'), false);
+  for (const invalid of [null, 'false', 0]) {
+    const negative = fixture(); negative.cm.immutable = invalid;
+    const attempt = harness(negative);
+    assert.throws(() => refresh(negative.options, candidate, attempt.io), /CONFIGMAP_SHAPE_INVALID/);
+    assert.equal(attempt.writes().length, 0);
+  }
+});
 for (const mode of ['check', 'dry-run', 'apply']) test(`режим ${mode} соблюдает effect budget`, () => {
   const f = fixture(mode), h = harness(f), result = refresh(f.options, candidate, h.io);
   assert.equal(result.status, { check: 'CHECKED', 'dry-run': 'DRY_RUN_PASS', apply: 'APPLIED' }[mode]);

@@ -2878,3 +2878,13 @@ CMUID/RV/dataSHA CAS, source clean SHA и policy/compiler/cluster/node/workspace
 видимы только в раскрытии; collapsed38px, expanded219px. Screenshot в приватный
 state path отклонён ограничением Chrome MCP workspace — это ограничение
 сохранения evidence, не доказательство дефекта приложения. Pixel check ещё открыт.
+
+14:40–14:41 UTC: компактный UI screenshot PASS через inline Chrome MCP,
+user справа, assistant слева, 38px tool rows, focus ring/details без наложений.
+Два запроса сохранить screenshot file отклонены MCP workspace boundary;
+ограничение не обходилось. Новый checkpoint6130eb45 запушен и clean.
+Live diagnostic check закрыто отказал CONFIGMAP_SHAPE_INVALID до эффекта:
+Kubernetes не сериализует optional immutable=false; actual поле отсутствует.
+Guard исправлен только для отсутствующего поля или explicitfalse; null/string/
+number/true отклоняются. Новый test сохраняет исходную omitted-field shape;
+CMUID/RV/data baseline не изменились, apply ещё не запускался.

@@ -45,7 +45,7 @@ export function validateOptions(o) {
 export function candidateConfigMap(current, candidate, o) {
   check(current.apiVersion === 'v1' && current.kind === 'ConfigMap' && current.metadata?.name === name && current.metadata?.namespace === namespace, 'CONFIGMAP_IDENTITY_INVALID');
   check(current.metadata.uid === o.configmapUID && current.metadata.resourceVersion === o.resourceVersion && !current.metadata.deletionTimestamp, 'CONFIGMAP_CAS_MISMATCH');
-  check(current.immutable === false && !Object.hasOwn(current, 'binaryData'), 'CONFIGMAP_SHAPE_INVALID');
+  check((!Object.hasOwn(current, 'immutable') || current.immutable === false) && !Object.hasOwn(current, 'binaryData'), 'CONFIGMAP_SHAPE_INVALID');
   const labels = current.metadata.labels;
   check(labels?.['app.kubernetes.io/part-of'] === 'kodex' && labels?.['kodex.dev/local-profile'] === 'hot-reload' && labels?.['kodex.dev/security-profile'] === 'trusted-cluster', 'CONFIGMAP_PROFILE_INVALID');
   check(current.data && Object.values(current.data).every(value => typeof value === 'string') && fingerprint(current.data) === o.baselineDataSHA256, 'CONFIGMAP_DATA_MISMATCH');
