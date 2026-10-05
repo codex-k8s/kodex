@@ -1,0 +1,35 @@
+{
+  "name": "@kodex/runner-npm-toolchain",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Зафиксированные CLI полного образа runner",
+  "scripts": {
+    "test": "node --test install.test.mjs"
+  },
+  "dependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "@openai/codex": "0.160.0",
+    "@playwright/mcp": "0.0.77",
+    "@playwright/test": "1.61.1",
+    "create-vue": "3.22.4",
+    "eslint": "10.5.0",
+    "playwright": "1.61.1",
+    "pnpm": "11.11.0",
+    "prettier": "3.8.4",
+    "typescript": "6.0.3",
+    "vite": "8.0.16",
+    "vitest": "4.1.9",
+    "vue": "3.5.38",
+    "vue-tsc": "3.3.5",
+    "wait-on": "9.0.10",
+    "wscat": "6.1.0",
+    "yarn": "1.22.22"
+  },
+  "overrides": {
+    "brace-expansion@>=5 <6": "5.0.11",
+    "ip-address@>=10 <11": "10.3.1",
+    "js-yaml@>=4 <5": "4.3.2",
+    "tar@>=7 <8": "7.5.21",
+    "undici@>=6 <7": "6.28.1"
+  }
+}

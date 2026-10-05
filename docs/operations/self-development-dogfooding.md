@@ -2208,3 +2208,41 @@ Checkbox6/7 и последующие live dogfooding этапы остаютс�
 Runbook Prettier PASS. Проверка форматирования всего исторического журнала
 дала FAIL также на исходном8f837663; прежние evidence-записи не переписывались
 механически. Это не объявляется успешной форматной проверкой журнала.
+
+05.10.2026 04:59 UTC, source99b94d75b5525e404bcb33300d8b82f05aecd253 + toolchain delta:
+PASS — ROOT объединённые32 адресных Python unit28.307s и18 npm unit175ms,
+sh/node syntax, ShellCheck и diff check. Security Go closure использует
+bounded fixedpoint min-require/MVS вместо конфликтующего exact go-get downgrade;
+итоговый ELF проверяет compiler/module/version/noReplace и восемь dependency
+floors. Все16 GoCLI собираются из upstream source; три platformCLI вынесены
+в независимый stage. MAIN helper SHA256
+1bcc8b7cbfffb3ad36ab22edce2186eb447e17a49d0bffb405d3b29c18abfb7d
+совпадает с helper реальной host проверки gh2.95.0/kubectl1.36.2/Helm4.2.1:
+три сборки PASS48.363/57.095/57.694s, actualELF Go1.26.6 и штатные version
+команды PASS. Это host source proof, не новый OCI admission.
+
+PASS — исполнитель дополнительно проверил actual grpcurl1.9.3/oapi2.7.1
+и17 npmCLI, новую npm12.2.0 CLI ci/uninstall в disposable private prefix.
+ROOT интегрировал frozen source и идентичные lock hashes:
+rootd4fefe6891e4b9f1cd5a87d7aa66ac06eea3f9ce3a2f45f3840133c973914e51,
+sourced30d5fe233e768dad2d23ff5636cf7d7950bbd6ea52d41f13f72dc5e2fc8193f.
+Upstream npm tarball integrity проверяется до записи в свежий каталог;
+bundle не переносится, installed modules не переписываются. Все npm version
+pins принадлежат manifest/lock; прежние Docker ARG удалены, CLI aliases
+относительные, nonroot system Chromium probe сохранён. npm18 unit/format PASS.
+Первый combined Prettier вызов выявил formatting FAIL GUIDE-DOC-003,
+исправление выполняется отдельно; исторический журнал не объявляется PASS.
+
+Новый полный OCI build, inventory50, повторный admission/promotion и ENV publish
+NOT RUN. Текущий authoritative gen5 candidate по-прежнему REJECTED123;
+checkbox6/7 и последующие live dogfooding этапы остаются OPEN. Чужие вкладки
+Chrome не тронуты, own22 периодически reload. Security incident остаётся OPEN.
+
+05.10.2026 05:01 UTC, source99b94d75 + финальная toolchain delta:
+PASS — повторные32 Python и18 npm unit после явного Go resource budget:
+каждая сборка использует -p=4/GOMAXPROCS4, независимые Docker stages сохраняют
+параллельность, не занимая все32 CPU одновременно. Unit проверяет actual argv
+и child env. Первый helper hash выше относится к host compatibility proof
+до этой исключительно ресурсной правки; новый OCI ещё не объявляется PASS.
+GUIDE-DOC-003 Prettier исправлен штатным formatter, повторный адресный check
+вместе с npm-toolchain PASS. Нормализация существующих таблиц только форматная.

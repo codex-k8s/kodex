@@ -68,7 +68,8 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         self.source.mkdir()
         self.state.mkdir(mode=0o700)
         self.bin.mkdir()
-        for name in ("services/jobs/agent-runner/Dockerfile", "tools/release/runner-binary-provenance.py"):
+        for name in ("services/jobs/agent-runner/Dockerfile", "services/jobs/agent-runner/build-go-tool.sh",
+                     "tools/release/runner-binary-provenance.py"):
             destination = self.source / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, destination)
@@ -145,7 +146,9 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         self.assertTrue(re.search(r'^FROM .* AS full-runtime$', dockerfile, re.MULTILINE))
         full = dockerfile.split(" AS full-runtime\n", 1)[1]
         self.assertNotIn('playwright install --with-deps chromium', full)
-        self.assertIn('"@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"', full)
+        manifest = (ROOT / "services/jobs/agent-runner/npm-toolchain/package.json").read_text()
+        self.assertIn('"@playwright/mcp": "0.0.77"', manifest)
+        self.assertIn('npm ci --prefix /opt/kodex/npm-toolchain --ignore-scripts', full)
         self.assertIn('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1', full)
         self.assertIn('PLAYWRIGHT_MCP_EXECUTABLE_PATH=/usr/lib/chromium/chromium', full)
         self.assertIn('COPY --from=toolchain-build /out/kodex-protected/ /usr/local/bin/', full)
@@ -159,7 +162,7 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         self.assertEqual(tuple(left or right for left, right in observed), required)
         self.assertEqual(len(required), 38)
         for executable in required:
-            self.assertIn(executable, dockerfile)
+            self.assertIn(executable, dockerfile + manifest)
 
     def test_security_refresh_and_native_browser_are_source_pinned_before_runner(self):
         full = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text().split(" AS full-runtime\n", 1)[1]
@@ -200,6 +203,19 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         self.assertEqual(len({proof['sourceInputSHA256'] for proof in proofs}), 2)
         self.assertEqual(len({proof['buildInputSHA256'] for proof in proofs}), 2)
 
+    def test_go_security_pin_changes_real_source_input_and_cache_identity(self):
+        self.assertEqual(self.run_builder('--image-profile', 'full').returncode, 0)
+        helper = self.source / 'services/jobs/agent-runner/build-go-tool.sh'
+        helper.write_text(helper.read_text().replace('golang.org/x/crypto v0.56.0', 'golang.org/x/crypto v0.57.0'))
+        for args in (('add', '.'), ('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'tool fixture')):
+            subprocess.run(['git', *args], cwd=self.source, check=True, capture_output=True, env=self.env)
+        result = self.run_builder('--image-profile', 'full')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        proofs = [json.loads(path.read_text()) for path in (self.state / 'cache').glob('*.provenance.json')]
+        self.assertEqual(len(proofs), 2)
+        self.assertEqual(len({proof['sourceInputSHA256'] for proof in proofs}), 2)
+        self.assertEqual(len({proof['buildInputSHA256'] for proof in proofs}), 2)
+
     def test_actual_browser_probe_uses_native_path_and_closes_without_raw_errors(self):
         full = (ROOT / 'services/jobs/agent-runner/Dockerfile').read_text().split(' AS full-runtime\n', 1)[1]
         probe = re.search(r"RUN runuser -u kodex -- node -e '([^'\n]+)'", full).group(1)
@@ -209,7 +225,7 @@ if(options.executablePath!=="/usr/lib/chromium/chromium"||options.headless!==tru
 if(process.env.PROBE_FAIL)throw new Error("SENTINEL_PRIVATE_ERROR");
 return {newPage:async()=>({setContent:async(value)=>{if(value!=="<title>kodex</title>")throw new Error("wrong content");},title:async()=>"kodex"}),close:async()=>{process.stdout.write("CLOSED");}};
 }};''')
-        probe = probe.replace('/usr/local/lib/node_modules/playwright', str(module))
+        probe = probe.replace('/opt/kodex/npm-toolchain/node_modules/playwright', str(module))
         for failed in (False, True):
             result = subprocess.run([shutil.which('node'), '-e', probe], env={**self.env, 'PLAYWRIGHT_MCP_EXECUTABLE_PATH': '/usr/lib/chromium/chromium',
                                     **({'PROBE_FAIL': '1'} if failed else {})}, capture_output=True, text=True, timeout=5)
@@ -218,19 +234,16 @@ return {newPage:async()=>({setContent:async(value)=>{if(value!=="<title>kodex</t
             self.assertEqual(result.stderr, 'System Chromium probe failed\n' if failed else '')
             self.assertNotIn('SENTINEL_PRIVATE_ERROR', result.stderr)
 
-    def test_base_yarn_absolute_links_are_normalized_in_a_separate_full_layer(self):
+    def test_npm_toolchain_publishes_relative_links_from_closed_source(self):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
         full = dockerfile.split(" AS full-runtime\n", 1)[1]
-        normalization = full.index('for yarn_name in yarn yarnpkg; do')
-        self.assertGreater(normalization, full.index('rm -rf /var/lib/apt/lists/* /root/.cache'))
-        self.assertLess(normalization, full.index('COPY --from=runner-build '))
-        self.assertIn('test "$(readlink "/usr/local/bin/${yarn_name}")" = "/opt/yarn-v${YARN_VERSION}/bin/${yarn_name}"', full)
-        self.assertIn('test -x "/opt/yarn-v${YARN_VERSION}/bin/${yarn_name}"', full)
-        self.assertIn('ln -sfn "../../../opt/yarn-v${YARN_VERSION}/bin/${yarn_name}" "/usr/local/bin/${yarn_name}"', full)
-        for name in ("yarn", "yarnpkg"):
-            target = f"../../../opt/yarn-v1.22.22/bin/{name}"
-            self.assertEqual(os.path.normpath(f"/usr/local/bin/{target}"), f"/opt/yarn-v1.22.22/bin/{name}")
-        self.assertIn('test "$(yarn --version)" = "${YARN_VERSION}"', full)
+        helper = (ROOT / "services/jobs/agent-runner/npm-toolchain/install.mjs").read_text()
+        self.assertIn('symlinkSync(relative(dirname(destination), target), destination)', helper)
+        self.assertLess(full.index('install.mjs verify'), full.index('install.mjs publish-links'))
+        self.assertLess(full.index('uninstall --global npm --prefix /usr/local'), full.index('install.mjs publish-links'))
+        self.assertLess(full.index('install.mjs publish-links'), full.index('COPY --from=runner-build '))
+        self.assertIn('require("/opt/kodex/npm-toolchain/node_modules/playwright")', full)
+        self.assertIn('test "$(yarn --version)" = "$(node -p', full)
         probe = (ROOT / "services/jobs/agent-runner/internal/imageinventory/probe.go").read_text()
         self.assertIn('root.Open(strings.TrimPrefix(path, "/"))', probe)
         self.assertNotIn('os.Open(path)', probe)
@@ -244,15 +257,18 @@ return {newPage:async()=>({setContent:async(value)=>{if(value!=="<title>kodex</t
             stages[header.group(2)] = (header.group(1), dockerfile[header.end():end])
         parent, tools = stages["toolchain-build"]
         self.assertEqual(parent, "build")
-        self.assertNotRegex(stages["build"][1] + tools, r'(?m)^(?:COPY|ADD) ')
+        self.assertNotRegex(stages["build"][1], r'(?m)^(?:COPY|ADD) ')
+        self.assertEqual(re.findall(r'(?m)^(?:COPY|ADD) (.+)$', tools),
+                         ["services/jobs/agent-runner/build-go-tool.sh /opt/kodex/build-go-tool.sh"])
         self.assertNotIn("runner-build", tools)
-        self.assertEqual(tools.count("CGO_ENABLED=0 go install "), 13)
+        self.assertEqual(tools.count("sh /opt/kodex/build-go-tool.sh "), 13)
+        self.assertNotIn("go install", tools)
         full = stages["full-runtime"][1]
         installation_end = full.index('rm -rf /var/lib/apt/lists/* /root/.cache')
         source_copy = full.index('COPY --from=runner-build ')
         self.assertGreater(source_copy, installation_end)
         early_copies = re.findall(r'(?m)^COPY .*?--from=([^ ]+)', full[:installation_end])
-        self.assertEqual(early_copies, ["toolchain-build", "build"])
+        self.assertEqual(early_copies, ["toolchain-build", "platform-cli-build", "build"])
 
     def test_full_guard_stages_exact_runner_after_prepare_before_install(self):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()

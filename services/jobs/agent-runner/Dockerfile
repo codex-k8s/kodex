@@ -29,7 +29,6 @@ RUN mkdir -p /out/kodex-protected \
 # последним stage этого Dockerfile и не зависит от local-runtime.
 FROM docker.io/library/node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS local-codex-cli
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0
 
 RUN set -eu; \
 	npm install --global "${KODEX_CODEX_PACKAGE}"; \
@@ -104,45 +103,49 @@ ARG MOCKGEN_VERSION=v0.6.0
 
 ENV GOBIN=/out/kodex-protected
 
+COPY services/jobs/agent-runner/build-go-tool.sh /opt/kodex/build-go-tool.sh
+
 RUN apk add --no-cache ca-certificates git \
 	&& mkdir -p "${GOBIN}" \
-	&& CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@"${GOOSE_VERSION}" \
-	&& CGO_ENABLED=0 go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@"${OAPI_CODEGEN_VERSION}" \
-	&& CGO_ENABLED=0 go install google.golang.org/protobuf/cmd/protoc-gen-go@"${PROTOC_GEN_GO_VERSION}" \
-	&& CGO_ENABLED=0 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@"${PROTOC_GEN_GO_GRPC_VERSION}" \
-	&& CGO_ENABLED=0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION}" \
-	&& CGO_ENABLED=0 go install golang.org/x/tools/cmd/goimports@"${GOIMPORTS_VERSION}" \
-	&& CGO_ENABLED=0 go install mvdan.cc/gofumpt@"${GOFUMPT_VERSION}" \
-	&& CGO_ENABLED=0 go install honnef.co/go/tools/cmd/staticcheck@"${STATICCHECK_VERSION}" \
-	&& CGO_ENABLED=0 go install github.com/bufbuild/buf/cmd/buf@"${BUF_VERSION}" \
-	&& CGO_ENABLED=0 go install github.com/fullstorydev/grpcurl/cmd/grpcurl@"${GRPCURL_VERSION}" \
-	&& CGO_ENABLED=0 go install github.com/mikefarah/yq/v4@"${YQ_VERSION}" \
-	&& CGO_ENABLED=0 go install github.com/sqlc-dev/sqlc/cmd/sqlc@"${SQLC_VERSION}" \
-	&& CGO_ENABLED=0 go install go.uber.org/mock/mockgen@"${MOCKGEN_VERSION}"
+	&& sh /opt/kodex/build-go-tool.sh github.com/pressly/goose/v3/cmd/goose@"${GOOSE_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@"${OAPI_CODEGEN_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh google.golang.org/protobuf/cmd/protoc-gen-go@"${PROTOC_GEN_GO_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh google.golang.org/grpc/cmd/protoc-gen-go-grpc@"${PROTOC_GEN_GO_GRPC_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh golang.org/x/tools/cmd/goimports@"${GOIMPORTS_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh mvdan.cc/gofumpt@"${GOFUMPT_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh honnef.co/go/tools/cmd/staticcheck@"${STATICCHECK_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh github.com/bufbuild/buf/cmd/buf@"${BUF_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh github.com/fullstorydev/grpcurl/cmd/grpcurl@"${GRPCURL_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh github.com/mikefarah/yq/v4@"${YQ_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh github.com/sqlc-dev/sqlc/cmd/sqlc@"${SQLC_VERSION}" \
+	&& sh /opt/kodex/build-go-tool.sh go.uber.org/mock/mockgen@"${MOCKGEN_VERSION}"
+# Готовые CLI содержат собственную stdlib и не обновляются заменой runtime Go.
+# Canonical upstream packages собираются независимо от runner и 13 Go tools.
+FROM build AS platform-cli-build
+
+ENV GOBIN=/out/kodex-platform
+
+COPY --chmod=0555 services/jobs/agent-runner/build-go-tool.sh /usr/local/bin/kodex-build-go-tool
+RUN set -eu; \
+	apk add --no-cache ca-certificates git; \
+	test "$(go env GOVERSION)" = "go1.26.6"; \
+	mkdir -p "${GOBIN}"; \
+	sh /usr/local/bin/kodex-build-go-tool github.com/cli/cli/v2/cmd/gh@"v${GH_CLI_VERSION}"; \
+	sh /usr/local/bin/kodex-build-go-tool k8s.io/kubernetes/cmd/kubectl@"${KUBECTL_VERSION}"; \
+	sh /usr/local/bin/kodex-build-go-tool helm.sh/helm/v4/cmd/helm@"${HELM_VERSION}"; \
+	cli_version=$("${GOBIN}/gh" --version); \
+	printf '%s\n' "$cli_version" | awk -v version="${GH_CLI_VERSION}" \
+		'NR == 1 {valid=($1 == "gh" && $2 == "version" && $3 == version)} END {exit !valid}'; \
+	client_version=$("${GOBIN}/kubectl" version --client -o json); \
+	test "$(printf '%s\n' "$client_version" | sed -n 's/.*"gitVersion": "\([^"]*\)".*/\1/p')" = "${KUBECTL_VERSION}"; \
+	test "$("${GOBIN}/helm" version --template '{{.Version}} {{.GoVersion}}')" = "${HELM_VERSION} go1.26.6"
+
 FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS full-runtime
 
 ENV GOTOOLCHAIN=local
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0
-ARG GH_CLI_VERSION=2.95.0
-ARG KUBECTL_VERSION=v1.36.2
-ARG HELM_VERSION=v4.2.1
 ARG JUST_VERSION=1.55.1
-ARG TYPESCRIPT_VERSION=6.0.3
-ARG VUE_VERSION=3.5.38
-ARG CREATE_VUE_VERSION=3.22.4
-ARG VITE_VERSION=8.0.16
-ARG VUE_TSC_VERSION=3.3.5
-ARG VITEST_VERSION=4.1.9
-ARG ESLINT_VERSION=10.5.0
-ARG PRETTIER_VERSION=3.8.4
-ARG PNPM_VERSION=11.8.0
-ARG YARN_VERSION=1.22.22
-ARG HEY_OPENAPI_TS_VERSION=0.99.0
-ARG WSCAT_VERSION=6.1.0
-ARG PLAYWRIGHT_VERSION=1.61.1
-ARG PLAYWRIGHT_MCP_VERSION=0.0.77
-ARG WAIT_ON_VERSION=9.0.10
 # Новая security-ревизия обновляет apt-слой, не затрагивая независимые Go tools.
 ARG KODEX_TOOLCHAIN_SECURITY_REVISION=20261005
 LABEL kodex.dev/toolchain-security-revision=${KODEX_TOOLCHAIN_SECURITY_REVISION}
@@ -150,12 +153,15 @@ ARG KODEX_AGENT_RUNNER_UID=10001
 ARG KODEX_AGENT_RUNNER_GID=10001
 
 COPY --from=toolchain-build /out/kodex-protected/ /usr/local/bin/
+COPY --from=platform-cli-build --chmod=0555 /out/kodex-platform/ /usr/local/bin/
 
 ENV PATH=/opt/kodex/bootstrap-go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
 	PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
 	PLAYWRIGHT_MCP_EXECUTABLE_PATH=/usr/lib/chromium/chromium
 
 COPY --from=build /usr/local/go/ /opt/kodex/bootstrap-go/
+COPY services/jobs/agent-runner/npm-toolchain/package.json services/jobs/agent-runner/npm-toolchain/package-lock.json services/jobs/agent-runner/npm-toolchain/install.mjs services/jobs/agent-runner/npm-toolchain/npm-source.json /opt/kodex/npm-toolchain/
+COPY services/jobs/agent-runner/npm-toolchain/npm-cli/package.json services/jobs/agent-runner/npm-toolchain/npm-cli/package-lock.json /opt/kodex/npm-toolchain/npm-cli/
 
 RUN set -eu; \
 	case "${KODEX_TOOLCHAIN_SECURITY_REVISION}" in ''|*[!0-9]*) exit 1 ;; esac; \
@@ -207,56 +213,25 @@ RUN set -eu; \
 	ln -sf /usr/local/go/bin/go /usr/local/bin/go; \
 	ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt; \
 	case "$(dpkg --print-architecture)" in \
-		x86_64) gh_arch=amd64; kubectl_arch=amd64; helm_arch=amd64; just_arch=x86_64 ;; \
-		amd64) gh_arch=amd64; kubectl_arch=amd64; helm_arch=amd64; just_arch=x86_64 ;; \
-		arm64) gh_arch=arm64; kubectl_arch=arm64; helm_arch=arm64; just_arch=aarch64 ;; \
-		aarch64) gh_arch=arm64; kubectl_arch=arm64; helm_arch=arm64; just_arch=aarch64 ;; \
+		x86_64) just_arch=x86_64 ;; \
+		amd64) just_arch=x86_64 ;; \
+		arm64) just_arch=aarch64 ;; \
+		aarch64) just_arch=aarch64 ;; \
 		*) echo "unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
 	esac; \
 	curl_flags="--ipv4 --fail --show-error --silent --location --retry 5 --retry-all-errors --connect-timeout 20 --max-time 300"; \
-	curl ${curl_flags} -o /tmp/gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_${gh_arch}.tar.gz"; \
-	tar -xzf /tmp/gh.tar.gz -C /tmp; \
-	mv "/tmp/gh_${GH_CLI_VERSION}_linux_${gh_arch}/bin/gh" /usr/local/bin/gh; \
-	curl ${curl_flags} -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${kubectl_arch}/kubectl"; \
-	curl ${curl_flags} -o /tmp/kubectl.sha256 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${kubectl_arch}/kubectl.sha256"; \
-	echo "$(cat /tmp/kubectl.sha256)  /usr/local/bin/kubectl" | sha256sum -c -; \
-	curl ${curl_flags} -o "/tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz" "https://get.helm.sh/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz"; \
-	curl ${curl_flags} -o "/tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum" "https://get.helm.sh/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum"; \
-	(cd /tmp && sha256sum -c "helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum"); \
-	tar -xzf "/tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz" -C /tmp; \
-	mv "/tmp/linux-${helm_arch}/helm" /usr/local/bin/helm; \
 	curl ${curl_flags} -o "/tmp/just.tar.gz" "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${just_arch}-unknown-linux-musl.tar.gz"; \
 	tar -xzf /tmp/just.tar.gz -C /tmp just; \
 	mv /tmp/just /usr/local/bin/just; \
 	chmod +x /usr/local/bin/gh /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/just; \
-	rm -rf /tmp/gh.tar.gz /tmp/gh_${GH_CLI_VERSION}_linux_${gh_arch} /tmp/kubectl.sha256 /tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz /tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum /tmp/linux-${helm_arch} /tmp/just.tar.gz; \
-	if command -v yarn >/dev/null 2>&1 && [ "$(yarn --version)" = "${YARN_VERSION}" ]; then \
-		echo "yarn ${YARN_VERSION} already installed"; \
-	else \
-		rm -f /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
-		npm install -g "yarn@${YARN_VERSION}"; \
-	fi; \
-	npm install -g \
-		"${KODEX_CODEX_PACKAGE}" \
-		"typescript@${TYPESCRIPT_VERSION}" \
-		"vue@${VUE_VERSION}" \
-		"create-vue@${CREATE_VUE_VERSION}" \
-		"vite@${VITE_VERSION}" \
-		"vue-tsc@${VUE_TSC_VERSION}" \
-		"vitest@${VITEST_VERSION}" \
-		"eslint@${ESLINT_VERSION}" \
-		"prettier@${PRETTIER_VERSION}" \
-		"pnpm@${PNPM_VERSION}" \
-		"@hey-api/openapi-ts@${HEY_OPENAPI_TS_VERSION}" \
-		"wscat@${WSCAT_VERSION}" \
-		"playwright@${PLAYWRIGHT_VERSION}" \
-		"@playwright/test@${PLAYWRIGHT_VERSION}" \
-		"@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" \
-		"wait-on@${WAIT_ON_VERSION}"; \
-	code_mode_host=$(find /usr/local/lib/node_modules/@openai/codex -type f \
-		-path '*/vendor/*/bin/codex-code-mode-host' -print -quit); \
-	test -n "$code_mode_host" && test -x "$code_mode_host"; \
-	ln -sf "$code_mode_host" /usr/local/bin/codex-code-mode-host; \
+	rm -rf /tmp/just.tar.gz; \
+	node /opt/kodex/npm-toolchain/install.mjs prepare-npm; \
+	npm ci --prefix /opt/kodex/npm-toolchain --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/; \
+	npm ci --prefix /opt/kodex/npm-toolchain/npm-cli --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/; \
+	node /opt/kodex/npm-toolchain/install.mjs verify; \
+	node /opt/kodex/npm-toolchain/npm-cli/bin/npm-cli.js uninstall --global npm --prefix /usr/local --ignore-scripts --no-audit --no-fund; \
+	test ! -e /usr/local/lib/node_modules/npm; \
+	node /opt/kodex/npm-toolchain/install.mjs publish-links; \
 	test -x "${PLAYWRIGHT_MCP_EXECUTABLE_PATH}"; \
 	playwright-mcp --help | grep -F -- '--executable-path' >/dev/null; \
 	node --version; \
@@ -302,19 +277,11 @@ RUN set -eu; \
 	wait-on --version >/dev/null; \
 	codex --version >/dev/null; \
 	codex-code-mode-host --help >/dev/null; \
+	npm cache clean --force; \
 	rm -rf /var/lib/apt/lists/* /root/.cache
 
 # Относительные ссылки остаются внутри final rootfs при чтении через os.Root.
-# Отдельный слой сохраняет кеш установки полного toolchain.
-RUN set -eu; \
-	if [ -L /usr/local/bin/yarn ] && [ "$(readlink /usr/local/bin/yarn)" = "/opt/yarn-v${YARN_VERSION}/bin/yarn" ]; then \
-		for yarn_name in yarn yarnpkg; do \
-			test "$(readlink "/usr/local/bin/${yarn_name}")" = "/opt/yarn-v${YARN_VERSION}/bin/${yarn_name}"; \
-			test -x "/opt/yarn-v${YARN_VERSION}/bin/${yarn_name}"; \
-			ln -sfn "../../../opt/yarn-v${YARN_VERSION}/bin/${yarn_name}" "/usr/local/bin/${yarn_name}"; \
-		done; \
-	fi; \
-	test "$(yarn --version)" = "${YARN_VERSION}"
+RUN test "$(yarn --version)" = "$(node -p 'require("/opt/kodex/npm-toolchain/package.json").dependencies.yarn')"
 
 RUN groupadd --gid "${KODEX_AGENT_RUNNER_GID}" kodex \
 	&& useradd --uid "${KODEX_AGENT_RUNNER_UID}" --gid "${KODEX_AGENT_RUNNER_GID}" --no-create-home --shell /usr/sbin/nologin kodex \
@@ -331,7 +298,7 @@ ENV HOME=/home/kodex \
 
 # Playwright использует штатный executablePath без второго устаревшего браузера.
 # Probe запускается с той же непривилегированной идентичностью, что и помощник.
-RUN runuser -u kodex -- node -e 'const {chromium}=require("/usr/local/lib/node_modules/playwright"); (async()=>{const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_MCP_EXECUTABLE_PATH,headless:true});try{const page=await browser.newPage();await page.setContent("<title>kodex</title>");if(await page.title()!=="kodex")throw new Error("System Chromium probe failed");}finally{await browser.close();}})().catch(()=>{console.error("System Chromium probe failed");process.exit(1);});'
+RUN runuser -u kodex -- node -e 'const {chromium}=require("/opt/kodex/npm-toolchain/node_modules/playwright"); (async()=>{const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_MCP_EXECUTABLE_PATH,headless:true});try{const page=await browser.newPage();await page.setContent("<title>kodex</title>");if(await page.title()!=="kodex")throw new Error("System Chromium probe failed");}finally{await browser.close();}})().catch(()=>{console.error("System Chromium probe failed");process.exit(1);});'
 
 COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /kodex-go-toolchain-guard
 RUN ["/kodex-go-toolchain-guard", "prepare", "services"]

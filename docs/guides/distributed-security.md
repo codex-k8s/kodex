@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.5.6
-updated: 2026-10-04
+version: 1.5.7
+updated: 2026-10-05
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -45,12 +45,12 @@ Readiness фонового controller подтверждает фактичес�
 
 Карта транспортного перехода (доменные события и переходы не меняются):
 
-| Инициатор | Источник полномочий и путь | Владелец и результат |
-| --- | --- | --- |
-| Browser navigation/project API | HTTPS gateway → проверенная OIDC session → внутренний RPC с пользовательским credential; projectRef только locator | CP повторно проверяет credential, разрешает tenant/project и permission; query либо прежняя owner-транзакция с OCC/idempotency/audit/outbox |
-| Browser WebSocket | Проверенная session и одноразовый ticket → gateway → тот же CP authorization | Прежние cursor/rejoin и разрешённая realtime projection; транспорт не выдаёт дополнительных прав |
-| Служебный worker | Разрешённая NetworkPolicy пара и exact caller/method → owner-resolved служебный principal | CP проверяет текущие claim/lease/attempt; прежние атомарные complete/cancel/retry/expiry и события |
-| Runtime/task или внешний provider effect | Отдельное server-owned делегирование с exact session/turn/attempt/input | Не понижается до SERVICE_OWNER_RESOLVED; нужны прежние доменные grant/revoke/receipt проверки |
+| Инициатор                                | Источник полномочий и путь                                                                                         | Владелец и результат                                                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browser navigation/project API           | HTTPS gateway → проверенная OIDC session → внутренний RPC с пользовательским credential; projectRef только locator | CP повторно проверяет credential, разрешает tenant/project и permission; query либо прежняя owner-транзакция с OCC/idempotency/audit/outbox |
+| Browser WebSocket                        | Проверенная session и одноразовый ticket → gateway → тот же CP authorization                                       | Прежние cursor/rejoin и разрешённая realtime projection; транспорт не выдаёт дополнительных прав                                            |
+| Служебный worker                         | Разрешённая NetworkPolicy пара и exact caller/method → owner-resolved служебный principal                          | CP проверяет текущие claim/lease/attempt; прежние атомарные complete/cancel/retry/expiry и события                                          |
+| Runtime/task или внешний provider effect | Отдельное server-owned делегирование с exact session/turn/attempt/input                                            | Не понижается до SERVICE_OWNER_RESOLVED; нужны прежние доменные grant/revoke/receipt проверки                                               |
 
 Для служебного principal `trusted-cluster` читает server-owned PostgreSQL-реестр
 `trusted_workload_generations`, а не создаёт фиктивный подписанный worker grant.
@@ -63,13 +63,13 @@ SELECT. Reader не понижает ранее сохранённый generatio
 Runtime credential projection в этом профиле не имитирует подписанный proof.
 Её сквозной контракт (#1728) имеет следующие отдельные переходы:
 
-| Переход | Полномочия и проверка | Результат и авторитетное чтение |
-| --- | --- | --- |
+| Переход                              | Полномочия и проверка                                                                                                                                  | Результат и авторитетное чтение                                                                                                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Materialize runtime/system assistant | Runtime controller → разрешённый exact RPC secret-broker → owner RPC CP; broker передаёт только profile/caller/method и точную execution lease с fence | CP в одном repeatable-read snapshot назначает actor/org/project из lease/revision/root run, проверяет весь существующий execution и provider/secret scope; broker создаёт projection по точным descriptors |
-| Повтор materialize | Те же lease/generation/attempt/input/revision и действующий fence; серверное поколение workload не от caller | Прежний идемпотентный content-addressed projection; изменение входа не расширяет старый допуск |
-| Recovery/validate | Broker повторно читает owner по сохранённому snapshot без fence; CP заново разрешает lineage и сравнивает все authority поля и generation | Только boolean current; нельзя продлить исходный срок projection. Нет нового доменного события, read path — ValidateRuntimeCredentialProjection |
-| Cancel/delete/terminal/lease expiry | Прежняя owner-транзакция закрывает lease/grants; последующий owner read не находит активный exact execution | Recovery удаляет только exact projection descriptor по прежним UID/resourceVersion preconditions; нового события projection нет, состояние владельца читается через ValidateRuntimeCredentialProjection |
-| Retry | Новая attempt/lease/revision и прежние owner events/grants | Старый snapshot не подходит новой attempt; новый materialize проходит весь путь заново |
+| Повтор materialize                   | Те же lease/generation/attempt/input/revision и действующий fence; серверное поколение workload не от caller                                           | Прежний идемпотентный content-addressed projection; изменение входа не расширяет старый допуск                                                                                                             |
+| Recovery/validate                    | Broker повторно читает owner по сохранённому snapshot без fence; CP заново разрешает lineage и сравнивает все authority поля и generation              | Только boolean current; нельзя продлить исходный срок projection. Нет нового доменного события, read path — ValidateRuntimeCredentialProjection                                                            |
+| Cancel/delete/terminal/lease expiry  | Прежняя owner-транзакция закрывает lease/grants; последующий owner read не находит активный exact execution                                            | Recovery удаляет только exact projection descriptor по прежним UID/resourceVersion preconditions; нового события projection нет, состояние владельца читается через ValidateRuntimeCredentialProjection    |
+| Retry                                | Новая attempt/lease/revision и прежние owner events/grants                                                                                             | Старый snapshot не подходит новой attempt; новый materialize проходит весь путь заново                                                                                                                     |
 
 Поле `rpc_profile` в authority является discriminator, но не источником прав:
 его принимает только явно настроенный trusted owner от разрешённого broker.
@@ -106,11 +106,11 @@ owner policy, а admission сверяет его с server-owned parameters. Lab
 Job не разрешает понижение защиты. `trusted-cluster` входит в digest run,
 поэтому Jobs двух профилей не разделяют immutable execution identity.
 
-| Фаза image flow | Транспорт и полномочия | Неизменённый результат |
-| --- | --- | --- |
-| claim / admit | image-admission → exact CP RPC по разрешённой NetworkPolicy; закрытый method registry и CP principal; без issuer/socket/grant-agent | Прежние owner claim, attempt, lease, version/idempotency и admission state; artifact tuple назначает CP |
-| promote | image-promotion → exact CP RPC; отдельные ServiceAccount, capability и registry credential | Прежний owner promotion record и проверка exact artifact/evidence; простой RPC не выдаёт право произвольного push |
-| scan / sign | RPC profile не выдаётся; прежние точные scanner/signer images, ServiceAccount и scoped registry credentials | Прежние отчёты и подписи; успешность сканирования не синтезируется |
+| Фаза image flow | Транспорт и полномочия                                                                                                              | Неизменённый результат                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| claim / admit   | image-admission → exact CP RPC по разрешённой NetworkPolicy; закрытый method registry и CP principal; без issuer/socket/grant-agent | Прежние owner claim, attempt, lease, version/idempotency и admission state; artifact tuple назначает CP           |
+| promote         | image-promotion → exact CP RPC; отдельные ServiceAccount, capability и registry credential                                          | Прежний owner promotion record и проверка exact artifact/evidence; простой RPC не выдаёт право произвольного push |
+| scan / sign     | RPC profile не выдаётся; прежние точные scanner/signer images, ServiceAccount и scoped registry credentials                         | Прежние отчёты и подписи; успешность сканирования не синтезируется                                                |
 
 Retry, cancellation, cleanup и executable proof hold не меняются этим
 транспортным render: авторитетными остаются CP owner records и admission
@@ -1064,7 +1064,6 @@ snapshot получает новый origin. Legacy lookup ограничен н
 policy или догадка по revision такую связь не доказывают. Исправление не
 переписывает published history, ключи и revocation/replay boundaries.
 
-
 Ротация является протоколом, а не заменой файла. Он обязан закрывать:
 
 - независимую смену ключа авторизации и сертификата подписанта;
@@ -1375,6 +1374,20 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   принимает только exact digest и bounded подписанный claim admission owner,
   связанный с provenance, SBOM, vulnerability policy/version и проверенной
   signature identity; missing/stale/rejected evidence закрыто отклоняется.
+- Обновление установленного компилятора не исправляет stdlib готового Go ELF.
+  Security-ревизия проверяет build metadata каждого CLI и при необходимости
+  собирает точный upstream module/version закреплённым компилятором. Нижние
+  границы зависимостей применяются только к присутствующим модулям через MVS,
+  без понижения более новых версий; замыкание проверяется ограниченным числом
+  повторов и по итоговому ELF. Неполное замыкание закрыто останавливает сборку.
+- npm overrides не исправляют зависимости внутри опубликованного bundle.
+  В таком случае CLI строится из exact официального source tarball с проверкой
+  integrity и безопасных путей в свежий каталог, без переноса bundled modules
+  и upstream lock. Отдельные manifest/lock входят в provenance; `npm ci` без
+  install hooks и проверка фактического дерева предшествуют публикации CLI.
+  Переписывание установленного node_modules, удаление SBOM findings и ослабление
+  admission policy не являются исправлением уязвимого образа. Проверки CLI на
+  хосте не заменяют допуск итогового OCI digest.
 - Durable evidence сохраняет подписанный payload побайтно. Разбор и повторная
   JSON-сериализация не могут быть storage boundary: один авторитетный OCI
   manifest задаёт закрытый набор layers с exact title, media type, size и
