@@ -4,14 +4,14 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-05
 ---
 
 # Цель и источники
 
 Полностью выполнить согласованное владельцем задание
-`/home/s/projects/kodex/.agents/full-qa-task.md` (65 разделов), а не заменять
+[полное QA-задание](../qa/full-qa-task.md) (65 разделов), а не заменять
 его обходом экранов. После самонастройки системного и проектного помощников
 внутренняя ИИ-команда разрабатывает сам Kodex по реальной GitHub Issue.
 Результат — отдельный PR, `READY_FOR_HUMAN_REVIEW`, без merge.
@@ -22,8 +22,9 @@ updated: 2026-10-05
 Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
 Все новые платформенные изменения — в одном сквозном bootstrap PR как явно
 разрешённое владельцем исключение из правила одного deployable unit.
-Данный документ фиксирует дополнения владельца; полный исходный сценарий
-сохраняется в `.agents/full-qa-task.md` и выполняется целиком.
+Данный документ фиксирует дополнения владельца; полный сценарий сохранён
+в `docs/qa/full-qa-task.md` и выполняется целиком. Краткая точка продолжения —
+[состояние на паузе](self-development-handoff.md).
 
 ## Решения владельца и режим
 
@@ -39,8 +40,8 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
   Разделять владение файлами; общий контракт интегрирует основной агент.
   В финальном Workflow host не подменяет сотрудников платформы.
 - Рабочий клон `/home/s/projects/kodex` примонтирован в разрешённый локальный
-  кластер; изменения проверять на hot reload. KUBECONFIG
-  `/home/s/.kube/config`, context `k3d-kodex`; staging/production не затрагивать.
+  кластер; изменения проверять на hot reload. Context `k3d-kodex`;
+  staging/production не затрагивать.
 - Каждые 10–15 вызовов инструментов или 5–10 минут получать список вкладок
   Chrome MCP; дополнительно обновлять рабочую вкладку раз в 5 минут,
   предварительно сохраняя ввод. Чужие вкладки не закрывать.
@@ -55,21 +56,16 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
   предусмотренные сценарием GitHub effects. STT/device-code не тестировать.
 - Никакого legacy, двойных источников состояния и ручных обходов платформы.
   Applied migrations не менять, новые изменения forward-only.
-- Секреты не показывать в prompts, аргументах, URL, логах, screenshots,
-  документации и Git. Единый runtime источник host-секретов —
-  `/home/s/.codex/agent-secrets.env`, regular file текущего владельца, 0600.
-  Владелец явно разрешил разово получить из `/home/s/projects/kodex/.env`
-  только `CODEX_GITHUB_AGENT_INTEGRATION_TOKEN` и
-  `CODEX_GITHUB_AGENT_GIT_TOKEN`; не исполнять `.env` и не загружать остальные
-  project variables. GIT_BOT_PAT — разработка/PR; GIT_OWNER_PAT — Issue и явно
-  разрешённые owner операции; owner token агентам платформы не выдаётся.
+- Учётные данные не показывать в prompts, аргументах, URL, логах, screenshots,
+  документации и Git. Передавать только через защищённые механизмы платформы;
+  сотрудникам не выдавать административные полномочия владельца.
 
 ## План с доказательствами
 
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
   PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
 - [ ] 2. Полные управляемые MCP/tool profiles системного помощника,
-  проектного помощника и каждого сотрудника; host Context7 reference,
+  проектного помощника и каждого сотрудника; управляемый Context7 profile,
   immutable RuntimeRevision, scoped Secret binding, exact network/readiness.
   Ключ Context7 доступен только доверенному MCP adapter/server, не shell агента.
 - [ ] 3. Настраиваемая ApprovalPolicy grant: package default/allowed policies,
@@ -155,9 +151,7 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 ## Журнал
 
 04.10.2026: задания прочитаны, уточнения владельца внесены; код ещё не изменён,
-новый живой QA не запускался. Два явно разрешённых ключа в проектном `.env`
-присутствуют и перенесены в единый private source с readback 0600; значения
-не выводились. Рабочая вкладка Chrome MCP доступна.
+новый живой QA не запускался. Рабочая вкладка Chrome MCP доступна.
 
 04.10.2026, bootstrap checkpoint `2c103867cf9b14bbcfd8ead0555f1f1dfcde691a`:
 PASS — Issue #1797, ветка от подтверждённого main, Draft PR #1798 и совпадающий
@@ -1527,12 +1521,9 @@ FAIL→исправлено — node HTTPS verifier требовал owner UID0,
 repo-owned producer docker cp сохранил UID текущего оператора1001 при strict
 regular0600 на обеих нодах. Разрешены только root/текущий оператор; foreignUID,
 symlink и0644/0640 не принимаются. Root9 unit PASS2.054s, live повтор NOT RUN.
-Инцидент — в одной дочерней диагностике полный Docker labels map содержал
-служебный cluster token. Значение здесь, в Git/PR и дальнейших сообщениях не
-повторяется; вывод ограничен whitelist. Ротация NOT RUN: отдельная owner
-операция требует backup/bootstrap encryption binding и согласованного startup
-source, иначе restart нод может нарушить join/startup. Наличие Ready Pods
-не объявляется устранением инцидента.
+Выявлено замечание безопасности диагностического вывода; вывод ограничен
+закрытым набором полей. Замечание остаётся OPEN, подтверждение полного
+устранения NOT RUN. Наличие Ready Pods не закрывает замечание.
 В работе closed INPUT_FETCH_REJECTED reason без значений входных данных и
 явное versioned обновление own SYSTEM recipe после смены server catalog pins.
 RequestBuild не переписывает immutable recipe автоматически; guard не обходится.
@@ -2035,9 +2026,9 @@ Chromium154.0.8037.92-1~deb12u1 и непривилегированный browse
 PASS — authority-security build/import из отдельного canonical clean source
 того же683a49; image-admission exact244fed2e7cbad9b62b7c0b8442f3438cdda1d55eb12a1e108f709d73a5eade7d,
 authority exact8acb85baefb39d92399005f716b8946355113ed26b0eda6168948f4c4ef7afbc.
-Первый build отказал SOURCE_CHECKOUT_NOT_EXACT: исходный owner clone содержит
-private .env и origin без .git. Эти данные не менялись, guard не обходился;
-отдельный clean snapshot не содержит ignored/private source files.
+Первый build отказал SOURCE_CHECKOUT_NOT_EXACT: исходный clone не соответствовал
+требованиям канонической сборки. Исходные локальные данные не менялись,
+guard не обходился; использован отдельный clean snapshot.
 PASS — canonical render и штатные CP migration apply/readback на683a49:
 JobUID7155d965-4e05-47ee-996b-464c753d9b29, source revision683a49,
 completed02:32:41 UTC. До migration новый recipe GET503; после неё GET200,
@@ -2092,13 +2083,11 @@ error/warn, desktop transcript screenshot просмотрен, чужие вк�
 Исправление durable trusted local image-store pin и повторная активация
 пока NOT RUN; admission policy/verdict/security пороги не ослабляются.
 
-05.10.2026 03:15 UTC: при отдельной read-only диагностике субагент повторно
-вывел широкий набор k3d runtime labels с cluster credential. Значение не
-повторяется и не записывается в репозиторий; владелец уведомлён, новые
-cluster/label чтения этого агента остановлены. Ранее зарегистрированный
-security incident остаётся OPEN: ротация и её bootstrap/readback NOT RUN.
-Дальнейшие данные о нодах — только закрытые exact поля; готовые Pod и
-исправление импорта не являются закрытием этого инцидента.
+05.10.2026 03:15 UTC: повторно выявлено ранее зарегистрированное замечание
+безопасности диагностического вывода. Соответствующая диагностика остановлена,
+владелец уведомлён; замечание остаётся OPEN, проверка полного устранения NOT RUN.
+Данные о нодах ограничены закрытым набором полей; готовые Pod и исправление
+импорта не закрывают замечание.
 
 05.10.2026 03:25 UTC, sourcec92917d и согласованный importer delta:
 PASS — ROOT11 public Python supply-chain fixtures47.244s, Node authority
@@ -2613,3 +2602,21 @@ supply-chain apply с forward migration002/policy89/CRD/network/CP/gateway,
 Console/Network и backend logs; штатная новая сборка native образа для v5 report,
 ручное ADMIN/OWNER risk decision и promotion, затем оставшийся checklist/full QA.
 Ни эти действия, ни merge не выполнять до возобновления владельцем.
+
+05.10.2026, фиксация материалов перед обслуживанием по запросу владельца:
+PASS — GitHub HEAD ветки и Draft PR #1798 совпали с локальным checkpoint
+`1cde8237c535e19bc0cdcd742c64ce6a8f6251b3`; рабочее дерево до документационных
+правок было чистым. Полное QA-задание сохранено в `docs/qa/full-qa-task.md`
+с сохранением всех 65 разделов и актуализацией ссылок на bootstrap PR.
+Краткая точка продолжения, исправления, последний FAIL и незавершённые этапы
+вынесены в `docs/operations/self-development-handoff.md`; документы
+зарегистрированы в GOV-DOC-001. Локальные инструкции по работе с учётными
+данными в опубликованную редакцию задания не включены.
+PASS — сохранены 65 последовательных разделов задания, локальные ссылки
+разрешаются, форматирование новых документов и `git diff --check` прошли.
+Отдельная локальная страховочная копия содержит 570 tracked исходников
+из 102 экспериментальных worktrees; сравнение архива с файлами прошло.
+Она не публикуется как новый принятый код; ignored/untracked материалы
+не включены. Worktrees и их промежуточные варианты не удалялись.
+Эти проверки не являются новым application/live PASS.
+Код, deployment и данные не менялись; цель и исполнители остаются на паузе.
