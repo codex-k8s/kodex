@@ -20,6 +20,9 @@ type AssistantConfigurationCatalogEntry struct {
 	RuntimeEnvironmentRef                                       string
 	ReasoningEfforts                                            []string
 	Version, RecipeGeneration                                   int64
+	AdmissionVerdict, PromotionState                            string
+	ToolInventorySHA256                                         string
+	ToolInventory                                               *runtimecontract.ImageToolInventory
 }
 
 type AssistantConfigurationCatalogResponse struct {

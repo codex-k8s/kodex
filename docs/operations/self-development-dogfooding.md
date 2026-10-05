@@ -3342,3 +3342,51 @@ ACCEPTED/PROMOTED, но entry projection не содержит candidate invento
 CURRENT_CONFIGURATION выдаёт inventory только текущего environment image.
 Этот воспроизведённый native self-configuration gap исправляется сквозно;
 назначение нового образа и provider ACK по-прежнему NOT RUN.
+
+### 05.10.2026 19:04–19:10 UTC — параллельная интеграция каталога и отчёта
+
+База `8f5dcb21af47cc3a6eef099f739628c84988e4ff`. Интегрированы два
+независимых пакета: candidate inventory patch SHA256
+`b0505a594098447d7685bcc978535b115e029d94322cb4423cb6e50ffe42d936` и
+readonly report patch SHA256
+`6aaa2b74326aeac243822cb157f63aa64c188009901d01152191bc2f67b7cb1b`.
+
+IMAGE_ARTIFACTS передаёт ACCEPTED/PROMOTED и полный безопасный inventory
+через прежний exact owner/lease RR snapshot, typed gRPC и проверенный MCP.
+Eligibility SQL и write authority не менялись. Историческое отсутствие
+evidence остаётся UNAVAILABLE; corrupt/foreign/unknown evidence закрыто
+отклоняется. Private disposable PostgreSQL SYSTEM и PROJECT fresh promotion
+PASS23.721s, оба scopes действительно проверены. Synthetic callback proof
+содержит38 required VERIFIED tools; disposable DB fixture проверяет передачу
+evidence, а не фактическую работоспособность живого toolchain.
+
+Причина ошибки после успешного Publish202 — frontend ошибочно требовал
+report.version=1 и текущую recipe.version для immutable admission report.
+Readonly чтение теперь принимает положительную safe version и прежнюю
+recipe.version того же exact artifact/build/generation/owner. Pins не
+переписываются, risk actions при drift скрыты; новая risk mutation по-прежнему
+требует exact current recipe. Speculative role-image loadDetail workaround
+не добавлен. В MAIN54 frontend unit, ESLint, Prettier, full vue-tsc PASS.
+Private пакет63 unit PASS; это отдельный набор, не MAIN результат.
+
+MAIN focused CP repository unit PASS0.074s, callback PASS0.087s, grpc
+compilation PASS (selected pattern не содержит grpc tests). Proto lint/build/
+reproducible codegen PASS после исправления PATH оснастки; первый запуск
+без пути к установленному buf — FAIL environment, не скрыт. Diff-check PASS.
+
+Штатный Air без deploy/full runner rebuild потребил source: CP build
+19:08:32.134→running19:08:53.232 UTC; runtime-controller
+19:08:32.020→running19:08:52.457 UTC. Host/Pod hashes repository/entity,
+transport, callback и generated Proto совпали. Pod UID сохранены:
+CP `5363ff5f-06bb-4b8e-ba36-3a0f3396bfdb`, RC
+`6edadec9-fbc6-4621-946a-ee5d2537bcf2`; Ready, application restart0.
+Работающий executable совпал с новым Air artifact: CP
+`fd636c38293d12ec54101f7fdd9c90bdec6b31d9013543f54645d8de1e0bbc1f`,
+RC `e47391571fce17b806c8f28655de72a30e6003722a6b3b5edca0fe5e9c288578`.
+Это local source proof изменённого дерева, не clean-SHA browser acceptance.
+
+Chrome process и MCP connections живы, но list_pages не возвращает ответ
+и предыдущий вызов завершился300s timeout. Это не доказательство отзыва
+browser approval. Чужие вкладки не трогались; restart/consent bypass не
+выполнялся. Новый SYSTEM43 UI, screenshot/Console/Network и provider ACK
+ещё NOT RUN. Цель остаётся активной; полный65-section QA не объявлен завершённым.

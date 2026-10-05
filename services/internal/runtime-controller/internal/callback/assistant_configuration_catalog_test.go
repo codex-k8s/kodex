@@ -102,6 +102,8 @@ func assistantFreshCatalogFixture(scope runtimecontract.AssistantScope, kind str
 		entry.Ref, entry.Version, entry.RecipeGeneration = "imgart_owned123", 5, 2
 		entry.ManifestDigest = "sha256:" + strings.Repeat("b", 64)
 		entry.Reference = "pull.fixture.invalid/assistant@" + entry.ManifestDigest
+		entry.AdmissionVerdict, entry.PromotionState = "ACCEPTED", "PROMOTED"
+		entry.VerifiedToolInventory = &controlplanev1.ImageToolInventory{Status: "UNAVAILABLE"}
 	case "ROLE_ENVIRONMENTS":
 		entry.Ref = "base"
 	}
@@ -132,6 +134,9 @@ func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T)
 				catalog := result.(map[string]any)["assistant_configuration_catalog"].(map[string]any)
 				entries := catalog["entries"].([]map[string]any)
 				fieldCount := 16
+				if kind == "IMAGE_ARTIFACTS" {
+					fieldCount += 3
+				}
 				if kind == "ASSISTANTS" {
 					fieldCount++
 					if entries[0]["runtime_environment_ref"] != "renv_current123" {

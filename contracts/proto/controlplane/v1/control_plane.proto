@@ -1958,6 +1958,12 @@ message AssistantConfigurationCatalogEntry {
   string assistant_profile_ref = 16;
   // Только ASSISTANTS: locator опубликованного окружения; не источник прав.
   string runtime_environment_ref = 17;
+  // Только IMAGE_ARTIFACTS: подтверждённый допуск exact артефакта.
+  string admission_verdict = 18;
+  // Только IMAGE_ARTIFACTS: серверный PROMOTED, не намерение публикации.
+  string promotion_state = 19;
+  // Только IMAGE_ARTIFACTS: полный безопасный inventory с immutable evidence pins.
+  ImageToolInventory verified_tool_inventory = 20;
 }
 
 message AssistantConfigurationCatalogResponse {

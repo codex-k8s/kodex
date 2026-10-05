@@ -72,6 +72,14 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 				t.Fatalf("%s catalog mixed owner", kind)
 			}
 		}
+		if kind == "IMAGE_ARTIFACTS" {
+			for _, entry := range result.Entries {
+				if entry.AdmissionVerdict != "ACCEPTED" || entry.PromotionState != "PROMOTED" ||
+					entry.ToolInventory != nil && (entry.ToolInventory.ImageDigest != entry.ManifestDigest || entry.ToolInventorySHA256 == "") {
+					t.Fatal("image candidate lost exact eligibility or evidence pins")
+				}
+			}
+		}
 		return result
 	}
 	for _, kind := range []string{"ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS"} {
@@ -544,6 +552,26 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatalf("preexisting manual draft superseded by prepare: %v", err)
 	}
 	if sourceScope == "PROJECT" {
+		candidateView, err := service.GetAgentRuntimeConfiguration(ctx, owner, agentRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: prefix + "-inventory-recipe"}, Payload: command.AssistantRoleImageRecipeInput{
+				ProjectRef: stringMap(lease, "projectRef"), AgentRef: agentRef, AgentVersion: candidateView.AgentVersion,
+				Name: "Assistant inventory candidate", Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"}}})
+		if err != nil || len(created.CreatedRefs) != 1 {
+			t.Fatal("canonical project candidate recipe creation failed")
+		}
+		resolved, err := r.ResolvePrincipal(ctx, owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		detail, err := r.Get(ctx, resolved, created.CreatedRefs[0])
+		if err != nil || len(detail.Builds) != 1 {
+			t.Fatal("canonical project candidate build missing")
+		}
+		testAssistantCatalogCandidatePromotion(t, ctx, r, service, owner, reader, lease, catalog, detail, prefix, readCatalog)
 		testAssistantProjectImageTemplateSelection(t, ctx, r, service, owner, lease)
 		system, err := service.GetSystemAssistant(ctx, owner)
 		if err != nil {
@@ -581,6 +609,11 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	}
 	if len(readCatalog("ROLE_IMAGE_RECIPES").Entries) == 0 {
 		t.Fatal("owned recipe absent from discovery")
+	}
+	testAssistantCatalogCandidatePromotion(t, ctx, r, service, owner, reader, lease, catalog, detail, prefix, readCatalog)
+	detail, err = r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil {
+		t.Fatal(err)
 	}
 	image.Parameters = map[string]any{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "name": "Updated assistant configuration image", "environmentKey": "promotion", "dockerfile": detail.Recipe.Input.Dockerfile + "\nRUN echo synthetic\n"}
 	image.Type = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"

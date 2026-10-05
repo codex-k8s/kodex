@@ -3,6 +3,7 @@ package callback
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (server *Server) configurationCatalog(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
@@ -275,6 +277,18 @@ func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, reques
 		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ASSISTANTS {
 			projection["runtime_environment_ref"] = entry.GetRuntimeEnvironmentRef()
 		}
+		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS {
+			raw, err := (protojson.MarshalOptions{UseProtoNames: true, EmitUnpopulated: true}).Marshal(entry.GetVerifiedToolInventory())
+			if err != nil || len(raw) > maximumAssistantCurrentConfigurationBytes {
+				return nil, invalid
+			}
+			var inventory map[string]any
+			if json.Unmarshal(raw, &inventory) != nil {
+				return nil, invalid
+			}
+			projection["admission_verdict"], projection["promotion_state"] = entry.GetAdmissionVerdict(), entry.GetPromotionState()
+			projection["verified_tool_inventory"] = inventory
+		}
 		entries = append(entries, projection)
 	}
 	return map[string]any{"kind": strings.TrimPrefix(response.GetKind().String(), "ASSISTANT_CONFIGURATION_CATALOG_KIND_"),
@@ -335,10 +349,14 @@ func validAssistantConfigurationCatalogEntry(input runtimecontract.RunnerInput, 
 	case controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS:
 		if !validAssistantResourceRef(entry.GetRef()) || entry.GetVersion() < 1 || entry.GetRecipeGeneration() < 1 ||
 			!strings.HasPrefix(entry.GetManifestDigest(), "sha256:") || !validAssistantCatalogDigest(strings.TrimPrefix(entry.GetManifestDigest(), "sha256:")) ||
-			!assistantCatalogPinnedImagePattern.MatchString(entry.GetReference()) || !strings.HasSuffix(entry.GetReference(), "@"+entry.GetManifestDigest()) {
+			!assistantCatalogPinnedImagePattern.MatchString(entry.GetReference()) || !strings.HasSuffix(entry.GetReference(), "@"+entry.GetManifestDigest()) ||
+			entry.GetAdmissionVerdict() != "ACCEPTED" || entry.GetPromotionState() != "PROMOTED" ||
+			entry.GetVerifiedToolInventory() == nil || !validAssistantCurrentReadMessage(entry.GetVerifiedToolInventory().ProtoReflect(), 0) ||
+			!validAssistantImageToolInventory(entry.GetVerifiedToolInventory(), &controlplanev1.RuntimeEnvironmentImage{ArtifactRef: entry.GetRef(), Digest: entry.GetManifestDigest()}) {
 			return false
 		}
 		allowed["version"], allowed["recipe_generation"], allowed["reference"], allowed["manifest_digest"] = true, true, true, true
+		allowed["admission_verdict"], allowed["promotion_state"], allowed["verified_tool_inventory"] = true, true, true
 	case controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_ENVIRONMENTS:
 		if !assistantCatalogEnvironmentKeyPattern.MatchString(entry.GetRef()) {
 			return false
@@ -349,7 +367,8 @@ func validAssistantConfigurationCatalogEntry(input runtimecontract.RunnerInput, 
 	present := map[string]bool{"provider": entry.GetProvider() != "", "model": entry.GetModel() != "", "version": entry.GetVersion() != 0,
 		"recipe_generation": entry.GetRecipeGeneration() != 0, "reference": entry.GetReference() != "", "manifest_digest": entry.GetManifestDigest() != "",
 		"catalog_revision": entry.GetCatalogRevision() != "", "catalog_digest": entry.GetCatalogDigest() != "", "reasoning_efforts": len(entry.GetReasoningEfforts()) != 0,
-		"default_reasoning_effort": entry.GetDefaultReasoningEffort() != "", "runtime_environment_ref": entry.GetRuntimeEnvironmentRef() != ""}
+		"default_reasoning_effort": entry.GetDefaultReasoningEffort() != "", "runtime_environment_ref": entry.GetRuntimeEnvironmentRef() != "",
+		"admission_verdict": entry.GetAdmissionVerdict() != "", "promotion_state": entry.GetPromotionState() != "", "verified_tool_inventory": entry.GetVerifiedToolInventory() != nil}
 	for field, supplied := range present {
 		if supplied && !allowed[field] {
 			return false

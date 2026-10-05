@@ -202,8 +202,33 @@ func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.
 		result.Entries = result.Entries[:10]
 		result.NextOffset = input.Offset + 10
 	}
+	if input.Kind == "IMAGE_ARTIFACTS" {
+		// Rows закрыты: evidence читается в том же owner/lease RR snapshot.
+		for index := range result.Entries {
+			entry := &result.Entries[index]
+			artifact, err := scanRoleImageArtifact(tx.QueryRow(ctx, queryRoleImagesGetActiveArtifact, current.organizationID, entry.Ref))
+			if err != nil {
+				return entity.AssistantConfigurationCatalogResponse{}, assistantLockedReadError(err, errs.ErrUnavailable)
+			}
+			if err := projectAssistantCatalogArtifact(entry, artifact); err != nil {
+				return entity.AssistantConfigurationCatalogResponse{}, err
+			}
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return result, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	return result, nil
+}
+
+func projectAssistantCatalogArtifact(entry *entity.AssistantConfigurationCatalogEntry, artifact entity.ImageArtifact) error {
+	if entry.Version < 1 || entry.RecipeGeneration < 1 || artifact.Ref != entry.Ref || artifact.Version != uint64(entry.Version) || artifact.RecipeGeneration != uint64(entry.RecipeGeneration) ||
+		artifact.OrganizationRef != entry.OrganizationRef || artifact.ScopeKind != entry.ScopeKind || artifact.ProjectRef != entry.ProjectRef ||
+		artifact.ManifestDigest != entry.ManifestDigest || artifact.PromotedReference != entry.Reference ||
+		artifact.AdmissionVerdict != "ACCEPTED" || artifact.PromotionState != "PROMOTED" || artifact.PromotionReadbackSHA256 == "" {
+		return errs.ErrUnavailable
+	}
+	entry.AdmissionVerdict, entry.PromotionState = artifact.AdmissionVerdict, artifact.PromotionState
+	entry.ToolInventory, entry.ToolInventorySHA256 = artifact.ToolInventory, artifact.ToolInventorySHA256
+	return nil
 }

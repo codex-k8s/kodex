@@ -12,7 +12,7 @@ updated: 2026-10-05
 
 05.10.2026 владелец явно возобновил работу после переноса хранилища.
 Перенос проверен; цель снова выполняется. Последний опубликованный checkpoint:
-`8104899c21a13615aa01e1b1f1f9e0d912f5cade`. Новый полный runner и четыре
+`8f5dcb21af47cc3a6eef099f739628c84988e4ff`. Новый полный runner и четыре
 supply-chain image собраны; fresh render и supply-chain apply/readback
 полностью завершены 05.10.2026 в17:59:24 UTC. Control plane, gateway и
 контроллеры Ready. Core repair secret-broker PASS18:18:45 UTC: доставлен
@@ -30,8 +30,13 @@ build COMPLETED, обязательные инструменты38/38 VERIFIED. 
 REJECTED по двум прежним HIGH findings, теперь точно локализованным в bundled
 pnpm11.11.0, а не обновлённом npm12.2.0. Для exact нового image/report через
 OWNER UI принято новое локальное решение риска; attempt2 ACCEPTED, generation8
-PROMOTED18:41 UTC. Запущен native SYSTEM42 для полного профиля. Новый
-environment/instructions/config publish и actual provider prompt proof NOT RUN.
+PROMOTED18:41 UTC. Native SYSTEM42 применил дополнительные инструкции и
+Web Search live, сохранив модель и аккаунт. Новый environment publish и
+actual provider prompt proof NOT RUN. Следующий ход SYSTEM43 назначает
+новый образ и полный инструментальный профиль после собственного чтения
+candidate inventory. Сквозной typed каталог и readonly чтение исторического
+отчёта исправлены; адресные проверки и hot reload PASS19:09 UTC.
+Chrome MCP list_pages зависает по таймауту; новая browser-проверка ещё NOT RUN.
 Ниже перечисленные старые checkpoints относятся к истории, а не к текущему HEAD.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).
