@@ -14,8 +14,8 @@ updated: 2026-10-05
 Перенос проверен; цель снова выполняется. CEL-политики исправлены, штатный
 apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e35fa4e`.
 Пять компонентов и архив сессий восстановлены; выполняется native QA.
-Текущий запушенный checkpoint кода: `06c1ddf81e1002c08987f5a03c5407dae03248c9`.
-Поверх него подготовлена узкая dev-диагностика задержки одного callback;
+Текущий запушенный checkpoint кода: `b5fe1bec30e2bc4ef09f207e18803a6195c374e3`.
+Поверх него устраняется узкий SSA ownership conflict диагностического script;
 точный следующий SHA и live readback фиксируются в журнале.
 Ниже перечисленные старые checkpoints относятся к истории, а не к текущему HEAD.
 
@@ -61,11 +61,14 @@ apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e3
 
 Native SYSTEM typed plan применён; recipe v8/generation6, build завершён.
 Admission scan завершился технической ошибкой прежнего projection handler;
-artifact остаётся CLAIMED/PENDING. Подготовленные новые worker images собраны
-и импортированы на обе ноды на source77e2f111, но пока не активированы:
-ordinary cutover требует закрытия текущей attempt. Узкий repo-owned
-диагностический refresh применён с exact ConfigMap CAS/readback; callback
-recovery исследуется без изменения claim, grant, policy или image pins.
+artifact штатно завершён FAILED/ADMISSION_LEASE_EXPIRED; claim/lease очищены,
+attempt terminal snapshot совпадает, один owner expiry receipt подтверждён.
+Подготовленные новые worker images собраны и импортированы на обе ноды
+на sourceb5fe1bec, но полная активация пока не завершена: ordinary SSA
+отказал на ownership одного диагностического script. Admission controller
+оставлен остановленным; CP/gateway/frontend доступны. Готовится exact CAS
+возврат canonical script с правильным field manager без force-conflicts,
+после чего штатный supply-chain apply/readback повторяется.
 
 Повторный ROLE_ENVIRONMENTS отказ устранён bounded whole-transaction retry
 только для PostgreSQL40001: новая транзакция повторно проверяет authority,
@@ -78,10 +81,11 @@ lease и fence. Адресные unit и SYSTEM/PROJECT PostgreSQL component PAS
 Admission recovery остаётся открытым: exact native Pod DNS и TCP к CP
 проверены; actual client trusted profile и отсутствие proxy подтверждены.
 Serving CP использует plaintext gRPC, поэтому TLS mismatch исключён.
-Это не доказательство успешного RPC: три native callback подтвердили REFUSED
-через закрытый потоковый classifier. SHORTtarget DNS тоже проверен.
-Следующий узкий шаг — двухсекундная задержка того же callback и bounded
-WaitForReady только Fail/Expire, без повторов полученной server error.
+Три native callback подтвердили REFUSED через закрытый потоковый classifier.
+Двухсекундная dev-диагностика дала штатный terminal receipt и очистку workspace;
+источник временного TCP отказа окончательно не доказан. Production bounded
+WaitForReady только Fail/Expire уже реализован и проверен disposable TCP,
+без повтора полученной server error; новый worker binary ещё не активирован.
 Секреты, claim, grant, NetworkPolicy и SQL-состояние не изменялись.
 
 Далее: штатный terminal callback → activation проверенных worker images →

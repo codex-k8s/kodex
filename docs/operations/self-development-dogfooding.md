@@ -3009,3 +3009,43 @@ cancel/deadline ноль effect даже после read-only barrier, serverUna
 Изолированный тот же patch: race PASS1.479s, vet/build PASS. Claim и authority
 не меняются. Context7 официальных gRPC-Go документов проверен.
 Новый worker binary пока не активирован; это адресные, не live проверки.
+
+16:01–16:06 UTC: штатный callback после V2 закрыл прежний claim. Kubernetes
+Job f3e54e2a-02be-4706-b610-ca4075a251e6 Completed16:01:31Z;
+PodUID36f7c72a-7d9e-4bef-90a4-09303df96cfd уже удалён. Его exact exitcode,
+runtime digest и full projected script readback NOT RUN после cleanup.
+Независимые authoritative READ подтверждают artifact FAILED с
+ADMISSION_LEASE_EXPIRED, очищенные claim/lease, attempt1/fence1 FAILED,
+точное совпадение terminal snapshot, отсутствие открытой attempt и один
+receipt platform.role-images.admission.expire для exact artifact/version.
+Это штатный Fail→PermissionDenied→fresh Expire, без искусственного verdict.
+ROOT owner read16:03:41UTC: pendingAdmissions0, build/promotion/runtime/
+lease0; published pins SHA28e8bf55 неизменны; прежний PVC отсутствует.
+
+На clean sourceb5fe1bec30e2bc4ef09f207e18803a6195c374e3 canonical
+all/build-jobs4/import на обе ноды PASS16:06:41UTC. Grype DB import layer
+CACHED: прежний import195.9s не повторился. Fresh render PASS16:08:57UTC,
+authority revision1, fingerprint
+7ae621141ca2f61dc0879a50e57678ec626ba675da1f2211707d0bab4272313a.
+Сборка завершена; immutable активация ещё не подтверждена.
+
+Supply-chain apply16:09:52UTC FAIL на SSA ownership одного
+ConfigMap.data.image-admission.sh: diagnostic kubectl-replace против
+обычного kodex-local-dev. Closed отказ сохранил admission controller0;
+CP/gateway/frontend Ready1. Claim/policy bypass и force-conflicts не применялись.
+Exact live RV453810/script8fcd/data73c2 неизменны. Готовится узкий repo-owned
+CAS возврат только этой script к canonical3d618 с fixed field manager,
+fresh idle owner/workspace/job/policy/source guards и строгим readback.
+Это не отмена цели: штатная активация продолжается после устранения причины.
+
+Chrome16:17:31UTC: раскрытие/закрытие компактной tool group PASS,
+horizontal overflow=false, reload/rejoin/SSOconnected PASS; чужие вкладки
+не трогались. Основной checklist2–15/6.1 остаётся открытым.
+
+16:21 UTC: ROOT61 diagnostic/restore unit PASS22.397s. Fixed field manager
+kodex-local-dev, original managedFields сохранены; current exact traceV2
+возвращается только к canonical script. Проверки source до owner SQL,
+fresh idle/очистка workspace/отсутствие native Job/Pod, policy/compiler,
+cluster/nodes, controller0 и неизменность published pins повторяются.
+Неверные UID/RV/data/source, дополнительные effects, stale owner и drift
+закрыто отклонены до записи. Live restore и повторная активация ещё NOT RUN.

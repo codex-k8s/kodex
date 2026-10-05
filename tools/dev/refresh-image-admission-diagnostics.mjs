@@ -75,7 +75,7 @@ export function verifyReadback(actual, expected, beforeRV, dryRun = false) {
 
 // Все effect-операции принадлежат одному namespace/name. kubectl stderr никогда
 // не выводится: admission warnings/errors могут содержать request или raw data.
-export function refresh(o, candidate, io, approveCandidate = candidateConfigMap) {
+export function refresh(o, candidate, io, approveCandidate = candidateConfigMap, workspaceBoundary = null) {
   validateOptions(o);
   const get = (...args) => JSON.parse(io.kubectl(['get', ...args, '-o', 'json']));
   let policyPins;
@@ -90,8 +90,11 @@ export function refresh(o, candidate, io, approveCandidate = candidateConfigMap)
       const node = nodes.find(value => value.metadata?.name === nodeName);
       check(node?.metadata.uid === nodeUID && !node.metadata.deletionTimestamp && node.status?.conditions?.some(value => value.type === 'Ready' && value.status === 'True'), 'NODE_IDENTITY_MISMATCH');
     }
-    const pvc = get('-n', namespace, 'persistentvolumeclaim', workspace);
-    check(pvc.metadata?.uid === workspaceUID && !pvc.metadata.deletionTimestamp && pvc.metadata.labels?.['kodex.dev/image-admission-id'] === workspace.slice(9) && pvc.metadata.annotations?.['kodex.dev/admission-run-sha256'] === '320b1cbe46eb01e9908e39eb630a27b28ca7ece389f5bdcf01d4a67103d14c7e', 'WORKSPACE_IDENTITY_MISMATCH');
+    if (workspaceBoundary) workspaceBoundary(get, io.kubectl);
+    else {
+      const pvc = get('-n', namespace, 'persistentvolumeclaim', workspace);
+      check(pvc.metadata?.uid === workspaceUID && !pvc.metadata.deletionTimestamp && pvc.metadata.labels?.['kodex.dev/image-admission-id'] === workspace.slice(9) && pvc.metadata.annotations?.['kodex.dev/admission-run-sha256'] === '320b1cbe46eb01e9908e39eb630a27b28ca7ece389f5bdcf01d4a67103d14c7e', 'WORKSPACE_IDENTITY_MISMATCH');
+    }
     const policies = ['kodex-image-admission-controller-jobs', 'kodex-image-admission-controller-workspaces'].map(policyName => {
       const policy = get('validatingadmissionpolicy', policyName);
       check(policy.metadata?.name === policyName && uid.test(policy.metadata.uid) && !policy.metadata.deletionTimestamp &&
@@ -102,13 +105,14 @@ export function refresh(o, candidate, io, approveCandidate = candidateConfigMap)
     check(!policyPins || fingerprint(policyPins) === fingerprint(policies), 'ADMISSION_POLICY_DRIFT');
     policyPins = policies;
   };
-  const currentCM = () => get('-n', namespace, 'configmap', name);
+  const currentCM = () => get('-n', namespace, 'configmap', name, '--show-managed-fields=true');
+  io.source(o);
   boundary();
   io.source(o);
   const current = currentCM(), expected = approveCandidate(current, candidate, o);
   const report = { context: o.context, sourceRevision: o.sourceRevision, configmapUID: o.configmapUID, beforeResourceVersion: o.resourceVersion, beforeDataSHA256: o.baselineDataSHA256, candidateDataSHA256: fingerprint(expected.data), candidateScriptSHA256: digest(candidate) };
   if (o.mode === 'check') return { ...report, status: 'CHECKED' };
-  const replace = dryRun => JSON.parse(io.kubectl(['-n', namespace, 'replace', '--validate=strict', ...(dryRun ? ['--dry-run=server'] : []), '-f', '-', '-o', 'json'], JSON.stringify(expected)));
+  const replace = dryRun => JSON.parse(io.kubectl(['-n', namespace, 'replace', '--field-manager=kodex-local-dev', '--validate=strict', ...(dryRun ? ['--dry-run=server'] : []), '-f', '-', '-o', 'json'], JSON.stringify(expected)));
   verifyReadback(replace(true), expected, o.resourceVersion, true);
   boundary();
   io.source(o);
@@ -122,7 +126,7 @@ export function refresh(o, candidate, io, approveCandidate = candidateConfigMap)
   return { ...report, resourceVersion: observed.metadata.resourceVersion, status: 'APPLIED' };
 }
 
-export function runRefreshCLI(entrypoint = 'refresh-image-admission-diagnostics.mjs', transform = value => value, approveCandidate = candidateConfigMap) {
+export function runRefreshCLI(entrypoint = 'refresh-image-admission-diagnostics.mjs', transform = value => value, approveCandidate = candidateConfigMap, workspaceBoundary = null) {
   const names = { context: 'context', 'source-root': 'sourceRoot', 'source-revision': 'sourceRevision', 'api-server': 'apiServer', 'cluster-uid': 'clusterUID', 'namespace-uid': 'namespaceUID', 'configmap-uid': 'configmapUID', 'resource-version': 'resourceVersion', 'baseline-data-sha256': 'baselineDataSHA256', 'server-node-uid': 'serverNodeUID', 'agent-node-uid': 'agentNodeUID' };
   const args = process.argv.slice(2), o = { mode: args.shift() };
   while (args.length) {
@@ -156,7 +160,7 @@ export function runRefreshCLI(entrypoint = 'refresh-image-admission-diagnostics.
     endpoint: () => run(kubectl, ['--kubeconfig=/home/s/.kube/config', '--context=k3d-kodex', 'config', 'view', '--minify', '-o', 'jsonpath={.clusters[0].cluster.server}']),
     source: () => verifySourceProof(run('git', ['-C', SOURCE_ROOT, 'rev-parse', 'HEAD']),
       run('git', ['-C', SOURCE_ROOT, 'status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none']), readCandidate(), candidate, o),
-  }, approveCandidate);
+  }, approveCandidate, workspaceBoundary);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
