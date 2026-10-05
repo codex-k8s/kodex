@@ -2969,3 +2969,29 @@ EOF фильтра ожидается до выхода; production script не 
 CM/source/policy/cluster guards сохранены. ROOT43unit PASS313ms с privacy,
 неизменностью command intent и CAS negative cases. Actual same admission
 image Bash/Busybox syntax проверены. Live check/dry-run/apply ещё NOT RUN.
+
+15:44–15:58 UTC, checkpoint06c1ddf81e1002c08987f5a03c5407dae03248c9:
+transport trace CHECK, server dry-run, exact CAS apply/readback PASS;
+ConfigMap UID прежний, RV451503, dataSHA
+e373f2dbc93ad93c494ffe455cc326e85adddc091e7ad953fb15412a9c15a293.
+Три actual callback Pod выдали только закрытый REFUSED. DNS/proxy/TLS
+исключены, источник отказа TCP ещё UNKNOWN. Ни claim, ни policy не изменены.
+
+Следующая узкая диагностика: один прежний callback после двухсекундной паузы,
+тот же intent/tuple/idempotency/status; exact preimage только текущего trace.
+Это проверка гипотезы startup readiness, не доказательство причины заранее.
+Production исправление готовится отдельно: WaitForReady лишь Fail/Expire
+в пределах прежнего deadline8s. Матрица жизненного цикла:
+
+| Путь | Authority и состояние | Результат/событие |
+| --- | --- | --- |
+| Native Job → bridge Fail → registered CP RPC | Server-owned attempt, exact actor/scope/grant/fence/version; прежняя owner-транзакция | Atomic artifact/attempt/receipt/audit/domain event |
+| PermissionDenied expired claim → typed Expire | Fresh expiry context, тот же immutable tuple, owner eligibility | Прежний атомарный terminal и отзыв grant |
+| Transport wait, cancellation/deadline до соединения | Нет нового claim/grant и нет owner effect | Нет события; authoritative owner read |
+| Полученный server status | WaitForReady не повторяет обработанный RPC | Прежняя ошибка или terminal receipt |
+
+Live terminal receipt, idle barrier и новая активация worker images пока NOT RUN.
+
+ROOT43 diagnostic unit PASS22.469s: timing, original exitcode, один callback,
+privacy и CAS/source/policy negative cases сохранены. Production script
+не изменён; live применение новой двухсекундной диагностики ещё NOT RUN.

@@ -14,7 +14,9 @@ updated: 2026-10-05
 Перенос проверен; цель снова выполняется. CEL-политики исправлены, штатный
 apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e35fa4e`.
 Пять компонентов и архив сессий восстановлены; выполняется native QA.
-Текущий checkpoint кода: `77e2f11183e4f87662ab20633a2579ffbfc07fc9`.
+Текущий запушенный checkpoint кода: `06c1ddf81e1002c08987f5a03c5407dae03248c9`.
+Поверх него подготовлена узкая dev-диагностика задержки одного callback;
+точный следующий SHA и live readback фиксируются в журнале.
 Ниже перечисленные старые checkpoints относятся к истории, а не к текущему HEAD.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).
@@ -76,8 +78,10 @@ lease и fence. Адресные unit и SYSTEM/PROJECT PostgreSQL component PAS
 Admission recovery остаётся открытым: exact native Pod DNS и TCP к CP
 проверены; actual client trusted profile и отсутствие proxy подтверждены.
 Serving CP использует plaintext gRPC, поэтому TLS mismatch исключён.
-Это не доказательство успешного RPC: callback по-прежнему возвращает
-Unavailable; следующий узкий шаг — actual short-name DNS и HTTP/2 transport.
+Это не доказательство успешного RPC: три native callback подтвердили REFUSED
+через закрытый потоковый classifier. SHORTtarget DNS тоже проверен.
+Следующий узкий шаг — двухсекундная задержка того же callback и bounded
+WaitForReady только Fail/Expire, без повторов полученной server error.
 Секреты, claim, grant, NetworkPolicy и SQL-состояние не изменялись.
 
 Далее: штатный terminal callback → activation проверенных worker images →

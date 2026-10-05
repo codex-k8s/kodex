@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { digest, fingerprint, refresh, verifySourceProof, SOURCE_ROOT } from './refresh-image-admission-diagnostics.mjs';
-import { BASELINE_SCRIPT_SHA256, CANDIDATE_SCRIPT_SHA256, FAILURE_INVOCATION, TRACE_INVOCATION, TRACE_CHILD, candidateConfigMap, traceCandidate } from './refresh-image-admission-transport-trace.mjs';
+import { BASELINE_SCRIPT_SHA256, CURRENT_SCRIPT_SHA256, CANDIDATE_SCRIPT_SHA256, FAILURE_INVOCATION, CURRENT_TRACE_INVOCATION, TRACE_INVOCATION, TRACE_CHILD, candidateConfigMap, traceCandidate } from './refresh-image-admission-transport-trace.mjs';
 
 const baseline = readFileSync(new URL('../../deploy/k8s/base/image-supply-chain/image-admission.sh', import.meta.url), 'utf8');
 const candidate = traceCandidate(baseline);
+const currentScript = baseline.replace(FAILURE_INVOCATION, CURRENT_TRACE_INVOCATION);
 const id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const options = { mode: 'apply', context: 'k3d-kodex', sourceRoot: SOURCE_ROOT, sourceRevision: 'a'.repeat(40), apiServer: 'https://127.0.0.2:6443', clusterUID: id, namespaceUID: id, configmapUID: id, resourceVersion: '100', serverNodeUID: id, agentNodeUID: id };
 function fixture() {
-  const cm = { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'kodex-image-admission', namespace: 'kodex-system', uid: id, resourceVersion: '100', labels: { 'app.kubernetes.io/part-of': 'kodex', 'kodex.dev/local-profile': 'hot-reload', 'kodex.dev/security-profile': 'trusted-cluster' } }, data: { 'image-admission.sh': baseline, 'provenance-policy.jq': 'immutable fixture' } };
+  const cm = { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'kodex-image-admission', namespace: 'kodex-system', uid: id, resourceVersion: '100', labels: { 'app.kubernetes.io/part-of': 'kodex', 'kodex.dev/local-profile': 'hot-reload', 'kodex.dev/security-profile': 'trusted-cluster' } }, data: { 'image-admission.sh': currentScript, 'provenance-policy.jq': 'immutable fixture' } };
   return { cm, o: { ...options, baselineDataSHA256: fingerprint(cm.data) } };
 }
 function mock(f) {
@@ -37,9 +38,11 @@ function mock(f) {
 
 test('dev candidate заменяет только одну fail invocation; production source неизменён', () => {
   assert.equal(digest(baseline), BASELINE_SCRIPT_SHA256);
+  assert.equal(digest(currentScript), CURRENT_SCRIPT_SHA256);
   assert.equal(digest(candidate), CANDIDATE_SCRIPT_SHA256);
   assert.equal(candidate.replace(TRACE_INVOCATION, FAILURE_INVOCATION), baseline);
   assert.equal(candidate.split('image-admission-bridge fail').length, 2);
+  assert.equal(TRACE_CHILD.split('sleep 2 || exit 1').length, 2);
   assert.equal(spawnSync('sh', ['-n'], { input: candidate, encoding: 'utf8' }).status, 0);
 });
 
