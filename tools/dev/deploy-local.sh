@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
-    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress|runtime-rbac]' \
+    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|supply-chain-quiesce|builder-runtime|core|integration-egress|runtime-rbac]' \
     '  [--workload <exact-core-deployment|stt-tts-service|control-plane-migrate>]' >&2
 }
 
@@ -41,7 +41,7 @@ done
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
-case "$stage" in full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress|runtime-rbac) ;; *) fail 'deployment stage is invalid' ;; esac
+case "$stage" in full|data|network|migrate|supply-chain|supply-chain-quiesce|builder-runtime|core|integration-egress|runtime-rbac) ;; *) fail 'deployment stage is invalid' ;; esac
 [[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
@@ -59,7 +59,6 @@ fi
 for command_name in docker jq kubectl openssl sha256sum yq python3; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-[[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
 [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
   fail 'production context is forbidden'
 
@@ -68,6 +67,14 @@ runtime_namespace=kodex-runtime
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 object_storage_secret_name=""
 temporary_directory=$(mktemp -d)
+kubectl_binary=$(command -v kubectl)
+kubectl_home=${HOME:-}
+[[ "$kubectl_home" == /* && -d "$kubectl_home" ]] || fail 'explicit HOME is required for local Kubernetes access'
+# Discovery/cache не создаются внутри source checkout при очищенном env.
+kubectl() {
+  env HOME="$kubectl_home" "$kubectl_binary" --context="$context" \
+    --cache-dir="$temporary_directory/kubectl-cache" "$@"
+}
 image_admission_controller_restore_replicas=""
 image_admission_policy_owner_coherent=true
 # Подстановки exact локальных имён выполняются только на приватной копии:
@@ -86,6 +93,7 @@ cleanup_on_exit() {
   rm -rf -- "$temporary_directory"
 }
 trap cleanup_on_exit EXIT
+[[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
 
 filter_render() {
   local name=$1 expression=$2 output
@@ -345,6 +353,155 @@ apply_image_admission_crd() {
   kubectl wait --for=condition=Established \
     customresourcedefinition/imageadmissionpolicyparameters.supplychain.kodex.dev \
     --timeout=3m >/dev/null || fail 'image admission policy CRD is not Established'
+  readback_local_image_admission_crd
+}
+
+canonical_image_admission_crd_spec() {
+  # Только документированные defaults API v1; все прочие поля сохраняются.
+  jq -scS 'map(.conversion //= {strategy:"None"} | .preserveUnknownFields //= false)'
+}
+
+readback_local_image_admission_crd() {
+  local expected actual resource
+  expected=$(yq -o=json -I=0 'select(.kind == "CustomResourceDefinition" and
+    .metadata.name == "imageadmissionpolicyparameters.supplychain.kodex.dev") | .spec' \
+    "$render" | canonical_image_admission_crd_spec) || fail 'image admission CRD source is invalid'
+  [[ "$(jq -r length <<<"$expected")" == 1 ]] || fail 'image admission CRD registry is incomplete'
+  resource=$(kubectl get customresourcedefinition/imageadmissionpolicyparameters.supplychain.kodex.dev -o json) ||
+    fail 'image admission CRD readback failed'
+  jq -e 'any(.status.conditions[]?; .type == "Established" and .status == "True")' \
+    <<<"$resource" >/dev/null || fail 'image admission CRD is not Established'
+  actual=$(jq -c .spec <<<"$resource" | canonical_image_admission_crd_spec) || fail 'image admission CRD spec is invalid'
+  [[ "$actual" == "$expected" ]] || fail 'image admission CRD spec readback mismatch'
+}
+
+quiesce_local_supply_chain_workload() {
+  local workload=$1 deployment uid resource_version replicas selector attempt stopped_spec pods
+  declare -gA supply_chain_quiesce_uids supply_chain_quiesce_specs
+  case "$workload" in control-api-gateway|image-admission-controller|role-image-builder|runtime-controller|control-plane) ;;
+    *) fail 'supply-chain quiesce workload is invalid' ;; esac
+  deployment=$(kubectl -n "$namespace" get "deployment/$workload" -o json) ||
+    fail 'supply-chain quiesce Deployment is unavailable'
+  jq -e --arg namespace "$namespace" --arg workload "$workload" '
+    .metadata.namespace == $namespace and .metadata.name == $workload and
+    .metadata.deletionTimestamp == null and
+    (.metadata.uid | test("^[a-f0-9-]{36}$")) and
+    (.metadata.resourceVersion | test("^[0-9]+$")) and
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    (.spec.replicas == 0 or .spec.replicas == 1) and
+    (.spec.selector.matchExpressions // [] | length) == 0 and
+    (.spec.selector.matchLabels | type == "object" and length > 0) and
+    all(.spec.selector.matchLabels | to_entries[];
+      (.key | test("^[A-Za-z0-9./_-]+$")) and (.value | test("^[A-Za-z0-9._-]+$"))) and
+    (.spec.template.metadata.labels as $labels |
+      all(.spec.selector.matchLabels | to_entries[]; .value == $labels[.key]))
+  ' <<<"$deployment" >/dev/null || fail 'supply-chain quiesce Deployment is not exactly owned'
+  uid=$(jq -r .metadata.uid <<<"$deployment")
+  resource_version=$(jq -r .metadata.resourceVersion <<<"$deployment")
+  replicas=$(jq -r .spec.replicas <<<"$deployment")
+  stopped_spec=$(jq -cS '.spec | .replicas = 0' <<<"$deployment")
+  if [[ -n "${supply_chain_quiesce_uids[$workload]:-}" ]]; then
+    [[ "${supply_chain_quiesce_uids[$workload]}" == "$uid" &&
+      "${supply_chain_quiesce_specs[$workload]}" == "$stopped_spec" ]] ||
+      fail 'supply-chain quiesce original Deployment changed'
+  else
+    supply_chain_quiesce_uids[$workload]=$uid
+    supply_chain_quiesce_specs[$workload]=$stopped_spec
+  fi
+  selector=$(jq -r '.spec.selector.matchLabels | to_entries | sort_by(.key) |
+    map(.key + "=" + .value) | join(",")' <<<"$deployment")
+  if [[ "$mode" == apply && "$replicas" == 1 ]]; then
+    kubectl -n "$namespace" scale "deployment/$workload" --replicas=0 \
+      --current-replicas="$replicas" --resource-version="$resource_version" >/dev/null ||
+      fail 'supply-chain quiesce scale precondition failed'
+  fi
+  for attempt in $(seq 1 180); do
+    deployment=$(kubectl -n "$namespace" get "deployment/$workload" -o json) ||
+      fail 'supply-chain quiesce Deployment readback failed'
+    jq -e --arg uid "$uid" '.metadata.uid == $uid' <<<"$deployment" >/dev/null ||
+      fail 'supply-chain quiesce Deployment identity changed'
+    [[ "$(jq -cS '.spec | .replicas = 0' <<<"$deployment")" == "$stopped_spec" ]] ||
+      fail 'supply-chain quiesce Deployment spec changed'
+    if jq -e '(.spec.replicas == 0) and (.status.replicas // 0) == 0 and
+      (.status.availableReplicas // 0) == 0' <<<"$deployment" >/dev/null; then
+      pods=$(kubectl -n "$namespace" get pods -l "$selector" -o json) ||
+        fail 'supply-chain quiesce Pod inventory is unavailable'
+      jq -e '.items | type == "array"' <<<"$pods" >/dev/null ||
+        fail 'supply-chain quiesce Pod inventory is invalid'
+      if jq -e '.items | length == 0' <<<"$pods" >/dev/null; then return 0; fi
+    fi
+    [[ "$mode" == apply && "$attempt" -lt 180 ]] || fail 'supply-chain quiesce Deployment did not stop'
+    sleep 1
+  done
+  fail 'supply-chain quiesce Deployment did not stop'
+}
+
+require_idle_local_supply_chain_owner() {
+  # Существующий repo-owned read-only SQL, без runtime credential или raw output.
+  local output="$temporary_directory/supply-chain-owner-idle.json" pins
+  command -v node >/dev/null 2>&1 || fail 'node is required for the owner idle check'
+  (umask 077
+    kubectl -n "$namespace" --request-timeout=30s exec -i kodex-postgresql-0 -- \
+      psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d control_plane \
+      <"$script_directory/supply-chain-owner-readback.sql" >"$output" \
+      2>"$temporary_directory/supply-chain-owner-idle.stderr"
+  ) || fail 'supply-chain owner idle read failed'
+  node --input-type=module - "$output" "$script_directory/../release/runner-policy-model.mjs" <<'JS'
+import { readFileSync, statSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+try {
+  const file = process.argv[2];
+  const info = statSync(file);
+  if (!info.isFile() || info.size > 16384) throw new Error();
+  const { requireIdle } = await import(pathToFileURL(process.argv[3]));
+  requireIdle(JSON.parse(readFileSync(file, 'utf8')));
+} catch {
+  process.stderr.write('Supply-chain fresh idle owner state required\n');
+  process.exitCode = 1;
+}
+JS
+  pins=$(jq -cS '{promotedArtifactCount,promotedPinsSHA256}' "$output") ||
+    fail 'supply-chain published pins read failed'
+  if [[ -n "${supply_chain_quiesce_promoted_pins:-}" ]]; then
+    [[ "$supply_chain_quiesce_promoted_pins" == "$pins" ]] ||
+      fail 'supply-chain published pins changed during quiesce'
+  fi
+  supply_chain_quiesce_promoted_pins=$pins
+}
+
+readback_local_supply_chain_configuration() {
+  local expected actual
+  expected=$(yq -o=json -I=0 'select(.kind == "ConfigMap" and
+    .metadata.namespace == "kodex-system" and
+    (.metadata.name == "control-plane-runtime" or .metadata.name == "kodex-platform-endpoints")) |
+    {"name": .metadata.name, "data": .data, "binaryData": .binaryData, "immutable": .immutable}' \
+    "$render" | jq -scS 'sort_by(.name)') || fail 'supply-chain configuration source is invalid'
+  [[ "$(jq -r 'map(.name) | join(",")' <<<"$expected")" == control-plane-runtime,kodex-platform-endpoints ]] ||
+    fail 'supply-chain configuration registry is incomplete'
+  actual=$(kubectl -n "$namespace" get configmap/control-plane-runtime configmap/kodex-platform-endpoints -o json |
+    jq -cS '[.items[] | {name:.metadata.name,data,binaryData,immutable}] | sort_by(.name)') ||
+    fail 'supply-chain configuration readback failed'
+  [[ "$actual" == "$expected" ]] || fail 'supply-chain configuration readback mismatch'
+}
+
+readback_local_claim_evidence_network() {
+  local expected actual
+  expected=$(yq -o=json -I=0 'select(.kind == "NetworkPolicy" and
+    .metadata.namespace == "kodex-system" and
+    (.metadata.name == "kodex-image-registry-evidence" or
+     .metadata.name == "kodex-image-admission-claim-evidence-exact-path")) |
+    {"name": .metadata.name, "spec": .spec}' "$render" |
+    jq -scS 'map(.spec |= (.ingress //= [] | .egress //= [])) | sort_by(.name)') ||
+    fail 'claim evidence network source is invalid'
+  [[ "$(jq -r 'map(.name) | join(",")' <<<"$expected")" == kodex-image-admission-claim-evidence-exact-path,kodex-image-registry-evidence ]] ||
+    fail 'claim evidence network registry is incomplete'
+  actual=$(kubectl -n "$namespace" get networkpolicy/kodex-image-registry-evidence \
+    networkpolicy/kodex-image-admission-claim-evidence-exact-path -o json |
+    jq -cS '[.items[] | {name:.metadata.name,spec} | .spec |= (.ingress //= [] | .egress //= [])] | sort_by(.name)') ||
+    fail 'claim evidence network readback failed'
+  [[ "$actual" == "$expected" ]] || fail 'claim evidence network readback mismatch'
 }
 
 pause_local_image_admission_controller() {
@@ -1291,7 +1448,7 @@ wait_stable_workloads() {
 }
 
 readback_local_image_admission_policies() {
-  local admission_name admission_kind expected_admission actual_admission
+  local admission_name admission_kind expected_admission actual_admission resource attempt
   # Полный закрытый набор относится к одному executable contract; presence
   # не доказывает, что Job renderer обслуживается актуальной policy.
   for admission_name in kodex-image-admission-controller-jobs \
@@ -1302,8 +1459,21 @@ readback_local_image_admission_policies() {
           .metadata.name == strenv(ADMISSION_NAME)) | .spec' "$render" | canonical_runtime_admission_specs)
       [[ "$(jq -r length <<<"$expected_admission")" == 1 ]] ||
         fail 'image admission policy registry is incomplete'
-      actual_admission=$(kubectl get "$admission_kind/$admission_name" -o json | \
-        jq -c .spec | canonical_runtime_admission_specs) ||
+      for attempt in $(seq 1 180); do
+        resource=$(kubectl get "$admission_kind/$admission_name" -o json) ||
+          fail 'image admission policy readback failed'
+        if [[ "$admission_kind" != ValidatingAdmissionPolicy ]] || jq -e '
+          .status.observedGeneration == .metadata.generation and
+          (.metadata.generation | type == "number" and . > 0)
+        ' <<<"$resource" >/dev/null; then break; fi
+        ((attempt < 180)) || fail 'image admission policy compilation is not current'
+        sleep 1
+      done
+      if [[ "$admission_kind" == ValidatingAdmissionPolicy ]]; then
+        jq -e '(.status.typeChecking.expressionWarnings // [] | length) == 0' \
+          <<<"$resource" >/dev/null || fail 'image admission policy has compilation warnings'
+      fi
+      actual_admission=$(jq -c .spec <<<"$resource" | canonical_runtime_admission_specs) ||
         fail 'image admission policy readback failed'
       [[ "$actual_admission" == "$expected_admission" ]] ||
         fail 'image admission policy readback mismatch'
@@ -1606,6 +1776,23 @@ if annotations['kodex.dev/source-root'] != source:
     raise SystemExit('Trusted deployment source root mismatch')
 local_hot_reload.verify(resources, source, annotations['kodex.dev/cache-root'], os.getuid(), os.getgid())
 PY
+  if [[ "$stage" == supply-chain-quiesce ]]; then
+    # Публичный stop barrier до переноса source. Ошибка и EXIT не возобновляют
+    # hot-reload readers/writers; только новый supply-chain apply снимает паузу.
+    image_admission_policy_owner_coherent=false
+    require_idle_local_supply_chain_owner
+    for workload in control-api-gateway image-admission-controller role-image-builder \
+      runtime-controller control-plane; do
+      quiesce_local_supply_chain_workload "$workload"
+    done
+    require_empty_local_image_admission_runs
+    require_idle_local_supply_chain_owner
+    for workload in control-api-gateway image-admission-controller role-image-builder \
+      runtime-controller control-plane; do
+      mode=readback quiesce_local_supply_chain_workload "$workload"
+    done
+    exit 0
+  fi
   if [[ "$mode" == apply && "$stage" == data ]]; then
     verify_email_projection_generation
     ensure_local_object_storage_secret
@@ -1732,6 +1919,10 @@ PY
   fi
   if [[ "$stage" == supply-chain ]]; then
     if [[ "$mode" == apply ]]; then
+      # Любая partial apply оставляет admission controller остановленным.
+      image_admission_policy_owner_coherent=false
+      pause_local_image_admission_controller
+      require_empty_local_image_admission_runs
       # Materialization policy обновляется до нового controller: hot reload
       # не должен создавать Pod по новому layout при прежней admission policy.
       apply_render runtime-materialization-admission '
@@ -1747,11 +1938,6 @@ PY
           .data.pullRegistryHost
         ' "$render")" >/dev/null
       ensure_seed_secrets
-      # При ошибке новой authority policy controller остаётся остановленным;
-      # EXIT cleanup не имеет права возобновить старые claims.
-      image_admission_policy_owner_coherent=false
-      pause_local_image_admission_controller
-      require_empty_local_image_admission_runs
       # Trusted профиль не запускает publisher: exact закрытый реестр встроен в CP.
       command -v node >/dev/null 2>&1 || fail 'node is required for the control-plane service policy check'
       node "$script_directory/../release/service-identity-policy.mjs" check \
@@ -1762,6 +1948,13 @@ PY
       # Goose применяет только forward migration текущего source, до нового CP.
       # Completed Job связан с exact source/render digest, не с прежним именем.
       apply_job control-plane-migrate
+      apply_image_admission_crd
+      apply_render image-admission-claim-evidence-network '
+        select(.kind == "NetworkPolicy" and .metadata.namespace == "kodex-system" and
+          (.metadata.name == "kodex-image-registry-evidence" or
+           .metadata.name == "kodex-image-admission-claim-evidence-exact-path"))
+      '
+      readback_local_claim_evidence_network
       # Claim/scan/sign/admit/promote читают общий скрипт и policy-фильтры:
       # новый builder не должен обслуживаться прежней схемой provenance.
       apply_render image-admission-runtime-configuration '
@@ -1816,6 +2009,11 @@ PY
       '
       kubectl -n "$namespace" rollout status deployment/kodex-buildkit --timeout=15m >/dev/null ||
         fail 'local BuildKit is unavailable after registry seed'
+      apply_render image-admission-owner-configuration '
+        select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+          (.metadata.name == "control-plane-runtime" or .metadata.name == "kodex-platform-endpoints"))
+      '
+      readback_local_supply_chain_configuration
       apply_render image-admission-control-plane-owner '
         select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
           .metadata.name == "control-plane")
@@ -1824,6 +2022,13 @@ PY
         fail 'control-plane is unavailable after image admission policy publication'
       readback_local_control_plane_image_policy
       readback_local_supply_chain_deployment_inputs control-plane
+      apply_render image-admission-control-api-reader '
+        select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+          .metadata.name == "control-api-gateway")
+      '
+      kubectl -n "$namespace" rollout status deployment/control-api-gateway --timeout=15m >/dev/null ||
+        fail 'control API gateway is unavailable after image admission owner publication'
+      readback_local_supply_chain_deployment_inputs control-api-gateway
       apply_render image-supply-chain-controllers '
         select(.kind == "Deployment" and
           (.metadata.name | test("^(image-admission-controller|role-image-builder|runtime-controller)$")))
@@ -1848,7 +2053,11 @@ PY
           fail 'runtime materialization admission readback mismatch'
       done
     done
-    for workload in kodex-image-registry-pull kodex-image-registry-push \
+    readback_local_image_admission_crd
+    readback_local_claim_evidence_network
+    readback_local_supply_chain_configuration
+    readback_local_control_plane_image_policy
+    for workload in control-plane control-api-gateway kodex-image-registry-pull kodex-image-registry-push \
       kodex-image-registry-promotion kodex-image-registry-staging-read \
       kodex-image-registry-evidence kodex-buildkit image-admission-controller \
       role-image-builder runtime-controller; do

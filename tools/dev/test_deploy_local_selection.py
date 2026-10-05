@@ -108,9 +108,9 @@ class DeployLocalSelectionTest(unittest.TestCase):
         registries = stage.index('apply_render image-registry-workloads')
         seed = stage.index('seed-local-image-supply-chain.sh')
         full_readiness = stage.index(
-            'for workload in kodex-image-registry-pull kodex-image-registry-push'
+            'for workload in control-plane control-api-gateway kodex-image-registry-pull kodex-image-registry-push'
         )
-        self.assertLess(node_registry, pause)
+        self.assertLess(pause, node_registry)
         self.assertLess(
             pause, reconcile, 'controller must stop before immutable policy reconciliation'
         )
@@ -364,7 +364,7 @@ cleanup_on_exit
         command = functions + '''
 fail() { printf '%s\\n' "$1" >&2; exit 1; }
 yq() { printf '%s\\n' "$EXPECTED_SPEC"; }
-kubectl() { printf '{"spec":%s}\\n' "$ACTUAL_SPEC"; }
+kubectl() { printf '{"metadata":{"generation":1},"status":{"observedGeneration":1,"typeChecking":{"expressionWarnings":[]}},"spec":%s}\\n' "$ACTUAL_SPEC"; }
 render=synthetic-render
 readback_local_image_admission_policies
 '''
@@ -648,6 +648,9 @@ readback_local_image_admission_policies() { phase vap-readback; }
 readback_local_image_admission_controller_rbac() { phase rbac-readback; }
 readback_local_control_plane_image_policy() { phase owner-readback; }
 readback_local_supply_chain_deployment_inputs() { phase source-readback; }
+apply_image_admission_crd() { phase crd-readback; }
+readback_local_claim_evidence_network() { phase network-readback; }
+readback_local_supply_chain_configuration() { phase configuration-readback; }
 reconcile_local_immutable_image_admission_policy() { phase policy; }
 ensure_seed_secrets() { :; }
 yq() { printf 'synthetic-public-host\\n'; }
@@ -674,6 +677,7 @@ trap cleanup_on_exit EXIT
                 path.write_text('#!/bin/sh\nexit 0\n')
                 path.chmod(0o700)
             for failed in ('pause', 'preflight', 'identity-policy', 'control-plane-migrate',
+                           'crd-readback', 'network-readback', 'configuration-readback',
                            'vap-readback', 'rbac-readback', 'kube-ready', 'owner-readback', 'source-readback', ''):
                 with self.subTest(failed=failed):
                     result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],

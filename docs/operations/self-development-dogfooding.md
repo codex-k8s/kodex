@@ -2438,3 +2438,25 @@ ROOT18 helper unit PASS0.006s для `docker image rm --no-prune` и закры�
 conflict/timeout diagnostics. Не выбранные parents теперь не подлежат rm;
 предыдущие3 direct image IDs удалены, число автоматически затронутых parents
 исторически UNKNOWN. Оставшиеся8 Docker IDs KEEP, новых rmi не было.
+
+05.10.2026 08:00 UTC, source checkpoint8df636880cc3210d314e2e4045dddd992becc5bd:
+PASS — frozen cutover v2 patch28bd021a2870d8e28f302ca024a3343c89dce947c7973dac3c8272cdb561b2c8
+применён только после завершения canonical renderer. Public maintenance stage
+останавливает пять exact owned hot-reload workloads с UID/spec/OCC, проверяет
+idle owner до/после и не возобновляет их при EXIT/частичной ошибке.
+Trusted local/source guard предшествует stop. Supply-chain activation сначала
+обновляет CRD, exact claim/evidence network, owner configuration и gateway,
+затем controllers; CEL readback требует актуальное generation без warnings.
+ROOT33 focused unit PASS5.769s, bash-n/ShellCheck/diff-check PASS.
+Disposable PostgreSQL fixture PASS13.146s в isolated worktree; SQL bytes
+не менялись после проверки. Live maintenance/activation пока NOT RUN.
+Canonical render на clean8df63688 завершился exit0, authority revision1,
+fingerprint e29430e5958ffc031f783794ece3304b4bfe0968975465bbd15ffe7035a1117c.
+
+Дополнительная scoped housekeeping волна завершена: npm479354880 и
+render-contract Go891555840 allocated bytes, всего1370910720;36690files/8099dirs.
+20802 защищённых metadata entries unchanged; обе ноды Ready/noDiskPressure.
+Финальный df55,669,653,504 bytes available, net gain не приравнивается
+к allocated bytes из-за параллельных писателей. Восемь Docker IDs KEEP,
+новых rmi не было. По новому запросу владельца продолжается read-only
+инвентаризация других локальных кешей без затрагивания процессов второго агента.
