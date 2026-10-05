@@ -1583,12 +1583,15 @@ readback_local_runtime_materialization_admission() {
           (.metadata.generation | type == "number" and . > 0) and
           .status.observedGeneration == .metadata.generation
         ' <<<"$resource" >/dev/null; then
+          # Kubernetes 1.35.5 status controller публикует observedGeneration
+          # после Check в одной ApplyStatus. Пустой optional typeChecking
+          # может отсутствовать после SSA; свежесть доказывает generation.
           jq -e '
-            (.status.typeChecking | type == "object") and
-            (.status.typeChecking.expressionWarnings // [] |
-              type == "array" and length == 0)
+            (.status.typeChecking | . == null or type == "object") and
+            (.status.typeChecking.expressionWarnings |
+              . == null or (type == "array" and length == 0))
           ' <<<"$resource" >/dev/null ||
-            fail 'runtime materialization admission has compilation warnings or incomplete type checking'
+            fail 'runtime materialization admission has compilation warnings or invalid type checking status'
           break
         fi
         sleep 1

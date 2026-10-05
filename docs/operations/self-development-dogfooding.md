@@ -2708,3 +2708,39 @@ disposable PostgreSQL NOT RUN. bash-n, ShellCheck, diff-check и выбранн�
 
 После фиксации clean source выполняются повторные адресные проверки и штатный
 build/render/apply. Chrome содержит ожидаемый maintenance503, не live PASS.
+
+05.10.2026 13:30 UTC:
+Source `59364eebac4df25bb43f82c8ca32cb27c124a0eb` запушен; remote Git и
+PR1798 head совпали при повторном readback. Первое мгновенное чтение PR после
+успешного push ещё вернуло прежний SHA; повторное чтение подтвердило новый.
+На exact clean SHA typed CEL PASS0.150s, gate7tests PASS7.218s,
+selection26tests PASS2.031s, cutover20 выполненных PASS9.558s/один PG NOT RUN.
+Canonical all/build-jobs4/import PASS, свежий render PASS:
+SHA256 `744fb2c81d507b8ce40fc5552abd0a3ef40934758ed34ae1374fe9a69005a2bb`.
+Tools5129d8fb, admission5d4078e6, builder87ae0042, authority85687d36;
+runner72b27d82 неизменён. Owner idle 13:25UTC counts0, promoted19/pins unchanged.
+
+FAIL — новый apply закрыто остановлен на слишком строгом собственном guard:
+runtime RBAC generation2/observed2 и Pod generation3/observed3 уже не имеют
+compiler warnings, но API server опустил всё пустое поле typeChecking.
+Это не прежняя ошибка CEL и не незавершённая observedGeneration.
+Точный upstream v1.35.5 status controller сначала выполняет Check, затем одним
+ApplyStatus публикует observedGeneration и warnings; optional пустой объект может
+не попасть в сохранённый SSA/JSON. Требование обязательного typeChecking object
+в guard и соответствующий negative fixture оказались неверными. Исправляются
+по этому авторитетному контракту с сохранением fresh generation/spec и отказа
+на любых warnings/неверных типах. Ни gate не обходился, ни controller не запускался.
+Все пять Deployment снова подтверждены replicas0; serving/full QA ещё NOT RUN.
+
+05.10.2026 13:33 UTC:
+Delta guard от base59364eeb, SHA256
+`8cf3daea62105f699cfa87726d38b5e7ea3329a9ce7cb20ad367afeaa29e92d2`,
+применён в рабочую ветку. Fresh observedGeneration и полный ожидаемый spec
+обязательны; отсутствующий/null/пустой optional typeChecking допускается только
+с этим доказательством завершённой проверки. Warnings, неверный JSON shape,
+прежнее поколение, drift и ошибка readback остаются закрытыми отказами.
+ROOT delta checks: gate8tests PASS15.605s, typed CEL PASS0.216s,
+selection26tests PASS2.612s, cutover20 выполненных PASS10.498s, один PG NOT RUN;
+bash-n/ShellCheck/guide formatting/diff-check PASS. Source фиксируется перед
+повторными exact-SHA checks и новым штатным render/apply; старый render повторно
+не используется. Предыдущий FAIL не скрыт и не объявлен успешной активацией.

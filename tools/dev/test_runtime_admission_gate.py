@@ -74,9 +74,12 @@ printf 'verified\n'
 
     def test_current_type_checking_accepts_omitempty_empty_warnings(self):
         _, _, resource = self.run_gate()
-        resource["status"]["typeChecking"] = {}
-        result, _, _ = self.run_gate(resource)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        for value in ({}, {"expressionWarnings": []}, None, "absent"):
+            with self.subTest(value=value):
+                if value == "absent": resource["status"].pop("typeChecking", None)
+                else: resource["status"]["typeChecking"] = value
+                result, _, _ = self.run_gate(resource)
+                self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_current_compiler_warning_in_any_policy_fails_closed(self):
         _, _, resource = self.run_gate()
@@ -99,18 +102,31 @@ printf 'verified\n'
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls[:2], ["ValidatingAdmissionPolicy/" + POLICIES[0]] * 2)
 
-    def test_missing_status_or_type_checking_is_not_success(self):
+    def test_missing_or_stale_completion_is_not_success_even_without_type_checking(self):
         _, _, baseline = self.run_gate()
-        for field in ("status", "typeChecking", "generation", "malformed-warnings"):
+        for field in ("status", "observedGeneration", "generation", "stale-observedGeneration"):
             resource = copy.deepcopy(baseline)
+            del resource["status"]["typeChecking"]
             if field == "status": del resource["status"]
-            elif field == "typeChecking": del resource["status"]["typeChecking"]
+            elif field == "observedGeneration": del resource["status"]["observedGeneration"]
             elif field == "generation": del resource["metadata"]["generation"]
-            else: resource["status"]["typeChecking"]["expressionWarnings"] = {}
+            else: resource["status"]["observedGeneration"] = 1
             with self.subTest(field=field):
                 result, _, _ = self.run_gate(resource)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn("verified", result.stdout)
+
+    def test_malformed_status_shapes_are_rejected(self):
+        _, _, baseline = self.run_gate()
+        for field in ("typeChecking", "expressionWarnings"):
+            for value in (False, True, "invalid", 1, [] if field == "typeChecking" else {}):
+                resource = copy.deepcopy(baseline)
+                if field == "typeChecking": resource["status"][field] = value
+                else: resource["status"]["typeChecking"][field] = value
+                with self.subTest(field=field, value=value):
+                    result, _, _ = self.run_gate(resource)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertNotIn("verified", result.stdout)
 
     def test_spec_drift_incomplete_render_and_failed_readback_are_rejected(self):
         _, _, resource = self.run_gate()

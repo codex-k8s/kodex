@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.1
+version: 1.7.2
 updated: 2026-10-05
 ---
 
@@ -1571,9 +1571,14 @@ warnings значим только при свежем `observedGeneration == ge
 `initContainers`; пути metadata/spec и точные image/command/resource ограничения
 сохраняют прежние проверки. До запуска CP/controller и в конечном readback один
 native snapshot связывает полный ожидаемый spec, текущую generation и завершённую
-type checking без warnings. Отсутствующая type checking или устаревшая generation
-закрыто отклоняются; отсутствие `expressionWarnings` в существующем пустом объекте
-type checking соответствует сериализации API server. Адресная проверка этого
+type checking без warnings. Авторитетный status controller Kubernetes сначала
+выполняет `Check`, затем одним `ApplyStatus` фиксирует observedGeneration и warnings;
+точное совпадение generation доказывает завершение этой проверки. Пустые optional
+`typeChecking`/`expressionWarnings` могут отсутствовать после SSA/omitempty и не
+означают отказ. Устаревшая либо отсутствующая observedGeneration, неверные типы
+status и любые warnings закрыто отклоняются. Это закрепляется по
+[исходнику целевой версии Kubernetes](https://github.com/kubernetes/kubernetes/blob/v1.35.5/pkg/controller/validatingadmissionpolicystatus/controller.go),
+а не по наличию необязательного JSON-поля. Адресная проверка этого
 gate — `make test-runtime-admission-gate`, предел процесса 60 секунд.
 
 Очистка воспроизводимых локальных кэшей и образов выбирает только явный
