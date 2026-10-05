@@ -4,7 +4,7 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.11
+version: 1.0.12
 updated: 2026-10-05
 ---
 
@@ -210,3 +210,44 @@ tools/dev/import-local-image.sh --context k3d-kodex --mode readback \
 Helper не отключает GC, не меняет admission/pull policy и не выполняет unpin
 или удаление прежних releases. Их retire требует отдельного owner-процесса;
 накопление pinned releases учитывается в бюджете диска.
+
+## Полный отчёт об отклонённом образе без раскрытия сырых данных
+
+Если краткий remediation пуст либо неполон при ненулевом blocking count,
+`tools/diagnostics/read-image-vulnerabilities.py` читает сохранённый immutable
+OCI evidence, а не повторяет scan и не меняет verdict. Владелец сначала
+получает exact artifact/image/vulnerability SHA через защищённый read path;
+recipe, generation и build связываются этим readback отдельно. Receipt не
+содержит этих трёх идентификаторов, поэтому helper их не выдумывает.
+
+```sh
+python3 -B tools/diagnostics/read-image-vulnerabilities.py \
+  --context k3d-kodex --kubeconfig /home/s/.kube/config \
+  --deployment-uid "$expected_registry_deployment_uid" \
+  --artifact-ref "$expected_artifact_ref" \
+  --image-digest "$expected_image_digest" \
+  --vulnerability-sha256 "$expected_vulnerability_sha256" \
+  --evidence-manifest-digest "$expected_evidence_manifest_digest"
+
+python3 -B -m unittest discover -s tools/diagnostics \
+  -p test_read_image_vulnerabilities.py
+```
+
+Проверяются exact Ready Pod → ReplicaSet → Deployment UID, scope evidence,
+registry image, ServiceAccount и PVC; regular owned0600 kubeconfig. Читаются
+только canonical regular paths, без symlink, полного metadata/env и Secret.
+Проверяются tag/revision link, manifest digest, все21 descriptors/hashes,
+canonical chunks и логический vulnerability SHA, receipt и policy counts.
+Бюджет180 секунд; part16MiB, общий evidence64MiB, итоговая проекция256KiB.
+
+Raw report, URLs и locations остаются в памяти и не печатаются. Вывод содержит
+ограниченные CVE/GHSA/GO identifiers, package/version/fix expressions и счётчики
+отфильтрованных записей с закрытыми reason codes. `knownTools` выдаёт только
+имена программ из закрытой таблицы exact paths; отсутствие location не
+доказывает отсутствия уязвимого бинарника. Reported fix expression не считается
+проверенным runtime pin. Ненулевой suppressed count требует дальнейшей
+диагностики, а не объявления исправления или ослабления policy.
+
+Формат хранения сверяется по
+[Distribution2.8.3 paths.go](https://github.com/distribution/distribution/blob/v2.8.3/registry/storage/paths.go);
+Context7 Distribution использован для официальной структуры registry API.

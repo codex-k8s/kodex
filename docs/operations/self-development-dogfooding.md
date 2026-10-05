@@ -2177,3 +2177,34 @@ artifact не доказывает выбор38 environment tools. REJECTED не
 Bounded remediation пустой при123blocking: требуется диагностика immutable
 полного evidence с безопасной проекцией package/advisory/fix. Новый helper
 пока NOT RUN; публичные policy пороги и verdict не менялись.
+
+05.10.2026 04:30 UTC, source8f8376639efcfca339ff90ea48f7888ad566c107 + diagnostic delta:
+PASS — ROOT полный immutable evidence readback candidateimgart_4Hof_Yt5aJOUtYz2qx-3ohbs
+через Ready registry Pod→RS→DeploymentUID60d8c666-c234-4437-8b66-5ce8e5b713a1;
+exact OCI manifestsha256:62e3a2a59ba28c8f14bdc4546d36b420e9f1fe5f8dba56aae2f34f5761b08172,
+image/vulnerability SHA совпали с owner tuple gen5. Проверены все descriptors,
+hashes, canonical chunks и rejected receipt. Safe summary123blocking/582high/
+459no-fix, suppressed0: ранее73 записей пропускались из-за GO advisory IDs,
+а не отсутствия fixes. Новая закрытая CVE/GHSA/GO проекция не раскрывает raw
+URLs/locations/metadata. SPDX-derived report не содержит binary locations:
+пустой knownTools не доказывает отсутствие binary. ROOT11 unit PASS0.016s,
+CLI/bounds/negative-owner/hash/redaction fixtures; bash syntax/ShellCheck/diff PASS.
+
+PASS — exact platform basedb9428 read-only BuildKit диагностикой, без запуска
+агента, установлен actual compiler каждого prebuiltCLI: gh/kubectl/helm все
+go1.26.4. Наличие installedGo1.26.6 их ELF не исправляет. Три независимых
+исполнителя готовят воспроизводимые GoCLI dependencies, npm locked tree и
+sourcebuild этих prebuiltCLI; новая сборка/допуск ещё NOT RUN.
+Readback полного отчёта также выявил x/crypto/net/mod/text fixes, не только
+первоначальные13 packages. Admission policy не изменяется и REJECTED не обходится.
+
+Chrome own22 reload/Console PASS, error/warn0; foreign29/36 не изменены.
+Из-за отсутствующего HOME у первого helper kubectl создал .kube cache в cwd:
+права/владение проверены без чтения содержимого,109entries/38files перенесены
+в восстанавливаемый private quarantine-vulnerability-kube-cache-20261005-0425.
+Helper теперь передаёт child только PATH/HOME/KUBECONFIG/LANG; кэши/данные
+приложения не удалены. Ранее зарегистрированный security incident остаётся OPEN.
+Checkbox6/7 и последующие live dogfooding этапы остаются OPEN/NOT RUN.
+Runbook Prettier PASS. Проверка форматирования всего исторического журнала
+дала FAIL также на исходном8f837663; прежние evidence-записи не переписывались
+механически. Это не объявляется успешной форматной проверкой журнала.

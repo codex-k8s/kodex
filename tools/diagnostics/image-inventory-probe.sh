@@ -84,6 +84,16 @@ if grep -Eq 'mod[[:space:]]+github.com/fullstorydev/grpcurl[[:space:]]+v1\.9\.3'
   printf 'grpcurlExactBuildInfo=true\n' >>/tmp/result.txt
 else printf 'grpcurlExactBuildInfo=false\n' >>/tmp/result.txt; fi
 rm -f /tmp/buildinfo.out
+for name in gh kubectl helm; do
+  /usr/local/go/bin/go version -m "/image/usr/local/bin/$name" >/tmp/buildinfo.out 2>&1 || {
+    printf 'Go CLI build info diagnostic failed\n' >&2
+    exit 1
+  }
+  compiler=$(awk 'NR == 1 && $2 ~ /^go[0-9]+\.[0-9]+\.[0-9]+$/ {print $2}' /tmp/buildinfo.out)
+  case "$compiler" in go[0-9]*.[0-9]*.[0-9]*) ;; *) exit 1 ;; esac
+  printf '%s compiler=%s\n' "$name" "$compiler" >>/tmp/result.txt
+done
+rm -f /tmp/buildinfo.out
 SCRIPT
 timeout -k 5 180 buildctl --addr tcp://127.0.0.1:1234 \
   --tlscacert /var/run/secrets/kodex/buildkit/tls/ca.pem \
