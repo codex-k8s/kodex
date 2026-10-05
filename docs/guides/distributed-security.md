@@ -1413,6 +1413,9 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   page; arbitrary URLs/raw paths не выходят наружу. Превышение бюджета —
   технический отказ, не усечение отчёта. Новый evidence format/policy и migration,
   CP/gateway/worker/signer/promotion материализуются до controller resume.
+  Внешнее явно пустое scanner fix state вместе с явно пустым массивом версий
+  допускается проецировать только в канонический UNKNOWN. Отсутствующие/null
+  поля, неизвестный state и противоречащие версии не получают неявных defaults.
   Immutable history не допускает UPDATE/DELETE в active/archive/trash lifecycle.
   Retention-исключение принадлежит только existing authorized permanent Project
   purge с exact server-owned protected purge context и полным terminal graph;
@@ -1440,6 +1443,8 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   claim определяется часами PostgreSQL и закрывается свежей maintenance
   identity, а не просроченным grant. Jobs и workspace удаляются только после
   подтверждённого owner terminal; повтор сохраняет исходный closed error code.
+  Сбой terminal callback сохраняет закрытую диагностику gRPC code без remote
+  error, claim или payload; marker завершения появляется только после receipt.
 - Локальный одноразовый helper доступа к credentials задаёт каждому kubectl
   явный приватный cache-dir вне repository и проверяет owner/mode/inode перед
   ограниченным cleanup. Отсутствие HOME в очищенном окружении не доказывает

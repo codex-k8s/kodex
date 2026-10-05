@@ -2224,6 +2224,16 @@ const ru = {
       context7_resolve_library_id: "Поиск библиотеки",
       context7_query_docs: "Документация библиотеки",
     },
+    configurationCatalogNames: {
+      ASSISTANTS: "Каталог помощников",
+      RUNTIME_PROFILES: "Каталог профилей выполнения",
+      PROVIDER_ACCOUNTS: "Каталог учётных записей провайдера",
+      MODELS: "Каталог моделей",
+      ROLE_IMAGE_RECIPES: "Каталог рецептов образов",
+      IMAGE_ARTIFACTS: "Каталог образов",
+      ROLE_ENVIRONMENTS: "Каталог окружений",
+      CURRENT_CONFIGURATION: "Текущие настройки",
+    },
     nativeShellActions: {
       READ: "чтение файлов",
       LIST_FILES: "список файлов",
@@ -6718,6 +6728,16 @@ const en = {
       get_file_manifest: "File list",
       context7_resolve_library_id: "Library search",
       context7_query_docs: "Library documentation",
+    },
+    configurationCatalogNames: {
+      ASSISTANTS: "Assistant catalog",
+      RUNTIME_PROFILES: "Runtime profile catalog",
+      PROVIDER_ACCOUNTS: "Provider account catalog",
+      MODELS: "Model catalog",
+      ROLE_IMAGE_RECIPES: "Image recipe catalog",
+      IMAGE_ARTIFACTS: "Image catalog",
+      ROLE_ENVIRONMENTS: "Environment catalog",
+      CURRENT_CONFIGURATION: "Current settings",
     },
     nativeShellActions: {
       READ: "read files",

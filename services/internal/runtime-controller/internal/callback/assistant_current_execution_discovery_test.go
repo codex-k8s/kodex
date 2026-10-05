@@ -120,8 +120,25 @@ func TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(string(dockerfile), "ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0\n") != 2 {
-		t.Fatal("SDK default metadata requires revalidation for changed production/local pins")
+	if strings.Count(string(dockerfile), "ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0\n") != 1 {
+		t.Fatal("SDK default metadata requires revalidation for changed local pin")
+	}
+	var manifest struct {
+		Dependencies map[string]string `json:"dependencies"`
+	}
+	manifestJSON, err := os.ReadFile(filepath.Join(job, "npm-toolchain", "package.json"))
+	if err != nil || json.Unmarshal(manifestJSON, &manifest) != nil || manifest.Dependencies["@openai/codex"] != "0.160.0" {
+		t.Fatal("SDK default metadata requires revalidation for changed production pin")
+	}
+	var lock struct {
+		Packages map[string]struct {
+			Dependencies map[string]string `json:"dependencies"`
+			Version      string            `json:"version"`
+		} `json:"packages"`
+	}
+	lockJSON, err := os.ReadFile(filepath.Join(job, "npm-toolchain", "package-lock.json"))
+	if err != nil || json.Unmarshal(lockJSON, &lock) != nil || lock.Packages[""].Dependencies["@openai/codex"] != "0.160.0" || lock.Packages["node_modules/@openai/codex"].Version != "0.160.0" {
+		t.Fatal("SDK default metadata requires revalidation for changed production lock pin")
 	}
 	writer, err := os.ReadFile(filepath.Join(job, "internal", "codex", "config.go"))
 	if err != nil {

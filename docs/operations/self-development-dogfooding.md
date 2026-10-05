@@ -2775,3 +2775,76 @@ realtime «Подключено», Console без ошибок. Скриншот
 Через UI отправлен SYSTEM запрос QA_SELFDEV_V5_IMAGE_01 для native typed
 обновления собственного рецепта. Его успешный результат и новая image build,
 report/risk/admission/promotion пока NOT RUN. Основной checklist не закрывался.
+
+05.10.2026 14:10 UTC, native image и read-path evidence:
+Checkpoint журнала/продолжения запушен как
+`b86ef05c9b285ab571e2098e7e15cdabbc665b37`; runtime-код и serving supply-chain
+images остаются от проверенного b40f2784. PR1798 OPEN Draft, head/body readback
+PASS. Новый SYSTEM run `run_Un3Ez_ZyZL-uzRvBr7eIjcR5` SUCCEEDED, один typed
+plan UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: исходная version7/generation5,
+standard template, текущий exact base72b27d82, без ручной подмены Dockerfile.
+UI diff/validation/apply PASS; recipe version8/generation6 и native Build
+`imgbld_ZgVthv4QHpBfaxKV-HuFDSEI` COMPLETED13:56:56UTC. После reload штатный
+application receipt остаётся «Применён»; повторная mutation не запускалась.
+
+Initial session/run/lease→Pod и actual runner digest связаны независимым readback.
+Revision digest и attempt подтверждены; полный input_digest proof NOT RUN,
+входной payload не извлекался. Переписка показывает user справа, assistant
+commentary/final/tools слева, компактный working indicator и Stop. Console
+рабочего сценария без ошибок. Диагностические GET к несуществующим history
+routes дали404/405 и не считаются дефектом приложения или успешной проверкой.
+
+Одиночный ROLE_ENVIRONMENTS отказ13:53:17UTC — Unavailable/control_unavailable.
+Missing-case/nil catalog wiring не подтверждены: serving binary реально
+назначает Catalog.List. Fresh SYSTEM read QA_ROLE_ENVIRONMENTS_RETRY_01
+успешно вернул standard/ORGANIZATION с первого запроса408ms, без mutations.
+Причина первоначального временного отказа UNKNOWN; speculative fix не выполнялся.
+Backend lease/Pod proof повторного read NOT RUN: ресурсы удалены штатно до наблюдения.
+
+FAIL — native admission: claim Job успешно завершён; native PVC Bound2Gi/RWO,
+scan Job завершился exit1 на обработке полного отчёта с закрытыми кодами
+«vulnerability report projection is invalid» и validator rejection. Это не
+vulnerability verdict и не допустимый повод принять риск. Failed-predecessor
+callback повторяется, artifact остаётся CLAIMED/PENDING, а UI показывает ожидание.
+Разбираются source report projection и terminal failure receipt раздельно;
+integrity/provenance/signature ограничения не ослабляются. Checkbox6.1 открыт,
+report/risk/admission/promotion live acceptance не выполнены.
+
+Для информативных компактных tool rows требуется закрытая публикация только
+catalog kind: существующая safeParameters projection пустая, frontend не может
+угадать selector. Дорабатываются producer и localized UI с negative privacy tests;
+сырые аргументы, поисковые строки и credentials в переписку не добавляются.
+
+05.10.2026 14:22 UTC, адресные исправления на рабочем дереве b86ef05c:
+Полный native report доказал причину отказа: шесть scanner findings содержат
+явный fix.state="" и fix.versions=[]. Только эта точная форма проецируется
+в UNKNOWN; missing/null/неизвестные значения закрыто отклоняются.
+Исправленный настоящий CLI разобрал весь исходный report21,135,836bytes:
+canonical1,777,795bytes, 4640 matches, 4634 groups, 2938 advisory,
+2 blocking, 459 unresolved/no-fix, 2315 suppressed. Хэши исходных bytes и
+immutable binding проверены, отчёт не усекался. Это локальное доказательство
+обработчика; новый live admission/UI/risk/promotion пока NOT RUN.
+
+Уточнение предыдущей гипотезы terminal closure: существующий owner DB trigger
+finish_image_admission_attempt уже атомарно завершает попытки; source/live
+функции и enabled triggers совпали. Дублирующая mutation не добавлялась.
+Усиленный disposable PostgreSQL component PASS6.47s после up/status/up:
+exact attempt/fence/FAILED, terminal snapshot и отсутствие активной попытки.
+Worker перестаёт скрывать только закрытую callback диагностику gRPC code;
+privacy/failed-predecessor recovery tests PASS, ложного marker при RPC outage нет.
+Причина текущего live callback отказа ещё исследуется, workaround не применён.
+
+Producer публикует только закрытый catalogKind; восемь localized компактных
+подписей и negative privacy tests готовы. ROOT integrated tests:
+runtimecontract PASS0.156s; полный callback PASS0.831s без исключённых тестов;
+FE transcript74tests PASS. Исходный FAIL устаревшего SDK pin fixture устранён:
+проверяются отдельно local ARG и production manifest/lock exact version,
+а не прежнее число одинаковых ARG. Serving code всё ещё b40f2784,
+новые live результаты и checkbox6.1 не объявляются выполненными.
+Дополнительно ROOT integrated: bridge/validator/controller unit PASS
+0.037/0.018/14.062s; FE typecheck/lint/format PASS; sh-n/diffcheck PASS.
+Полный runtimecontract race PASS2.038s на isolated base+patch. Узкий diagnostic
+refresh ConfigMap ещё NOT RUN: обычный supply-chain cutover закрыто требует
+отсутствия текущих worker runs. Новый диагностический путь ограничивается
+одной публикацией закрытого callback code с exact UID/resourceVersion/data
+readback, без изменения claim/grant/image/policy или обхода допуска.

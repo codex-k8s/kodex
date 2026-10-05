@@ -162,6 +162,16 @@ const managedTools = new Set([
   "context7_resolve_library_id",
   "context7_query_docs",
 ]);
+const configurationCatalogKinds = new Set([
+  "ASSISTANTS",
+  "RUNTIME_PROFILES",
+  "PROVIDER_ACCOUNTS",
+  "MODELS",
+  "ROLE_IMAGE_RECIPES",
+  "IMAGE_ARTIFACTS",
+  "ROLE_ENVIRONMENTS",
+  "CURRENT_CONFIGURATION",
+]);
 function toolPreview(
   toolCall: NonNullable<RunActivityItem["toolCall"]>,
 ): string | undefined {
@@ -200,6 +210,11 @@ function compactServiceRow(item: (typeof displayItems.value)[number]): boolean {
 }
 
 function toolLabel(toolCall: NonNullable<RunActivityItem["toolCall"]>): string {
+  if (toolCall.tool === "get_configuration_catalog") {
+    const kind = toolCall.safeParameters.catalogKind;
+    if (typeof kind === "string" && configurationCatalogKinds.has(kind))
+      return t(`runs.configurationCatalogNames.${kind}`);
+  }
   if (managedTools.has(toolCall.tool))
     return t(`runs.managedToolNames.${toolCall.tool}`);
   if (!nativeTools.has(toolCall.tool))

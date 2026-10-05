@@ -1709,7 +1709,14 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	}
 	switch tool {
 	case "get_configuration_catalog":
-		return map[string]any{}, "platform.configuration.read", "", input.IsAssistant()
+		parameters := map[string]any{}
+		if catalog, ok := arguments["assistant_configuration_catalog"].(map[string]any); ok {
+			if kind, ok := catalog["kind"].(string); ok && assistantConfigurationCatalogKindKnown(kind) {
+				// Публикуется только закрытый вид каталога, без аргументов и координат ресурса.
+				parameters["catalogKind"] = kind
+			}
+		}
+		return parameters, "platform.configuration.read", "", input.IsAssistant()
 	case "get_integration_catalog":
 		return map[string]any{}, "platform.integration.catalog", "", len(input.IntegrationGrants) != 0
 	case "find_platform_resources":

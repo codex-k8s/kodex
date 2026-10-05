@@ -79,7 +79,8 @@ func TestAssistantOwnCurrentConfigurationTraversesMCPWithoutAuthorityOrHistoryLe
 					t.Fatal("own read leaked private execution or credential metadata")
 				}
 			}
-			if len(client.projection.GetSafeParameters().AsMap()) != 0 || strings.Contains(client.projection.GetSafeResult(), "public-value") {
+			parameters := client.projection.GetSafeParameters().AsMap()
+			if len(parameters) != 1 || parameters["catalogKind"] != "CURRENT_CONFIGURATION" || strings.Contains(client.projection.GetSafeResult(), "public-value") {
 				t.Fatal("full configuration escaped into persistent tool history")
 			}
 		})

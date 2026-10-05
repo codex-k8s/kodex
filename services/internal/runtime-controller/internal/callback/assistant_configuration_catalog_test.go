@@ -53,7 +53,7 @@ func TestAssistantFreshFutureReasoningTraversesMCPAndSafeProjection(t *testing.T
 		t.Fatal("MCP discovery lost fresh model reasoning or exact read authority")
 	}
 	projection := client.projection
-	if projection == nil || projection.GetLeaseRef() != input.LeaseRef || projection.GetFence() != input.LeaseFence || projection.GetGeneration() != input.LeaseGeneration || len(projection.GetSafeParameters().AsMap()) != 0 || projection.GetCapabilityRef() != "platform.configuration.read" || projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED {
+	if projection == nil || projection.GetLeaseRef() != input.LeaseRef || projection.GetFence() != input.LeaseFence || projection.GetGeneration() != input.LeaseGeneration || len(projection.GetSafeParameters().AsMap()) != 1 || projection.GetSafeParameters().AsMap()["catalogKind"] != "MODELS" || projection.GetCapabilityRef() != "platform.configuration.read" || projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED {
 		t.Fatal("MCP activity did not preserve exact lease and credential-free metadata")
 	}
 }
@@ -142,7 +142,7 @@ func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T)
 					t.Fatal("catalog lost closed safe entry projection")
 				}
 				parameters, permission, _, ok := safeToolCallParameters(input, "get_configuration_catalog", arguments)
-				if !ok || permission != "platform.configuration.read" || len(parameters) != 0 {
+				if !ok || permission != "platform.configuration.read" || len(parameters) != 1 || parameters["catalogKind"] != kind {
 					t.Fatal("catalog request metadata escaped safe tool projection")
 				}
 			})

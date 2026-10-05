@@ -253,7 +253,7 @@ type grypeProjectionMatch struct {
 		ID       string `json:"id"`
 		Severity string `json:"severity"`
 		Fix      struct {
-			State    string   `json:"state"`
+			State    *string  `json:"state"`
 			Versions []string `json:"versions"`
 		} `json:"fix"`
 	} `json:"vulnerability"`
@@ -297,7 +297,16 @@ func ProjectImageVulnerabilityReport(raw []byte, binding ImageVulnerabilityRepor
 			fixes := append([]string{}, match.Vulnerability.Fix.Versions...)
 			slices.Sort(fixes)
 			fixes = slices.Compact(fixes)
-			state := map[string]string{"fixed": "FIXED", "not-fixed": "NOT_FIXED", "wont-fix": "WONT_FIX", "unknown": "UNKNOWN"}[match.Vulnerability.Fix.State]
+			state := ""
+			if sourceState := match.Vulnerability.Fix.State; sourceState != nil {
+				state = map[string]string{"fixed": "FIXED", "not-fixed": "NOT_FIXED", "wont-fix": "WONT_FIX", "unknown": "UNKNOWN"}[*sourceState]
+				// Grype может явно сериализовать нулевое состояние без исправлений.
+				// Только эта полная внешняя форма означает UNKNOWN: отсутствующие
+				// поля, null и противоречащие ей версии остаются закрытым отказом.
+				if *sourceState == "" && match.Vulnerability.Fix.Versions != nil && len(match.Vulnerability.Fix.Versions) == 0 {
+					state = "UNKNOWN"
+				}
+			}
 			severity := strings.ToUpper(match.Vulnerability.Severity)
 			kind, link := vulnerabilityAdvisoryLink(match.Vulnerability.ID)
 			finding := ImageVulnerabilityFinding{PackageName: match.Artifact.Name, InstalledVersion: match.Artifact.Version,

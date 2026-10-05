@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -199,10 +201,15 @@ func TestReportInputIsBoundedPrivateRegularAndNoFollow(t *testing.T) {
 }
 
 func TestBridgeDiagnosticNeverPrintsRemoteCredentialsOrPayload(t *testing.T) {
-	for _, code := range []codes.Code{codes.Internal, codes.Unavailable, codes.InvalidArgument, codes.PermissionDenied} {
-		err := status.Error(code, "private-fixture-token raw-report internal-url")
-		if bridgeDiagnostic(err) != "image admission bridge failed: "+code.String() {
-			t.Fatal("remote diagnostics leaked")
+	const privateDetail = "private-fixture-token raw-report internal-url"
+	for _, code := range []codes.Code{codes.Internal, codes.Unavailable, codes.Unknown, codes.DataLoss, codes.InvalidArgument, codes.PermissionDenied} {
+		for _, err := range []error{status.Error(code, privateDetail), fmt.Errorf("%s: %w", privateDetail, status.Error(code, privateDetail))} {
+			if bridgeDiagnostic(err) != "image admission bridge failed: "+code.String() {
+				t.Fatal("remote diagnostics leaked")
+			}
 		}
+	}
+	if bridgeDiagnostic(fmt.Errorf("%s: %w", privateDetail, errors.New(privateDetail))) != "image admission bridge failed: Unknown" {
+		t.Fatal("local diagnostics leaked")
 	}
 }

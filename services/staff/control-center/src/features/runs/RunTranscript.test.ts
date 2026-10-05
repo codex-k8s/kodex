@@ -250,6 +250,83 @@ describe("RunTranscript: managed инструменты", () => {
     ).toContain("run-transcript__preview");
     expect(title(await render("tool\nunsafe"))).toBe("Вызов инструмента");
   });
+  it.each([
+    ["ASSISTANTS", "Каталог помощников", "Assistant catalog"],
+    [
+      "RUNTIME_PROFILES",
+      "Каталог профилей выполнения",
+      "Runtime profile catalog",
+    ],
+    [
+      "PROVIDER_ACCOUNTS",
+      "Каталог учётных записей провайдера",
+      "Provider account catalog",
+    ],
+    ["MODELS", "Каталог моделей", "Model catalog"],
+    ["ROLE_IMAGE_RECIPES", "Каталог рецептов образов", "Image recipe catalog"],
+    ["IMAGE_ARTIFACTS", "Каталог образов", "Image catalog"],
+    ["ROLE_ENVIRONMENTS", "Каталог окружений", "Environment catalog"],
+    ["CURRENT_CONFIGURATION", "Текущие настройки", "Current settings"],
+  ])(
+    "показывает закрытый вид каталога %s в компактной строке",
+    async (catalogKind, ru, en) => {
+      for (const [locale, expected] of [
+        ["ru", ru],
+        ["en", en],
+      ] as const) {
+        const html = await render(
+          "get_configuration_catalog",
+          { catalogKind },
+          locale,
+          "get_configuration_catalog:completed",
+        );
+        expect(title(html)).toBe(expected);
+        expect(html).not.toContain("RAW_COMMAND_SENTINEL");
+        expect(html).not.toContain("RAW_OUTPUT_SENTINEL");
+        expect(html).not.toContain("HIDDEN_REASONING_SENTINEL");
+        expect(html).not.toContain(
+          'class="safe-markdown run-transcript__preview"',
+        );
+      }
+    },
+  );
+  it.each([
+    undefined,
+    null,
+    1,
+    ["ROLE_ENVIRONMENTS"],
+    {},
+    "UNKNOWN_KIND",
+    "role_environments",
+    "ROLE_ENVIRONMENTS\nPRIVATE_SENTINEL",
+    "__proto__",
+  ])(
+    "сохраняет общий заголовок для неизвестного вида каталога %j",
+    async (catalogKind) => {
+      expect(
+        title(await render("get_configuration_catalog", { catalogKind })),
+      ).toBe("Каталог настроек");
+      expect(
+        title(await render("get_configuration_catalog", { catalogKind }, "en")),
+      ).toBe("Configuration catalog");
+    },
+  );
+  it("не использует вид каталога в подписи другого инструмента", async () => {
+    expect(
+      title(
+        await render("propose_configuration_plan", {
+          catalogKind: "ROLE_ENVIRONMENTS",
+        }),
+      ),
+    ).toBe("Настройки помощника");
+    expect(
+      title(
+        await render("get_configuration_catalog", {
+          assistant_configuration_catalog: { kind: "ROLE_ENVIRONMENTS" },
+        }),
+      ),
+    ).toBe("Каталог настроек");
+  });
 });
 
 describe("RunTranscript: безопасный runtime text", () => {

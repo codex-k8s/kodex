@@ -166,7 +166,7 @@ func TestTechnicalFailureDoesNotFabricateRejectedEvidence(t *testing.T) {
   printf '%s\n' "$1" >> /work/rpc-calls
 `
 				if rpc == "unavailable" {
-					program += "  return 1\n"
+					program += "  printf '%s\\n' 'image admission bridge failed: Unavailable' >&2\n  return 1\n"
 				} else {
 					program += "  return 0\n"
 				}
@@ -179,6 +179,10 @@ func TestTechnicalFailureDoesNotFabricateRejectedEvidence(t *testing.T) {
 				program = strings.ReplaceAll(program, "image-admission-bridge", "fixture_bridge")
 				command := exec.CommandContext(t.Context(), "sh", "-c", program)
 				output, failure := command.CombinedOutput()
+				callbackExpected := phase == "claim" || phase == "admit"
+				if callbackExpected && rpc == "unavailable" && !strings.Contains(string(output), "image admission bridge failed: Unavailable") {
+					t.Fatal("closed terminal callback diagnostic was discarded")
+				}
 				if phase == "admit" && rpc == "available" {
 					if failure != nil {
 						t.Fatalf("owner terminal receipt failed: %v: %s", failure, output)
@@ -208,5 +212,68 @@ func TestTechnicalFailureDoesNotFabricateRejectedEvidence(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestFailedPredecessorTerminalCallbackIgnoresIncompleteEvidence(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join(repositoryRoot(), "deploy/k8s/base/image-supply-chain/image-admission.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := strings.Index(string(source), "\nrequire_policy\n\n")
+	if entry < 0 {
+		t.Fatal("production admission entrypoint absent")
+	}
+	for _, predecessor := range []string{"SCAN_PREDECESSOR_FAILED", "SIGN_PREDECESSOR_FAILED", "ADMIT_PREDECESSOR_FAILED"} {
+		t.Run(predecessor, func(t *testing.T) {
+			work := t.TempDir()
+			const retainedClaim = "{\"immutable\":\"fixture-claim\"}\n"
+			for name, raw := range map[string]string{"owner-claim.json": retainedClaim, "claim.complete": "fixture-run\n", "vulnerability-report.json": "incomplete scan projection\n"} {
+				if err := os.WriteFile(filepath.Join(work, name), []byte(raw), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Выполняется настоящий admit entrypoint. Stub заменяет только policy
+			// preflight и внешний RPC; signed record и 26 descriptors не создаются.
+			program := string(source[:entry]) + `
+ADMISSION_RUN_ID=fixture-run
+require_policy() { :; }
+fixture_bridge() {
+  [ "$1" = fail ] && [ "$IMAGE_OWNER_ADMISSION_FAILURE_CODE" = ADMISSION_WORKER_FAILED ] || exit 8
+  if [ ! -f /work/fixture-rpc-available ]; then
+    printf '%s\n' 'image admission bridge failed: Unavailable' >&2
+    return 1
+  fi
+}
+` + string(source[entry:])
+			program = strings.ReplaceAll(program, "/work/", work+"/")
+			program = strings.ReplaceAll(program, "image-admission-bridge", "fixture_bridge")
+			run := func() ([]byte, error) {
+				return exec.CommandContext(t.Context(), "sh", "-c", program, "fixture", "admit", predecessor).CombinedOutput()
+			}
+			output, err := run()
+			if err == nil || !strings.Contains(string(output), "image admission bridge failed: Unavailable") {
+				t.Fatal("callback outage lost failure or its closed diagnostic")
+			}
+			if _, err := os.Stat(filepath.Join(work, "admission.failed")); !os.IsNotExist(err) {
+				t.Fatal("callback outage fabricated a terminal receipt marker")
+			}
+			if err := os.WriteFile(filepath.Join(work, "fixture-rpc-available"), nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if output, err := run(); err != nil {
+				t.Fatalf("exact callback recovery depended on incomplete scan evidence: %v: %s", err, output)
+			}
+			for name, expected := range map[string]string{"owner-claim.json": retainedClaim, "owner-failure-code": "ADMISSION_WORKER_FAILED\n", "admission.failed": "fixture-run\n", "vulnerability-report.json": "incomplete scan projection\n"} {
+				if raw, err := os.ReadFile(filepath.Join(work, name)); err != nil || string(raw) != expected {
+					t.Fatal("recovery changed immutable state or lost terminal marker", name)
+				}
+			}
+			for _, name := range []string{"signature.complete", "verdict", "admission.receipt.json", "evidence.oci.manifest.json"} {
+				if _, err := os.Stat(filepath.Join(work, name)); !os.IsNotExist(err) {
+					t.Fatal("terminal callback fabricated signed record evidence", name)
+				}
+			}
+		})
 	}
 }

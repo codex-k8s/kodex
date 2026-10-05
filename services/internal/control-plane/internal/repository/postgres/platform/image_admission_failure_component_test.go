@@ -76,11 +76,20 @@ func TestImageAdmissionFailureComponent(t *testing.T) {
 		var state, verdict, code, sbom string
 		var tokenGone, leaseGone bool
 		var generation, revision uint64
-		if err := pool.QueryRow(ctx, queryImageAdmissionFailureReadback, scope.organizationID, claim.Artifact.Ref).Scan(&state, &verdict, &code, &tokenGone, &leaseGone, &generation, &sbom, &revision); err != nil {
+		var attemptRef, attemptState string
+		var attemptNumber uint32
+		var attemptFence uint64
+		var exactTerminalSnapshot, noOpenAttempt bool
+		if err := pool.QueryRow(ctx, queryImageAdmissionFailureReadback, scope.organizationID, claim.Artifact.Ref).Scan(&state, &verdict, &code, &tokenGone, &leaseGone, &generation, &sbom, &revision,
+			&attemptRef, &attemptNumber, &attemptState, &attemptFence, &exactTerminalSnapshot, &noOpenAttempt); err != nil {
 			t.Fatal(err)
 		}
 		if state != "FAILED" || verdict != "" || code != expected || !tokenGone || !leaseGone || generation != 0 || sbom != "" || revision != 0 {
 			t.Fatal("technical failure fabricated evidence or retained a claim")
+		}
+		if attemptRef != claim.AdmissionAttemptRef || attemptNumber != claim.AdmissionAttempt || attemptState != "FAILED" ||
+			attemptFence != claim.Fence || !exactTerminalSnapshot || !noOpenAttempt {
+			t.Fatal("technical failure did not atomically close the exact admission attempt")
 		}
 		var count int
 		if err := pool.QueryRow(ctx, queryImageAdmissionFailureEventCount, claim.Artifact.RecipeRef, claim.Artifact.OrganizationRef, expected).Scan(&count); err != nil || count != 1 {

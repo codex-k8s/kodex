@@ -78,7 +78,9 @@ record_owner_failure() {
   failure_code=$(persist_owner_failure_code "$1") || return 1
   # Bridge проверяет immutable owner tuple и свежую authority; expired claim
   # закрывается отдельным fresh Expire RPC, а не повторным использованием grant.
-  IMAGE_OWNER_ADMISSION_FAILURE_CODE="$failure_code" image-admission-bridge fail 2>/dev/null || return 1
+  # Bridge печатает только закрытый gRPC code, без remote error или claim.
+  # Сбой callback должен оставаться наблюдаемым, пока durable receipt не получен.
+  IMAGE_OWNER_ADMISSION_FAILURE_CODE="$failure_code" image-admission-bridge fail || return 1
   [ ! -L /work/admission.failed ] &&
     { [ ! -e /work/admission.failed ] || [ -f /work/admission.failed ]; } || return 1
   write_marker admission.failed
