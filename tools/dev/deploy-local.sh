@@ -347,29 +347,6 @@ apply_image_admission_crd() {
     --timeout=3m >/dev/null || fail 'image admission policy CRD is not Established'
 }
 
-cleanup_local_image_admission_runs() {
-  local selector inventory
-  selector='app.kubernetes.io/name=kodex-image-admission,kodex.dev/image-admission-orchestrated=true'
-  inventory=$(kubectl -n "$namespace" get jobs,persistentvolumeclaims \
-    -l "$selector" -o json) ||
-    fail 'local image admission inventory is unavailable for revision cleanup'
-  jq -e --arg namespace "$namespace" '
-    all(.items[];
-      .metadata.namespace == $namespace and
-      .metadata.labels["app.kubernetes.io/name"] == "kodex-image-admission" and
-      .metadata.labels["kodex.dev/image-admission-orchestrated"] == "true" and
-      (if .kind == "Job" then
-        (.metadata.name | test(
-          "^mc-admit-[a-f0-9]{32}-(claim|scan|sign|admit|promote)$"))
-       elif .kind == "PersistentVolumeClaim" then
-        (.metadata.name | test("^mc-admit-[a-f0-9]{32}$"))
-       else false end))
-  ' <<<"$inventory" >/dev/null ||
-    fail 'local image admission inventory contains an unmanaged resource'
-  kubectl -n "$namespace" delete jobs,persistentvolumeclaims -l "$selector" \
-    --ignore-not-found --wait=true --timeout=3m >/dev/null
-}
-
 pause_local_image_admission_controller() {
   local controller replicas
   controller=$(kubectl -n "$namespace" get \
@@ -404,6 +381,66 @@ pause_local_image_admission_controller() {
   done
 }
 
+require_empty_local_image_admission_runs() {
+  # Обновление ABI не является terminal receipt: старую workspace не удаляем.
+  local inventory
+  inventory=$(kubectl -n "$namespace" get jobs,persistentvolumeclaims \
+    -l 'app.kubernetes.io/name=kodex-image-admission,kodex.dev/image-admission-orchestrated=true' \
+    -o json) || fail 'local image admission upgrade inventory is unavailable'
+  jq -e '.items | type == "array" and length == 0' <<<"$inventory" >/dev/null ||
+    fail 'local image admission upgrade requires an empty managed Job and workspace inventory'
+}
+
+require_local_image_admission_policy_upgrade() {
+  [[ "$stage" == supply-chain || "$stage" == full ]] ||
+    fail 'immutable image admission upgrade requires supply-chain or full activation'
+  require_empty_local_image_admission_runs
+}
+
+readback_local_image_admission_controller_rbac() {
+  local expected actual
+  expected=$(yq -o=json -I=0 '
+    select((.kind == "Role" or .kind == "RoleBinding") and
+      .metadata.namespace == "kodex-system" and .metadata.name == "image-admission-controller") |
+    {kind: .kind, rules: .rules, roleRef: .roleRef, subjects: .subjects}
+  ' "$render" | jq -scS 'sort_by(.kind)')
+  [[ "$(jq -r length <<<"$expected")" == 2 ]] ||
+    fail 'image admission controller RBAC registry is incomplete'
+  actual=$(kubectl -n "$namespace" get role/image-admission-controller \
+    rolebinding/image-admission-controller -o json | jq -cS '
+      [.items[] | {kind, rules, roleRef, subjects}] | sort_by(.kind)
+    ') || fail 'image admission controller RBAC readback failed'
+  [[ "$actual" == "$expected" ]] || fail 'image admission controller RBAC readback mismatch'
+}
+
+readback_local_supply_chain_deployment_inputs() {
+  local workload=$1 expected actual
+  # Это exact Deployment input/readiness gate, не доказательство ELF работающего CP.
+  expected=$(WORKLOAD="$workload" yq -o=json -I=0 '
+    select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(WORKLOAD)) | .spec.template
+  ' "$render" | jq -scS '
+    if length != 1 then error("deployment input is ambiguous") else .[0] end |
+    {revision: .metadata.annotations["kodex.dev/source-revision"],
+     content: .metadata.annotations["kodex.dev/source-content-sha256"],
+     images: [.spec.containers[], .spec.initContainers[]? | {name,image}] | sort_by(.name)}
+  ') || fail 'supply-chain Deployment source input is invalid'
+  jq -e '(.revision | test("^[a-f0-9]{40}$")) and
+    (.content | test("^[a-f0-9]{64}$"))' <<<"$expected" >/dev/null ||
+    fail 'supply-chain Deployment source pins are absent'
+  actual=$(kubectl -n "$namespace" get "deployment/$workload" -o json | jq -cS '
+    if .status.observedGeneration != .metadata.generation or
+      (.status.updatedReplicas // 0) != .spec.replicas or
+      (.status.availableReplicas // 0) != .spec.replicas or
+      (.status.replicas // 0) != .spec.replicas then error("deployment rollout is incomplete") else . end |
+    .spec.template |
+    {revision: .metadata.annotations["kodex.dev/source-revision"],
+     content: .metadata.annotations["kodex.dev/source-content-sha256"],
+     images: [.spec.containers[], .spec.initContainers[]? | {name,image}] | sort_by(.name)}
+  ') || fail 'supply-chain Deployment input readback failed'
+  [[ "$actual" == "$expected" ]] || fail 'supply-chain Deployment input readback mismatch'
+}
+
 reconcile_local_immutable_image_admission_policy() {
   local desired current desired_digest current_digest
   desired=$(yq -o=json -I=0 '
@@ -425,9 +462,9 @@ reconcile_local_immutable_image_admission_policy() {
         .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
       ' <<<"$current" >/dev/null ||
         fail 'immutable image admission ConfigMap is not owned by the local Kodex profile'
+      require_local_image_admission_policy_upgrade
       kubectl -n "$namespace" delete configmap/kodex-image-admission-policy \
         --wait=true --timeout=2m >/dev/null
-      cleanup_local_image_admission_runs
     fi
   fi
 
@@ -450,6 +487,7 @@ reconcile_local_immutable_image_admission_policy() {
     .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
   ' <<<"$current" >/dev/null ||
     fail 'immutable image admission policy is not owned by the local Kodex profile'
+  require_local_image_admission_policy_upgrade
   kubectl -n "$namespace" delete \
     imageadmissionpolicyparameters/kodex-image-admission-policy \
     --wait=true --timeout=2m >/dev/null
@@ -1370,6 +1408,7 @@ readback_local_image_supply_chain() {
   local expected_admission_configuration actual_admission_configuration
   local target_registry promoted_pull_host resource name
   readback_local_image_admission_policies
+  readback_local_image_admission_controller_rbac
   if [[ "$security_profile" == trusted-cluster ]]; then
     readback_local_control_plane_image_policy
   fi
@@ -1708,11 +1747,21 @@ PY
           .data.pullRegistryHost
         ' "$render")" >/dev/null
       ensure_seed_secrets
-      pause_local_image_admission_controller
       # При ошибке новой authority policy controller остаётся остановленным;
       # EXIT cleanup не имеет права возобновить старые claims.
       image_admission_policy_owner_coherent=false
-      cleanup_local_image_admission_runs
+      pause_local_image_admission_controller
+      require_empty_local_image_admission_runs
+      # Trusted профиль не запускает publisher: exact закрытый реестр встроен в CP.
+      command -v node >/dev/null 2>&1 || fail 'node is required for the control-plane service policy check'
+      node "$script_directory/../release/service-identity-policy.mjs" check \
+        "$script_directory/../../deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json" \
+        "$script_directory/../../services/internal/control-plane/internal/app/service-identity-classification.json" \
+        "$script_directory/../../services/internal/control-plane/internal/app/service-identity-policy.json" >/dev/null ||
+        fail 'control-plane exact service identity policy source check failed'
+      # Goose применяет только forward migration текущего source, до нового CP.
+      # Completed Job связан с exact source/render digest, не с прежним именем.
+      apply_job control-plane-migrate
       # Claim/scan/sign/admit/promote читают общий скрипт и policy-фильтры:
       # новый builder не должен обслуживаться прежней схемой provenance.
       apply_render image-admission-runtime-configuration '
@@ -1738,6 +1787,11 @@ PY
           (.metadata.name | test("^kodex-image-admission-(controller-jobs|controller-workspaces|proof-release)$")))
       '
       readback_local_image_admission_policies
+      apply_render image-admission-controller-rbac '
+        select((.kind == "Role" or .kind == "RoleBinding") and
+          .metadata.namespace == "kodex-system" and .metadata.name == "image-admission-controller")
+      '
+      readback_local_image_admission_controller_rbac
       apply_render image-registry-workloads '
         select(.kind == "Deployment" and
           (.metadata.name | test("^kodex-image-registry-(pull|push|promotion|staging-read|evidence)$")))
@@ -1769,12 +1823,13 @@ PY
       kubectl -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
         fail 'control-plane is unavailable after image admission policy publication'
       readback_local_control_plane_image_policy
-      image_admission_policy_owner_coherent=true
+      readback_local_supply_chain_deployment_inputs control-plane
       apply_render image-supply-chain-controllers '
         select(.kind == "Deployment" and
           (.metadata.name | test("^(image-admission-controller|role-image-builder|runtime-controller)$")))
       '
       image_admission_controller_restore_replicas=""
+      image_admission_policy_owner_coherent=true
     fi
     for admission_name in runtime-execution-ticket-exact-projection \
       runtime-execution-service-account runtime-execution-rbac \
@@ -1799,6 +1854,7 @@ PY
       role-image-builder runtime-controller; do
       kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=15m >/dev/null ||
         fail "local image supply-chain Deployment is unavailable: $workload"
+      readback_local_supply_chain_deployment_inputs "$workload"
     done
     readback_local_image_supply_chain
   fi
@@ -2015,8 +2071,9 @@ if [[ "$mode" == apply ]]; then
   ensure_local_backup_controller_secret
   ensure_seed_secrets
   apply_image_admission_crd
+  image_admission_policy_owner_coherent=false
   pause_local_image_admission_controller
-  cleanup_local_image_admission_runs
+  require_empty_local_image_admission_runs
   reconcile_local_immutable_image_admission_policy
   reconcile_local_mutable_configmaps
   apply_render foundation '
@@ -2058,12 +2115,6 @@ if [[ "$mode" == apply ]]; then
   '
   kubectl -n "$namespace" rollout status deployment/kodex-buildkit --timeout=15m >/dev/null ||
     fail 'local BuildKit is unavailable after registry seed'
-  apply_render image-admission-workloads '
-    select(.kind == "Deployment" and
-      (.metadata.name == "image-admission-controller" or
-       .metadata.name == "role-image-builder"))
-  '
-  image_admission_controller_restore_replicas=""
   apply_render application-workloads '
     select(.kind == "Deployment" and
       .metadata.name != "internal-rpc-authority-publisher" and
@@ -2072,9 +2123,19 @@ if [[ "$mode" == apply ]]; then
       .metadata.name != "role-image-builder" and
       (.metadata.name | test("^kodex-image-registry-") | not))
   '
+  # Publisher и его readers запускаются совместно; ждать его до readers нельзя.
+  kubectl -n "$namespace" rollout status deployment/internal-rpc-authority-publisher --timeout=15m >/dev/null ||
+    fail 'internal RPC authority publisher is unavailable before image admission activation'
   # CP seed назначает accountRef; каталог и warm не могут предшествовать импорту.
   kubectl -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
     fail 'control plane is unavailable before provider bootstrap'
+  apply_render image-admission-workloads '
+    select(.kind == "Deployment" and
+      (.metadata.name == "image-admission-controller" or
+       .metadata.name == "role-image-builder"))
+  '
+  image_admission_controller_restore_replicas=""
+  image_admission_policy_owner_coherent=true
   python3 "$script_directory/../install/provider-bootstrap.py" recover --context "$context"
 else
   discover_local_object_storage_secret

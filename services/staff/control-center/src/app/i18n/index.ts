@@ -1899,6 +1899,9 @@ const ru = {
     buildCompleted: "Сборка завершена",
     awaitingAdmission: "Ожидает допуска",
     admissionRejected: "Допуск отклонён",
+    admissionRejectedTitle: "Образ не прошёл проверку безопасности",
+    admissionRejectedHelp:
+      "Обновите базовый образ или зависимости и повторите сборку. Публикация недоступна, пока образ не пройдёт проверку допуска.",
     admissionFailed: "Проверка допуска завершилась с ошибкой",
     promotionBlockedByFailure: "Публикация недоступна: ошибка проверки",
     admissionFailureHelp:
@@ -5500,6 +5503,9 @@ const en = {
     buildCompleted: "Build completed",
     awaitingAdmission: "Awaiting admission",
     admissionRejected: "Admission rejected",
+    admissionRejectedTitle: "The image did not pass the security check",
+    admissionRejectedHelp:
+      "Update the base image or dependencies and rebuild. Publication is unavailable until the image passes admission.",
     admissionFailed: "Image admission check failed",
     promotionBlockedByFailure: "Publication unavailable: check failed",
     admissionFailureHelp:

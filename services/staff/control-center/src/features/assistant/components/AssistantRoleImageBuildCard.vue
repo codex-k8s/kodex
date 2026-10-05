@@ -5,6 +5,8 @@ import { useI18n } from "vue-i18n";
 import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
 import RoleImageAdmissionFailureNotice from "@/features/role-images/RoleImageAdmissionFailureNotice.vue";
+import RoleImageAdmissionRejectionNotice from "@/features/role-images/RoleImageAdmissionRejectionNotice.vue";
+import { currentRoleImageAdmissionRejected } from "@/features/role-images/admission-rejection";
 import {
   currentRoleImageAdmissionFailure,
   assertRoleImageAdmissionFailure,
@@ -83,6 +85,15 @@ const candidate = computed(() => {
     ? artifact
     : undefined;
 });
+const admissionRejected = computed(
+  () =>
+    !admissionFailure.value &&
+    currentRoleImageAdmissionRejected(
+      detail.value?.recipe,
+      build.value,
+      candidate.value ?? detail.value?.activeArtifact,
+    ),
+);
 const currentBuildPromoted = computed(
   () =>
     build.value?.stage === "COMPLETED" &&
@@ -112,15 +123,17 @@ const promotionPending = computed(
 const promotionState = computed(() =>
   admissionFailure.value
     ? "FAILED"
-    : currentBuildPromoted.value
-      ? "PROMOTED"
-      : promotionFailed.value
-        ? "FAILED"
-        : candidate.value?.promotionRequested
-          ? candidate.value.promotionState === "PENDING"
-            ? "QUEUED"
-            : "PROMOTING"
-          : (promotionReceipt.value?.state ?? "PENDING"),
+    : admissionRejected.value
+      ? "REJECTED"
+      : currentBuildPromoted.value
+        ? "PROMOTED"
+        : promotionFailed.value
+          ? "FAILED"
+          : candidate.value?.promotionRequested
+            ? candidate.value.promotionState === "PENDING"
+              ? "QUEUED"
+              : "PROMOTING"
+            : (promotionReceipt.value?.state ?? "PENDING"),
 );
 const awaitingAdmission = computed(
   () =>
@@ -334,6 +347,7 @@ async function promoteCandidate(): Promise<void> {
         v-if="admissionFailure"
         :failure="admissionFailure"
       />
+      <RoleImageAdmissionRejectionNotice v-else-if="admissionRejected" />
       <template v-if="build">
         <label>
           {{

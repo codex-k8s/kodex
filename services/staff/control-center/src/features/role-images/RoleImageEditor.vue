@@ -19,6 +19,8 @@ import { useRoute, useRouter } from "vue-router";
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
 import RoleImageAdmissionFailureNotice from "./RoleImageAdmissionFailureNotice.vue";
+import RoleImageAdmissionRejectionNotice from "./RoleImageAdmissionRejectionNotice.vue";
+import { currentRoleImageAdmissionRejected } from "./admission-rejection";
 import { currentRoleImageAdmissionFailure } from "./admission-failure";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
 import { verifiedImageInventoryAvailable } from "@/shared/lib/verified-image-tools";
@@ -163,6 +165,15 @@ const admissionFailure = computed(() =>
     currentBuild.value,
     props.recipeRef ? store.admissionFailures[props.recipeRef] : undefined,
   ),
+);
+const admissionRejected = computed(
+  () =>
+    !admissionFailure.value &&
+    currentRoleImageAdmissionRejected(
+      recipe.value,
+      currentBuild.value,
+      artifact.value,
+    ),
 );
 const revisions = computed(() =>
   props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
@@ -670,6 +681,7 @@ onBeforeUnmount(() => {
         v-if="admissionFailure"
         :failure="admissionFailure"
       />
+      <RoleImageAdmissionRejectionNotice v-else-if="admissionRejected" />
 
       <div class="editor-layout">
         <main class="editor-main">
@@ -1005,9 +1017,11 @@ onBeforeUnmount(() => {
                 <dt>{{ t("roleImages.promotion") }}</dt>
                 <dd>
                   {{
-                    recipe?.promotedImageReady
-                      ? t("roleImages.promoted")
-                      : t("roleImages.notPromoted")
+                    admissionRejected
+                      ? t("roleImages.promotionBlockedByAdmission")
+                      : recipe?.promotedImageReady
+                        ? t("roleImages.promoted")
+                        : t("roleImages.notPromoted")
                   }}
                 </dd>
               </div>

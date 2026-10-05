@@ -4,8 +4,8 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.10
-updated: 2026-08-26
+version: 1.0.11
+updated: 2026-10-05
 ---
 
 # Диагностика автоматического admission образов ролей
@@ -39,8 +39,10 @@ Runtime читает отдельную immutable `ConfigMap`-проекцию; 
 3. Проверить `/healthz` и cached `/readyz`. Probe не должен обращаться к
    `control-plane`, registry или другой business service.
 4. Сверить Role: exact get immutable typed parameters и runtime `ConfigMap`;
-   get/list/create Job; get/list/create/delete PVC. Secret, Pod, Deployment,
-   RoleBinding, list/watch parameters и update/patch полномочия отсутствуют.
+   get/list/create/delete Job; get/list/create/update/delete PVC. PVC update
+   ограничен workspace VAP ровно двумя recovery annotations; spec и остальные
+   metadata неизменны. Secret, Pod, Deployment, RoleBinding, list/watch parameters,
+   patch и update других ресурсов отсутствуют.
    Проверить, что installer materializes registry identities через exact
    Kubernetes Secrets, а k3s `registries.yaml` содержит только pull-only
    credential для exact HTTPS host. Node runtime readback не должен
@@ -74,9 +76,10 @@ IMAGE_ADMISSION_POLICY_JSON='<read-only ConfigMap JSON without secrets>' \
 - `claim` завершён без работы: это bounded idle outcome. Controller создаст
   новую ожидающую phase после backoff; warning не должен повторяться на каждом
   опросе.
-- `scan`, `sign` или `admit` failed: workspace удаляется guarded по UID,
-  artifact остаётся непродвинутым, а повтор начинается с нового server-owned
-  claim.
+- `admit` failed: controller сохраняет exact predecessor UID/backoff в PVC и
+  запускает bounded callback recovery. Только durable owner failure receipt
+  разрешает marker `admission.failed` и cleanup. Отказ callback сохраняет
+  workspace; Kubernetes Failed сам по себе не разрешает новый claim или cleanup.
 - `promote` failed: admission workspace не восстанавливать. Следующая phase
   получает свежий one-time promotion claim и durable evidence по exact OCI
   manifest digest.
@@ -135,3 +138,37 @@ IMAGE_ADMISSION_POLICY_JSON='<read-only ConfigMap JSON without secrets>' \
 утверждённый exact digest, не откатывая policy revision, promoted artifacts или
 owner state. Незавершённые claims закрывает только специализированный
 `control-plane` lifecycle.
+
+### Локальная активация технического admission failure (#1797)
+
+Следующая последовательность — инструкция для отдельно разрешённого owner/SRE
+apply, а не разрешение deployment со стороны этого read-only runbook.
+
+1. Зафиксировать clean application SHA, source и exact OCI digest readback.
+   `tools/dev/build-local-image-supply-chain.sh --source-root "$application_source" --state-directory "$state_directory" --component authority-security --context k3d-kodex`
+   собирает новые `image-admission` (bridge/controller) и authority binaries;
+   ConfigMap-only обновление не добавляет RPC. Сборка требует canonical source
+   checkout; ошибки source guards не обходятся правкой private `.env` или remote.
+2. Из clean source, совпадающего с существующими trusted host mounts, выполнить
+   `tools/dev/render-current-local.sh --context k3d-kodex --state-directory "$state_directory" --expected-sha "$application_sha"`.
+   Использовать объявленный этой командой новый private render, не прежний файл.
+3. `tools/dev/deploy-local.sh --context k3d-kodex --mode apply --security-profile trusted-cluster --stage supply-chain --render "$fresh_render" --state-directory "$state_directory"`:
+   controller останавливается; exact managed Jobs/PVC inventory обязан быть пуст.
+   Непустой/недоступный inventory закрывает apply без удаления workspace и resume.
+   Далее идут проверка global registry → embedded exact CP policy, source-pinned
+   `control-plane-migrate` (включая forward migration `20261005000100`), актуальные
+   script/parameters/VAP/bindings, exact Role/RoleBinding readback, новый CP с
+   readiness/policy/source-input readback и лишь затем новые controllers.
+4. Выполнить ту же команду с `--mode readback`. Она сверяет exact RBAC/VAP,
+   source revision/content и image inputs полностью завершённых Deployment rollout.
+   Это не доказательство ELF работающего процесса и не live acceptance image flow:
+   actual executable/source и owner readbacks проверяются отдельно.
+
+В trusted-cluster global publisher/sidecars намеренно отсутствуют: новая
+машинная policy (для этого перехода revision 88) проверяется по source, а exact
+service policy встроена в новый CP. Protected full также требует пустой managed
+inventory, materializes publisher policy через foundation и ждёт publisher и CP
+до image controller; профиль не смешивается
+с trusted stage. При отказе migration/RBAC/policy/owner gate EXIT не возобновляет
+прежний controller. Старые expired DB claims при пустом workspace закрывает
+bounded owner hook первого свежего Claim, не Kubernetes cleanup и не read path.

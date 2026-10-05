@@ -2016,3 +2016,39 @@ UI объединены, но их live activation/browser checks пока NOT R
 Chrome native REQUEST_BUILD/protected GET200, Console error/warn отсутствуют
 на предыдущем живом checkpoint. Новый technical failure UI и mobile viewport
 будут проверены после migration/полной активации authority и controller RBAC.
+
+05.10.2026 02:43 UTC, source683a49db4132c19745b5ec7b7b917617fea6c164
+и согласованный activation/UX delta (следующий commit содержит этот журнал):
+PASS — full runner OCI/provenance/import EXIT0, exact manifest
+sha256:db9428ac147b3654b4f89f84b152647bb69dc6e3e5af4ed30e5748e92a470740.
+Build подтвердил expat2.5.0-1+deb12u4, aprutil1.6.3-1+deb12u1,
+Chromium154.0.8037.92-1~deb12u1 и непривилегированный browser probe.
+Это не vulnerability PASS: новый owner scan ещё NOT RUN.
+PASS — authority-security build/import из отдельного canonical clean source
+того же683a49; image-admission exact244fed2e7cbad9b62b7c0b8442f3438cdda1d55eb12a1e108f709d73a5eade7d,
+authority exact8acb85baefb39d92399005f716b8946355113ed26b0eda6168948f4c4ef7afbc.
+Первый build отказал SOURCE_CHECKOUT_NOT_EXACT: исходный owner clone содержит
+private .env и origin без .git. Эти данные не менялись, guard не обходился;
+отдельный clean snapshot не содержит ignored/private source files.
+PASS — canonical render и штатные CP migration apply/readback на683a49:
+JobUID7155d965-4e05-47ee-996b-464c753d9b29, source revision683a49,
+completed02:32:41 UTC. До migration новый recipe GET503; после неё GET200,
+страница доступна и Console без ошибок. Desktop screenshot просмотрен;
+mobile390x844 — scrollWidth390, кнопки/карточки не переполняют экран.
+PASS — текущему REJECTED добавлена компактная подсказка с действием,
+без выдуманных CVE/counts и без смешения с technical FAILED. Native desktop
+screenshot подтверждает её на exact38K, protected GET tuple совпал;
+новый helper покрывает stale/cross-scope и accepted promotion failure.
+PASS — ROOT57 frontend unit в3 suites, lint, forced vue-tsc;
+37 повторных Node;45 deployment/render fixtures, bash syntax/ShellCheck/diff.
+Первый Python запуск использовал неверное имя hot-reload test module и получил
+ImportError; повтор с реальным test_local_hot_reload.py прошёл45/45.
+Activation теперь недеструктивна: pause → empty managed Jobs/PVC preflight →
+source policy check → forward migration → exact Role/VAP → fresh CP → controllers.
+Trusted-cluster не получает global publisher; protected профиль сохраняет его.
+Системный аналог stage=data закрыто отклоняет изменение прежней immutable
+policy до удаления ConfigMap/Parameters; fresh/identical data разрешены.
+Destructive Job/PVC cleanup helper удалён, пустой inventory проверяется до
+каждого policy delete. Дополнительные8 сценариев и общий46-fixture suite PASS.
+Новая activation live, новый recipe/rebuild/admission/promote и SYSTEM publish
+пока NOT RUN; checkbox6/7 OPEN.

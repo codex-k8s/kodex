@@ -30,6 +30,7 @@ vi.mock("vue-router", () => ({
 }));
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import RoleImageEditor from "./RoleImageEditor.vue";
+import { currentRoleImageAdmissionRejected } from "./admission-rejection";
 import { i18n } from "@/app/i18n";
 
 let recipe: RoleImageRecipe;
@@ -137,6 +138,71 @@ beforeEach(() => {
     createdAt: recipe.createdAt,
     updatedAt: recipe.updatedAt,
   };
+});
+
+describe("понятный закрытый REJECTED допуск, отдельно от technical FAILED", () => {
+  it.each(["ru", "en"] as const)(
+    "human notice и следующий шаг, locale=%s",
+    async (locale) => {
+      i18n.global.locale.value = locale;
+      const value = artifact({
+        admissionVerdict: "REJECTED",
+        vulnerabilityEvidenceSha256: "c".repeat(64),
+      });
+      const html = await summary(value, true);
+      expect(html).toContain('class="admission-rejection"');
+      expect(html).toContain(
+        i18n.global.t("roleImages.admissionRejectedTitle"),
+      );
+      expect(html).toContain(i18n.global.t("roleImages.admissionRejectedHelp"));
+      const notice = html.slice(
+        html.indexOf('class="admission-rejection"'),
+        html.indexOf("</section>", html.indexOf('class="admission-rejection"')),
+      );
+      expect(notice).not.toContain("CVE-");
+      expect(notice).not.toContain("925");
+      expect(notice).not.toContain(value.vulnerabilityEvidenceSha256);
+      expect(html).not.toContain('class="admission-failure"');
+      const sidebar = html.slice(
+        html.indexOf('class="panel facts-panel"'),
+        html.indexOf('class="panel artifact-card"'),
+      );
+      expect(sidebar).toContain(
+        i18n.global.t("roleImages.promotionBlockedByAdmission"),
+      );
+      expect(sidebar).not.toContain(i18n.global.t("roleImages.notPromoted"));
+    },
+  );
+  it("не объявляет vulnerability для accepted artifact с отказом публикации", async () => {
+    const value = artifact({
+      admissionVerdict: "ACCEPTED",
+      promotionState: "REJECTED",
+    });
+    expect(currentRoleImageAdmissionRejected(recipe, build, value)).toBe(false);
+    expect(await summary(value, true)).not.toContain(
+      'class="admission-rejection"',
+    );
+  });
+  it.each([
+    { buildRef: "imgbld_old" },
+    { recipeRef: "imgrec_foreign" },
+    { recipeGeneration: 0 },
+    { organizationRef: "org_foreign" },
+    { projectRef: "prj_foreign" },
+    { scopeKind: "PROJECT" as const },
+    { version: 0 },
+  ])(
+    "старое/чужое свидетельство не становится current rejection %j",
+    async (change) => {
+      const value = artifact({ admissionVerdict: "REJECTED", ...change });
+      expect(currentRoleImageAdmissionRejected(recipe, build, value)).toBe(
+        false,
+      );
+      expect(await summary(value, true)).not.toContain(
+        'class="admission-rejection"',
+      );
+    },
+  );
 });
 describe("публичное состояние образа помощника", () => {
   it.each([

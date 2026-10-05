@@ -131,8 +131,8 @@ class DeployLocalSelectionTest(unittest.TestCase):
         readback = stage.index('readback_local_control_plane_image_policy')
         coherent = stage.index('image_admission_policy_owner_coherent=true')
         resume = stage.index('apply_render image-supply-chain-controllers')
-        self.assertEqual(sorted((pause, closed, policy, catalog, owner, ready, readback, coherent, resume)),
-                         [pause, closed, policy, catalog, owner, ready, readback, coherent, resume])
+        self.assertEqual(sorted((closed, pause, policy, catalog, owner, ready, readback, resume, coherent)),
+                         [closed, pause, policy, catalog, owner, ready, readback, resume, coherent])
         cleanup = re.search(r'(?ms)^cleanup_on_exit\(\) \{.*?^\}', source).group(0)
         self.assertIn('"$image_admission_policy_owner_coherent" == true', cleanup)
         renderer = SCRIPT.with_name('render-local.sh').read_text()
@@ -222,7 +222,7 @@ readback_local_control_plane_image_policy
     def test_failed_policy_owner_gate_cannot_resume_controller_in_exit_cleanup(self):
         source = SCRIPT.read_text()
         cleanup = re.search(r'(?ms)^cleanup_on_exit\(\) \{.*?^\}', source).group(0)
-        command = cleanup + '''
+        command = 'exec 3>&1\n' + cleanup + '''
 kubectl() { printf 'resumed\\n'; }
 rm() { return 0; }
 namespace=kodex-system
@@ -305,7 +305,7 @@ cleanup_on_exit
         stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
         match = re.search(r"apply_render image-admission-runtime-configuration\s+'([^']*)'", stage)
         self.assertIsNotNone(match)
-        self.assertLess(stage.index('cleanup_local_image_admission_runs'), match.start())
+        self.assertLess(stage.index('require_empty_local_image_admission_runs'), match.start())
         self.assertLess(match.start(), stage.index('apply_render image-supply-chain-controllers'))
         accepted = {"kind": "ConfigMap", "metadata": {"name": "kodex-image-admission", "namespace": "kodex-system"}}
         rejected = [
@@ -461,6 +461,250 @@ readback_local_image_admission_policies
                 result = self.run_selection(workload, stage)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("workload selection requires", result.stderr)
+
+    def test_supply_chain_upgrade_requires_forward_owner_and_exact_rbac_before_resume(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        steps = ['image_admission_policy_owner_coherent=false',
+                 'pause_local_image_admission_controller', 'require_empty_local_image_admission_runs',
+                 'service-identity-policy.mjs" check', 'apply_job control-plane-migrate',
+                 'apply_render image-admission-controller-policies',
+                 'readback_local_image_admission_policies',
+                 'apply_render image-admission-controller-rbac',
+                 'readback_local_image_admission_controller_rbac',
+                 'apply_render image-admission-control-plane-owner',
+                 'readback_local_control_plane_image_policy',
+                 'apply_render image-supply-chain-controllers']
+        positions = [stage.index(step) for step in steps]
+        self.assertEqual(positions, sorted(positions))
+        upgrade = stage[:stage.index('  if [[ "$stage" == builder-runtime ]]')]
+        self.assertNotIn('cleanup_local_image_admission_runs', upgrade)
+        self.assertNotIn('apply_render authority-publisher', upgrade)
+        expression = re.search(r"apply_render image-admission-controller-rbac\s+'([^']*)'", stage).group(1)
+        accepted = [{'kind': kind, 'metadata': {'namespace': 'kodex-system', 'name': 'image-admission-controller'}}
+                    for kind in ('Role', 'RoleBinding')]
+        rejected = [{'kind': kind, 'metadata': {'namespace': namespace, 'name': name}}
+                    for kind in ('Role', 'RoleBinding', 'ClusterRole', 'Secret')
+                    for namespace in ('kodex-system', 'foreign')
+                    for name in ('image-admission-controller', 'image-admission-controller-shadow')
+                    if not (kind in ('Role', 'RoleBinding') and namespace == 'kodex-system'
+                            and name == 'image-admission-controller')]
+        result = subprocess.run(['jq', '-c', expression], capture_output=True, text=True, timeout=5,
+                                input='\n'.join(json.dumps(item) for item in accepted + rejected))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], accepted)
+
+    def test_upgrade_empty_inventory_is_non_destructive_and_fails_closed(self):
+        source = SCRIPT.read_text()
+        function = re.search(r'(?ms)^require_empty_local_image_admission_runs\(\) \{.*?^\}', source).group(0)
+        command = function + '''
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+kubectl() { printf '%s\\n' "$INVENTORY"; return "$KUBE_EXIT"; }
+namespace=kodex-system
+require_empty_local_image_admission_runs
+'''
+        for inventory, kube_exit, error in (({'items': []}, '0', None),
+                ({'items': [{'kind': 'Job'}]}, '0', 'requires an empty'),
+                ({'items': [{'kind': 'PersistentVolumeClaim'}]}, '0', 'requires an empty'),
+                ({}, '0', 'requires an empty'), ({'items': []}, '1', 'unavailable')):
+            with self.subTest(inventory=inventory, kube_exit=kube_exit):
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                    env=dict(os.environ, INVENTORY=json.dumps(inventory), KUBE_EXIT=kube_exit),
+                    text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode == 0, error is None)
+                if error:
+                    self.assertIn(error, result.stderr)
+        self.assertNotIn('delete', function)
+
+    def test_immutable_policy_change_is_guarded_before_each_delete(self):
+        source = SCRIPT.read_text()
+        self.assertNotIn('cleanup_local_image_admission_runs() {', source)
+        self.assertNotIn('delete jobs,persistentvolumeclaims', source)
+        functions = '\n'.join(re.search(r'(?ms)^' + name + r'\(\) \{.*?^\}', source).group(0)
+                              for name in ('require_empty_local_image_admission_runs',
+                                           'require_local_image_admission_policy_upgrade',
+                                           'reconcile_local_immutable_image_admission_policy'))
+        labels = {'app.kubernetes.io/part-of': 'kodex', 'kodex.dev/local-profile': 'hot-reload'}
+        desired_config = {'immutable': True, 'metadata': {'labels': labels}, 'data': {'revision': 'new'}}
+        desired_parameters = {'metadata': {'labels': labels}, 'spec': {'revision': 'new'}}
+        changed_config = dict(desired_config, data={'revision': 'old'})
+        changed_parameters = dict(desired_parameters, spec={'revision': 'old'})
+        command = functions + '''
+exec 3>&1
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+yq() {
+  if [[ "$*" == *ImageAdmissionPolicyParameters* ]]; then printf '%s\\n' "$DESIRED_PARAMETERS";
+  else printf '%s\\n' "$DESIRED_CONFIG"; fi
+}
+kubectl() {
+  case "$*" in
+    *get\\ jobs,persistentvolumeclaims*) printf '%s\\n' "$INVENTORY" ;;
+    *get\\ configmap/*) printf '%s\\n' "$CURRENT_CONFIG" ;;
+    *get\\ imageadmissionpolicyparameters/*) printf '%s\\n' "$CURRENT_PARAMETERS" ;;
+    *delete*) printf 'deleted\\n' >&3 ;;
+    *) return 99 ;;
+  esac
+}
+namespace=kodex-system
+render=synthetic
+stage=$TEST_STAGE
+reconcile_local_immutable_image_admission_policy
+'''
+        cases = [
+            ('data', '', '', [], 0, None),
+            ('data', desired_config, desired_parameters, [], 0, None),
+            ('data', changed_config, desired_parameters, [], 0, 'requires supply-chain or full'),
+            ('data', desired_config, changed_parameters, [], 0, 'requires supply-chain or full'),
+            ('supply-chain', changed_config, desired_parameters, [{'kind': 'PersistentVolumeClaim'}], 0, 'requires an empty'),
+            ('full', desired_config, changed_parameters, [{'kind': 'Job'}], 0, 'requires an empty'),
+            ('supply-chain', changed_config, changed_parameters, [], 2, None),
+            ('full', desired_config, changed_parameters, [], 1, None),
+        ]
+        for stage, config, parameters, items, deletes, error in cases:
+            with self.subTest(stage=stage, deletes=deletes, error=error):
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                    env=dict(os.environ, DESIRED_CONFIG=json.dumps(desired_config),
+                             DESIRED_PARAMETERS=json.dumps(desired_parameters),
+                             CURRENT_CONFIG=json.dumps(config) if config else '',
+                             CURRENT_PARAMETERS=json.dumps(parameters) if parameters else '',
+                             INVENTORY=json.dumps({'items': items}), TEST_STAGE=stage),
+                    text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode == 0, error is None, result.stderr)
+                self.assertEqual(result.stdout.count('deleted'), deletes)
+                if error: self.assertIn(error, result.stderr)
+
+    def test_exact_controller_rbac_readback_rejects_missing_update_and_extra_rights(self):
+        source = SCRIPT.read_text()
+        function = re.search(r'(?ms)^readback_local_image_admission_controller_rbac\(\) \{.*?^\}', source).group(0)
+        expected = [{'kind': 'Role', 'rules': [{'apiGroups': [''], 'resources': ['persistentvolumeclaims'],
+                     'verbs': ['get', 'list', 'create', 'update', 'delete']}], 'subjects': None, 'roleRef': None},
+                    {'kind': 'RoleBinding', 'rules': None,
+                     'subjects': [{'kind': 'ServiceAccount', 'name': 'image-admission-controller', 'namespace': 'kodex-system'}],
+                     'roleRef': {'kind': 'Role', 'name': 'image-admission-controller', 'apiGroup': 'rbac.authorization.k8s.io'}}]
+        command = function + '''
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+yq() { jq -c '.[]' <<<"$EXPECTED"; }
+kubectl() { printf '{"items":%s}\\n' "$ACTUAL"; }
+namespace=kodex-system
+render=synthetic
+readback_local_image_admission_controller_rbac
+'''
+        cases = [(expected, None), (expected[:1], 'mismatch')]
+        for mutate in ('missing-update', 'extra-secret', 'foreign-actor'):
+            actual = json.loads(json.dumps(expected))
+            if mutate == 'missing-update': actual[0]['rules'][0]['verbs'].remove('update')
+            elif mutate == 'extra-secret': actual[0]['rules'].append({'apiGroups': [''], 'resources': ['secrets'], 'verbs': ['get']})
+            else: actual[1]['subjects'][0]['name'] = 'other'
+            cases.append((actual, 'mismatch'))
+        for actual, error in cases:
+            with self.subTest(error=error, actual=actual):
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                    env=dict(os.environ, EXPECTED=json.dumps(expected), ACTUAL=json.dumps(actual)),
+                    text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode == 0, error is None, result.stderr)
+                if error: self.assertIn(error, result.stderr)
+
+    def test_protected_publisher_and_owner_are_ready_before_image_controller(self):
+        source = SCRIPT.read_text()
+        full = source[source.index('if [[ "$mode" == apply ]]; then\n  verify_email_projection_generation'):]
+        steps = ['image_admission_policy_owner_coherent=false', 'pause_local_image_admission_controller',
+                 'require_empty_local_image_admission_runs', 'apply_job control-plane-migrate', 'apply_render authority-publisher',
+                 'apply_render application-workloads',
+                 'rollout status deployment/internal-rpc-authority-publisher', 'rollout status deployment/control-plane',
+                 'apply_render image-admission-workloads']
+        positions = [full.index(step) for step in steps]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn('cleanup_local_image_admission_runs', full)
+
+    def test_supply_chain_failed_upgrade_never_resumes_controller(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        stage = stage[:stage.index('    for admission_name in runtime-execution-ticket-exact-projection')] + '\n  fi\n'
+        cleanup = re.search(r'(?ms)^cleanup_on_exit\(\) \{.*?^\}', source).group(0)
+        command = cleanup + '''
+fail() { printf 'closed\\n' >&2; exit 1; }
+phase() { printf '%s\\n' "$1"; [[ "$1" != "$FAIL_PHASE" ]] || fail; }
+apply_render() { phase "$1"; }
+apply_job() { phase "$1"; }
+pause_local_image_admission_controller() { phase pause; image_admission_controller_restore_replicas=1; }
+require_empty_local_image_admission_runs() { phase preflight; }
+readback_local_image_admission_policies() { phase vap-readback; }
+readback_local_image_admission_controller_rbac() { phase rbac-readback; }
+readback_local_control_plane_image_policy() { phase owner-readback; }
+readback_local_supply_chain_deployment_inputs() { phase source-readback; }
+reconcile_local_immutable_image_admission_policy() { phase policy; }
+ensure_seed_secrets() { :; }
+yq() { printf 'synthetic-public-host\\n'; }
+node() { phase identity-policy; }
+kubectl() { if [[ "$*" == *scale* ]]; then printf 'unexpected-resume\\n' >&3; else phase kube-ready; fi; }
+rm() { :; }
+stage=supply-chain
+mode=apply
+namespace=kodex-system
+context=synthetic-local
+render=synthetic
+state_directory=/synthetic
+script_directory=$STUB_DIRECTORY
+temporary_directory=/synthetic
+image_admission_controller_restore_replicas=""
+image_admission_policy_owner_coherent=true
+trap cleanup_on_exit EXIT
+''' + stage
+        # Внешние repo entrypoints заменены inert fixtures; cluster/docker не вызываются.
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ('configure-local-node-registry.sh', 'seed-local-image-supply-chain.sh'):
+                path = Path(directory) / name
+                path.write_text('#!/bin/sh\nexit 0\n')
+                path.chmod(0o700)
+            for failed in ('pause', 'preflight', 'identity-policy', 'control-plane-migrate',
+                           'vap-readback', 'rbac-readback', 'kube-ready', 'owner-readback', 'source-readback', ''):
+                with self.subTest(failed=failed):
+                    result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                        env=dict(os.environ, FAIL_PHASE=failed, STUB_DIRECTORY=directory),
+                        text=True, capture_output=True, timeout=5)
+                    if failed:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertNotIn('image-supply-chain-controllers', result.stdout)
+                        # EXIT cleanup не вызывает kubectl scale после owner gate failure.
+                        self.assertNotIn('unexpected-resume', result.stdout)
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertIn('image-supply-chain-controllers', result.stdout)
+
+    def test_supply_chain_source_and_image_readback_rejects_stale_rollout(self):
+        source = SCRIPT.read_text()
+        function = re.search(r'(?ms)^readback_local_supply_chain_deployment_inputs\(\) \{.*?^\}', source).group(0)
+        template = {'metadata': {'annotations': {'kodex.dev/source-revision': 'a' * 40,
+                    'kodex.dev/source-content-sha256': 'b' * 64}},
+                    'spec': {'containers': [{'name': 'image-admission-controller', 'image': 'repo@sha256:' + 'c' * 64}]}}
+        deployment = {'metadata': {'generation': 3}, 'spec': {'replicas': 1, 'template': template},
+                      'status': {'observedGeneration': 3, 'updatedReplicas': 1, 'availableReplicas': 1, 'replicas': 1}}
+        command = function + '''
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+yq() { printf '%s\\n' "$EXPECTED_TEMPLATE"; }
+kubectl() { printf '%s\\n' "$ACTUAL_DEPLOYMENT"; }
+namespace=kodex-system
+render=synthetic
+readback_local_supply_chain_deployment_inputs image-admission-controller
+'''
+        cases = [(deployment, None)]
+        for mutate in ('revision', 'content', 'image', 'generation', 'old-replica'):
+            actual = json.loads(json.dumps(deployment))
+            if mutate in ('revision', 'content'):
+                key = 'kodex.dev/source-' + ('revision' if mutate == 'revision' else 'content-sha256')
+                actual['spec']['template']['metadata']['annotations'][key] = 'd' * (40 if mutate == 'revision' else 64)
+            elif mutate == 'image': actual['spec']['template']['spec']['containers'][0]['image'] = 'old'
+            elif mutate == 'generation': actual['status']['observedGeneration'] = 2
+            else: actual['status']['replicas'] = 2
+            cases.append((actual, 'readback'))
+        for actual, error in cases:
+            with self.subTest(error=error, actual=actual):
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                    env=dict(os.environ, EXPECTED_TEMPLATE=json.dumps(template), ACTUAL_DEPLOYMENT=json.dumps(actual)),
+                    text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode == 0, error is None, result.stderr)
+                if error: self.assertIn(error, result.stderr)
 
     def test_full_core_applies_the_synthetic_integration_fixture(self):
         source = SCRIPT.read_text()

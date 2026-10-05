@@ -18,6 +18,7 @@ import type {
   RoleImageRecipeDetail,
 } from "@/shared/api/generated/openapi/types.gen";
 import { imageAdmissionFailureFixture } from "@/test-utils/image-admission-failure-fixture";
+import { unavailableInventoryFixture } from "@/test-utils/image-inventory-fixture";
 
 const api = vi.hoisted(() => ({
   read: vi.fn(),
@@ -128,6 +129,7 @@ interface State {
   problem: Ref<boolean>;
   detail: Ref<RoleImageRecipeDetail | undefined>;
   admissionFailure: Ref<RoleImageAdmissionFailure | undefined>;
+  admissionRejected: Ref<boolean>;
   awaitingAdmission: Ref<boolean>;
   promotionState: Ref<string>;
 }
@@ -187,6 +189,68 @@ describe("Realtime-чтение карточки образа", () => {
   afterEach(() => {
     for (const app of apps.splice(0)) app.unmount();
   });
+
+  it.each([true, false])(
+    "closed securityREJECTED отдельно от promotionfailure, SYSTEM=%s",
+    async (system) => {
+      const value = detail(system);
+      const build = {
+        scopeKind: value.recipe.scopeKind,
+        organizationRef: value.recipe.organizationRef,
+        projectRef: value.recipe.projectRef,
+        ref: "imgbld_completed",
+        version: 1,
+        recipeRef: value.recipe.ref,
+        recipeGeneration: value.recipe.generation,
+        sourceAvailable: false,
+        attempt: 1,
+        stage: "COMPLETED" as const,
+        progressPercent: 100,
+        createdAt: value.recipe.createdAt,
+        updatedAt: value.recipe.updatedAt,
+      };
+      const artifact = {
+        scopeKind: value.recipe.scopeKind,
+        organizationRef: value.recipe.organizationRef,
+        projectRef: value.recipe.projectRef,
+        ref: "imgart_rejected",
+        version: 1,
+        recipeRef: value.recipe.ref,
+        recipeGeneration: value.recipe.generation,
+        buildRef: build.ref,
+        manifestDigest: "a".repeat(64),
+        provenanceSha256: "b".repeat(64),
+        admissionVerdict: "REJECTED" as const,
+        promotionState: "REJECTED" as const,
+        promotionRequested: false,
+        declaredTools: [],
+        verifiedToolInventory: unavailableInventoryFixture(),
+      };
+      api.read.mockResolvedValue({
+        ...value,
+        builds: [build],
+        promotionCandidate: artifact,
+      });
+      const state = mountCard(system);
+      await settle();
+      expect(state.admissionRejected.value).toBe(true);
+      expect(state.promotionState.value).toBe("REJECTED");
+      expect(state.admissionFailure.value).toBeUndefined();
+      api.read.mockResolvedValue({
+        ...value,
+        builds: [build],
+        promotionCandidate: {
+          ...artifact,
+          admissionVerdict: "ACCEPTED",
+          promotionRequested: true,
+        },
+      });
+      snapshot();
+      await settle();
+      expect(state.admissionRejected.value).toBe(false);
+      expect(state.promotionState.value).toBe("FAILED");
+    },
+  );
 
   it.each([true, false])(
     "technical failure из WS-readback не остаётся pending, SYSTEM=%s",
