@@ -3429,3 +3429,30 @@ SHA256 `0b2b2e7bb08561ecc4edb947c85cc89d32d75feaf6dd70ab198d33172b0db397`.
 требуются replacement/readback exact gen8 role image и фактически исполняемый
 новый binary плюс actual input ACK следующего хода; зелёный relay недостаточен.
 Новый native ход не отправлялся; текущий Chrome MCP retry ожидает ответ.
+
+### 05.10.2026 19:26–19:32 UTC — BLOCKED по недоступности Chrome MCP
+
+Source checkpoint `32d2937f00b647d73c6c37de5847cf603fa37e60` сохранён;
+кодовые проверки относятся к972e5fcd, далее менялся только журнал/guide.
+Один и тот же browser blocker подтверждён в трёх последовательных goal turns.
+Последний list_pages завершился300s timeout; альтернативный read-only
+take_snapshot exact рабочей вкладки2 также завершился300s timeout.
+Все handles terminal, дочерние работы завершены. Chrome и оба MCP процесса
+живы, соединения ESTAB; причина и состояние approval остаются UNKNOWN.
+Browser restart, CDP/profile/cookie fallback и обход согласия не выполнялись.
+
+Дополнительная граница runtime proof: SHA2560b2b из предыдущего baseline
+принадлежит файлу runner, не доказанному работающему process. В idle provider
+сейчас наблюдается только PID1 kodex-init; /proc/1/exe SHA256
+`d8ac588e35d191520ebb3484424d46d0bdbc70787c33ab59fbfc695c865cdfc5`.
+Отдельный runner process не наблюдается. После gen8 publication нужен именно
+фактический turn/start ACK с exact runtime/image pins; idle init или file hash
+его не заменяют. Запуски и новые mutations не отправлялись.
+
+Этап BLOCKED требует восстановления MCP или изменения внешнего состояния;
+полное65-section QA не достигнуто, bootstrap PR не слит и checklist не
+отмечен без evidence. При возобновлении сначала revalidate рабочую вкладку/
+SSO и current resource versions, затем выполнить сохранённый SYSTEM43 через
+помощника, опубликовать draft штатным UI и проверить следующий actual turn.
+Рекомендуемая owner диагностика: chrome://inspect/#remote-debugging и
+видимый запрос разрешения подключения, если он появился.
