@@ -2318,3 +2318,31 @@ PASS — ROOT15 disposable cache-helper unit0.260s и diff check. Read-only audi
 входят в scope. Реальный prune ещё NOT RUN до фиксации кода в текущем PR.
 Новый runner72b27 отдельным readback подтверждён durable-pinned на обеих
 нодах; source/build/import proof не считается принятием vulnerability risk.
+
+05.10.2026 06:20 UTC, checkpoint a0361ab97e0ec010eeac7d4a8c8f734dc65f1dee:
+PASS — штатный helper реально удалил49 obsolete OCI archives,
+40,773,172,224 bytes; все current/restore pins сохранены. Старый generated
+render cache в `/tmp` отдельно очищен после проверки владельца, host processes,
+Pod и Docker mounts; освободилось около62тыс inode, исходники не затронуты.
+Новые build/test cache размещаются вне `/tmp`.
+
+Первая активация runner72 завершилась FAIL: promotion registry недоступен.
+Readback установил exact причину — после прежнего DiskPressure у certificate
+guard отсутствовал локальный tools image. Repo-owned `import-local-image.sh`
+повторно импортировал и durable-pin проверил текущий exact tools digest на
+обеих нодах; только затем повторён тот же проверенный supply-chain render.
+PASS — повторный apply и отдельный `deploy-local.sh --mode readback` exit0;
+immutable live admission policy содержит trusted runner digest72b27.
+Обе ноды DiskPressure=False; promotion/evidence registry Ready.
+Это activation/readback старого допуска, не завершение нового risk feature.
+
+Scope6.1 в работе: frozen four human OWNER/ADMIN user operations,
+owner-scoped полный отчёт, append-only decision и новая admission attempt.
+ROOT isolated shared decoder+CLI unit PASS: exact counts, grouping/suppressed,
+canonical links, duplicate/unknown/noncanonical JSON, foreign tuple, reason и
+size/depth bounds. Исходники пока не интегрированы: shared report SHA
+9604e7a36f91a666290558e13bd65ce915d4475b7b85100add47cb94671308dd,
+risk binding SHA6a215e12d869bc86a0d8798537b37fafcbc4b731c3d34282e7f000b608250499.
+Context7 `/anchore/grype` подтвердил inline `ignoredMatches` и закрытые fix states.
+CP/worker/UI integrated build, fresh typed admission и browser acceptance
+нового решения о риске — NOT RUN. Checkbox6.1 не отмечен.
