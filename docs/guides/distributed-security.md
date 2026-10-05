@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.6.0
+version: 1.7.0
 updated: 2026-10-05
 ---
 
@@ -1419,11 +1419,16 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   оно очищает только project history, никогда organization history. Caller-set
   GUC, disable triggers и произвольный history cleanup не являются authority.
 - Размер транспортного layer не ограничивает полноту логического SBOM:
-  evidence v4 хранит SBOM и vulnerability report четырьмя фиксированными
+  evidence v5 хранит SBOM и исходный vulnerability report четырьмя фиксированными
   последовательными частями. Каждая часть не больше 16MiB, сумма всех layers
   не больше 64MiB; короткая последняя непустая часть допускает только пустые
-  завершающие части. Закрытый набор из 21 descriptor связывает exact title,
-  media type, порядок, размер и digest. Recovery сначала проверяет транспорт,
+  завершающие части. Закрытый набор из 26 descriptors связывает exact title,
+  media type, порядок, размер и digest. Помимо исходных payload и signatures,
+  он включает полную `vulnerability-report.json` projection с её signature,
+  `risk-acceptance.json` с её signature и signature самого admission receipt.
+  В normal admission оба risk layers присутствуют пустыми; отсутствие decision
+  не разрешает произвольный binding. Receipt v3 и signature binding v2 связывают
+  точные attempt/fence, projection SHA256 и risk SHA256. Recovery сначала проверяет транспорт,
   затем восстанавливает исходные байты и сверяет исходные hashes/signatures.
   Урезание данных, увеличение бюджета и совместимый запасной decoder прежнего
   формата запрещены; прежний неподходящий artifact требует новой штатной сборки
@@ -1516,6 +1521,49 @@ control-plane. Политика строится из фактического S
 точек целевого контура либо через отдельный утвержденный шлюз исходящего
 трафика. Значения
 одного контура не переносятся в другой.
+
+## Безопасное локальное обслуживание
+
+Локальное обслуживание разрешено только отдельным owner-approved repo-owned
+путём. До эффекта и после него заново проверяются exact cluster/nodes, resource
+UID/spec/resourceVersion/OCC, immutable опубликованные image/policy/runtime pins
+и authoritative owner idle. Namespace, label или отсутствие видимого Pod сами
+по себе не доказывают отсутствие незавершённых runs, tasks, claims, leases,
+grants и внешних effects. Неизвестное состояние, неполное чтение или изменение
+pins закрыто останавливают обслуживание; history/receipts не удаляются для
+получения искусственного idle.
+
+Terminal проверяется по полному закрытому набору каждого вида: для Run это
+`SUCCEEDED|FAILED|CANCELLED`, для RunNode также `SKIPPED`; `QUEUED`, `PLANNED`,
+`RUNNING`, состояния ожидания и `CANCELLING` не являются terminal. У Job отдельно
+проверяются `Complete|Failed`, у Pod — `Succeeded|Failed`, и фактическое состояние
+всех обычных, init и native sidecar containers. Успешно завершённый одноразовый
+init с `reason=Completed`, `exitCode=0` и `ready=true` не считается живым
+контейнером; это исключение не применяется к работающему native sidecar с
+`restartPolicy=Always`. Неизвестный статус закрыто отклоняется.
+
+Исторический Pod `Failed/Evicted` с оставшимся runtime status допускается как
+отсутствующий только после двух независимых native CRI наблюдений: exact Pod UID
+не имеет sandbox или containers на каждой из двух exact trusted nodes. Node
+недоступен, проверена только одна нода либо CRI identity неоднозначна — idle не
+доказан. Kubernetes history сохраняется; удаление исторического Pod не заменяет
+это доказательство.
+
+Пауза controller сохраняется при ошибке, timeout и неизвестном исходе;
+автоматический resume через `EXIT` trap запрещён. Перед отдельным возобновлением
+материализуются и читаются заново forward migrations, exact policy/CRD,
+NetworkPolicy, CP/gateway и необходимые worker/bridge binaries. Только после
+этого повторные owner idle и exact serving readback разрешают controller resume.
+
+Очистка воспроизводимых локальных кэшей и образов выбирает только явный
+проверенный список. Перед каждым эффектом заново сверяются владелец, текущие
+процессы и mounts, image current/restore pins и runtime references всех локальных
+нод. Docker image удаляется без force и с `--no-prune`, чтобы не удалить
+невыбранные untagged parents. Dependency conflict оставляет образ; timeout или
+потерянный ACK требуют authoritative readback без слепого повтора. Квитанция
+отдельно фиксирует подтверждённые targets, неизвестные побочные исходы,
+логический объём слоёв и фактическое изменение свободного места. Общий кэш
+активного пользователя не считается мусором.
 
 ## Полнота deployable
 

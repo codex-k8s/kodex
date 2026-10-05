@@ -4,7 +4,7 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.9.0
+version: 0.9.1
 updated: 2026-10-05
 ---
 
@@ -145,8 +145,10 @@ Manifest связывает platform, spec, immutable build и runtime contract.
 Admission извлекает только canonical final path из exact platform digest,
 проверяет registry и immutable tuple, и отдельно подписывает outer binding
 с image digest, platform digest, manifest SHA256 и provenance SHA256. Signed
-inventory входит отдельным immutable layer в evidence v3; receipt v2 содержит
-его SHA256. Promotion восстанавливает исходные подписанные байты, проверяет
+inventory входит отдельным immutable layer в evidence v5; receipt v3 содержит
+его SHA256. Signature binding v2 и receipt v3 дополнительно связывают exact
+admission attempt/fence, полный report projection SHA256 и risk acceptance
+SHA256. Promotion восстанавливает исходные подписанные байты, проверяет
 digest/подпись/binding и не пересобирает evidence. CP сохраняет payload и digest
 в той же транзакции с fenced admission receipt и существующим recipe event.
 Отсутствие inventory у исторического artifact возвращается как `UNAVAILABLE`,
@@ -155,7 +157,7 @@ digest/подпись/binding и не пересобирает evidence. CP со
 | Переход | Authority и binding | Effect / consumer |
 | --- | --- | --- |
 | Build → probe | Серверный builder claim, exact runtime-base/frontend/toolchain, RO finalized rootfs | Canonical manifest; tool failures не становятся capabilities |
-| Scan → sign | Exact index/platform digest и BuildKit provenance; все объявленные OCI tools VERIFIED | Signed inventory binding, evidence v3 / admission workload |
+| Scan → sign | Exact index/platform digest и BuildKit provenance; все объявленные OCI tools VERIFIED | Signed inventory binding, evidence v5 / admission workload |
 | RecordAdmission | Existing exact workload permission, claim/fence/version/expiry, payload SHA и immutable tuple | Payload + digest + idempotency receipt + existing recipe event атомарно |
 | Promotion | Existing одноразовая owner authorization, receipt и evidence manifest digests | Исходные signed layers; exact image/evidence readback |
 | Own CURRENT_CONFIGURATION | Existing own SYSTEM/PROJECT lease и canonical current environment/image eligibility | Fresh typed inventory отдельно от immutable execution snapshot; новых событий нет |
@@ -275,6 +277,16 @@ provenance, runtime ABI/tools и signature errors никогда не override.
 задним числом подписанными. Новый admission имеет отдельный attempt-qualified
 evidence tag/manifest, подписанный decision binding и новый подписанный receipt;
 signer остаётся отдельной identity, private key не передаётся admission worker.
+Текущий evidence v5 имеет ровно 26 ordered descriptors с exact title/media type,
+size и digest. В него входят исходные SBOM и Grype bytes, inventory/provenance,
+полная typed `vulnerability-report.json`, `risk-acceptance.json`, receipt v3
+и их detached signatures; signature binding использует v2. Для normal admission
+оба risk layers присутствуют пустыми, а risk SHA256 в receipt/binding пустой.
+Каждый SBOM и исходный vulnerability report сохраняется четырьмя фиксированными
+частями: непоследняя непустая часть ровно 16MiB, короткая непустая часть допускает
+только пустые завершающие части. Raw layer limit остаётся 16MiB, общий — 64MiB.
+Recovery проверяет закрытый порядок/descriptors, восстанавливает exact исходные
+bytes и только затем сверяет logical hashes, полный JSON и signatures.
 Promotion проверяет все исходные bytes и новые signatures/tuple, а окружение
 получает только новый exact promoted digest после штатного publish/pin.
 FAILED/expired attempt не переиспользует прежний token; если отдельная owner
@@ -287,6 +299,9 @@ registry от имени CP. Artifact без новой полной projection 
 worker/signer/promotion и итогового render до возобновления controller.
 Legacy decoder, NULL fallback, ручное заполнение DB и изменение старых migrations
 запрещены. Проекция READY и разрешённые nextActions назначаются owner, не UI.
+Новый writer/reader принимает только evidence v5, receipt v3 и signature binding
+v2; исторические immutable evidence v3/v4 и receipt v2 не переписываются и не
+декодируются запасной веткой ради нового допуска или risk decision.
 
 Append-only history запрещает UPDATE/DELETE отчётов, решений и admission attempts
 в ACTIVE, ARCHIVED и trash lifecycle. Единственное retention-исключение —

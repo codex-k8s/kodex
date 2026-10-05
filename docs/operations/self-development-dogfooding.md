@@ -2557,3 +2557,22 @@ fixture FAIL из-за экспортированных test variables; fixture 
 export как реальные local variables скрипта. ROOT47 unit PASS11.885s,
 optionalPG NOT RUN, bash-n/ShellCheck/diff PASS. Все5остались0; шестая public
 maintenance попытка ещё NOT RUN, исходные ошибки не скрыты.
+
+05.10.2026 09:12 UTC:
+PASS — public supply-chain-quiesce на clean5b2154a13ac0f2b8c3fb846bda4f20a5a49e70bf
+завершился exit0. Все5 exact Deployment spec/status replicas0, двойной native
+proof43 builder +1CP historical Evicted, полные completed container/Job checks
+и повторный owner idle/published pins readback прошли. Private canonical log
+сохранён. Fresh owner09:12:22 active counts0, promoted19/hash28e8bf55 unchanged.
+Ни history, ни candidates, ни grants не изменяли для прохождения barrier.
+
+После PASS перенесён risk checkpointb34fd081 normal cherry-pick21688895d10ca51eabf9857a84818cbc543dc56c.
+ROOT Git object readback доказал идентичные subtree hashes libs/go, CP, gateway,
+worker, frontend и contracts относительно testedb34fd081. Это перенос проверенного
+source, не новый live PASS. Документы обновлены до evidencev5/26 descriptors,
+receiptv3/signaturebindingv2 и общего maintenance/cleanup invariant.
+Frozen docs patch8035c1b4f8c8500b852a5f23ebffe827e4d3cd38e7bce3940df07632e51cd6ac;
+ROOT guide Prettier/diff PASS. Domain Prettier FAIL также на unchangedb34
+из-за исходных unformatted tables; широкий форматный rewrite не выполняли.
+Canonical финальный build/render/apply, migration002/policy89 и browser risk
+decision/rebuild/promotion пока NOT RUN. Checkbox6.1 остаётся открытым.
