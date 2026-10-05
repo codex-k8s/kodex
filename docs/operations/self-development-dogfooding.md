@@ -2546,3 +2546,14 @@ Complete/succeeded1/active0, exact command/module/SA/template и Pod binding.
 отклоняется; jobs/history не удаляются. ROOT47 unit PASS11.089s (optionalPG
 NOT RUN), ShellCheck/bash-n/diff PASS; ROOT live11 canonical templates и hash
 suffixes TRUE. Пятая public maintenance попытка ещё NOT RUN.
+
+05.10.2026 09:09 UTC, source77469577:
+FAIL — пятый public maintenance встретил Linux ARG_MAX при передаче полного
+Pod inventory через jq --argjson. Direct read-only validator для всех11 exact
+Jobs/Pod PASS, ownership guards не ослаблялись. Исправлена только передача
+данных: stdin/--slurpfile вместо больших argv, включая accumulated Job array.
+Добавлены positive fixtures с200000-byte metadata у Pod и Job. Первый новый
+fixture FAIL из-за экспортированных test variables; fixture теперь снимает
+export как реальные local variables скрипта. ROOT47 unit PASS11.885s,
+optionalPG NOT RUN, bash-n/ShellCheck/diff PASS. Все5остались0; шестая public
+maintenance попытка ещё NOT RUN, исходные ошибки не скрыты.

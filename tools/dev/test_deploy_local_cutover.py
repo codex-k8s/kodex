@@ -268,6 +268,11 @@ class CutoverTest(unittest.TestCase):
         digest = 'a' * 64
         command = functions('readback_local_quiesced_pods') + PREFIX + '''
 script_directory=$SOURCE_DIRECTORY
+export -n PODS JOB
+if [[ ${LARGE_INVENTORY:-0} == 1 ]]; then
+  PODS=$(python3 -c 'import json,sys;v=json.load(sys.stdin);v["items"][0]["metadata"]["annotations"]={"test-padding":"x"*200000};print(json.dumps(v))' <<<"$PODS")
+  JOB=$(python3 -c 'import json,sys;v=json.load(sys.stdin);v["metadata"]["annotations"]["test-padding"]="x"*200000;print(json.dumps(v))' <<<"$JOB")
+fi
 kubectl() { case "$*" in *get\\ replicasets*) printf '{"items":[]}\\n';;
   *get\\ job/*) printf '%s\\n' "$JOB";; *) return 99;; esac; }
 readback_local_quiesced_pods "$DEPLOYMENT_UID" control-plane app.kubernetes.io/name=control-plane "$PODS"
@@ -299,7 +304,7 @@ readback_local_quiesced_pods "$DEPLOYMENT_UID" control-plane app.kubernetes.io/n
                 'status': {'phase': 'Succeeded', 'containerStatuses': [{'name': main_name, 'ready': False,
                     'started': False, 'state': {'terminated': {'reason': 'Completed', 'exitCode': 0,
                                                               'finishedAt': '2026-10-05T08:00:00Z'}}}]}}
-            cases = [('canonical', pod, job, True)]
+            cases = [('canonical', pod, job, True), ('large-inventory', pod, job, True)]
             for case in ('foreign-name', 'missing-owner', 'cross-uid', 'foreign-namespace', 'foreign-component',
                          'hash-prefix', 'active-job', 'incomplete-job', 'deleting-job', 'foreign-selector',
                          'foreign-command', 'run-job', 'foreign-service-account', 'cronjob-owned',
@@ -329,6 +334,7 @@ readback_local_quiesced_pods "$DEPLOYMENT_UID" control-plane app.kubernetes.io/n
             for case, selected_pod, selected_job, success in cases:
                 with self.subTest(component=component, case=case):
                     result = run(command, SOURCE_DIRECTORY=str(SCRIPT.parent), DEPLOYMENT_UID=uid,
+                                 LARGE_INVENTORY='1' if case == 'large-inventory' else '0',
                                  PODS={'items': [selected_pod]}, JOB=selected_job)
                     self.assertEqual(result.returncode == 0, success, result.stderr)
 

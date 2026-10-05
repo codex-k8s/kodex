@@ -391,15 +391,16 @@ readback_local_quiesced_pods() {
         fail 'supply-chain quiesce Job name is unsupported'
       job=$(kubectl -n "$namespace" get "job/$name" -o json) ||
         fail 'supply-chain quiesce Job owner is unavailable'
-      jobs=$(jq -cn --argjson jobs "$jobs" --argjson job "$job" '$jobs + [$job]') ||
+      jobs=$(printf '%s\n%s\n' "$jobs" "$job" | jq -sc '.[0] + [.[1]]') ||
         fail 'supply-chain quiesce Job owner is invalid'
     done <<<"$job_names"
-    jq -cn --argjson pods "$pods" --argjson jobs "$jobs" '{pods:$pods.items,jobs:$jobs}' |
+    printf '%s\n%s\n' "$pods" "$jobs" | jq -sc '{pods:.[0].items,jobs:.[1]}' |
       python3 "$script_directory/prove-k3d-evicted-pods.py" validate-terminal-jobs control-plane \
         >/dev/null 2>/dev/null || fail 'supply-chain quiesce terminal Job owner proof failed'
   fi
   if ! jq -e --arg uid "$uid" --arg workload "$workload" --arg namespace "$namespace" \
-    --arg selector "$selector" --argjson sets "$replica_sets" --argjson jobs "$jobs" '
+    --arg selector "$selector" --slurpfile sets <(printf '%s' "$replica_sets") \
+    --slurpfile jobs <(printf '%s' "$jobs") '
     def controller: [.metadata.ownerReferences[]? | select(.controller == true)];
     def stopped($spec; $statuses; $regular_init):
       ($spec // []) as $containers | ($statuses // []) as $states |
@@ -420,7 +421,7 @@ readback_local_quiesced_pods() {
         (.state.terminated.finishedAt | type == "string" and
           test("^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$")));
     ($selector | split(",") | map(split("=") | {key:.[0],value:.[1]}) | from_entries) as $labels |
-    ($sets.items | type == "array") and
+    ($sets[0].items | type == "array") and
     all(.items[];
       .metadata.namespace == $namespace and
       (.metadata.uid | test("^[a-f0-9-]{36}$")) and
@@ -428,10 +429,10 @@ readback_local_quiesced_pods() {
       (.status.phase == "Succeeded" or .status.phase == "Failed") and
       (controller as $owners | ($owners | length) == 1 and
         (($owners[0].apiVersion == "batch/v1" and $owners[0].kind == "Job" and
-          any($jobs[]; .metadata.uid == $owners[0].uid and .metadata.name == $owners[0].name and
+          any($jobs[0][]; .metadata.uid == $owners[0].uid and .metadata.name == $owners[0].name and
             .metadata.namespace == $namespace)) or
         ($owners[0].apiVersion == "apps/v1" and $owners[0].kind == "ReplicaSet" and
-        any($sets.items[];
+        any($sets[0].items[];
           .metadata.namespace == $namespace and .metadata.uid == $owners[0].uid and
           .metadata.name == $owners[0].name and
           (controller as $parents | ($parents | length) == 1 and
