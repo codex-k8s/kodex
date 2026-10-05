@@ -2576,3 +2576,40 @@ ROOT guide Prettier/diff PASS. Domain Prettier FAIL также на unchangedb34
 из-за исходных unformatted tables; широкий форматный rewrite не выполняли.
 Canonical финальный build/render/apply, migration002/policy89 и browser risk
 decision/rebuild/promotion пока NOT RUN. Checkbox6.1 остаётся открытым.
+
+05.10.2026 09:27 UTC, пауза по явному запросу владельца:
+PASS — canonical final supply-chain build all/build-jobs4 на clean source
+99f397c56a7dd97831011d70be73e82eb8999afd завершился exit0 с exact OCI readback
+на обеих нодах. Tools c526cb85a5b1ba935071e2bf66171de9fea7485148185103eff1eb93f869f892,
+admission8186602fe13b30c4261f16b1e45088c7c680ea65b05bf4d761328185c9234e17,
+builder450a8601ff726a67d3fe0fc472d64dfb7c8e53596f845e45633c04b7a3229545,
+authorityba9e012257c6b0bdace04cd8b23400ff0fba750a18d948eaa0414abc1c076c7b.
+Runner72b27d82 и его ABI subtree неизменны. Это build/import PASS, не serving
+либо full QA. Private build log risk-final-build-20261005-0913.log сохранён.
+
+PASS — fresh canonical render для того же99f397c5 завершился exit0:
+render-99f397c56a7dd97831011d70be73e82eb8999afd.5OCwPU.yaml в private state,
+authority revision1, fingerprintbe82f464e535a65d8af0ca9070afb31f31c203e4014dbdaa9ddec48340ffdf02.
+Source оставался clean/неизменным до завершения build/render/apply процессов.
+FAIL — supply-chain apply закрылся ещё в preflight: существующая policy
+kodex-image-admission-controller-workspaces generation2/observed2 содержит CEL
+warning spec.validations[4].expression: undefined field resources.requests
+для PersistentVolumeClaim. Jobs generation4 и proof-release generation1 warnings
+не имеют. Guard не обходили; migration002, новые serving policy/CRD/network и
+resume controllers НЕ выполнены. Private apply log risk-final-apply-20261005-0925.log.
+
+Все5 Deployment оставлены spec/status replicas0 в ранее доказанном maintenance
+barrier, новых runs/agent/STT/device-code запусков нет. Source изменения в PR1798,
+сквозной dogfooding/checkbox6.1 НЕ завершены. Build/render/apply процессы joined;
+субагенты завершены. Дополнительный primer tar860213248 allocated bytes KEEP:
+owner pause поступил до эффекта, ничего больше не удаляли; private paused report
+cleanup-primer.qeULNvtI/paused-primer-report.md сохранён0600.
+
+После явного «продолжай»: сначала safe live readback; исправить CEL workspace
+типизацию code-first с адресными negative tests без ослабления PVC constraints,
+сохранить отсутствие warnings gate; затем fresh source/render и public
+supply-chain apply с forward migration002/policy89/CRD/network/CP/gateway,
+только после полного readback resume controllers. Далее Chrome snapshot/screenshot,
+Console/Network и backend logs; штатная новая сборка native образа для v5 report,
+ручное ADMIN/OWNER risk decision и promotion, затем оставшийся checklist/full QA.
+Ни эти действия, ни merge не выполнять до возобновления владельцем.
