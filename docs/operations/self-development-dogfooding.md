@@ -3409,3 +3409,23 @@ Native SYSTEM43 и последующие пользовательские эт�
 Рекомендуемая штатная диагностика владельца: chrome://inspect/#remote-debugging
 и видимый запрос разрешения, если он появился. Отзыв approval не утверждается;
 работа не объявлена завершённой и goal не поставлен на паузу.
+
+### 05.10.2026 19:20–19:23 UTC — фактический baseline перед SYSTEM43
+
+Source/remote/PR head `bf62c21dd475ee348069f3b7e67c54aa6915e40e`
+совпали, дерево чистое, PR Draft/OPEN. Control Plane, Runtime Controller,
+frontend и secret-broker имеют1/1 Ready, observed generation совпадает.
+Первое read-only обращение ошибочно использовало несуществующий namespace
+kodex; после разрешения namespace по canonical script/readback проверка
+в kodex-system PASS. Это не дефект готовности сервиса.
+
+Warm Pod штатно заменён19:09:05 UTC, текущий UID
+`eb9de8be-8bc6-4f90-b093-fb8dab65fdab`; все три контейнера Ready/restart0.
+Role/provider всё ещё используют опубликованный прежний role digest
+`sha256:1c82da820d9d4053ec6b56ed1f2073e468696edd97fc93235f88579b7ef59de4`,
+а credential relay уже85b5. Read-only exec в provider-runtime доказал binary
+SHA256 `0b2b2e7bb08561ecc4edb947c85cc89d32d75feaf6dd70ab198d33172b0db397`.
+Это НЕ новый75c8 protected runner. После SYSTEM43 publication отдельно
+требуются replacement/readback exact gen8 role image и фактически исполняемый
+новый binary плюс actual input ACK следующего хода; зелёный relay недостаточен.
+Новый native ход не отправлялся; текущий Chrome MCP retry ожидает ответ.
