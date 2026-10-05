@@ -336,6 +336,8 @@ func (service *Service) RecordAdmission(ctx context.Context, input repository.Ad
 	}
 	input.Principal = principal
 	if err := authorizeKey(input.Principal, permissionRecordAdmission, "image-admission", input.IdempotencyKey); err != nil ||
+		!validRef(input.ExpectedAdmissionAttemptRef, "imgadm") || input.ExpectedAdmissionAttempt == 0 ||
+		input.VulnerabilityReportJSON == "" || !sha256Pattern.MatchString(input.VulnerabilityReportProjectionSHA256) ||
 		!validRef(input.ArtifactRef, "imgart") || input.ExpectedVersion == 0 || input.ExpectedFence == 0 || input.ClaimToken == "" ||
 		!manifestPattern.MatchString(input.ManifestDigest) || !sha256Pattern.MatchString(input.ImmutableBuildSHA256) ||
 		!sha256Pattern.MatchString(input.ProvenanceSHA256) || !sha256Pattern.MatchString(input.SBOMSHA256) ||

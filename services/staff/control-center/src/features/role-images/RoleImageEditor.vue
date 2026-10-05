@@ -12,7 +12,15 @@ import {
   Square,
   TerminalSquare,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -20,6 +28,7 @@ import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfil
 import RoleImageLineage from "./RoleImageLineage.vue";
 import RoleImageAdmissionFailureNotice from "./RoleImageAdmissionFailureNotice.vue";
 import RoleImageAdmissionRejectionNotice from "./RoleImageAdmissionRejectionNotice.vue";
+import RoleImageVulnerabilityReportWorkspace from "./RoleImageVulnerabilityReportWorkspace.vue";
 import { currentRoleImageAdmissionRejected } from "./admission-rejection";
 import { currentRoleImageAdmissionFailure } from "./admission-failure";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
@@ -84,6 +93,7 @@ const buildsExpanded = ref(false);
 const revisionsExpanded = ref(false);
 const revisionRoot = ref<HTMLElement>();
 const revisionSentinel = ref<HTMLElement>();
+const vulnerabilityReportRoot = ref<HTMLElement>();
 const openedBuildSources = ref(new Set<string>());
 function toggleBuildSource(ref: string, event: Event): void {
   const details = event.currentTarget;
@@ -231,6 +241,8 @@ const summaryStatus = computed<{ state: string; label?: string }>(() => {
     return { state: "PENDING", label: t("roleImages.awaitingAdmission") };
   if (currentArtifact.value.admissionVerdict === "REJECTED")
     return { state: "REJECTED", label: t("roleImages.admissionRejected") };
+  if (currentArtifact.value.admissionVerdict !== "ACCEPTED")
+    return { state: "PENDING", label: t("roleImages.awaitingAdmission") };
   if (promotionReceipt.value?.imageArtifactRef === currentArtifact.value.ref) {
     if (promotionReceipt.value.state === "FAILED") return { state: "FAILED" };
     if (promotionReceipt.value.state === "PROMOTING")
@@ -470,6 +482,16 @@ watch(
   },
 );
 onMounted(() => void load());
+watch(
+  [() => route.hash, () => currentArtifact.value?.ref],
+  async () => {
+    if (route.hash !== "#vulnerability-report") return;
+    await nextTick();
+    if (!disposed)
+      vulnerabilityReportRoot.value?.scrollIntoView({ block: "start" });
+  },
+  { flush: "post" },
+);
 onBeforeUnmount(() => {
   disposed = true;
   loadGeneration += 1;
@@ -682,6 +704,24 @@ onBeforeUnmount(() => {
         :failure="admissionFailure"
       />
       <RoleImageAdmissionRejectionNotice v-else-if="admissionRejected" />
+      <div
+        id="vulnerability-report"
+        ref="vulnerabilityReportRoot"
+        v-if="
+          recipe &&
+          currentBuild?.stage === 'COMPLETED' &&
+          currentArtifact &&
+          !admissionFailure
+        "
+      >
+        <RoleImageVulnerabilityReportWorkspace
+          v-if="recipe && currentBuild && currentArtifact"
+          :scope="resourceScope"
+          :recipe="recipe"
+          :build="currentBuild"
+          :artifact="currentArtifact"
+        />
+      </div>
 
       <div class="editor-layout">
         <main class="editor-main">

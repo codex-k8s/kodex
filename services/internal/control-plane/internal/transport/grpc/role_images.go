@@ -219,6 +219,11 @@ func castImageArtifact(input entity.ImageArtifact) *controlplanev1.ImageArtifact
 		result.DeclaredTools = append(result.DeclaredTools, &controlplanev1.RoleImageTool{Name: item.Name, Version: item.Version, SourceRef: item.SourceRef, Sha256: item.SHA256})
 	}
 	result.VerifiedToolInventory = castImageToolInventory(input.ToolInventory, input.ToolInventorySHA256)
+	result.AdmissionAttempt = castImageAdmissionAttempt(input.AdmissionAttempt)
+	if input.AdmissionVerdict == "" && input.AdmissionAttempt != nil && (input.AdmissionAttempt.State == "PENDING" || input.AdmissionAttempt.State == "CLAIMED") {
+		result.AdmissionVerdict = controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_PENDING
+	}
+	result.RiskDecision = castImageRiskDecision(input.RiskDecision)
 	return result
 }
 
@@ -434,7 +439,11 @@ func (server *RoleImageServer) ClaimImageAdmission(ctx context.Context, request 
 	return &controlplanev1.ClaimImageAdmissionResponse{
 		ImageArtifact: castImageArtifact(claim.Artifact), ClaimToken: claim.ClaimToken,
 		Fence: claim.Fence, AuthorityGeneration: claim.AuthorityGeneration,
-		ClaimExpiresAt: timestamp(claim.ClaimExpiresAt),
+		ClaimExpiresAt:      timestamp(claim.ClaimExpiresAt),
+		AdmissionAttemptRef: claim.AdmissionAttemptRef, AdmissionAttempt: claim.AdmissionAttempt,
+		RiskAcceptanceJson: claim.RiskAcceptanceJSON, RiskAcceptanceSha256: claim.RiskAcceptanceSHA256,
+		SourceAdmissionReceiptSha256: claim.SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest: claim.SourceEvidenceManifestDigest,
+		SourceAdmissionRevision: claim.SourceAdmissionRevision,
 	}, nil
 }
 
@@ -459,6 +468,8 @@ func (server *RoleImageServer) RecordImageAdmission(ctx context.Context, request
 		return nil, err
 	}
 	artifact, err := server.service.RecordAdmission(ctx, roleimagerepository.AdmissionRecordInput{
+		ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(),
+		VulnerabilityReportJSON: request.GetVulnerabilityReportJson(), VulnerabilityReportProjectionSHA256: request.GetVulnerabilityReportProjectionSha256(), RiskAcceptanceSHA256: request.GetRiskAcceptanceSha256(),
 		Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
 		ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
 		ClaimToken: request.GetClaimToken(), ManifestDigest: request.GetManifestDigest(),
@@ -483,6 +494,7 @@ func (server *RoleImageServer) FailImageAdmission(ctx context.Context, request *
 		return nil, err
 	}
 	failure, err := server.service.FailAdmission(ctx, roleimagerepository.AdmissionFailureInput{
+		ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(),
 		Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
 		ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ClaimToken: request.GetClaimToken(),
 		ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(),
@@ -502,7 +514,7 @@ func (server *RoleImageServer) ExpireImageAdmissionClaim(ctx context.Context, re
 	if err != nil {
 		return nil, err
 	}
-	failure, err := server.service.ExpireAdmission(ctx, roleimagerepository.AdmissionExpiryInput{Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(), ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(), ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(), PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(), BuildRef: request.GetBuildRef(), ExpectedBuildAttempt: request.GetExpectedBuildAttempt(), RecipeGeneration: request.GetRecipeGeneration(), SpecSHA256: request.GetSpecSha256()})
+	failure, err := server.service.ExpireAdmission(ctx, roleimagerepository.AdmissionExpiryInput{ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(), Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(), ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(), ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(), PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(), BuildRef: request.GetBuildRef(), ExpectedBuildAttempt: request.GetExpectedBuildAttempt(), RecipeGeneration: request.GetRecipeGeneration(), SpecSHA256: request.GetSpecSha256()})
 	if err != nil {
 		return nil, transportError(err)
 	}

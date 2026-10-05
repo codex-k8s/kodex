@@ -60,6 +60,10 @@ WHERE artifact.organization_id = $1::uuid
           artifact.admission_state = 'REJECTED'
           AND artifact.promotion_state = 'REJECTED'
       )
+      OR (artifact.admission_state IN ('PENDING','CLAIMED') AND EXISTS (
+          SELECT 1 FROM control_plane.image_admission_attempts attempt
+          WHERE attempt.artifact_id=artifact.id AND attempt.organization_id=artifact.organization_id
+            AND attempt.risk_decision_id IS NOT NULL AND attempt.state IN ('PENDING','CLAIMED')))
   )
 ORDER BY artifact.created_at DESC, artifact.ref DESC
 LIMIT 1

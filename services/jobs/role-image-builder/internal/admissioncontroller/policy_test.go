@@ -160,6 +160,89 @@ func TestAdmissionJobPolicyRejectsPrivilegeExpansion(t *testing.T) {
 	t.Fatal("job policy is missing")
 }
 
+func TestAdmissionReportMaterializationHasExactRegistryAndAdmitPaths(t *testing.T) {
+	policies, err := readAdmissionPolicies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jobPolicy admissionPolicyDocument
+	for _, policy := range policies {
+		if policy.Metadata.Name == "kodex-image-admission-controller-jobs" {
+			jobPolicy = policy
+		}
+	}
+	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := "v20261005120000-" + testOrchestrationRevision
+	for _, profile := range []string{"protected", "trusted-cluster"} {
+		ownerPolicy := completeTestPolicy()
+		if profile == "trusted-cluster" {
+			ownerPolicy.Labels["kodex.dev/security-profile"] = profile
+		}
+		for _, phase := range phases {
+			rendered, err := renderer.Render(t.Context(), ownerPolicy, "production", runID, phase)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := prepareRendered(rendered, "kodex-system", runID, phase); err != nil {
+				t.Fatal(err)
+			}
+			job, err := runtime.DefaultUnstructuredConverter.ToUnstructured(rendered.Job)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertPolicyAccepts(t, jobPolicy, job, ownerPolicy)
+			for _, name := range []string{"IMAGE_OWNER_VULNERABILITY_REPORT_JSON_FILE", "IMAGE_OWNER_VULNERABILITY_REPORT_PROJECTION_SHA256_FILE"} {
+				found := false
+				for _, item := range rendered.Job.Spec.Template.Spec.Containers[0].Env {
+					found = found || item.Name == name
+				}
+				if found != (phase == "admit") {
+					t.Fatal("report paths escaped admit phase")
+				}
+			}
+			if phase != "admit" {
+				continue
+			}
+			for _, name := range []string{"IMAGE_OWNER_VULNERABILITY_REPORT_JSON_FILE", "IMAGE_OWNER_VULNERABILITY_REPORT_PROJECTION_SHA256_FILE"} {
+				changed := rendered.Job.DeepCopy()
+				for index := range changed.Spec.Template.Spec.Containers[0].Env {
+					item := &changed.Spec.Template.Spec.Containers[0].Env[index]
+					if item.Name == name {
+						item.Value = "/work/foreign.json"
+					}
+				}
+				object, err := runtime.DefaultUnstructuredConverter.ToUnstructured(changed)
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertPolicyRejects(t, jobPolicy, object, ownerPolicy)
+			}
+			changed := rendered.Job.DeepCopy()
+			changed.Spec.Template.Spec.Containers[0].Command = []string{"/usr/local/bin/image-vulnerability-report-validator", "report"}
+			object, err := runtime.DefaultUnstructuredConverter.ToUnstructured(changed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertPolicyRejects(t, jobPolicy, object, ownerPolicy)
+			for _, tools := range []string{
+				"base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,jq,regctl,sha256sum,syft,tr,wc",
+				ownerPolicy.Data["requiredTools"] + ",foreign-helper",
+				"image-vulnerability-report-validator," + ownerPolicy.Data["requiredTools"],
+			} {
+				invalid := ownerPolicy.DeepCopy()
+				invalid.Data["requiredTools"] = tools
+				assertPolicyRejects(t, jobPolicy, job, invalid)
+				if _, err := renderer.Render(t.Context(), invalid, "production", runID, phase); err == nil {
+					t.Fatal("renderer accepted non-exact executable registry")
+				}
+			}
+		}
+	}
+}
+
 func TestAdmissionPoliciesAcceptOnlyExactProofHoldAndRelease(t *testing.T) {
 	if _, err := exec.LookPath("jq"); err != nil {
 		t.Skip("jq is required to execute the production renderer")
@@ -275,7 +358,7 @@ func completeTestPolicy() *corev1.ConfigMap {
 		"trustedRoleBaseRepository":   "registry.example.test/kodex/agent-runner",
 		"trustedRoleBaseDigest":       "sha256:" + stringsOf("a", 64),
 		"roleRuntimeContractRevision": "1", "roleRuntimeContractSHA256": stringsOf("d", 64),
-		"requiredTools": "base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,jq,regctl,sha256sum,syft,wc",
+		"requiredTools": "base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc",
 	}}
 }
 

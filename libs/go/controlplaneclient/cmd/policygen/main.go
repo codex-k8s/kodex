@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 88, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 89, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -283,6 +283,12 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	// Полный nested execution/catalog pin покрывается canonical Proto digest.
 	// Отдельные resource/version/attempt headers здесь не назначают полномочия.
 	switch operationID {
+	case "platform.query.organization.role-images.vulnerability-report.get", "platform.query.role-images.vulnerability-report.get":
+		// Полный report locator и filters закреплены canonical Proto; scope назначает owner.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.command.organization.role-images.risk.decide", "platform.command.role-images.risk.decide":
+		// Human admin authority проверяется owner до OCC/replay; project header не заменяет её.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.role-images.admission.fail", "platform.role-images.admission.expire":
 		// Полный exact claim tuple и OCC охватывает canonical Proto digest; authority назначает owner.
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}

@@ -17,7 +17,7 @@ func validOrganizationRoleImageBuild(build *controlplanev1.ImageBuild, recipe *c
 }
 
 func validOrganizationRoleImageArtifact(artifact *controlplanev1.ImageArtifact, recipe *controlplanev1.RoleImageRecipe) bool {
-	return artifact == nil || artifact.GetScopeKind() == controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION &&
+	return artifact == nil || validImageRiskHistory(artifact) && artifact.GetScopeKind() == controlplanev1.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION &&
 		artifact.GetProjectRef() == "" && artifact.GetOrganizationRef() == recipe.GetOrganizationRef() && artifact.GetRecipeRef() == recipe.GetRef()
 }
 

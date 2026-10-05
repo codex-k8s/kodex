@@ -32,7 +32,7 @@ func (s *failureRepositoryStub) ExpireAdmission(context.Context, repo.AdmissionE
 
 func TestAdmissionFailureRequiresClosedExactWorkerAuthority(t *testing.T) {
 	principal := value.Principal{ActorID: "svc_admission", AuthorityTenant: "org_installation", Permission: "platform.role-images.admission.fail", CorrelationRef: "cor_failure", CallerWorkload: "image-admission", CredentialRevision: 1}
-	input := repo.AdmissionFailureInput{Principal: principal, IdempotencyKey: "admission-failure-unit", ArtifactRef: "imgart_12345678", BuildRef: "imgbld_12345678", ExpectedVersion: 2, ExpectedFence: 1, ExpectedAuthorityGeneration: 1, ExpectedBuildAttempt: 1, RecipeGeneration: 1, ClaimToken: strings.Repeat("t", 43), PolicyRevision: 1, ManifestDigest: "sha256:" + strings.Repeat("a", 64), ImmutableBuildSHA256: strings.Repeat("b", 64), ProvenanceSHA256: strings.Repeat("c", 64), PolicySHA256: strings.Repeat("d", 64), SpecSHA256: strings.Repeat("e", 64), ErrorCode: "ADMISSION_WORKER_FAILED"}
+	input := repo.AdmissionFailureInput{ExpectedAdmissionAttemptRef: "imgadm_12345678", ExpectedAdmissionAttempt: 1, Principal: principal, IdempotencyKey: "admission-failure-unit", ArtifactRef: "imgart_12345678", BuildRef: "imgbld_12345678", ExpectedVersion: 2, ExpectedFence: 1, ExpectedAuthorityGeneration: 1, ExpectedBuildAttempt: 1, RecipeGeneration: 1, ClaimToken: strings.Repeat("t", 43), PolicyRevision: 1, ManifestDigest: "sha256:" + strings.Repeat("a", 64), ImmutableBuildSHA256: strings.Repeat("b", 64), ProvenanceSHA256: strings.Repeat("c", 64), PolicySHA256: strings.Repeat("d", 64), SpecSHA256: strings.Repeat("e", 64), ErrorCode: "ADMISSION_WORKER_FAILED"}
 	catalog, err := NewCatalog([]Environment{validEnvironment(true, true)})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestAdmissionFailureRequiresClosedExactWorkerAuthority(t *testing.T) {
 	principal.Permission = "platform.role-images.admission.expire"
 	stub := &failureRepositoryStub{resolved: principal}
 	service, _ := New(stub, catalog)
-	expiry := repo.AdmissionExpiryInput{Principal: principal, IdempotencyKey: input.IdempotencyKey, ArtifactRef: input.ArtifactRef, BuildRef: input.BuildRef, ExpectedVersion: input.ExpectedVersion, ExpectedFence: input.ExpectedFence, ExpectedAuthorityGeneration: input.ExpectedAuthorityGeneration, ExpectedBuildAttempt: input.ExpectedBuildAttempt, RecipeGeneration: input.RecipeGeneration, PolicyRevision: input.PolicyRevision, ManifestDigest: input.ManifestDigest, ImmutableBuildSHA256: input.ImmutableBuildSHA256, ProvenanceSHA256: input.ProvenanceSHA256, PolicySHA256: input.PolicySHA256, SpecSHA256: input.SpecSHA256}
+	expiry := repo.AdmissionExpiryInput{ExpectedAdmissionAttemptRef: input.ExpectedAdmissionAttemptRef, ExpectedAdmissionAttempt: input.ExpectedAdmissionAttempt, Principal: principal, IdempotencyKey: input.IdempotencyKey, ArtifactRef: input.ArtifactRef, BuildRef: input.BuildRef, ExpectedVersion: input.ExpectedVersion, ExpectedFence: input.ExpectedFence, ExpectedAuthorityGeneration: input.ExpectedAuthorityGeneration, ExpectedBuildAttempt: input.ExpectedBuildAttempt, RecipeGeneration: input.RecipeGeneration, PolicyRevision: input.PolicyRevision, ManifestDigest: input.ManifestDigest, ImmutableBuildSHA256: input.ImmutableBuildSHA256, ProvenanceSHA256: input.ProvenanceSHA256, PolicySHA256: input.PolicySHA256, SpecSHA256: input.SpecSHA256}
 	if _, err := service.ExpireAdmission(t.Context(), expiry); err != nil || stub.calls != 1 {
 		t.Fatal("dedicated owner expiry rejected")
 	}

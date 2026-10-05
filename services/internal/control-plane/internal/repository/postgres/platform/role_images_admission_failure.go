@@ -30,11 +30,14 @@ func (repository *Repository) failAdmission(ctx context.Context, input roleimage
 
 func (repository *Repository) ExpireAdmission(ctx context.Context, input roleimagerepo.AdmissionExpiryInput) (entity.RoleImageAdmissionFailure, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.RoleImageAdmissionFailure, error) {
-		return repository.terminalAdmission(ctx, roleimagerepo.AdmissionFailureInput{Principal: input.Principal, IdempotencyKey: input.IdempotencyKey, ArtifactRef: input.ArtifactRef, ExpectedVersion: input.ExpectedVersion, ExpectedFence: input.ExpectedFence, ExpectedAuthorityGeneration: input.ExpectedAuthorityGeneration, ManifestDigest: input.ManifestDigest, ImmutableBuildSHA256: input.ImmutableBuildSHA256, ProvenanceSHA256: input.ProvenanceSHA256, PolicyRevision: input.PolicyRevision, PolicySHA256: input.PolicySHA256, BuildRef: input.BuildRef, ExpectedBuildAttempt: input.ExpectedBuildAttempt, RecipeGeneration: input.RecipeGeneration, SpecSHA256: input.SpecSHA256, ErrorCode: "ADMISSION_LEASE_EXPIRED"}, true)
+		return repository.terminalAdmission(ctx, roleimagerepo.AdmissionFailureInput{ExpectedAdmissionAttemptRef: input.ExpectedAdmissionAttemptRef, ExpectedAdmissionAttempt: input.ExpectedAdmissionAttempt, Principal: input.Principal, IdempotencyKey: input.IdempotencyKey, ArtifactRef: input.ArtifactRef, ExpectedVersion: input.ExpectedVersion, ExpectedFence: input.ExpectedFence, ExpectedAuthorityGeneration: input.ExpectedAuthorityGeneration, ManifestDigest: input.ManifestDigest, ImmutableBuildSHA256: input.ImmutableBuildSHA256, ProvenanceSHA256: input.ProvenanceSHA256, PolicyRevision: input.PolicyRevision, PolicySHA256: input.PolicySHA256, BuildRef: input.BuildRef, ExpectedBuildAttempt: input.ExpectedBuildAttempt, RecipeGeneration: input.RecipeGeneration, SpecSHA256: input.SpecSHA256, ErrorCode: "ADMISSION_LEASE_EXPIRED"}, true)
 	})
 }
 
 func (repository *Repository) terminalAdmission(ctx context.Context, input roleimagerepo.AdmissionFailureInput, expiry bool) (entity.RoleImageAdmissionFailure, error) {
+	if input.ExpectedAdmissionAttemptRef == "" || input.ExpectedAdmissionAttempt == 0 {
+		return entity.RoleImageAdmissionFailure{}, errs.ErrForbidden
+	}
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
 		return entity.RoleImageAdmissionFailure{}, err
@@ -60,6 +63,10 @@ func (repository *Repository) terminalAdmission(ctx context.Context, input rolei
 	}
 	if err != nil {
 		return entity.RoleImageAdmissionFailure{}, errs.ErrUnavailable
+	}
+	attempt, err := repository.readImageAdmissionAttempt(ctx, tx, current, locked.ID, locked.Artifact.Ref)
+	if err != nil || attempt.Attempt.Ref != input.ExpectedAdmissionAttemptRef || attempt.Attempt.Number != input.ExpectedAdmissionAttempt {
+		return entity.RoleImageAdmissionFailure{}, errs.ErrForbidden
 	}
 	var replay entity.RoleImageAdmissionFailure
 	if found, err := repository.loadRoleImageReceipt(ctx, tx, current, operation, input.IdempotencyKey, intent, &replay); err != nil {

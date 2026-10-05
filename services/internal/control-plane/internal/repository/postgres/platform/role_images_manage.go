@@ -214,6 +214,9 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 			return roleimagerepo.Detail{}, errs.ErrUnavailable
 		}
 		activeArtifact = &item
+		if err := repository.hydrateImageRiskHistory(ctx, querier, current, activeArtifact); err != nil {
+			return roleimagerepo.Detail{}, err
+		}
 	}
 	var promotionCandidate *entity.ImageArtifact
 	var candidateCanBePromoted bool
@@ -221,6 +224,9 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 		current.organizationID, internalID), &candidateCanBePromoted)
 	if candidateErr == nil {
 		promotionCandidate = &item
+		if err := repository.hydrateImageRiskHistory(ctx, querier, current, promotionCandidate); err != nil {
+			return roleimagerepo.Detail{}, err
+		}
 		if canPromote && candidateCanBePromoted {
 			recipe.NextActions = append(recipe.NextActions, "PROMOTE")
 		}

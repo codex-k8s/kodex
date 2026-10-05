@@ -63,6 +63,9 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation, key, intent, &replay); receiptErr != nil {
 		return entity.ImageAdmissionClaim{}, receiptErr
 	} else if found {
+		if replay.AdmissionAttemptRef == "" || replay.AdmissionAttempt == 0 {
+			return entity.ImageAdmissionClaim{}, errs.ErrNotFound
+		}
 		if replay.Artifact.Ref == "" && len(replay.Expired) > 0 {
 			if err := committed(tx, ctx); err != nil {
 				return entity.ImageAdmissionClaim{}, err
@@ -129,8 +132,17 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 	if err != nil {
 		return entity.ImageAdmissionClaim{}, errs.ErrUnavailable
 	}
+	attempt, riskJSON, riskSHA, sourceReceipt, sourceEvidence, err := repository.ensureImageAdmissionAttempt(ctx, tx, current, artifact, artifactID, fence)
+	if err != nil {
+		return entity.ImageAdmissionClaim{}, err
+	}
+	if err := repository.hydrateImageRiskHistory(ctx, tx, current, &artifact); err != nil {
+		return entity.ImageAdmissionClaim{}, err
+	}
 	receipt := admissionClaimReceipt{Artifact: artifact, Fence: fence,
-		AuthorityGeneration: principal.CredentialRevision, ClaimExpiresAt: expiresAt, Expired: expired}
+		AuthorityGeneration: principal.CredentialRevision, ClaimExpiresAt: expiresAt, Expired: expired,
+		AdmissionAttemptRef: attempt.Ref, AdmissionAttempt: attempt.Number, RiskAcceptanceJSON: riskJSON, RiskAcceptanceSHA256: riskSHA,
+		SourceAdmissionRevision: attempt.SourceAdmissionRevision, SourceAdmissionReceiptSHA256: sourceReceipt, SourceEvidenceManifestDigest: sourceEvidence}
 	if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, key, intent,
 		"IMAGE_ADMISSION_CLAIM", receipt); err != nil {
 		return entity.ImageAdmissionClaim{}, err
@@ -146,10 +158,16 @@ func (repository *Repository) admissionClaimFromReceipt(receipt admissionClaimRe
 		receipt.Fence, receipt.AuthorityGeneration, receipt.ClaimExpiresAt)
 	return entity.ImageAdmissionClaim{Artifact: receipt.Artifact, ClaimToken: token,
 		Fence: receipt.Fence, AuthorityGeneration: receipt.AuthorityGeneration,
-		ClaimExpiresAt: receipt.ClaimExpiresAt}
+		ClaimExpiresAt: receipt.ClaimExpiresAt, AdmissionAttemptRef: receipt.AdmissionAttemptRef, AdmissionAttempt: receipt.AdmissionAttempt,
+		RiskAcceptanceJSON: receipt.RiskAcceptanceJSON, RiskAcceptanceSHA256: receipt.RiskAcceptanceSHA256,
+		SourceAdmissionRevision: receipt.SourceAdmissionRevision, SourceAdmissionReceiptSHA256: receipt.SourceAdmissionReceiptSHA256,
+		SourceEvidenceManifestDigest: receipt.SourceEvidenceManifestDigest}
 }
 
 func (repository *Repository) RecordAdmission(ctx context.Context, input roleimagerepo.AdmissionRecordInput) (entity.ImageArtifact, error) {
+	if input.ExpectedAdmissionAttemptRef == "" || input.ExpectedAdmissionAttempt == 0 {
+		return entity.ImageArtifact{}, errs.ErrForbidden
+	}
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
 		return entity.ImageArtifact{}, err
@@ -182,6 +200,16 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 	if locked.Artifact.Version != input.ExpectedVersion {
 		return entity.ImageArtifact{}, errs.ErrVersionMismatch
 	}
+	if err := repository.matchImageAdmissionAttempt(ctx, tx, current, locked.ID, input.ExpectedAdmissionAttemptRef, input.ExpectedAdmissionAttempt, "CLAIMED"); err != nil {
+		return entity.ImageArtifact{}, err
+	}
+	var currentArtifact bool
+	if err := tx.QueryRow(ctx, queryRoleImagesAdmissionCurrent, pgx.StrictNamedArgs{"organization_id": current.organizationID, "artifact_id": locked.ID}).Scan(&currentArtifact); err != nil {
+		return entity.ImageArtifact{}, errs.ErrUnavailable
+	}
+	if !currentArtifact {
+		return entity.ImageArtifact{}, errs.ErrForbidden
+	}
 	if locked.AdmissionState != "CLAIMED" || locked.AdmissionFence != input.ExpectedFence ||
 		locked.AdmissionAuthorityGeneration > input.Principal.CredentialRevision ||
 		locked.AdmissionExpiresAt == nil || !time.Now().UTC().Before(*locked.AdmissionExpiresAt) ||
@@ -203,6 +231,9 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 	} else if input.Verdict == "ACCEPTED" || input.ToolInventorySHA256 != "" {
 		return entity.ImageArtifact{}, errs.ErrInvalid
 	}
+	if err := repository.validateAdmissionVulnerabilityReport(ctx, tx, current, locked, input); err != nil {
+		return entity.ImageArtifact{}, err
+	}
 	if err := tx.QueryRow(ctx, queryRoleImagesRecordAdmission, current.organizationID,
 		locked.ID, locked.Artifact.Version, input.Verdict, input.SBOMSHA256,
 		input.VulnerabilityEvidenceSHA256, input.SignatureIdentity, input.SignatureSHA256,
@@ -216,6 +247,12 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 	locked.Artifact.SignatureIdentity, locked.Artifact.SignatureSHA256 = input.SignatureIdentity, input.SignatureSHA256
 	locked.Artifact.AdmissionReceiptSHA256 = input.AdmissionReceiptSHA256
 	locked.Artifact.AdmissionReceiptOCIManifestDigest = input.AdmissionReceiptOCIManifestDigest
+	if err := repository.storeAdmissionVulnerabilityReport(ctx, tx, current, locked.ID, locked.Artifact, input); err != nil {
+		return entity.ImageArtifact{}, err
+	}
+	if err := repository.hydrateImageRiskHistory(ctx, tx, current, &locked.Artifact); err != nil {
+		return entity.ImageArtifact{}, err
+	}
 	if err := repository.storeRoleImageReceipt(ctx, tx, current, operation,
 		input.IdempotencyKey, intent, "IMAGE_ADMISSION_RECORD", locked.Artifact); err != nil {
 		return entity.ImageArtifact{}, err

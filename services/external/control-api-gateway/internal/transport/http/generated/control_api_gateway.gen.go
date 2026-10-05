@@ -1852,6 +1852,54 @@ func (e GateResolutionDecision) Valid() bool {
 	}
 }
 
+// Defines values for ImageAdmissionAttemptState.
+const (
+	ImageAdmissionAttemptStateACCEPTED  ImageAdmissionAttemptState = "ACCEPTED"
+	ImageAdmissionAttemptStateCANCELLED ImageAdmissionAttemptState = "CANCELLED"
+	ImageAdmissionAttemptStateCLAIMED   ImageAdmissionAttemptState = "CLAIMED"
+	ImageAdmissionAttemptStateFAILED    ImageAdmissionAttemptState = "FAILED"
+	ImageAdmissionAttemptStatePENDING   ImageAdmissionAttemptState = "PENDING"
+	ImageAdmissionAttemptStateREJECTED  ImageAdmissionAttemptState = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the ImageAdmissionAttemptState enum.
+func (e ImageAdmissionAttemptState) Valid() bool {
+	switch e {
+	case ImageAdmissionAttemptStateACCEPTED:
+		return true
+	case ImageAdmissionAttemptStateCANCELLED:
+		return true
+	case ImageAdmissionAttemptStateCLAIMED:
+		return true
+	case ImageAdmissionAttemptStateFAILED:
+		return true
+	case ImageAdmissionAttemptStatePENDING:
+		return true
+	case ImageAdmissionAttemptStateREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageAdmissionRiskAction.
+const (
+	ImageAdmissionRiskActionACCEPTRISK ImageAdmissionRiskAction = "ACCEPT_RISK"
+	ImageAdmissionRiskActionREJECTRISK ImageAdmissionRiskAction = "REJECT_RISK"
+)
+
+// Valid indicates whether the value is a known member of the ImageAdmissionRiskAction enum.
+func (e ImageAdmissionRiskAction) Valid() bool {
+	switch e {
+	case ImageAdmissionRiskActionACCEPTRISK:
+		return true
+	case ImageAdmissionRiskActionREJECTRISK:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ImagePlatformToolInventoryPlatform.
 const (
 	Linuxamd64 ImagePlatformToolInventoryPlatform = "linux/amd64"
@@ -2065,6 +2113,126 @@ func (e ImageToolObservationStatus) Valid() bool {
 	case ImageToolObservationStatusPROBEFAILED:
 		return true
 	case ImageToolObservationStatusVERIFIED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilityAdvisoryKind.
+const (
+	CVE   ImageVulnerabilityAdvisoryKind = "CVE"
+	GHSA  ImageVulnerabilityAdvisoryKind = "GHSA"
+	GO    ImageVulnerabilityAdvisoryKind = "GO"
+	OTHER ImageVulnerabilityAdvisoryKind = "OTHER"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilityAdvisoryKind enum.
+func (e ImageVulnerabilityAdvisoryKind) Valid() bool {
+	switch e {
+	case CVE:
+		return true
+	case GHSA:
+		return true
+	case GO:
+		return true
+	case OTHER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilityFixState.
+const (
+	ImageVulnerabilityFixStateFIXED    ImageVulnerabilityFixState = "FIXED"
+	ImageVulnerabilityFixStateNOTFIXED ImageVulnerabilityFixState = "NOT_FIXED"
+	ImageVulnerabilityFixStateUNKNOWN  ImageVulnerabilityFixState = "UNKNOWN"
+	ImageVulnerabilityFixStateWONTFIX  ImageVulnerabilityFixState = "WONT_FIX"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilityFixState enum.
+func (e ImageVulnerabilityFixState) Valid() bool {
+	switch e {
+	case ImageVulnerabilityFixStateFIXED:
+		return true
+	case ImageVulnerabilityFixStateNOTFIXED:
+		return true
+	case ImageVulnerabilityFixStateUNKNOWN:
+		return true
+	case ImageVulnerabilityFixStateWONTFIX:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilityReportNextActions.
+const (
+	ImageVulnerabilityReportNextActionsACCEPTRISK       ImageVulnerabilityReportNextActions = "ACCEPT_RISK"
+	ImageVulnerabilityReportNextActionsREBUILDFORREPORT ImageVulnerabilityReportNextActions = "REBUILD_FOR_REPORT"
+	ImageVulnerabilityReportNextActionsREJECTRISK       ImageVulnerabilityReportNextActions = "REJECT_RISK"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilityReportNextActions enum.
+func (e ImageVulnerabilityReportNextActions) Valid() bool {
+	switch e {
+	case ImageVulnerabilityReportNextActionsACCEPTRISK:
+		return true
+	case ImageVulnerabilityReportNextActionsREBUILDFORREPORT:
+		return true
+	case ImageVulnerabilityReportNextActionsREJECTRISK:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilityReportState.
+const (
+	ImageVulnerabilityReportStateFAILED      ImageVulnerabilityReportState = "FAILED"
+	ImageVulnerabilityReportStateREADY       ImageVulnerabilityReportState = "READY"
+	ImageVulnerabilityReportStateUNAVAILABLE ImageVulnerabilityReportState = "UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilityReportState enum.
+func (e ImageVulnerabilityReportState) Valid() bool {
+	switch e {
+	case ImageVulnerabilityReportStateFAILED:
+		return true
+	case ImageVulnerabilityReportStateREADY:
+		return true
+	case ImageVulnerabilityReportStateUNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilitySeverity.
+const (
+	ImageVulnerabilitySeverityCRITICAL   ImageVulnerabilitySeverity = "CRITICAL"
+	ImageVulnerabilitySeverityHIGH       ImageVulnerabilitySeverity = "HIGH"
+	ImageVulnerabilitySeverityLOW        ImageVulnerabilitySeverity = "LOW"
+	ImageVulnerabilitySeverityMEDIUM     ImageVulnerabilitySeverity = "MEDIUM"
+	ImageVulnerabilitySeverityNEGLIGIBLE ImageVulnerabilitySeverity = "NEGLIGIBLE"
+	ImageVulnerabilitySeverityUNKNOWN    ImageVulnerabilitySeverity = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilitySeverity enum.
+func (e ImageVulnerabilitySeverity) Valid() bool {
+	switch e {
+	case ImageVulnerabilitySeverityCRITICAL:
+		return true
+	case ImageVulnerabilitySeverityHIGH:
+		return true
+	case ImageVulnerabilitySeverityLOW:
+		return true
+	case ImageVulnerabilitySeverityMEDIUM:
+		return true
+	case ImageVulnerabilitySeverityNEGLIGIBLE:
+		return true
+	case ImageVulnerabilitySeverityUNKNOWN:
 		return true
 	default:
 		return false
@@ -4380,19 +4548,19 @@ func (e ProviderAccountDeletionState) Valid() bool {
 
 // Defines values for ProviderAccountPolicyVersionMode.
 const (
-	ProviderAccountPolicyVersionModeFIXED     ProviderAccountPolicyVersionMode = "FIXED"
-	ProviderAccountPolicyVersionModeLEASTUSED ProviderAccountPolicyVersionMode = "LEAST_USED"
-	ProviderAccountPolicyVersionModeWEIGHTED  ProviderAccountPolicyVersionMode = "WEIGHTED"
+	FIXED     ProviderAccountPolicyVersionMode = "FIXED"
+	LEASTUSED ProviderAccountPolicyVersionMode = "LEAST_USED"
+	WEIGHTED  ProviderAccountPolicyVersionMode = "WEIGHTED"
 )
 
 // Valid indicates whether the value is a known member of the ProviderAccountPolicyVersionMode enum.
 func (e ProviderAccountPolicyVersionMode) Valid() bool {
 	switch e {
-	case ProviderAccountPolicyVersionModeFIXED:
+	case FIXED:
 		return true
-	case ProviderAccountPolicyVersionModeLEASTUSED:
+	case LEASTUSED:
 		return true
-	case ProviderAccountPolicyVersionModeWEIGHTED:
+	case WEIGHTED:
 		return true
 	default:
 		return false
@@ -4993,6 +5161,7 @@ func (e RoleImageAdmissionFailureState) Valid() bool {
 // Defines values for RoleImageArtifactAdmissionVerdict.
 const (
 	RoleImageArtifactAdmissionVerdictACCEPTED RoleImageArtifactAdmissionVerdict = "ACCEPTED"
+	RoleImageArtifactAdmissionVerdictPENDING  RoleImageArtifactAdmissionVerdict = "PENDING"
 	RoleImageArtifactAdmissionVerdictREJECTED RoleImageArtifactAdmissionVerdict = "REJECTED"
 )
 
@@ -5000,6 +5169,8 @@ const (
 func (e RoleImageArtifactAdmissionVerdict) Valid() bool {
 	switch e {
 	case RoleImageArtifactAdmissionVerdictACCEPTED:
+		return true
+	case RoleImageArtifactAdmissionVerdictPENDING:
 		return true
 	case RoleImageArtifactAdmissionVerdictREJECTED:
 		return true
@@ -9330,16 +9501,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	DELETED SearchVFSParamsLifecycleState = "DELETED"
+	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case SearchVFSParamsLifecycleStateACTIVE:
 		return true
-	case DELETED:
+	case SearchVFSParamsLifecycleStateDELETED:
 		return true
 	default:
 		return false
@@ -10649,6 +10820,145 @@ type GateResolutionReceipt struct {
 	Run   Run       `json:"run"`
 }
 
+// ImageAdmissionAttempt Безопасная типизированная owner projection.
+type ImageAdmissionAttempt struct {
+	AdmissionReceiptSha256 string    `json:"admissionReceiptSha256"`
+	ArtifactRef            OpaqueRef `json:"artifactRef"`
+	DecisionRef            string    `json:"decisionRef"`
+	EvidenceManifestDigest string    `json:"evidenceManifestDigest"`
+	Fence                  int64     `json:"fence"`
+	Number                 int       `json:"number"`
+	Ref                    OpaqueRef `json:"ref"`
+
+	// State Закрытое значение; неизвестное не даёт новых полномочий.
+	State   ImageAdmissionAttemptState `json:"state"`
+	Version int64                      `json:"version"`
+}
+
+// ImageAdmissionAttemptState Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageAdmissionAttemptState string
+
+// ImageAdmissionRiskAction Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageAdmissionRiskAction string
+
+// ImageAdmissionRiskDecision Безопасная типизированная owner projection.
+type ImageAdmissionRiskDecision struct {
+	// Action Закрытое значение; неизвестное не даёт новых полномочий.
+	Action ImageAdmissionRiskAction `json:"action"`
+
+	// AdmissionRevision Текущая owner revision admission projection.
+	AdmissionRevision int64     `json:"admissionRevision"`
+	ArtifactRef       OpaqueRef `json:"artifactRef"`
+
+	// ArtifactVersion Текущая версия artifact; If-Match относится к ней.
+	ArtifactVersion int64  `json:"artifactVersion"`
+	BindingSha256   string `json:"bindingSha256"`
+
+	// BuildAttempt Точная attempt исходной сборки.
+	BuildAttempt int       `json:"buildAttempt"`
+	BuildRef     OpaqueRef `json:"buildRef"`
+
+	// BuildVersion Версия сохранённого immutable build snapshot.
+	BuildVersion      int64     `json:"buildVersion"`
+	DecidedAt         Timestamp `json:"decidedAt"`
+	DecidedByActorRef OpaqueRef `json:"decidedByActorRef"`
+
+	// ManifestDigest Exact image digest sha256:; tag не является authority.
+	ManifestDigest  string    `json:"manifestDigest"`
+	OrganizationRef OpaqueRef `json:"organizationRef"`
+
+	// PolicyRevision Version-pinned baseline policy.
+	PolicyRevision int64 `json:"policyRevision"`
+
+	// PolicySha256 Exact baseline policy digest.
+	PolicySha256 string `json:"policySha256"`
+
+	// PriorAdmissionReceiptSha256 SHA256 immutable предыдущей receipt.
+	PriorAdmissionReceiptSha256 string `json:"priorAdmissionReceiptSha256"`
+
+	// PriorEvidenceManifestDigest Exact OCI manifest предыдущего evidence bundle.
+	PriorEvidenceManifestDigest string `json:"priorEvidenceManifestDigest"`
+
+	// ProjectRef Точный PROJECT locator; пустой только для ORGANIZATION.
+	ProjectRef string `json:"projectRef"`
+	Reason     string `json:"reason"`
+
+	// RecipeGeneration Неизменяемое поколение recipe/build snapshot.
+	RecipeGeneration int64     `json:"recipeGeneration"`
+	RecipeRef        OpaqueRef `json:"recipeRef"`
+
+	// RecipeVersion Exact версия рецепта для owner OCC.
+	RecipeVersion int64     `json:"recipeVersion"`
+	Ref           OpaqueRef `json:"ref"`
+
+	// SbomSha256 SHA256 исходных полных SBOM bytes.
+	SbomSha256 string                   `json:"sbomSha256"`
+	ScopeKind  RuntimeResourceScopeKind `json:"scopeKind"`
+
+	// SourceAdmissionRevision Original REJECTED terminal revision, закреплённая report.
+	SourceAdmissionRevision int64 `json:"sourceAdmissionRevision"`
+	Version                 int64 `json:"version"`
+
+	// VulnerabilityEvidenceSha256 SHA256 исходных полных scanner bytes.
+	VulnerabilityEvidenceSha256 string `json:"vulnerabilityEvidenceSha256"`
+}
+
+// ImageAdmissionRiskDecisionInput Все pins обязательны; actor/tenant назначает сервер. If-Match совпадает с expectedArtifactVersion, reason 1..2048 UTF8 bytes без controls.
+type ImageAdmissionRiskDecisionInput struct {
+	// Action Закрытое значение; неизвестное не даёт новых полномочий.
+	Action ImageAdmissionRiskAction `json:"action"`
+
+	// ExpectedAdmissionRevision Exact current admission projection revision.
+	ExpectedAdmissionRevision int64 `json:"expectedAdmissionRevision"`
+
+	// ExpectedArtifactVersion OCC artifact; не доказательство владения.
+	ExpectedArtifactVersion int64 `json:"expectedArtifactVersion"`
+
+	// ExpectedBuildAttempt Exact immutable build attempt.
+	ExpectedBuildAttempt int       `json:"expectedBuildAttempt"`
+	ExpectedBuildRef     OpaqueRef `json:"expectedBuildRef"`
+
+	// ExpectedRecipeGeneration Exact recipe generation исходного report.
+	ExpectedRecipeGeneration int64 `json:"expectedRecipeGeneration"`
+
+	// ExpectedRecipeVersion Exact current recipe version.
+	ExpectedRecipeVersion int64 `json:"expectedRecipeVersion"`
+
+	// ManifestDigest Exact image digest, не источник authority.
+	ManifestDigest string `json:"manifestDigest"`
+
+	// PolicyRevision Текущая pinned baseline policy revision.
+	PolicyRevision int64 `json:"policyRevision"`
+
+	// PolicySha256 Текущий exact baseline policy digest.
+	PolicySha256 string `json:"policySha256"`
+
+	// PriorAdmissionReceiptSha256 Exact original REJECTED receipt pin.
+	PriorAdmissionReceiptSha256 string `json:"priorAdmissionReceiptSha256"`
+
+	// PriorEvidenceManifestDigest Exact original immutable evidence manifest.
+	PriorEvidenceManifestDigest string `json:"priorEvidenceManifestDigest"`
+
+	// ProjectionSha256 SHA256 полной safe projection, не hash видимой страницы.
+	ProjectionSha256 string `json:"projectionSha256"`
+
+	// Reason Обязательная bounded причина для audit, не shell.
+	Reason string `json:"reason"`
+
+	// VulnerabilityEvidenceSha256 SHA256 полного исходного report, показанного администратору.
+	VulnerabilityEvidenceSha256 string `json:"vulnerabilityEvidenceSha256"`
+}
+
+// ImageAdmissionRiskDecisionResponse Безопасная типизированная owner projection.
+type ImageAdmissionRiskDecisionResponse struct {
+	// AdmissionAttempt Безопасная типизированная owner projection.
+	AdmissionAttempt *ImageAdmissionAttempt `json:"admissionAttempt,omitempty"`
+	Artifact         RoleImageArtifact      `json:"artifact"`
+
+	// Decision Безопасная типизированная owner projection.
+	Decision ImageAdmissionRiskDecision `json:"decision"`
+}
+
 // ImagePlatformToolInventory defines model for ImagePlatformToolInventory.
 type ImagePlatformToolInventory struct {
 	ManifestSha256 string                             `json:"manifestSha256"`
@@ -10687,6 +10997,138 @@ type ImageToolObservationName string
 
 // ImageToolObservationStatus defines model for ImageToolObservation.Status.
 type ImageToolObservationStatus string
+
+// ImageVulnerabilityAdvisoryKind Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageVulnerabilityAdvisoryKind string
+
+// ImageVulnerabilityFinding Безопасная типизированная owner projection.
+type ImageVulnerabilityFinding struct {
+	AdvisoryId string `json:"advisoryId"`
+
+	// AdvisoryKind Закрытое значение; неизвестное не даёт новых полномочий.
+	AdvisoryKind ImageVulnerabilityAdvisoryKind `json:"advisoryKind"`
+
+	// AdvisoryUrl Только server canonical NVD/GitHub/pkg.go.dev URL; OTHER пуст, raw URL запрещён.
+	AdvisoryUrl string `json:"advisoryUrl"`
+	Blocking    bool   `json:"blocking"`
+	Ecosystem   string `json:"ecosystem"`
+
+	// FixState Закрытое значение; неизвестное не даёт новых полномочий.
+	FixState         ImageVulnerabilityFixState `json:"fixState"`
+	FixedVersions    []string                   `json:"fixedVersions"`
+	Ignored          bool                       `json:"ignored"`
+	InstalledVersion string                     `json:"installedVersion"`
+	Occurrences      int                        `json:"occurrences"`
+	PackageName      string                     `json:"packageName"`
+	Ref              string                     `json:"ref"`
+
+	// Severity Закрытое значение; неизвестное не даёт новых полномочий.
+	Severity ImageVulnerabilitySeverity `json:"severity"`
+}
+
+// ImageVulnerabilityFixState Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageVulnerabilityFixState string
+
+// ImageVulnerabilityReport Безопасная типизированная owner projection.
+type ImageVulnerabilityReport struct {
+	// AdmissionRevision Текущая owner revision admission projection.
+	AdmissionRevision int64     `json:"admissionRevision"`
+	ArtifactRef       OpaqueRef `json:"artifactRef"`
+
+	// ArtifactVersion Текущая версия artifact; If-Match относится к ней.
+	ArtifactVersion    int64 `json:"artifactVersion"`
+	BlockingMatchCount int   `json:"blockingMatchCount"`
+
+	// BuildAttempt Точная attempt исходной сборки.
+	BuildAttempt int       `json:"buildAttempt"`
+	BuildRef     OpaqueRef `json:"buildRef"`
+
+	// BuildVersion Версия сохранённого immutable build snapshot.
+	BuildVersion int64 `json:"buildVersion"`
+
+	// Complete Назначает полный canonical validator, не caller.
+	Complete bool `json:"complete"`
+
+	// ManifestDigest Exact image digest sha256:; tag не является authority.
+	ManifestDigest  string                                `json:"manifestDigest"`
+	MatchCount      int                                   `json:"matchCount"`
+	NextActions     []ImageVulnerabilityReportNextActions `json:"nextActions"`
+	OrganizationRef OpaqueRef                             `json:"organizationRef"`
+
+	// PolicyRevision Version-pinned baseline policy.
+	PolicyRevision int64 `json:"policyRevision"`
+
+	// PolicySha256 Exact baseline policy digest.
+	PolicySha256 string `json:"policySha256"`
+
+	// PriorAdmissionReceiptSha256 SHA256 immutable предыдущей receipt.
+	PriorAdmissionReceiptSha256 string `json:"priorAdmissionReceiptSha256"`
+
+	// PriorEvidenceManifestDigest Exact OCI manifest предыдущего evidence bundle.
+	PriorEvidenceManifestDigest string `json:"priorEvidenceManifestDigest"`
+
+	// ProjectRef Точный PROJECT locator; пустой только для ORGANIZATION.
+	ProjectRef       string `json:"projectRef"`
+	ProjectionSha256 string `json:"projectionSha256"`
+
+	// RecipeGeneration Неизменяемое поколение recipe/build snapshot.
+	RecipeGeneration int64     `json:"recipeGeneration"`
+	RecipeRef        OpaqueRef `json:"recipeRef"`
+
+	// RecipeVersion Exact версия рецепта для owner OCC.
+	RecipeVersion int64 `json:"recipeVersion"`
+
+	// SbomSha256 SHA256 исходных полных SBOM bytes.
+	SbomSha256     string                            `json:"sbomSha256"`
+	ScopeKind      RuntimeResourceScopeKind          `json:"scopeKind"`
+	SeverityCounts []ImageVulnerabilitySeverityCount `json:"severityCounts"`
+
+	// SourceAdmissionRevision Original REJECTED terminal revision, закреплённая report.
+	SourceAdmissionRevision int64 `json:"sourceAdmissionRevision"`
+
+	// State Закрытое значение; неизвестное не даёт новых полномочий.
+	State                     ImageVulnerabilityReportState `json:"state"`
+	SuppressedMatchCount      int                           `json:"suppressedMatchCount"`
+	UniqueAdvisoryCount       int                           `json:"uniqueAdvisoryCount"`
+	UnresolvedNoFixMatchCount int                           `json:"unresolvedNoFixMatchCount"`
+	Version                   int64                         `json:"version"`
+
+	// VulnerabilityEvidenceSha256 SHA256 исходных полных scanner bytes.
+	VulnerabilityEvidenceSha256 string `json:"vulnerabilityEvidenceSha256"`
+}
+
+// ImageVulnerabilityReportNextActions defines model for ImageVulnerabilityReport.NextActions.
+type ImageVulnerabilityReportNextActions string
+
+// ImageVulnerabilityReportPageInfo Безопасная типизированная owner projection.
+type ImageVulnerabilityReportPageInfo struct {
+	NextPageToken string `json:"nextPageToken"`
+}
+
+// ImageVulnerabilityReportResponse Безопасная типизированная owner projection.
+type ImageVulnerabilityReportResponse struct {
+	Findings []ImageVulnerabilityFinding `json:"findings"`
+
+	// Page Безопасная типизированная owner projection.
+	Page ImageVulnerabilityReportPageInfo `json:"page"`
+
+	// Report Безопасная типизированная owner projection.
+	Report ImageVulnerabilityReport `json:"report"`
+}
+
+// ImageVulnerabilityReportState Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageVulnerabilityReportState string
+
+// ImageVulnerabilitySeverity Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageVulnerabilitySeverity string
+
+// ImageVulnerabilitySeverityCount Безопасная типизированная owner projection.
+type ImageVulnerabilitySeverityCount struct {
+	MatchCount int `json:"matchCount"`
+
+	// Severity Закрытое значение; неизвестное не даёт новых полномочий.
+	Severity ImageVulnerabilitySeverity `json:"severity"`
+}
 
 // Incident defines model for Incident.
 type Incident struct {
@@ -12487,29 +12929,36 @@ type RoleImageAdmissionFailureState string
 
 // RoleImageArtifact defines model for RoleImageArtifact.
 type RoleImageArtifact struct {
-	AdmissionVerdict            RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
-	BuildRef                    OpaqueRef                         `json:"buildRef"`
-	DeclaredTools               []RoleImageArtifactTool           `json:"declaredTools"`
-	ManifestDigest              string                            `json:"manifestDigest"`
-	OrganizationRef             OpaqueRef                         `json:"organizationRef"`
-	ProjectRef                  string                            `json:"projectRef"`
-	PromotedAt                  *Timestamp                        `json:"promotedAt,omitempty"`
-	PromotedReference           *string                           `json:"promotedReference,omitempty"`
-	PromotionReceiptSha256      *string                           `json:"promotionReceiptSha256,omitempty"`
-	PromotionRequested          bool                              `json:"promotionRequested"`
-	PromotionState              RoleImageArtifactPromotionState   `json:"promotionState"`
-	ProvenanceSha256            string                            `json:"provenanceSha256"`
-	RecipeGeneration            int64                             `json:"recipeGeneration"`
-	RecipeRef                   OpaqueRef                         `json:"recipeRef"`
-	Ref                         OpaqueRef                         `json:"ref"`
-	SbomSha256                  *string                           `json:"sbomSha256,omitempty"`
-	ScopeKind                   RuntimeResourceScopeKind          `json:"scopeKind"`
-	VerifiedToolInventory       ImageToolInventory                `json:"verifiedToolInventory"`
-	Version                     int64                             `json:"version"`
-	VulnerabilityEvidenceSha256 *string                           `json:"vulnerabilityEvidenceSha256,omitempty"`
+	// AdmissionAttempt Безопасная типизированная owner projection.
+	AdmissionAttempt *ImageAdmissionAttempt `json:"admissionAttempt,omitempty"`
+
+	// AdmissionVerdict PENDING обозначает только новую risk-bound attempt до terminal Record; прежний REJECTED остаётся историей.
+	AdmissionVerdict       RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
+	BuildRef               OpaqueRef                         `json:"buildRef"`
+	DeclaredTools          []RoleImageArtifactTool           `json:"declaredTools"`
+	ManifestDigest         string                            `json:"manifestDigest"`
+	OrganizationRef        OpaqueRef                         `json:"organizationRef"`
+	ProjectRef             string                            `json:"projectRef"`
+	PromotedAt             *Timestamp                        `json:"promotedAt,omitempty"`
+	PromotedReference      *string                           `json:"promotedReference,omitempty"`
+	PromotionReceiptSha256 *string                           `json:"promotionReceiptSha256,omitempty"`
+	PromotionRequested     bool                              `json:"promotionRequested"`
+	PromotionState         RoleImageArtifactPromotionState   `json:"promotionState"`
+	ProvenanceSha256       string                            `json:"provenanceSha256"`
+	RecipeGeneration       int64                             `json:"recipeGeneration"`
+	RecipeRef              OpaqueRef                         `json:"recipeRef"`
+	Ref                    OpaqueRef                         `json:"ref"`
+
+	// RiskDecision Безопасная типизированная owner projection.
+	RiskDecision                *ImageAdmissionRiskDecision `json:"riskDecision,omitempty"`
+	SbomSha256                  *string                     `json:"sbomSha256,omitempty"`
+	ScopeKind                   RuntimeResourceScopeKind    `json:"scopeKind"`
+	VerifiedToolInventory       ImageToolInventory          `json:"verifiedToolInventory"`
+	Version                     int64                       `json:"version"`
+	VulnerabilityEvidenceSha256 *string                     `json:"vulnerabilityEvidenceSha256,omitempty"`
 }
 
-// RoleImageArtifactAdmissionVerdict defines model for RoleImageArtifact.AdmissionVerdict.
+// RoleImageArtifactAdmissionVerdict PENDING обозначает только новую risk-bound attempt до terminal Record; прежний REJECTED остаётся историей.
 type RoleImageArtifactAdmissionVerdict string
 
 // RoleImageArtifactPromotionState defines model for RoleImageArtifact.PromotionState.
@@ -15907,6 +16356,24 @@ type UpdateSystemRoleImageRecipeParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// DecideOrganizationImageAdmissionRiskParams defines parameters for DecideOrganizationImageAdmissionRisk.
+type DecideOrganizationImageAdmissionRiskParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetOrganizationImageVulnerabilityReportParams defines parameters for GetOrganizationImageVulnerabilityReport.
+type GetOrganizationImageVulnerabilityReportParams struct {
+	PageSize             *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken            *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	PackageQuery         *string                     `form:"packageQuery,omitempty" json:"packageQuery,omitempty"`
+	Severity             *ImageVulnerabilitySeverity `form:"severity,omitempty" json:"severity,omitempty"`
+	AdvisoryQuery        *string                     `form:"advisoryQuery,omitempty" json:"advisoryQuery,omitempty"`
+	BlockingOnly         *bool                       `form:"blockingOnly,omitempty" json:"blockingOnly,omitempty"`
+	ExpectedReportSha256 *string                     `form:"expectedReportSha256,omitempty" json:"expectedReportSha256,omitempty"`
+}
+
 // CommandSystemRoleImageRecipeParams defines parameters for CommandSystemRoleImageRecipe.
 type CommandSystemRoleImageRecipeParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -16180,6 +16647,24 @@ type UpdateRoleImageRecipeParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// DecideImageAdmissionRiskParams defines parameters for DecideImageAdmissionRisk.
+type DecideImageAdmissionRiskParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetImageVulnerabilityReportParams defines parameters for GetImageVulnerabilityReport.
+type GetImageVulnerabilityReportParams struct {
+	PageSize             *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken            *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	PackageQuery         *string                     `form:"packageQuery,omitempty" json:"packageQuery,omitempty"`
+	Severity             *ImageVulnerabilitySeverity `form:"severity,omitempty" json:"severity,omitempty"`
+	AdvisoryQuery        *string                     `form:"advisoryQuery,omitempty" json:"advisoryQuery,omitempty"`
+	BlockingOnly         *bool                       `form:"blockingOnly,omitempty" json:"blockingOnly,omitempty"`
+	ExpectedReportSha256 *string                     `form:"expectedReportSha256,omitempty" json:"expectedReportSha256,omitempty"`
 }
 
 // CommandRoleImageRecipeParams defines parameters for CommandRoleImageRecipe.
@@ -17347,6 +17832,9 @@ type CreateSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
 // UpdateSystemRoleImageRecipeJSONRequestBody defines body for UpdateSystemRoleImageRecipe for application/json ContentType.
 type UpdateSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
 
+// DecideOrganizationImageAdmissionRiskJSONRequestBody defines body for DecideOrganizationImageAdmissionRisk for application/json ContentType.
+type DecideOrganizationImageAdmissionRiskJSONRequestBody = ImageAdmissionRiskDecisionInput
+
 // CommandSystemRoleImageRecipeJSONRequestBody defines body for CommandSystemRoleImageRecipe for application/json ContentType.
 type CommandSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeCommand
 
@@ -17391,6 +17879,9 @@ type CreateRoleImageRecipeJSONRequestBody = RoleImageRecipeCreateInput
 
 // UpdateRoleImageRecipeJSONRequestBody defines body for UpdateRoleImageRecipe for application/json ContentType.
 type UpdateRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
+
+// DecideImageAdmissionRiskJSONRequestBody defines body for DecideImageAdmissionRisk for application/json ContentType.
+type DecideImageAdmissionRiskJSONRequestBody = ImageAdmissionRiskDecisionInput
 
 // CommandRoleImageRecipeJSONRequestBody defines body for CommandRoleImageRecipe for application/json ContentType.
 type CommandRoleImageRecipeJSONRequestBody = RoleImageRecipeCommand
@@ -18992,6 +19483,12 @@ type ServerInterface interface {
 	// (PATCH /api/v1/organization/role-image-recipes/{recipeRef})
 	UpdateSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, params UpdateSystemRoleImageRecipeParams)
 
+	// (POST /api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision)
+	DecideOrganizationImageAdmissionRisk(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, artifactRef ArtifactRef, params DecideOrganizationImageAdmissionRiskParams)
+
+	// (GET /api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report)
+	GetOrganizationImageVulnerabilityReport(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, artifactRef ArtifactRef, params GetOrganizationImageVulnerabilityReportParams)
+
 	// (POST /api/v1/organization/role-image-recipes/{recipeRef}/commands)
 	CommandSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, params CommandSystemRoleImageRecipeParams)
 
@@ -19105,6 +19602,12 @@ type ServerInterface interface {
 
 	// (PATCH /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef})
 	UpdateRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params UpdateRoleImageRecipeParams)
+
+	// (POST /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision)
+	DecideImageAdmissionRisk(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, artifactRef ArtifactRef, params DecideImageAdmissionRiskParams)
+
+	// (GET /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report)
+	GetImageVulnerabilityReport(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, artifactRef ArtifactRef, params GetImageVulnerabilityReportParams)
 
 	// (POST /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands)
 	CommandRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params CommandRoleImageRecipeParams)
@@ -32303,6 +32806,256 @@ func (siw *ServerInterfaceWrapper) UpdateSystemRoleImageRecipe(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// DecideOrganizationImageAdmissionRisk operation middleware
+func (siw *ServerInterfaceWrapper) DecideOrganizationImageAdmissionRisk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DecideOrganizationImageAdmissionRiskParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideOrganizationImageAdmissionRisk(w, r, recipeRef, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrganizationImageVulnerabilityReport operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationImageVulnerabilityReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationImageVulnerabilityReportParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "packageQuery" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "packageQuery", r.URL.Query(), &params.PackageQuery, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "packageQuery"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageQuery", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "severity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "severity", r.URL.Query(), &params.Severity, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "severity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "severity", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "advisoryQuery" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "advisoryQuery", r.URL.Query(), &params.AdvisoryQuery, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "advisoryQuery"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "advisoryQuery", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "blockingOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "blockingOnly", r.URL.Query(), &params.BlockingOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "blockingOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "blockingOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedReportSha256" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedReportSha256", r.URL.Query(), &params.ExpectedReportSha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedReportSha256"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedReportSha256", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationImageVulnerabilityReport(w, r, recipeRef, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CommandSystemRoleImageRecipe operation middleware
 func (siw *ServerInterfaceWrapper) CommandSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
 
@@ -35466,6 +36219,274 @@ func (siw *ServerInterfaceWrapper) UpdateRoleImageRecipe(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateRoleImageRecipe(w, r, projectRef, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DecideImageAdmissionRisk operation middleware
+func (siw *ServerInterfaceWrapper) DecideImageAdmissionRisk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DecideImageAdmissionRiskParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideImageAdmissionRisk(w, r, projectRef, recipeRef, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetImageVulnerabilityReport operation middleware
+func (siw *ServerInterfaceWrapper) GetImageVulnerabilityReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetImageVulnerabilityReportParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "packageQuery" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "packageQuery", r.URL.Query(), &params.PackageQuery, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "packageQuery"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageQuery", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "severity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "severity", r.URL.Query(), &params.Severity, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "severity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "severity", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "advisoryQuery" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "advisoryQuery", r.URL.Query(), &params.AdvisoryQuery, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "advisoryQuery"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "advisoryQuery", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "blockingOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "blockingOnly", r.URL.Query(), &params.BlockingOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "blockingOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "blockingOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedReportSha256" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedReportSha256", r.URL.Query(), &params.ExpectedReportSha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedReportSha256"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedReportSha256", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImageVulnerabilityReport(w, r, projectRef, recipeRef, artifactRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -48496,6 +49517,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes", wrapper.CreateSystemRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}", wrapper.GetSystemRoleImageRecipe)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}", wrapper.UpdateSystemRoleImageRecipe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision", wrapper.DecideOrganizationImageAdmissionRisk)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report", wrapper.GetOrganizationImageVulnerabilityReport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/commands", wrapper.CommandSystemRoleImageRecipe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/promotion", wrapper.PromoteSystemRoleImage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/revisions", wrapper.ListSystemRoleImageRecipeRevisions)
@@ -48534,6 +49557,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.CreateRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.GetRoleImageRecipe)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.UpdateRoleImageRecipe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision", wrapper.DecideImageAdmissionRisk)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report", wrapper.GetImageVulnerabilityReport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands", wrapper.CommandRoleImageRecipe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/promotions", wrapper.PromoteRoleImage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/revisions", wrapper.ListRoleImageRecipeRevisions)

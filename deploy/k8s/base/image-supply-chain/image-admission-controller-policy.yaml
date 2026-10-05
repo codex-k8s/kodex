@@ -87,6 +87,11 @@ spec:
         variables.protected ? variables.grantAgent.env.map(item, item.name).join(',') : ''
   validations:
     - expression: >-
+        params.spec.requiredTools ==
+          'base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,' +
+          'image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc'
+      message: Image admission required tools differ from the exact executable registry.
+    - expression: >-
         variables.securityProfile in ['protected', 'trusted-cluster'] &&
         (variables.trustedCluster ?
           (has(object.spec.template.metadata.labels) &&
@@ -209,7 +214,9 @@ spec:
             'IMAGE_OWNER_CONTROL_PLANE_TARGET,IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME,' +
             'IMAGE_OWNER_CONTROL_PLANE_CA_FILE,IMAGE_OWNER_CONTROL_PLANE_CERTIFICATE_FILE,' +
             'IMAGE_OWNER_CONTROL_PLANE_PRIVATE_KEY_FILE,IMAGE_OWNER_APPLICATION_GRANT_FILE,' +
-            'IMAGE_OWNER_STATE_FILE,IMAGE_OWNER_PROMOTION_FILE' : '') &&
+            'IMAGE_OWNER_STATE_FILE,IMAGE_OWNER_PROMOTION_FILE' : '') +
+          (variables.phase == 'admit' ?
+            ',IMAGE_OWNER_VULNERABILITY_REPORT_JSON_FILE,IMAGE_OWNER_VULNERABILITY_REPORT_PROJECTION_SHA256_FILE' : '') &&
         variables.main.env.all(item,
           !has(item.valueFrom) && has(item.value) &&
           (item.name == 'ADMISSION_RUN_ID' ?
@@ -240,6 +247,10 @@ spec:
            item.name == 'IMAGE_OWNER_APPLICATION_GRANT_FILE' ? item.value == '/application-grant/application-grant.jws' :
            item.name == 'IMAGE_OWNER_STATE_FILE' ? item.value == '/work/owner-claim.json' :
            item.name == 'IMAGE_OWNER_PROMOTION_FILE' ? item.value == '/work/owner-promotion.json' :
+           item.name == 'IMAGE_OWNER_VULNERABILITY_REPORT_JSON_FILE' ?
+             variables.phase == 'admit' && item.value == '/work/vulnerability-report.json' :
+           item.name == 'IMAGE_OWNER_VULNERABILITY_REPORT_PROJECTION_SHA256_FILE' ?
+             variables.phase == 'admit' && item.value == '/work/vulnerability-report.sha256' :
            false))
       message: Image admission environment differs from the owner contract.
     - expression: >-

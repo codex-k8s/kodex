@@ -16,10 +16,12 @@ type failureRPCStub struct {
 	code                   codes.Code
 	failCalls, expireCalls int
 	expiry                 *cp.ExpireImageAdmissionClaimRequest
+	failure                *cp.FailImageAdmissionRequest
 }
 
-func (s *failureRPCStub) FailImageAdmission(context.Context, *cp.FailImageAdmissionRequest, ...grpc.CallOption) (*cp.FailImageAdmissionResponse, error) {
+func (s *failureRPCStub) FailImageAdmission(_ context.Context, in *cp.FailImageAdmissionRequest, _ ...grpc.CallOption) (*cp.FailImageAdmissionResponse, error) {
 	s.failCalls++
+	s.failure = in
 	return nil, status.Error(s.code, "closed fixture failure")
 }
 func (s *failureRPCStub) ExpireImageAdmissionClaim(_ context.Context, in *cp.ExpireImageAdmissionClaimRequest, _ ...grpc.CallOption) (*cp.ExpireImageAdmissionClaimResponse, error) {
@@ -29,6 +31,7 @@ func (s *failureRPCStub) ExpireImageAdmissionClaim(_ context.Context, in *cp.Exp
 }
 func TestAdmissionFailFallbackUsesDedicatedFreshExpiryAndExactTuple(t *testing.T) {
 	claim := Claim{ArtifactID: "imgart_12345678", Version: 2, Fence: 3, AuthorityGeneration: 4, ClaimToken: "private-fixture-token", RecipeID: "imgrec_12345678", RecipeGeneration: 5, BuildID: "imgbld_12345678", BuildAttempt: 1, ScopeKind: "ORGANIZATION", OrganizationRef: "org_12345678", ManifestDigest: "manifest-fixture", ImmutableBuildSHA256: "build-fixture", ProvenanceSHA256: "provenance-fixture", PolicyRevision: 1, PolicySHA256: "policy-fixture", SpecSHA256: "spec-fixture"}
+	claim.AdmissionAttemptRef, claim.AdmissionAttempt, claim.ExpiresAt = "imgadm_12345678", 2, time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
 	for _, code := range []codes.Code{codes.PermissionDenied, codes.Unavailable, codes.Aborted, codes.InvalidArgument} {
 		t.Run(code.String(), func(t *testing.T) {
 			stub := &failureRPCStub{code: code}
@@ -43,6 +46,10 @@ func TestAdmissionFailFallbackUsesDedicatedFreshExpiryAndExactTuple(t *testing.T
 			}
 			if stub.failCalls != 1 {
 				t.Fatal("callback retry was unbounded")
+			}
+			if stub.failure.ExpectedAdmissionAttemptRef != claim.AdmissionAttemptRef || stub.failure.ExpectedAdmissionAttempt != claim.AdmissionAttempt ||
+				stub.expiry != nil && (stub.expiry.ExpectedAdmissionAttemptRef != claim.AdmissionAttemptRef || stub.expiry.ExpectedAdmissionAttempt != claim.AdmissionAttempt) {
+				t.Fatal("terminal callback lost exact admission attempt")
 			}
 		})
 	}

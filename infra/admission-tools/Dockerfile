@@ -12,7 +12,10 @@ COPY libs/go/ libs/go/
 COPY services/jobs/role-image-builder/ services/jobs/role-image-builder/
 RUN CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
       -trimpath -buildvcs=false -ldflags="-s -w" \
-      -o /out/image-tool-inventory-validator ./cmd/image-tool-inventory-validator
+      -o /out/image-tool-inventory-validator ./cmd/image-tool-inventory-validator \
+    && CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
+      -trimpath -buildvcs=false -ldflags="-s -w" \
+      -o /out/image-vulnerability-report-validator ./cmd/image-vulnerability-report-validator
 
 FROM docker.io/library/alpine:3.22.1@sha256:eafc1edb577d2e9b458664a15f23ea1c370214193226069eb22921169fc7e43f
 ARG SOURCE_SHA=unknown
@@ -35,6 +38,7 @@ COPY --from=syft --chmod=0555 /syft /usr/local/bin/syft
 COPY --from=grype --chmod=0555 /grype /usr/local/bin/grype
 COPY --from=regctl --chmod=0555 /regctl /usr/local/bin/regctl
 COPY --from=build --chmod=0555 /out/image-tool-inventory-validator /usr/local/bin/image-tool-inventory-validator
+COPY --from=build --chmod=0555 /out/image-vulnerability-report-validator /usr/local/bin/image-vulnerability-report-validator
 ADD --checksum=sha256:3c368df5c3624fe083ad646ca3be59525739dfe9caa4b6d14c7f252d155fbd98 \
     https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.9_2026-10-02T00:35:12Z_1790922713.tar.zst \
     /tmp/grype-db.tar.zst
@@ -43,7 +47,7 @@ RUN install -d -m 0755 "$GRYPE_DB_CACHE_DIR" \
     && grype db status >/dev/null \
     && rm -f /tmp/grype-db.tar.zst \
     && chown -R 10001:10001 /var/lib/grype
-RUN for tool in base64 bash cmp cosign curl grype image-tool-inventory-validator jq openssl pgrep regctl sha256sum syft wc; do \
+RUN for tool in base64 bash cmp cosign curl grype image-tool-inventory-validator image-vulnerability-report-validator jq openssl pgrep regctl sha256sum syft tr wc; do \
       command -v "$tool" >/dev/null || exit 1; \
     done
 LABEL org.opencontainers.image.title="Kodex image admission tools" \

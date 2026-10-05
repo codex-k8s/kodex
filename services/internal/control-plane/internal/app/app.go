@@ -250,6 +250,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return fmt.Errorf("construct role image transport: %w", err)
 	}
 	serverOptions := append(transportOptions,
+		grpc.MaxRecvMsgSize(8<<20),
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {

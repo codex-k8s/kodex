@@ -3,6 +3,26 @@
   "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
   "operations": [
     {
+      "operation_id": "platform.command.organization.role-images.risk.decide",
+      "source_binding_sha256": "f1322573ce992c1d7225f29d66b45a6d0c85610c37c0678adffd6836ddf27721",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-images.risk.decide",
+      "source_binding_sha256": "3ad373d9584c38c5e708d56de20f0a75bd0b3dc356d61353b515ae249470607f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.organization.role-images.vulnerability-report.get",
+      "source_binding_sha256": "5d0a177addd4eb39f80fdefd55a5e091f88b9f3c0a9e49b6b0ce8fcc00880570",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.role-images.vulnerability-report.get",
+      "source_binding_sha256": "adfadd7f5c8ddcdd8bd326c97a3ce17d14a7128bd27abbe1daed67931bd75a88",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.command.system-assistant.integration-grants.change",
       "source_binding_sha256": "6748ccf1dceaa351db260ed1d18078f4873fdc62274305b71478ed5079cb5f7d",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"

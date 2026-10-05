@@ -67,17 +67,41 @@ type BuildFailureInput struct {
 }
 
 type AdmissionRecordInput struct {
-	Principal                                                  value.Principal
-	IdempotencyKey, ArtifactRef, ClaimToken, ManifestDigest    string
-	ImmutableBuildSHA256, ProvenanceSHA256, SBOMSHA256         string
-	VulnerabilityEvidenceSHA256, PolicySHA256, Verdict         string
-	SignatureIdentity, SignatureSHA256, AdmissionReceiptSHA256 string
-	AdmissionReceiptOCIManifestDigest                          string
-	ToolInventoryJSON, ToolInventorySHA256                     string
-	ExpectedVersion, ExpectedFence, PolicyRevision             uint64
+	Principal                                                                                                       value.Principal
+	IdempotencyKey, ArtifactRef, ClaimToken, ManifestDigest                                                         string
+	ImmutableBuildSHA256, ProvenanceSHA256, SBOMSHA256                                                              string
+	VulnerabilityEvidenceSHA256, PolicySHA256, Verdict                                                              string
+	SignatureIdentity, SignatureSHA256, AdmissionReceiptSHA256                                                      string
+	AdmissionReceiptOCIManifestDigest                                                                               string
+	ToolInventoryJSON, ToolInventorySHA256                                                                          string
+	ExpectedVersion, ExpectedFence, PolicyRevision                                                                  uint64
+	ExpectedAdmissionAttemptRef, VulnerabilityReportJSON, VulnerabilityReportProjectionSHA256, RiskAcceptanceSHA256 string
+	ExpectedAdmissionAttempt                                                                                        uint32
+}
+
+type VulnerabilityReportFilter struct {
+	ScopeKind, ProjectRef, RecipeRef, ArtifactRef               string
+	PackageQuery, Severity, AdvisoryQuery, ExpectedReportSHA256 string
+	BlockingOnly                                                *bool
+	Page                                                        query.Page
+}
+
+type AdmissionRiskInput struct {
+	Principal                                                                                           value.Principal
+	Mutation                                                                                            value.Mutation
+	ScopeKind, ProjectRef, RecipeRef, ArtifactRef                                                       string
+	ExpectedArtifactVersion, ExpectedAdmissionRevision, ExpectedRecipeVersion, ExpectedRecipeGeneration uint64
+	ExpectedBuildRef                                                                                    string
+	ExpectedBuildAttempt                                                                                uint32
+	ManifestDigest, VulnerabilityEvidenceSHA256, ProjectionSHA256                                       string
+	PriorAdmissionReceiptSHA256, PriorEvidenceManifestDigest                                            string
+	PolicyRevision                                                                                      uint64
+	PolicySHA256, Action, Reason                                                                        string
 }
 
 type AdmissionFailureInput struct {
+	ExpectedAdmissionAttemptRef                                                                   string
+	ExpectedAdmissionAttempt                                                                      uint32
 	Principal                                                                                     value.Principal
 	IdempotencyKey, ArtifactRef, ClaimToken                                                       string
 	ManifestDigest, ImmutableBuildSHA256, ProvenanceSHA256, PolicySHA256                          string
@@ -88,6 +112,8 @@ type AdmissionFailureInput struct {
 
 // Expiry не принимает worker token или назначаемую caller причину.
 type AdmissionExpiryInput struct {
+	ExpectedAdmissionAttemptRef                                                                   string
+	ExpectedAdmissionAttempt                                                                      uint32
 	Principal                                                                                     value.Principal
 	IdempotencyKey, ArtifactRef, ManifestDigest, ImmutableBuildSHA256, ProvenanceSHA256           string
 	PolicySHA256, BuildRef, SpecSHA256                                                            string
@@ -121,6 +147,8 @@ type SupplyWorkAvailability struct {
 }
 
 type Repository interface {
+	GetVulnerabilityReport(context.Context, value.Principal, VulnerabilityReportFilter) (entity.ImageVulnerabilityReport, error)
+	DecideAdmissionRisk(context.Context, AdmissionRiskInput) (entity.ImageAdmissionRiskResult, error)
 	ListOrganizationRevisions(context.Context, value.Principal, string, query.Page) ([]entity.RoleImageRecipeRevision, string, error)
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	List(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, int64, error)

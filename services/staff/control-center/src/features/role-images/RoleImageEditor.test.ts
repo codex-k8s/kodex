@@ -16,6 +16,11 @@ import {
 
 const state = vi.hoisted(() => ({ store: {} as Record<string, unknown> }));
 vi.mock("./store", () => ({ useRoleImagesStore: () => state.store }));
+vi.mock("./RoleImageVulnerabilityReportWorkspace.vue", () => ({
+  default: defineComponent({
+    render: () => h("section", { "data-report-boundary": true }),
+  }),
+}));
 vi.mock("@/features/platform/store", () => ({
   usePlatformStore: () => ({
     bootstrap: { organizationRef: "org_synthetic" },

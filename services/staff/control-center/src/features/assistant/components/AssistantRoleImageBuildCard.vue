@@ -6,6 +6,7 @@ import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
 import RoleImageAdmissionFailureNotice from "@/features/role-images/RoleImageAdmissionFailureNotice.vue";
 import RoleImageAdmissionRejectionNotice from "@/features/role-images/RoleImageAdmissionRejectionNotice.vue";
+import RoleImageVulnerabilityReportWorkspace from "@/features/role-images/RoleImageVulnerabilityReportWorkspace.vue";
 import { currentRoleImageAdmissionRejected } from "@/features/role-images/admission-rejection";
 import {
   currentRoleImageAdmissionFailure,
@@ -69,6 +70,7 @@ const problem = ref(false);
 const promotionProblem = ref(false);
 const promotionReceipt = ref<RoleImagePromotionReceipt>();
 const attemptedArtifactRef = ref<string>();
+const reportExpanded = ref(false);
 const build = computed(() => latestBuild(detail.value?.builds ?? []));
 const admissionFailure = computed(() =>
   currentRoleImageAdmissionFailure(
@@ -83,6 +85,14 @@ const candidate = computed(() => {
     artifact?.buildRef === build.value.ref &&
     artifact.recipeGeneration === build.value.recipeGeneration
     ? artifact
+    : undefined;
+});
+const reportArtifact = computed(() => {
+  const value = candidate.value ?? detail.value?.activeArtifact;
+  return value &&
+    value.buildRef === build.value?.ref &&
+    value.recipeGeneration === build.value.recipeGeneration
+    ? value
     : undefined;
 });
 const admissionRejected = computed(
@@ -138,7 +148,9 @@ const promotionState = computed(() =>
 const awaitingAdmission = computed(
   () =>
     build.value?.stage === "COMPLETED" &&
-    !candidate.value &&
+    (!candidate.value ||
+      (candidate.value.admissionVerdict !== "ACCEPTED" &&
+        candidate.value.admissionVerdict !== "REJECTED")) &&
     !admissionFailure.value &&
     !currentBuildPromoted.value,
 );
@@ -348,6 +360,39 @@ async function promoteCandidate(): Promise<void> {
         :failure="admissionFailure"
       />
       <RoleImageAdmissionRejectionNotice v-else-if="admissionRejected" />
+      <template
+        v-if="
+          resourceAddress &&
+          detail &&
+          build?.stage === 'COMPLETED' &&
+          reportArtifact &&
+          !admissionFailure
+        "
+      >
+        <div class="assistant-report-actions">
+          <button
+            type="button"
+            class="button button--secondary"
+            @click="reportExpanded = !reportExpanded"
+          >
+            {{ $t("imageVulnerabilities.summary") }}
+          </button>
+          <RouterLink
+            :to="{ ...targetRoute, hash: '#vulnerability-report' }"
+            class="button button--secondary"
+            @click="emit('navigate')"
+            >{{ $t("imageVulnerabilities.open") }}</RouterLink
+          >
+        </div>
+        <RoleImageVulnerabilityReportWorkspace
+          v-if="reportExpanded && resourceAddress && build && reportArtifact"
+          :scope="resourceAddress"
+          :recipe="detail.recipe"
+          :build="build"
+          :artifact="reportArtifact"
+          compact
+        />
+      </template>
       <template v-if="build">
         <label>
           {{
@@ -490,6 +535,15 @@ async function promoteCandidate(): Promise<void> {
 </template>
 
 <style scoped>
+.assistant-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.assistant-report-actions > * {
+  max-width: 100%;
+}
 .assistant-build-card {
   display: grid;
   gap: 8px;

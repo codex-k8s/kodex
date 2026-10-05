@@ -211,7 +211,7 @@ spec:
             matchExpressions:
               - key: kodex.dev/image-admission-phase
                 operator: In
-                values: [admit, promote]
+                values: [claim, admit, promote]
       ports: [{protocol: TCP, port: 5007}]
   egress: []
 ---
@@ -351,6 +351,26 @@ spec:
       app.kubernetes.io/name: kodex-image-admission
       app.kubernetes.io/component: image-admission
       kodex.dev/image-admission-phase: admit
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kodex-image-registry
+              kodex.dev/registry-scope: evidence
+      ports: [{protocol: TCP, port: 5007}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kodex-image-admission-claim-evidence-exact-path
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kodex-image-admission
+      app.kubernetes.io/component: image-admission
+      kodex.dev/image-admission-phase: claim
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:

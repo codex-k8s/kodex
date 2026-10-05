@@ -75,7 +75,7 @@ done
   { echo "promotion evidence repository binding is invalid" >&2; exit 78; }
 [[ $policy_revision =~ ^[1-9][0-9]*$ ]] || { echo "policy revision is invalid" >&2; exit 78; }
 [[ $policy_sha256 =~ ^[a-f0-9]{64}$ ]] || { echo "policy digest is invalid" >&2; exit 78; }
-[[ $required_tools == base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,jq,regctl,sha256sum,syft,wc ]] ||
+[[ $required_tools == base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc ]] ||
   { echo "admission tools contract is invalid" >&2; exit 78; }
 [[ $builder_identity == spiffe://kodex.local/ns/kodex-system/sa/role-image-builder ]] ||
   { echo "builder identity is invalid" >&2; exit 78; }
@@ -324,6 +324,12 @@ EOF
             - {name: IMAGE_OWNER_APPLICATION_GRANT_FILE, value: /application-grant/application-grant.jws}
             - {name: IMAGE_OWNER_STATE_FILE, value: /work/owner-claim.json}
             - {name: IMAGE_OWNER_PROMOTION_FILE, value: /work/owner-promotion.json}
+EOF
+  fi
+  if [[ $phase == admit ]]; then
+    cat <<EOF
+            - {name: IMAGE_OWNER_VULNERABILITY_REPORT_JSON_FILE, value: /work/vulnerability-report.json}
+            - {name: IMAGE_OWNER_VULNERABILITY_REPORT_PROJECTION_SHA256_FILE, value: /work/vulnerability-report.sha256}
 EOF
   fi
   cat <<EOF

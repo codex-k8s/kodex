@@ -99,10 +99,18 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 		result.Builds = append(result.Builds, publicRoleImageBuild(build))
 	}
 	if response.GetActiveArtifact() != nil {
+		if !validImageRiskHistory(response.GetActiveArtifact()) {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		artifact := publicRoleImageArtifact(response.GetActiveArtifact())
 		result.ActiveArtifact = &artifact
 	}
 	if response.GetPromotionCandidate() != nil {
+		if !validImageRiskHistory(response.GetPromotionCandidate()) {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		artifact := publicRoleImageArtifact(response.GetPromotionCandidate())
 		result.PromotionCandidate = &artifact
 	}
@@ -132,6 +140,10 @@ func validRoleImageLineage(lineage *controlplanev1.RoleImageManagedLineage) bool
 
 func validRoleImageReceipt(writer http.ResponseWriter, response *controlplanev1.ManageRoleImageRecipeResponse, projectRef, recipeRef string) bool {
 	recipe := response.GetRecipe()
+	if artifact := response.GetImageArtifact(); artifact != nil && !validImageRiskHistory(artifact) {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return false
+	}
 	if recipe == nil || recipe.GetProjectRef() != projectRef || recipeRef != "" && recipe.GetRef() != recipeRef ||
 		!validRoleImageLineage(recipe.GetManagedLineage()) || !validRoleImageSource(recipe) || !validRoleImageBuildSource(response.GetImageBuild()) || response.GetImageBuild().GetConfigurationRevisionRef() != "" && !effectiveCapabilityRef(response.GetImageBuild().GetConfigurationRevisionRef()) {
 		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
@@ -405,6 +417,18 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 		result.DeclaredTools = append(result.DeclaredTools, generated.RoleImageArtifactTool{Name: tool.GetName(), Version: tool.GetVersion()})
 	}
 	result.VerifiedToolInventory = publicImageToolInventory(input.GetVerifiedToolInventory())
+	if input.GetAdmissionAttempt() != nil {
+		value, ok := imageRiskPublic[generated.ImageAdmissionAttempt](input.GetAdmissionAttempt())
+		if ok {
+			result.AdmissionAttempt = &value
+		}
+	}
+	if input.GetRiskDecision() != nil {
+		value, ok := imageRiskPublic[generated.ImageAdmissionRiskDecision](input.GetRiskDecision())
+		if ok {
+			result.RiskDecision = &value
+		}
+	}
 	return result
 }
 

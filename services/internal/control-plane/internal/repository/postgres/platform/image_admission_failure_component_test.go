@@ -65,7 +65,7 @@ func TestImageAdmissionFailureComponent(t *testing.T) {
 	}
 	inputFor := func(claim entity.ImageAdmissionClaim, key string) roleimagerepo.AdmissionFailureInput {
 		a := claim.Artifact
-		return roleimagerepo.AdmissionFailureInput{Principal: worker, IdempotencyKey: key, ArtifactRef: a.Ref, ExpectedVersion: a.Version, ExpectedFence: claim.Fence, ExpectedAuthorityGeneration: claim.AuthorityGeneration, ClaimToken: claim.ClaimToken, ManifestDigest: a.ManifestDigest, ImmutableBuildSHA256: a.ImmutableBuildSHA256, ProvenanceSHA256: a.ProvenanceSHA256, PolicyRevision: a.PolicyRevision, PolicySHA256: a.PolicySHA256, BuildRef: a.BuildRef, ExpectedBuildAttempt: a.BuildAttempt, RecipeGeneration: a.RecipeGeneration, SpecSHA256: a.SpecSHA256, ErrorCode: "ADMISSION_WORKER_FAILED"}
+		return roleimagerepo.AdmissionFailureInput{ExpectedAdmissionAttemptRef: claim.AdmissionAttemptRef, ExpectedAdmissionAttempt: claim.AdmissionAttempt, Principal: worker, IdempotencyKey: key, ArtifactRef: a.Ref, ExpectedVersion: a.Version, ExpectedFence: claim.Fence, ExpectedAuthorityGeneration: claim.AuthorityGeneration, ClaimToken: claim.ClaimToken, ManifestDigest: a.ManifestDigest, ImmutableBuildSHA256: a.ImmutableBuildSHA256, ProvenanceSHA256: a.ProvenanceSHA256, PolicyRevision: a.PolicyRevision, PolicySHA256: a.PolicySHA256, BuildRef: a.BuildRef, ExpectedBuildAttempt: a.BuildAttempt, RecipeGeneration: a.RecipeGeneration, SpecSHA256: a.SpecSHA256, ErrorCode: "ADMISSION_WORKER_FAILED"}
 	}
 	assertFailure := func(claim entity.ImageAdmissionClaim, expected string) {
 		t.Helper()
@@ -149,7 +149,7 @@ func TestImageAdmissionFailureComponent(t *testing.T) {
 	if _, err := repository.FailAdmission(ctx, input); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("expired worker token accepted: %v", err)
 	}
-	expiry := roleimagerepo.AdmissionExpiryInput{Principal: worker, IdempotencyKey: "failure-expired-owner", ArtifactRef: input.ArtifactRef, ExpectedVersion: input.ExpectedVersion, ExpectedFence: input.ExpectedFence, ExpectedAuthorityGeneration: input.ExpectedAuthorityGeneration, ManifestDigest: input.ManifestDigest, ImmutableBuildSHA256: input.ImmutableBuildSHA256, ProvenanceSHA256: input.ProvenanceSHA256, PolicyRevision: input.PolicyRevision, PolicySHA256: input.PolicySHA256, BuildRef: input.BuildRef, ExpectedBuildAttempt: input.ExpectedBuildAttempt, RecipeGeneration: input.RecipeGeneration, SpecSHA256: input.SpecSHA256}
+	expiry := roleimagerepo.AdmissionExpiryInput{ExpectedAdmissionAttemptRef: input.ExpectedAdmissionAttemptRef, ExpectedAdmissionAttempt: input.ExpectedAdmissionAttempt, Principal: worker, IdempotencyKey: "failure-expired-owner", ArtifactRef: input.ArtifactRef, ExpectedVersion: input.ExpectedVersion, ExpectedFence: input.ExpectedFence, ExpectedAuthorityGeneration: input.ExpectedAuthorityGeneration, ManifestDigest: input.ManifestDigest, ImmutableBuildSHA256: input.ImmutableBuildSHA256, ProvenanceSHA256: input.ProvenanceSHA256, PolicyRevision: input.PolicyRevision, PolicySHA256: input.PolicySHA256, BuildRef: input.BuildRef, ExpectedBuildAttempt: input.ExpectedBuildAttempt, RecipeGeneration: input.RecipeGeneration, SpecSHA256: input.SpecSHA256}
 	failure, err = repository.ExpireAdmission(ctx, expiry)
 	if err != nil || failure.ErrorCode != "ADMISSION_LEASE_EXPIRED" {
 		t.Fatalf("owner expiry: %v", err)
@@ -178,7 +178,7 @@ func TestImageAdmissionFailureComponent(t *testing.T) {
 		t.Fatalf("terminal availability: %v", err)
 	}
 	hookInput := inputFor(claim, "hook-recovery")
-	expiry = roleimagerepo.AdmissionExpiryInput{Principal: worker, IdempotencyKey: "hook-recovery-expire", ArtifactRef: hookInput.ArtifactRef, ExpectedVersion: hookInput.ExpectedVersion, ExpectedFence: hookInput.ExpectedFence, ExpectedAuthorityGeneration: hookInput.ExpectedAuthorityGeneration, ManifestDigest: hookInput.ManifestDigest, ImmutableBuildSHA256: hookInput.ImmutableBuildSHA256, ProvenanceSHA256: hookInput.ProvenanceSHA256, PolicyRevision: hookInput.PolicyRevision, PolicySHA256: hookInput.PolicySHA256, BuildRef: hookInput.BuildRef, ExpectedBuildAttempt: hookInput.ExpectedBuildAttempt, RecipeGeneration: hookInput.RecipeGeneration, SpecSHA256: hookInput.SpecSHA256}
+	expiry = roleimagerepo.AdmissionExpiryInput{ExpectedAdmissionAttemptRef: hookInput.ExpectedAdmissionAttemptRef, ExpectedAdmissionAttempt: hookInput.ExpectedAdmissionAttempt, Principal: worker, IdempotencyKey: "hook-recovery-expire", ArtifactRef: hookInput.ArtifactRef, ExpectedVersion: hookInput.ExpectedVersion, ExpectedFence: hookInput.ExpectedFence, ExpectedAuthorityGeneration: hookInput.ExpectedAuthorityGeneration, ManifestDigest: hookInput.ManifestDigest, ImmutableBuildSHA256: hookInput.ImmutableBuildSHA256, ProvenanceSHA256: hookInput.ProvenanceSHA256, PolicyRevision: hookInput.PolicyRevision, PolicySHA256: hookInput.PolicySHA256, BuildRef: hookInput.BuildRef, ExpectedBuildAttempt: hookInput.ExpectedBuildAttempt, RecipeGeneration: hookInput.RecipeGeneration, SpecSHA256: hookInput.SpecSHA256}
 	if receipt, err := repository.ExpireAdmission(ctx, expiry); err != nil || receipt.ErrorCode != "ADMISSION_LEASE_EXPIRED" {
 		t.Fatalf("hook expiry exact receipt recovery: %v", err)
 	}
@@ -216,8 +216,9 @@ func TestImageAdmissionFailureComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	input = inputFor(claim, "failure-race-result")
-	record := roleimagerepo.AdmissionRecordInput{Principal: worker, IdempotencyKey: "failure-race-record", ArtifactRef: claim.Artifact.Ref, ExpectedVersion: claim.Artifact.Version, ExpectedFence: claim.Fence, ClaimToken: claim.ClaimToken, ManifestDigest: claim.Artifact.ManifestDigest, ImmutableBuildSHA256: claim.Artifact.ImmutableBuildSHA256, ProvenanceSHA256: claim.Artifact.ProvenanceSHA256, PolicyRevision: claim.Artifact.PolicyRevision, PolicySHA256: claim.Artifact.PolicySHA256, Verdict: "ACCEPTED", SBOMSHA256: strings.Repeat("1", 64), VulnerabilityEvidenceSHA256: strings.Repeat("2", 64), SignatureIdentity: "synthetic-owner", SignatureSHA256: strings.Repeat("3", 64), AdmissionReceiptSHA256: strings.Repeat("4", 64), AdmissionReceiptOCIManifestDigest: "sha256:" + strings.Repeat("5", 64)}
+	record := roleimagerepo.AdmissionRecordInput{ExpectedAdmissionAttemptRef: claim.AdmissionAttemptRef, ExpectedAdmissionAttempt: claim.AdmissionAttempt, Principal: worker, IdempotencyKey: "failure-race-record", ArtifactRef: claim.Artifact.Ref, ExpectedVersion: claim.Artifact.Version, ExpectedFence: claim.Fence, ClaimToken: claim.ClaimToken, ManifestDigest: claim.Artifact.ManifestDigest, ImmutableBuildSHA256: claim.Artifact.ImmutableBuildSHA256, ProvenanceSHA256: claim.Artifact.ProvenanceSHA256, PolicyRevision: claim.Artifact.PolicyRevision, PolicySHA256: claim.Artifact.PolicySHA256, Verdict: "ACCEPTED", SBOMSHA256: strings.Repeat("1", 64), VulnerabilityEvidenceSHA256: strings.Repeat("2", 64), SignatureIdentity: "synthetic-owner", SignatureSHA256: strings.Repeat("3", 64), AdmissionReceiptSHA256: strings.Repeat("4", 64), AdmissionReceiptOCIManifestDigest: "sha256:" + strings.Repeat("5", 64)}
 	record.ToolInventoryJSON, record.ToolInventorySHA256 = imageInventoryFixture(claim.Artifact)
+	record.VulnerabilityReportJSON, record.VulnerabilityReportProjectionSHA256, record.VulnerabilityEvidenceSHA256 = imageRiskReportFixture(t, claim.Artifact, record.SBOMSHA256, false)
 	outcomes := make(chan error, 2)
 	go func() { _, err := repository.FailAdmission(ctx, input); outcomes <- err }()
 	go func() { _, err := repository.RecordAdmission(ctx, record); outcomes <- err }()

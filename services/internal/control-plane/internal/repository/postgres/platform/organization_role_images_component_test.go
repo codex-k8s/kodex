@@ -183,6 +183,7 @@ func TestOrganizationRoleImagesComponent(t *testing.T) {
 		t.Fatalf("claim organization admission: %v", err)
 	}
 	admissionInput := roleimagerepo.AdmissionRecordInput{
+		ExpectedAdmissionAttemptRef: admission.AdmissionAttemptRef, ExpectedAdmissionAttempt: admission.AdmissionAttempt,
 		Principal: admissionWorker, IdempotencyKey: "org-image-admit", ArtifactRef: artifact.Ref, ClaimToken: admission.ClaimToken,
 		ExpectedVersion: admission.Artifact.Version, ExpectedFence: admission.Fence, ManifestDigest: manifest,
 		ImmutableBuildSHA256: artifact.ImmutableBuildSHA256, ProvenanceSHA256: artifact.ProvenanceSHA256,
@@ -191,6 +192,7 @@ func TestOrganizationRoleImagesComponent(t *testing.T) {
 		SignatureSHA256: strings.Repeat("3", 64), AdmissionReceiptSHA256: strings.Repeat("4", 64), AdmissionReceiptOCIManifestDigest: "sha256:" + strings.Repeat("5", 64),
 	}
 	admissionInput.ToolInventoryJSON, admissionInput.ToolInventorySHA256 = imageInventoryFixture(admission.Artifact)
+	admissionInput.VulnerabilityReportJSON, admissionInput.VulnerabilityReportProjectionSHA256, admissionInput.VulnerabilityEvidenceSHA256 = imageRiskReportFixture(t, admission.Artifact, admissionInput.SBOMSHA256, false)
 	admitted, err := repository.RecordAdmission(ctx, admissionInput)
 	if err != nil || admitted.ScopeKind != "ORGANIZATION" {
 		t.Fatalf("admit organization artifact: %v", err)

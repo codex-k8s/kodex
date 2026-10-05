@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/clients/imageowner"
 	"os"
 	"path/filepath"
@@ -10,10 +11,17 @@ import (
 )
 
 func TestReadOwnerStateIsPrivateBoundedAndClosed(t *testing.T) {
-	for _, scenario := range []string{"valid", "symlink", "public_mode", "unknown_field", "extra_json", "oversized", "fifo"} {
+	for _, scenario := range []string{"valid", "symlink", "public_mode", "unknown_field", "duplicate_field", "extra_json", "oversized", "fifo"} {
 		t.Run(scenario, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "owner-claim.json")
-			raw := `{"artifactId":"imgart_12345678","authorityGeneration":1}`
+			encoded, err := json.Marshal(imageowner.Claim{ArtifactID: "imgart_12345678", AuthorityGeneration: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw := string(encoded)
+			if scenario == "duplicate_field" {
+				raw = `{"artifactId":"imgart_12345678",` + raw[1:]
+			}
 			if scenario == "unknown_field" {
 				raw = `{"artifactId":"imgart_12345678","privateUnknown":1}`
 			}
@@ -45,7 +53,7 @@ func TestReadOwnerStateIsPrivateBoundedAndClosed(t *testing.T) {
 				path = link
 			}
 			var claim imageowner.Claim
-			err := readState(path, &claim)
+			err = readState(path, &claim)
 			if (err == nil) != (scenario == "valid") {
 				t.Fatal("owner state violated private bounded closed contract")
 			}

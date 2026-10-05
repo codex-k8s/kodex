@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.5.7
+version: 1.6.0
 updated: 2026-10-05
 ---
 
@@ -1393,6 +1393,31 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   manifest задаёт закрытый набор layers с exact title, media type, size и
   digest, а recovery повторно проверяет descriptors, owner binding и detached
   signature над восстановленными байтами.
+- Явное human admin принятие vulnerability-риска не меняет immutable исходный
+  отчёт, REJECTED receipt или общий policy threshold. Owner сначала разрешает
+  ресурс и проверяет свежую human роль, затем OCC/idempotency exact tuple:
+  tenant/scope, recipe/build generation/attempt, artifact/image, полный report,
+  projection, исходные receipt/evidence и policy digests. Обязательные reason,
+  actor/time и decision назначаются или проверяются владельцем; payload actor,
+  assistant grant и PROJECT/service identity не дают права одобрения.
+  ACCEPT_RISK атомарно сохраняет append-only decision/history/audit/event и
+  создаёт новую PENDING attempt/fence, а не меняет прежний verdict на ACCEPTED.
+  Worker восстанавливает исходные bytes и получает новый подписанный receipt
+  вместе с подписанным decision binding; promotion проверяет всю цепочку.
+  Scanner/integrity/provenance/runtime ABI/tools/signature failures никогда
+  не override. Решение действует только для exact immutable tuple, без broad
+  temporary waiver, автоматического переноса на новую сборку или fallback.
+  Без полной typed projection разрешён только UNAVAILABLE/REBUILD_FOR_REPORT:
+  ни backfill, ни исторический reader, ни ручной DB repair не создают eligibility.
+  Чтение выдаёт все severity и grouped occurrences через bounded version-pinned
+  page; arbitrary URLs/raw paths не выходят наружу. Превышение бюджета —
+  технический отказ, не усечение отчёта. Новый evidence format/policy и migration,
+  CP/gateway/worker/signer/promotion материализуются до controller resume.
+  Immutable history не допускает UPDATE/DELETE в active/archive/trash lifecycle.
+  Retention-исключение принадлежит только existing authorized permanent Project
+  purge с exact server-owned protected purge context и полным terminal graph;
+  оно очищает только project history, никогда organization history. Caller-set
+  GUC, disable triggers и произвольный history cleanup не являются authority.
 - Размер транспортного layer не ограничивает полноту логического SBOM:
   evidence v4 хранит SBOM и vulnerability report четырьмя фиксированными
   последовательными частями. Каждая часть не больше 16MiB, сумма всех layers

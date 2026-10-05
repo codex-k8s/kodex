@@ -32,7 +32,17 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 88 and .policy.authority_abi_version == 2 and
+	.policy_revision == 89 and .policy.authority_abi_version == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.query.organization.role-images.vulnerability-report.get" or .operation_id == "platform.query.role-images.vulnerability-report.get") |
+    select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
+      .authority_proof_producer_id == "control-plane.oidc" and .authority_sources == ["OIDC_SESSION", "DOMAIN_STATE"] and
+      .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.organization.role-images.risk.decide" or .operation_id == "platform.command.role-images.risk.decide") |
+    select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
+      .authority_proof_producer_id == "control-plane.oidc" and .authority_sources == ["OIDC_SESSION", "DOMAIN_STATE"] and
+      .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 2 and
+  all(.policy.operation_bindings[] | select(.operation_id | contains("role-images.risk.decide") or contains("vulnerability-report.get"));
+    .caller_workload_id == "control-api-gateway" and .permission == .operation_id) and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.role-images.admission.fail" or .operation_id == "platform.role-images.admission.expire") |
     select(.caller_workload_id == "image-admission" and .target_workload_id == "control-plane" and .project_required == false and
       .authority_proof_producer_id == "control-plane.image-admission" and
@@ -48,7 +58,7 @@ jq -e '
   ([.policy.operation_bindings[] | select(.operation_id | contains("organization.runtime") or contains("organization.role-images")) |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and
       .authority_proof_producer_id == "control-plane.oidc" and .project_required == false and
-      .request_profile.mode == "UNARY_PROTO_SHA256" and .request_profile.attempt == "FORBIDDEN")] | length) == 8 and
+      .request_profile.mode == "UNARY_PROTO_SHA256" and .request_profile.attempt == "FORBIDDEN")] | length) == 10 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.command.organization.runtime-secret-drafts.create" or
       .operation_id == "platform.command.organization.runtime-environment-drafts.create" or
       .operation_id == "platform.organization.role-images.recipes.manage") |

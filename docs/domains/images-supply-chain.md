@@ -4,7 +4,7 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.8.1
+version: 0.9.0
 updated: 2026-10-05
 ---
 
@@ -206,6 +206,95 @@ Cancel/update/archive/delete сохраняют существующий owner t
 origin — owner command либо bounded owner Claim expiry hook; consumers —
 существующий platform event/rejoin path и owner recipe detail readback.
 
+## Безопасный отчёт и явное принятие риска
+
+Решение владельца от 2026-10-05 (#1797) допускает узкое исключение из
+vulnerability-порога только по явному решению человека `OWNER|ADMIN` организации.
+Исключение не отключает policy и не исправляет образ: оно навсегда связывает
+один неизменный образ, исходный отчёт и конкретное решение. Ассистент, signed
+PROJECT actor, worker и service identity не могут принять риск или назначить
+человеческого actor. Locator проекта в endpoint не является authority.
+
+Новый admission сохраняет полный исходный Grype report и безопасную typed
+projection `kodex.dev/image-vulnerability-report/v1`. Projection включает все
+`matches` и `ignoredMatches`, включая `UNKNOWN`, `LOW`, `MEDIUM` и сведения без
+исправления. Ignored findings явно помечаются, считаются отдельно и не становятся
+blocking; остальные blocking/no-fix признаки вычисляются неизменной baseline
+policy. Неизвестный severity не скрывается и не превращается в доказательство
+безопасности. LOW/MEDIUM сами по себе baseline не блокируют.
+
+Одна строка группирует только точное совпадение packageName, installedVersion,
+ecosystem, advisoryId, severity, fixState, отсортированных fixedVersions,
+blocking и ignored. `occurrences` сохраняет число исходных совпадений;
+`matchCount` и каждый severity count равны сумме occurrences, а
+`uniqueAdvisoryCount` считает уникальные advisoryId. Ref строки — детерминированный
+SHA256 канонического tuple. Ограничения — 10 000 сгруппированных строк и 4MiB
+projection; превышение или неполнота являются техническим отказом, не усечённым
+`READY`. Исходный report сохраняет прежний evidence budget.
+
+Публичный read path выдаёт только package/version/ecosystem, severity, advisory,
+fixState/fixedVersions, occurrences и вычисленные сервером признаки. Для CVE,
+GHSA и GO сервер формирует соответственно exact ссылки
+`https://nvd.nist.gov/vuln/detail/{CVE}`,
+`https://github.com/advisories/{GHSA}` и `https://pkg.go.dev/vuln/{GO}`.
+OTHER отображается без ссылки. Raw report, locations, произвольные URL,
+credentials и registry addresses не выдаются. Страница ограничена 100 строками;
+cursor связывает exact report/projection digests и все фильтры. Projection
+связывает scope/organization/project, recipe version/generation, build
+version/attempt, artifact/image digest, SBOM/report и policy revision/digest.
+Receipt/admission revision и текущая artifact version добавляются owner read
+path отдельно, чтобы исключить циклическое хеширование projection и receipt.
+
+| Сценарий / endpoint | Actor и owner-команда | Version, effect и consumer |
+| --- | --- | --- |
+| GET `organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report` либо PROJECT path | Fresh USER, активный OWNER/ADMIN организации; gateway → `GetOrganizationImageVulnerabilityReport` либо `GetImageVulnerabilityReport` → CP owner eligibility | Exact current recipe/latest build/artifact; безопасная report page, без изменения состояния и события |
+| POST тех же artifact paths `/risk-decision`, `REJECT_RISK` | Только тот же human admin; gateway → `DecideOrganizationImageAdmissionRisk` либо `DecideImageAdmissionRisk` | Owner разрешает ресурс до OCC/replay; обязательные reason, If-Match, idempotency и все report/evidence/image/policy pins; immutable decision/audit/receipt и один recipe event атомарно, исходный REJECTED сохраняется |
+| POST `/risk-decision`, `ACCEPT_RISK` | Та же specialized owner-команда; actor/time/decisionRef назначает CP | Append-only decision и прежняя admission history, новая PENDING attempt/fence; revoke старого claim, audit/idempotency/один recipe event атомарно; текущая projection не является ACCEPTED |
+| PENDING → CLAIMED → ACCEPTED либо FAILED | Existing image-admission workload, fresh grant и exact attempt/fence/expiry; Claim → Record/Fail/Expire | Worker восстанавливает exact исходные report/SBOM/evidence, проверяет image/provenance/runtime ABI/tools/policy; подписывает исходные bytes, decision binding и новый receipt; CP атомарно завершает новую attempt, consumers — promotion и owner rejoin |
+| Update/archive/новая build | Existing recipe owner graph | Exact old decision не разрешает иной tuple; stale claim закрыто отклоняется, старые report/decision/receipt остаются историей |
+
+Операции registry — `platform.query.organization.role-images.vulnerability-report.get`,
+`platform.query.role-images.vulnerability-report.get`,
+`platform.command.organization.role-images.risk.decide` и
+`platform.command.role-images.risk.decide`. Они разрешены только OIDC gateway
+с `USER_CREDENTIAL_REQUIRED`, без PROJECT authority. CP дополнительно проверяет
+свежую роль OWNER/ADMIN и `organization.manage`; transport permission не
+заменяет owner rule. `If-Match` совпадает с expected artifact version в body;
+OCC включает также recipe/build/admission/report/projection/evidence/policy pins.
+Reason обязателен, ограничен 2048 UTF-8 bytes и не содержит control characters.
+
+`kodex.dev/image-risk-acceptance/v1` связывает immutable decisionRef/version,
+human actor/time/reason, scope, exact recipe/build/image/report/projection/policy
+и исходные admission revision/receipt/evidence manifest digests. Это не waiver
+на проект, период или будущие сборки. Attempt/fence не входят в постоянное решение:
+их назначает новый owner claim. Автоматическое пересканирование с другим отчётом
+не может подменить утверждённый report. Scanner/database/parser/integrity,
+provenance, runtime ABI/tools и signature errors никогда не override.
+
+Прежний immutable REJECTED receipt и его evidence не изменяются и не объявляются
+задним числом подписанными. Новый admission имеет отдельный attempt-qualified
+evidence tag/manifest, подписанный decision binding и новый подписанный receipt;
+signer остаётся отдельной identity, private key не передаётся admission worker.
+Promotion проверяет все исходные bytes и новые signatures/tuple, а окружение
+получает только новый exact promoted digest после штатного publish/pin.
+FAILED/expired attempt не переиспользует прежний token; если отдельная owner
+retry-команда не материализована, доступен только штатный rebuild, без queue reset.
+
+Forward-only cutover не выполняет backfill старых reports и не читает evidence
+registry от имени CP. Artifact без новой полной projection имеет `UNAVAILABLE`
+и nextAction `REBUILD_FOR_REPORT`, без ACCEPT_RISK/REJECT_RISK. Владелец делает
+новый typed update/build после обновления migration, policy, CP/gateway,
+worker/signer/promotion и итогового render до возобновления controller.
+Legacy decoder, NULL fallback, ручное заполнение DB и изменение старых migrations
+запрещены. Проекция READY и разрешённые nextActions назначаются owner, не UI.
+
+Append-only history запрещает UPDATE/DELETE отчётов, решений и admission attempts
+в ACTIVE, ARCHIVED и trash lifecycle. Единственное retention-исключение —
+существующий authorized permanent Project purge: owner в exact защищённом purge
+context атомарно очищает только history своего project в общем terminal graph.
+Organization history не затрагивается. Caller-set GUC, отключение triggers,
+ручной SQL и частичный history-delete не заменяют этот specialized owner path.
+
 ## Сборщик и граница исполнения
 
 Kaniko не используется в промышленной конфигурации, поскольку исходный проект
@@ -379,7 +468,9 @@ contract не поддерживаются. Dual-read/dual-write и миграц
 - успешной сборки;
 - формирования SBOM;
 - прохождения versioned политики уязвимостей: полный отчёт сохраняется, а
-  `High`/`Critical` с доступной исправленной версией закрыто блокируют допуск;
+  `High`/`Critical` с доступной исправленной версией закрыто блокируют допуск,
+  кроме нового подписанного admission по точному человеческому ACCEPT_RISK,
+  описанному выше;
 - фиксации происхождения;
 - проверки подписи;
 - публикации в разрешенный OCI-реестр.

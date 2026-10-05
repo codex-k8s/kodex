@@ -27,7 +27,7 @@ func (service *Service) FailAdmission(ctx context.Context, input roleimage.Admis
 	if err := authorizeKey(principal, "platform.role-images.admission.fail", "image-admission", input.IdempotencyKey); err != nil {
 		return entity.RoleImageAdmissionFailure{}, err
 	}
-	if !validAdmissionWorkerFailure(input.ErrorCode) || !validRef(input.ArtifactRef, "imgart") ||
+	if !validRef(input.ExpectedAdmissionAttemptRef, "imgadm") || input.ExpectedAdmissionAttempt == 0 || !validAdmissionWorkerFailure(input.ErrorCode) || !validRef(input.ArtifactRef, "imgart") ||
 		!validRef(input.BuildRef, "imgbld") || input.ExpectedVersion == 0 || input.ExpectedFence == 0 ||
 		input.ExpectedAuthorityGeneration == 0 || input.ExpectedBuildAttempt == 0 || input.ExpectedBuildAttempt > 10 ||
 		input.RecipeGeneration == 0 || len(input.ClaimToken) < 32 || len(input.ClaimToken) > 512 || input.PolicyRevision == 0 ||
@@ -48,7 +48,7 @@ func (service *Service) ExpireAdmission(ctx context.Context, input roleimage.Adm
 	if err := authorizeKey(principal, "platform.role-images.admission.expire", "image-admission", input.IdempotencyKey); err != nil {
 		return entity.RoleImageAdmissionFailure{}, err
 	}
-	if !validRef(input.ArtifactRef, "imgart") || !validRef(input.BuildRef, "imgbld") || input.ExpectedVersion == 0 || input.ExpectedFence == 0 || input.ExpectedAuthorityGeneration == 0 || input.ExpectedBuildAttempt == 0 || input.ExpectedBuildAttempt > 10 || input.RecipeGeneration == 0 || input.PolicyRevision == 0 || !manifestPattern.MatchString(input.ManifestDigest) || !sha256Pattern.MatchString(input.ImmutableBuildSHA256) || !sha256Pattern.MatchString(input.ProvenanceSHA256) || !sha256Pattern.MatchString(input.PolicySHA256) || !sha256Pattern.MatchString(input.SpecSHA256) {
+	if !validRef(input.ExpectedAdmissionAttemptRef, "imgadm") || input.ExpectedAdmissionAttempt == 0 || !validRef(input.ArtifactRef, "imgart") || !validRef(input.BuildRef, "imgbld") || input.ExpectedVersion == 0 || input.ExpectedFence == 0 || input.ExpectedAuthorityGeneration == 0 || input.ExpectedBuildAttempt == 0 || input.ExpectedBuildAttempt > 10 || input.RecipeGeneration == 0 || input.PolicyRevision == 0 || !manifestPattern.MatchString(input.ManifestDigest) || !sha256Pattern.MatchString(input.ImmutableBuildSHA256) || !sha256Pattern.MatchString(input.ProvenanceSHA256) || !sha256Pattern.MatchString(input.PolicySHA256) || !sha256Pattern.MatchString(input.SpecSHA256) {
 		return entity.RoleImageAdmissionFailure{}, errs.ErrInvalid
 	}
 	return service.repository.ExpireAdmission(ctx, input)

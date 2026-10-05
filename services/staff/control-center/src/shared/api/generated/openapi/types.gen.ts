@@ -2438,6 +2438,336 @@ export type RoleImageAdmissionFailure = {
     errorCode: 'ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND' | 'ADMISSION_EVIDENCE_EXCEEDS_BOUND' | 'ADMISSION_WORKER_FAILED' | 'ADMISSION_LEASE_EXPIRED';
 };
 
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageVulnerabilitySeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NEGLIGIBLE' | 'UNKNOWN';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageVulnerabilityAdvisoryKind = 'CVE' | 'GHSA' | 'GO' | 'OTHER';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageVulnerabilityFixState = 'FIXED' | 'NOT_FIXED' | 'WONT_FIX' | 'UNKNOWN';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageVulnerabilityReportState = 'READY' | 'UNAVAILABLE' | 'FAILED';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageAdmissionRiskAction = 'ACCEPT_RISK' | 'REJECT_RISK';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageAdmissionAttemptState = 'PENDING' | 'CLAIMED' | 'ACCEPTED' | 'REJECTED' | 'FAILED' | 'CANCELLED';
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilitySeverityCount = {
+    severity: ImageVulnerabilitySeverity;
+    matchCount: number;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilityFinding = {
+    ref: string;
+    packageName: string;
+    installedVersion: string;
+    ecosystem: string;
+    advisoryId: string;
+    advisoryKind: ImageVulnerabilityAdvisoryKind;
+    /**
+     * Только server canonical NVD/GitHub/pkg.go.dev URL; OTHER пуст, raw URL запрещён.
+     */
+    advisoryUrl: string;
+    severity: ImageVulnerabilitySeverity;
+    fixState: ImageVulnerabilityFixState;
+    fixedVersions: Array<string>;
+    blocking: boolean;
+    ignored: boolean;
+    occurrences: number;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilityReport = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    /**
+     * Точный PROJECT locator; пустой только для ORGANIZATION.
+     */
+    projectRef: string;
+    recipeRef: OpaqueRef;
+    /**
+     * Exact версия рецепта для owner OCC.
+     */
+    recipeVersion: number;
+    /**
+     * Неизменяемое поколение recipe/build snapshot.
+     */
+    recipeGeneration: number;
+    buildRef: OpaqueRef;
+    /**
+     * Версия сохранённого immutable build snapshot.
+     */
+    buildVersion: number;
+    /**
+     * Точная attempt исходной сборки.
+     */
+    buildAttempt: number;
+    artifactRef: OpaqueRef;
+    /**
+     * Текущая версия artifact; If-Match относится к ней.
+     */
+    artifactVersion: number;
+    /**
+     * Exact image digest sha256:; tag не является authority.
+     */
+    manifestDigest: string;
+    /**
+     * Текущая owner revision admission projection.
+     */
+    admissionRevision: number;
+    /**
+     * Original REJECTED terminal revision, закреплённая report.
+     */
+    sourceAdmissionRevision: number;
+    /**
+     * SHA256 immutable предыдущей receipt.
+     */
+    priorAdmissionReceiptSha256: string;
+    /**
+     * Exact OCI manifest предыдущего evidence bundle.
+     */
+    priorEvidenceManifestDigest: string;
+    /**
+     * SHA256 исходных полных scanner bytes.
+     */
+    vulnerabilityEvidenceSha256: string;
+    /**
+     * SHA256 исходных полных SBOM bytes.
+     */
+    sbomSha256: string;
+    /**
+     * Version-pinned baseline policy.
+     */
+    policyRevision: number;
+    /**
+     * Exact baseline policy digest.
+     */
+    policySha256: string;
+    state: ImageVulnerabilityReportState;
+    version: number;
+    projectionSha256: string;
+    /**
+     * Назначает полный canonical validator, не caller.
+     */
+    complete: boolean;
+    matchCount: number;
+    uniqueAdvisoryCount: number;
+    blockingMatchCount: number;
+    unresolvedNoFixMatchCount: number;
+    suppressedMatchCount: number;
+    severityCounts: [
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount
+    ];
+    nextActions: Array<'ACCEPT_RISK' | 'REJECT_RISK' | 'REBUILD_FOR_REPORT'>;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilityReportPageInfo = {
+    nextPageToken: string;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilityReportResponse = {
+    report: ImageVulnerabilityReport;
+    findings: Array<ImageVulnerabilityFinding>;
+    page: ImageVulnerabilityReportPageInfo;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageAdmissionRiskDecision = {
+    ref: OpaqueRef;
+    version: number;
+    action: ImageAdmissionRiskAction;
+    reason: string;
+    decidedByActorRef: OpaqueRef;
+    decidedAt: Timestamp;
+    bindingSha256: string;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    /**
+     * Точный PROJECT locator; пустой только для ORGANIZATION.
+     */
+    projectRef: string;
+    recipeRef: OpaqueRef;
+    /**
+     * Exact версия рецепта для owner OCC.
+     */
+    recipeVersion: number;
+    /**
+     * Неизменяемое поколение recipe/build snapshot.
+     */
+    recipeGeneration: number;
+    buildRef: OpaqueRef;
+    /**
+     * Версия сохранённого immutable build snapshot.
+     */
+    buildVersion: number;
+    /**
+     * Точная attempt исходной сборки.
+     */
+    buildAttempt: number;
+    artifactRef: OpaqueRef;
+    /**
+     * Текущая версия artifact; If-Match относится к ней.
+     */
+    artifactVersion: number;
+    /**
+     * Exact image digest sha256:; tag не является authority.
+     */
+    manifestDigest: string;
+    /**
+     * Текущая owner revision admission projection.
+     */
+    admissionRevision: number;
+    /**
+     * Original REJECTED terminal revision, закреплённая report.
+     */
+    sourceAdmissionRevision: number;
+    /**
+     * SHA256 immutable предыдущей receipt.
+     */
+    priorAdmissionReceiptSha256: string;
+    /**
+     * Exact OCI manifest предыдущего evidence bundle.
+     */
+    priorEvidenceManifestDigest: string;
+    /**
+     * SHA256 исходных полных scanner bytes.
+     */
+    vulnerabilityEvidenceSha256: string;
+    /**
+     * SHA256 исходных полных SBOM bytes.
+     */
+    sbomSha256: string;
+    /**
+     * Version-pinned baseline policy.
+     */
+    policyRevision: number;
+    /**
+     * Exact baseline policy digest.
+     */
+    policySha256: string;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageAdmissionAttempt = {
+    ref: OpaqueRef;
+    version: number;
+    number: number;
+    state: ImageAdmissionAttemptState;
+    artifactRef: OpaqueRef;
+    decisionRef: string;
+    fence: number;
+    admissionReceiptSha256: string;
+    evidenceManifestDigest: string;
+};
+
+/**
+ * Все pins обязательны; actor/tenant назначает сервер. If-Match совпадает с expectedArtifactVersion, reason 1..2048 UTF8 bytes без controls.
+ */
+export type ImageAdmissionRiskDecisionInput = {
+    /**
+     * OCC artifact; не доказательство владения.
+     */
+    expectedArtifactVersion: number;
+    /**
+     * Exact current admission projection revision.
+     */
+    expectedAdmissionRevision: number;
+    /**
+     * Exact current recipe version.
+     */
+    expectedRecipeVersion: number;
+    /**
+     * Exact recipe generation исходного report.
+     */
+    expectedRecipeGeneration: number;
+    expectedBuildRef: OpaqueRef;
+    /**
+     * Exact immutable build attempt.
+     */
+    expectedBuildAttempt: number;
+    /**
+     * Exact image digest, не источник authority.
+     */
+    manifestDigest: string;
+    /**
+     * SHA256 полного исходного report, показанного администратору.
+     */
+    vulnerabilityEvidenceSha256: string;
+    /**
+     * SHA256 полной safe projection, не hash видимой страницы.
+     */
+    projectionSha256: string;
+    /**
+     * Exact original REJECTED receipt pin.
+     */
+    priorAdmissionReceiptSha256: string;
+    /**
+     * Exact original immutable evidence manifest.
+     */
+    priorEvidenceManifestDigest: string;
+    /**
+     * Текущая pinned baseline policy revision.
+     */
+    policyRevision: number;
+    /**
+     * Текущий exact baseline policy digest.
+     */
+    policySha256: string;
+    action: ImageAdmissionRiskAction;
+    /**
+     * Обязательная bounded причина для audit, не shell.
+     */
+    reason: string;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageAdmissionRiskDecisionResponse = {
+    decision: ImageAdmissionRiskDecision;
+    admissionAttempt?: ImageAdmissionAttempt;
+    artifact: RoleImageArtifact;
+};
+
 export type RoleImageArtifactTool = {
     name: string;
     version: string;
@@ -2455,13 +2785,18 @@ export type RoleImageArtifact = {
     manifestDigest: string;
     provenanceSha256: string;
     promotedReference?: string;
-    admissionVerdict: 'ACCEPTED' | 'REJECTED';
+    /**
+     * PENDING обозначает только новую risk-bound attempt до terminal Record; прежний REJECTED остаётся историей.
+     */
+    admissionVerdict: 'ACCEPTED' | 'REJECTED' | 'PENDING';
     promotionState: 'PENDING' | 'CLAIMED' | 'AUTHORIZED' | 'PROMOTED' | 'REJECTED';
     promotionRequested: boolean;
     sbomSha256?: string;
     vulnerabilityEvidenceSha256?: string;
     declaredTools: Array<RoleImageArtifactTool>;
     verifiedToolInventory: ImageToolInventory;
+    admissionAttempt?: ImageAdmissionAttempt;
+    riskDecision?: ImageAdmissionRiskDecision;
     promotedAt?: Timestamp;
     promotionReceiptSha256?: string;
 };
@@ -8975,6 +9310,146 @@ export type PromoteSystemRoleImageResponses = {
 };
 
 export type PromoteSystemRoleImageResponse = PromoteSystemRoleImageResponses[keyof PromoteSystemRoleImageResponses];
+
+export type GetOrganizationImageVulnerabilityReportData = {
+    body?: never;
+    path: {
+        recipeRef: OpaqueRef;
+        artifactRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+        packageQuery?: string;
+        severity?: ImageVulnerabilitySeverity;
+        advisoryQuery?: string;
+        blockingOnly?: boolean;
+        expectedReportSha256?: string;
+    };
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report';
+};
+
+export type GetOrganizationImageVulnerabilityReportErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetOrganizationImageVulnerabilityReportError = GetOrganizationImageVulnerabilityReportErrors[keyof GetOrganizationImageVulnerabilityReportErrors];
+
+export type GetOrganizationImageVulnerabilityReportResponses = {
+    /**
+     * Exact report page, включая все severity и suppressed occurrences
+     */
+    200: ImageVulnerabilityReportResponse;
+};
+
+export type GetOrganizationImageVulnerabilityReportResponse = GetOrganizationImageVulnerabilityReportResponses[keyof GetOrganizationImageVulnerabilityReportResponses];
+
+export type DecideOrganizationImageAdmissionRiskData = {
+    body: ImageAdmissionRiskDecisionInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        recipeRef: OpaqueRef;
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision';
+};
+
+export type DecideOrganizationImageAdmissionRiskErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DecideOrganizationImageAdmissionRiskError = DecideOrganizationImageAdmissionRiskErrors[keyof DecideOrganizationImageAdmissionRiskErrors];
+
+export type DecideOrganizationImageAdmissionRiskResponses = {
+    /**
+     * Durable immutable decision receipt и свежий owner artifact
+     */
+    200: ImageAdmissionRiskDecisionResponse;
+};
+
+export type DecideOrganizationImageAdmissionRiskResponse = DecideOrganizationImageAdmissionRiskResponses[keyof DecideOrganizationImageAdmissionRiskResponses];
+
+export type GetImageVulnerabilityReportData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+        artifactRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+        packageQuery?: string;
+        severity?: ImageVulnerabilitySeverity;
+        advisoryQuery?: string;
+        blockingOnly?: boolean;
+        expectedReportSha256?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report';
+};
+
+export type GetImageVulnerabilityReportErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetImageVulnerabilityReportError = GetImageVulnerabilityReportErrors[keyof GetImageVulnerabilityReportErrors];
+
+export type GetImageVulnerabilityReportResponses = {
+    /**
+     * Exact report page, включая все severity и suppressed occurrences
+     */
+    200: ImageVulnerabilityReportResponse;
+};
+
+export type GetImageVulnerabilityReportResponse = GetImageVulnerabilityReportResponses[keyof GetImageVulnerabilityReportResponses];
+
+export type DecideImageAdmissionRiskData = {
+    body: ImageAdmissionRiskDecisionInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision';
+};
+
+export type DecideImageAdmissionRiskErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DecideImageAdmissionRiskError = DecideImageAdmissionRiskErrors[keyof DecideImageAdmissionRiskErrors];
+
+export type DecideImageAdmissionRiskResponses = {
+    /**
+     * Durable immutable decision receipt и свежий owner artifact
+     */
+    200: ImageAdmissionRiskDecisionResponse;
+};
+
+export type DecideImageAdmissionRiskResponse = DecideImageAdmissionRiskResponses[keyof DecideImageAdmissionRiskResponses];
 
 export type ListSystemRuntimeSecretsData = {
     body?: never;
