@@ -57,6 +57,7 @@ PROVIDER_BOOTSTRAP_ENV = {
 # В trusted dev-кластере эти точные контейнеры ограничивались CPU при seed
 # полного образа. Память и production base не изменяются.
 TRUSTED_REGISTRY_CPU = {
+    ("kodex-image-registry-staging-read", "registry"): ("250m", "2"),
     ("kodex-image-registry-promotion", "registry"): ("500m", "4"),
     ("kodex-image-registry-pull", "pull-authorizer"): ("100m", "1"),
     ("kodex-image-registry-promotion", "certificate-guard"): ("50m", "500m"),

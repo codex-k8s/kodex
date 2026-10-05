@@ -1828,3 +1828,54 @@ PASS — stale managed package fixture теперь доказывает INVALID
 Isolated disposable PG target PASS7.00s; ROOT Go1.26.6 platform unit PASS.622s.
 Общий Bootstrap остаётся FAIL до исправления email configuration CONFLICT;
 финальный полный повтор ещё NOT RUN. Checkbox2–15 остаются OPEN.
+
+05.10.2026 00:15 UTC, source `c31388db1d01abdb8aa43820374c1a0be58a2d69`
+и email fixture delta поверх него:
+PASS — canonical trusted-cluster render, supply-chain apply и exact readback
+на c31388db; ConfigMap admission script SHA256 совпал с repository source.
+Первый render с ошибочным expected SHA закрыто отказан, без применения;
+успешный повтор использовал точный git HEAD. Immutable runner807 не заменён.
+PASS — штатный UI REQUEST_BUILD создал imgbld_DbnT1NLkqXxBh-px5SXqTFT4,
+generation4; build COMPLETED100. Artifact imgart_hD2NB_1ugCGsCDMwrxNDGhgu,
+manifest sha256:2e0ee4861fae20edf058e1d7c867930665130f9f20fb615170694bea3a984bf2:
+normal inventory required38/VERIFIED38, outer VERIFIED.
+FAIL — admission/promotion REJECTED. Closed diagnostic после durable owner
+record сверена по exact recipe/generation/build/artifact/digest/verdict/report
+hash с protected owner GET. SCAN_TECHNICAL_REJECTION, counts отсутствуют;
+это не результат CVE-проверки. Report SHA256
+853e2d2f179c444e525c6e73b2ca22281a16c2928428500e0688a0905e82bc6b точно
+соответствует canonical unavailable evidence scan/predecessor workload failed.
+Scan Job завершился без marker точной причины; process exit/root cause пока
+UNKNOWN. Events не доказали OOM/Deadline, обход допуска не выполнялся.
+PASS — email fixture проверяет idle revoke/regrant отдельно от pending effects;
+старый RuntimeRevision остаётся forbidden, pending regrant конфликтует без
+изменения grant/version, exact owner Cancel выполняется даже при assertion fail.
+Isolated public disposable Bootstrap на fdc20a0d + согласованные fixtures
+PASS101.95s; ROOT integrated Go1.26.6 platform unit PASS.625s.
+Полный PostgreSQL повтор на MAIN текущего tree ещё NOT RUN; isolated PASS
+не выдаётся за него. Checkbox2–15 OPEN, SYSTEM publish/full QA ещё NOT RUN.
+
+05.10.2026 00:22 UTC, интеграционный tree поверх c31388db:
+PASS — ROOT public disposable PostgreSQL Bootstrap целиком PASS98.97s,
+script EXIT0, worker-grant и runner-policy readback PASS на текущем коде.
+Запускался только изолированный loopback container, не live PostgreSQL.
+Первый запуск оснастки закрыто отказан из-за PATH без Node; повтор выполнен
+с pinned Go1.26.6 и Node24.21.0. Python invocation без PYTHONPATH/из неверного
+cwd отказана до тестов; корректный ROOT repeat дал14 PASS, не code failure.
+FAIL/root cause CONFIRMED — native38G build imgbld_HMZypiIc907emyN8YI0-XigW
+завершён; exact scan Job mc-admit-93f7743d533a45e02b787c272de85f52-scan,
+JobUID78272bf2-5209-4cbe-84c3-cd78a2bd9129 и PodUID
+fc3348a7-a060-4d72-8e72-ac4d88d745a9 связаны ownerReference и exact command.
+Readonly capture до очистки: exit137/Error, start00:16:00/finish00:18:41 UTC.
+Kernel read с фильтром только exact PodUID подтвердил memory-cgroup OOM,
+victim syft. Сырой dmesg/log/messages не выводился. Это объясняет technical
+rejection без результата CVE; ранее inventory38 PASS не доказывал scan success.
+Исправление только trusted-cluster: scan CPU1/4, memory2Gi/16Gi;
+staging-read registry CPU250m/2. Protected scan256Mi/2Gi и остальные фазы
+сохранены, production base/CEL/security policy не ослаблены. Existing single
+workspace и последовательность фаз сохраняют один scanner; тяжёлый BuildKit
+и scan при проверке не запускать параллельно как два полных host budgets.
+Isolated controller Go1.26.6 PASS11.947s, ROOT14 Python и4 metadata-watch
+unit PASS; shell syntax/format/diff-check PASS. Новый helper читает только
+exact Job/Pod identities и closed termination metadata, без logs/env/messages.
+Actual deployment/repeat без OOM ещё NOT RUN; checkbox6/7 остаются OPEN.

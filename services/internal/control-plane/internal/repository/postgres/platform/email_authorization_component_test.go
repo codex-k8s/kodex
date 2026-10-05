@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -133,41 +134,101 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	}
 	configurationJSON, _ := json.Marshal(config)
 	if err := repository.ConfigureEmail(ctx, configurationJSON); err != nil {
-		t.Fatal(err)
+		t.Fatalf("publish email producer policy configuration: %v", err)
 	}
 	mailbox = config.Mailboxes[0]
+	runtime := worker("runtime-controller", "platform.runtime.execution.claim")
+	bounded := map[string]any{"to": "recipient@example.test", "subject": "Fixture", "body_text": "Bounded test"}
+	cancelOwnedRun := func(ref, key string) bool {
+		t.Helper()
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		current, err := service.GetRun(cleanupCtx, owner, ref)
+		if err != nil {
+			t.Errorf("read email producer run for cleanup: %v", err)
+			return false
+		}
+		if current.Ref != ref || current.ProjectRef != project.Project.Ref || current.Target.Type != "AGENT" || current.Target.Ref != agent.Ref {
+			t.Error("email producer run cleanup identity mismatch")
+			return false
+		}
+		cancelled, err := service.Execute(cleanupCtx, command.Command{Kind: command.CancelRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &current.Version},
+			Payload:  command.RunCommandInput{RunRef: ref}})
+		if err != nil || cancelled.Run == nil || cancelled.Run.Ref != ref || cancelled.Run.State != "CANCELLED" {
+			t.Errorf("cancel email producer run for cleanup: %v", err)
+			return false
+		}
+		return true
+	}
+	// Положительная повторная выдача проверяется до pending WRITE effects.
+	preflight, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "email-producer-preflight-run"}, Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref,
+			Title: "Email grant snapshot", Task: "Verify exact grant generation", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}})
+	if err != nil || preflight.Run == nil {
+		t.Fatalf("launch email grant preflight: %v", err)
+	}
+	preflightCancelled := false
+	defer func() {
+		if !preflightCancelled {
+			cancelOwnedRun(preflight.Run.Ref, "email-producer-preflight-cancel")
+		}
+	}()
+	preflightClaim, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: runtime,
+		Mutation: value.Mutation{IdempotencyKey: "email-producer-preflight-execution"}, Payload: command.LeaseInput{WorkloadInstance: "email-producer-preflight-runtime", Limit: 1}})
+	if err != nil || len(preflightClaim.RuntimeItems) != 1 || stringMap(preflightClaim.RuntimeItems[0], "runRef") != preflight.Run.Ref {
+		t.Fatalf("claim exact email grant preflight: %v", err)
+	}
+	oldExecution := preflightClaim.RuntimeItems[0]
+	denyOldSend := func(key string) {
+		t.Helper()
+		_, err := service.ResolveIntegrationInvocation(ctx, runtime, map[string]string{
+			"run_ref": stringMap(oldExecution, "runRef"), "node_ref": stringMap(oldExecution, "nodeRef"), "connection_ref": connection.Ref,
+			"capability_key": "email.message.send", "idempotency_key": key}, bounded)
+		if !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("old email runtime snapshot authorized send: %v", err)
+		}
+	}
+	preflightRevoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "email-producer-preflight-revoke", ExpectedVersion: &granted.Connection.Version},
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})
+	if err != nil || preflightRevoked.Connection == nil {
+		t.Fatalf("revoke idle email preflight grant: %v", err)
+	}
+	denyOldSend("email-producer-preflight-revoked-send")
+	granted, err = service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "email-producer-preflight-regrant", ExpectedVersion: &preflightRevoked.Connection.Version},
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}})
+	if err != nil || granted.Connection == nil {
+		t.Fatalf("regrant idle email preflight authority: %v", err)
+	}
+	denyOldSend("email-producer-preflight-regranted-send")
+	if !cancelOwnedRun(preflight.Run.Ref, "email-producer-preflight-cancel") {
+		t.Fatal("email preflight cleanup failed")
+	}
+	preflightCancelled = true
 	run, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-run"}, Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref,
 			Title: "Email effect", Task: "Send approved message", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}})
 	if err != nil || run.Run == nil {
 		t.Fatalf("launch email run: %v", err)
 	}
-	defer func() {
-		current, err := service.GetRun(ctx, owner, run.Run.Ref)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
-			Mutation: value.Mutation{IdempotencyKey: "email-producer-cancel", ExpectedVersion: &current.Version},
-			Payload:  command.RunCommandInput{RunRef: current.Ref}}); err != nil {
-			t.Error(err)
-		}
-	}()
-	runtime := worker("runtime-controller", "platform.runtime.execution.claim")
+	defer func() { cancelOwnedRun(run.Run.Ref, "email-producer-cancel") }()
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: runtime,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-execution"}, Payload: command.LeaseInput{WorkloadInstance: "email-producer-runtime", Limit: 1}})
-	if err != nil || len(claimed.RuntimeItems) != 1 {
+	if err != nil || len(claimed.RuntimeItems) != 1 || stringMap(claimed.RuntimeItems[0], "runRef") != run.Run.Ref {
 		t.Fatalf("claim email runtime: %v", err)
 	}
 	execution := claimed.RuntimeItems[0]
+	if stringMap(oldExecution, "runtimeRevisionRef") == "" || stringMap(execution, "runtimeRevisionRef") == "" || stringMap(oldExecution, "runtimeRevisionRef") == stringMap(execution, "runtimeRevisionRef") {
+		t.Fatal("email main lifecycle reused old runtime revision")
+	}
 	readInvocation, err := service.ResolveIntegrationInvocation(ctx, runtime, map[string]string{
 		"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"), "connection_ref": connection.Ref,
 		"capability_key": "email.message.list", "idempotency_key": "email-producer-mailbox-read"}, map[string]any{})
 	if err != nil || stringMap(readInvocation, "state") != "WAITING_APPROVAL" || stringMap(readInvocation, "gateRef") == "" {
 		t.Fatalf("mailbox Human Gate did not protect READ operation: %v", err)
 	}
-	bounded := map[string]any{"to": "recipient@example.test", "subject": "Fixture", "body_text": "Bounded test"}
 	invocation, err := service.ResolveIntegrationInvocation(ctx, runtime, map[string]string{
 		"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"), "connection_ref": connection.Ref,
 		"capability_key": "email.message.send", "idempotency_key": "email-producer-send"}, bounded)
@@ -240,8 +301,12 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-regrant", ExpectedVersion: &revoked.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}}); err != nil {
-		t.Fatal(err)
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}}); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("pending email effect allowed grant replacement: %v", err)
+	}
+	unchanged, err := service.GetIntegrationConnection(ctx, owner, connection.Ref)
+	if err != nil || unchanged.Ref != revoked.Connection.Ref || unchanged.Version != revoked.Connection.Version || !reflect.DeepEqual(unchanged.Grants, revoked.Connection.Grants) {
+		t.Fatalf("blocked email regrant changed exact grant snapshot: %v", err)
 	}
 	if _, err := service.ResolveEmailAuthorization(ctx, email, input); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("new grant version revived old runtime: %v", err)

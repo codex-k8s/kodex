@@ -40,6 +40,7 @@ class TrustedClusterRenderTest(unittest.TestCase):
 
     def test_trusted_registry_cpu_budget_is_exact_and_preserves_other_resources(self):
         targets = {
+            ("kodex-image-registry-staging-read", "registry"): ("250m", "2"),
             ("kodex-image-registry-promotion", "registry"): ("500m", "4"),
             ("kodex-image-registry-pull", "pull-authorizer"): ("100m", "1"),
             ("kodex-image-registry-promotion", "certificate-guard"): ("50m", "500m"),
@@ -77,11 +78,22 @@ class TrustedClusterRenderTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "TRUSTED_REGISTRY_CPU_BUDGET_REQUIRED:kodex-image-registry-promotion:registry"):
                 verify(changed, PROFILE)
 
+    def test_trusted_staging_read_cpu_verifier_rejects_budget_drift(self):
+        resource = self.registry_workload("kodex-image-registry-staging-read", ["registry"])
+        result = materialize([resource], PROFILE)
+        for section in ("requests", "limits"):
+            changed = copy.deepcopy(result)
+            changed[0]["spec"]["template"]["spec"]["containers"][0]["resources"][section]["cpu"] = "100m"
+            with self.assertRaisesRegex(ValueError, "TRUSTED_REGISTRY_CPU_BUDGET_REQUIRED:kodex-image-registry-staging-read:registry"):
+                verify(changed, PROFILE)
+
     def test_registry_cpu_budget_does_not_target_foreign_or_non_registry_workloads(self):
         resources = [self.registry_workload("kodex-image-registry-promotion", ["registry"], "other"),
                      self.registry_workload("kodex-image-registry-promotion", ["registry"], kind="Job"),
                      self.registry_workload("kodex-image-registry-push", ["registry", "write-authorizer"]),
-                     self.registry_workload("kodex-image-registry-staging-read", ["registry"])]
+                     self.registry_workload("kodex-image-registry-staging-read", ["registry"], "other"),
+                     self.registry_workload("kodex-image-registry-staging-read", ["registry"], kind="Job"),
+                     self.registry_workload("kodex-image-registry-staging-read", ["other"])]
         result = materialize(resources, PROFILE)
         for original, rendered in zip(resources, result):
             self.assertEqual([container["resources"] for container in original["spec"]["template"]["spec"]["containers"]],
