@@ -1879,3 +1879,32 @@ Isolated controller Go1.26.6 PASS11.947s, ROOT14 Python и4 metadata-watch
 unit PASS; shell syntax/format/diff-check PASS. Новый helper читает только
 exact Job/Pod identities и closed termination metadata, без logs/env/messages.
 Actual deployment/repeat без OOM ещё NOT RUN; checkbox6/7 остаются OPEN.
+
+05.10.2026 00:47 UTC, source f52874938cd65dadf40c8688e3dc61b912a947a5:
+PASS — commit/push/PR head readback f5287493; ROOT controller suite PASS12.085s,
+source/ReadyPod hashes control-plane/archive/frontend совпали на stable HEAD.
+Новый admission image sha256:ec10faeeb770c803cf25954902e6d6ee360eb47aa93debb448a906b9a926cdfb
+собран repo-owned narrow image-admission build и импортирован с exact digest
+readback. Canonical render, supply-chain apply/readback script EXIT0.
+FAIL — прежний readback оказался неполным: не проверял owner process policy.
+38H imgbld_yB0r3Dm3Y9_kQtR8h5AZGBiV COMPLETED, затем scan/admit быстро
+завершились без authoritative verdict. Exact CP Pod сохранял policySHA
+7fd6b1b2f68ca0f971c12843e557ea3db64be0451927598e8cef4de332a16576,
+а controller ConfigMap уже d7e568f7c00f0be6915ebc34b4649a7cbf2d19c5f0a03c41058bcbb54db20298.
+Нельзя выдавать тот script EXIT0 за полную admission coherence.
+PASS — штатный core --workload control-plane применён из того же render;
+новый Ready PodUID6a018355-e357-4fc9-ba57-ae34eedfefc5 получил d7e568f7…,
+выбранный env readback совпал с current controller policy.
+PASS — 38I imgbld_CJ3xGM6hyIxDJk0TUC9rRTwS COMPLETED. Exact scan JobUID
+936b68d2-6735-4710-914b-0c32774f033d, PodUID85ee91c7-9f3e-4933-87aa-13dfa16f35d5:
+actual CPU1/4, memory2Gi/16Gi, deadline720, parallelism/completions1.
+Metadata-only helper captured exit0/signal0/COMPLETED,
+00:39:49→00:43:03 UTC. OOM устранён в этом реальном scan, но admission owner
+record пока UNKNOWN: subsequent Jobs удалены, protected GET candidate отсутствует.
+Положительный scan не назван ACCEPTED/PROMOTED, environment publish NOT RUN.
+Исправлена общая причина SCall drift: новый policy/catalog → desired CP rollout
+→ exact Deployment/ReplicaSet/ReadyPod → только два policy-поля работающего Go
+child → controller resume. Error до gate сохраняет controller paused даже в
+EXIT cleanup. Annotation revision+digest гарантируют rollover при same HEAD.
+ROOT18 Python PASS, shell syntax/diff-check PASS. Новый SCall delta live NOT RUN.
+Дополнительные sign/admit причины исследуются до перехода к следующему этапу.

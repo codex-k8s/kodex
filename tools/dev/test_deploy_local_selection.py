@@ -119,6 +119,154 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertLess(registries, seed)
         self.assertLess(seed, full_readiness)
 
+    def test_supply_chain_refreshes_policy_owner_before_resuming_claims(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        pause = stage.index('pause_local_image_admission_controller')
+        closed = stage.index('image_admission_policy_owner_coherent=false')
+        policy = stage.index('apply_render image-admission-owner-intent')
+        catalog = stage.index('apply_render role-environment-catalog')
+        owner = stage.index('apply_render image-admission-control-plane-owner')
+        ready = stage.index('rollout status deployment/control-plane')
+        readback = stage.index('readback_local_control_plane_image_policy')
+        coherent = stage.index('image_admission_policy_owner_coherent=true')
+        resume = stage.index('apply_render image-supply-chain-controllers')
+        self.assertEqual(sorted((pause, closed, policy, catalog, owner, ready, readback, coherent, resume)),
+                         [pause, closed, policy, catalog, owner, ready, readback, coherent, resume])
+        cleanup = re.search(r'(?ms)^cleanup_on_exit\(\) \{.*?^\}', source).group(0)
+        self.assertIn('"$image_admission_policy_owner_coherent" == true', cleanup)
+        renderer = SCRIPT.with_name('render-local.sh').read_text()
+        self.assertIn('kodex.dev/image-policy-revision', renderer)
+        match = re.search(r"apply_render image-admission-control-plane-owner\s+'([^']*)'", stage)
+        accepted = {'kind': 'Deployment', 'metadata': {'namespace': 'kodex-system', 'name': 'control-plane'}}
+        rejected = [dict(accepted, kind='ConfigMap'),
+                    {'kind': 'Deployment', 'metadata': {'namespace': 'other', 'name': 'control-plane'}},
+                    {'kind': 'Deployment', 'metadata': {'namespace': 'kodex-system', 'name': 'control-plane-other'}}]
+        result = subprocess.run(['jq', '-c', match.group(1)], text=True, capture_output=True,
+                                input='\n'.join(json.dumps(item) for item in [accepted] + rejected), timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], [accepted])
+
+    def test_policy_owner_readback_requires_live_owner_pod_and_actual_process(self):
+        source = SCRIPT.read_text()
+        function = re.search(r'(?ms)^readback_local_control_plane_image_policy\(\) \{.*?^\}', source).group(0)
+        policy = {'policySHA256': 'a' * 64, 'policyRevision': '4'}
+        annotations = {'kodex.dev/runtime-admission-policy-sha256': policy['policySHA256'],
+                       'kodex.dev/image-policy-revision': policy['policyRevision']}
+        labels = {'app.kubernetes.io/part-of': 'kodex', 'app.kubernetes.io/name': 'control-plane',
+                  'kodex.dev/local-profile': 'hot-reload', 'kodex.dev/security-profile': 'trusted-cluster'}
+        deployment = {'metadata': {'namespace': 'kodex-system', 'name': 'control-plane',
+                                  'uid': 'deployment-uid', 'generation': 2, 'labels': labels},
+                      'spec': {'replicas': 1, 'template': {'metadata': {'annotations': annotations},
+                              'spec': {'containers': [{'name': 'control-plane', 'env': [
+                                  {'name': 'CONTROL_PLANE_IMAGE_POLICY_REVISION', 'value': '4'},
+                                  {'name': 'CONTROL_PLANE_IMAGE_POLICY_SHA256', 'value': 'a' * 64}]}]}}},
+                      'status': {'observedGeneration': 2, 'updatedReplicas': 1, 'availableReplicas': 1, 'replicas': 1}}
+        replica_set = {'metadata': {'namespace': 'kodex-system', 'uid': 'replica-set-uid',
+                                   'ownerReferences': [{'kind': 'Deployment', 'controller': True, 'uid': 'deployment-uid'}]},
+                       'spec': {'replicas': 1, 'template': {'metadata': {'annotations': annotations}}}}
+        pod = {'metadata': {'namespace': 'kodex-system', 'name': 'control-plane-new', 'labels': labels,
+                            'annotations': annotations,
+                            'ownerReferences': [{'kind': 'ReplicaSet', 'controller': True, 'uid': 'replica-set-uid'}]},
+               'status': {'phase': 'Running', 'conditions': [{'type': 'Ready', 'status': 'True'}],
+                          'containerStatuses': [{'name': 'control-plane', 'ready': True}]}}
+        command = function + '''
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+yq() { printf '%s\\n' "$EXPECTED_POLICY"; }
+kubectl() {
+  case "$*" in
+    *get\\ configmap/*) printf '{"data":%s}\\n' "$CURRENT_POLICY" ;;
+    *get\\ deployment/*) printf '%s\\n' "$DEPLOYMENT" ;;
+    *get\\ replicasets*) printf '{"items":[%s]}\\n' "$REPLICA_SET" ;;
+    *get\\ pods*) printf '{"items":%s}\\n' "$PODS" ;;
+    *exec*) sh -n -c "${!#}" || exit 98; printf '%s\\n' "$PROCESS_POLICY" ;;
+    *) exit 99 ;;
+  esac
+}
+namespace=kodex-system
+render=synthetic
+readback_local_control_plane_image_policy
+'''
+        base = dict(os.environ, EXPECTED_POLICY=json.dumps(policy), CURRENT_POLICY=json.dumps(policy),
+                    DEPLOYMENT=json.dumps(deployment), REPLICA_SET=json.dumps(replica_set), PODS=json.dumps([pod]),
+                    PROCESS_POLICY='4\n' + 'a' * 64)
+        cases = [(base, None), (dict(base, PROCESS_POLICY='4\n' + 'b' * 64), 'process readback mismatch'),
+                 (dict(base, PROCESS_POLICY='3\n' + 'a' * 64), 'process readback mismatch'),
+                 (dict(base, PODS='[]'), 'Ready Pod readback mismatch'),
+                 (dict(base, PODS=json.dumps([pod, pod])), 'Ready Pod readback mismatch'),
+                 (dict(base, CURRENT_POLICY=json.dumps(dict(policy, policySHA256='b' * 64))), 'live image policy readback mismatch')]
+        stale_deployment = json.loads(json.dumps(deployment))
+        stale_deployment['spec']['template']['spec']['containers'][0]['env'][1]['value'] = 'b' * 64
+        cases.append((dict(base, DEPLOYMENT=json.dumps(stale_deployment)), 'Deployment readback mismatch'))
+        not_ready = json.loads(json.dumps(deployment))
+        not_ready['status']['observedGeneration'] = 1
+        cases.append((dict(base, DEPLOYMENT=json.dumps(not_ready)), 'Deployment readback mismatch'))
+        foreign_replica_set = json.loads(json.dumps(replica_set))
+        foreign_replica_set['metadata']['ownerReferences'][0]['uid'] = 'foreign-deployment'
+        cases.append((dict(base, REPLICA_SET=json.dumps(foreign_replica_set)), 'ReplicaSet readback mismatch'))
+        foreign_pod = json.loads(json.dumps(pod))
+        foreign_pod['metadata']['ownerReferences'][0]['uid'] = 'foreign-replica-set'
+        cases.append((dict(base, PODS=json.dumps([foreign_pod])), 'Ready Pod readback mismatch'))
+        for env, error in cases:
+            with self.subTest(error=error):
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                                        env=env, text=True, capture_output=True, timeout=5)
+                if error is None:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(error, result.stderr)
+        self.assertIn('/go/build-cache/runtime-control-plane/build/main', function)
+        self.assertNotIn('-- printenv', function)
+
+    def test_failed_policy_owner_gate_cannot_resume_controller_in_exit_cleanup(self):
+        source = SCRIPT.read_text()
+        cleanup = re.search(r'(?ms)^cleanup_on_exit\(\) \{.*?^\}', source).group(0)
+        command = cleanup + '''
+kubectl() { printf 'resumed\\n'; }
+rm() { return 0; }
+namespace=kodex-system
+temporary_directory=/synthetic-only
+image_admission_controller_restore_replicas=1
+image_admission_policy_owner_coherent=$COHERENT
+cleanup_on_exit
+'''
+        # Scale stdout подавлен самим cleanup; записываем только synthetic marker.
+        command = command.replace("kubectl() { printf 'resumed\\n'; }",
+                                  "kubectl() { printf 'resumed\\n' >&3; }")
+        for coherent, expected in [('true', 'resumed\n'), ('false', '')]:
+            result = subprocess.run(['bash', '-euo', 'pipefail', '-c', 'exec 3>&1\n' + command],
+                                    env=dict(os.environ, COHERENT=coherent), text=True, capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
+
+    def test_policy_revision_rollout_annotation_is_exact_without_source_changes(self):
+        renderer = SCRIPT.with_name('render-local.sh').read_text()
+        scoped = renderer[renderer.index('# Policy задаёт authority процесса CP'):]
+        expression = re.search(r"yq -i '([^']*)'", scoped).group(1)
+        self.assertLess(scoped.index('if [[ "$security_profile" == trusted-cluster ]]'), scoped.index('yq -i'))
+        for revision, digest in [('4', 'a' * 64), ('5', 'b' * 64)]:
+            resources = [{'kind': kind, 'metadata': {'name': name, 'namespace': namespace},
+                          'spec': {'template': {'metadata': {'annotations': {
+                              'kodex.dev/source-revision': 'same-source-sha',
+                              'kodex.dev/runtime-admission-policy-sha256': digest}}}}}
+                         for kind, name, namespace in [('Deployment', 'control-plane', 'kodex-system'),
+                                                       ('Deployment', 'control-plane', 'other'),
+                                                       ('Deployment', 'other', 'kodex-system'),
+                                                       ('StatefulSet', 'control-plane', 'kodex-system')]]
+            result = subprocess.run(['yq', '-N', '-o=json', '-I=0', expression, '-'],
+                                    input='\n---\n'.join(json.dumps(item) for item in resources),
+                                    env=dict(os.environ, ADMISSION_POLICY_JSON=json.dumps({
+                                        'policyRevision': revision, 'policySHA256': digest})),
+                                    text=True, capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            rendered = [json.loads(line) for line in result.stdout.splitlines()]
+            self.assertEqual(rendered[0]['spec']['template']['metadata']['annotations'], {
+                'kodex.dev/source-revision': 'same-source-sha',
+                'kodex.dev/runtime-admission-policy-sha256': digest,
+                'kodex.dev/image-policy-revision': revision})
+            self.assertEqual(rendered[1:], resources[1:])
+
     def test_supply_chain_materialization_admission_is_exact_and_precedes_controller(self):
         source = SCRIPT.read_text()
         stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]

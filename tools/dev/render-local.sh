@@ -613,6 +613,19 @@ ADMISSION_POLICY_JSON="$admission_policy_json" yq -i '
   )
 ' "$render"
 
+# Policy задаёт authority процесса CP при старте, а не только mounted данные.
+# Даже при том же source SHA изменение policy обязано заменить его Pod.
+if [[ "$security_profile" == trusted-cluster ]]; then
+# shellcheck disable=SC2016
+ADMISSION_POLICY_JSON="$admission_policy_json" yq -i '
+  (strenv(ADMISSION_POLICY_JSON) | from_json) as $policy |
+  with(select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "control-plane");
+    .spec.template.metadata.annotations."kodex.dev/image-policy-revision" = $policy.policyRevision
+  )
+' "$render"
+fi
+
 BACKUP_CONTROLLER_IMAGE="$backup_controller_image" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "backup-controller");
     (.spec.template.spec.containers[] | select(.name == "backup-controller")) |= (

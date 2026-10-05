@@ -69,6 +69,7 @@ script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 object_storage_secret_name=""
 temporary_directory=$(mktemp -d)
 image_admission_controller_restore_replicas=""
+image_admission_policy_owner_coherent=true
 # Подстановки exact локальных имён выполняются только на приватной копии:
 # исходный проверенный render может одновременно читать другой readback.
 render_input=$render
@@ -77,7 +78,8 @@ cp -- "$render_input" "$render"
 chmod 0600 "$render"
 
 cleanup_on_exit() {
-  if [[ -n "$image_admission_controller_restore_replicas" ]]; then
+  if [[ -n "$image_admission_controller_restore_replicas" &&
+    "$image_admission_policy_owner_coherent" == true ]]; then
     kubectl -n "$namespace" scale deployment/image-admission-controller \
       --replicas="$image_admission_controller_restore_replicas" >/dev/null 2>&1 || true
   fi
@@ -1271,12 +1273,106 @@ readback_local_image_admission_policies() {
   done
 }
 
+readback_local_control_plane_image_policy() {
+  local expected_policy current_policy deployment replica_sets replica_set_uid pods pod_name actual_process expected_process
+  expected_policy=$(yq -o=json -I=0 '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-image-admission-policy") |
+    .data | {"policySHA256": .policySHA256, "policyRevision": .policyRevision}
+  ' "$render" | jq -sc 'if length == 1 then .[0] else null end')
+  jq -e '
+    (.policySHA256 | type == "string" and test("^[a-f0-9]{64}$")) and
+    .policySHA256 != ("0" * 64) and
+    (.policyRevision | type == "string" and test("^[1-9][0-9]*$"))
+  ' <<<"$expected_policy" >/dev/null || fail 'control-plane image policy projection is invalid'
+  current_policy=$(kubectl -n "$namespace" get configmap/kodex-image-admission-policy -o json |
+    jq -c '{policySHA256:.data.policySHA256,policyRevision:.data.policyRevision}') ||
+    fail 'control-plane live image policy is unavailable'
+  [[ "$(jq -Sc . <<<"$current_policy")" == "$(jq -Sc . <<<"$expected_policy")" ]] ||
+    fail 'control-plane live image policy readback mismatch'
+  deployment=$(kubectl -n "$namespace" get deployment/control-plane -o json) ||
+    fail 'control-plane image policy Deployment is unavailable'
+  jq -e --argjson policy "$expected_policy" --arg namespace "$namespace" '
+    .metadata.namespace == $namespace and .metadata.name == "control-plane" and
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    .status.observedGeneration == .metadata.generation and
+    .spec.replicas == 1 and .status.updatedReplicas == 1 and
+    .status.availableReplicas == 1 and (.status.replicas // 0) == 1 and
+    .spec.template.metadata.annotations["kodex.dev/runtime-admission-policy-sha256"] == $policy.policySHA256 and
+    .spec.template.metadata.annotations["kodex.dev/image-policy-revision"] == $policy.policyRevision and
+    ([.spec.template.spec.containers[] | select(.name == "control-plane") | .env[] |
+      select(.name == "CONTROL_PLANE_IMAGE_POLICY_SHA256") | .value] == [$policy.policySHA256]) and
+    ([.spec.template.spec.containers[] | select(.name == "control-plane") | .env[] |
+      select(.name == "CONTROL_PLANE_IMAGE_POLICY_REVISION") | .value] == [$policy.policyRevision])
+  ' <<<"$deployment" >/dev/null || fail 'control-plane image policy Deployment readback mismatch'
+  replica_sets=$(kubectl -n "$namespace" get replicasets -l app.kubernetes.io/name=control-plane -o json) ||
+    fail 'control-plane image policy ReplicaSet is unavailable'
+  replica_set_uid=$(jq -er --argjson deployment "$deployment" --argjson policy "$expected_policy" '
+    [.items[] | select(.metadata.namespace == $deployment.metadata.namespace and
+      .metadata.deletionTimestamp == null and
+      any(.metadata.ownerReferences[]?; .kind == "Deployment" and .controller == true and
+        .uid == $deployment.metadata.uid) and
+      .spec.template.metadata.annotations["kodex.dev/runtime-admission-policy-sha256"] == $policy.policySHA256 and
+      .spec.template.metadata.annotations["kodex.dev/image-policy-revision"] == $policy.policyRevision and
+      .spec.replicas == 1)] |
+    if length == 1 then .[0].metadata.uid else error("control-plane policy ReplicaSet is not unique") end
+  ' <<<"$replica_sets") || fail 'control-plane image policy ReplicaSet readback mismatch'
+  pods=$(kubectl -n "$namespace" get pods -l app.kubernetes.io/name=control-plane -o json) ||
+    fail 'control-plane image policy Pod is unavailable'
+  pod_name=$(jq -er --argjson policy "$expected_policy" --arg namespace "$namespace" --arg replicaSetUID "$replica_set_uid" '
+    [.items[] | select(.metadata.namespace == $namespace and
+      .metadata.deletionTimestamp == null and .status.phase == "Running" and
+      .metadata.labels["app.kubernetes.io/name"] == "control-plane" and
+      .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+      any(.metadata.ownerReferences[]?; .kind == "ReplicaSet" and .controller == true and .uid == $replicaSetUID) and
+      .metadata.annotations["kodex.dev/runtime-admission-policy-sha256"] == $policy.policySHA256 and
+      .metadata.annotations["kodex.dev/image-policy-revision"] == $policy.policyRevision and
+      any(.status.conditions[]?; .type == "Ready" and .status == "True") and
+      ([.status.containerStatuses[]? | select(.name == "control-plane" and .ready == true)] | length) == 1)] |
+    if length == 1 then .[0].metadata.name else error("control-plane policy Pod is not unique") end
+  ' <<<"$pods") || fail 'control-plane image policy Ready Pod readback mismatch'
+  # Читаем только два публичных policy-поля exact работающего Go child;
+  # env supervisor и mounted ConfigMap не доказывают конфигурацию процесса.
+  # shellcheck disable=SC2016
+  actual_process=$(kubectl -n "$namespace" exec "$pod_name" -c control-plane -- sh -eu -c '
+    count=0
+    result=""
+    for entry in /proc/[0-9]*/exe; do
+      target=$(readlink "$entry" 2>/dev/null) || continue
+      case "$target" in
+        /go/build-cache/runtime-control-plane/build/main|"/go/build-cache/runtime-control-plane/build/main (deleted)") ;;
+        *) continue ;;
+      esac
+      process=${entry%/exe}
+      started=$(awk '\''{sub(/^.*\) /, ""); print $20}'\'' "$process/stat")
+      result=$(tr "\000" "\n" < "$process/environ" | awk -F= '\''
+        $1 == "CONTROL_PLANE_IMAGE_POLICY_REVISION" {revision=$2; revisions++}
+        $1 == "CONTROL_PLANE_IMAGE_POLICY_SHA256" {digest=$2; digests++}
+        END {if (revisions != 1 || digests != 1) exit 1; print revision; print digest}
+      '\'') || exit 1
+      [ "$started" = "$(awk '\''{sub(/^.*\) /, ""); print $20}'\'' "$process/stat")" ] || exit 1
+      [ "$(readlink "$entry")" = "$target" ] || exit 1
+      count=$((count + 1))
+    done
+    [ "$count" = 1 ] || exit 1
+    printf "%s\n" "$result"
+  ') || fail 'control-plane image policy process readback failed'
+  expected_process=$(jq -r '.policyRevision,.policySHA256' <<<"$expected_policy")
+  [[ "$actual_process" == "$expected_process" ]] ||
+    fail 'control-plane image policy process readback mismatch'
+}
+
 readback_local_image_supply_chain() {
   local expected_policy actual_policy policy_resource controller workloads expected_deployments
   local expected_digest actual_digest catalog_expected_digest catalog_actual_digest
   local expected_admission_configuration actual_admission_configuration
   local target_registry promoted_pull_host resource name
   readback_local_image_admission_policies
+  if [[ "$security_profile" == trusted-cluster ]]; then
+    readback_local_control_plane_image_policy
+  fi
   expected_admission_configuration=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
       .metadata.name == "kodex-image-admission") | .data
@@ -1613,6 +1709,9 @@ PY
         ' "$render")" >/dev/null
       ensure_seed_secrets
       pause_local_image_admission_controller
+      # При ошибке новой authority policy controller остаётся остановленным;
+      # EXIT cleanup не имеет права возобновить старые claims.
+      image_admission_policy_owner_coherent=false
       cleanup_local_image_admission_runs
       # Claim/scan/sign/admit/promote читают общий скрипт и policy-фильтры:
       # новый builder не должен обслуживаться прежней схемой provenance.
@@ -1663,6 +1762,14 @@ PY
       '
       kubectl -n "$namespace" rollout status deployment/kodex-buildkit --timeout=15m >/dev/null ||
         fail 'local BuildKit is unavailable after registry seed'
+      apply_render image-admission-control-plane-owner '
+        select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+          .metadata.name == "control-plane")
+      '
+      kubectl -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
+        fail 'control-plane is unavailable after image admission policy publication'
+      readback_local_control_plane_image_policy
+      image_admission_policy_owner_coherent=true
       apply_render image-supply-chain-controllers '
         select(.kind == "Deployment" and
           (.metadata.name | test("^(image-admission-controller|role-image-builder|runtime-controller)$")))
