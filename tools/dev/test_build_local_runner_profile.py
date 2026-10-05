@@ -144,9 +144,10 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
         self.assertTrue(re.search(r'^FROM .* AS full-runtime$', dockerfile, re.MULTILINE))
         full = dockerfile.split(" AS full-runtime\n", 1)[1]
-        self.assertIn('playwright install --with-deps chromium', full)
+        self.assertNotIn('playwright install --with-deps chromium', full)
         self.assertIn('"@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"', full)
-        self.assertIn('PLAYWRIGHT_BROWSERS_PATH=/ms-playwright', full)
+        self.assertIn('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1', full)
+        self.assertIn('PLAYWRIGHT_MCP_EXECUTABLE_PATH=/usr/lib/chromium/chromium', full)
         self.assertIn('COPY --from=toolchain-build /out/kodex-protected/ /usr/local/bin/', full)
         self.assertIn('RUN ["/kodex-go-toolchain-guard", "install", "services", "/usr/local/go/bin/go"]', full)
         required = ("bash", "curl", "git", "gh", "jq", "yq", "ripgrep", "make", "just", "go", "goimports", "gofumpt",
@@ -159,6 +160,63 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         self.assertEqual(len(required), 38)
         for executable in required:
             self.assertIn(executable, dockerfile)
+
+    def test_security_refresh_and_native_browser_are_source_pinned_before_runner(self):
+        full = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text().split(" AS full-runtime\n", 1)[1]
+        self.assertIn('ARG KODEX_TOOLCHAIN_SECURITY_REVISION=20261005', full)
+        self.assertIn('LABEL kodex.dev/toolchain-security-revision=${KODEX_TOOLCHAIN_SECURITY_REVISION}', full)
+        self.assertLess(full.index('APT::Update::Error-Mode=any update'), full.index('apt-get upgrade -y --no-install-recommends'))
+        self.assertLess(full.index('apt-get upgrade -y --no-install-recommends'), full.index('apt-get install -y --no-install-recommends'))
+        self.assertNotIn('/ms-playwright', full)
+        self.assertIn("chromium.launch({executablePath:process.env.PLAYWRIGHT_MCP_EXECUTABLE_PATH,headless:true})", full)
+        self.assertIn('runuser -u kodex -- node -e', full)
+        self.assertLess(full.index('runuser -u kodex -- node -e'), full.index('COPY --from=runner-build '))
+
+    def test_actual_dockerfile_security_gate_rejects_old_or_missing_packages(self):
+        full = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text().split(" AS full-runtime\n", 1)[1]
+        start = full.index('\trequire_security_version()')
+        end = full.index('\tln -sf /usr/bin/tini', start)
+        gate = full[start:end].replace('\\\n', '\n')
+        query = self.bin / "dpkg-query"
+        query.write_text('#!/bin/sh\ncase "$3" in\nlibexpat1|libexpat1-dev) printf "%s" "${EXPAT_VERSION}" ;;\nlibaprutil1) printf "%s" "${APR_VERSION}" ;;\nchromium) printf "%s" "${CHROMIUM_VERSION}" ;;\n*) exit 1 ;;\nesac\n')
+        query.chmod(0o700)
+        versions = {"EXPAT_VERSION": "2.5.0-1+deb12u4", "APR_VERSION": "1.6.3-1+deb12u1", "CHROMIUM_VERSION": "154.0.8037.92-1~deb12u1"}
+        for overrides, expected in (({}, 0), ({"EXPAT_VERSION": "2.5.0-1+deb12u2"}, 1),
+                                    ({"APR_VERSION": "1.6.3-1"}, 1), ({"CHROMIUM_VERSION": "149.0.7827.55"}, 1),
+                                    ({"EXPAT_VERSION": ""}, 1), ({"CHROMIUM_VERSION": "invalid"}, 1)):
+            result = subprocess.run(['sh', '-ec', gate], env={**self.env, **versions, **overrides}, capture_output=True, timeout=5)
+            self.assertEqual(result.returncode == 0, expected == 0, result.stderr.decode())
+
+    def test_security_revision_changes_real_source_input_and_cache_identity(self):
+        self.assertEqual(self.run_builder('--image-profile', 'full').returncode, 0)
+        dockerfile = self.source / 'services/jobs/agent-runner/Dockerfile'
+        dockerfile.write_text(dockerfile.read_text().replace('KODEX_TOOLCHAIN_SECURITY_REVISION=20261005', 'KODEX_TOOLCHAIN_SECURITY_REVISION=20261006'))
+        for args in (('add', '.'), ('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'security fixture')):
+            subprocess.run(['git', *args], cwd=self.source, check=True, capture_output=True, env=self.env)
+        result = self.run_builder('--image-profile', 'full')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        proofs = [json.loads(path.read_text()) for path in (self.state / 'cache').glob('*.provenance.json')]
+        self.assertEqual(len(proofs), 2)
+        self.assertEqual(len({proof['sourceInputSHA256'] for proof in proofs}), 2)
+        self.assertEqual(len({proof['buildInputSHA256'] for proof in proofs}), 2)
+
+    def test_actual_browser_probe_uses_native_path_and_closes_without_raw_errors(self):
+        full = (ROOT / 'services/jobs/agent-runner/Dockerfile').read_text().split(' AS full-runtime\n', 1)[1]
+        probe = re.search(r"RUN runuser -u kodex -- node -e '([^'\n]+)'", full).group(1)
+        module = self.root / 'playwright.cjs'
+        module.write_text('''exports.chromium={launch:async(options)=>{
+if(options.executablePath!=="/usr/lib/chromium/chromium"||options.headless!==true)throw new Error("wrong native browser");
+if(process.env.PROBE_FAIL)throw new Error("SENTINEL_PRIVATE_ERROR");
+return {newPage:async()=>({setContent:async(value)=>{if(value!=="<title>kodex</title>")throw new Error("wrong content");},title:async()=>"kodex"}),close:async()=>{process.stdout.write("CLOSED");}};
+}};''')
+        probe = probe.replace('/usr/local/lib/node_modules/playwright', str(module))
+        for failed in (False, True):
+            result = subprocess.run([shutil.which('node'), '-e', probe], env={**self.env, 'PLAYWRIGHT_MCP_EXECUTABLE_PATH': '/usr/lib/chromium/chromium',
+                                    **({'PROBE_FAIL': '1'} if failed else {})}, capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 1 if failed else 0)
+            self.assertEqual(result.stdout, '' if failed else 'CLOSED')
+            self.assertEqual(result.stderr, 'System Chromium probe failed\n' if failed else '')
+            self.assertNotIn('SENTINEL_PRIVATE_ERROR', result.stderr)
 
     def test_base_yarn_absolute_links_are_normalized_in_a_separate_full_layer(self):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()

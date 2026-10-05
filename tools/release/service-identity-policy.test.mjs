@@ -7,8 +7,15 @@ const source = JSON.parse(readFileSync(new URL("../../deploy/k8s/base/internal-r
 const classification = JSON.parse(readFileSync(new URL("../../services/internal/control-plane/internal/app/service-identity-classification.json",import.meta.url),"utf8"));
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,395);
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,309);
+  assert.equal(policy.bindings.length,399);
+  for (const operation of ["platform.role-images.admission.fail","platform.role-images.admission.expire"]) {
+    const bindings = policy.bindings.filter((value) => value.operation_id === operation);
+    assert.equal(bindings.length,1);
+    assert.equal(bindings[0].caller_spiffe_id,"spiffe://kodex.local/ns/kodex-system/sa/image-admission");
+    assert.equal(bindings[0].actor_mode,"SERVICE_OWNER_RESOLVED");
+    assert.equal(bindings[0].project_required,false);
+  }
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,311);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
     "platform.organization.role-images.recipes.get",

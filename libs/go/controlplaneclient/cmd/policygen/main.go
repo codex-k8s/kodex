@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 87, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 88, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -283,6 +283,9 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	// Полный nested execution/catalog pin покрывается canonical Proto digest.
 	// Отдельные resource/version/attempt headers здесь не назначают полномочия.
 	switch operationID {
+	case "platform.role-images.admission.fail", "platform.role-images.admission.expire":
+		// Полный exact claim tuple и OCC охватывает canonical Proto digest; authority назначает owner.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.query.integration-grant-candidates.connections.list", "platform.query.integration-grant-candidates.projects.list", "platform.query.integration-grant-candidates.recipients.list", "platform.query.integration-grant-candidates.capabilities.list", "platform.query.system-assistant.integration-grant-candidates.get":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.runtime.files.search", "platform.runtime.files.metadata", "platform.runtime.files.preview", "platform.runtime.files.manifest", "platform.runtime.execution.artifact.stream", "platform.runtime.assistant.resources.search":

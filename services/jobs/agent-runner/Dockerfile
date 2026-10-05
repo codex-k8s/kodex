@@ -143,23 +143,31 @@ ARG WSCAT_VERSION=6.1.0
 ARG PLAYWRIGHT_VERSION=1.61.1
 ARG PLAYWRIGHT_MCP_VERSION=0.0.77
 ARG WAIT_ON_VERSION=9.0.10
+# Новая security-ревизия обновляет apt-слой, не затрагивая независимые Go tools.
+ARG KODEX_TOOLCHAIN_SECURITY_REVISION=20261005
+LABEL kodex.dev/toolchain-security-revision=${KODEX_TOOLCHAIN_SECURITY_REVISION}
 ARG KODEX_AGENT_RUNNER_UID=10001
 ARG KODEX_AGENT_RUNNER_GID=10001
 
 COPY --from=toolchain-build /out/kodex-protected/ /usr/local/bin/
 
 ENV PATH=/opt/kodex/bootstrap-go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
-	PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+	PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+	PLAYWRIGHT_MCP_EXECUTABLE_PATH=/usr/lib/chromium/chromium
 
 COPY --from=build /usr/local/go/ /opt/kodex/bootstrap-go/
 
 RUN set -eu; \
+	case "${KODEX_TOOLCHAIN_SECURITY_REVISION}" in ''|*[!0-9]*) exit 1 ;; esac; \
+	test "${#KODEX_TOOLCHAIN_SECURITY_REVISION}" -eq 8; \
+	export DEBIAN_FRONTEND=noninteractive; \
 	test -f /etc/apt/sources.list.d/debian.sources; \
 	sed -i 's#^URIs: http://deb.debian.org/#URIs: https://deb.debian.org/#' /etc/apt/sources.list.d/debian.sources; \
 	grep -Fqx 'URIs: https://deb.debian.org/debian' /etc/apt/sources.list.d/debian.sources; \
 	grep -Fqx 'URIs: https://deb.debian.org/debian-security' /etc/apt/sources.list.d/debian.sources; \
 	if grep -Eq '^URIs: http://' /etc/apt/sources.list.d/debian.sources; then exit 1; elif [ "$?" -gt 1 ]; then exit 1; fi; \
-	apt-get update; \
+	apt-get -o APT::Update::Error-Mode=any update; \
+	apt-get upgrade -y --no-install-recommends; \
 	apt-get install -y --no-install-recommends \
 		bash \
 		bubblewrap \
@@ -184,6 +192,15 @@ RUN set -eu; \
 		tar \
 		tini \
 		tree; \
+	require_security_version() { \
+		installed_version=$(dpkg-query -W -f='${Version}' "$1"); \
+		dpkg --validate-version "$installed_version"; \
+		dpkg --compare-versions "$installed_version" ge "$2"; \
+	}; \
+	require_security_version libexpat1 '2.5.0-1+deb12u4'; \
+	require_security_version libexpat1-dev '2.5.0-1+deb12u4'; \
+	require_security_version libaprutil1 '1.6.3-1+deb12u1'; \
+	require_security_version chromium '154.0.8037.92-1~deb12u1'; \
 	ln -sf /usr/bin/tini /sbin/tini; \
 	ln -sf /usr/bin/fdfind /usr/local/bin/fd; \
 	ln -sf /usr/bin/chromium /usr/local/bin/chromium; \
@@ -240,8 +257,8 @@ RUN set -eu; \
 		-path '*/vendor/*/bin/codex-code-mode-host' -print -quit); \
 	test -n "$code_mode_host" && test -x "$code_mode_host"; \
 	ln -sf "$code_mode_host" /usr/local/bin/codex-code-mode-host; \
-	playwright install --with-deps chromium; \
-	chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"; \
+	test -x "${PLAYWRIGHT_MCP_EXECUTABLE_PATH}"; \
+	playwright-mcp --help | grep -F -- '--executable-path' >/dev/null; \
 	node --version; \
 	npm --version; \
 	go version; \
@@ -312,6 +329,10 @@ ENV HOME=/home/kodex \
 	XDG_CONFIG_HOME=/home/kodex/.config \
 	XDG_CACHE_HOME=/home/kodex/.cache
 
+# Playwright использует штатный executablePath без второго устаревшего браузера.
+# Probe запускается с той же непривилегированной идентичностью, что и помощник.
+RUN runuser -u kodex -- node -e 'const {chromium}=require("/usr/local/lib/node_modules/playwright"); (async()=>{const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_MCP_EXECUTABLE_PATH,headless:true});try{const page=await browser.newPage();await page.setContent("<title>kodex</title>");if(await page.title()!=="kodex")throw new Error("System Chromium probe failed");}finally{await browser.close();}})().catch(()=>{console.error("System Chromium probe failed");process.exit(1);});'
+
 COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /kodex-go-toolchain-guard
 RUN ["/kodex-go-toolchain-guard", "prepare", "services"]
 COPY --from=build /usr/local/go/ /usr/local/go/
@@ -322,8 +343,7 @@ ENV GOROOT=/usr/local/go \
 	GOENV=off \
 	GOFLAGS= \
 	GOTOOLCHAIN=local \
-	PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
-	PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+	PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 RUN ["/kodex-go-toolchain-guard", "install", "services", "/usr/local/go/bin/go"]
 
 USER 10001:10001

@@ -32,6 +32,8 @@ service RoleImageService {
   rpc GetImageSupplyWorkAvailability(GetImageSupplyWorkAvailabilityRequest) returns (GetImageSupplyWorkAvailabilityResponse);
   rpc ClaimImageAdmission(ClaimImageAdmissionRequest) returns (ClaimImageAdmissionResponse);
   rpc RecordImageAdmission(RecordImageAdmissionRequest) returns (RecordImageAdmissionResponse);
+  rpc FailImageAdmission(FailImageAdmissionRequest) returns (FailImageAdmissionResponse);
+  rpc ExpireImageAdmissionClaim(ExpireImageAdmissionClaimRequest) returns (ExpireImageAdmissionClaimResponse);
   rpc ClaimImagePromotion(ClaimImagePromotionRequest) returns (ClaimImagePromotionResponse);
   rpc AuthorizeImagePromotion(AuthorizeImagePromotionRequest) returns (AuthorizeImagePromotionResponse);
   rpc CompleteImagePromotion(CompleteImagePromotionRequest) returns (CompleteImagePromotionResponse);
@@ -298,6 +300,7 @@ message GetRoleImageRecipeResponse {
   repeated ImageBuild builds = 2;
   ImageArtifact active_artifact = 3;
   ImageArtifact promotion_candidate = 4;
+  RoleImageAdmissionFailure admission_failure = 5;
 }
 
 message ManageRoleImageRecipeRequest {
@@ -338,6 +341,7 @@ message GetOrganizationRoleImageRecipeResponse {
   repeated ImageBuild builds = 2;
   ImageArtifact active_artifact = 3;
   ImageArtifact promotion_candidate = 4;
+  RoleImageAdmissionFailure admission_failure = 5;
 }
 message ManageOrganizationRoleImageRecipeRequest {
   MutationContext mutation = 1;
@@ -503,6 +507,62 @@ message RecordImageAdmissionRequest {
 }
 message RecordImageAdmissionResponse {
   ImageArtifact image_artifact = 1;
+}
+
+// Технический отказ не создаёт verdict или evidence receipt.
+message RoleImageAdmissionFailure {
+  string image_artifact_ref = 1;
+  uint64 version = 2;
+  string recipe_ref = 3;
+  uint64 recipe_generation = 4;
+  string build_ref = 5;
+  uint32 build_attempt = 6;
+  RuntimeResourceScopeKind scope_kind = 7;
+  string organization_ref = 8;
+  string project_ref = 9;
+  string state = 10;
+  string error_code = 11;
+}
+message FailImageAdmissionRequest {
+  string idempotency_key = 1;
+  string image_artifact_ref = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string claim_token = 5;
+  string manifest_digest = 6;
+  string immutable_build_sha256 = 7;
+  string provenance_sha256 = 8;
+  uint64 policy_revision = 9;
+  string policy_sha256 = 10;
+  string build_ref = 11;
+  uint32 expected_build_attempt = 12;
+  uint64 recipe_generation = 13;
+  string spec_sha256 = 14;
+  uint64 expected_authority_generation = 15;
+  string error_code = 16;
+}
+message FailImageAdmissionResponse {
+  RoleImageAdmissionFailure admission_failure = 1;
+}
+// Старый fence является OCC locator, не полномочием. Expiry назначает DBclock владельца.
+message ExpireImageAdmissionClaimRequest {
+  string idempotency_key = 1;
+  string image_artifact_ref = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string manifest_digest = 5;
+  string immutable_build_sha256 = 6;
+  string provenance_sha256 = 7;
+  uint64 policy_revision = 8;
+  string policy_sha256 = 9;
+  string build_ref = 10;
+  uint32 expected_build_attempt = 11;
+  uint64 recipe_generation = 12;
+  string spec_sha256 = 13;
+  uint64 expected_authority_generation = 14;
+}
+message ExpireImageAdmissionClaimResponse {
+  RoleImageAdmissionFailure admission_failure = 1;
 }
 message ClaimImagePromotionRequest {
   string idempotency_key = 1;

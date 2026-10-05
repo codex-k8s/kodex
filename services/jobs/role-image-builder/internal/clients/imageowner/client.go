@@ -9,6 +9,8 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	sharedclient "github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Config struct {
@@ -37,6 +39,7 @@ type Claim struct {
 	ArtifactID                  string         `json:"artifactId"`
 	Version                     uint64         `json:"version"`
 	Fence                       uint64         `json:"fence"`
+	AuthorityGeneration         uint64         `json:"authorityGeneration"`
 	ClaimToken                  string         `json:"claimToken"`
 	ExpiresAt                   time.Time      `json:"expiresAt"`
 	RecipeID                    string         `json:"recipeId"`
@@ -139,7 +142,7 @@ func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 	}
 	artifact := response.GetImageArtifact()
 	if artifact == nil || artifact.GetVersion() == 0 || response.GetClaimToken() == "" ||
-		response.GetFence() == 0 || response.GetClaimExpiresAt() == nil || len(artifact.GetPlatforms()) == 0 {
+		response.GetFence() == 0 || response.GetAuthorityGeneration() == 0 || response.GetClaimExpiresAt() == nil || len(artifact.GetPlatforms()) == 0 {
 		return Claim{}, errors.New("image admission claim is incomplete")
 	}
 	platforms := make([]string, 0, len(artifact.GetPlatforms()))
@@ -156,7 +159,8 @@ func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 	}
 	return Claim{DeclaredTools: declared, ArtifactID: artifact.GetRef(), Version: artifact.GetVersion(), Fence: response.GetFence(),
 		ScopeKind: scopeName(artifact.GetScopeKind()), OrganizationRef: artifact.GetOrganizationRef(), ProjectRef: artifact.GetProjectRef(),
-		ClaimToken: response.GetClaimToken(), ExpiresAt: response.GetClaimExpiresAt().AsTime(),
+		AuthorityGeneration: response.GetAuthorityGeneration(),
+		ClaimToken:          response.GetClaimToken(), ExpiresAt: response.GetClaimExpiresAt().AsTime(),
 		RecipeID: artifact.GetRecipeRef(), RecipeVersion: artifact.GetRecipeVersion(), RecipeGeneration: artifact.GetRecipeGeneration(),
 		SpecSHA256: artifact.GetSpecSha256(), BuildID: artifact.GetBuildRef(), BuildVersion: artifact.GetBuildVersion(),
 		BuildAttempt: artifact.GetBuildAttempt(), StagingReference: artifact.GetStagingReference(),
@@ -194,6 +198,46 @@ func (client *Client) Record(ctx context.Context, key string, claim Claim, evide
 	artifact := response.GetImageArtifact()
 	if artifact == nil || artifact.GetVersion() <= claim.Version {
 		return errors.New("recorded image admission response is incomplete")
+	}
+	return nil
+}
+
+func (client *Client) Fail(ctx context.Context, key string, claim Claim, code string) error {
+	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
+	defer cancel()
+	response, err := client.shared.RoleImages.FailImageAdmission(callCtx, &controlplanev1.FailImageAdmissionRequest{
+		IdempotencyKey: key, ImageArtifactRef: claim.ArtifactID, ExpectedVersion: claim.Version,
+		ExpectedFence: claim.Fence, ClaimToken: claim.ClaimToken, ExpectedAuthorityGeneration: claim.AuthorityGeneration,
+		ManifestDigest: claim.ManifestDigest, ImmutableBuildSha256: claim.ImmutableBuildSHA256, ProvenanceSha256: claim.ProvenanceSHA256,
+		PolicyRevision: claim.PolicyRevision, PolicySha256: claim.PolicySHA256, BuildRef: claim.BuildID,
+		ExpectedBuildAttempt: claim.BuildAttempt, RecipeGeneration: claim.RecipeGeneration, SpecSha256: claim.SpecSHA256, ErrorCode: code,
+	})
+	if status.Code(err) == codes.PermissionDenied {
+		return client.Expire(ctx, key+"-expiry", claim)
+	}
+	if err != nil {
+		return err
+	}
+	return validateFailure(response.GetAdmissionFailure(), claim, code)
+}
+
+func (client *Client) Expire(ctx context.Context, key string, claim Claim) error {
+	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
+	defer cancel()
+	response, err := client.shared.RoleImages.ExpireImageAdmissionClaim(callCtx, &controlplanev1.ExpireImageAdmissionClaimRequest{IdempotencyKey: key, ImageArtifactRef: claim.ArtifactID, ExpectedVersion: claim.Version, ExpectedFence: claim.Fence, ExpectedAuthorityGeneration: claim.AuthorityGeneration, ManifestDigest: claim.ManifestDigest, ImmutableBuildSha256: claim.ImmutableBuildSHA256, ProvenanceSha256: claim.ProvenanceSHA256, PolicyRevision: claim.PolicyRevision, PolicySha256: claim.PolicySHA256, BuildRef: claim.BuildID, ExpectedBuildAttempt: claim.BuildAttempt, RecipeGeneration: claim.RecipeGeneration, SpecSha256: claim.SpecSHA256})
+	if err != nil {
+		return err
+	}
+	return validateFailure(response.GetAdmissionFailure(), claim, "ADMISSION_LEASE_EXPIRED")
+}
+
+func validateFailure(failure *controlplanev1.RoleImageAdmissionFailure, claim Claim, code string) error {
+	if failure == nil || failure.GetImageArtifactRef() != claim.ArtifactID || failure.GetVersion() != claim.Version+1 ||
+		failure.GetRecipeRef() != claim.RecipeID || failure.GetRecipeGeneration() != claim.RecipeGeneration ||
+		failure.GetBuildRef() != claim.BuildID || failure.GetBuildAttempt() != claim.BuildAttempt ||
+		scopeName(failure.GetScopeKind()) != claim.ScopeKind || failure.GetOrganizationRef() != claim.OrganizationRef ||
+		failure.GetProjectRef() != claim.ProjectRef || failure.GetState() != "FAILED" || failure.GetErrorCode() != code {
+		return errors.New("failed image admission response is incomplete")
 	}
 	return nil
 }

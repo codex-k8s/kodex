@@ -18,6 +18,8 @@ import { useRoute, useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
+import RoleImageAdmissionFailureNotice from "./RoleImageAdmissionFailureNotice.vue";
+import { currentRoleImageAdmissionFailure } from "./admission-failure";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
 import { verifiedImageInventoryAvailable } from "@/shared/lib/verified-image-tools";
 import { recipeCopySource } from "@/features/managed-configurations/copy-source";
@@ -155,6 +157,13 @@ const currentArtifact = computed(() =>
     ? artifact.value
     : undefined,
 );
+const admissionFailure = computed(() =>
+  currentRoleImageAdmissionFailure(
+    recipe.value,
+    currentBuild.value,
+    props.recipeRef ? store.admissionFailures[props.recipeRef] : undefined,
+  ),
+);
 const revisions = computed(() =>
   props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
 );
@@ -190,6 +199,7 @@ const promotionEvidenceState = computed(() => {
   return promotionReceipt.value?.state;
 });
 const promotionVisualState = computed(() => {
+  if (admissionFailure.value) return "FAILED";
   if (
     currentArtifact.value?.admissionVerdict === "REJECTED" ||
     currentArtifact.value?.promotionState === "REJECTED"
@@ -201,6 +211,8 @@ const promotionVisualState = computed(() => {
 });
 const summaryStatus = computed<{ state: string; label?: string }>(() => {
   if (!recipe.value) return { state: "PENDING" };
+  if (admissionFailure.value)
+    return { state: "FAILED", label: t("roleImages.admissionFailed") };
   const state = roleImageState(recipe.value, currentBuild.value);
   if (state === "PROMOTED") return { state, label: t("roleImages.promoted") };
   if (state !== "COMPLETED") return { state };
@@ -402,6 +414,7 @@ async function confirmLifecycle(): Promise<void> {
 
 async function promote(): Promise<void> {
   if (
+    admissionFailure.value ||
     !recipe.value ||
     !artifact.value ||
     store.mutating ||
@@ -565,7 +578,7 @@ onBeforeUnmount(() => {
             {{ t("roleImages.restore") }}
           </button>
           <button
-            v-if="canPromoteRoleImage(recipe, artifact)"
+            v-if="!admissionFailure && canPromoteRoleImage(recipe, artifact)"
             class="button button--primary"
             type="button"
             :disabled="store.mutating || hasLocalChanges"
@@ -616,13 +629,19 @@ onBeforeUnmount(() => {
             <small v-if="artifact">{{ artifact.manifestDigest }}</small>
           </div>
           <StatusBadge
-            :state="artifact?.admissionVerdict ?? 'PENDING'"
+            :state="
+              admissionFailure
+                ? 'FAILED'
+                : (artifact?.admissionVerdict ?? 'PENDING')
+            "
             :label="
-              artifact?.admissionVerdict === 'ACCEPTED'
-                ? t('states.APPROVED')
-                : artifact?.admissionVerdict === 'REJECTED'
-                  ? t('states.REJECTED')
-                  : t('states.PENDING')
+              admissionFailure
+                ? t('roleImages.admissionFailed')
+                : artifact?.admissionVerdict === 'ACCEPTED'
+                  ? t('states.APPROVED')
+                  : artifact?.admissionVerdict === 'REJECTED'
+                    ? t('states.REJECTED')
+                    : t('states.PENDING')
             "
           />
         </article>
@@ -637,13 +656,20 @@ onBeforeUnmount(() => {
           <StatusBadge
             :state="promotionVisualState"
             :label="
-              promotionVisualState === 'REJECTED'
-                ? t('roleImages.promotionBlockedByAdmission')
-                : undefined
+              admissionFailure
+                ? t('roleImages.promotionBlockedByFailure')
+                : promotionVisualState === 'REJECTED'
+                  ? t('roleImages.promotionBlockedByAdmission')
+                  : undefined
             "
           />
         </article>
       </section>
+
+      <RoleImageAdmissionFailureNotice
+        v-if="admissionFailure"
+        :failure="admissionFailure"
+      />
 
       <div class="editor-layout">
         <main class="editor-main">

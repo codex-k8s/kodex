@@ -3,10 +3,16 @@ import { createSSRApp, defineComponent, h } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   RoleImageArtifact,
+  RoleImageAdmissionFailure,
   RoleImageBuild,
   RoleImageRecipe,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unavailableInventoryFixture } from "@/test-utils/image-inventory-fixture";
+import { imageAdmissionFailureFixture } from "@/test-utils/image-admission-failure-fixture";
+import {
+  currentRoleImageAdmissionFailure,
+  assertRoleImageAdmissionFailure,
+} from "./admission-failure";
 
 const state = vi.hoisted(() => ({ store: {} as Record<string, unknown> }));
 vi.mock("./store", () => ({ useRoleImagesStore: () => state.store }));
@@ -53,11 +59,13 @@ function artifact(
 async function summary(
   value?: RoleImageArtifact,
   full = false,
+  failure?: RoleImageAdmissionFailure,
 ): Promise<string> {
   state.store = {
     recipes: { [recipe.ref]: recipe },
     builds: { [recipe.ref]: [build] },
     artifacts: { [recipe.ref]: value },
+    admissionFailures: { [recipe.ref]: failure },
     promotionReceipts: {},
     revisions: {},
     revisionNextPageToken: {},
@@ -131,6 +139,125 @@ beforeEach(() => {
   };
 });
 describe("публичное состояние образа помощника", () => {
+  it.each([
+    "ADMISSION_WORKER_FAILED",
+    "ADMISSION_LEASE_EXPIRED",
+    "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND",
+    "ADMISSION_EVIDENCE_EXCEEDS_BOUND",
+  ] as const)(
+    "показывает авторитетный технический отказ %s отдельно от verdict",
+    async (errorCode) => {
+      for (const scopeKind of ["ORGANIZATION", "PROJECT"] as const) {
+        recipe.scopeKind = scopeKind;
+        recipe.projectRef = scopeKind === "PROJECT" ? "project_synthetic" : "";
+        build.scopeKind = scopeKind;
+        build.projectRef = recipe.projectRef;
+        for (const locale of ["ru", "en"] as const) {
+          i18n.global.locale.value = locale;
+          const failure = imageAdmissionFailureFixture(recipe, build, {
+            errorCode,
+          });
+          const html = await summary(undefined, true, failure);
+          const start = html.indexOf('class="admission-failure"');
+          expect(start).toBeGreaterThan(0);
+          const notice = html.slice(start, html.indexOf("</section>", start));
+          expect(notice).toContain('role="alert"');
+          expect(notice).toContain(
+            locale === "ru"
+              ? "Проверка допуска завершилась с ошибкой"
+              : "Image admission check failed",
+          );
+          expect(notice.slice(0, notice.indexOf("<details"))).not.toContain(
+            errorCode,
+          );
+          expect(notice).toMatch(new RegExp(`<code[^>]*>${errorCode}</code>`));
+          expect(notice).not.toMatch(/<details[^>]*\sopen(?:[\s=>])/);
+          expect(html).not.toContain('data-state="REJECTED"');
+          const lifecycle = html.slice(
+            html.indexOf('class="image-lifecycle"'),
+            html.indexOf('class="editor-layout"'),
+          );
+          expect(lifecycle).toContain(
+            locale === "ru" ? "Сборка завершена" : "Build completed",
+          );
+          expect(lifecycle).toContain('data-state="FAILED"');
+          expect(lifecycle).not.toContain(
+            locale === "ru" ? "Ожидает проверки" : "Pending review",
+          );
+        }
+      }
+    },
+  );
+  it("не переносит старый отказ на новый build, attempt, generation или owner", async () => {
+    const exact = imageAdmissionFailureFixture(recipe, build);
+    expect(currentRoleImageAdmissionFailure(recipe, build, exact)).toBe(exact);
+    for (const change of [
+      { imageArtifactRef: "" },
+      { version: 0 },
+      { version: 1.5 },
+      { recipeRef: "imgrec_foreign" },
+      { recipeGeneration: 0 },
+      { buildRef: "imgbld_old" },
+      { buildAttempt: 0 },
+      { organizationRef: "org_foreign" },
+      { projectRef: "project_foreign" },
+      { scopeKind: "PROJECT" },
+      { state: "REJECTED" },
+      { errorCode: "UNKNOWN_PRIVATE_CODE" },
+    ]) {
+      const foreign = { ...exact, ...change } as RoleImageAdmissionFailure;
+      expect(
+        currentRoleImageAdmissionFailure(recipe, build, foreign),
+      ).toBeUndefined();
+      expect(() =>
+        assertRoleImageAdmissionFailure({
+          recipe,
+          builds: [build],
+          admissionFailure: foreign,
+        }),
+      ).toThrow("failure identity");
+      expect(await summary(undefined, true, foreign)).not.toContain(
+        'class="admission-failure"',
+      );
+    }
+    expect(
+      currentRoleImageAdmissionFailure(
+        recipe,
+        { ...build, stage: "QUEUED" },
+        exact,
+      ),
+    ).toBeUndefined();
+    expect(
+      currentRoleImageAdmissionFailure(
+        { ...recipe, generation: 2 },
+        build,
+        exact,
+      ),
+    ).toBeUndefined();
+    expect(() =>
+      assertRoleImageAdmissionFailure({
+        recipe,
+        builds: [build],
+        admissionFailure: exact,
+        promotionCandidate: artifact(),
+      }),
+    ).toThrow();
+  });
+  it("старый опубликованный artifact не скрывает отказ новой сборки", async () => {
+    recipe.promotedImageReady = true;
+    const html = await summary(
+      artifact({ buildRef: "imgbld_previous", recipeGeneration: 0 }),
+      true,
+      imageAdmissionFailureFixture(recipe, build),
+    );
+    expect(html).toContain('class="admission-failure"');
+    const header = html.slice(
+      html.indexOf('class="panel image-summary"'),
+      html.indexOf("</section>"),
+    );
+    expect(header).toContain('data-state="FAILED"');
+    expect(header).not.toContain('data-state="PROMOTED"');
+  });
   it("называет ORGANIZATION образ помощником без name heuristic", async () => {
     recipe.name = "Среда аналитика";
     expect(await summary()).toContain("Образ помощника");

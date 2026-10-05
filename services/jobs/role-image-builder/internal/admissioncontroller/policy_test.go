@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -337,6 +338,10 @@ func evaluateAdmissionPolicy(policy admissionPolicyDocument, object map[string]a
 }
 
 func evaluateAdmissionPolicyWithOld(policy admissionPolicyDocument, object, oldObject map[string]any, ownerPolicy *corev1.ConfigMap) (bool, error) {
+	return evaluateAdmissionPolicyForActor(policy, object, oldObject, ownerPolicy, "system:serviceaccount:kodex-system:image-admission-controller")
+}
+
+func evaluateAdmissionPolicyForActor(policy admissionPolicyDocument, object, oldObject map[string]any, ownerPolicy *corev1.ConfigMap, actor string) (bool, error) {
 	environment, err := newPolicyEnvironment()
 	if err != nil {
 		return false, err
@@ -358,8 +363,13 @@ func evaluateAdmissionPolicyWithOld(policy admissionPolicyDocument, object, oldO
 	variableValues := map[string]any{}
 	activation := map[string]any{
 		"object": object, "oldObject": oldObject, "params": params,
-		"request": map[string]any{"userInfo": map[string]any{
-			"username": "system:serviceaccount:kodex-system:image-admission-controller",
+		"request": map[string]any{"operation": func() string {
+			if oldObject != nil {
+				return "UPDATE"
+			}
+			return "CREATE"
+		}(), "userInfo": map[string]any{
+			"username": actor,
 		}},
 		"variables": variableValues,
 	}
@@ -374,7 +384,7 @@ func evaluateAdmissionPolicyWithOld(policy admissionPolicyDocument, object, oldO
 		}
 		result, _, err := program.Eval(activation)
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("policy expression %s: %w", expression, err)
 		}
 		boolean, ok := result.(types.Bool)
 		if !ok {

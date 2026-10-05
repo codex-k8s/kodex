@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 87,
+  "policy_revision": 88,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -123,6 +123,8 @@
         ],
         "allowed_operation_ids": [
           "platform.role-images.admission.claim",
+          "platform.role-images.admission.expire",
+          "platform.role-images.admission.fail",
           "platform.role-images.admission.record"
         ],
         "server_resolved_fields": [
@@ -13205,6 +13207,76 @@
           "version": "FORBIDDEN",
           "attempt": "REQUIRED",
           "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.role-images.admission.expire",
+        "caller_workload_id": "image-admission",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/image-admission",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/image-admission",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RoleImageService/ExpireImageAdmissionClaim",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.role-images.admission.expire",
+        "authority_proof_producer_id": "control-plane.image-admission",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.role-images.admission.fail",
+        "caller_workload_id": "image-admission",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/image-admission",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/image-admission",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RoleImageService/FailImageAdmission",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.role-images.admission.fail",
+        "authority_proof_producer_id": "control-plane.image-admission",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {

@@ -40,6 +40,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { csrfToken, mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
+import { assertRoleImageAdmissionFailure } from "./admission-failure";
 import {
   roleImageRuntimeScope,
   type RoleImageResourceScope,
@@ -169,19 +170,13 @@ export async function loadRoleImageDetail(
   const owner = runtimeResourceOwnerBoundary(scope);
   const resolved = roleImageRuntimeScope(scope);
   if (resolved.kind === "ORGANIZATION")
-    return checkedRoleImageReadback(
+    return checkedRoleImageDetail(
       owner,
       (await unwrap(getSystemRoleImageRecipe({ path: { recipeRef }, signal })))
         .data,
-      (value) => [
-        value.recipe,
-        ...value.builds,
-        ...(value.activeArtifact ? [value.activeArtifact] : []),
-        ...(value.promotionCandidate ? [value.promotionCandidate] : []),
-      ],
     );
   const projectRef = resolved.projectRef;
-  return checkedRoleImageReadback(
+  return checkedRoleImageDetail(
     owner,
     (
       await unwrap(
@@ -191,13 +186,22 @@ export async function loadRoleImageDetail(
         }),
       )
     ).data,
-    (value) => [
-      value.recipe,
-      ...value.builds,
-      ...(value.activeArtifact ? [value.activeArtifact] : []),
-      ...(value.promotionCandidate ? [value.promotionCandidate] : []),
-    ],
   );
+}
+
+function checkedRoleImageDetail(
+  owner: ReturnType<typeof runtimeResourceOwnerBoundary>,
+  detail: RoleImageRecipeDetail,
+): RoleImageRecipeDetail {
+  const checked = checkedRoleImageReadback(owner, detail, (value) => [
+    value.recipe,
+    ...value.builds,
+    ...(value.activeArtifact ? [value.activeArtifact] : []),
+    ...(value.promotionCandidate ? [value.promotionCandidate] : []),
+    ...(value.admissionFailure ? [value.admissionFailure] : []),
+  ]);
+  assertRoleImageAdmissionFailure(checked);
+  return checked;
 }
 
 export async function loadRoleImageRevisionPage(

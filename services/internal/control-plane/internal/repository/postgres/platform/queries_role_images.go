@@ -9,6 +9,20 @@ var queryRoleImagesExpireBuilds string
 var queryRoleImagesClaimOutcomeReceipt string
 
 var (
+	//go:embed sql/role_images_read_failure_claim.sql
+	queryRoleImagesReadFailureClaim string
+	//go:embed sql/role_images_admission_claim_replay_live.sql
+	queryRoleImagesAdmissionClaimReplayLive string
+	//go:embed sql/role_images_expire_admission_claim.sql
+	queryRoleImagesExpireAdmissionClaim string
+	//go:embed sql/role_images_admission_current.sql
+	queryRoleImagesAdmissionCurrent string
+	//go:embed sql/role_images_fail_admission.sql
+	queryRoleImagesFailAdmission string
+	//go:embed sql/role_images_expire_admissions.sql
+	queryRoleImagesExpireAdmissions string
+	//go:embed sql/role_images_get_admission_failure.sql
+	queryRoleImagesGetAdmissionFailure string
 	//go:embed sql/role_images_list_recipes.sql
 	queryRoleImagesListRecipes string
 	//go:embed sql/role_images_get_recipe.sql

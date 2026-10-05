@@ -1673,6 +1673,16 @@
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {
+      "operation_id": "platform.role-images.admission.fail",
+      "source_binding_sha256": "f494f69ef435ccb2f24d24fb9031a833fedee815019f5b9d323679669f8b693f",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.admission.expire",
+      "source_binding_sha256": "aa565a0d62220244e9adecb5cd6929924c77cfa5cd8b920c54c260d176bbec9f",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
       "operation_id": "platform.role-images.builds.claim",
       "source_binding_sha256": "919c27a7df6fd8297a05efea2c06b439f9992475f65b25f5543498860682cf66",
       "actor_mode": "SERVICE_OWNER_RESOLVED"

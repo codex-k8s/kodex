@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
+import { lstat } from "node:fs/promises";
 import {
   assertInputEnvironment,
   assertInputRequest,
@@ -17,6 +18,8 @@ import {
   parseInputBody,
   parseInputCLI,
   parseTLSSecret,
+  ownerTLSReadArguments,
+  withPrivateKubectlCache,
 } from "./protected-owner-ui-input.mjs";
 
 const port = 23456;
@@ -106,6 +109,138 @@ test("CLI допускает только публичное подтвержд�
       () => parseInputCLI(args),
       /^Error: OWNER_UI_INPUT_REJECTED$/,
     );
+});
+
+test("kubectl получает только exact GET и явный одноразовый cache-dir, без HOME/project fallback", () => {
+  const directory = "/tmp/kodex-owner-ui-cache-aB123C";
+  for (const [kind, name] of [
+    ["ingress", "staff-control-center"],
+    ["secret", "staff-control-center-public-tls"],
+  ]) {
+    assert.deepEqual(ownerTLSReadArguments(kind, name, directory), [
+      "--kubeconfig",
+      "/home/s/.kube/config",
+      "--context",
+      "k3d-kodex",
+      "--namespace",
+      "kodex-system",
+      "--cache-dir",
+      directory,
+      "get",
+      kind,
+      name,
+      "--output",
+      "json",
+    ]);
+  }
+  for (const [kind, name, path] of [
+    ["secret", "other", directory],
+    ["pods", "staff-control-center", directory],
+    [
+      "secret",
+      "staff-control-center-public-tls",
+      "/home/s/projects/kodex/.kube/cache",
+    ],
+  ])
+    assert.throws(() => ownerTLSReadArguments(kind, name, path));
+});
+
+test("temporary cache0700: awaited cleanup только exact created uid/inode, включая ошибку GET", async () => {
+  const directory = "/tmp/kodex-owner-ui-cache-aB123C";
+  const info = () => ({
+    isDirectory: () => true,
+    isSymbolicLink: () => false,
+    uid: 1000,
+    mode: 0o40700,
+    dev: 1,
+    ino: 2,
+  });
+  for (const fail of [false, true]) {
+    const trace = [];
+    const io = {
+      tmpdir: () => "/tmp",
+      realpath: async (value) => value,
+      mkdtemp: async (prefix) => {
+        assert.equal(prefix, "/tmp/kodex-owner-ui-cache-");
+        return directory;
+      },
+      lstat: async () => info(),
+      uid: 1000,
+      rm: async (path, options) => {
+        trace.push("cleanup");
+        assert.equal(path, directory);
+        assert.deepEqual(options, {
+          recursive: true,
+          force: false,
+          maxRetries: 0,
+        });
+      },
+    };
+    const result = withPrivateKubectlCache(async (path) => {
+      assert.equal(path, directory);
+      trace.push("read");
+      if (fail) throw new Error("GET_FAILED");
+      return "DONE";
+    }, io);
+    if (fail) await assert.rejects(result, /GET_FAILED/);
+    else assert.equal(await result, "DONE");
+    assert.deepEqual(trace, ["read", "cleanup"]);
+  }
+});
+
+test("заменённый cache/symlink/foreign UID/broad mode не удаляются рекурсивно", async () => {
+  for (const bad of ["INODE", "SYMLINK", "UID", "MODE"]) {
+    let calls = 0,
+      removed = false;
+    const io = {
+      tmpdir: () => "/tmp",
+      realpath: async (value) => value,
+      mkdtemp: async () => "/tmp/kodex-owner-ui-cache-aB123C",
+      uid: 1000,
+      lstat: async () => {
+        calls++;
+        return {
+          isDirectory: () => true,
+          isSymbolicLink: () => calls > 1 && bad === "SYMLINK",
+          uid: calls > 1 && bad === "UID" ? 1001 : 1000,
+          mode: calls > 1 && bad === "MODE" ? 0o40755 : 0o40700,
+          dev: 1,
+          ino: calls > 1 && bad === "INODE" ? 3 : 2,
+        };
+      },
+      rm: async () => {
+        removed = true;
+      },
+    };
+    await assert.rejects(
+      withPrivateKubectlCache(async () => {}, io),
+      /OWNER_UI_INPUT_REJECTED/,
+    );
+    assert.equal(removed, false);
+  }
+});
+
+test("project TMPDIR не создаёт каталог, native temporary cache имеет0700 и удалён до return", async () => {
+  let created = false;
+  await assert.rejects(
+    withPrivateKubectlCache(async () => {}, {
+      tmpdir: () => "/home/s/projects/kodex",
+      realpath: async (value) => value,
+      mkdtemp: async () => {
+        created = true;
+      },
+    }),
+    /OWNER_UI_INPUT_REJECTED/,
+  );
+  assert.equal(created, false);
+  let path;
+  await withPrivateKubectlCache(async (directory) => {
+    path = directory;
+    const info = await lstat(directory);
+    assert.equal(info.mode & 0o777, 0o700);
+    assert.equal(info.uid, process.getuid());
+  });
+  await assert.rejects(lstat(path), { code: "ENOENT" });
 });
 
 test("debug/keylog/inspector отклоняются до TLS и credential чтения", () => {

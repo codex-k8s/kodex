@@ -63,8 +63,24 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation, key, intent, &replay); receiptErr != nil {
 		return entity.ImageAdmissionClaim{}, receiptErr
 	} else if found {
+		if replay.Artifact.Ref == "" && len(replay.Expired) > 0 {
+			if err := committed(tx, ctx); err != nil {
+				return entity.ImageAdmissionClaim{}, err
+			}
+			return entity.ImageAdmissionClaim{}, errs.ErrNotFound
+		}
 		if replay.Artifact.PolicyRevision != repository.roleImages.PolicyRevision ||
 			replay.Artifact.PolicySHA256 != repository.roleImages.PolicySHA256 {
+			if err := committed(tx, ctx); err != nil {
+				return entity.ImageAdmissionClaim{}, err
+			}
+			return entity.ImageAdmissionClaim{}, errs.ErrNotFound
+		}
+		var live bool
+		if err := tx.QueryRow(ctx, queryRoleImagesAdmissionClaimReplayLive, pgx.StrictNamedArgs{"organization_id": current.organizationID, "artifact_ref": replay.Artifact.Ref, "version": replay.Artifact.Version, "fence": replay.Fence, "generation": replay.AuthorityGeneration, "token_sha256": tokenDigest(repository.admissionClaimFromReceipt(replay).ClaimToken)}).Scan(&live); err != nil {
+			return entity.ImageAdmissionClaim{}, errs.ErrUnavailable
+		}
+		if !live {
 			if err := committed(tx, ctx); err != nil {
 				return entity.ImageAdmissionClaim{}, err
 			}
@@ -75,11 +91,21 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 		}
 		return repository.admissionClaimFromReceipt(replay), nil
 	}
+	expired, err := repository.expireRoleImageAdmissions(ctx, tx, current)
+	if err != nil {
+		return entity.ImageAdmissionClaim{}, err
+	}
 	var artifactID, artifactRef string
 	var version, fence uint64
 	err = tx.QueryRow(ctx, queryRoleImagesClaimAdmissionCandidate, policyArguments).Scan(
 		&artifactID, &artifactRef, &version, &fence)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if len(expired) > 0 {
+			if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, key, intent,
+				"IMAGE_ADMISSION_EXPIRY_OUTCOME", admissionClaimReceipt{Expired: expired}); err != nil {
+				return entity.ImageAdmissionClaim{}, err
+			}
+		}
 		if err := committed(tx, ctx); err != nil {
 			return entity.ImageAdmissionClaim{}, err
 		}
@@ -104,7 +130,7 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 		return entity.ImageAdmissionClaim{}, errs.ErrUnavailable
 	}
 	receipt := admissionClaimReceipt{Artifact: artifact, Fence: fence,
-		AuthorityGeneration: principal.CredentialRevision, ClaimExpiresAt: expiresAt}
+		AuthorityGeneration: principal.CredentialRevision, ClaimExpiresAt: expiresAt, Expired: expired}
 	if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, key, intent,
 		"IMAGE_ADMISSION_CLAIM", receipt); err != nil {
 		return entity.ImageAdmissionClaim{}, err

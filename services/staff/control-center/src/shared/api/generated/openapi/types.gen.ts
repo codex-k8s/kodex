@@ -2421,6 +2421,21 @@ export type RoleImageRecipeDetail = {
     builds: Array<RoleImageBuild>;
     activeArtifact?: RoleImageArtifact;
     promotionCandidate?: RoleImageArtifact;
+    admissionFailure?: RoleImageAdmissionFailure;
+};
+
+export type RoleImageAdmissionFailure = {
+    imageArtifactRef: OpaqueRef;
+    version: number;
+    recipeRef: OpaqueRef;
+    recipeGeneration: number;
+    buildRef: OpaqueRef;
+    buildAttempt: number;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    projectRef: string;
+    state: 'FAILED';
+    errorCode: 'ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND' | 'ADMISSION_EVIDENCE_EXCEEDS_BOUND' | 'ADMISSION_WORKER_FAILED' | 'ADMISSION_LEASE_EXPIRED';
 };
 
 export type RoleImageArtifactTool = {

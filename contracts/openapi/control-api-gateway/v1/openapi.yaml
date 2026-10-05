@@ -14274,6 +14274,25 @@ components:
           }
         activeArtifact: { $ref: "#/components/schemas/RoleImageArtifact" }
         promotionCandidate: { $ref: "#/components/schemas/RoleImageArtifact" }
+        admissionFailure: { $ref: "#/components/schemas/RoleImageAdmissionFailure" }
+    RoleImageAdmissionFailure:
+      type: object
+      additionalProperties: false
+      required: [imageArtifactRef, version, recipeRef, recipeGeneration, buildRef, buildAttempt, scopeKind, organizationRef, projectRef, state, errorCode]
+      properties:
+        imageArtifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        recipeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        recipeGeneration: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        buildRef: { $ref: "#/components/schemas/OpaqueRef" }
+        buildAttempt: { type: integer, minimum: 1, maximum: 10 }
+        scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { type: string, maxLength: 128 }
+        state: { type: string, enum: [FAILED] }
+        errorCode:
+          type: string
+          enum: [ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND, ADMISSION_EVIDENCE_EXCEEDS_BOUND, ADMISSION_WORKER_FAILED, ADMISSION_LEASE_EXPIRED]
     RoleImageArtifactTool:
       type: object
       additionalProperties: false

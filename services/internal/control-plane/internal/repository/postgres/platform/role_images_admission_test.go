@@ -32,10 +32,20 @@ func TestRoleImageAdmissionPolicyRotationQueries(t *testing.T) {
 		"policy_revision = @policy_revision",
 		"policy_sha256 = @policy_sha256",
 		"admission_state = 'pending'",
-		"admission_claim_expires_at <= clock_timestamp()",
+		"build.stage = 'completed'",
+		"recipe.version = artifact.recipe_version",
+		"latest.created_at desc",
 	} {
 		if !strings.Contains(claim, required) {
 			t.Fatalf("admission claim selector does not enforce %q", required)
+		}
+	}
+	if strings.Contains(claim, "admission_claim_expires_at") {
+		t.Fatal("expired admission claim can be reclaimed instead of terminalized")
+	}
+	for _, required := range []string{"admission_claim_expires_at <= clock_timestamp()", "admission_state = 'failed'", "admission_claim_token_sha256 = null"} {
+		if !strings.Contains(strings.ToLower(queryRoleImagesExpireAdmissions), required) {
+			t.Fatalf("owner expiry does not enforce %q", required)
 		}
 	}
 }

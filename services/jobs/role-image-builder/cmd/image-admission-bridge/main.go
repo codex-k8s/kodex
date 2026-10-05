@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,7 +34,7 @@ func main() {
 
 func run(ctx context.Context) error {
 	if len(os.Args) != 2 {
-		return errors.New("usage: image-admission-bridge claim|record|claim-promotion|authorize-promotion|complete")
+		return errors.New("usage: image-admission-bridge claim|record|fail|claim-promotion|authorize-promotion|complete")
 	}
 	operation := os.Args[1]
 	promotionMode := operation == "claim-promotion" || operation == "authorize-promotion" || operation == "complete"
@@ -58,6 +59,21 @@ func run(ctx context.Context) error {
 		return err
 	}
 	switch operation {
+	case "fail":
+		var claim imageowner.Claim
+		if err := readState(statePath, &claim); err != nil {
+			return err
+		}
+		code, err := requiredEnv("IMAGE_OWNER_ADMISSION_FAILURE_CODE")
+		if err != nil {
+			return err
+		}
+		switch code {
+		case "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND", "ADMISSION_EVIDENCE_EXCEEDS_BOUND", "ADMISSION_WORKER_FAILED":
+		default:
+			return errors.New("image admission failure code is invalid")
+		}
+		return client.Fail(ctx, idempotencyKey(operation, runID+"\x00"+claim.ArtifactID), claim, code)
 	case "claim":
 		claim, err := client.Claim(ctx, idempotencyKey(operation, runID))
 		if err != nil {
@@ -216,8 +232,26 @@ func writeState(path string, value any) error {
 }
 
 func readState(path string, target any) error {
-	raw, err := os.ReadFile(path)
-	if err != nil || len(raw) == 0 || len(raw) > maximumStateBytes || json.Unmarshal(raw, target) != nil {
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return errors.New("read bounded image owner state")
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() <= 0 || info.Size() > maximumStateBytes {
+		return errors.New("read bounded image owner state")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != uint32(os.Geteuid()) {
+		return errors.New("read bounded image owner state")
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, maximumStateBytes+1))
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err != nil || len(raw) == 0 || len(raw) > maximumStateBytes || decoder.Decode(target) != nil {
+		return errors.New("read bounded image owner state")
+	}
+	if decoder.Decode(new(any)) != io.EOF {
 		return errors.New("read bounded image owner state")
 	}
 	return nil

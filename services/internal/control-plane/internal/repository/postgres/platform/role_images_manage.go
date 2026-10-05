@@ -235,9 +235,21 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 			return roleimagerepo.Detail{}, err
 		}
 	}
+	var failure entity.RoleImageAdmissionFailure
+	err = querier.QueryRow(ctx, queryRoleImagesGetAdmissionFailure, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "recipe_id": internalID,
+	}).Scan(&failure.ImageArtifactRef, &failure.Version, &failure.RecipeRef, &failure.RecipeGeneration,
+		&failure.BuildRef, &failure.BuildAttempt, &failure.ScopeKind, &failure.OrganizationRef, &failure.ProjectRef,
+		&failure.State, &failure.ErrorCode)
+	var admissionFailure *entity.RoleImageAdmissionFailure
+	if err == nil {
+		admissionFailure = &failure
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return roleimagerepo.Detail{}, errs.ErrUnavailable
+	}
 	return roleimagerepo.Detail{
 		Recipe: recipe, Builds: builds, ActiveArtifact: activeArtifact,
-		PromotionCandidate: promotionCandidate,
+		PromotionCandidate: promotionCandidate, AdmissionFailure: admissionFailure,
 	}, nil
 }
 

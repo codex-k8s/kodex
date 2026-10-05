@@ -4,6 +4,11 @@ import { useI18n } from "vue-i18n";
 
 import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
+import RoleImageAdmissionFailureNotice from "@/features/role-images/RoleImageAdmissionFailureNotice.vue";
+import {
+  currentRoleImageAdmissionFailure,
+  assertRoleImageAdmissionFailure,
+} from "@/features/role-images/admission-failure";
 import {
   commandRoleImage,
   loadRoleImageDetail,
@@ -63,6 +68,13 @@ const promotionProblem = ref(false);
 const promotionReceipt = ref<RoleImagePromotionReceipt>();
 const attemptedArtifactRef = ref<string>();
 const build = computed(() => latestBuild(detail.value?.builds ?? []));
+const admissionFailure = computed(() =>
+  currentRoleImageAdmissionFailure(
+    detail.value?.recipe,
+    build.value,
+    detail.value?.admissionFailure,
+  ),
+);
 const candidate = computed(() => {
   const artifact = detail.value?.promotionCandidate;
   return build.value?.stage === "COMPLETED" &&
@@ -98,20 +110,23 @@ const promotionPending = computed(
       ["QUEUED", "PROMOTING"].includes(promotionReceipt.value?.state ?? "")),
 );
 const promotionState = computed(() =>
-  currentBuildPromoted.value
-    ? "PROMOTED"
-    : promotionFailed.value
-      ? "FAILED"
-      : candidate.value?.promotionRequested
-        ? candidate.value.promotionState === "PENDING"
-          ? "QUEUED"
-          : "PROMOTING"
-        : (promotionReceipt.value?.state ?? "PENDING"),
+  admissionFailure.value
+    ? "FAILED"
+    : currentBuildPromoted.value
+      ? "PROMOTED"
+      : promotionFailed.value
+        ? "FAILED"
+        : candidate.value?.promotionRequested
+          ? candidate.value.promotionState === "PENDING"
+            ? "QUEUED"
+            : "PROMOTING"
+          : (promotionReceipt.value?.state ?? "PENDING"),
 );
 const awaitingAdmission = computed(
   () =>
     build.value?.stage === "COMPLETED" &&
     !candidate.value &&
+    !admissionFailure.value &&
     !currentBuildPromoted.value,
 );
 const cancellable = computed(() => build.value && buildIsActive(build.value));
@@ -182,6 +197,7 @@ watch(
           next.builds.some((item) => item.recipeRef !== value.recipeRef)
         )
           throw new Error("Role image build scope mismatch");
+        assertRoleImageAdmissionFailure(next);
         detail.value = next;
         problem.value = false;
       } catch {
@@ -314,6 +330,10 @@ async function promoteCandidate(): Promise<void> {
     </p>
     <template v-if="detail">
       <p>{{ localizeServerMessage(detail.recipe.name) }}</p>
+      <RoleImageAdmissionFailureNotice
+        v-if="admissionFailure"
+        :failure="admissionFailure"
+      />
       <template v-if="build">
         <label>
           {{
@@ -367,11 +387,13 @@ async function promoteCandidate(): Promise<void> {
           <span>{{ $t("roleImages.admissionVerdict") }}</span>
           <StatusBadge
             :state="
-              candidate?.admissionVerdict ??
-              (currentBuildPromoted
-                ? detail.activeArtifact?.admissionVerdict
-                : undefined) ??
-              'PENDING'
+              admissionFailure
+                ? 'FAILED'
+                : (candidate?.admissionVerdict ??
+                  (currentBuildPromoted
+                    ? detail.activeArtifact?.admissionVerdict
+                    : undefined) ??
+                  'PENDING')
             "
           />
         </div>

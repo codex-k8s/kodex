@@ -4,8 +4,10 @@ import {
   createPublicKey,
   X509Certificate,
 } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { createServer } from "node:https";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { createSecureContext } from "node:tls";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
@@ -177,41 +179,98 @@ export function parseTLSSecret(source) {
   return { cert: decode("tls.crt"), key: decode("tls.key") };
 }
 
-async function readIngressTLS() {
-  const kubectl = async (kind, name) => {
-    try {
-      const result = await execute(
-        "/usr/local/bin/kubectl",
-        [
-          "--kubeconfig",
-          "/home/s/.kube/config",
-          "--context",
-          "k3d-kodex",
-          "--namespace",
-          namespace,
-          "get",
-          kind,
-          name,
-          "--output",
-          "json",
-        ],
-        {
-          env: {
-            PATH: "/usr/local/bin:/usr/bin:/bin",
-            KUBECONFIG: "/home/s/.kube/config",
-          },
-          encoding: "utf8",
-          timeout: 10_000,
-          maxBuffer: 262144,
-        },
+export async function withPrivateKubectlCache(action, io = {}) {
+  const root = await (io.realpath ?? realpath)((io.tmpdir ?? tmpdir)());
+  requireInput(["/tmp", "/var/tmp"].includes(root));
+  const directory = await (io.mkdtemp ?? mkdtemp)(
+    join(root, "kodex-owner-ui-cache-"),
+  );
+  const metadata = io.lstat ?? lstat;
+  const uid = io.uid ?? process.getuid();
+  let identity;
+  const verify = (info) =>
+    requireInput(
+      info.isDirectory() &&
+        !info.isSymbolicLink() &&
+        info.uid === uid &&
+        (info.mode & 0o777) === 0o700,
+    );
+  try {
+    requireInput(
+      dirname(directory) === root &&
+        /^kodex-owner-ui-cache-[A-Za-z0-9]{6}$/.test(basename(directory)),
+    );
+    identity = await metadata(directory);
+    verify(identity);
+    return await action(directory);
+  } finally {
+    if (identity) {
+      const current = await metadata(directory);
+      verify(current);
+      requireInput(
+        current.dev === identity.dev && current.ino === identity.ino,
       );
-      return result.stdout;
-    } catch {
-      throw new Error("OWNER_UI_INPUT_REJECTED");
+      await (io.rm ?? rm)(directory, {
+        recursive: true,
+        force: false,
+        maxRetries: 0,
+      });
     }
-  };
-  parseIngress(await kubectl("ingress", ingressName));
-  const material = parseTLSSecret(await kubectl("secret", secretName));
+  }
+}
+
+export function ownerTLSReadArguments(kind, name, directory) {
+  requireInput(
+    (kind === "ingress" && name === ingressName) ||
+      (kind === "secret" && name === secretName),
+  );
+  requireInput(
+    directory.startsWith("/") &&
+      ["/tmp", "/var/tmp"].includes(dirname(directory)) &&
+      /^kodex-owner-ui-cache-[A-Za-z0-9]{6}$/.test(basename(directory)),
+  );
+  return [
+    "--kubeconfig",
+    "/home/s/.kube/config",
+    "--context",
+    "k3d-kodex",
+    "--namespace",
+    namespace,
+    "--cache-dir",
+    directory,
+    "get",
+    kind,
+    name,
+    "--output",
+    "json",
+  ];
+}
+
+async function readIngressTLS() {
+  const material = await withPrivateKubectlCache(async (cacheDirectory) => {
+    const kubectl = async (kind, name) => {
+      try {
+        const result = await execute(
+          "/usr/local/bin/kubectl",
+          ownerTLSReadArguments(kind, name, cacheDirectory),
+          {
+            env: {
+              PATH: "/usr/local/bin:/usr/bin:/bin",
+              KUBECONFIG: "/home/s/.kube/config",
+            },
+            encoding: "utf8",
+            timeout: 10_000,
+            maxBuffer: 262144,
+          },
+        );
+        return result.stdout;
+      } catch {
+        throw new Error("OWNER_UI_INPUT_REJECTED");
+      }
+    };
+    parseIngress(await kubectl("ingress", ingressName));
+    return parseTLSSecret(await kubectl("secret", secretName));
+  });
   try {
     const certificate = new X509Certificate(material.cert);
     requireInput(

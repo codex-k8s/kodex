@@ -174,7 +174,7 @@ spec:
             (!has(object.metadata.annotations) ||
               !('kodex.dev/admission-failed-predecessor-uid' in object.metadata.annotations))) ||
           (variables.phase == 'admit' && variables.main.command.size() == 4 &&
-            variables.main.command[3] in ['SCAN_PREDECESSOR_FAILED', 'SIGN_PREDECESSOR_FAILED'] &&
+            variables.main.command[3] in ['SCAN_PREDECESSOR_FAILED', 'SIGN_PREDECESSOR_FAILED', 'ADMIT_PREDECESSOR_FAILED'] &&
             has(object.metadata.annotations) &&
             'kodex.dev/admission-failed-predecessor-uid' in object.metadata.annotations &&
             object.metadata.annotations['kodex.dev/admission-failed-predecessor-uid'].matches(
@@ -568,18 +568,58 @@ spec:
     resourceRules:
       - apiGroups: ['']
         apiVersions: [v1]
-        operations: [CREATE]
+        operations: [CREATE, UPDATE]
         resources: [persistentvolumeclaims]
         scope: Namespaced
   matchConditions:
     - name: exact-controller
       expression: >-
         request.userInfo.username ==
-        'system:serviceaccount:kodex-system:image-admission-controller'
+        'system:serviceaccount:kodex-system:image-admission-controller' ||
+        (request.operation == 'UPDATE' &&
+          ((!has(oldObject.metadata.annotations) && has(object.metadata.annotations) &&
+            ('kodex.dev/admission-recovery-uid' in object.metadata.annotations ||
+             'kodex.dev/admission-recovery-after' in object.metadata.annotations)) ||
+           (has(oldObject.metadata.annotations) &&
+            ((!has(object.metadata.annotations)) ||
+             ['kodex.dev/admission-recovery-uid', 'kodex.dev/admission-recovery-after'].exists(k,
+               (k in oldObject.metadata.annotations) != (k in object.metadata.annotations) ||
+               (k in oldObject.metadata.annotations && k in object.metadata.annotations &&
+                 oldObject.metadata.annotations[k] != object.metadata.annotations[k]))))))
   variables:
     - name: admissionId
       expression: object.metadata.labels['kodex.dev/image-admission-id']
   validations:
+    - expression: >-
+        request.userInfo.username == 'system:serviceaccount:kodex-system:image-admission-controller'
+      message: Image admission recovery cursor belongs to the exact controller.
+    - expression: >-
+        request.operation != 'CREATE' ||
+        (!('kodex.dev/admission-recovery-uid' in object.metadata.annotations) &&
+         !('kodex.dev/admission-recovery-after' in object.metadata.annotations))
+      message: Image admission recovery cursor requires a failed existing run.
+    - expression: >-
+        request.operation != 'UPDATE' ||
+        (object.spec == oldObject.spec && object.metadata.labels == oldObject.metadata.labels &&
+         ((!has(object.metadata.ownerReferences) && !has(oldObject.metadata.ownerReferences)) ||
+           (has(object.metadata.ownerReferences) && has(oldObject.metadata.ownerReferences) &&
+            object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+         ((!has(object.metadata.finalizers) && !has(oldObject.metadata.finalizers)) ||
+           (has(object.metadata.finalizers) && has(oldObject.metadata.finalizers) &&
+            object.metadata.finalizers == oldObject.metadata.finalizers)) &&
+         object.metadata.annotations.all(k, k in ['kodex.dev/admission-recovery-uid', 'kodex.dev/admission-recovery-after'] ||
+           (k in oldObject.metadata.annotations && object.metadata.annotations[k] == oldObject.metadata.annotations[k])) &&
+         oldObject.metadata.annotations.all(k, k in ['kodex.dev/admission-recovery-uid', 'kodex.dev/admission-recovery-after'] ||
+           (k in object.metadata.annotations && object.metadata.annotations[k] == oldObject.metadata.annotations[k])) &&
+         'kodex.dev/admission-recovery-uid' in object.metadata.annotations &&
+         object.metadata.annotations['kodex.dev/admission-recovery-uid'].matches('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$') &&
+         'kodex.dev/admission-recovery-after' in object.metadata.annotations &&
+         object.metadata.annotations['kodex.dev/admission-recovery-after'].matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$') &&
+         timestamp(string(object.metadata.annotations['kodex.dev/admission-recovery-after'])) >= timestamp(oldObject.metadata.creationTimestamp) &&
+         timestamp(string(object.metadata.annotations['kodex.dev/admission-recovery-after'])) <= timestamp(oldObject.metadata.creationTimestamp) + duration('24h') &&
+         (!('kodex.dev/admission-recovery-after' in oldObject.metadata.annotations) ||
+           timestamp(string(object.metadata.annotations['kodex.dev/admission-recovery-after'])) >= timestamp(string(oldObject.metadata.annotations['kodex.dev/admission-recovery-after']))))
+      message: Image admission recovery may update only its bounded exact cursor.
     - expression: >-
         object.metadata.namespace == 'kodex-system' &&
         has(object.metadata.labels) &&
@@ -595,7 +635,7 @@ spec:
     - expression: >-
         object.spec.accessModes == ['ReadWriteOnce'] &&
         string(object.spec.resources.requests['storage']) == '2Gi' &&
-        !has(object.spec.volumeName) &&
+        (request.operation == 'UPDATE' || !has(object.spec.volumeName)) &&
         !has(object.spec.selector) &&
         !has(object.spec.dataSource) &&
         !has(object.spec.dataSourceRef)

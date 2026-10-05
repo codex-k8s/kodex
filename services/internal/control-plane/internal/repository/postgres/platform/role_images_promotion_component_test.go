@@ -398,6 +398,9 @@ func seedPromotionArtifact(t *testing.T, ctx context.Context, repository *Reposi
 	if err != nil {
 		t.Fatal("read synthetic inventory fixture")
 	}
+	if decision == "PENDING" {
+		return inventoryArtifact
+	}
 	inventoryJSON, inventorySHA256 := imageInventoryFixture(inventoryArtifact)
 	if err := repository.pool.QueryRow(ctx, queryRoleImagesRecordAdmission,
 		current.organizationID, artifactID, uint64(1), decision,

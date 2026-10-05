@@ -1390,6 +1390,19 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   Урезание данных, увеличение бюджета и совместимый запасной decoder прежнего
   формата запрещены; прежний неподходящий artifact требует новой штатной сборки
   и допуска, а не перезаписи immutable evidence.
+- Технический отказ worker не является vulnerability verdict. Отдельная
+  owner-команда закрывает точный artifact/build/attempt по immutable digest,
+  fence и authority generation, отзывает claim и фиксирует audit/event/receipt
+  одной транзакцией; evidence и verdict остаются неназначенными. Истечение
+  claim определяется часами PostgreSQL и закрывается свежей maintenance
+  identity, а не просроченным grant. Jobs и workspace удаляются только после
+  подтверждённого owner terminal; повтор сохраняет исходный closed error code.
+- Локальный одноразовый helper доступа к credentials задаёт каждому kubectl
+  явный приватный cache-dir вне repository и проверяет owner/mode/inode перед
+  ограниченным cleanup. Отсутствие HOME в очищенном окружении не доказывает
+  отсутствие credential/discovery cache в рабочем каталоге. Значения выбранных
+  credentials передаются только exact HTTPS native form, без tool arguments,
+  логов, cookie injection и отключения TLS/CSP.
 - Materializer недоверенного build input принадлежит deployable, получает
   отдельную pull-only mTLS/application identity и destination-bound egress.
   Он принимает только exact OCI manifest digest и single-layer descriptor,

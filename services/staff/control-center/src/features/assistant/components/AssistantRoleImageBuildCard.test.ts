@@ -14,8 +14,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   AssistantPlan,
+  RoleImageAdmissionFailure,
   RoleImageRecipeDetail,
 } from "@/shared/api/generated/openapi/types.gen";
+import { imageAdmissionFailureFixture } from "@/test-utils/image-admission-failure-fixture";
 
 const api = vi.hoisted(() => ({
   read: vi.fn(),
@@ -125,6 +127,9 @@ interface State {
   loading: Ref<boolean>;
   problem: Ref<boolean>;
   detail: Ref<RoleImageRecipeDetail | undefined>;
+  admissionFailure: Ref<RoleImageAdmissionFailure | undefined>;
+  awaitingAdmission: Ref<boolean>;
+  promotionState: Ref<string>;
 }
 const apps: App[] = [];
 async function settle(): Promise<void> {
@@ -182,6 +187,57 @@ describe("Realtime-чтение карточки образа", () => {
   afterEach(() => {
     for (const app of apps.splice(0)) app.unmount();
   });
+
+  it.each([true, false])(
+    "technical failure из WS-readback не остаётся pending, SYSTEM=%s",
+    async (system) => {
+      const value = detail(system);
+      value.builds = [
+        {
+          scopeKind: value.recipe.scopeKind,
+          organizationRef: value.recipe.organizationRef,
+          projectRef: value.recipe.projectRef,
+          ref: "imgbld_completed",
+          version: 1,
+          recipeRef: value.recipe.ref,
+          recipeGeneration: value.recipe.generation,
+          sourceAvailable: false,
+          attempt: 1,
+          stage: "COMPLETED",
+          progressPercent: 100,
+          createdAt: value.recipe.createdAt,
+          updatedAt: value.recipe.updatedAt,
+        },
+      ];
+      api.read.mockResolvedValue(value);
+      const state = mountCard(system);
+      await settle();
+      expect(state.awaitingAdmission.value).toBe(true);
+      const completedBuild = value.builds[0];
+      if (!completedBuild)
+        throw new Error("Synthetic completed build is absent");
+      const failure = imageAdmissionFailureFixture(
+        value.recipe,
+        completedBuild,
+        { errorCode: "ADMISSION_LEASE_EXPIRED" },
+      );
+      api.read.mockResolvedValue({ ...value, admissionFailure: failure });
+      snapshot();
+      await settle();
+      expect(state.problem.value).toBe(false);
+      expect(state.admissionFailure.value).toEqual(failure);
+      expect(state.awaitingAdmission.value).toBe(false);
+      expect(state.promotionState.value).toBe("FAILED");
+      api.read.mockResolvedValue({
+        ...value,
+        builds: [{ ...completedBuild, ref: "imgbld_new", stage: "QUEUED" }],
+      });
+      snapshot();
+      await settle();
+      expect(state.admissionFailure.value).toBeUndefined();
+      expect(state.promotionState.value).toBe("PENDING");
+    },
+  );
 
   it.each([true, false])(
     "один snapshot/rejoin вызывает одно чтение, SYSTEM=%s",

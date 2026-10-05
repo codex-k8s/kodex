@@ -128,6 +128,15 @@ type ImageAdmissionClaim struct {
 	ClaimExpiresAt      time.Time
 }
 
+// RoleImageAdmissionFailure — авторитетный технический исход, не admission verdict.
+type RoleImageAdmissionFailure struct {
+	ImageArtifactRef, RecipeRef, BuildRef  string
+	ScopeKind, OrganizationRef, ProjectRef string
+	Version, RecipeGeneration              uint64
+	BuildAttempt                           uint32
+	State, ErrorCode                       string
+}
+
 type ImagePromotionClaim struct {
 	Artifact            ImageArtifact
 	PromotionClaim      string

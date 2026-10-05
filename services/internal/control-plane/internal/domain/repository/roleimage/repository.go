@@ -40,6 +40,7 @@ type Detail struct {
 	Builds             []entity.ImageBuild
 	ActiveArtifact     *entity.ImageArtifact
 	PromotionCandidate *entity.ImageArtifact
+	AdmissionFailure   *entity.RoleImageAdmissionFailure
 }
 
 type BuildLeaseInput struct {
@@ -74,6 +75,24 @@ type AdmissionRecordInput struct {
 	AdmissionReceiptOCIManifestDigest                          string
 	ToolInventoryJSON, ToolInventorySHA256                     string
 	ExpectedVersion, ExpectedFence, PolicyRevision             uint64
+}
+
+type AdmissionFailureInput struct {
+	Principal                                                                                     value.Principal
+	IdempotencyKey, ArtifactRef, ClaimToken                                                       string
+	ManifestDigest, ImmutableBuildSHA256, ProvenanceSHA256, PolicySHA256                          string
+	BuildRef, SpecSHA256, ErrorCode                                                               string
+	ExpectedVersion, ExpectedFence, ExpectedAuthorityGeneration, PolicyRevision, RecipeGeneration uint64
+	ExpectedBuildAttempt                                                                          uint32
+}
+
+// Expiry не принимает worker token или назначаемую caller причину.
+type AdmissionExpiryInput struct {
+	Principal                                                                                     value.Principal
+	IdempotencyKey, ArtifactRef, ManifestDigest, ImmutableBuildSHA256, ProvenanceSHA256           string
+	PolicySHA256, BuildRef, SpecSHA256                                                            string
+	ExpectedVersion, ExpectedFence, ExpectedAuthorityGeneration, PolicyRevision, RecipeGeneration uint64
+	ExpectedBuildAttempt                                                                          uint32
 }
 
 type PromotionAuthorizeInput struct {
@@ -119,6 +138,8 @@ type Repository interface {
 	GetSupplyWorkAvailability(context.Context, value.Principal) (SupplyWorkAvailability, error)
 	ClaimAdmission(context.Context, value.Principal, string) (entity.ImageAdmissionClaim, error)
 	RecordAdmission(context.Context, AdmissionRecordInput) (entity.ImageArtifact, error)
+	FailAdmission(context.Context, AdmissionFailureInput) (entity.RoleImageAdmissionFailure, error)
+	ExpireAdmission(context.Context, AdmissionExpiryInput) (entity.RoleImageAdmissionFailure, error)
 	ClaimPromotion(context.Context, value.Principal, string) (entity.ImagePromotionClaim, error)
 	RequestPromotion(context.Context, PromotionRequestInput) (entity.RoleImagePromotionReceipt, error)
 	AuthorizePromotion(context.Context, PromotionAuthorizeInput) (entity.ImagePromotionAuthorization, error)

@@ -88,6 +88,197 @@ const pod = () => ({
 });
 const clone = (value) => structuredClone(value);
 
+function ownerFailureFixture(t) {
+  const source = readFileSync(
+    new URL(
+      "../../deploy/k8s/base/image-supply-chain/image-admission.sh",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const directory = mkdtempSync(join(tmpdir(), "kodex-owner-failure-"));
+  chmodSync(directory, 0o700);
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const bin = join(directory, "bin");
+  mkdirSync(bin, { mode: 0o700 });
+  const calls = join(directory, "calls");
+  writeFileSync(join(directory, "owner-claim.json"), "{}\n", { mode: 0o600 });
+  const bridge = join(bin, "image-admission-bridge");
+  writeFileSync(
+    bridge,
+    `#!/bin/sh\nset -eu\n[ "$1" = fail ] || exit 2\nprintf '%s\\n' "$IMAGE_OWNER_ADMISSION_FAILURE_CODE" >>"$FIXTURE_CALLS"\n[ "$FIXTURE_BRIDGE_OUTCOME" = success ] || exit 1\n`,
+    { mode: 0o700 },
+  );
+  const definitions = [
+    "fail",
+    "classify_owner_failure",
+    "read_owner_failure_code",
+    "persist_owner_failure_code",
+    "record_owner_failure",
+    "write_marker",
+  ]
+    .map((name) => {
+      const fn = source.match(
+        new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?^\\}`, "m"),
+      )?.[0];
+      assert.ok(fn, `production ${name} function is missing`);
+      return fn.replaceAll("/work/", directory + "/");
+    })
+    .join("\n");
+  const invoke = (body, outcome = "success", args = []) =>
+    spawnSync(
+      "sh",
+      [
+        "-eu",
+        "-c",
+        `${definitions}\nadmission_phase=admit\n${body}`,
+        "fixture",
+        ...args,
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          PATH: bin + ":" + process.env.PATH,
+          ADMISSION_RUN_ID: run,
+          FIXTURE_CALLS: calls,
+          FIXTURE_BRIDGE_OUTCOME: outcome,
+        },
+      },
+    );
+  return { source, directory, calls, invoke };
+}
+
+test("admit failure persists closed first intent before callback and retries without evidence fabrication", (t) => {
+  const f = ownerFailureFixture(t);
+  const intent = join(f.directory, "owner-failure-code");
+  const marker = join(f.directory, "admission.failed");
+  const first = f.invoke(
+    'fail "admission evidence entry exceeds bound"',
+    "unavailable",
+  );
+  assert.equal(first.status, 1);
+  assert.equal(
+    readFileSync(intent, "utf8"),
+    "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND\n",
+  );
+  assert.equal(lstatSync(intent).mode & 0o777, 0o600);
+  assert.throws(() => lstatSync(marker));
+  assert.throws(() => lstatSync(join(f.directory, "admission.complete")));
+  assert.throws(() => lstatSync(join(f.directory, "vulnerability.json")));
+  const recovery = f.source.match(
+    /      if \[ "\$2" = ADMIT_PREDECESSOR_FAILED \]; then\n[\s\S]*?\n      fi/,
+  )?.[0];
+  assert.ok(recovery, "technical admit recovery branch is missing");
+  const result = f.invoke(
+    `load_owner_claim() { exit 77; }\nwrite_technical_rejection() { exit 78; }\n${recovery}`,
+    "success",
+    ["admit", "ADMIT_PREDECESSOR_FAILED"],
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(marker, "utf8"), run + "\n");
+  assert.equal(
+    readFileSync(f.calls, "utf8"),
+    "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND\nADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND\n",
+  );
+  assert.equal(
+    readFileSync(intent, "utf8"),
+    "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND\n",
+  );
+  const replay = f.invoke("record_owner_failure ADMISSION_WORKER_FAILED");
+  assert.equal(replay.status, 0);
+  assert.equal(
+    readFileSync(intent, "utf8"),
+    "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND\n",
+  );
+});
+
+test("owner failure codes are closed, unknown details never enter intent or bridge", (t) => {
+  const f = ownerFailureFixture(t);
+  for (const [reason, expected] of [
+    [
+      "admission evidence entry exceeds bound",
+      "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND",
+    ],
+    ["admission evidence exceeds bound", "ADMISSION_EVIDENCE_EXCEEDS_BOUND"],
+    [
+      "logical admission evidence exceeds bound",
+      "ADMISSION_EVIDENCE_EXCEEDS_BOUND",
+    ],
+    ["private-token-must-not-leak", "ADMISSION_WORKER_FAILED"],
+  ]) {
+    const result = f.invoke(`classify_owner_failure '${reason}'`);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, expected + "\n");
+  }
+  assert.notEqual(f.invoke("record_owner_failure UNKNOWN").status, 0);
+  assert.throws(() => lstatSync(f.calls));
+  const result = f.invoke("record_owner_failure ADMISSION_WORKER_FAILED");
+  assert.equal(result.status, 0);
+  assert.equal(readFileSync(f.calls, "utf8"), "ADMISSION_WORKER_FAILED\n");
+});
+
+test("malformed or symlinked durable failure intent is rejected before owner callback", (t) => {
+  const f = ownerFailureFixture(t);
+  const intent = join(f.directory, "owner-failure-code");
+  for (const bytes of [
+    "ADMISSION_WORKER_FAILED",
+    "ADMISSION_WORKER_FAILED\n\n",
+    "ADMISSION_WORKER_FAILED\0",
+    "UNKNOWN\n",
+    "x".repeat(65),
+  ]) {
+    writeFileSync(intent, bytes, { mode: 0o600 });
+    assert.notEqual(
+      f.invoke("record_owner_failure ADMISSION_WORKER_FAILED").status,
+      0,
+    );
+    assert.throws(() => lstatSync(f.calls));
+    assert.equal(readFileSync(intent).toString(), bytes);
+  }
+  writeFileSync(intent, "ADMISSION_WORKER_FAILED\n");
+  chmodSync(intent, 0o644);
+  assert.notEqual(
+    f.invoke("record_owner_failure ADMISSION_WORKER_FAILED").status,
+    0,
+  );
+  rmSync(intent);
+  const foreign = join(f.directory, "foreign");
+  writeFileSync(foreign, "ADMISSION_WORKER_FAILED\n", { mode: 0o600 });
+  symlinkSync(foreign, intent);
+  assert.notEqual(
+    f.invoke("record_owner_failure ADMISSION_WORKER_FAILED").status,
+    0,
+  );
+  assert.throws(() => lstatSync(f.calls));
+});
+
+test("owner state must remain regular and available; outage never writes failure marker", (t) => {
+  const f = ownerFailureFixture(t);
+  const state = join(f.directory, "owner-claim.json");
+  rmSync(state);
+  assert.notEqual(
+    f.invoke("record_owner_failure ADMISSION_WORKER_FAILED").status,
+    0,
+  );
+  assert.throws(() => lstatSync(f.calls));
+  const foreign = join(f.directory, "foreign-state");
+  writeFileSync(foreign, "{}\n");
+  symlinkSync(foreign, state);
+  assert.notEqual(
+    f.invoke("record_owner_failure ADMISSION_WORKER_FAILED").status,
+    0,
+  );
+  assert.throws(() => lstatSync(f.calls));
+  rmSync(state);
+  writeFileSync(state, "x".repeat(1048577));
+  assert.notEqual(
+    f.invoke("record_owner_failure ADMISSION_WORKER_FAILED").status,
+    0,
+  );
+  assert.throws(() => lstatSync(f.calls));
+  assert.throws(() => lstatSync(join(f.directory, "admission.failed")));
+});
+
 function evidenceCompactionFixture(t) {
   const source = readFileSync(
     new URL(

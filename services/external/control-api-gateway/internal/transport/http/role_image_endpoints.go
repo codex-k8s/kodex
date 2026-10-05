@@ -107,6 +107,12 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 		result.PromotionCandidate = &artifact
 	}
 	setVersionETag(writer, response.GetRecipe().GetVersion())
+	failure, validFailure := publicRoleImageAdmissionFailure(response.GetAdmissionFailure(), response.GetRecipe(), response.GetBuilds())
+	if !validFailure {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	result.AdmissionFailure = failure
 	writeJSON(writer, http.StatusOK, result)
 }
 

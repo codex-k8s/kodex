@@ -14,7 +14,70 @@ fail() {
     write_technical_rejection "$1" || true
   fi
   echo "image admission failed: $1" >&2
+  if [ "$admission_phase" = admit ]; then
+    failure_code=$(classify_owner_failure "$1")
+    if record_owner_failure "$failure_code"; then
+      exit 0
+    fi
+  fi
   exit 1
+}
+
+classify_owner_failure() {
+  case "$1" in
+    'admission evidence entry exceeds bound') printf '%s\n' ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND ;;
+    'admission evidence exceeds bound'|'logical admission evidence exceeds bound')
+      printf '%s\n' ADMISSION_EVIDENCE_EXCEEDS_BOUND ;;
+    *) printf '%s\n' ADMISSION_WORKER_FAILED ;;
+  esac
+}
+
+read_owner_failure_code() {
+  failure_path=/work/owner-failure-code
+  [ -f "$failure_path" ] && [ ! -L "$failure_path" ] &&
+    [ "$(stat -c '%u' "$failure_path")" = "$(id -u)" ] &&
+    [ "$(stat -c '%a' "$failure_path")" = 600 ] || return 1
+  failure_bytes=$(wc -c <"$failure_path" | tr -d ' ')
+  [ "$failure_bytes" -gt 0 ] && [ "$failure_bytes" -le 64 ] || return 1
+  failure_saved_code=$(cat "$failure_path")
+  case "$failure_saved_code" in
+    ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND|ADMISSION_EVIDENCE_EXCEEDS_BOUND|ADMISSION_WORKER_FAILED) ;;
+    *) return 1 ;;
+  esac
+  [ "$failure_bytes" -eq $((${#failure_saved_code} + 1)) ] || return 1
+  printf '%s\n' "$failure_saved_code" | cmp -s - "$failure_path" || return 1
+  printf '%s\n' "$failure_saved_code"
+}
+
+persist_owner_failure_code() {
+  case "$1" in
+    ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND|ADMISSION_EVIDENCE_EXCEEDS_BOUND|ADMISSION_WORKER_FAILED) ;;
+    *) return 1 ;;
+  esac
+  failure_path=/work/owner-failure-code
+  if [ -e "$failure_path" ] || [ -L "$failure_path" ]; then
+    read_owner_failure_code
+    return $?
+  fi
+  failure_temporary="$failure_path.next.$$"
+  (umask 077; set -C; printf '%s\n' "$1" >"$failure_temporary") || return 1
+  # Первый intent публикуется атомарно и никогда не перезаписывает победителя.
+  ln "$failure_temporary" "$failure_path" 2>/dev/null || true
+  rm -f "$failure_temporary"
+  read_owner_failure_code
+}
+
+record_owner_failure() {
+  [ -f /work/owner-claim.json ] && [ ! -L /work/owner-claim.json ] || return 1
+  failure_state_bytes=$(wc -c </work/owner-claim.json | tr -d ' ')
+  [ "$failure_state_bytes" -gt 0 ] && [ "$failure_state_bytes" -le 1048576 ] || return 1
+  failure_code=$(persist_owner_failure_code "$1") || return 1
+  # Bridge проверяет immutable owner tuple и свежую authority; expired claim
+  # закрывается отдельным fresh Expire RPC, а не повторным использованием grant.
+  IMAGE_OWNER_ADMISSION_FAILURE_CODE="$failure_code" image-admission-bridge fail 2>/dev/null || return 1
+  [ ! -L /work/admission.failed ] &&
+    { [ ! -e /work/admission.failed ] || [ -f /work/admission.failed ]; } || return 1
+  write_marker admission.failed
 }
 
 wait_for_file() {
@@ -137,7 +200,7 @@ require_policy() {
   echo "$TRUSTED_ROLE_BASE_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
     fail "trusted role base repository is invalid"
   echo "$TRUSTED_ROLE_BASE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "trusted role base digest is invalid"
-  for tool in base64 cmp cosign dd grype image-admission-bridge image-tool-inventory-validator jq regctl sha256sum syft wc; do
+  for tool in base64 cmp cosign dd grype id image-admission-bridge image-tool-inventory-validator jq ln regctl sha256sum stat syft wc; do
     command -v "$tool" >/dev/null || fail "admission image is incomplete"
   done
 }
@@ -978,10 +1041,16 @@ case "${1:-}" in
   admit)
     if [ "$#" -eq 2 ]; then
       case "$2" in
-        SCAN_PREDECESSOR_FAILED|SIGN_PREDECESSOR_FAILED) ;;
+        SCAN_PREDECESSOR_FAILED|SIGN_PREDECESSOR_FAILED|ADMIT_PREDECESSOR_FAILED) ;;
         *) fail "invalid failed admission predecessor" ;;
       esac
       wait_for_marker claim.complete
+      if [ "$2" = ADMIT_PREDECESSOR_FAILED ]; then
+        # Техническое завершение не зависит от current base/evidence и не
+        # подписывает либо публикует выдуманный REJECTED bundle.
+        record_owner_failure ADMISSION_WORKER_FAILED || exit 1
+        exit 0
+      fi
       load_owner_claim
       reject_failed_predecessor "$2"
     else

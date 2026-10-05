@@ -4951,6 +4951,45 @@ func (e RoleEnvironmentPlatformOs) Valid() bool {
 	}
 }
 
+// Defines values for RoleImageAdmissionFailureErrorCode.
+const (
+	ADMISSIONEVIDENCEENTRYEXCEEDSBOUND RoleImageAdmissionFailureErrorCode = "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND"
+	ADMISSIONEVIDENCEEXCEEDSBOUND      RoleImageAdmissionFailureErrorCode = "ADMISSION_EVIDENCE_EXCEEDS_BOUND"
+	ADMISSIONLEASEEXPIRED              RoleImageAdmissionFailureErrorCode = "ADMISSION_LEASE_EXPIRED"
+	ADMISSIONWORKERFAILED              RoleImageAdmissionFailureErrorCode = "ADMISSION_WORKER_FAILED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageAdmissionFailureErrorCode enum.
+func (e RoleImageAdmissionFailureErrorCode) Valid() bool {
+	switch e {
+	case ADMISSIONEVIDENCEENTRYEXCEEDSBOUND:
+		return true
+	case ADMISSIONEVIDENCEEXCEEDSBOUND:
+		return true
+	case ADMISSIONLEASEEXPIRED:
+		return true
+	case ADMISSIONWORKERFAILED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImageAdmissionFailureState.
+const (
+	RoleImageAdmissionFailureStateFAILED RoleImageAdmissionFailureState = "FAILED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageAdmissionFailureState enum.
+func (e RoleImageAdmissionFailureState) Valid() bool {
+	switch e {
+	case RoleImageAdmissionFailureStateFAILED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleImageArtifactAdmissionVerdict.
 const (
 	RoleImageArtifactAdmissionVerdictACCEPTED RoleImageArtifactAdmissionVerdict = "ACCEPTED"
@@ -8892,25 +8931,25 @@ func (e ListArtifactsParamsType) Valid() bool {
 
 // Defines values for ListArtifactsParamsScanState.
 const (
-	CLEAN       ListArtifactsParamsScanState = "CLEAN"
-	FAILED      ListArtifactsParamsScanState = "FAILED"
-	PENDING     ListArtifactsParamsScanState = "PENDING"
-	QUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
-	SCANNING    ListArtifactsParamsScanState = "SCANNING"
+	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
+	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
+	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
+	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
+	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsScanState enum.
 func (e ListArtifactsParamsScanState) Valid() bool {
 	switch e {
-	case CLEAN:
+	case ListArtifactsParamsScanStateCLEAN:
 		return true
-	case FAILED:
+	case ListArtifactsParamsScanStateFAILED:
 		return true
-	case PENDING:
+	case ListArtifactsParamsScanStatePENDING:
 		return true
-	case QUARANTINED:
+	case ListArtifactsParamsScanStateQUARANTINED:
 		return true
-	case SCANNING:
+	case ListArtifactsParamsScanStateSCANNING:
 		return true
 	default:
 		return false
@@ -12425,6 +12464,27 @@ type RoleEnvironmentView struct {
 	ToolKeys          *[]string `json:"toolKeys,omitempty"`
 }
 
+// RoleImageAdmissionFailure defines model for RoleImageAdmissionFailure.
+type RoleImageAdmissionFailure struct {
+	BuildAttempt     int                                `json:"buildAttempt"`
+	BuildRef         OpaqueRef                          `json:"buildRef"`
+	ErrorCode        RoleImageAdmissionFailureErrorCode `json:"errorCode"`
+	ImageArtifactRef OpaqueRef                          `json:"imageArtifactRef"`
+	OrganizationRef  OpaqueRef                          `json:"organizationRef"`
+	ProjectRef       string                             `json:"projectRef"`
+	RecipeGeneration int64                              `json:"recipeGeneration"`
+	RecipeRef        OpaqueRef                          `json:"recipeRef"`
+	ScopeKind        RuntimeResourceScopeKind           `json:"scopeKind"`
+	State            RoleImageAdmissionFailureState     `json:"state"`
+	Version          int64                              `json:"version"`
+}
+
+// RoleImageAdmissionFailureErrorCode defines model for RoleImageAdmissionFailure.ErrorCode.
+type RoleImageAdmissionFailureErrorCode string
+
+// RoleImageAdmissionFailureState defines model for RoleImageAdmissionFailure.State.
+type RoleImageAdmissionFailureState string
+
 // RoleImageArtifact defines model for RoleImageArtifact.
 type RoleImageArtifact struct {
 	AdmissionVerdict            RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
@@ -12686,10 +12746,11 @@ type RoleImageRecipeCreateInput struct {
 
 // RoleImageRecipeDetail defines model for RoleImageRecipeDetail.
 type RoleImageRecipeDetail struct {
-	ActiveArtifact     *RoleImageArtifact `json:"activeArtifact,omitempty"`
-	Builds             []RoleImageBuild   `json:"builds"`
-	PromotionCandidate *RoleImageArtifact `json:"promotionCandidate,omitempty"`
-	Recipe             RoleImageRecipe    `json:"recipe"`
+	ActiveArtifact     *RoleImageArtifact         `json:"activeArtifact,omitempty"`
+	AdmissionFailure   *RoleImageAdmissionFailure `json:"admissionFailure,omitempty"`
+	Builds             []RoleImageBuild           `json:"builds"`
+	PromotionCandidate *RoleImageArtifact         `json:"promotionCandidate,omitempty"`
+	Recipe             RoleImageRecipe            `json:"recipe"`
 }
 
 // RoleImageRecipePage defines model for RoleImageRecipePage.

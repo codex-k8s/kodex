@@ -163,6 +163,49 @@ digest/подпись/binding и не пересобирает evidence. CP со
 Реальный inventory проверяется canonical build/admission; unit и synthetic
 recovery fixtures не доказывают наличие toolchain в развёрнутом образе.
 
+## Технический terminal admission
+
+Технический отказ `FAILED` хранится отдельно от verdict `ACCEPTED|REJECTED`:
+не создаёт scanner/signature/evidence receipt и не разрешает promotion. Owner
+DTO `RoleImageRecipeDetail.admissionFailure` содержит только artifact/version,
+recipe/generation, build/attempt, полный scope и закрытый errorCode. Чтение
+SYSTEM/ORGANIZATION и PROJECT разрешает только failure текущего рецепта и
+последней сборки; старый failure не перекрывает новую attempt или generation.
+
+| Инициатор / переход | Authority и OCC | Транзакция и consumer |
+| --- | --- | --- |
+| `PENDING → CLAIMED` | image-admission mTLS + fresh application proof; owner выбирает только ACTIVE exact current recipe/latest COMPLETED build | Claim/fence/generation/token и receipt; expired claim не переиспользуется |
+| `CLAIMED → ACCEPTED|REJECTED` | Существующий `RecordImageAdmission`, exact token/fence/version/expiry и подписанные digests | Существующие verdict/evidence и recipe event; eligibility без ослабления |
+| `CLAIMED → FAILED` | `FailImageAdmission`, exact image-admission method/proof и полный сохранённый immutable tuple; DBclock ещё до expiry | Worker codes только `ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND`, `ADMISSION_EVIDENCE_EXCEEDS_BOUND`, `ADMISSION_WORKER_FAILED`; revoke claim + audit + idempotency receipt + один `ROLE_IMAGE_RECIPE_CHANGED` атомарно |
+| Expired `CLAIMED → FAILED` | Dedicated `ExpireImageAdmissionClaim`: fresh maintenance proof того же workload, exact old fence/version/authority-generation/tuple как OCC; без token и caller reason; expiry назначает DBclock | Только `ADMISSION_LEASE_EXPIRED`; тот же атомарный terminal envelope. Existing Claim command также закрывает не более 32 expired claims своей организации, с durable outcome receipt |
+| Terminal receipt rejoin | Fresh proof, owner-resolved artifact/organization, неизменный command intent; transport correlation/credential rotation не меняют intent | Повтор возвращает прежний receipt без второго события; expiry rejoin после Claim hook сверяет приватный pin прежнего claim generation, не выдавая его как authority |
+| Abrupt FAILED admit / callback outage | Controller разрешает свежий exact managed Job UID/run и сохраняет PVC cursor до удаления FAILED Job | Новая admit Job получает только `ADMIT_PREDECESSOR_FAILED`; bridge повторяет тот же сохранённый claim и closed failure intent. Jobs/PVC остаются до успешного durable owner callback |
+| Recovery / cleanup | Cursor содержит только predecessor UID и next UTC; backoff 10s–10m, максимум 24h от API-assigned PVC creationTimestamp | Controller restart восстанавливает cursor; только callback Job success закрывает workspace. Исчерпание бюджета сохраняет workspace и закрыто возвращает technical degradation, без нового claim |
+
+Controller получает только namespace-scoped PVC `update` дополнительно к
+существующим capabilities. Workspace VAP допускает UPDATE ровно двух recovery
+annotations, запрещает изменения spec, labels, ownerReferences, finalizers и
+всех иных annotations; CREATE не принимает готовый recovery cursor. Другой actor
+не может добавить, удалить или изменить recovery annotations. Cursor/Job UID
+является Kubernetes recovery locator, но не источником control-plane authority.
+Forward-only upgrade сначала обновляет migration, CP/gateway, bridge/controller
+бинарии и обе exact authority policies. ConfigMap-only обновление скрипта не
+материализует callback RPC. Новый штатный Claim сохраняет `authorityGeneration`.
+Старый workspace без этого server pin не принимает legacy default или inference:
+перед обновлением требуется exact managed Jobs/PVC preflight. Если workspace
+пуст, bounded expiry hook первого свежего Claim закрывает старые expired DB claims.
+Удаление Kubernetes ресурсов само по себе не является owner terminal proof.
+Grant issuer/profile остаётся прежним; registry, локальный CP service allowlist
+и generated policy содержат два exact специализированных метода, недоступных
+builder, promotion, gateway и controller workloads. Availability read path
+не выполняет state transitions. Stale/reclaimed tuples закрыто отклоняются.
+
+Cancel/update/archive/delete сохраняют существующий owner terminal graph;
+дополнительных admission retry/delete или поддельного durable verdict нет.
+Событие технического terminal имеет cardinality один на закрытый artifact,
+origin — owner command либо bounded owner Claim expiry hook; consumers —
+существующий platform event/rejoin path и owner recipe detail readback.
+
 ## Сборщик и граница исполнения
 
 Kaniko не используется в промышленной конфигурации, поскольку исходный проект

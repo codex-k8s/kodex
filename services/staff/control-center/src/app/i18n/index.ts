@@ -1899,6 +1899,19 @@ const ru = {
     buildCompleted: "Сборка завершена",
     awaitingAdmission: "Ожидает допуска",
     admissionRejected: "Допуск отклонён",
+    admissionFailed: "Проверка допуска завершилась с ошибкой",
+    promotionBlockedByFailure: "Публикация недоступна: ошибка проверки",
+    admissionFailureHelp:
+      "Для публикации образ должен успешно пройти проверку допуска.",
+    admissionFailureReasons: {
+      ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND:
+        "Один из файлов проверки превышает допустимый размер.",
+      ADMISSION_EVIDENCE_EXCEEDS_BOUND:
+        "Общий размер данных проверки превышает допустимый предел.",
+      ADMISSION_WORKER_FAILED: "Не удалось выполнить проверку допуска образа.",
+      ADMISSION_LEASE_EXPIRED:
+        "Проверка допуска не завершилась в отведённое время.",
+    },
     promotionBlockedByAdmission: "Заблокирована допуском",
     awaitingPromotion: "Ожидает публикации",
     new: "Новый образ",
@@ -5487,6 +5500,20 @@ const en = {
     buildCompleted: "Build completed",
     awaitingAdmission: "Awaiting admission",
     admissionRejected: "Admission rejected",
+    admissionFailed: "Image admission check failed",
+    promotionBlockedByFailure: "Publication unavailable: check failed",
+    admissionFailureHelp:
+      "The image must pass admission before it can be published.",
+    admissionFailureReasons: {
+      ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND:
+        "One verification file exceeds the allowed size.",
+      ADMISSION_EVIDENCE_EXCEEDS_BOUND:
+        "The total verification data exceeds the allowed size.",
+      ADMISSION_WORKER_FAILED:
+        "The image admission check could not be completed.",
+      ADMISSION_LEASE_EXPIRED:
+        "The image admission check did not finish in time.",
+    },
     promotionBlockedByAdmission: "Blocked by image admission",
     awaitingPromotion: "Awaiting promotion",
     new: "New image",

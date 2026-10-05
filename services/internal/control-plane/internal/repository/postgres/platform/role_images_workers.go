@@ -33,6 +33,7 @@ type buildExpiryReceipt struct {
 }
 
 type admissionClaimReceipt struct {
+	Expired             []entity.RoleImageAdmissionFailure
 	Artifact            entity.ImageArtifact
 	Fence               uint64
 	AuthorityGeneration uint64
