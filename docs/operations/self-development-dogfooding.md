@@ -2995,3 +2995,17 @@ Live terminal receipt, idle barrier и новая активация worker imag
 ROOT43 diagnostic unit PASS22.469s: timing, original exitcode, один callback,
 privacy и CAS/source/policy negative cases сохранены. Production script
 не изменён; live применение новой двухсекундной диагностики ещё NOT RUN.
+
+16:00–16:02 UTC, checkpoint6b6ecf8654f45d09f0a463848047dd5d61c4ef56:
+V2 diagnostic CHECK/server dry-run/CAS apply/readback PASS; RV453810,
+dataSHA73c2e05e14b769fa9a4bb39ce7c9ffff63aa37ccee59f21edee17ba6bdba44f1.
+Новая native попытка отслеживается; terminal результат ещё не подтверждён.
+
+Production WaitForReady добавлен только owner Fail/Expire в прежнем8s budget.
+ROOT imageowner unit PASS0.288s, bridge unit PASS0.037s; реальный disposable
+loopback fixture подтверждает REFUSED→Ready, первый exact request/один effect,
+cancel/deadline ноль effect даже после read-only barrier, serverUnavailable
+не повторяется, PermissionDenied ведёт к отдельному свежему Expire.
+Изолированный тот же patch: race PASS1.479s, vet/build PASS. Claim и authority
+не меняются. Context7 официальных gRPC-Go документов проверен.
+Новый worker binary пока не активирован; это адресные, не live проверки.

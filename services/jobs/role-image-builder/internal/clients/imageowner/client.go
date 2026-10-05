@@ -11,6 +11,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	sharedclient "github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -309,6 +310,8 @@ func (client *Client) Fail(ctx context.Context, key string, claim Claim, code st
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
+	// Только terminal callback ждёт соединение в прежнем bounded context;
+	// ответ владельца не повторяется и не превращается в новую claim.
 	response, err := client.shared.RoleImages.FailImageAdmission(callCtx, &controlplanev1.FailImageAdmissionRequest{
 		IdempotencyKey: key, ImageArtifactRef: claim.ArtifactID, ExpectedVersion: claim.Version,
 		ExpectedFence: claim.Fence, ClaimToken: claim.ClaimToken, ExpectedAuthorityGeneration: claim.AuthorityGeneration,
@@ -316,7 +319,7 @@ func (client *Client) Fail(ctx context.Context, key string, claim Claim, code st
 		PolicyRevision: claim.PolicyRevision, PolicySha256: claim.PolicySHA256, BuildRef: claim.BuildID,
 		ExpectedBuildAttempt: claim.BuildAttempt, RecipeGeneration: claim.RecipeGeneration, SpecSha256: claim.SpecSHA256, ErrorCode: code,
 		ExpectedAdmissionAttemptRef: claim.AdmissionAttemptRef, ExpectedAdmissionAttempt: claim.AdmissionAttempt,
-	})
+	}, grpc.WaitForReady(true))
 	if status.Code(err) == codes.PermissionDenied {
 		return client.Expire(ctx, key+"-expiry", claim)
 	}
@@ -332,7 +335,7 @@ func (client *Client) Expire(ctx context.Context, key string, claim Claim) error
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
-	response, err := client.shared.RoleImages.ExpireImageAdmissionClaim(callCtx, &controlplanev1.ExpireImageAdmissionClaimRequest{IdempotencyKey: key, ImageArtifactRef: claim.ArtifactID, ExpectedVersion: claim.Version, ExpectedFence: claim.Fence, ExpectedAuthorityGeneration: claim.AuthorityGeneration, ManifestDigest: claim.ManifestDigest, ImmutableBuildSha256: claim.ImmutableBuildSHA256, ProvenanceSha256: claim.ProvenanceSHA256, PolicyRevision: claim.PolicyRevision, PolicySha256: claim.PolicySHA256, BuildRef: claim.BuildID, ExpectedBuildAttempt: claim.BuildAttempt, RecipeGeneration: claim.RecipeGeneration, SpecSha256: claim.SpecSHA256, ExpectedAdmissionAttemptRef: claim.AdmissionAttemptRef, ExpectedAdmissionAttempt: claim.AdmissionAttempt})
+	response, err := client.shared.RoleImages.ExpireImageAdmissionClaim(callCtx, &controlplanev1.ExpireImageAdmissionClaimRequest{IdempotencyKey: key, ImageArtifactRef: claim.ArtifactID, ExpectedVersion: claim.Version, ExpectedFence: claim.Fence, ExpectedAuthorityGeneration: claim.AuthorityGeneration, ManifestDigest: claim.ManifestDigest, ImmutableBuildSha256: claim.ImmutableBuildSHA256, ProvenanceSha256: claim.ProvenanceSHA256, PolicyRevision: claim.PolicyRevision, PolicySha256: claim.PolicySHA256, BuildRef: claim.BuildID, ExpectedBuildAttempt: claim.BuildAttempt, RecipeGeneration: claim.RecipeGeneration, SpecSha256: claim.SpecSHA256, ExpectedAdmissionAttemptRef: claim.AdmissionAttemptRef, ExpectedAdmissionAttempt: claim.AdmissionAttempt}, grpc.WaitForReady(true))
 	if err != nil {
 		return err
 	}
