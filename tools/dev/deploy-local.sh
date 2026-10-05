@@ -1555,6 +1555,48 @@ wait_stable_workloads() {
   fail 'local workloads did not retain a stable Ready state'
 }
 
+readback_local_runtime_materialization_admission() {
+  local admission_name admission_kind expected_admission actual_admission resource
+  local deadline=$((SECONDS + 180))
+  # До запуска owner/controller проверяем полный spec и свежую компиляцию
+  # всех runtime policies. Один snapshot связывает spec, generation и warnings.
+  for admission_name in runtime-execution-ticket-exact-projection \
+    runtime-execution-service-account runtime-execution-rbac \
+    runtime-execution-network-policy runtime-revision-exact-configmap-projection \
+    runtime-role-pod-exact-secret-projection; do
+    for admission_kind in ValidatingAdmissionPolicy ValidatingAdmissionPolicyBinding; do
+      expected_admission=$(ADMISSION_KIND="$admission_kind" ADMISSION_NAME="$admission_name" \
+        yq -o=json -I=0 'select(.kind == strenv(ADMISSION_KIND) and
+          .metadata.name == strenv(ADMISSION_NAME)) | .spec' "$render" | canonical_runtime_admission_specs)
+      [[ "$(jq -r length <<<"$expected_admission")" == 1 ]] ||
+        fail 'runtime materialization admission registry is incomplete'
+      while true; do
+        ((SECONDS < deadline)) || fail 'runtime materialization admission compilation is not current'
+        resource=$(kubectl --request-timeout=10s get "$admission_kind/$admission_name" -o json) ||
+          fail 'runtime materialization admission readback failed'
+        actual_admission=$(jq -c .spec <<<"$resource" | canonical_runtime_admission_specs) ||
+          fail 'runtime materialization admission readback failed'
+        [[ "$actual_admission" == "$expected_admission" ]] ||
+          fail 'runtime materialization admission readback mismatch'
+        if [[ "$admission_kind" != ValidatingAdmissionPolicy ]]; then break; fi
+        if jq -e '
+          (.metadata.generation | type == "number" and . > 0) and
+          .status.observedGeneration == .metadata.generation
+        ' <<<"$resource" >/dev/null; then
+          jq -e '
+            (.status.typeChecking | type == "object") and
+            (.status.typeChecking.expressionWarnings // [] |
+              type == "array" and length == 0)
+          ' <<<"$resource" >/dev/null ||
+            fail 'runtime materialization admission has compilation warnings or incomplete type checking'
+          break
+        fi
+        sleep 1
+      done
+    done
+  done
+}
+
 readback_local_image_admission_policies() {
   local admission_name admission_kind expected_admission actual_admission resource attempt
   # Полный закрытый набор относится к одному executable contract; presence
@@ -2038,6 +2080,7 @@ PY
                 .kind == "ValidatingAdmissionPolicyBinding") and
           (.metadata.name | test("^runtime-(execution-ticket-exact-projection|execution-service-account|execution-rbac|execution-network-policy|revision-exact-configmap-projection|role-pod-exact-secret-projection)$")))
       '
+      readback_local_runtime_materialization_admission
       "$script_directory/configure-local-node-registry.sh" --mode apply \
         --context "$context" --material-directory "$state_directory/material" \
         --promoted-pull-host "$(yq -N -r '
@@ -2144,23 +2187,7 @@ PY
       image_admission_controller_restore_replicas=""
       image_admission_policy_owner_coherent=true
     fi
-    for admission_name in runtime-execution-ticket-exact-projection \
-      runtime-execution-service-account runtime-execution-rbac \
-      runtime-execution-network-policy runtime-revision-exact-configmap-projection \
-      runtime-role-pod-exact-secret-projection; do
-      for admission_kind in ValidatingAdmissionPolicy ValidatingAdmissionPolicyBinding; do
-        expected_admission=$(ADMISSION_KIND="$admission_kind" ADMISSION_NAME="$admission_name" \
-          yq -o=json -I=0 'select(.kind == strenv(ADMISSION_KIND) and
-            .metadata.name == strenv(ADMISSION_NAME)) | .spec' "$render" | canonical_runtime_admission_specs)
-        [[ "$(jq -r length <<<"$expected_admission")" == 1 ]] ||
-          fail 'runtime materialization admission registry is incomplete'
-        actual_admission=$(kubectl get "$admission_kind/$admission_name" -o json | \
-          jq -c .spec | canonical_runtime_admission_specs) ||
-          fail 'runtime materialization admission readback failed'
-        [[ "$actual_admission" == "$expected_admission" ]] ||
-          fail 'runtime materialization admission readback mismatch'
-      done
-    done
+    readback_local_runtime_materialization_admission
     readback_local_image_admission_crd
     readback_local_claim_evidence_network
     readback_local_supply_chain_configuration

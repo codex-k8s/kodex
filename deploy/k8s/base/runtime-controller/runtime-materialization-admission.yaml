@@ -177,10 +177,12 @@ spec:
       message: execution RBAC labels are invalid
     - expression: >-
         object.kind == 'RoleBinding' ||
-        (object.metadata.name.matches('^runtime-role-[a-f0-9]{16}$') &&
+        (object.kind == 'Role' &&
+         object.metadata.name.matches('^runtime-role-[a-f0-9]{16}$') &&
          object.metadata.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
-         size(object.rules) == 2 &&
-         object.rules.all(rule,
+         has(dyn(object).rules) &&
+         size(dyn(object).rules) == 2 &&
+         dyn(object).rules.all(rule,
            size(rule.apiGroups) == 1 && rule.apiGroups[0] == '' &&
            size(rule.verbs) == 1 && rule.verbs[0] == 'get' &&
            size(rule.resourceNames) == 1 &&
@@ -191,17 +193,20 @@ spec:
       message: execution Role may read only its exact Pod and logs
     - expression: >-
         object.kind == 'Role' ||
-        (object.metadata.name.matches('^runtime-rb-[a-f0-9]{16}$') &&
+        (object.kind == 'RoleBinding' &&
+         object.metadata.name.matches('^runtime-rb-[a-f0-9]{16}$') &&
          object.metadata.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
-         size(object.subjects) == 1 &&
-         object.subjects[0].kind == 'ServiceAccount' &&
-         object.subjects[0].namespace == 'kodex-runtime' &&
-         object.subjects[0].name.matches('^runtime-sa-[a-f0-9]{16}$') &&
-         object.subjects[0].name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
-         object.roleRef.apiGroup == 'rbac.authorization.k8s.io' &&
-         object.roleRef.kind == 'Role' &&
-         object.roleRef.name.matches('^runtime-role-[a-f0-9]{16}$') &&
-         object.roleRef.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']))
+         has(dyn(object).subjects) &&
+         size(dyn(object).subjects) == 1 &&
+         dyn(object).subjects[0].kind == 'ServiceAccount' &&
+         dyn(object).subjects[0].namespace == 'kodex-runtime' &&
+         dyn(object).subjects[0].name.matches('^runtime-sa-[a-f0-9]{16}$') &&
+         dyn(object).subjects[0].name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
+         has(dyn(object).roleRef) &&
+         dyn(object).roleRef.apiGroup == 'rbac.authorization.k8s.io' &&
+         dyn(object).roleRef.kind == 'Role' &&
+         dyn(object).roleRef.name.matches('^runtime-role-[a-f0-9]{16}$') &&
+         dyn(object).roleRef.name.endsWith(object.metadata.labels['runtime.kodex.dev/execution-hash']))
       message: execution RoleBinding identity is invalid
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -531,7 +536,7 @@ spec:
       message: managed role Pod security boundary is invalid
     - expression: >-
         [variables.roleContainers[0], variables.providerContainers[0],
-          object.spec.initContainers[1]].all(container,
+          dyn(object.spec.initContainers[1])].all(container,
           container.image.matches('^.+@sha256:[a-f0-9]{64}$') &&
           container.image == variables.roleContainers[0].image &&
           container.imagePullPolicy == 'IfNotPresent' &&
@@ -614,7 +619,7 @@ spec:
       message: managed role Pod resources are outside the approved policy
     - expression: >-
         [variables.roleContainers[0], variables.relayContainers[0],
-          object.spec.initContainers[1]].all(container,
+          dyn(object.spec.initContainers[1])].all(container,
           size(container.resources.requests) == 2 &&
           size(container.resources.limits) == 2 &&
           quantity(string(container.resources.requests.cpu)).compareTo(quantity('25m')) == 0 &&
@@ -852,34 +857,34 @@ spec:
         ['workspace', 'vfs-input', 'vfs-knowledge'].all(name,
           size(object.spec.volumes.filter(volume,
             volume.name == name && has(volume.emptyDir) &&
-            quantity(string(volume.emptyDir.sizeLimit)).compareTo(quantity('1Gi')) == 0 &&
+            quantity(string(dyn(volume.emptyDir).sizeLimit)).compareTo(quantity('1Gi')) == 0 &&
             !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
             !has(volume.secret) && !has(volume.configMap) &&
             !has(volume.projected))) == 1) &&
         size(object.spec.volumes.filter(volume,
           volume.name == 'runtime-context' && has(volume.emptyDir) &&
-          quantity(string(volume.emptyDir.sizeLimit)).compareTo(quantity('520Mi')) == 0 &&
+          quantity(string(dyn(volume.emptyDir).sizeLimit)).compareTo(quantity('520Mi')) == 0 &&
           (!has(volume.emptyDir.medium) || volume.emptyDir.medium == '') &&
           !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
           !has(volume.secret) && !has(volume.configMap) && !has(volume.projected))) == 1 &&
         ['provider-socket', 'provider-credential-relay'].all(name,
           size(object.spec.volumes.filter(volume,
             volume.name == name && has(volume.emptyDir) &&
-            quantity(string(volume.emptyDir.sizeLimit)).compareTo(quantity('8Mi')) == 0 &&
+            quantity(string(dyn(volume.emptyDir).sizeLimit)).compareTo(quantity('8Mi')) == 0 &&
             !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
             !has(volume.secret) && !has(volume.configMap) &&
             !has(volume.projected))) == 1) &&
         ['tmp', 'provider-tmp'].all(name,
           size(object.spec.volumes.filter(volume,
             volume.name == name && has(volume.emptyDir) &&
-            quantity(string(volume.emptyDir.sizeLimit)).compareTo(quantity('512Mi')) == 0 &&
+            quantity(string(dyn(volume.emptyDir).sizeLimit)).compareTo(quantity('512Mi')) == 0 &&
             !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
             !has(volume.secret) && !has(volume.configMap) &&
             !has(volume.projected))) == 1)
         &&
         size(object.spec.volumes.filter(volume,
           volume.name == 'runtime-egress-trust' && has(volume.emptyDir) &&
-          quantity(string(volume.emptyDir.sizeLimit)).compareTo(quantity('2Mi')) == 0 &&
+          quantity(string(dyn(volume.emptyDir).sizeLimit)).compareTo(quantity('2Mi')) == 0 &&
           (!has(volume.emptyDir.medium) || volume.emptyDir.medium == '') &&
           !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
           !has(volume.secret) && !has(volume.configMap) && !has(volume.projected))) == 1

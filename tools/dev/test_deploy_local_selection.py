@@ -298,7 +298,9 @@ cleanup_on_exit
         )
         self.assertEqual(result.returncode, 0)
         self.assertEqual([json.loads(line) for line in result.stdout.splitlines()], accepted)
-        self.assertIn("runtime materialization admission readback mismatch", stage)
+        self.assertIn("readback_local_runtime_materialization_admission", stage)
+        readback = re.search(r'(?ms)^readback_local_runtime_materialization_admission\(\) \{.*?^\}', source).group(0)
+        self.assertIn("runtime materialization admission readback mismatch", readback)
 
     def test_supply_chain_admission_script_is_updated_while_controller_is_paused(self):
         source = SCRIPT.read_text()
@@ -635,7 +637,7 @@ readback_local_image_admission_controller_rbac
     def test_supply_chain_failed_upgrade_never_resumes_controller(self):
         source = SCRIPT.read_text()
         stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
-        stage = stage[:stage.index('    for admission_name in runtime-execution-ticket-exact-projection')] + '\n  fi\n'
+        stage = stage[:stage.index('\n    readback_local_runtime_materialization_admission\n')] + '\n  fi\n'
         cleanup = re.search(r'(?ms)^cleanup_on_exit\(\) \{.*?^\}', source).group(0)
         command = cleanup + '''
 fail() { printf 'closed\\n' >&2; exit 1; }
@@ -645,6 +647,7 @@ apply_job() { phase "$1"; }
 pause_local_image_admission_controller() { phase pause; image_admission_controller_restore_replicas=1; }
 require_empty_local_image_admission_runs() { phase preflight; }
 readback_local_image_admission_policies() { phase vap-readback; }
+readback_local_runtime_materialization_admission() { phase runtime-vap-readback; }
 readback_local_image_admission_controller_rbac() { phase rbac-readback; }
 readback_local_control_plane_image_policy() { phase owner-readback; }
 readback_local_supply_chain_deployment_inputs() { phase source-readback; }
@@ -676,7 +679,7 @@ trap cleanup_on_exit EXIT
                 path = Path(directory) / name
                 path.write_text('#!/bin/sh\nexit 0\n')
                 path.chmod(0o700)
-            for failed in ('pause', 'preflight', 'identity-policy', 'control-plane-migrate',
+            for failed in ('pause', 'preflight', 'runtime-vap-readback', 'identity-policy', 'control-plane-migrate',
                            'crd-readback', 'network-readback', 'configuration-readback',
                            'vap-readback', 'rbac-readback', 'kube-ready', 'owner-readback', 'source-readback', ''):
                 with self.subTest(failed=failed):

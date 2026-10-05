@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.0
+version: 1.7.1
 updated: 2026-10-05
 ---
 
@@ -1554,6 +1554,27 @@ init с `reason=Completed`, `exitCode=0` и `ready=true` не считается
 материализуются и читаются заново forward migrations, exact policy/CRD,
 NetworkPolicy, CP/gateway и необходимые worker/bridge binaries. Только после
 этого повторные owner idle и exact serving readback разрешают controller resume.
+
+CEL-проверка Quantity учитывает точную OpenAPI-схему целевого API server:
+`oneOf(string, number)` без `type` может исключить Quantity и содержащую его
+карту из статической модели. `dyn` допускается только на точной границе
+`resources` или `emptyDir`; прежние storage/resource limits сохраняются.
+Regression использует реальный schema-to-CEL adapter закреплённой версии,
+воспроизводит прежний warning и проверяет отрицательные значения. Пустой список
+warnings значим только при свежем `observedGeneration == generation`; ошибка
+компиляции не разрешает возобновить controller. Публичная ограниченная проверка —
+`make test-workspace-policy-contract`, локальный предел процесса 120 секунд.
+
+Для policy, объединяющей Role/RoleBinding, динамическая граница ограничена
+полями `rules`/`subjects`/`roleRef` внутри точной ветки `kind` с проверкой наличия.
+Для списка обычных/init контейнеров `dyn` ограничен единственным элементом
+`initContainers`; пути metadata/spec и точные image/command/resource ограничения
+сохраняют прежние проверки. До запуска CP/controller и в конечном readback один
+native snapshot связывает полный ожидаемый spec, текущую generation и завершённую
+type checking без warnings. Отсутствующая type checking или устаревшая generation
+закрыто отклоняются; отсутствие `expressionWarnings` в существующем пустом объекте
+type checking соответствует сериализации API server. Адресная проверка этого
+gate — `make test-runtime-admission-gate`, предел процесса 60 секунд.
 
 Очистка воспроизводимых локальных кэшей и образов выбирает только явный
 проверенный список. Перед каждым эффектом заново сверяются владелец, текущие

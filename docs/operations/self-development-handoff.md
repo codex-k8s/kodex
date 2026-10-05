@@ -8,17 +8,19 @@ version: 1.0.0
 updated: 2026-10-05
 ---
 
-# Состояние на паузе
+# Текущее состояние
 
-Работа приостановлена владельцем. Этот документ не разрешает её возобновление.
-Кластер, агентские запуски, сборки и QA не запускать до явного «продолжай».
+05.10.2026 владелец явно возобновил работу после переноса хранилища.
+Перенос проверен; цель снова выполняется. Пять компонентов пока остаются
+в maintenance до исправления CEL-политики и полного штатного apply/readback.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).
 - Draft PR: [#1798](https://github.com/codex-k8s/kodex/pull/1798), не слит.
 - Ветка: `kodex-agent/issue-1797-self-development-bootstrap`.
 - Последняя фиксация кода и технических документов: `99f397c56a7dd97831011d70be73e82eb8999afd`.
 - Checkpoint завершения сборки и паузы: `1cde8237c535e19bc0cdcd742c64ce6a8f6251b3`.
-- Последующие изменения этой фиксации касаются только документации.
+- После этого checkpoint исправлена CEL-типизация admission policies;
+  точный source и результаты адресных проверок фиксируются в журнале.
 - Полное задание: [65 разделов QA](../qa/full-qa-task.md).
 - Checklist и подробный хронологический журнал: [самонастройка](self-development-dogfooding.md).
 
@@ -53,13 +55,18 @@ updated: 2026-10-05
 - PASS: свежий render того же source. Это не serving/live acceptance.
 - PASS: maintenance barrier ранее подтверждён; пять Deployment оставлены
   с `spec/status replicas=0`, активных работ нет, promoted pins сохранены.
-- FAIL: apply остановлен в preflight на CEL warning существующей
+- FAIL: частичный apply остановлен на CEL warning существующей
   `kodex-image-admission-controller-workspaces`, generation/observedGeneration 2.
   `spec.validations[4].expression` обращается к полю `resources.requests`,
   которое type checker не распознал для PersistentVolumeClaim.
   Проверка отсутствия warnings не обходилась.
-- NOT RUN: новая migration `20261005000200_image_admission_risk_decisions.sql`,
-  serving policy 89 и новые CRD/network/CP/gateway; контроллеры не возобновлены.
+- Уточнение по свежему readback 05.10.2026 12:58 UTC: migration
+  `20261005000200_image_admission_risk_decisions.sql` уже применена,
+  `goose_db_version.is_applied=true`. Job `control-plane-migrate-85012127fec2`
+  завершился при предыдущем apply в 09:25 UTC. Прежняя трактовка отказа как
+  preflight «до любых эффектов» была неверной: отказ случился после частичного
+  apply, на проверке компиляции политики. Serving CP/gateway и контроллеры
+  не возобновлены; полная активация и её readback ещё NOT RUN.
 - NOT RUN: живое принятие риска, повторный admission/promotion и полный dogfooding.
 - Открытое замечание безопасности ещё не закрыто; подтверждение устранения NOT RUN.
 - Общее историческое форматирование журнала имеет отдельный FAIL;
@@ -68,14 +75,17 @@ updated: 2026-10-05
 Сейчас остановлены control-plane, control-api-gateway, image-admission,
 role-image-builder и runtime-controller. API возвращает `503`; это ожидаемое
 следствие maintenance, а не доказательство работоспособности нового кода.
-Все дочерние агенты и собственные build/render/apply процессы завершены.
+На checkpoint паузы дочерние агенты и build/render/apply были завершены.
+После возобновления выполняются адресные исправления и проверки политик;
+сервисы не запускаются до подтверждения их успешной компиляции.
 
-# Что делать после возобновления
+# Оставшиеся действия
 
-- [ ] Сверить GitHub HEAD, рабочую ветку, сохранённые данные и фактическое
+- [x] Сверить GitHub HEAD, рабочую ветку, сохранённые данные и фактическое
       состояние Deployment/работ/образов. Старое evidence не объявлять свежим.
-- [ ] Исправить CEL-типизацию workspace policy через код и адресные negative tests,
-      не ослабляя PVC constraints и gate отсутствия compiler warnings.
+- [x] Исправить CEL-типизацию workspace/runtime policy через код и адресные
+      negative tests, не ослабляя PVC/RBAC/контейнерные ограничения.
+      Живая компиляция и активация остаются отдельным следующим пунктом.
 - [ ] Получить fresh source/render; штатным repo-owned apply выполнить forward
       migration и обновление CRD/policy/network/CP/gateway. После полного readback
       штатно возобновить контроллеры. Не применять старый render вслепую.

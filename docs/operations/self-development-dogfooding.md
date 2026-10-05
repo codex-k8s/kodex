@@ -24,7 +24,7 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
 разрешённое владельцем исключение из правила одного deployable unit.
 Данный документ фиксирует дополнения владельца; полный сценарий сохранён
 в `docs/qa/full-qa-task.md` и выполняется целиком. Краткая точка продолжения —
-[состояние на паузе](self-development-handoff.md).
+[точка продолжения](self-development-handoff.md).
 
 ## Решения владельца и режим
 
@@ -2620,3 +2620,91 @@ PASS — сохранены 65 последовательных разделов
 не включены. Worktrees и их промежуточные варианты не удалялись.
 Эти проверки не являются новым application/live PASS.
 Код, deployment и данные не менялись; цель и исполнители остаются на паузе.
+
+05.10.2026 12:58 UTC, возобновление владельцем, source
+`0e8d86078d478fa565a6bfaff63c7c262ffb94fa`, свежий readback:
+PASS — четыре перенесённых каталога доступны по прежним путям через bind mounts;
+device/inode совпали с каталогами на `/data`. Постоянные mount units и Docker
+dependencies активны; основной диск свободен на 262 GiB, второй на 332 GiB.
+Все 13 исходных контейнеров работают; обе ноды Ready, 42 Ready Pods как до
+переноса. Session-archive notReady — прежний отдельный дефект, не регресс переноса.
+PASS — шесть баз Codex прошли bounded readonly quick_check. Для обеих сессий
+SHA256 исходного префикса точной прежней длины совпал с migration manifest;
+последующие дописывания не считаются повреждением. Exact четыре OCI pin и
+сохранённые render/страховочная копия доступны; значения private inputs не читались
+и не публиковались. Проверка переноса не является новой приёмкой приложения.
+
+Свежий owner SQL: openBuilds/pendingAdmissions/pendingPromotions/activeRuntimeRuns/
+claimedRuntimeLeases=0, promotedArtifactCount=19 и promotedPinsSHA256
+`28e8bf55a6bb69d0fd3b00afb7b7a85373f2f1e2db66ed829ce8deb400bc62c8`
+не изменились. Пять Deployment остаются replicas0.
+Уточнение прежнего отчёта: migration `20261005000200` уже применена,
+goose is_applied=true, Job control-plane-migrate-85012127fec2 Complete.
+Предыдущий supply-chain apply дошёл до migration и применения policy;
+CEL warning остановил дальнейшую активацию, а не был отказом до всех эффектов.
+Исторические заявления о NOT RUN migration и preflight до любых изменений
+опровергнуты этим readback; полный serving activation/browser risk QA NOT RUN.
+Новый apply должен использовать идемпотентные forward migrations, без отката схемы.
+
+Chrome MCP подключён к рабочей вкладке Kodex; соседняя вкладка не тронута.
+Frontend revision/config GET200, bootstrap/session GET503 ожидаемы при maintenance.
+Это не browser PASS. Для дальнейших cluster действий используется repo-pinned
+kubectl v1.35.5 вместо внешнего v1.37.1, не совместимого по minor skew.
+Параллельный исполнитель диагностирует typed Quantity/PVC CEL и готовит
+исправление с адресными негативными тестами; второй выполнил проверку переноса.
+
+05.10.2026 13:14 UTC, продолжение исправлений:
+Frozen workspace patch от base `0e8d8607`, SHA256
+`15fb987735852b3424c94f31fe9155d0e9bdd3c3666fcb6f3824684f6d1e852d`,
+перенесён в рабочую ветку без ослабления PVC/volume constraints. `dyn` ограничен
+Quantity-границей `resources`/`emptyDir`: точные 2Gi и пять прежних размеров
+временных томов сохранены. В отдельном тестовом модуле реальный schema-to-CEL
+adapter Kubernetes v1.35.5 воспроизводит прежние ошибки типизации; production
+зависимости не изменялись. Дополнительно исправляются RBAC Role/RoleBinding
+union и смешанный список обычных/init контейнеров. Live активация исправлений
+ещё NOT RUN; compiler gate не обходится.
+
+ROOT на ещё незакоммиченном patch: `make test-workspace-policy-contract` PASS
+0.047s, адресный admissioncontroller test PASS 0.515s, vet нового test module
+PASS. Текущие deploy selection 26 tests PASS; maintenance 21 tests PASS с одним
+disposable PostgreSQL NOT RUN. После интеграции второго patch проверки будут
+повторены на точном committed SHA. Форматирование новых QA/handoff и guide,
+runtime policy, bash syntax и diff-check PASS; прежний широкий formatting FAIL
+не объявляется исправленным.
+
+Read-only диагностика session-archive: /readyz 503, owner RPC Unavailable,
+у остановленного control-plane нет ready endpoints. Это ожидаемая maintenance
+зависимость, не обнаруженная регрессия переноса. Отдельный restart или ослабление
+readiness не выполнялись; её восстановление после активации CP пока NOT RUN.
+
+PR1798 остаётся OPEN Draft, body readback PASS: статус возобновления и факт
+уже применённой migration002 исправлены. Перенос хранилища, compile исправления
+и адресные unit не являются полной живой приёмкой либо завершением цели.
+
+05.10.2026 13:19 UTC:
+Интегрирован второй frozen patch от того же base, SHA256
+`6e3b051465d7ef6b9bea524e847e4823cdad9a008d242bbf79fab245ccf34cf5`.
+RBAC union и init/main list исправлены на минимальных динамических границах.
+Actor/namespace/kind, exact hash/image/command/args/resources, matchConditions,
+CREATE-only и Deny bindings не расширялись. Cancel/delete/retry/renew и owner
+graph не изменялись. Типизированные negative eval проверяют изменённые hash,
+namespace, subject, ClusterRole, wildcards, отсутствующие и неверно типизированные
+поля, mutable/foreign image, команды/аргументы и размеры ресурсов.
+
+Новый runtime compiler gate применяется сразу после policy/binding до запуска
+owner/controller и повторяется в конечном readback: полный ожидаемый spec,
+свежая observedGeneration и существующий typeChecking без warnings из одного
+snapshot, общий бюджет 180s, GET timeout10s. Публичный bounded unit entrypoint
+`make test-runtime-admission-gate` ограничен 60s.
+
+ROOT объединённый patch: typed CEL tests PASS0.150s; gate7tests PASS7.083s;
+selection26tests PASS2.113s; cutover20выполненныхtests PASS9.423s, один optional
+disposable PostgreSQL NOT RUN. bash-n, ShellCheck, diff-check и выбранное
+форматирование PASS. Все девять VAP API server принимает в server-dry-run;
+это проверка manifest API, не live compiled generation и не dry-run самого PVC.
+Проверка PVC под обычной admin identity пропустила бы controller matchCondition,
+поэтому не объявляется PASS. Native positive PVC проверяется следующей настоящей
+сборкой; отдельные отрицательные server PVC проверки пока NOT RUN.
+
+После фиксации clean source выполняются повторные адресные проверки и штатный
+build/render/apply. Chrome содержит ожидаемый maintenance503, не live PASS.

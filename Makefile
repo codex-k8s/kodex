@@ -37,6 +37,14 @@ test-web-only-release:
 	@python3 scripts/tests/pwa-public-assets-test.py
 	@./scripts/tests/web-only-release-test.sh
 
+.PHONY: test-workspace-policy-contract
+test-workspace-policy-contract: check-go-toolchain
+	@cd tools/dev/workspace-policy-contract && env -u GOFLAGS GOENV=off GOWORK=off timeout 120s go test -count=1 -timeout=60s ./...
+
+.PHONY: test-runtime-admission-gate
+test-runtime-admission-gate:
+	@timeout 60s python3 -B tools/dev/test_runtime_admission_gate.py
+
 .PHONY: test-pwa-public-assets-http
 test-pwa-public-assets-http:
 	@timeout 180s python3 scripts/tests/pwa-public-assets-test.py --http

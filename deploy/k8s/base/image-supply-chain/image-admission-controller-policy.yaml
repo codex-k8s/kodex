@@ -645,7 +645,7 @@ spec:
       message: Image admission workspace identity is outside the owner contract.
     - expression: >-
         object.spec.accessModes == ['ReadWriteOnce'] &&
-        string(object.spec.resources.requests['storage']) == '2Gi' &&
+        string(dyn(object.spec.resources).requests['storage']) == '2Gi' &&
         (request.operation == 'UPDATE' || !has(object.spec.volumeName)) &&
         !has(object.spec.selector) &&
         !has(object.spec.dataSource) &&
