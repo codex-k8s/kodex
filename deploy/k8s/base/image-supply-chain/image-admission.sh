@@ -36,6 +36,20 @@ wait_for_marker() {
   [ "$(cat "/work/$1")" = "$ADMISSION_RUN_ID" ] || fail "stale predecessor evidence"
 }
 
+# Нормализуем полный новый документ до вычисления дайджеста и подписи.
+# Durable evidence при восстановлении остаётся побайтно неизменным.
+compact_evidence_json() {
+  compaction_input=$1
+  if ! jq -eScs '
+    if length == 1 and (.[0] | type) == "object" then .[0]
+    else error("evidence must be a single JSON object") end
+  ' "$compaction_input" >"$compaction_input.compact" 2>/dev/null; then
+    rm -f "$compaction_input.compact"
+    fail "evidence JSON compaction failed"
+  fi
+  mv "$compaction_input.compact" "$compaction_input" || fail "evidence JSON compaction failed"
+}
+
 # Проекция только подтверждённого durable evidence после успешной записи владельца.
 emit_admission_diagnostic() {
   jq -cen --arg run "$ADMISSION_RUN_ID" \
@@ -858,6 +872,7 @@ case "${1:-}" in
     write_syft_registry_config "$staging_host" /identity/username /identity/password
     syft --config /tmp/syft.json --from registry "$source_ref" \
       -o spdx-json=/work/sbom.json || fail "SBOM generation failed"
+    compact_evidence_json /work/sbom.json
     GRYPE_CHECK_FOR_APP_UPDATE=false \
       grype sbom:/work/sbom.json -o json >/work/vulnerability.raw.json ||
       fail "vulnerability scan failed"
@@ -867,6 +882,7 @@ case "${1:-}" in
       -f /opt/kodex/vulnerability-policy.jq \
       /work/vulnerability.raw.json >/work/vulnerability.json ||
       fail "vulnerability policy evaluation failed"
+    compact_evidence_json /work/vulnerability.json
     if jq -e '.kodexPolicy.blockingMatchCount == 0' /work/vulnerability.json >/dev/null; then
       printf '%s\n' ACCEPTED >/work/verdict
     else

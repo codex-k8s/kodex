@@ -1908,3 +1908,34 @@ child → controller resume. Error до gate сохраняет controller pause
 EXIT cleanup. Annotation revision+digest гарантируют rollover при same HEAD.
 ROOT18 Python PASS, shell syntax/diff-check PASS. Новый SCall delta live NOT RUN.
 Дополнительные sign/admit причины исследуются до перехода к следующему этапу.
+
+05.10.2026 01:07 UTC, source419eead0348f27066754b8d3ebe75fba90422063:
+PASS — canonical render и repo-owned supply-chain apply/readback нового
+owner coherence gate. Ready CP PodUID2e97d722-3a20-42ce-8d61-06badfe11bfc,
+policyRevision1/policySHA256d7e568f7c00f0be6915ebc34b4649a7cbf2d19c5f0a03c41058bcbb54db20298.
+Script проверил exact Deployment/ReplicaSet/ReadyPod и два выбранных policy
+поля фактически работающего Go child; только затем controller replicas1/Ready1.
+FAIL — native38J buildimgbld_QX-NHOK0yOIqta2DiWomJDmM COMPLETED/gen4.
+Read-only observer captured fresh runv20261005005308-f52874938cd65dadf40c8688e3dc61b912a947a5:
+SCAN JobUIDff744af1-6ae9-4eef-b145-eb752c99d653,
+PodUID2566bbd5-9502-4b7e-8720-d18b2ba68514 exit0 00:53:31→00:56:46;
+SIGN exit0 00:56:52→00:56:53;
+ADMIT JobUIDbbf0a84d-b50f-4add-aa25-e62962591bc7,
+PodUIDf63e3933-b1e1-4b4b-8543-a377951d625b exit1 00:56:58 и closed literal
+ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND. Это actual per-entry guard, не OOM.
+Конкретный oversized member/его размер UNKNOWN; fresh run candidate не назван
+owner-confirmed artifact tuple, authoritative record/diagnostic отсутствует.
+Метаданные сохранены в owned0600 private artifact; raw logs/env не сохранялись.
+Найден общий lifecycle defect: FAILED admit удалял Jobs/PVC без owner terminal,
+CLAIMED artifact мог снова попасть в очередь после TTL, UI продолжал ожидание.
+В реализации отдельный fenced FailImageAdmission и technical failure read model;
+verdict/evidence не фабрикуются, expiry определяется owner PostgreSQL clock.
+В текущем дереве419eead + compact delta ROOT Node13 PASS, shell syntax/diff-check
+PASS: полные новые SBOM/vulnerability JSON компактируются до hashing/signing,
+проверяются semantic equality и неизменные16Mi/64Mi bounds. Applied evidence
+recovery/replay не переписывается. Context7 /jqlang/jq: checked compact/sort/exit
+и сохранение числовых литералов без арифметики; runtime recipe pin jq1.8.2.
+Live compact repeat, owner technical failure и публикация окружения NOT RUN;
+checkbox6/7 остаются OPEN. Frontend recipe polling source-only не обнаружен:
+повторный detail read запускает verified WebSocket invalidation, не timer;
+Network count сам по себе не доказательство polling.

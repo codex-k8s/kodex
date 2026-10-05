@@ -15,6 +15,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import { createHash } from "node:crypto";
 import {
   admissionBinding,
   parseDiagnostic,
@@ -86,6 +87,201 @@ const pod = () => ({
   ],
 });
 const clone = (value) => structuredClone(value);
+
+function evidenceCompactionFixture(t) {
+  const source = readFileSync(
+    new URL(
+      "../../deploy/k8s/base/image-supply-chain/image-admission.sh",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const definition = source.match(
+    /^compact_evidence_json\(\) \{\n[\s\S]*?^\}/m,
+  )?.[0];
+  assert.ok(definition, "production compaction function is missing");
+  const directory = mkdtempSync(join(tmpdir(), "kodex-evidence-compaction-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const compact = (path) =>
+    spawnSync(
+      "sh",
+      [
+        "-eu",
+        "-c",
+        `fail() { printf 'image admission failed: %s\\n' "$1" >&2; exit 1; }\n${definition}\ncompact_evidence_json "$1"`,
+        "fixture",
+        path,
+      ],
+      { encoding: "utf8" },
+    );
+  return { source, directory, compact };
+}
+
+test("full evidence JSON is canonical before hashing and signing without content loss", (t) => {
+  const { source, directory, compact } = evidenceCompactionFixture(t);
+  const sbom = {
+    packages: [
+      { name: "tool", versionInfo: "1.2.3", externalRefs: ["CVE-2026-12345"] },
+    ],
+    document: { unicode: "данные", nullValue: null, active: false },
+  };
+  const vulnerability = {
+    matches: [
+      {
+        vulnerability: {
+          id: "CVE-2026-12345",
+          severity: "High",
+          fix: { versions: ["1.2.4"], state: "fixed" },
+        },
+        artifact: { name: "tool", version: "1.2.3" },
+      },
+    ],
+    kodexPolicy: {
+      blockingMatchCount: 1,
+      highOrCriticalMatchCount: 1,
+      unresolvedNoFixMatchCount: 0,
+    },
+  };
+  for (const [name, value] of [
+    ["sbom", sbom],
+    ["vulnerability", vulnerability],
+  ]) {
+    const path = join(directory, name + ".json");
+    writeFileSync(path, JSON.stringify(value, null, 8));
+    const beforeHash = createHash("sha256")
+      .update(readFileSync(path))
+      .digest("hex");
+    const result = compact(path);
+    assert.equal(result.status, 0, result.stderr);
+    const bytes = readFileSync(path);
+    assert.deepEqual(JSON.parse(bytes.toString()), value);
+    assert.equal(bytes.toString().trim().split("\n").length, 1);
+    assert.notEqual(
+      createHash("sha256").update(bytes).digest("hex"),
+      beforeHash,
+    );
+    const digest = execFileSync("sha256sum", [path], {
+      encoding: "utf8",
+    }).split(" ")[0];
+    assert.equal(digest, createHash("sha256").update(bytes).digest("hex"));
+    assert.equal(compact(path).status, 0);
+    assert.deepEqual(readFileSync(path), bytes);
+  }
+  const numericPath = join(directory, "numeric-literals.json");
+  writeFileSync(
+    numericPath,
+    '{ "size": 100000000000000001, "precision": 1.234567890123456789 }',
+  );
+  assert.equal(compact(numericPath).status, 0);
+  assert.equal(
+    readFileSync(numericPath, "utf8"),
+    '{"precision":1.234567890123456789,"size":100000000000000001}\n',
+  );
+  const scan = source.slice(
+    source.indexOf("  scan)"),
+    source.indexOf("  sign)"),
+  );
+  assert.ok(
+    scan.indexOf("compact_evidence_json /work/sbom.json") >
+      scan.indexOf("SBOM generation failed"),
+  );
+  assert.ok(
+    scan.indexOf("compact_evidence_json /work/sbom.json") <
+      scan.indexOf("grype sbom:"),
+  );
+  assert.ok(
+    scan.indexOf("compact_evidence_json /work/vulnerability.json") >
+      scan.indexOf("vulnerability policy evaluation failed"),
+  );
+  for (const name of ["sbom", "vulnerability"]) {
+    assert.ok(
+      scan.indexOf(`compact_evidence_json /work/${name}.json`) <
+        scan.indexOf(`sha256sum /work/${name}.json`),
+    );
+  }
+  assert.ok(
+    scan.indexOf("compact_evidence_json /work/vulnerability.json") <
+      scan.indexOf("write_marker scan.complete"),
+  );
+  assert.doesNotMatch(
+    source.slice(source.indexOf("  sign)")),
+    /compact_evidence_json/,
+  );
+});
+
+test("compaction preserves the exact evidence bounds and rejects malformed objects", (t) => {
+  const { source, directory, compact } = evidenceCompactionFixture(t);
+  const path = join(directory, "sbom.json");
+  const bound = 16777216;
+  const value = {
+    packages: Array.from({ length: 18000 }, (_, index) => ({
+      name: `tool-${index}`,
+      versions: ["1.2.3"],
+      files: [{ path: "/usr/local/bin/tool", hash: "a".repeat(64) }],
+    })),
+  };
+  const pretty = JSON.stringify(value, null, " ".repeat(10));
+  // Большой отступ моделирует только форматирование, а не удаление данных.
+  const expanded = pretty.replace(/^ +/gm, (spaces) => spaces.repeat(8));
+  assert.ok(Buffer.byteLength(expanded) > bound);
+  writeFileSync(path, expanded);
+  assert.equal(compact(path).status, 0);
+  assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), value);
+  assert.ok(readFileSync(path).length < bound);
+  const guard = source.match(
+    /    evidence_total=0\n[\s\S]*?done <<EOF\n\$\(evidence_entries\)\nEOF/,
+  )?.[0];
+  assert.ok(guard, "production size guard is missing");
+  assert.match(guard, /-le 16777216/);
+  assert.match(guard, /-le 67108864/);
+  const bounded = (entries = ["sbom.json"]) =>
+    spawnSync(
+      "sh",
+      [
+        "-eu",
+        "-c",
+        `fail() { exit 1; }\nevidence_entries() { printf '%s\\n' ${entries.map((name) => `'${name}|application/json'`).join(" ")}; }\n${guard.replaceAll("/work/", directory + "/")}`,
+      ],
+      { encoding: "utf8" },
+    );
+  assert.equal(bounded().status, 0);
+  writeFileSync(path, JSON.stringify({ requiredContent: "x".repeat(bound) }));
+  assert.equal(compact(path).status, 0);
+  assert.ok(readFileSync(path).length > bound);
+  assert.notEqual(bounded().status, 0);
+  const overhead = Buffer.byteLength(
+    JSON.stringify({ requiredContent: "" }) + "\n",
+  );
+  writeFileSync(
+    path,
+    JSON.stringify({ requiredContent: "x".repeat(bound - overhead) }),
+  );
+  assert.equal(compact(path).status, 0);
+  assert.equal(readFileSync(path).length, bound);
+  assert.equal(bounded().status, 0);
+  const exactBoundBytes = readFileSync(path);
+  const totalEntries = [
+    "sbom.json",
+    "provenance.json",
+    "native-provenance.json",
+    "vulnerability.json",
+  ];
+  for (const name of totalEntries.slice(1))
+    writeFileSync(join(directory, name), exactBoundBytes);
+  assert.equal(bounded(totalEntries).status, 0);
+  writeFileSync(join(directory, "extra.json"), "\n");
+  assert.notEqual(bounded([...totalEntries, "extra.json"]).status, 0);
+  for (const invalid of ["{", "null", "[]", "{}\n{}", "false"]) {
+    writeFileSync(path, invalid);
+    const result = compact(path);
+    assert.notEqual(result.status, 0);
+    assert.equal(
+      result.stderr,
+      "image admission failed: evidence JSON compaction failed\n",
+    );
+    assert.equal(readFileSync(path, "utf8"), invalid);
+  }
+});
 
 test("diagnostic accepts only exact owner/run/image and public bounded remediation", () => {
   assert.deepEqual(
