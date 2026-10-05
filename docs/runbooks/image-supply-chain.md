@@ -181,9 +181,14 @@ bounded owner hook первого свежего Claim, не Kubernetes cleanup 
 Kubernetes node inventory и требует `linux/amd64` на каждом workload node.
 OCI archive обязан содержать один ожидаемый descriptor и своё tagged имя.
 
-Импорт в containerd namespace `k8s.io` создаёт tagged и immutable digest refs
-с labels `io.cri-containerd.image=managed` и
-`io.cri-containerd.pinned=pinned` атомарно, до CRI image event. Значение `pinned`
+Импорт в containerd namespace `k8s.io` создаёт tagged ref с labels
+`io.cri-containerd.image=managed` и `io.cri-containerd.pinned=pinned`
+атомарно, до CRI image event. После проверки exact source descriptor helper
+публикует immutable digest alias через `ctr images tag --local --force`:
+[local tag containerd v2.2.3](https://github.com/containerd/containerd/blob/v2.2.3/cmd/ctr/commands/images/tag.go)
+копирует source Image целиком, включая Labels; metadata Create фиксирует labels
+и descriptor одной транзакцией. Default transfer tag вместо `--local` не является
+подтверждённым способом сохранения pin. Значение `pinned`
 определено [containerd v2.2.3](https://github.com/containerd/containerd/blob/v2.2.3/internal/cri/labels/labels.go),
 а [CRI ImageStatus](https://github.com/containerd/containerd/blob/v2.2.3/internal/cri/server/images/image_status.go)
 возвращает фактический `pinned`. Один успешный import или cache pointer не

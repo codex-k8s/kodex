@@ -83,13 +83,23 @@ elif name == "docker" and args[0] == "exec":
         assert command[-1] == "-"
         sys.stdin.buffer.read()
         event("node_import", node)
+        (root / ("alias-" + node)).unlink(missing_ok=True)
+    elif command[:4] == ["images", "tag", "--local", "--force"]:
+        assert command[4] == os.environ["IMPORT_REFERENCE"].split("@", 1)[0] + ":cached"
+        assert command[5] == os.environ["IMPORT_REFERENCE"]
+        event("node_alias", node)
+        (root / ("alias-" + node)).write_text("copied-pinned-labels")
     elif command[:2] == ["images", "list"]:
         if node != os.environ.get("MISSING_IMPORT_NODE"):
             digest = os.environ["IMPORT_REFERENCE"].split("@", 1)[1]
             if os.environ.get("IMPORT_WRONG_TARGET"): digest = "sha256:" + "a" * 64
             pin = "pinned" if not os.environ.get("IMPORT_UNPINNED") else "false"
             platform = os.environ.get("IMPORT_PLATFORM", "linux/amd64")
-            print(os.environ["IMPORT_REFERENCE"], "application/vnd.oci.image.manifest.v1+json", digest,
+            reference = command[2].removeprefix("name==")
+            if os.environ.get("IMPORT_NAMED_ONLY") and "@" in reference:
+                if not (root / ("alias-" + node)).exists():
+                    sys.exit(0)
+            print(reference, "application/vnd.oci.image.manifest.v1+json", digest,
                   "10.0 MiB", platform, "io.cri-containerd.image=managed,io.cri-containerd.pinned=" + pin)
     elif command[:3] == ["images", "check", "--quiet"]:
         if not os.environ.get("IMPORT_INCOMPLETE"):
@@ -293,6 +303,10 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         result = subprocess.run(outside, env=environment, capture_output=True, text=True, timeout=12)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('closed local platform profile', result.stderr)
+        result = subprocess.run(args, env=dict(environment, IMPORT_NAMED_ONLY="1"),
+                                capture_output=True, text=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual({item["target"] for item in self.events() if item["kind"] == "node_alias"}, nodes)
 
     def test_archive_mixed_names_rejected_before_import(self):
         import io, tarfile

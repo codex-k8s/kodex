@@ -2104,3 +2104,20 @@ negative fixture PASS после исправления ошибочного и�
 Offline tuple guards трёх сохранённых OCI archives совпали с exact state
 refs. Live восстановление/pin/activation ещё NOT RUN, старый scan925 остаётся
 REJECTED; этим unit результатом checkbox6/7 не закрываются.
+
+05.10.2026 03:30 UTC, source2f7031b627a70a2dbf3a57dde2febca29bff14ab:
+PASS — fresh canonical render; сохранённые OCI archives без rebuild.
+FAIL — первый actual pinned import остановился до объявления успеха:
+ctr сохранил named tag244fed с managed/pinned labels на первой ноде,
+но --digests не создал ожидаемый immutable alias. Exact descriptor readback
+это обнаружил; остальные refs и supply-chain apply не выполнены.
+В upstream containerd2.2.3 подтверждён tag --local, который копирует полный
+Image с labels и target одной metadata-транзакцией. Default transfer path
+не используется как недоказанный эквивалент. Исправление и live повтор NOT RUN.
+
+05.10.2026 03:33 UTC, source2f7031b6 и согласованный alias delta:
+PASS — ROOT named-only OCI positive/negative fixture29.417s,
+actual-helper Node1test7.984s, bash syntax/ShellCheck/diff.
+Перед alias публикацией проверяется exact pinned source descriptor, затем
+ctr tag --local копирует target/labels атомарно. Полный exact content/unpack/
+CRI readback не менялся. Повторный live import/activation ещё NOT RUN.

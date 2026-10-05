@@ -44,7 +44,11 @@ if(name==='docker'){
   a=a.slice(5);
   if(a.slice(0,2).join(' ')==='images import'){
    if(!a.includes('--digests')||a[a.indexOf('--platform')+1]!=='linux/amd64'||!a.includes('io.cri-containerd.image=managed')||!a.includes('io.cri-containerd.pinned=pinned')||a.at(-1)!=='-')process.exit(96);
-   fs.readFileSync(0);fs.appendFileSync(refs,a[a.indexOf('--base-name')+1]+'@'+digest+'\\n');process.exit(0);
+   const imported=fs.readFileSync(0),index=JSON.parse(cp.execFileSync('tar',['-xOf','-','index.json'],{input:imported}));fs.appendFileSync(refs,index.manifests[0].annotations['io.containerd.image.name']+'\\n');process.exit(0);
+  }
+  if(a.slice(0,4).join(' ')==='images tag --local --force'){
+   if(!fs.readFileSync(refs,'utf8').split('\\n').includes(a[4])||a[5]!==a[4].split(':local-')[0]+'@'+digest)process.exit(96);
+   fs.appendFileSync(refs,a[5]+'\\n');process.exit(0);
   }
   if(a.slice(0,2).join(' ')==='images list'){
    const ref=a[2].slice('name=='.length);if(!fs.readFileSync(refs,'utf8').split('\\n').includes(ref))process.exit(96);

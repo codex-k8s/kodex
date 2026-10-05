@@ -71,11 +71,11 @@ node_inventory=$(kubectl --context "$context" get nodes -o json | jq -ce '
 runtime_socket=/run/k3s/containerd/containerd.sock
 declare -a ctr_command cri_command
 
-verify_imported_image() {
-  local record status deadline=$((SECONDS + 10))
-  record=$("${ctr_command[@]}" images list "name==$exact_reference" 2>/dev/null) ||
+verify_image_descriptor() {
+  local reference=$1 record
+  record=$("${ctr_command[@]}" images list "name==$reference" 2>/dev/null) ||
     fail 'immutable image descriptor readback failed'
-  awk -v ref="$exact_reference" -v digest="$manifest_digest" '
+  awk -v ref="$reference" -v digest="$manifest_digest" '
     $1 == ref {
       count++
       if ($3 != digest || $(NF-1) != "linux/amd64") exit 1
@@ -89,6 +89,18 @@ verify_imported_image() {
     }
     END {if (count != 1) exit 1}
   ' <<<"$record" || fail 'immutable image descriptor, platform or durable pin mismatch'
+}
+
+publish_digest_alias() {
+  verify_image_descriptor "$tag"
+  # --local копирует весь source Image с Labels в атомарный Create, без unpinned alias.
+  "${ctr_command[@]}" images tag --local --force "$tag" "$exact_reference" >/dev/null 2>&1 ||
+    fail 'pinned immutable image alias publication failed'
+}
+
+verify_imported_image() {
+  local status deadline=$((SECONDS + 10))
+  verify_image_descriptor "$exact_reference"
   "${ctr_command[@]}" content get "$manifest_digest" 2>/dev/null | sha256sum |
     awk -v expected="${manifest_digest#sha256:}" '$1 == expected {found=1} END {exit !found}' ||
     fail 'imported image manifest digest mismatch'
@@ -133,6 +145,7 @@ if [[ "$context" == k3d-* ]]; then
         --platform linux/amd64 --base-name "$repository" --digests \
         --label io.cri-containerd.image=managed --label io.cri-containerd.pinned=pinned \
         - <"$archive" >/dev/null 2>&1 || fail 'pinned k3d image import failed'
+      publish_digest_alias
     fi
     verify_imported_image
   done
@@ -149,6 +162,7 @@ else
     "${ctr_command[@]}" images import --platform linux/amd64 --base-name "$repository" --digests \
       --label io.cri-containerd.image=managed --label io.cri-containerd.pinned=pinned \
       "$archive" >/dev/null 2>&1 || fail 'pinned local k3s image import failed'
+    publish_digest_alias
   fi
   verify_imported_image
 fi
