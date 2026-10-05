@@ -5,7 +5,7 @@ type: operations
 status: approved
 owner: manager
 version: 1.0.0
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 # Цель и источники
@@ -2065,3 +2065,42 @@ multi-document synthetic input, включая foreign namespace rejection.
 ROOT47 deployment/render fixtures PASS; actual projection свежего private
 render выбрала ровно Role/RoleBinding. Context7 /mikefarah/yq подтверждает
 create-map синтаксис с quoted keys. Повторная activation ещё NOT RUN.
+
+05.10.2026 03:12 UTC, sourcec92917ddbacf07849f764bbce14b40cf5a5d5257:
+FAIL — supply-chain apply завершился на bounded pull registry readiness.
+Новый pull-authorizer244fed не запущен: IfNotPresent не нашёл exact image
+в containerd, сетевой fallback закрыт отсутствующим local registry DNS.
+Readback обеих нод подтверждает отсутствие новых244fed/8acb/db9, хотя их
+импорт с manifest hash был проверен в02:37. Это point-in-time доказательство,
+не durable presence: kubelet high85%/low80%, shared imageFS около89.5% used,
+FreeDiskSpaceFailed на обеих нодах; конкретный deleting actor не доказан.
+Старый pull registry и приложение доступны; controller replicas0, старый CP
+sourceffa1. Новый live admission flow не PASS, checkbox6/7 остаются OPEN.
+Первый readback использовал ошибочное имя codex-system вместо kodex-system;
+повтор с правильным namespace и all-namespace metadata подтвердил ресурсы
+на месте, удаления кластера не было; shorthand -n исправен.
+Chrome own22: reload/session/recipe GET200, Console без
+error/warn, desktop transcript screenshot просмотрен, чужие вкладки не тронуты.
+Исправление durable trusted local image-store pin и повторная активация
+пока NOT RUN; admission policy/verdict/security пороги не ослабляются.
+
+05.10.2026 03:15 UTC: при отдельной read-only диагностике субагент повторно
+вывел широкий набор k3d runtime labels с cluster credential. Значение не
+повторяется и не записывается в репозиторий; владелец уведомлён, новые
+cluster/label чтения этого агента остановлены. Ранее зарегистрированный
+security incident остаётся OPEN: ротация и её bootstrap/readback NOT RUN.
+Дальнейшие данные о нодах — только закрытые exact поля; готовые Pod и
+исправление импорта не являются закрытием этого инцидента.
+
+05.10.2026 03:25 UTC, sourcec92917d и согласованный importer delta:
+PASS — ROOT11 public Python supply-chain fixtures47.244s, Node authority
+security1fixture6.780s; bash syntax/ShellCheck/diff. Atomic trusted-platform
+CRI labels назначаются при import; проверяются все exact native nodes,
+immutable descriptor, manifest/content/unpack и CRI Pinned/repoDigests.
+Добавлена readback-only команда и закрытый список девяти repositories;
+foreign/conflicting archive aliases не могут получить pin. ROOT отдельный
+negative fixture PASS после исправления ошибочного имени unittest класса
+в первой команде (тот запуск AttributeError, не product failure/PASS).
+Offline tuple guards трёх сохранённых OCI archives совпали с exact state
+refs. Live восстановление/pin/activation ещё NOT RUN, старый scan925 остаётся
+REJECTED; этим unit результатом checkbox6/7 не закрываются.

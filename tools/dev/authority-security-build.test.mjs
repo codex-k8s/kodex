@@ -21,27 +21,42 @@ const manifest=JSON.stringify({schemaVersion:2,mediaType:'application/vnd.oci.im
 const context='k3d-synthetic',nodes=['k3d-synthetic-agent-0','k3d-synthetic-server-0'];
 if(name==='kubectl'){
  if(a.join(' ')==='config current-context'){process.stdout.write(context);process.exit(0);}
+ if(a.join(' ')==='--context '+context+' get nodes -o json'){process.stdout.write(JSON.stringify({items:nodes.map(name=>({metadata:{name},status:{nodeInfo:{operatingSystem:'linux',architecture:'amd64'}}}))}));process.exit(0);}
  if(a.join(' ')!=='--context '+context+' get namespace kodex-system -o json')process.exit(93);
  process.stdout.write(JSON.stringify({metadata:{labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'staging'}}}));process.exit(0);
 }
 if(name==='k3d'){
- if(a.join(' ')==='node list -o json'){process.stdout.write(JSON.stringify(nodes.map(name=>({name,role:name.includes('-agent-')?'agent':'server'}))));process.exit(0);}
+ if(a.join(' ')==='node list -o json'){process.stdout.write(JSON.stringify(nodes.map(name=>({name,role:name.includes('-agent-')?'agent':'server',runtimeLabels:{'k3d.cluster':'synthetic'}}))));process.exit(0);}
  if(a.length!==8||a[0]!=='image'||a[1]!=='import'||a.slice(3).join(' ')!=='--cluster synthetic --mode direct --keep-tarball'||!fs.statSync(a[2]).isFile())process.exit(94);
  process.exit(0);
 }
 if(name==='docker'){
  if(a.join(' ')==="inspect --format {{.HostConfig.NetworkMode}} buildx_buildkit_kodex-local-dev0"){process.stdout.write('host');process.exit(0);}
  if(a[0]==='exec'){
-  if(!nodes.includes(a[1])||a.slice(2,5).join(' ')!=='ctr -n k8s.io')process.exit(95);
-  const node=a[1];a=a.slice(5);const refs=process.env.REFS+'-'+node;
-  if(a.length===5&&a.slice(0,3).join(' ')==='images tag --force'&&a[4]===a[3].split(':local-')[0]+'@'+digest){fs.appendFileSync(refs,a[4]+'\\n');process.exit(0);}
-  if(a.join(' ')==='images list --quiet'){process.stdout.write(fs.readFileSync(refs));process.exit(0);}
+  if(a[1]==='-i')a.splice(1,1);
+  if(!nodes.includes(a[1]))process.exit(95);
+  const node=a[1];a=a.slice(2);const refs=process.env.REFS+'-'+node;
+  if(a[0]==='crictl'){
+   if(a.slice(0,5).join(' ')!=='crictl --runtime-endpoint unix:///run/k3s/containerd/containerd.sock --image-endpoint unix:///run/k3s/containerd/containerd.sock'||a[5]!=='inspecti')process.exit(95);
+   process.stdout.write(JSON.stringify({status:{pinned:true,repoDigests:[a[6]],id:'sha256:'+'d'.repeat(64)},info:{imageSpec:{os:'linux',architecture:'amd64'}}}));process.exit(0);
+  }
+  if(a.slice(0,5).join(' ')!=='ctr --address /run/k3s/containerd/containerd.sock -n k8s.io')process.exit(95);
+  a=a.slice(5);
+  if(a.slice(0,2).join(' ')==='images import'){
+   if(!a.includes('--digests')||a[a.indexOf('--platform')+1]!=='linux/amd64'||!a.includes('io.cri-containerd.image=managed')||!a.includes('io.cri-containerd.pinned=pinned')||a.at(-1)!=='-')process.exit(96);
+   fs.readFileSync(0);fs.appendFileSync(refs,a[a.indexOf('--base-name')+1]+'@'+digest+'\\n');process.exit(0);
+  }
+  if(a.slice(0,2).join(' ')==='images list'){
+   const ref=a[2].slice('name=='.length);if(!fs.readFileSync(refs,'utf8').split('\\n').includes(ref))process.exit(96);
+   process.stdout.write(ref+' application/vnd.oci.image.manifest.v1+json '+digest+' 1.0 KiB linux/amd64 io.cri-containerd.image=managed,io.cri-containerd.pinned=pinned\\n');process.exit(0);
+  }
+  if(a.slice(0,3).join(' ')==='images check --quiet'){process.stdout.write(a[3].slice('name=='.length)+'\\n');process.exit(0);}
   if(a.join(' ')==='content get '+digest){process.stdout.write(process.env.CORRUPT_IMPORT?'{}':manifest);process.exit(0);}
   process.exit(96);
  }
  if(a[0]!=='buildx')process.exit(90);if(a[1]==='version')process.exit(0);if(a[1]==='inspect'){process.stdout.write('Status: running');process.exit(0);}
  if(a[1]!=='build')process.exit(91);const dest=a[a.indexOf('--output')+1].split('dest=')[1],dir=fs.mkdtempSync(path.join(process.env.TMPDIR,'oci-'));
- fs.mkdirSync(path.join(dir,'blobs','sha256'),{recursive:true});fs.writeFileSync(path.join(dir,'blobs','sha256',digest.slice(7)),manifest);fs.writeFileSync(path.join(dir,'index.json'),JSON.stringify({manifests:[{digest}]}));cp.execFileSync('tar',['-cf',dest,'-C',dir,'index.json','blobs']);process.exit(0);
+ fs.mkdirSync(path.join(dir,'blobs','sha256'),{recursive:true});fs.writeFileSync(path.join(dir,'blobs','sha256',digest.slice(7)),manifest);fs.writeFileSync(path.join(dir,'index.json'),JSON.stringify({manifests:[{digest,annotations:{'io.containerd.image.name':a[a.indexOf('--tag')+1]}}]}));cp.execFileSync('tar',['-cf',dest,'-C',dir,'index.json','blobs']);process.exit(0);
 }
 process.exit(97);
 `;
@@ -51,9 +66,9 @@ process.exit(97);
   let records=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse),builds=records.filter(c=>c.name==='docker'&&c.args[1]==='build');assert.equal(builds.length,2);
   assert.deepEqual(builds.map(c=>c.args[c.args.indexOf('--target')+1]),['runtime','image-admission']);assert.ok(builds[0].args.includes('VERSION='+metadata.revision));assert.ok(builds[1].args.includes('SOURCE_SHA='+metadata.revision));
   assert.equal(records.filter(c=>c.name==='sudo'||c.name==='k3s').length,0);
-  assert.deepEqual(records.filter(c=>c.name==='kubectl'&&c.args[0]==='--context').map(c=>c.args),[['--context','k3d-synthetic','get','namespace','kodex-system','-o','json']]);
+  assert.deepEqual(records.filter(c=>c.name==='kubectl'&&c.args[0]==='--context').map(c=>c.args),[['--context','k3d-synthetic','get','namespace','kodex-system','-o','json'],...Array.from({length:2},()=>['--context','k3d-synthetic','get','nodes','-o','json'])]);
   assert.equal(metadata.profile,'multi-node-k3d-image-store');
-  for(const node of ['k3d-synthetic-agent-0','k3d-synthetic-server-0'])assert.equal(records.filter(c=>c.name==='docker'&&c.args[0]==='exec'&&c.args[1]===node&&c.args[5]==='content').length,2,'each exact image must be verified on each node');
+  for(const node of ['k3d-synthetic-agent-0','k3d-synthetic-server-0'])assert.equal(records.filter(c=>c.name==='docker'&&c.args[0]==='exec'&&c.args[1]===node&&c.args[7]==='content').length,2,'each exact image must be verified on each node');
   commit();r=run();assert.equal(r.status,0,r.stderr);records=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);assert.equal(records.filter(c=>c.name==='docker'&&c.args[1]==='build').length,4,'same tree with new VERSION must not reuse old binary cache');
   r=run('production');assert.notEqual(r.status,0);assert.match(r.stderr,/exact staging context/);
   const beforeWrong=readFileSync(calls,'utf8').trim().split('\n').length;

@@ -172,3 +172,36 @@ inventory, materializes publisher policy через foundation и ждёт publi
 с trusted stage. При отказе migration/RBAC/policy/owner gate EXIT не возобновляет
 прежний controller. Старые expired DB claims при пустом workspace закрывает
 bounded owner hook первого свежего Claim, не Kubernetes cleanup и не read path.
+
+### Устойчивый импорт локальных platform images
+
+`tools/dev/import-local-image.sh` принимает только девять exact repositories
+локального platform profile, а не произвольные пользовательские образы.
+Для k3d registry узлов выбирается по exact `k3d.cluster`, сверяется с полным
+Kubernetes node inventory и требует `linux/amd64` на каждом workload node.
+OCI archive обязан содержать один ожидаемый descriptor и своё tagged имя.
+
+Импорт в containerd namespace `k8s.io` создаёт tagged и immutable digest refs
+с labels `io.cri-containerd.image=managed` и
+`io.cri-containerd.pinned=pinned` атомарно, до CRI image event. Значение `pinned`
+определено [containerd v2.2.3](https://github.com/containerd/containerd/blob/v2.2.3/internal/cri/labels/labels.go),
+а [CRI ImageStatus](https://github.com/containerd/containerd/blob/v2.2.3/internal/cri/server/images/image_status.go)
+возвращает фактический `pinned`. Один успешный import или cache pointer не
+доказывает защиту образа от kubelet image GC.
+
+На каждом узле helper сверяет exact manifest digest, native platform, обе
+metadata labels, полный content и unpack, затем bounded CRI readback с
+`pinned=true` и exact immutable `repoDigests`. Для повторного readback без записи:
+
+```sh
+tools/dev/import-local-image.sh --context k3d-kodex --mode readback \
+  --repository "$repository" --tag "$tagged_reference" \
+  --exact-reference "$immutable_reference"
+```
+
+Для восстановления отсутствующего ref повторить штатный `--mode import`
+с прежним проверенным `--archive "$oci_archive"` и теми же exact refs; rebuild
+или новая VERSION для этого не нужны. Ошибка любого узла закрывает успех.
+Helper не отключает GC, не меняет admission/pull policy и не выполняет unpin
+или удаление прежних releases. Их retire требует отдельного owner-процесса;
+накопление pinned releases учитывается в бюджете диска.
