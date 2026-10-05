@@ -1,18 +1,24 @@
 """Герметичные проверки maintenance barrier без доступа к кластеру."""
 import copy
+import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 import uuid
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).with_name("deploy-local.sh")
 SOURCE = SCRIPT.read_text()
 PREFIX = '\nfail() { printf "%s\\n" "$1" >&2; exit 1; }; namespace=kodex-system; render=synthetic\n'
+HELPER_SPEC = importlib.util.spec_from_file_location('evicted_proof', SCRIPT.with_name('prove-k3d-evicted-pods.py'))
+EVICTED = importlib.util.module_from_spec(HELPER_SPEC)
+HELPER_SPEC.loader.exec_module(EVICTED)
 
 
 def functions(*names):
@@ -25,7 +31,239 @@ def run(command, **values):
         capture_output=True, text=True, timeout=5)
 
 
+class EvictedProofTest(unittest.TestCase):
+    def setUp(self):
+        self.uid = '12345678-1234-1234-1234-123456789abc'
+        self.pod_uid = '22345678-1234-1234-1234-123456789abc'
+        self.rs_uid = '32345678-1234-1234-1234-123456789abc'
+        self.other_uid = '42345678-1234-1234-1234-123456789abc'
+        self.targets = [{'name': 'role-image-builder-old', 'uid': self.pod_uid,
+                         'nodeName': 'k3d-kodex-server-0'}]
+        self.selector = 'app=role-image-builder'
+        self.deployment = {'metadata': {'name': 'role-image-builder', 'namespace': 'kodex-system',
+            'uid': self.uid, 'labels': {'app.kubernetes.io/part-of': 'kodex',
+                'kodex.dev/local-profile': 'hot-reload', 'kodex.dev/security-profile': 'trusted-cluster'}},
+            'spec': {'replicas': 0, 'selector': {'matchLabels': {'app': 'role-image-builder'}}}}
+        self.namespace = {'metadata': {'name': 'kodex-system', 'uid': self.other_uid,
+                                      'labels': {'app.kubernetes.io/part-of': 'kodex'}}}
+        self.replica = {'metadata': {'name': 'role-image-builder-old', 'namespace': 'kodex-system',
+            'uid': self.rs_uid, 'ownerReferences': [{'controller': True, 'apiVersion': 'apps/v1',
+                'kind': 'Deployment', 'name': 'role-image-builder', 'uid': self.uid}]}}
+        self.pod = {'metadata': {'name': self.targets[0]['name'], 'namespace': 'kodex-system',
+            'uid': self.pod_uid, 'labels': {'app': 'role-image-builder'}, 'ownerReferences': [{
+                'controller': True, 'apiVersion': 'apps/v1', 'kind': 'ReplicaSet',
+                'name': self.replica['metadata']['name'], 'uid': self.rs_uid}]},
+            'spec': {'nodeName': self.targets[0]['nodeName']}, 'status': {'phase': 'Failed', 'reason': 'Evicted'}}
+        self.nodes = []
+        self.native = []
+        self.identities = {}
+        for index, name in enumerate(sorted(EVICTED.NODES)):
+            address = '172.18.0.' + str(index + 2)
+            self.nodes.append({'metadata': {'name': name, 'uid': str(index + 5) + self.uid[1:]},
+                'status': {'nodeInfo': {'operatingSystem': 'linux', 'architecture': 'amd64'},
+                           'conditions': [{'type': 'Ready', 'status': 'True'}],
+                           'addresses': [{'type': 'InternalIP', 'address': address}]}})
+            self.native.append({'name': name, 'role': 'agent' if index == 0 else 'server',
+                                'runtimeLabels': {'k3d.cluster': 'kodex'}})
+            self.identities[name] = [str(index + 1) * 64, '/' + name, True, name, 'kodex', address]
+        self.sandboxes = {'items': [{'id': 'a' * 64, 'metadata': {'uid': self.other_uid,
+            'name': 'other-pod', 'namespace': 'kodex-system'}, 'state': 'SANDBOX_READY'}]}
+        self.containers = {'containers': [{'id': 'b' * 64, 'podSandboxId': 'a' * 64,
+            'labels': {'io.kubernetes.pod.uid': self.other_uid, 'io.kubernetes.pod.name': 'other-pod',
+                       'io.kubernetes.pod.namespace': 'kodex-system'}, 'state': 'CONTAINER_RUNNING'}]}
+        self.tasks = 'a' * 64 + '\n' + 'b' * 64 + '\n'
+        self.calls = []
+        self.mutate = None
+        self.boundaries = 0
+        self.context = EVICTED.CONTEXT
+        self.server = 'https://127.0.0.1:6443'
+        self.docker_endpoint = 'unix:///var/run/docker.sock'
+
+    def command(self, args):
+        self.calls.append(args)
+        if self.mutate: self.mutate(args)
+        if args[:3] == ['kubectl', 'config', 'current-context']: return self.context
+        if args[:3] == ['kubectl', 'config', 'view']: return self.server
+        if args[:3] == ['docker', 'context', 'inspect']: return self.docker_endpoint
+        if args[:3] == ['kubectl', 'get', 'namespace']:
+            self.boundaries += 1
+            return json.dumps(self.namespace)
+        if args[0] == 'kubectl':
+            if 'deployment/role-image-builder' in args: value = self.deployment
+            elif 'replicasets' in args: value = {'items': [self.replica]}
+            elif 'pods' in args: value = {'items': [self.pod]}
+            elif 'nodes' in args: value = {'items': self.nodes}
+            else: raise AssertionError(args)
+            return json.dumps(value)
+        if args[:3] == ['k3d', 'node', 'list']: return json.dumps(self.native)
+        if args[:2] == ['docker', 'inspect']:
+            self.assertEqual(args[2:5], ['--type', 'container', '--format'])
+            self.assertEqual(args[5], EVICTED.DOCKER_IDENTITY)
+            return json.dumps(self.identities[args[-1]])
+        self.assertEqual(args[:2], ['docker', 'exec'])
+        self.assertIn(args[2], [entry[0] for entry in self.identities.values()])
+        if args[3] == 'ctr':
+            self.assertEqual(args[4:], ['--address', EVICTED.SOCKET, '-n', 'k8s.io', 'tasks', 'list', '--quiet'])
+            return self.tasks
+        self.assertEqual(args[3:8], ['crictl', '--runtime-endpoint', 'unix://' + EVICTED.SOCKET,
+                                   '--image-endpoint', 'unix://' + EVICTED.SOCKET])
+        if args[8:] == ['pods', '-o', 'json']: return json.dumps(self.sandboxes)
+        self.assertEqual(args[8:], ['ps', '-a', '-o', 'json'])
+        return json.dumps(self.containers)
+
+    def proof(self):
+        return EVICTED.prove('role-image-builder', self.uid, self.selector, self.targets, self.command)
+
+    def test_two_snapshots_all_nodes_and_fresh_boundary(self):
+        result = self.proof()
+        self.assertEqual(result['code'], 'EVICTED_POD_PROCESSES_ABSENT')
+        self.assertEqual((result['pods'], result['nodes'], result['snapshots']), (1, 2, 2))
+        self.assertEqual(self.boundaries, 2)
+        self.assertEqual(sum(args[0:2] == ['docker', 'exec'] for args in self.calls), 12)
+        self.assertNotIn('other-pod', json.dumps(result))
+
+    def test_unknown_or_orphan_runtime_never_proves_absence(self):
+        baseline = copy.deepcopy((self.sandboxes, self.containers, self.tasks))
+        for case in ('target', 'cross-uid', 'cross-namespace', 'orphan-container', 'unknown-container',
+                     'duplicate-container', 'duplicate-sandbox', 'orphan-task', 'duplicate-task', 'malformed-task'):
+            with self.subTest(case=case):
+                self.sandboxes, self.containers, self.tasks = copy.deepcopy(baseline)
+                if case == 'target': self.sandboxes['items'][0]['metadata']['uid'] = self.pod_uid
+                elif case == 'cross-uid': self.containers['containers'][0]['labels']['io.kubernetes.pod.uid'] = self.pod_uid
+                elif case == 'cross-namespace': self.containers['containers'][0]['labels']['io.kubernetes.pod.namespace'] = 'foreign'
+                elif case == 'orphan-container': self.containers['containers'][0]['podSandboxId'] = 'c' * 64
+                elif case == 'unknown-container': self.containers['containers'][0]['state'] = 'CONTAINER_UNKNOWN'
+                elif case == 'duplicate-container': self.containers['containers'] *= 2
+                elif case == 'duplicate-sandbox': self.sandboxes['items'] *= 2
+                elif case == 'orphan-task': self.tasks += 'c' * 64 + '\n'
+                elif case == 'duplicate-task': self.tasks *= 2
+                else: self.tasks = 'malformed\n'
+                with self.assertRaises(ValueError): self.proof()
+
+    def test_identity_lineage_and_node_uncertainty_fail_closed(self):
+        for case in ('missing-node', 'node-not-ready', 'foreign-cluster', 'duplicate-node', 'native-ip',
+                     'native-stopped', 'foreign-namespace', 'foreign-rs', 'foreign-deployment', 'not-evicted'):
+            with self.subTest(case=case):
+                self.setUp()
+                if case == 'missing-node': self.nodes.pop()
+                elif case == 'node-not-ready': self.nodes[0]['status']['conditions'][0]['status'] = 'False'
+                elif case == 'foreign-cluster': self.native[0]['runtimeLabels']['k3d.cluster'] = 'foreign'
+                elif case == 'duplicate-node': self.native[1] = copy.deepcopy(self.native[0])
+                elif case == 'native-ip': self.identities[sorted(EVICTED.NODES)[0]][5] = '172.18.0.99'
+                elif case == 'native-stopped': self.identities[sorted(EVICTED.NODES)[0]][2] = False
+                elif case == 'foreign-namespace': self.pod['metadata']['namespace'] = 'foreign'
+                elif case == 'foreign-rs': self.pod['metadata']['ownerReferences'][0]['uid'] = self.other_uid
+                elif case == 'foreign-deployment': self.replica['metadata']['ownerReferences'][0]['uid'] = self.other_uid
+                else: self.pod['status']['reason'] = 'ContainerStatusUnknown'
+                with self.assertRaises(ValueError): self.proof()
+
+    def test_changed_second_boundary_and_second_runtime_snapshot_fail(self):
+        for case in ('deployment', 'node', 'pod', 'runtime'):
+            with self.subTest(case=case):
+                self.setUp()
+                def mutate(args):
+                    if case == 'runtime' and sum(call[:2] == ['docker', 'exec'] for call in self.calls) == 7:
+                        self.tasks += 'c' * 64 + '\n'
+                    if args[:3] == ['kubectl', 'get', 'namespace'] and self.boundaries == 1:
+                        if case == 'deployment': self.deployment['spec']['newField'] = 'changed'
+                        elif case == 'node': self.nodes[0]['metadata']['uid'] = self.other_uid
+                        elif case == 'pod': self.pod['metadata']['uid'] = self.other_uid
+                self.mutate = mutate
+                with self.assertRaises(ValueError): self.proof()
+
+    def test_duplicate_json_and_cross_scope_inputs_are_closed(self):
+        for value in ('{"items":[],"items":[]}', '{"x":NaN}'):
+            with self.assertRaises(ValueError): EVICTED.decode(value)
+        for targets in ([], self.targets * 2, [dict(self.targets[0], nodeName='foreign')],
+                        [dict(self.targets[0], unexpected=True)]):
+            with self.assertRaises(ValueError):
+                EVICTED.prove('role-image-builder', self.uid, self.selector, targets, self.command)
+
+    def test_child_environment_private_cache_and_bounded_cancel(self):
+        environment = {'PATH': os.environ['PATH'], 'HOME': '/home/s', 'KUBECONFIG': '/home/s/.kube/config',
+                       'DO_NOT_INHERIT': 'synthetic'}
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, environment, clear=True):
+            command = EVICTED.BoundedCommands(str(Path(directory, 'cache')))
+            self.assertEqual(Path(command.cache).stat().st_mode & 0o777, 0o700)
+            output = command([sys.executable, '-c', 'import os,json; print(json.dumps(sorted(os.environ)))'])
+            # CPython может добавить только LC_CTYPE при нормализации locale.
+            self.assertLessEqual(set(json.loads(output)), {'PATH', 'HOME', 'KUBECONFIG', 'LC_CTYPE'})
+            self.assertNotIn('DO_NOT_INHERIT', output)
+            command.deadline = time.monotonic() + 0.1
+            started = time.monotonic()
+            with self.assertRaises(ValueError):
+                command([sys.executable, '-c', 'import time; time.sleep(10)'])
+            self.assertLess(time.monotonic() - started, 2)
+            with patch.dict(os.environ, {'HOME': '/foreign'}):
+                with self.assertRaises(ValueError): EVICTED.BoundedCommands(str(Path(directory, 'foreign')))
+
+    def test_runtime_output_over_bound_fails_without_raw_diagnostic(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ,
+                {'PATH': os.environ['PATH'], 'HOME': '/home/s', 'KUBECONFIG': '/home/s/.kube/config'}, clear=True):
+            command = EVICTED.BoundedCommands(str(Path(directory, 'cache')))
+            with self.assertRaisesRegex(ValueError, '^EVICTED_POD_ABSENCE_NOT_PROVEN$'):
+                command([sys.executable, '-c', 'import os; os.write(1,b"x"*(9<<20))'])
+
+    def test_local_context_and_endpoint_boundary_has_no_portable_fallback(self):
+        for field, value in (('context', 'k3s'), ('server', 'https://192.0.2.1:6443'),
+                             ('server', 'http://127.0.0.1:6443'), ('server', 'https://[::1]:6443'),
+                             ('server', 'https://127.0.0.1:6443/foreign'),
+                             ('docker_endpoint', 'tcp://127.0.0.1:2375')):
+            with self.subTest(field=field, value=value):
+                self.setUp()
+                setattr(self, field, value)
+                with self.assertRaises(ValueError): self.proof()
+
+    def test_duplicate_authoritative_node_or_native_container_identity_fails(self):
+        self.nodes[1]['metadata']['uid'] = self.nodes[0]['metadata']['uid']
+        with self.assertRaises(ValueError): self.proof()
+        self.setUp()
+        names = sorted(EVICTED.NODES)
+        self.identities[names[1]][0] = self.identities[names[0]][0]
+        with self.assertRaises(ValueError): self.proof()
+
+
 class CutoverTest(unittest.TestCase):
+    def test_evicted_requires_native_proof_and_outage_is_immediate(self):
+        uid = '12345678-1234-1234-1234-123456789abc'
+        rs_uid = '22345678-1234-1234-1234-123456789abc'
+        pods = {'items': [{'metadata': {'name': 'role-image-builder-old', 'namespace': 'kodex-system',
+            'uid': '32345678-1234-1234-1234-123456789abc', 'labels': {'app': 'role-image-builder'},
+            'ownerReferences': [{'controller': True, 'apiVersion': 'apps/v1', 'kind': 'ReplicaSet',
+                                 'uid': rs_uid, 'name': 'role-image-builder-old'}]},
+            'spec': {'nodeName': 'k3d-kodex-server-0', 'containers': [{'name': 'role-image-builder'}]},
+            'status': {'phase': 'Failed', 'reason': 'Evicted'}}]}
+        sets = {'items': [{'metadata': {'name': 'role-image-builder-old', 'namespace': 'kodex-system',
+            'uid': rs_uid, 'ownerReferences': [{'controller': True, 'apiVersion': 'apps/v1',
+                'kind': 'Deployment', 'name': 'role-image-builder', 'uid': uid}]}}]}
+        proof = {'status': 'PASS', 'code': 'EVICTED_POD_PROCESSES_ABSENT', 'nodes': 2, 'pods': 1,
+                 'snapshots': 2, 'targetSandboxes': 0, 'targetContainers': 0, 'targetTasks': 0,
+                 'orphanContainers': 0, 'unresolvedTasks': 0}
+        command = functions('readback_local_quiesced_pods') + PREFIX + '''
+security_profile=$PROFILE; stage=supply-chain-quiesce; context=k3d-kodex
+temporary_directory=$PRIVATE; script_directory=synthetic
+kubectl() { printf '%s\\n' "$SETS"; }
+python3() { cat >"$PRIVATE/input.json"; printf '%s\\n' "$PROOF"; return "$PROOF_EXIT"; }
+readback_local_quiesced_pods "$UID_INPUT" role-image-builder app=role-image-builder "$PODS"
+'''
+        for case, profile, exit_code, value, success in (
+                ('proven', 'trusted-cluster', '0', proof, True),
+                ('outage', 'trusted-cluster', '1', proof, False),
+                ('fake-receipt', 'trusted-cluster', '0', dict(proof, targetTasks=1), False),
+                ('foreign-profile', 'protected', '0', proof, False)):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                result = run(command, PRIVATE=directory, PROFILE=profile, UID_INPUT=uid,
+                             PODS=pods, SETS=sets, PROOF=value, PROOF_EXIT=exit_code)
+                self.assertEqual(result.returncode == 0, success, result.stderr)
+                if success:
+                    self.assertEqual(json.loads(Path(directory, 'input.json').read_text()), [{
+                        'name': 'role-image-builder-old', 'uid': pods['items'][0]['metadata']['uid'],
+                        'nodeName': 'k3d-kodex-server-0'}])
+        caller = functions('quiesce_local_supply_chain_workload')
+        final = caller[caller.index('if readback_local_quiesced_pods'):]
+        self.assertLess(final.index('get "deployment/$workload"'), final.index('return 0'))
+        self.assertIn('final Deployment spec changed', final)
+
     def test_historical_terminal_pods_require_complete_status_and_exact_lineage(self):
         deployment_uid = '12345678-1234-1234-1234-123456789abc'
         replica_uid = 'abcdefab-1234-1234-1234-123456789abc'

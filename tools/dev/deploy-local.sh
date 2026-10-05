@@ -376,13 +376,13 @@ readback_local_image_admission_crd() {
 }
 
 readback_local_quiesced_pods() {
-  local uid=$1 workload=$2 selector=$3 pods=$4 replica_sets
+  local uid=$1 workload=$2 selector=$3 pods=$4 replica_sets evicted proof
   jq -e '.items | type == "array"' <<<"$pods" >/dev/null ||
     fail 'supply-chain quiesce Pod inventory is invalid'
   if jq -e '.items | length == 0' <<<"$pods" >/dev/null; then return 0; fi
   replica_sets=$(kubectl -n "$namespace" get replicasets -l "$selector" -o json) ||
     fail 'supply-chain quiesce ReplicaSet inventory is unavailable'
-  jq -e --arg uid "$uid" --arg workload "$workload" --arg namespace "$namespace" \
+  if ! jq -e --arg uid "$uid" --arg workload "$workload" --arg namespace "$namespace" \
     --arg selector "$selector" --argjson sets "$replica_sets" '
     def controller: [.metadata.ownerReferences[]? | select(.controller == true)];
     def stopped($spec; $statuses):
@@ -407,7 +407,6 @@ readback_local_quiesced_pods() {
       (.metadata.uid | test("^[a-f0-9-]{36}$")) and
       (.metadata.labels as $actual | all($labels | to_entries[]; .value == $actual[.key])) and
       (.status.phase == "Succeeded" or .status.phase == "Failed") and
-      (.status.reason != "NodeLost" and .status.reason != "ContainerStatusUnknown") and
       (controller as $owners | ($owners | length) == 1 and
         $owners[0].apiVersion == "apps/v1" and $owners[0].kind == "ReplicaSet" and
         any($sets.items[];
@@ -417,14 +416,35 @@ readback_local_quiesced_pods() {
             $parents[0].apiVersion == "apps/v1" and $parents[0].kind == "Deployment" and
             $parents[0].uid == $uid and $parents[0].name == $workload))) and
       (.spec.containers | type == "array" and length > 0) and
-      stopped(.spec.containers; .status.containerStatuses) and
-      stopped(.spec.initContainers; .status.initContainerStatuses) and
-      stopped(.spec.ephemeralContainers; .status.ephemeralContainerStatuses))
-  ' <<<"$pods" >/dev/null
+      ((.status.phase == "Failed" and .status.reason == "Evicted") or
+        ((.status.reason != "NodeLost" and .status.reason != "ContainerStatusUnknown") and
+          stopped(.spec.containers; .status.containerStatuses) and
+          stopped(.spec.initContainers; .status.initContainerStatuses) and
+          stopped(.spec.ephemeralContainers; .status.ephemeralContainerStatuses))))
+  ' <<<"$pods" >/dev/null; then return 1; fi
+  evicted=$(jq -c '[.items[] | select(.status.phase == "Failed" and .status.reason == "Evicted") |
+    {name:.metadata.name,uid:.metadata.uid,nodeName:.spec.nodeName}]' <<<"$pods") ||
+    fail 'supply-chain Evicted Pod inventory is invalid'
+  if jq -e 'length > 0' <<<"$evicted" >/dev/null; then
+    [[ "${security_profile:-}" == trusted-cluster && "${stage:-}" == supply-chain-quiesce &&
+      "$context" == k3d-kodex ]] || fail 'supply-chain Evicted Pod proof profile is unsupported'
+    proof="$temporary_directory/evicted-pod-proof.json"
+    # Только read-only native CRI proof; неизвестный runtime не повторяется 180 секунд.
+    (umask 077
+      HOME=/home/s KUBECONFIG=/home/s/.kube/config python3 "$script_directory/prove-k3d-evicted-pods.py" \
+        --context "$context" --deployment "$workload" --deployment-uid "$uid" --selector "$selector" \
+        --cache-directory "$temporary_directory/evicted-kubectl-cache" \
+        <<<"$evicted" >"$proof" 2>"$temporary_directory/evicted-pod-proof.stderr"
+    ) || fail 'supply-chain Evicted Pod process absence proof failed'
+    jq -e --argjson count "$(jq length <<<"$evicted")" '
+      . == {status:"PASS",code:"EVICTED_POD_PROCESSES_ABSENT",nodes:2,pods:$count,snapshots:2,
+        targetSandboxes:0,targetContainers:0,targetTasks:0,orphanContainers:0,unresolvedTasks:0}
+    ' "$proof" >/dev/null || fail 'supply-chain Evicted Pod process proof is invalid'
+  fi
 }
 
 quiesce_local_supply_chain_workload() {
-  local workload=$1 deployment uid resource_version replicas selector attempt stopped_spec pods
+  local workload=$1 deployment uid resource_version replicas selector attempt stopped_spec pods final_pods
   declare -gA supply_chain_quiesce_uids supply_chain_quiesce_specs
   case "$workload" in control-api-gateway|image-admission-controller|role-image-builder|runtime-controller|control-plane) ;;
     *) fail 'supply-chain quiesce workload is invalid' ;; esac
@@ -478,7 +498,23 @@ quiesce_local_supply_chain_workload() {
         fail 'supply-chain quiesce Pod inventory is unavailable'
       # Исторический terminal Pod не читается как живой процесс только после
       # полного status/lineage proof; phase сам по себе недостаточен.
-      if readback_local_quiesced_pods "$uid" "$workload" "$selector" "$pods"; then return 0; fi
+      if readback_local_quiesced_pods "$uid" "$workload" "$selector" "$pods"; then
+        deployment=$(kubectl -n "$namespace" get "deployment/$workload" -o json) ||
+          fail 'supply-chain quiesce final Deployment readback failed'
+        jq -e --arg uid "$uid" '.metadata.uid == $uid and .metadata.deletionTimestamp == null and
+          .spec.replicas == 0 and (.status.replicas // 0) == 0 and (.status.availableReplicas // 0) == 0' \
+          <<<"$deployment" >/dev/null || fail 'supply-chain quiesce final Deployment identity changed'
+        [[ "$(jq -cS .spec <<<"$deployment")" == "$stopped_spec" ]] ||
+          fail 'supply-chain quiesce final Deployment spec changed'
+        final_pods=$(kubectl -n "$namespace" get pods -l "$selector" -o json) ||
+          fail 'supply-chain quiesce final Pod inventory is unavailable'
+        [[ "$(jq -cS '[.items[] | {uid:.metadata.uid,name:.metadata.name,namespace:.metadata.namespace,
+          labels:.metadata.labels,owners:.metadata.ownerReferences,spec,status}] | sort_by(.uid)' <<<"$final_pods")" == \
+          "$(jq -cS '[.items[] | {uid:.metadata.uid,name:.metadata.name,namespace:.metadata.namespace,
+          labels:.metadata.labels,owners:.metadata.ownerReferences,spec,status}] | sort_by(.uid)' <<<"$pods")" ]] ||
+          fail 'supply-chain quiesce final Pod inventory changed'
+        return 0
+      fi
     fi
     [[ "$mode" == apply && "$attempt" -lt 180 ]] || fail 'supply-chain quiesce Deployment did not stop'
     sleep 1

@@ -2471,3 +2471,36 @@ Frozen terminal followup465d5c8169db4696474af02d37b17ce32e4e8242498f436f252732bc
 main/init/ephemeral statuses и exact Pod→ReplicaSet→Deployment UID lineage.
 Unknown/NodeLost, неполные или ещё живые statuses закрыто отклоняются.
 Результат повторного maintenance фиксируется отдельно; не объявлен PASS заранее.
+
+05.10.2026, followup на source6c15267634811714e78a228fc22b417597008d64:
+FAIL — второй public quiesce остановил gateway/admission/builder, но встретил
+43 исторических Failed/Evicted builder Pod с неполными statuses. Runtime и
+control-plane остались включены; EXIT ничего не возобновил, history не удалена.
+Read-only native diagnostic на обеих нодах не обнаружил target sandboxes,
+containers/tasks, orphan containers или unresolved tasks; это предварительная
+диагностика, не доказательство законченного public maintenance.
+Frozen patch01ba30ab0553ac8999216cb3111f13caba9f8dc7b8c3992be1d39bbbc6c531bb
+добавляет bounded double-snapshot native CRI proof с exact node/Docker identity,
+Pod→ReplicaSet→Deployment UID lineage и свежей boundary проверкой. Неизвестные
+identity, runtime или выход за пределы budget закрыто отклоняются.
+ROOT45 focused tests PASS7.630s, один optional disposable PostgreSQL NOT RUN;
+bash-n/ShellCheck/diff-check PASS. Первый launcher с несуществующим именем
+test module получил FAIL; правильные два модуля выполнены отдельно полностью.
+Новая live проверка пока NOT RUN.
+
+Дополнительная housekeeping волна завершена: суммарно2262470656 allocated bytes,
+71854 files/14185 dirs в exact npm и render-contract Go leaves. Защищённые
+20802 metadata entries и19 promoted pins неизменны. Docker8 unknown IDs,
+shared активные кеши и чужие процессы сохранены; `/tmp` free inode178791
+не изменился. Подробный private report сохранён, cleanup не является QA PASS.
+
+Read-only source diagnostic подтвердил неизменный runner subtree
+16d03b7a1ca107f524b1f79c0f18bbcfb4371c39 на cd58276e,6c152676,b34fd081:
+RunnerInputv8 не декодирует evidencev5/receiptv3/signaturebindingv2.
+Четыре адресных runtimecontract unit PASS0.017s на b34fd081; live ABI NOT RUN.
+Статическая карта RPC подтверждает response33MiB/send17MiB/client и
+server recv8MiB: полная report projection4MiB передаётся protobuf string,
+а claim содержит только bounded risk receipt16KiB. Новых RPC лимитов не нужно.
+Изолированный image-admission build primer на cleanb34fd081 завершился exit0;
+это только cache warm/import в private state, текущие deployment/pins не менялись.
+Canonical финальная сборка и live risk/UI acceptance ещё NOT RUN.
