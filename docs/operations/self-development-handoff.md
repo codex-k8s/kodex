@@ -12,7 +12,7 @@ updated: 2026-10-05
 
 05.10.2026 владелец явно возобновил работу после переноса хранилища.
 Перенос проверен; цель снова выполняется. Последний опубликованный checkpoint:
-`8f5dcb21af47cc3a6eef099f739628c84988e4ff`. Новый полный runner и четыре
+`972e5fcd1c00e1eca93715fa09c89679117f9b54`. Новый полный runner и четыре
 supply-chain image собраны; fresh render и supply-chain apply/readback
 полностью завершены 05.10.2026 в17:59:24 UTC. Control plane, gateway и
 контроллеры Ready. Core repair secret-broker PASS18:18:45 UTC: доставлен
@@ -48,6 +48,38 @@ Chrome MCP list_pages зависает по таймауту; новая browser
   точный source и результаты адресных проверок фиксируются в журнале.
 - Полное задание: [65 разделов QA](../qa/full-qa-task.md).
 - Checklist и подробный хронологический журнал: [самонастройка](self-development-dogfooding.md).
+
+# Следующий native ход SYSTEM43
+
+После восстановления Chrome MCP отправить собственному SYSTEM помощнику:
+
+```text
+SYSTEM43. Подготовь один план с PREPARE_RUNTIME_ENVIRONMENT_REVISION для
+собственного текущего окружения. Прочитай CURRENT_CONFIGURATION, актуальную
+схему операции и IMAGE_ARTIFACTS через get_configuration_catalog.
+Выбери только imgart_EZdtnfyjtj-vq4o9-_j9W5NU: generation8,
+ACCEPTED/PROMOTED, verified_tool_inventory.status=VERIFIED.
+Передай все38 required tools из фактического inventory. Каждый observation
+должен быть VERIFIED на всех platforms; command — basename фактического
+path, команды уникальны и доступны на всех platforms. Для tools укажи name,
+command и непустое русское description. Не угадывай пути или display names.
+Parameters: только environmentRef, systemAssistantRef, imageArtifactRef,
+tools. Не передавай policy, publicValues/updates/removals, secretBindings,
+name/description: сервер сохраняет текущий snapshot этих полей.
+Инструкции, модель, аккаунт и grants не меняй. При mismatch или неполном
+inventory сообщи конкретную причину; иначе propose_configuration_plan один
+раз, сообщи plan_ref/version/revision, image digest и число tools; ожидай
+подтверждения владельца.
+```
+
+Затем штатный UI: проверить единственную operation/diff → Validate → Apply.
+Это только draft. Открыть draft, проверить сохранение policy/resources/
+values/secret descriptors → Validate → impact → выбрать exact SYSTEM
+consumer по consumerRef/bindingRef и передать его item.ref → Publish один раз.
+Readback: PUBLISHED draft, APPLIED impact/consumer, currentVersion и binding
+совпали с publishedRevisionRef/targetDigest, exact gen8 artifact и38 tools.
+Следующий native turn отдельно доказывает новый execution snapshot/provider
+ACK; текущий immutable SYSTEM43 snapshot не переписывается.
 
 # Исправлено в исходниках
 

@@ -3390,3 +3390,19 @@ Chrome process и MCP connections живы, но list_pages не возвращ�
 browser approval. Чужие вкладки не трогались; restart/consent bypass не
 выполнялся. Новый SYSTEM43 UI, screenshot/Console/Network и provider ACK
 ещё NOT RUN. Цель остаётся активной; полный65-section QA не объявлен завершённым.
+
+19:12–19:15 UTC: checkpoint
+`972e5fcd1c00e1eca93715fa09c89679117f9b54` опубликован и exact remote/PR
+head подтверждён; рабочее дерево чистое, PR1798 остаётся Draft/OPEN.
+На этом чистом SHA повторно PASS: MAIN54 frontend unit, CP catalog unit
+0.057s и callback0.076s. Код не изменялся после hot reload proof.
+Общий readonly-history/write-current инвариант закреплён в FE-DOC-001.
+
+Chrome list_pages второй раз завершился300s timeout; третий штатный вызов
+продолжается. Read-only диагностика: Chrome и оба MCP процесса живы,
+DevToolsActivePort существует, подключения ESTAB. AutoConnect использует
+browser WebSocket напрямую, поэтому HTTP404 /json/version не считается
+доказательством неисправности или отсутствия approval. Точная причина UNKNOWN;
+обычного MCP status/approval endpoint и доступного файлового журнала нет.
+Никакого restart, CDP fallback, profile/cookie чтения или обхода согласия не было.
+Native SYSTEM43 и последующие пользовательские этапы ожидают рабочего MCP.

@@ -131,6 +131,13 @@ fixture. Frontend не восстанавливает отсутствующее
 - Pagination, sorting и filters имеют типизированную model.
 - Cache invalidation задается явно после mutation.
 
+Исторический immutable отчёт не сравнивается с текущей версией родительского
+ресурса как с обязательным условием чтения. Readonly boundary сохраняет exact
+owner, artifact/build/generation и исходные evidence pins; положительная
+safe version отчёта не ограничивается значением1. Новый decision требует
+текущей authoritative версии. При drift интерфейс убирает decision actions,
+но не переписывает report pins и не скрывает доступный исторический отчёт.
+
 ## Завершение документа и исходящих запросов
 
 Owner lifetime запроса включает локальное время жизни документа. `beforeunload`
