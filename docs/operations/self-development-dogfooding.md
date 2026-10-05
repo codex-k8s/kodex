@@ -2504,3 +2504,20 @@ server recv8MiB: полная report projection4MiB передаётся protobu
 Изолированный image-admission build primer на cleanb34fd081 завершился exit0;
 это только cache warm/import в private state, текущие deployment/pins не менялись.
 Canonical финальная сборка и live risk/UI acceptance ещё NOT RUN.
+
+05.10.2026 08:53 UTC, maintenance sourceed46f9e7:
+FAIL — третья public попытка успешно прошла double native CRI proof для43
+historical Evicted Pod и остановила runtime-controller. На двух historical
+Succeeded runtime Pod обнаружен regular init Completed/exit0/started=false,
+но ready=true: Kubernetes так обозначает успешно завершённый обычный init.
+Это не работающий процесс; прежний общий ready=false предикат ошибочен.
+После диагностики exact собственный maintenance process отменён SIGTERM,
+cancel/join подтверждён; MAIN не меняли до его завершения. Gateway/admission/
+builder/runtime остались0, control-plane1, ничего не возобновлено.
+Frozen followupee474b3c5532c4213a2cd8fc0420b7d354fe2e81edc18593de36d931ee3a8253
+разделяет regular init и main/sidecar: ready=true разрешается только обычному
+init без restartPolicy, с полным Completed/exit0/started=false terminated proof.
+Running/Always sidecar, неполные/неизвестные statuses остаются closed failure.
+ROOT45 focused tests PASS8.964s, optionalPG NOT RUN, bash/ShellCheck/diff PASS.
+Owner fresh08:50:22: все active counts0, published19/hash28e8bf55 unchanged.
+Четвёртая live попытка пока NOT RUN; итоговый stop barrier не объявлен PASS.

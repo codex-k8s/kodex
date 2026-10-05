@@ -385,14 +385,17 @@ readback_local_quiesced_pods() {
   if ! jq -e --arg uid "$uid" --arg workload "$workload" --arg namespace "$namespace" \
     --arg selector "$selector" --argjson sets "$replica_sets" '
     def controller: [.metadata.ownerReferences[]? | select(.controller == true)];
-    def stopped($spec; $statuses):
+    def stopped($spec; $statuses; $regular_init):
       ($spec // []) as $containers | ($statuses // []) as $states |
       ($containers | type == "array") and ($states | type == "array") and
       all($containers[]; .name | type == "string" and test("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")) and
       ([$containers[].name] | sort) == ([$states[].name] | sort) and
       ([$containers[].name] | unique | length) == ($containers | length) and
-      all($states[];
-        .ready == false and (.started == null or .started == false) and
+      all($states[]; . as $state |
+        (.ready == false or ($regular_init and .ready == true and .started == false and
+          .state.terminated.reason == "Completed" and .state.terminated.exitCode == 0 and
+          any($containers[]; .name == $state.name and .restartPolicy == null))) and
+        (.started == null or .started == false) and
         (.state | type == "object" and keys == ["terminated"]) and
         (.state.terminated | type == "object") and
         (.state.terminated.reason == "Completed" or .state.terminated.reason == "Error" or
@@ -418,9 +421,9 @@ readback_local_quiesced_pods() {
       (.spec.containers | type == "array" and length > 0) and
       ((.status.phase == "Failed" and .status.reason == "Evicted") or
         ((.status.reason != "NodeLost" and .status.reason != "ContainerStatusUnknown") and
-          stopped(.spec.containers; .status.containerStatuses) and
-          stopped(.spec.initContainers; .status.initContainerStatuses) and
-          stopped(.spec.ephemeralContainers; .status.ephemeralContainerStatuses))))
+          stopped(.spec.containers; .status.containerStatuses; false) and
+          stopped(.spec.initContainers; .status.initContainerStatuses; true) and
+          stopped(.spec.ephemeralContainers; .status.ephemeralContainerStatuses; false))))
   ' <<<"$pods" >/dev/null; then return 1; fi
   evicted=$(jq -c '[.items[] | select(.status.phase == "Failed" and .status.reason == "Evicted") |
     {name:.metadata.name,uid:.metadata.uid,nodeName:.spec.nodeName}]' <<<"$pods") ||

@@ -298,6 +298,42 @@ readback_local_quiesced_pods "$DEPLOYMENT_UID" control-plane app=control-plane "
             status['name'] = prefix + '-helper'
             complete['status'][prefix + 'ContainerStatuses'] = [status]
         cases.append(('all-container-kinds-complete', {'items': [complete]}, sets, True))
+        successful_init = copy.deepcopy(complete)
+        successful_init['status']['initContainerStatuses'][0]['ready'] = True
+        successful_init['status']['initContainerStatuses'][0]['started'] = False
+        cases.append(('ordinary-completed-init-ready-true', {'items': [successful_init]}, sets, True))
+        for case in ('main-ready', 'ephemeral-ready', 'sidecar-ready', 'sidecar-running',
+                     'init-running', 'init-waiting', 'init-nonzero', 'init-error',
+                     'init-started', 'init-missing-started', 'init-missing-state', 'init-missing-finished',
+                     'init-missing-exit', 'init-missing-status', 'init-wrong-name', 'init-duplicate',
+                     'init-invalid-ready', 'init-unknown-policy'):
+            bad = copy.deepcopy(successful_init)
+            status = bad['status']['initContainerStatuses'][0]
+            if case == 'main-ready': bad['status']['containerStatuses'][0]['ready'] = True
+            elif case == 'ephemeral-ready': bad['status']['ephemeralContainerStatuses'][0]['ready'] = True
+            elif case == 'sidecar-ready': bad['spec']['initContainers'][0]['restartPolicy'] = 'Always'
+            elif case == 'sidecar-running':
+                bad['spec']['initContainers'][0]['restartPolicy'] = 'Always'
+                status['ready'] = False
+                status['state'] = {'running': {'startedAt': '2026-10-05T08:00:00Z'}}
+            elif case == 'init-running': status['state'] = {'running': {}}
+            elif case == 'init-waiting': status['state'] = {'waiting': {}}
+            elif case == 'init-nonzero': status['state']['terminated']['exitCode'] = 1
+            elif case == 'init-error': status['state']['terminated']['reason'] = 'Error'
+            elif case == 'init-started': status['started'] = True
+            elif case == 'init-missing-started': status.pop('started')
+            elif case == 'init-missing-state': status.pop('state')
+            elif case == 'init-missing-finished': status['state']['terminated'].pop('finishedAt')
+            elif case == 'init-missing-exit': status['state']['terminated'].pop('exitCode')
+            elif case == 'init-missing-status': bad['status'].pop('initContainerStatuses')
+            elif case == 'init-wrong-name': status['name'] = 'foreign'
+            elif case == 'init-duplicate': bad['status']['initContainerStatuses'].append(copy.deepcopy(status))
+            elif case == 'init-invalid-ready': status['ready'] = 'true'
+            else: bad['spec']['initContainers'][0]['restartPolicy'] = 'Never'
+            cases.append((case, {'items': [bad]}, sets, False))
+        stopped_sidecar = copy.deepcopy(complete)
+        stopped_sidecar['spec']['initContainers'][0]['restartPolicy'] = 'Always'
+        cases.append(('terminated-sidecar-ready-false', {'items': [stopped_sidecar]}, sets, True))
         for phase in ('Pending', 'Running', 'Unknown', 'Other'):
             bad = copy.deepcopy(pod)
             bad['status']['phase'] = phase
