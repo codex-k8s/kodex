@@ -1964,3 +1964,20 @@ Live v4 apply/admission/promote NOT RUN. Общий invariant закреплён
 Frontend technical failure frozen: 75 адресных unit, lint/typecheck/format PASS
 в isolated tree419eead + согласованном generated snapshot; ROOT/browser NOT RUN.
 Отдельные backend Fail/Expire commands и recovery/cleanup ещё в реализации.
+
+05.10.2026 01:54 UTC, sourceffa1b99696fd5b005ac39364fe5e5b6c9897123a:
+PASS — ROOT повторные публичные image-supply-chain fixtures (13 embedded
+Python) и Node13 на этом exact SHA; canonical render и repo-owned
+supply-chain apply/readback EXIT0. Controller resumed/Ready1 только после
+owner coherence gate. Ready CP PodUIDa0e7b77e-f5a1-4833-9c3a-8bfb79635647,
+script ConfigMap SHA2566dba2d84a169b549bd1bda4fa5a324f417fec059ded8c08870acf858696229e2
+совпал с исходником v4. Host/ReadyPod source hashes для CP, session-archive
+и frontend совпали при стабильном HEAD. Это deployment/readback, не доказательство
+ACCEPTED/PROMOTED: новой owner admission receipt ещё нет, checkbox6/7 OPEN.
+SSO рабочей Chrome вкладки истекла; значения credentials через tool arguments
+или stdout не передаются. Добавлен ограниченный repo-owned одноразовый
+localdev HTTPS native-form input helper: exact Origin/SNI/Host, TLS1.3,
+loopback и текущий Linux UID, два выбранных owner keys, 60s, no-store,
+после fetch проверка той же формы, результат только Boolean. Cookie injection,
+TLS/CSP bypass и device-code не используются. ROOT18 быстрых Node tests,
+syntax/diff-check PASS; live native SSO helper пока NOT RUN.
