@@ -2744,3 +2744,34 @@ selection26tests PASS2.612s, cutover20 выполненных PASS10.498s, од�
 bash-n/ShellCheck/guide formatting/diff-check PASS. Source фиксируется перед
 повторными exact-SHA checks и новым штатным render/apply; старый render повторно
 не используется. Предыдущий FAIL не скрыт и не объявлен успешной активацией.
+
+05.10.2026 13:52 UTC, восстановление и начало native QA:
+Source `b40f278477cf977e058a90c8bcd163550e35fa4e` запушен и clean.
+На exact SHA typed CEL PASS0.166s, gate8tests PASS12.525s,
+selection26tests PASS2.898s, cutover20 выполненных PASS11.781s;
+один optional disposable PostgreSQL test NOT RUN. Canonical all/build-jobs4/import
+PASS; toolsd291ed70, admission0900a530, builderccb0d76b, authority623c257b,
+runner72b27d82 неизменён. Свежий render SHA256
+`ecae96175cf42579c3b2595ba1ae5ef9f42324490f5f41bf3099ec32788e8e49`.
+
+Первый повторный apply FAIL до service policy check: выбранный PATH запуска
+не включал Node. Это ошибка invocation, не изменение кода или обход gate.
+После добавления штатного Node в выбранный PATH тот же exact source/render
+успешно прошёл canonical supply-chain apply/readback, exit0.
+Новая migration Job завершена; все девять VAP имеют fresh generation=observed
+и ноль compiler warnings. Все пять возобновляемых Deployment и session-archive
+desired/ready/updated/available=1, подтверждено повторным снимком через30s.
+Archive сам восстановился после CP, прежний Pod UID/restartCount сохранены.
+CP/archive source mounts и адресные host/Pod hashes совпали; фактические
+Go1.26.6 executables сверены отдельно от Air launcher. vcs.revision у hot
+binaries отсутствует: annotation не выдаётся за exact source binary proof.
+
+Owner readback13:52UTC: openBuilds/pendingAdmissions/pendingPromotions/
+activeRuntimeRuns/claimedRuntimeLeases=0, promotedArtifactCount19 и прежний
+promotedPinsSHA256 сохранены. Непрошенный ACCEPTED/PENDING artifact не объявлялся
+активной publication task. Chrome после reload: bootstrap/session200, SSO,
+realtime «Подключено», Console без ошибок. Скриншот: собственные сообщения
+справа, ответы/инструменты слева; один компактный working indicator и Stop.
+Через UI отправлен SYSTEM запрос QA_SELFDEV_V5_IMAGE_01 для native typed
+обновления собственного рецепта. Его успешный результат и новая image build,
+report/risk/admission/promotion пока NOT RUN. Основной checklist не закрывался.

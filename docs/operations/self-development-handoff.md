@@ -11,8 +11,9 @@ updated: 2026-10-05
 # Текущее состояние
 
 05.10.2026 владелец явно возобновил работу после переноса хранилища.
-Перенос проверен; цель снова выполняется. Пять компонентов пока остаются
-в maintenance до исправления CEL-политики и полного штатного apply/readback.
+Перенос проверен; цель снова выполняется. CEL-политики исправлены, штатный
+apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e35fa4e`.
+Пять компонентов и архив сессий восстановлены; выполняется native QA.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).
 - Draft PR: [#1798](https://github.com/codex-k8s/kodex/pull/1798), не слит.
@@ -72,12 +73,24 @@ updated: 2026-10-05
 - Общее историческое форматирование журнала имеет отдельный FAIL;
   это не ошибка сборки приложения и не объявлено PASS.
 
-Сейчас остановлены control-plane, control-api-gateway, image-admission,
-role-image-builder и runtime-controller. API возвращает `503`; это ожидаемое
-следствие maintenance, а не доказательство работоспособности нового кода.
-На checkpoint паузы дочерние агенты и build/render/apply были завершены.
-После возобновления выполняются адресные исправления и проверки политик;
-сервисы не запускаются до подтверждения их успешной компиляции.
+  05.10.2026 13:52 UTC — предыдущие FAIL сохранены выше как история. На clean
+  source `b40f278477cf977e058a90c8bcd163550e35fa4e` исправлены Quantity/PVC,
+  RBAC union, init/main list и обработка optional пустого typeChecking.
+  Typed CEL, восемь compiler gate tests, deploy selection и выполненные cutover
+  tests PASS; один optional disposable PostgreSQL test NOT RUN.
+  Canonical all/build-jobs4/import, свежий render и supply-chain apply/readback PASS.
+  Все девять VAP имеют свежие generation/observedGeneration и ноль warnings.
+  Все пять Deployment и session-archive имеют desired/ready/updated/available=1;
+  archive восстановился без ручного restart. Source mounts и адресные host/Pod
+  hashes сверены, фактические Go executables проверены отдельно от Air launcher.
+  У hot binaries нет vcs.revision: exact source SHA не выводится из annotation.
+  Chrome: SSO, bootstrap/session200, подключённый realtime, Console без ошибок;
+  скриншот переписки просмотрен. Новый SYSTEM turn отправлен штатным UI.
+  Полная native самонастройка, решение о риске и dogfooding ещё не завершены.
+
+Maintenance503 устранён штатной активацией после успешной компиляции политик.
+Готовность Deployment и вход не объявляются завершением пользовательских
+сценариев: последующие этапы выполняются через помощников и штатный UI.
 
 # Оставшиеся действия
 
@@ -86,7 +99,7 @@ role-image-builder и runtime-controller. API возвращает `503`; это
 - [x] Исправить CEL-типизацию workspace/runtime policy через код и адресные
       negative tests, не ослабляя PVC/RBAC/контейнерные ограничения.
       Живая компиляция и активация остаются отдельным следующим пунктом.
-- [ ] Получить fresh source/render; штатным repo-owned apply выполнить forward
+- [x] Получить fresh source/render; штатным repo-owned apply выполнить forward
       migration и обновление CRD/policy/network/CP/gateway. После полного readback
       штатно возобновить контроллеры. Не применять старый render вслепую.
 - [ ] Проверить Chrome: скриншот, вёрстку/UX, Console, relevant Network,

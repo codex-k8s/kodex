@@ -251,7 +251,7 @@ async function readIngressTLS() {
     const kubectl = async (kind, name) => {
       try {
         const result = await execute(
-          "/usr/local/bin/kubectl",
+          "/home/s/.local/state/kodex-dev/tools/bin/kubectl",
           ownerTLSReadArguments(kind, name, cacheDirectory),
           {
             env: {
