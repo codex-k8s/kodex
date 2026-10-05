@@ -2121,3 +2121,59 @@ actual-helper Node1test7.984s, bash syntax/ShellCheck/diff.
 Перед alias публикацией проверяется exact pinned source descriptor, затем
 ctr tag --local копирует target/labels атомарно. Полный exact content/unpack/
 CRI readback не менялся. Повторный live import/activation ещё NOT RUN.
+
+05.10.2026 03:58 UTC, exact sourceeba6a9046774a5092ad422cc001bcf8b7f29ac69:
+PASS — восстановлены три сохранённых OCI archives без rebuild: runnerdb9428,
+admission244fed и authority8acb. Import и отдельный readback подтвердили exact
+descriptor/content/unpack и CRI Pinned/repoDigests на обеих нодах. Repo-owned
+supply-chain render/apply/readback завершились успешно; controller/builder
+вновь Ready. Forward migration JobUIDf8ca63ba-d152-49a6-85dc-e98d26bd64e5
+завершился; свежий CP process прошёл exact policy readiness revision88.
+Host/Pod source hashes CP/archive/frontend совпали; actual CP PodUID
+a9b39054-3901-4b52-b38d-be7eb3f0d6bd, ELF SHA256
+e8931c83700547dbe1120ebd504403f45a1c8aa9107cee7d7231e5222d2833c6
+содержит новые закрытые admission.fail/.expire permissions. Это local hot
+readback, не production acceptance и не устранение security incident.
+Chrome own22: catalog/recipe/session GET200, Console без error/warn,
+desktop screenshot плана просмотрен, чужие вкладки не тронуты.
+
+SYSTEM сам подготовил вариант5: один typed UPDATE собственной recipe версии6,
+standard без клиентского dockerfile; before807eda → afterdb9428, сохранены
+scope/name/assistant pins. ROOT проверил ревизию и применил её штатно:
+recipeversion7/generation5, exact buildimgbld_LkA0f0xohoqVJrPXaIZK57Zh
+COMPLETED. CREATE/UPDATE автоматически создают Build в той же owner transaction;
+отдельный REQUEST_BUILD не выполнялся. Предыдущий тезис ROOT о необходимости
+отдельного запуска был ошибочным; lifecycle не менялся. Read-only recipe
+observer поколения5 запущен до подтверждения. SCAN JobUID
+1d305a83-7d52-4f55-8c4f-c93f841f21b2, run
+v20261005035723-eba6a9046774a5092ad422cc001bcf8b7f29ac69 наблюдается отдельно;
+вердикт/публикация ещё NOT RUN, checkbox6/7 остаются OPEN.
+
+ROOT6 frontend i18n unit PASS5.67s, адресный ESLint/Prettier/diff PASS для
+нейтральных трёх RU/EN подсказок: сохранить рецепт → проверить build status →
+успешный допуск → отдельно опубликовать → выбрать окружение. Source изменений
+этой подсказки — uncommitted delta к eba6a904, не прежняя сборка образов.
+На экранах сразу проверяется не только исправность, но и удобство/компактность:
+история12 сборок требует bounded list4–5 элементов; отдельная UX правка в работе.
+
+05.10.2026 04:05 UTC, sourceeba6a904 + frontend UX delta:
+PASS — ROOT49 адресных frontend unit6.07s, ESLint/Prettier/diff.
+История12 сборок ограничена max-height480px/70dvh и сохраняет все попытки,
+keyboard-focus scroll region, диагностику и действия. Desktop2099x1142:
+clientHeight480/scrollHeight1378; mobile390x844: width390 без горизонтального
+overflow, scrollHeight2038; оба screenshot просмотрены после hydration.
+Полной пагинации builds в API нет: не добавлялись фиктивный loadmore или polling.
+
+SCAN gen5 завершился exit0: exact JobUID1d305a83-7d52-4f55-8c4f-c93f841f21b2,
+PodUID4b5db3a1-977a-4db7-b750-c2fbfc8581b4,03:57:45→04:00:58UTC.
+Owner GET200 подтвердил version3 REJECTED candidateimgart_4Hof_Yt5aJOUtYz2qx-3ohbs,
+exact gen5/buildimgbld_LkA0f0xohoqVJrPXaIZK57Zh/image
+sha256:0d5c11d82182dc9a398938d097b0b5775036624032be8edd77f764fee8e00e90
+и vulnerability SHA48c9d16e7fc6b37e0ae6a305f815f9c964d76db308de232ff1c8d111a6965186.
+Private observer совпал с tuple: blocking123/high-or-critical582/no-fix459.
+VERIFIED inventory содержит50 programs linux/amd64; declaredTools0 публичного
+artifact не доказывает выбор38 environment tools. REJECTED не обходится;
+публикация/системное окружение всё ещё NOT RUN, checkbox6/7 OPEN.
+Bounded remediation пустой при123blocking: требуется диагностика immutable
+полного evidence с безопасной проекцией package/advisory/fix. Новый helper
+пока NOT RUN; публичные policy пороги и verdict не менялись.

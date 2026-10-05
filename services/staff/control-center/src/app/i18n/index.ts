@@ -4274,7 +4274,7 @@ const ru = {
       systemImageBoundary:
         "Образ общесистемного помощника. Область и привязка к помощнику закреплены сервером и здесь не меняются. Сборка, проверка и продвижение выполняются штатным процессом.",
       systemImageNextSteps:
-        "После подтверждения начнётся сборка нового поколения образа. Дождитесь проверки, отдельно подтвердите продвижение и выберите образ в окружении помощника. Текущие ходы сохранят прежний образ.",
+        "Подтверждение сохранит рецепт образа. Затем откройте его и проверьте состояние сборки. После успешного допуска отдельно опубликуйте образ и выберите его в окружении помощника. Текущие ходы сохранят прежний образ.",
       runtimeConfigurationBoundary:
         "Настройки модели применятся только к закреплённому помощнику и следующим ходам. После сохранения и проверки плана отдельно подтвердите применение; текущие ходы сохранят прежнюю конфигурацию.",
       runtimeConfigurationUnavailable:
@@ -4291,9 +4291,9 @@ const ru = {
       roleImageCatalogUnavailable:
         "Не удалось загрузить каталог сотрудников и окружений. Обновите страницу и проверьте план снова.",
       roleImageCreateNextSteps:
-        "После подтверждения платформа создаст рецепт и поставит первую сборку в очередь. Образ станет доступен сотруднику только после успешной проверки и публикации.",
+        "Подтверждение создаст рецепт образа. Затем откройте его и проверьте состояние сборки. После успешного допуска отдельно опубликуйте образ и выберите его в окружении сотрудника.",
       roleImageUpdateNextSteps:
-        "После подтверждения платформа создаст новое поколение рецепта и поставит его сборку в очередь. Текущее опубликованное поколение останется доступным до успешной проверки и отдельной публикации нового.",
+        "Подтверждение сохранит новое поколение рецепта образа. Затем откройте его и проверьте состояние сборки. После успешного допуска отдельно опубликуйте образ и выберите его в окружении сотрудника. Текущее опубликованное поколение останется доступным.",
       roleImageHistoricalSource:
         "В сохранённом плане нет исходника Dockerfile. Если образ создан, откройте его рецепт, чтобы посмотреть текущий исходник.",
       connectionDefinition: "Тип интеграции",
@@ -8746,7 +8746,7 @@ const en = {
       systemImageBoundary:
         "System assistant image. The server-pinned scope and assistant cannot be changed here. Building, verification and promotion use the standard pipeline.",
       systemImageNextSteps:
-        "Confirmation queues the new image generation for building. Wait for verification, separately confirm promotion, then select the image in the assistant environment. Current turns keep their existing image.",
+        "Confirmation saves the image recipe. Then open it and check the build status. After successful admission, publish the image separately and select it in the assistant environment. Current turns keep their existing image.",
       runtimeConfigurationBoundary:
         "Model settings apply only to the pinned assistant and future turns. Save and validate the plan, then separately confirm application; current turns keep their existing configuration.",
       runtimeConfigurationUnavailable:
@@ -8763,9 +8763,9 @@ const en = {
       roleImageCatalogUnavailable:
         "Could not load the employee and environment catalog. Reload the page and validate the plan again.",
       roleImageCreateNextSteps:
-        "After confirmation, the platform creates a recipe and queues its first build. The employee can use the image only after successful verification and promotion.",
+        "Confirmation creates the image recipe. Then open it and check the build status. After successful admission, publish the image separately and select it in the employee environment.",
       roleImageUpdateNextSteps:
-        "After confirmation, the platform creates a new recipe generation and queues its build. The current promoted generation remains available until the new one is verified and promoted separately.",
+        "Confirmation saves a new image recipe generation. Then open it and check the build status. After successful admission, publish the image separately and select it in the employee environment. The current published generation remains available.",
       roleImageHistoricalSource:
         "This saved plan does not contain the Dockerfile source. If the image was created, open its recipe to inspect the current source.",
       connectionDefinition: "Integration type",

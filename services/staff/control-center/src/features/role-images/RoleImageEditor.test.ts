@@ -61,10 +61,11 @@ async function summary(
   value?: RoleImageArtifact,
   full = false,
   failure?: RoleImageAdmissionFailure,
+  history?: RoleImageBuild[],
 ): Promise<string> {
   state.store = {
     recipes: { [recipe.ref]: recipe },
-    builds: { [recipe.ref]: [build] },
+    builds: { [recipe.ref]: history ?? [build] },
     artifacts: { [recipe.ref]: value },
     admissionFailures: { [recipe.ref]: failure },
     promotionReceipts: {},
@@ -138,6 +139,27 @@ beforeEach(() => {
     createdAt: recipe.createdAt,
     updatedAt: recipe.updatedAt,
   };
+});
+
+describe("компактная история сборок", () => {
+  it("сохраняет все двенадцать попыток, отказ и действие диагностики в scroll region", async () => {
+    recipe.generation = 4;
+    const history = Array.from({ length: 12 }, (_, index) => ({
+      ...build,
+      ref: `build_history_${String(index)}`,
+      recipeGeneration: Math.floor(index / 3) + 1,
+      attempt: (index % 3) + 1,
+      stage: index === 11 ? ("FAILED" as const) : ("COMPLETED" as const),
+      diagnosticSummary: index === 11 ? "Не удалось собрать образ" : undefined,
+    }));
+    const html = await summary(undefined, true, undefined, history);
+    expect(html.match(/class="build-row"/g)).toHaveLength(12);
+    expect(html).toContain('role="region"');
+    expect(html).toContain('aria-label="История сборок" tabindex="0"');
+    expect(html).toContain("Не удалось собрать образ");
+    expect(html).toContain(i18n.global.t("states.FAILED"));
+    expect(html).toContain('class="button build-debug-action"');
+  });
 });
 
 describe("понятный закрытый REJECTED допуск, отдельно от technical FAILED", () => {

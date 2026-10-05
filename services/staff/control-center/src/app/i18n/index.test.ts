@@ -15,6 +15,33 @@ function entries(value: unknown, prefix = ""): [string, string][] {
   );
 }
 describe("Control Center translations", () => {
+  it.each(["ru", "en"] as const)(
+    "объясняет сохранение рецепта, проверку сборки и отдельную публикацию в %s",
+    (locale) => {
+      const translations = new Map(
+        entries(i18n.global.getLocaleMessage(locale)),
+      );
+      for (const key of [
+        "systemImageNextSteps",
+        "roleImageCreateNextSteps",
+        "roleImageUpdateNextSteps",
+      ]) {
+        const text = translations.get(`assistant.planEditor.${key}`);
+        expect(text, key).toBeDefined();
+        if (locale === "ru") {
+          expect(text).toMatch(
+            /Подтверждение (?:сохранит|создаст).*рецепт.*проверьте состояние сборки.*После успешного допуска отдельно опубликуйте образ.*выберите его в окружении/,
+          );
+          expect(text).not.toMatch(/начнётся сборка|поставит.*в очередь/);
+        } else {
+          expect(text).toMatch(
+            /Confirmation (?:saves|creates).*recipe.*check the build status.*After successful admission, publish the image separately.*select it in the.*environment/,
+          );
+          expect(text).not.toMatch(/queues|starts the build/);
+        }
+      }
+    },
+  );
   it("переводит каждое поле схемы пакета интеграции", () => {
     const keys = new Set<string>();
     const visited = new Set<object>();

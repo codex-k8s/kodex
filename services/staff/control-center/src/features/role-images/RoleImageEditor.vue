@@ -849,7 +849,12 @@ onBeforeUnmount(() => {
                 <Maximize2 :size="20" />
               </button>
             </header>
-            <div class="build-history__scroll">
+            <div
+              class="build-history__scroll build-history__scroll--builds"
+              role="region"
+              :aria-label="t('roleImages.buildHistory')"
+              tabindex="0"
+            >
               <div v-if="!builds.length" class="empty-section">
                 {{ t("roleImages.noBuilds") }}
               </div>
@@ -1446,8 +1451,25 @@ onBeforeUnmount(() => {
   max-height: 768px;
   overflow: auto;
 }
-.build-history__scroll .build-row {
-  min-height: 128px;
+.build-history__scroll--builds {
+  min-width: 0;
+  max-height: min(480px, 70dvh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.build-history__scroll--builds .build-row {
+  min-height: 96px;
+  overflow-wrap: anywhere;
+}
+.build-history__scroll--builds .build-row > * {
+  min-width: 0;
+}
+.build-history__scroll--builds .build-debug-action {
+  max-width: 100%;
+  min-height: 32px;
+  height: auto;
+  white-space: normal;
 }
 .build-history__scroll--revisions {
   max-height: 528px;

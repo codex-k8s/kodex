@@ -16,6 +16,22 @@ const editor = readFileSync(
 );
 
 describe("каталог образов ИИ-сотрудников", () => {
+  it("ограничивает видимую историю пятью карточками и оставляет доступную прокрутку", () => {
+    expect(editor).toMatch(
+      /class="build-history__scroll build-history__scroll--builds"\s+role="region"\s+:aria-label="t\('roleImages.buildHistory'\)"\s+tabindex="0"/,
+    );
+    expect(editor).toMatch(
+      /\.build-history__scroll--builds\s*\{[^}]*max-height: min\(480px, 70dvh\);[^}]*overflow-x: hidden;[^}]*overflow-y: auto;/s,
+    );
+    expect(editor).toMatch(
+      /\.build-history__scroll--builds \.build-row\s*\{[^}]*min-height: 96px;[^}]*overflow-wrap: anywhere;/s,
+    );
+    expect(editor).toMatch(
+      /\.build-history__scroll--builds \.build-debug-action\s*\{[^}]*max-width: 100%;[^}]*min-height: 32px;[^}]*height: auto;[^}]*white-space: normal;/s,
+    );
+    expect(editor).toContain('v-for="build in builds"');
+    expect(editor).not.toContain("builds.slice(");
+  });
   it("на телефоне переносит lifecycle status на отдельную строку и оставляет место помощнику", () => {
     const mobile = editor.slice(editor.indexOf("@media (max-width: 640px)"));
     expect(mobile).toContain(
