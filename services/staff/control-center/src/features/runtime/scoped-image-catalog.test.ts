@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { verifiedInventoryFixture } from "@/test-utils/image-inventory-fixture";
+import {
+  verifiedInventoryFixture,
+  unavailableInventoryFixture,
+} from "@/test-utils/image-inventory-fixture";
 import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen";
 import {
   createScopedRuntimeImageCatalog,
@@ -58,6 +61,131 @@ function reader() {
 const signal = () => new AbortController().signal;
 
 describe("Каталог допущенных образов в точной области", () => {
+  it("исторический UNAVAILABLE не скрывает соседний точный образ", async () => {
+    const api = reader();
+    const historical = {
+      ...recipe,
+      ref: "recipe_historical",
+      activeImageArtifactRef: "artifact_historical",
+    };
+    api.list.mockResolvedValue({ items: [historical, recipe], total: 2 });
+    api.read.mockImplementation((_, ref) =>
+      Promise.resolve(
+        ref === historical.ref
+          ? {
+              recipe: historical,
+              builds: [],
+              activeArtifact: {
+                ...artifact,
+                ref: historical.activeImageArtifactRef,
+                recipeRef: historical.ref,
+                verifiedToolInventory: unavailableInventoryFixture(),
+              },
+            }
+          : { recipe, builds: [], activeArtifact: artifact },
+      ),
+    );
+    const catalog = createScopedRuntimeImageCatalog(scope.organizationRef, api);
+    const page = await catalog.loadPage(scope, "", undefined, signal());
+    expect(page.items.map((item) => item.ref)).toEqual([artifact.ref]);
+    await expect(
+      catalog.loadArtifact(
+        scope,
+        historical.ref,
+        historical.activeImageArtifactRef,
+        signal(),
+      ),
+    ).rejects.toMatchObject({ code: "IMAGE_ARTIFACT_NOT_CURRENT" });
+  });
+  it("проходит историческую пустую страницу по курсору без ослабления inventory", async () => {
+    const api = reader();
+    const historical = {
+      ...recipe,
+      ref: "recipe_historical",
+      activeImageArtifactRef: "artifact_historical",
+    };
+    api.list
+      .mockResolvedValueOnce({
+        items: [historical],
+        total: 2,
+        nextPageToken: "next",
+      })
+      .mockResolvedValueOnce({ items: [recipe], total: 2 });
+    api.read.mockImplementation((_, ref) =>
+      Promise.resolve(
+        ref === historical.ref
+          ? {
+              recipe: historical,
+              builds: [],
+              activeArtifact: {
+                ...artifact,
+                ref: historical.activeImageArtifactRef,
+                recipeRef: historical.ref,
+                verifiedToolInventory: unavailableInventoryFixture(),
+              },
+            }
+          : { recipe, builds: [], activeArtifact: artifact },
+      ),
+    );
+    const page = await createScopedRuntimeImageCatalog(
+      scope.organizationRef,
+      api,
+    ).loadPage(scope, "", undefined, signal());
+    expect(page.items.map((item) => item.ref)).toEqual([artifact.ref]);
+    expect(api.list).toHaveBeenNthCalledWith(
+      2,
+      scope,
+      "next",
+      expect.any(AbortSignal),
+      30,
+    );
+  });
+  it.each(["foreign", "identity", "verified", "transport"])(
+    "не скрывает ошибку %s соседнего кандидата",
+    async (failure) => {
+      const api = reader();
+      const historical = {
+        ...recipe,
+        ref: "recipe_historical",
+        activeImageArtifactRef: "artifact_historical",
+      };
+      api.list.mockResolvedValue({ items: [historical, recipe], total: 2 });
+      api.read.mockImplementation((_, ref) => {
+        if (ref !== historical.ref)
+          return Promise.resolve({
+            recipe,
+            builds: [],
+            activeArtifact: artifact,
+          });
+        if (failure === "transport")
+          throw new Error("Synthetic transport failure");
+        const invalid = {
+          ...artifact,
+          ref: historical.activeImageArtifactRef,
+          recipeRef: historical.ref,
+          verifiedToolInventory:
+            failure === "verified"
+              ? { ...verifiedInventoryFixture(), sha256: "" }
+              : unavailableInventoryFixture(),
+          ...(failure === "foreign" ? { organizationRef: "org_foreign" } : {}),
+          ...(failure === "identity" ? { ref: "artifact_other" } : {}),
+        };
+        return Promise.resolve({
+          recipe: historical,
+          builds: [],
+          activeArtifact: invalid,
+        });
+      });
+      await expect(
+        createScopedRuntimeImageCatalog(scope.organizationRef, api).loadPage(
+          scope,
+          "",
+          undefined,
+          signal(),
+        ),
+      ).rejects.toThrow();
+    },
+  );
   it("выбирает поколение активного артефакта, а не новой ещё не опубликованной сборки", async () => {
     const catalog = createScopedRuntimeImageCatalog(
       scope.organizationRef,

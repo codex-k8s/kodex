@@ -6,8 +6,14 @@ import {
   type EditablePlanOperation,
 } from "@/features/assistant/model";
 import { useRuntimeStore } from "@/features/runtime/store";
-import type { RuntimeResourceScope } from "@/features/runtime/resource-scope";
-import type { RuntimeImageCatalog } from "@/features/runtime/image-tools-selection";
+import {
+  runtimeResourceScopeKey,
+  type RuntimeResourceScope,
+} from "@/features/runtime/resource-scope";
+import type {
+  RuntimeImageCatalog,
+  RuntimeImageOption,
+} from "@/features/runtime/image-tools-selection";
 import RuntimeEnvironmentToolsEditor from "@/features/runtime/RuntimeEnvironmentToolsEditor.vue";
 import {
   verifiedImageInventoryAvailable,
@@ -35,6 +41,7 @@ const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
   parameter: [key: string, value: unknown];
+  "resolved-image": [value: RuntimeImageOption];
 }>();
 const runtime = useRuntimeStore();
 const artifact = ref<RoleImageArtifact>();
@@ -146,17 +153,20 @@ watch(
 );
 
 watch(
-  () =>
-    [
-      props.projectRef,
-      props.resourceScope,
-      imageRef.value,
-      props.selectedImage?.ref,
+  [
+    () => props.projectRef,
+    () =>
+      props.resourceScope ? runtimeResourceScopeKey(props.resourceScope) : "",
+    () => imageRef.value,
+    () => props.selectedImage?.ref,
+    () =>
       props.selectedImage && "recipeRef" in props.selectedImage
         ? props.selectedImage.recipeRef
         : "",
-    ] as const,
-  async ([projectRef, scope, ref, , chosenRecipe], _, onCleanup) => {
+    () => props.imageCatalog,
+  ] as const,
+  async ([projectRef, , ref, , chosenRecipe, catalog], _, onCleanup) => {
+    const scope = props.resourceScope;
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     artifact.value = undefined;
@@ -165,7 +175,7 @@ watch(
     if ((!projectRef && !scope) || !ref) return;
     loading.value = true;
     try {
-      if (scope?.kind === "ORGANIZATION" && !props.imageCatalog)
+      if (scope?.kind === "ORGANIZATION" && !catalog)
         throw new Error("Organization image catalog is unavailable");
       let recipeRef = typeof chosenRecipe === "string" ? chosenRecipe : "";
       if (!recipeRef) {
@@ -173,13 +183,8 @@ watch(
         const visited = new Set<string>();
         do {
           const page =
-            scope && props.imageCatalog
-              ? await props.imageCatalog.loadPage(
-                  scope,
-                  "",
-                  cursor,
-                  controller.signal,
-                )
+            scope && catalog
+              ? await catalog.loadPage(scope, "", cursor, controller.signal)
               : await runtime.searchPromotedRoleImagePage(
                   projectRef,
                   "",
@@ -208,20 +213,24 @@ watch(
           "Promoted image is not available in the project catalog",
         );
       const loaded =
-        scope && props.imageCatalog
-          ? await props.imageCatalog.loadArtifact(
-              scope,
-              recipeRef,
-              ref,
-              controller.signal,
-            )
+        scope && catalog
+          ? await catalog.loadArtifact(scope, recipeRef, ref, controller.signal)
           : await runtime.loadPromotedRoleImageArtifact(
               projectRef,
               recipeRef,
               ref,
               controller.signal,
             );
-      if (!controller.signal.aborted) artifact.value = loaded.artifact;
+      if (!controller.signal.aborted) {
+        artifact.value = loaded.artifact;
+        emit("resolved-image", {
+          ref,
+          title: loaded.recipeName,
+          description: loaded.artifact.promotedReference,
+          recipeRef,
+          generation: loaded.artifact.recipeGeneration,
+        });
+      }
     } catch {
       if (!controller.signal.aborted) loadFailed.value = true;
     } finally {

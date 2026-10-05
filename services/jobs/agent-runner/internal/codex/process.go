@@ -181,6 +181,10 @@ type appServer struct {
 }
 
 func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error) (result Result, resultErr error) {
+	return executeLocalWithInputProof(ctx, input, prompt, mcpProxyToken, onActivity, nil)
+}
+
+func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error, proofObserver providerInputProofObserver) (result Result, resultErr error) {
 	if err := validateRuntimeSelection(input); err != nil {
 		return Result{}, atProviderStage(providerStageSelection, err)
 	}
@@ -262,16 +266,8 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := state.captureUsageBaseline(); err != nil {
 		return Result{}, atProviderStage(providerStageUsageBaseline, server.abort(ctx, state, err))
 	}
-	turnParams, err := turnStartParams(input, state.threadID, prompt)
-	if err != nil {
-		return Result{}, atProviderStage(providerStageTurnParameters, server.abort(ctx, state, err))
-	}
-	raw, err = server.call(ctx, state, "turn/start", turnParams)
-	if err != nil {
-		return Result{}, atProviderStage(providerStageTurnStart, server.abort(ctx, state, err))
-	}
-	if err := state.bindTurn(raw); err != nil {
-		return Result{}, atProviderStage(providerStageTurnStart, server.abort(ctx, state, err))
+	if err := server.startTurnWithInputProof(ctx, state, input, prompt, proofObserver); err != nil {
+		return Result{}, atProviderStage(providerStageOf(err), server.abort(ctx, state, err))
 	}
 	if err := server.waitTerminal(ctx, state); err != nil {
 		return Result{}, atProviderStage(providerStageTerminalWait, server.abort(ctx, state, err))

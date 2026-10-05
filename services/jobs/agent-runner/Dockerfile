@@ -320,6 +320,14 @@ ENV GOROOT=/usr/local/go \
 	PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 RUN ["/kodex-go-toolchain-guard", "install", "services", "/usr/local/go/bin/go"]
 
+# Публичные manifest/lock не наследуют private mode исходного build context.
+# Проверяем настоящий npm той же non-root идентичностью, не меняя probe sandbox.
+RUN chmod 0444 /opt/kodex/npm-toolchain/package.json /opt/kodex/npm-toolchain/package-lock.json \
+	/opt/kodex/npm-toolchain/npm-cli/package.json /opt/kodex/npm-toolchain/npm-cli/package-lock.json \
+	&& test "$(runuser -u kodex -- env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/nonexistent \
+		NPM_CONFIG_LOGS_MAX=0 NPM_CONFIG_UPDATE_NOTIFIER=false npm --version)" = \
+		"$(node -p 'require("/opt/kodex/npm-toolchain/npm-cli/package.json").version')"
+
 USER 10001:10001
 
 ENTRYPOINT ["/usr/local/bin/kodex-init", "entrypoint", "/usr/local/bin/kodex-agent-runner"]

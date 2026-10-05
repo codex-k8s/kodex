@@ -164,6 +164,26 @@ function runtime(
 }
 
 describe("Карточка применённого окружения", () => {
+  it("ссылка SYSTEM ведёт на server-created draftRef, а не только published форму", async () => {
+    const applied = plan(true);
+    const state = await captureSetupState(Card, (app) => app.use(i18n), {
+      plan: applied,
+      operationRef: "op_synthetic",
+    });
+    (state.draft as Ref<RuntimeEnvironmentDraft>).value = {
+      ...draft(true, "Собственное окружение"),
+      state: "DRAFT",
+    };
+    expect((state.destination as ComputedRef<unknown>).value).toEqual({
+      name: "system-assistant-environment",
+      query: { draftRef: "draft_synthetic" },
+    });
+    expect(api.read).toHaveBeenCalledWith(
+      scope,
+      "draft_synthetic",
+      expect.any(AbortSignal),
+    );
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     i18n.global.locale.value = "ru";

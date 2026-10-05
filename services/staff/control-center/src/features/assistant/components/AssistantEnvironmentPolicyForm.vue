@@ -166,6 +166,19 @@ const problems = computed(() => {
     ),
   ];
 });
+const compact = computed(() => {
+  if (
+    props.operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
+    problems.value.length > 0 ||
+    !policy.value ||
+    policy.value.webAccess.mode !== "NONE"
+  )
+    return false;
+  const before = parsePolicy(props.operation.value.before.policyInput);
+  return Boolean(
+    before && JSON.stringify(policy.value) === JSON.stringify(before),
+  );
+});
 watch(
   () => problems.value.length === 0,
   (valid) => emit("valid", valid),
@@ -180,11 +193,38 @@ function update(value: RuntimeEnvironmentPolicyInput): void {
 
 <template>
   <div class="assistant-environment-policy">
-    <RuntimeEnvironmentPolicyFields
-      :policy="policy ?? defaultRuntimeEnvironmentPolicy()"
-      :disabled="disabled || !policy"
-      @update:policy="update"
-    />
+    <component
+      :is="compact ? 'details' : 'div'"
+      class="assistant-environment-policy__advanced"
+    >
+      <summary v-if="compact">
+        {{ $t("common.advanced") }}
+        <small>{{ $t("assistant.settings.environmentAdvanced") }}</small>
+        <small v-if="policy">{{
+          $t("assistant.planEditor.environmentPolicySummary", {
+            cpuRequest: policy.resources.cpuRequestMilli,
+            cpuLimit: policy.resources.cpuLimitMilli,
+            memoryRequest: policy.resources.memoryRequestMib,
+            memoryLimit: policy.resources.memoryLimitMib,
+            volumes: policy.volumes.length,
+          })
+        }}</small>
+      </summary>
+      <p
+        v-else-if="
+          operation.value.type === 'PREPARE_RUNTIME_ENVIRONMENT_REVISION'
+        "
+        class="secondary-text"
+        role="status"
+      >
+        {{ $t("assistant.planEditor.environmentPolicyReview") }}
+      </p>
+      <RuntimeEnvironmentPolicyFields
+        :policy="policy ?? defaultRuntimeEnvironmentPolicy()"
+        :disabled="disabled || !policy"
+        @update:policy="update"
+      />
+    </component>
     <p
       v-for="problem in problems"
       :key="problem"
@@ -204,5 +244,20 @@ function update(value: RuntimeEnvironmentPolicyInput): void {
 }
 .field-error {
   color: var(--color-danger, #b42318);
+}
+div.assistant-environment-policy__advanced {
+  display: grid;
+  gap: 12px;
+}
+.assistant-environment-policy__advanced > .runtime-policy-fields {
+  margin-top: 12px;
+}
+.assistant-environment-policy__advanced > summary {
+  cursor: pointer;
+}
+.assistant-environment-policy__advanced > summary > small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-secondary);
 }
 </style>

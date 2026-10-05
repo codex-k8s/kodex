@@ -69,6 +69,25 @@ func TestProbeSandboxKernelChild(t *testing.T) {
 		t.Skip("disposable subprocess only")
 	}
 	runtime.LockOSThread()
+	// Launcher хоста может сохранять inheritable capabilities даже при пустых
+	// permitted/effective. Env fixture их не очищает: сбрасываем только этот
+	// выделенный child, затем проверяем прежнюю строгую production boundary.
+	var capabilities [2]unix.CapUserData
+	header := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
+	if unix.Capset(&header, &capabilities[0]) != nil {
+		t.Fatal("fixture capability drop failed")
+	}
+	if unix.Prctl(unix.PR_CAP_AMBIENT, unix.PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0) != nil {
+		t.Fatal("fixture ambient capability drop failed")
+	}
+	if unix.Capget(&header, &capabilities[0]) != nil {
+		t.Fatal("fixture capability readback failed")
+	}
+	for _, capability := range capabilities {
+		if capability.Inheritable != 0 {
+			t.Fatal("fixture inheritable capabilities are not empty")
+		}
+	}
 	if !probeStandardDescriptorsSafe() || !probeCapabilitiesEmpty() {
 		t.Fatal("native null, output pipes or empty capabilities rejected")
 	}

@@ -5,6 +5,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import {
   assertPromotedRuntimeImage,
+  assertPromotedRuntimeImageIdentity,
   type RuntimeImageCatalog,
   type RuntimeImageOption,
 } from "./image-tools-selection";
@@ -14,6 +15,18 @@ import {
   type RuntimeResourceScope,
   type RuntimeScopedResourceIdentity,
 } from "./resource-scope";
+import { AppProblem } from "@/shared/api/problem";
+
+class HistoricalImageInventoryUnavailable extends AppProblem {
+  constructor() {
+    super({
+      status: 409,
+      code: "IMAGE_ARTIFACT_NOT_CURRENT",
+      retryable: false,
+      kind: "conflict",
+    });
+  }
+}
 
 type ScopedRecipe = Omit<RoleImageRecipe, "scopeKind"> &
   RuntimeScopedResourceIdentity;
@@ -68,17 +81,29 @@ export function createScopedRuntimeImageCatalog(
       detail.activeArtifact,
       organizationRef,
     );
-    assertPromotedRuntimeImage(detail.activeArtifact, {
+    const expected = {
       artifactRef,
       recipeRef,
       recipeGeneration: detail.activeArtifact.recipeGeneration,
-    });
+    };
+    assertPromotedRuntimeImageIdentity(detail.activeArtifact, expected);
     if (
       detail.recipe.state !== "ACTIVE" ||
       !detail.recipe.promotedImageReady ||
       detail.recipe.activeImageArtifactRef !== artifactRef
     )
       throw new Error("Runtime image catalog artifact is not active");
+    const inventory = detail.activeArtifact.verifiedToolInventory;
+    if (
+      inventory.status === "UNAVAILABLE" &&
+      inventory.sha256 === "" &&
+      inventory.imageDigest === "" &&
+      inventory.provenanceSha256 === "" &&
+      Array.isArray(inventory.platforms) &&
+      inventory.platforms.length === 0
+    )
+      throw new HistoricalImageInventoryUnavailable();
+    assertPromotedRuntimeImage(detail.activeArtifact, expected);
     return { artifact: detail.activeArtifact, recipeName: detail.recipe.name };
   }
 
@@ -112,14 +137,23 @@ export function createScopedRuntimeImageCatalog(
                 ?.toLocaleLowerCase()
                 .includes(needle)),
         );
-        const items: RuntimeImageOption[] = await Promise.all(
+        const options = await Promise.all(
           candidates.map(async (recipe) => {
             const ref = recipe.activeImageArtifactRef;
             if (!ref)
               throw new Error(
                 "Runtime image artifact reference is unavailable",
               );
-            const result = await readArtifact(scope, recipe.ref, ref, signal);
+            let result;
+            try {
+              result = await readArtifact(scope, recipe.ref, ref, signal);
+            } catch (error) {
+              // Исторический UNAVAILABLE не предлагается и не закрывает соседний
+              // точный образ. Другие ошибки, включая owner/VERIFIED, не скрываются.
+              if (error instanceof HistoricalImageInventoryUnavailable)
+                return undefined;
+              throw error;
+            }
             return {
               ref,
               title: result.recipeName,
@@ -128,6 +162,9 @@ export function createScopedRuntimeImageCatalog(
               generation: result.artifact.recipeGeneration,
             };
           }),
+        );
+        const items: RuntimeImageOption[] = options.filter(
+          (option) => option !== undefined,
         );
         if (page.nextPageToken && visited.has(page.nextPageToken))
           throw new Error("Runtime image catalog returned a repeated cursor");

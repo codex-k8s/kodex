@@ -3146,3 +3146,67 @@ Environment draft с собственным promoted artifact; прочие де
 настройки сохраняются. Диалог `cnv_w4f5OYasOOhU0d5wGhiF8p4I`, turn
 `trn_VYIz6sGW21I-sg2G06BapeeT`, run `run_ncKQ_eJKk4Dcst5eAeWHlK74`.
 Apply/publish новой среды и runtime/prompt proof после неё пока NOT RUN.
+
+### 05.10.2026 17:12 UTC — точный каталог образа и non-root npm
+
+PASS: защищённые GET подтвердили три организационных рецепта. Собственный
+образ имеет VERIFIED inventory с 50 observations и точные owner/image pins.
+Два исторических ACTIVE/PROMOTED образа имеют канонический пустой UNAVAILABLE
+inventory; общий Promise.all ошибочно блокировал из-за них весь каталог.
+Исправлен только этот случай: одиночный loadArtifact остаётся строгим,
+повреждённый VERIFIED, чужой owner и transport failure не скрываются.
+Название выбранного образа восстанавливается без изменения tools[]/плана.
+Semantic scope watch не перезапускает чтение при эквивалентном parent render.
+
+PASS: hot reload native SYSTEM40 показал `kodex-selfdev-system`, ноль выбранных
+из 41 VERIFIED инструментов и отсутствие прежней ошибки. npm PROBE_FAILED
+не предлагается; 37/38 required не объявляются 38/38. Адресные frontend
+проверки: 103 unit, lint и typecheck PASS на frozen patch
+`17ed9ba004c23f6b06ee1834154819bb3bf077c6f610e5f88857a3b155c13436`,
+base `6efc5104`, интегрирован поверх checkpoint `d29e4f63`.
+
+Причина npm доказана на прежнем actual image: публичный npm package.json
+недоступен non-root пользователю, `npm --version` завершается EACCES.
+Исправление делает четыре конкретных публичных manifest/lock read-only
+и добавляет обязательный настоящий non-root version smoke в Dockerfile;
+ранние install layers, bytes, probe sandbox и inventory truth сохранены.
+20 npm unit PASS в основном рабочем дереве. Новый OCI, его admission/promotion,
+full38/38 и actual provider prompt receipt пока NOT RUN.
+
+Открытый baseline FAIL: Go toolchain contract обнаруживает отсутствующий
+emailbridgeapi COPY closure в control-api-gateway. Воспроизведено на чистом
+предыдущем source; проверка не ослабляется, устранение включено в bootstrap.
+
+### 05.10.2026 17:26 UTC — собственное окружение опубликовано, пакет runner
+
+PASS: SYSTEM40 plan `pln_soYq66c3fmvE-TMk0bNZ9u6A`, revision1, применён
+через OWNER UI; exact receipt создал draft `renvd_HO8CV0ufJ0WAccl01aUSQgaP`.
+Из переписки открыт авторитетный draftRef, проведены fresh authentication,
+validate и impact; выбран только текущий системный помощник. Publish через UI
+и protected GET подтвердили PUBLISHED/version3, окружение
+`renv_aSMtfZ2vp9GgOHqTOZnGhWE4` revision22/versionRef
+`renvv_quVjHbEqDeaw63wj1HTjyc_U`, binding version2 на эту же ревизию.
+Image artifact `imgart_-PQ2z3H-QfPi7dAYxUgBMsHm` назначен штатно;
+37/38 required и будущий corrected OCI остаются раздельными результатами.
+
+В окне плана добавлена существующая карточка server-created draft после
+точного APPLIED receipt. Неизменённая валидная policy свёрнута в расширенные
+настройки; изменённая/непроверенная policy и интернет видны полностью.
+Focused frontend80 unit PASS в основном дереве; frozen combined113 unit,
+lint/typecheck PASS. Placeholder после HMR оказался временным состоянием;
+после обычного чтения selected/modelValue/exact artifact/friendly title совпали.
+
+Добавлен закрытый structured receipt PROVIDER_INPUT_ACKNOWLEDGED после actual
+Codex app-server ACK turn/start. Только pins и hashes/byte-comparison, без
+raw input, credentials либо reasoning. Доступ provider UID к двум фиксированным
+workspace input файлам подтверждён отдельно; это не live ACK нового runner.
+MAIN полный agent-runner go test ./... PASS (app14.894s, codex4.703s,
+imageinventory0.047s). Прежний kernel test FAIL вызван inherited capabilities
+host launcher; disposable child теперь сбрасывает их до прежних строгих
+проверок. Production sandbox не менялся. Go Docker COPY closure contract
+после четырёх недостающих строк двух шлюзов PASS.
+
+Следующий шаг: clean checkpoint → одна full runner сборка npm+receipt → свежий
+supply-chain render/apply/readback и secret-broker closure. Затем новый native
+recipe generation с exact rebuilt base, admission/promotion, повторное назначение
+и новый ход с actual receipt. Старый immutable gen7 не объявляется новым binary.

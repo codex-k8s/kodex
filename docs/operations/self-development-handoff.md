@@ -196,9 +196,10 @@ Maintenance503 устранён штатной активацией после �
       штатно возобновить контроллеры. Не применять старый render вслепую.
 - [ ] Проверить Chrome: скриншот, вёрстку/UX, Console, relevant Network,
       WebSocket и логи backend. Чужие вкладки не закрывать.
-- [ ] Для уже завершённого build `imgbld_391ktSUxZEzhsxVdJjm97i0r` проверить полный
-      evidence v5/report, решение ADMIN/OWNER при необходимости, подписанный
-      admission и promotion. Checkbox 6.1 пока открыт.
+- [ ] Для следующего исправленного image повторить полный report, точное
+      решение ADMIN/OWNER при необходимости, подписанный admission и promotion.
+      Предыдущий build `imgbld_391ktSUxZEzhsxVdJjm97i0r` уже прошёл этот путь;
+      остаётся npm PROBE_FAILED, исправление и новый OCI пока не активированы.
 - [ ] Через SYSTEM выполнить самонастройку, Context7/web/repository/prompt proof,
       создание проекта `Kodex | Dev` и отдельного Project Assistant.
 - [ ] Через PROJECT создать шесть ролей, окружения, grants, файлы и SOFTWARE_CHANGE;
@@ -216,3 +217,12 @@ Maintenance503 устранён штатной активацией после �
 Изолированные экспериментальные worktrees не являются новым источником
 принятого кода. Их не удалять при обслуживании до сверки с историей ветки;
 промежуточные варианты не применять поверх текущего checkpoint автоматически.
+
+05.10.2026 17:12 UTC: поверх pushed `d29e4f63` интегрированы адресные frontend
+исправления каталога и восстановленного имени образа, а также non-root npm fix.
+Native40 UI теперь показывает собственный образ и 41 VERIFIED программу без
+ошибки каталога. В17:26 UTC окружение revision22 опубликовано, binding version2
+совпадает с `renvv_quVjHbEqDeaw63wj1HTjyc_U`; draft PUBLISHED/version3.
+Новые runtime receipt
+и corrected image проверять только после canonical rebuild; прежний immutable
+gen7 не содержит будущего protected binary. Полный checklist остаётся открыт.

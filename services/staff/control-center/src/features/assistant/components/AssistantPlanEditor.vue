@@ -27,6 +27,7 @@ import AssistantSchedulePlanForm from "@/features/assistant/components/Assistant
 import AssistantRuntimeConfigurationPlanForm from "./AssistantRuntimeConfigurationPlanForm.vue";
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
 import AssistantEnvironmentRevisionForm from "@/features/assistant/components/AssistantEnvironmentRevisionForm.vue";
+import AssistantEnvironmentDraftCard from "@/features/assistant/components/AssistantEnvironmentDraftCard.vue";
 import AssistantEnvironmentFieldsForm from "@/features/assistant/components/AssistantEnvironmentFieldsForm.vue";
 import AssistantEnvironmentToolsForm from "@/features/assistant/components/AssistantEnvironmentToolsForm.vue";
 import AssistantEnvironmentPolicyForm from "@/features/assistant/components/AssistantEnvironmentPolicyForm.vue";
@@ -101,6 +102,18 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const runtime = useRuntimeStore();
 const platform = usePlatformStore();
+const draftContinuationPlan = computed(() => {
+  const receipt = props.receipt ?? props.plan.receipt;
+  if (
+    props.plan.state !== "APPLIED" ||
+    !receipt ||
+    receipt.outcome !== "APPLIED" ||
+    receipt.planRef !== props.plan.ref ||
+    receipt.planRevision !== props.plan.revision
+  )
+    return;
+  return { ...props.plan, receipt };
+});
 function projectConnectionReady(operation: EditablePlanOperation): boolean {
   try {
     const input = operationInputs([operation])[0];
@@ -1266,6 +1279,20 @@ function validationProblemLabel(problem: string): string {
         </p>
       </section>
 
+      <template v-if="draftContinuationPlan">
+        <AssistantEnvironmentDraftCard
+          v-for="operation in draftContinuationPlan.operations.filter(
+            (item) =>
+              item.type === 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' ||
+              item.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT',
+          )"
+          :key="`environment-continuation-${operation.ref}`"
+          :plan="draftContinuationPlan"
+          :operation-ref="operation.ref"
+          @navigate="emit('close')"
+        />
+      </template>
+
       <button
         v-if="hasFriendlyOperations"
         class="button button--ghost assistant-plan-details-toggle"
@@ -1570,6 +1597,7 @@ function validationProblemLabel(problem: string): string {
                 :resource-scope="environmentResourceScope(operation)"
                 :image-catalog="resourceCatalogs?.images"
                 :disabled="!editable"
+                @resolved-image="rememberSelectedImage"
                 @valid="environmentToolsValidity[operation.value.ref] = $event"
                 @dirty="environmentToolsTouched = true"
                 @parameter="
@@ -1996,6 +2024,7 @@ function validationProblemLabel(problem: string): string {
                   :project-ref="plan.projectRef || ''"
                   :selected-image="selectedImage(operation)"
                   :disabled="!editable"
+                  @resolved-image="rememberSelectedImage"
                   @valid="
                     environmentToolsValidity[operation.value.ref] = $event
                   "

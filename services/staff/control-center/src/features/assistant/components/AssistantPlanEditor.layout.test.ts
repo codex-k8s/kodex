@@ -8,6 +8,24 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("после Apply открывает точный авторитетный черновик прямо из modal", () => {
+    expect(source).toContain("<AssistantEnvironmentDraftCard");
+    expect(source).toContain('v-if="draftContinuationPlan"');
+    expect(source).toContain(':plan="draftContinuationPlan"');
+    expect(source).toContain("@navigate=\"emit('close')\"");
+    expect(source).toContain("receipt.planRef !== props.plan.ref");
+    expect(source).toContain("receipt.planRevision !== props.plan.revision");
+    expect(source.indexOf("<AssistantEnvironmentDraftCard")).toBeGreaterThan(
+      source.indexOf('class="assistant-plan-receipt"'),
+    );
+    const card = readFileSync(
+      new URL("./AssistantEnvironmentDraftCard.vue", import.meta.url),
+      "utf8",
+    );
+    expect(card).toContain("readEnvironmentDraft(");
+    expect(card).toContain("query: { draftRef: current.ref }");
+    expect(card).not.toContain("createEnvironmentDraft");
+  });
   it("показывает PROJECT preparation как ORG подключение с readonly owner и защищённым продолжением", () => {
     expect(source).toContain("projectAssistantConnectionPlanOwner");
     expect(source).toContain("projectConnectionReady(operation)");

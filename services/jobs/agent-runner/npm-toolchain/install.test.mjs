@@ -23,6 +23,75 @@ import {
 } from "./install.mjs";
 
 const root = fileURLToPath(new URL("./", import.meta.url));
+const dockerfile = readFileSync(
+  new URL("../Dockerfile", import.meta.url),
+  "utf8",
+);
+
+function assertNonRootNpmPublication(source) {
+  const publication = source.indexOf(
+    "RUN chmod 0444 /opt/kodex/npm-toolchain/package.json",
+  );
+  const finalUser = source.lastIndexOf("USER 10001:10001");
+  assert.ok(
+    publication >
+      source.lastIndexOf(
+        'RUN ["/kodex-go-toolchain-guard", "install", "services", "/usr/local/go/bin/go"]',
+      ),
+  );
+  assert.ok(finalUser > publication);
+  const statement = source
+    .slice(publication, finalUser)
+    .replace(/\\\n\s*/g, " ")
+    .replace(/\s+/g, " ");
+  assert.match(
+    statement,
+    /RUN chmod 0444 \/opt\/kodex\/npm-toolchain\/package\.json \/opt\/kodex\/npm-toolchain\/package-lock\.json \/opt\/kodex\/npm-toolchain\/npm-cli\/package\.json \/opt\/kodex\/npm-toolchain\/npm-cli\/package-lock\.json\s+&&/,
+  );
+  assert.match(
+    statement,
+    /runuser -u kodex -- env -i PATH=\/usr\/local\/bin:\/usr\/bin:\/bin HOME=\/nonexistent\s+NPM_CONFIG_LOGS_MAX=0 NPM_CONFIG_UPDATE_NOTIFIER=false npm --version/,
+  );
+  assert.match(
+    statement,
+    /node -p 'require\("\/opt\/kodex\/npm-toolchain\/npm-cli\/package\.json"\)\.version'/,
+  );
+  assert.match(statement, /npm --version\)" = "\$\(node -p/);
+  assert.doesNotMatch(
+    statement,
+    /chmod\s+-R|chown|\/run\/secrets|\|\|\s*(true|:)/,
+  );
+}
+
+test("публикует публичные npm manifest/lock как read-only и проверяет actual non-root version", () => {
+  assertNonRootNpmPublication(dockerfile);
+});
+
+test("закрыто обнаруживает потерю mode, non-root identity и version equality", () => {
+  for (const [before, after] of [
+    [
+      "RUN chmod 0444 /opt/kodex/npm-toolchain/package.json",
+      "RUN chmod 0600 /opt/kodex/npm-toolchain/package.json",
+    ],
+    [
+      "RUN chmod 0444 /opt/kodex/npm-toolchain/package.json",
+      "RUN chmod 0777 /opt/kodex/npm-toolchain/package.json",
+    ],
+    ["runuser -u kodex -- env -i", "env -i"],
+    ["NPM_CONFIG_LOGS_MAX=0", "NPM_CONFIG_LOGS_MAX=10"],
+    ['npm --version)" =', 'npm --version)" !='],
+    [
+      'require("/opt/kodex/npm-toolchain/npm-cli/package.json").version',
+      '"12.2.0"',
+    ],
+  ]) {
+    assert.notEqual(dockerfile.replace(before, after), dockerfile);
+    assert.throws(() =>
+      assertNonRootNpmPublication(dockerfile.replace(before, after)),
+    );
+  }
+});
+
 function archive(entries) {
   const parts = [];
   for (const [name, body, type = "0"] of entries) {

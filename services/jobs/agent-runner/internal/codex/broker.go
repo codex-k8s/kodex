@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -306,6 +307,7 @@ func safeNotificationMethod(method string) string {
 // ServeProviderBroker запускается только в container UID 10002 без Kubernetes
 // token, application grants, mTLS keys, MCP bearer и handoff signing key.
 func ServeProviderBroker(ctx context.Context) error {
+	proofObserver := providerInputProofLogger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	if os.Geteuid() != 10002 {
 		return errors.New("Codex provider broker UID is invalid")
 	}
@@ -336,7 +338,7 @@ func ServeProviderBroker(ctx context.Context) error {
 			}
 			return errors.New("accept isolated Codex provider request")
 		}
-		if err := serveBrokerRequest(ctx, connection); err != nil {
+		if err := serveBrokerRequest(ctx, connection, proofObserver); err != nil {
 			logProviderSafeFailure(providerStageOf(err), err)
 			_ = connection.Close()
 			continue
@@ -362,7 +364,7 @@ func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) e
 	return nil
 }
 
-func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
+func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver providerInputProofObserver) error {
 	unixConnection, ok := connection.(*net.UnixConn)
 	if !ok {
 		return atProviderStage(providerStageBrokerRequest, errors.New("provider broker transport is invalid"))
@@ -431,7 +433,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	frames := &brokerFrameWriter{writer: connection}
 	execute := func(ctx context.Context, input model.Input, prompt []byte, token string) (Result, error) {
-		return executeLocal(ctx, input, prompt, token, frames.activity)
+		return executeLocalWithInputProof(ctx, input, prompt, token, frames.activity, proofObserver)
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, execute, credentialrelay.Commit)
 	if err != nil {

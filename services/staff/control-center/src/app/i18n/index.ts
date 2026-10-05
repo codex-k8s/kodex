@@ -4260,10 +4260,14 @@ const ru = {
         "Это окружение общесистемного Kodex. Проверьте общесистемный образ, инструменты, переменные, привязки секретов, ресурсы и сетевой доступ. Подтверждение создаст только черновик.",
       environmentPolicyInvalid:
         "Политика окружения повреждена или содержит недопустимые поля. Попросите подготовить новый план.",
+      environmentPolicySummary:
+        "CPU {cpuRequest}/{cpuLimit} mCPU · память {memoryRequest}/{memoryLimit} MiB · томов: {volumes} · дополнительный сетевой доступ выключен. Политика не изменяется.",
+      environmentPolicyReview:
+        "Проверьте политику ресурсов и доступа: изменённые, непроверенные настройки и доступ к интернету показаны полностью. Применение плана не заменяет отдельное подтверждение публикации.",
       environmentPolicyFreshAuthentication:
         "Доступ к собственному исполнению Kubernetes потребует свежего входа перед проверкой или публикацией окружения.",
       environmentToolsUnverified:
-        "Не удалось сверить инструменты с опубликованным образом этого проекта. Выберите готовый образ или обновите план.",
+        "Не удалось сверить инструменты с опубликованным образом в выбранной области. Выберите готовый образ или обновите план.",
       environmentToolsPending:
         "Инструменты из текущей ревизии показаны для проверки; доступность каталога образа пока не подтверждена:",
       environmentRevisionNotReady:
@@ -8745,6 +8749,10 @@ const en = {
         "This is the system Kodex environment. Review its organization image, tools, values, secret bindings, resources, and network access. Confirmation creates only a draft.",
       environmentPolicyInvalid:
         "The environment policy is damaged or contains unsupported fields. Request a new plan.",
+      environmentPolicySummary:
+        "CPU {cpuRequest}/{cpuLimit} mCPU · memory {memoryRequest}/{memoryLimit} MiB · volumes: {volumes} · additional network access is disabled. The policy is unchanged.",
+      environmentPolicyReview:
+        "Review resource and access policy: changed or unverified settings and internet access remain fully visible. Applying the plan does not replace separate publication approval.",
       environmentPolicyFreshAuthentication:
         "Kubernetes access to the current execution requires fresh sign-in before validating or publishing the environment.",
       environmentToolsUnverified:

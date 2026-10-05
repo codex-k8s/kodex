@@ -42,6 +42,24 @@ export function assertPromotedRuntimeImage(
     "artifactRef" | "recipeRef" | "recipeGeneration"
   >,
 ): void {
+  assertPromotedRuntimeImageIdentity(artifact, expected);
+  if (!verifiedImageInventoryAvailable(artifact))
+    throw new AppProblem({
+      status: 409,
+      code: "IMAGE_ARTIFACT_NOT_CURRENT",
+      retryable: false,
+      kind: "conflict",
+    });
+}
+
+// Только проверка metadata. Выбор образа дополнительно требует VERIFIED inventory.
+export function assertPromotedRuntimeImageIdentity(
+  artifact: RoleImageArtifact,
+  expected: Pick<
+    RuntimeEnvironmentImage,
+    "artifactRef" | "recipeRef" | "recipeGeneration"
+  >,
+): void {
   const digest = artifact.manifestDigest.replace(/^sha256:/, "");
   if (
     artifact.ref !== expected.artifactRef ||
@@ -49,7 +67,6 @@ export function assertPromotedRuntimeImage(
     artifact.recipeGeneration !== expected.recipeGeneration ||
     artifact.admissionVerdict !== "ACCEPTED" ||
     artifact.promotionState !== "PROMOTED" ||
-    !verifiedImageInventoryAvailable(artifact) ||
     !/^[a-f0-9]{64}$/.test(digest) ||
     !artifact.promotedReference?.endsWith(`@sha256:${digest}`)
   )
