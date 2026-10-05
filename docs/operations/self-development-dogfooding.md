@@ -3398,11 +3398,14 @@ head подтверждён; рабочее дерево чистое, PR1798 о
 0.057s и callback0.076s. Код не изменялся после hot reload proof.
 Общий readonly-history/write-current инвариант закреплён в FE-DOC-001.
 
-Chrome list_pages второй раз завершился300s timeout; третий штатный вызов
-продолжается. Read-only диагностика: Chrome и оба MCP процесса живы,
+Chrome list_pages трижды завершился300s timeout; последний отказ19:18 UTC.
+Read-only диагностика: Chrome и оба MCP процесса живы,
 DevToolsActivePort существует, подключения ESTAB. AutoConnect использует
 browser WebSocket напрямую, поэтому HTTP404 /json/version не считается
 доказательством неисправности или отсутствия approval. Точная причина UNKNOWN;
 обычного MCP status/approval endpoint и доступного файлового журнала нет.
 Никакого restart, CDP fallback, profile/cookie чтения или обхода согласия не было.
 Native SYSTEM43 и последующие пользовательские этапы ожидают рабочего MCP.
+Рекомендуемая штатная диагностика владельца: chrome://inspect/#remote-debugging
+и видимый запрос разрешения, если он появился. Отзыв approval не утверждается;
+работа не объявлена завершённой и goal не поставлен на паузу.
