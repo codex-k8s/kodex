@@ -2460,3 +2460,14 @@ render-contract Go891555840 allocated bytes, всего1370910720;36690files/809
 к allocated bytes из-за параллельных писателей. Восемь Docker IDs KEEP,
 новых rmi не было. По новому запросу владельца продолжается read-only
 инвентаризация других локальных кешей без затрагивания процессов второго агента.
+
+05.10.2026 08:08 UTC, maintenance на32ca6b91:
+FAIL — первый public quiesce закрылся на historical Succeeded Pod gateway;
+GW остался replicas0, остальные workload не менялись, EXIT не возобновлял
+остановленное. Прямой read-only owner query доказал все active counts0,
+unrequestedAcceptedArtifacts1 и19 promoted pins с неизменным28e8bf55a6bb69d0fd3b00afb7b7a85373f2f1e2db66ed829ce8deb400bc62c8.
+Frozen terminal followup465d5c8169db4696474af02d37b17ce32e4e8242498f436f252732bc1bfbe494
+не удаляет history: отсутствие живых reader containers доказывается полным
+main/init/ephemeral statuses и exact Pod→ReplicaSet→Deployment UID lineage.
+Unknown/NodeLost, неполные или ещё живые statuses закрыто отклоняются.
+Результат повторного maintenance фиксируется отдельно; не объявлен PASS заранее.

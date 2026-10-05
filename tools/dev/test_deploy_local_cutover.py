@@ -26,6 +26,83 @@ def run(command, **values):
 
 
 class CutoverTest(unittest.TestCase):
+    def test_historical_terminal_pods_require_complete_status_and_exact_lineage(self):
+        deployment_uid = '12345678-1234-1234-1234-123456789abc'
+        replica_uid = 'abcdefab-1234-1234-1234-123456789abc'
+        pod = {'metadata': {'namespace': 'kodex-system', 'name': 'control-plane-historical',
+            'uid': '87654321-1234-1234-1234-123456789abc', 'labels': {'app': 'control-plane'},
+            'ownerReferences': [{'apiVersion': 'apps/v1', 'kind': 'ReplicaSet', 'name': 'control-plane-old',
+                                 'uid': replica_uid, 'controller': True}]},
+            'spec': {'containers': [{'name': 'control-plane'}]},
+            'status': {'phase': 'Succeeded', 'containerStatuses': [{'name': 'control-plane', 'ready': False,
+                'state': {'terminated': {'reason': 'Completed', 'exitCode': 0,
+                                        'finishedAt': '2026-10-05T08:00:00Z'}}}]}}
+        sets = {'items': [{'metadata': {'namespace': 'kodex-system', 'name': 'control-plane-old',
+            'uid': replica_uid, 'ownerReferences': [{'apiVersion': 'apps/v1', 'kind': 'Deployment',
+                'name': 'control-plane', 'uid': deployment_uid, 'controller': True}]}}]}
+        command = functions('readback_local_quiesced_pods') + PREFIX + '''
+kubectl() { printf '%s\\n' "$SETS"; }
+readback_local_quiesced_pods "$DEPLOYMENT_UID" control-plane app=control-plane "$PODS"
+'''
+        cases = [('empty', {'items': []}, sets, True), ('completed', {'items': [pod]}, sets, True)]
+        failed = copy.deepcopy(pod)
+        failed['status']['phase'] = 'Failed'
+        failed['status']['containerStatuses'][0]['started'] = False
+        failed['status']['containerStatuses'][0]['state']['terminated'].update(reason='Error', exitCode=1)
+        cases.append(('failed-terminated', {'items': [failed]}, sets, True))
+        deleting = copy.deepcopy(pod)
+        deleting['metadata']['deletionTimestamp'] = '2026-10-05T08:01:00Z'
+        cases.append(('deleting-terminal', {'items': [deleting]}, sets, True))
+        complete = copy.deepcopy(pod)
+        for prefix in ('init', 'ephemeral'):
+            complete['spec'][prefix + 'Containers'] = [{'name': prefix + '-helper'}]
+            status = copy.deepcopy(pod['status']['containerStatuses'][0])
+            status['name'] = prefix + '-helper'
+            complete['status'][prefix + 'ContainerStatuses'] = [status]
+        cases.append(('all-container-kinds-complete', {'items': [complete]}, sets, True))
+        for phase in ('Pending', 'Running', 'Unknown', 'Other'):
+            bad = copy.deepcopy(pod)
+            bad['status']['phase'] = phase
+            cases.append((phase, {'items': [bad]}, sets, False))
+        for state in ({'running': {}}, {'waiting': {}},
+                      {'terminated': pod['status']['containerStatuses'][0]['state']['terminated'], 'running': {}}):
+            bad = copy.deepcopy(pod)
+            bad['status']['containerStatuses'][0]['state'] = state
+            cases.append(('fake-terminal-live-state', {'items': [bad]}, sets, False))
+        for key, value in (('ready', True), ('started', True), ('started', 'false'), ('ready', None)):
+            bad = copy.deepcopy(pod)
+            bad['status']['containerStatuses'][0][key] = value
+            cases.append(('invalid-status-' + key, {'items': [bad]}, sets, False))
+        for key in ('containerStatuses', 'initContainerStatuses', 'ephemeralContainerStatuses'):
+            bad = copy.deepcopy(complete)
+            bad['status'].pop(key)
+            cases.append(('missing-' + key, {'items': [bad]}, sets, False))
+        duplicate = copy.deepcopy(pod)
+        duplicate['status']['containerStatuses'].append(copy.deepcopy(duplicate['status']['containerStatuses'][0]))
+        cases.append(('duplicate-status', {'items': [duplicate]}, sets, False))
+        for reason in ('ContainerStatusUnknown', 'Unknown', 'NodeLost'):
+            bad = copy.deepcopy(pod)
+            bad['status']['containerStatuses'][0]['state']['terminated']['reason'] = reason
+            cases.append((reason, {'items': [bad]}, sets, False))
+        for mutate in ('pod-selector', 'pod-namespace', 'pod-owner-uid', 'replica-owner-uid', 'replica-namespace',
+                       'replica-name', 'replica-controller', 'finished-at', 'pod-node-lost'):
+            bad = copy.deepcopy(pod)
+            bad_sets = copy.deepcopy(sets)
+            if mutate == 'pod-selector': bad['metadata']['labels']['app'] = 'foreign'
+            elif mutate == 'pod-namespace': bad['metadata']['namespace'] = 'foreign'
+            elif mutate == 'pod-owner-uid': bad['metadata']['ownerReferences'][0]['uid'] = deployment_uid
+            elif mutate == 'replica-owner-uid': bad_sets['items'][0]['metadata']['ownerReferences'][0]['uid'] = replica_uid
+            elif mutate == 'replica-namespace': bad_sets['items'][0]['metadata']['namespace'] = 'foreign'
+            elif mutate == 'replica-name': bad_sets['items'][0]['metadata']['name'] = 'foreign'
+            elif mutate == 'replica-controller': bad_sets['items'][0]['metadata']['ownerReferences'][0]['controller'] = False
+            elif mutate == 'finished-at': bad['status']['containerStatuses'][0]['state']['terminated'].pop('finishedAt')
+            else: bad['status']['reason'] = 'NodeLost'
+            cases.append((mutate, {'items': [bad]}, bad_sets, False))
+        for name, pods, replica_sets, success in cases:
+            with self.subTest(case=name):
+                result = run(command, DEPLOYMENT_UID=deployment_uid, PODS=pods, SETS=replica_sets)
+                self.assertEqual(result.returncode == 0, success, result.stderr)
+
     def test_quiesce_public_stage_has_no_resume_or_apply(self):
         block = SOURCE[SOURCE.index('if [[ "$stage" == supply-chain-quiesce ]]; then'):]
         block = block[:block.index('if [[ "$mode" == apply && "$stage" == data ]]; then')]
@@ -58,7 +135,7 @@ class CutoverTest(unittest.TestCase):
         drained = copy.deepcopy(original)
         drained['spec']['replicas'] = 0
         drained['status'] = {'replicas': 0, 'availableReplicas': 0}
-        command = functions('quiesce_local_supply_chain_workload') + PREFIX + '''
+        command = functions('readback_local_quiesced_pods', 'quiesce_local_supply_chain_workload') + PREFIX + '''
 exec 3>&1
 seq() { printf '180\\n'; }
 kubectl() {

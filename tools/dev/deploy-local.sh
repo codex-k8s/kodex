@@ -375,6 +375,54 @@ readback_local_image_admission_crd() {
   [[ "$actual" == "$expected" ]] || fail 'image admission CRD spec readback mismatch'
 }
 
+readback_local_quiesced_pods() {
+  local uid=$1 workload=$2 selector=$3 pods=$4 replica_sets
+  jq -e '.items | type == "array"' <<<"$pods" >/dev/null ||
+    fail 'supply-chain quiesce Pod inventory is invalid'
+  if jq -e '.items | length == 0' <<<"$pods" >/dev/null; then return 0; fi
+  replica_sets=$(kubectl -n "$namespace" get replicasets -l "$selector" -o json) ||
+    fail 'supply-chain quiesce ReplicaSet inventory is unavailable'
+  jq -e --arg uid "$uid" --arg workload "$workload" --arg namespace "$namespace" \
+    --arg selector "$selector" --argjson sets "$replica_sets" '
+    def controller: [.metadata.ownerReferences[]? | select(.controller == true)];
+    def stopped($spec; $statuses):
+      ($spec // []) as $containers | ($statuses // []) as $states |
+      ($containers | type == "array") and ($states | type == "array") and
+      all($containers[]; .name | type == "string" and test("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")) and
+      ([$containers[].name] | sort) == ([$states[].name] | sort) and
+      ([$containers[].name] | unique | length) == ($containers | length) and
+      all($states[];
+        .ready == false and (.started == null or .started == false) and
+        (.state | type == "object" and keys == ["terminated"]) and
+        (.state.terminated | type == "object") and
+        (.state.terminated.reason == "Completed" or .state.terminated.reason == "Error" or
+          .state.terminated.reason == "OOMKilled") and
+        (.state.terminated.exitCode | type == "number" and floor == . and . >= 0) and
+        (.state.terminated.finishedAt | type == "string" and
+          test("^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$")));
+    ($selector | split(",") | map(split("=") | {key:.[0],value:.[1]}) | from_entries) as $labels |
+    ($sets.items | type == "array") and
+    all(.items[];
+      .metadata.namespace == $namespace and
+      (.metadata.uid | test("^[a-f0-9-]{36}$")) and
+      (.metadata.labels as $actual | all($labels | to_entries[]; .value == $actual[.key])) and
+      (.status.phase == "Succeeded" or .status.phase == "Failed") and
+      (.status.reason != "NodeLost" and .status.reason != "ContainerStatusUnknown") and
+      (controller as $owners | ($owners | length) == 1 and
+        $owners[0].apiVersion == "apps/v1" and $owners[0].kind == "ReplicaSet" and
+        any($sets.items[];
+          .metadata.namespace == $namespace and .metadata.uid == $owners[0].uid and
+          .metadata.name == $owners[0].name and
+          (controller as $parents | ($parents | length) == 1 and
+            $parents[0].apiVersion == "apps/v1" and $parents[0].kind == "Deployment" and
+            $parents[0].uid == $uid and $parents[0].name == $workload))) and
+      (.spec.containers | type == "array" and length > 0) and
+      stopped(.spec.containers; .status.containerStatuses) and
+      stopped(.spec.initContainers; .status.initContainerStatuses) and
+      stopped(.spec.ephemeralContainers; .status.ephemeralContainerStatuses))
+  ' <<<"$pods" >/dev/null
+}
+
 quiesce_local_supply_chain_workload() {
   local workload=$1 deployment uid resource_version replicas selector attempt stopped_spec pods
   declare -gA supply_chain_quiesce_uids supply_chain_quiesce_specs
@@ -428,9 +476,9 @@ quiesce_local_supply_chain_workload() {
       (.status.availableReplicas // 0) == 0' <<<"$deployment" >/dev/null; then
       pods=$(kubectl -n "$namespace" get pods -l "$selector" -o json) ||
         fail 'supply-chain quiesce Pod inventory is unavailable'
-      jq -e '.items | type == "array"' <<<"$pods" >/dev/null ||
-        fail 'supply-chain quiesce Pod inventory is invalid'
-      if jq -e '.items | length == 0' <<<"$pods" >/dev/null; then return 0; fi
+      # Исторический terminal Pod не читается как живой процесс только после
+      # полного status/lineage proof; phase сам по себе недостаточен.
+      if readback_local_quiesced_pods "$uid" "$workload" "$selector" "$pods"; then return 0; fi
     fi
     [[ "$mode" == apply && "$attempt" -lt 180 ]] || fail 'supply-chain quiesce Deployment did not stop'
     sleep 1
