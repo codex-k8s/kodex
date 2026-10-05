@@ -14,6 +14,8 @@ updated: 2026-10-05
 Перенос проверен; цель снова выполняется. CEL-политики исправлены, штатный
 apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e35fa4e`.
 Пять компонентов и архив сессий восстановлены; выполняется native QA.
+Текущий checkpoint кода: `c5ed80d48c8a73b6a2aceebab75fddd133b27bef`.
+Ниже перечисленные старые checkpoints относятся к истории, а не к текущему HEAD.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).
 - Draft PR: [#1798](https://github.com/codex-k8s/kodex/pull/1798), не слит.
@@ -48,6 +50,31 @@ apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e3
   Большие Kubernetes inventory передаются потоком, без ограничения argv.
 - Адресная очистка устаревших кэшей с сохранением current/restore pins;
   дополнительные удаления после запроса паузы не выполнялись.
+- Строгая нормализация явного пустого scanner fix state, проверенная на полном
+  native отчёте; технический scan failure не подменяется решением о риске.
+- Tool rows по38px с конкретными именами каталогов, раскрытием деталей и
+  клавиатурной навигацией; screenshot на текущем hot reload проверен.
+
+## Текущая точка продолжения
+
+Native SYSTEM typed plan применён; recipe v8/generation6, build завершён.
+Admission scan завершился технической ошибкой прежнего projection handler;
+artifact остаётся CLAIMED/PENDING. Подготовленные новые worker images собраны
+и импортированы на обе ноды на source5f169a5, но пока не активированы:
+ordinary cutover требует закрытия текущей attempt. Узкий repo-owned
+диагностический refresh применён с exact ConfigMap CAS/readback; callback
+recovery исследуется без изменения claim, grant, policy или image pins.
+
+Повторный ROLE_ENVIRONMENTS отказ доказан как PostgreSQL40001 при конкурентном
+lease renew и REPEATABLE READ/FOR SHARE. Готовится bounded whole-transaction
+retry с повторной проверкой authority; общий component guard отдельно
+проверяется на актуальность после расширения migration graph.
+
+Далее: штатный terminal callback → activation проверенных worker images →
+fresh native build/полный report/owner risk decision/подписанный admission/
+promotion → typed SYSTEM environment → новый turn и tool/prompt proof →
+SYSTEM создаёт проект и PROJECT → шесть ролей, grants и реальный Workflow.
+Основной checklist2–15/6.1 остаётся открытым до фактических доказательств.
 
 # Последние фактические проверки
 

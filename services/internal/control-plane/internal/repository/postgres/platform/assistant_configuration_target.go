@@ -31,7 +31,7 @@ func (repository *Repository) assistantConfigurationTargetForRead(ctx context.Co
 		return target, errs.ErrNotFound
 	}
 	if err != nil {
-		return target, errs.ErrUnavailable
+		return target, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	if target.scopeKind != "ORGANIZATION" && target.scopeKind != "PROJECT" {
 		return target, errs.ErrNotFound

@@ -110,6 +110,13 @@ SQL не собирается конкатенацией пользовател�
 - Retry serialization/deadlock выполняется ограниченно и только для доказанно
   идемпотентной операции.
 
+Чтение, которое удерживает lease через `FOR SHARE` в `REPEATABLE READ`, может
+получить `40001` при конкурентном renew между snapshot и захватом блокировки.
+Повтор охватывает всю транзакцию после подтверждённого rollback: новый snapshot,
+свежие actor/tenant/lease/fence/generation и eligibility checks. Общий request
+budget и число попыток ограничены; stale/cancel/expiry/forbidden не повторяются,
+частичный результат не выдаётся. Отказ rollback закрыто останавливает повтор.
+
 Составной авторитетный snapshot не читается несколькими независимыми
 statement через pool. Если aggregate собирается из основной строки и дочерних
 коллекций, все части читаются в одной read-only `REPEATABLE READ` transaction

@@ -2888,3 +2888,43 @@ Kubernetes не сериализует optional immutable=false; actual поле
 Guard исправлен только для отсутствующего поля или explicitfalse; null/string/
 number/true отклоняются. Новый test сохраняет исходную omitted-field shape;
 CMUID/RV/data baseline не изменились, apply ещё не запускался.
+
+14:47–14:53 UTC, checkpoint c5ed80d48c8a73b6a2aceebab75fddd133b27bef:
+ROOT24 diagnostic unit PASS; live check, server dry-run, CAS apply и строгий
+readback PASS. Изменена только публикация закрытого callback code; claim,
+grant, образы и admission policy не менялись. ConfigMap прежнего UID,
+resourceVersion443592; full data SHA256
+dc297e676f88545be3e5e5091113a72c97f6c06d7f45e087a0c70824bb334457.
+Fresh clean render PASS: authority revision1, fingerprint
+922554e9734654dc14b1c0a8845d4dc1d65da63cae22217c41bbe88f7d2d6c15.
+Это не activation новых worker images. Owner read14:48:19UTC:
+pendingAdmissions1, остальные активные build/promotion/runtime/lease0;
+promoted count19 и published pins неизменны. Native recovery продолжает
+создавать и закрывать неудачные callback Jobs; terminal receipt ещё не получен.
+Chrome reload/rejoin и Console PASS; PR Draft body/head readback обновлён.
+
+15:01 UTC, адресный пакет поверх c5ed80d4:
+ROOT whole-transaction read retry unit PASS0.094s. Совместный canonical
+disposable PostgreSQL up/status/up: SYSTEM и PROJECT component PASS28.716s;
+три concurrent-renew subcases воспроизвели exact40001 и fresh successful retry.
+Stale fence/generation/missing lease закрыто отклонены без повторов и побочных
+записей; foreign project deletion isolation/worker grant/runner policy PASS.
+Только40001 повторяется до3 раз с единым5s budget и rollback старой транзакции;
+catalog/search/integration definition read сохраняют прежнюю authority.
+Предыдущий component FAIL точного purge graph был устаревшим test tuple:
+migration уже утвердила100nodes/253edges и exact hashes вместо97/248.
+Изменена только фикстура; production guard и applied migration не менялись.
+Изолированный frozen patch дополнительно unit/race/vet/build PASS;
+native catalog повтор после текущей интеграции пока NOT RUN.
+
+Ускорение следующих сборок: COPY Go validators перенесён после immutable
+Grype DB ADD/import/status в local и production admission-tools Dockerfile.
+Checksum, возраст базы, tool probes и non-root режим не менялись.
+Context7 Docker cache ordering проверен; ROOT13 build script tests PASS47.139s.
+Live build/cache timing ещё NOT RUN, ожидаемый выигрыш не объявляется доказанным.
+
+Admission callback теперь наблюдаем: два actual failed-predecessor Jobs
+завершились с закрытым Unavailable; controller штатно удаляет и повторяет их.
+Это не отсутствие создания Job. Transport target/endpoint/network selectors
+проверяются; root cause ещё UNKNOWN. Метрики Fail/Expire в текущем CP не
+экспонируются: отсутствие counter не означает ноль вызовов.

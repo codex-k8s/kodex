@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -34,21 +33,21 @@ var queryAssistantConfigurationCatalogAccounts string
 var queryAssistantConfigurationCatalogImages string
 
 func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
+	return retryAssistantLockedRead(ctx, func(attemptCtx context.Context) (entity.AssistantConfigurationCatalogResponse, error) {
+		return repository.listAssistantConfigurationCatalogOnce(attemptCtx, principal, leaseRef, fence, generation, input)
+	})
+}
+
+func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, input entity.AssistantConfigurationCatalogRequest) (_ entity.AssistantConfigurationCatalogResponse, resultError error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.AssistantConfigurationCatalogResponse{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
-		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrUnavailable
+		return entity.AssistantConfigurationCatalogResponse{}, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
-	defer func() {
-		cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer stop()
-		_ = tx.Rollback(cleanup)
-	}()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultError)
 	fenceDigest := sha256.Sum256([]byte(fence))
 	var sourceProjectRef, sourceScope, sourceRef string
 	err = tx.QueryRow(ctx, queryAssistantSearchResolveLease, pgx.StrictNamedArgs{"organization_id": current.organizationID, "lease_ref": leaseRef, "fence_digest": hex.EncodeToString(fenceDigest[:]), "generation": generation}).Scan(&current.actorRef, &current.actorID, &current.authorityProjectID, &sourceProjectRef)
@@ -56,7 +55,7 @@ func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Cont
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrNotFound
 	}
 	if err != nil {
-		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrUnavailable
+		return entity.AssistantConfigurationCatalogResponse{}, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	if _, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef); err != nil {
 		return entity.AssistantConfigurationCatalogResponse{}, err
@@ -65,7 +64,7 @@ func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Cont
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrForbidden
 	}
 	if err := tx.QueryRow(ctx, queryAssistantConfigurationCatalogSource, pgx.StrictNamedArgs{"organization_id": current.organizationID, "lease_ref": leaseRef}).Scan(&sourceScope, &sourceRef); err != nil {
-		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrNotFound
+		return entity.AssistantConfigurationCatalogResponse{}, assistantLockedReadError(err, errs.ErrNotFound)
 	}
 	if sourceScope != "SYSTEM" && sourceScope != "PROJECT" || (sourceScope == "PROJECT" || input.Kind == "CURRENT_CONFIGURATION") && input.AssistantRef != sourceRef {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrForbidden
@@ -171,7 +170,7 @@ func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Cont
 		return result, errs.ErrInvalid
 	}
 	if err != nil {
-		return result, errs.ErrUnavailable
+		return result, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	if rows != nil {
 		for rows.Next() {
@@ -189,14 +188,14 @@ func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Cont
 			}
 			if scanErr != nil {
 				rows.Close()
-				return result, errs.ErrUnavailable
+				return result, assistantLockedReadError(scanErr, errs.ErrUnavailable)
 			}
 			result.Entries = append(result.Entries, entry)
 		}
 		err = rows.Err()
 		rows.Close()
 		if err != nil {
-			return result, errs.ErrUnavailable
+			return result, assistantLockedReadError(err, errs.ErrUnavailable)
 		}
 	}
 	if len(result.Entries) > 10 {
@@ -204,7 +203,7 @@ func (repository *Repository) ListAssistantConfigurationCatalog(ctx context.Cont
 		result.NextOffset = input.Offset + 10
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return result, errs.ErrUnavailable
+		return result, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	return result, nil
 }

@@ -401,5 +401,27 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
                 process.wait(timeout=8)
 
 
+class AdmissionDatabaseLayerOrderTest(unittest.TestCase):
+    def test_immutable_database_layer_precedes_frequently_changed_validators(self):
+        repository = SCRIPT.parents[2]
+        for name in ("tools/dev/Dockerfile.local-image-supply-chain",
+                     "infra/admission-tools/Dockerfile"):
+            with self.subTest(dockerfile=name):
+                source = (repository / name).read_text()
+                database = source.index("ADD --checksum=sha256:")
+                imported = source.index("&& grype db import /tmp/grype-db.tar.zst")
+                verified = source.index("&& grype db status >/dev/null")
+                for validator in ("image-tool-inventory-validator",
+                                  "image-vulnerability-report-validator"):
+                    materialized = source.index(
+                        f"COPY --from=build --chmod=0555 /out/{validator} ")
+                    self.assertLess(database, imported)
+                    self.assertLess(imported, verified)
+                    self.assertLess(verified, materialized)
+                    self.assertLess(materialized, source.index("RUN for tool in "))
+                self.assertIn("GRYPE_DB_AUTO_UPDATE=false", source)
+                self.assertIn("GRYPE_DB_VALIDATE_AGE=true", source)
+
+
 if __name__ == "__main__":
     unittest.main()

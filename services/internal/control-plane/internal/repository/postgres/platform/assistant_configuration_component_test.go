@@ -54,6 +54,9 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	}
 	catalog, _ := promotionComponentCatalog(t)
 	r.ConfigureRoleImageCatalog(catalog)
+	t.Run("fresh catalog survives concurrent lease renew", func(t *testing.T) {
+		testAssistantLockedReadConcurrentLeaseRenew(t, ctx, r, reader, lease)
+	})
 	readCatalog := func(kind string) entity.AssistantConfigurationCatalogResponse {
 		t.Helper()
 		input := entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: agentRef}
