@@ -89,6 +89,14 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
   files, user/task input с harmless marker, model/reasoning и exact pins.
 - [ ] 6. Общий admitted/promoted образ kodex-selfdev со всем требуемым
   инструментарием; отдельные execution workspaces, без общего mutable PVC.
+- [ ] 6.1. Администратор рассматривает безопасный отчёт уязвимостей образа:
+  пакет и версия, severity, CVE/GHSA/GO со ссылкой и доступное исправление.
+  Явное принятие риска с обязательным обоснованием относится только к точному
+  artifact/image digest, immutable отчёту и policy. Решение сохраняется в
+  аудите; новая сборка либо другой отчёт требуют нового решения. Ошибки scan,
+  целостности, происхождения, runtime ABI и подписи не подлежат обходу.
+  Допуск после принятия риска требует штатного повторного подписанного
+  admission, не переписывает прежнее evidence и не выдаётся самим агентом.
 - [ ] 7. System Assistant сам настраивает себя typed plan; подтверждение,
   публикация, Context7/web/GitHub read и prompt proof реальных ходов.
 - [ ] 8. System Assistant создаёт Kodex | Dev и отдельного Project Assistant;
@@ -2272,3 +2280,41 @@ mounts, sharing=shared, без export cache в image. Exact compiler, SumDB,
 mod verify, floors и metadata guards сохраняются; /out не cache mount.
 Context7 /docker/docs проверен: cache mounts и multi-stage/ARG semantics.
 Новый полный OCI/admission остаются NOT RUN до следующей сборки.
+
+05.10.2026 05:30 UTC, exact sourcecd58276e8c66daa5d29908ecdf5db94de9ea92d5:
+PASS — полный repo-owned runner build завершился exit0, actual16GoCLI,
+locked npm tree, nonroot Chromium probe и protected binary provenance.
+OCI manifestsha256:72b27d82bc3583995e870ab7a134153404b856d89a26b06716eaf748f2588104,
+provenanceSHA6623e8c9b63bf63c7b227973e82b1fa8deaf742df48c834bcf71b1c918c5a57b,
+runnerELF0b2b2e7bb08561ecc4edb947c85cc89d32d75feaf6dd70ab198d33172b0db397.
+Import завершился штатно и public image pin обновлён; отдельный readback
+обеих нод в работе. ACCEPTED/PROMOTED не доказаны: SYSTEM recipe gen5
+сохраняет прежний REJECTED123 до нового штатного update/build/admission.
+
+Новый owner scope6.1 принят: exact digest/report-bound решение администратора
+об уязвимостях с обоснованием, аудитом и новым подписанным admission.
+Реализация ещё NOT RUN. Исторические reports без новой typed projection не
+получают ручного backfill или разрешения через NULL fallback: перед решением
+требуется штатная новая сборка. Не создаётся отдельный legacy report task.
+LOW/MEDIUM остаются информационными; scanner/integrity/provenance/ABI/signature
+ошибки не подлежат override. Матрица/контракты готовятся до реализации.
+
+FAIL — trusted dev nodes DiskPressure=True: session Redis/OAuth Pending после
+eviction, собственная вкладка возвращает HTTP500. Обнаружено ~40GiB старых
+generated Kodex OCI archives; подготовлен code-first точный cleanup с
+сохранением всех current и restore pins. Реального удаления ещё не было,
+чужие данные/проекты, thresholds и taints не менялись. Первый fresh render
+cd582 закрыто остановлен при изменении source во время render; не применён.
+Предыдущие ROOT49 frontend tests относятся к eba6+UX delta/8f837663, а не
+к повторному запуску на cd582. Новые34Python/18npm checks описаны отдельно.
+
+05.10.2026 05:35 UTC, sourcecd582 + exact cleanup delta:
+PASS — ROOT15 disposable cache-helper unit0.260s и diff check. Read-only audit
+ровно90 generated OCI archives,10 защищены current/restore pins, unsafe0.
+Рекомендуемая явная выборка49 OBSOLETE runner/admission/admission-tools
+содержит40,773,172,224 bytes. Helper не выбирает targets автоматически,
+проверяет exact manifest/inode/size/owner/parents и заново все9 current pins
+перед каждым unlink; JSON, .next, неизвестные компоненты и чужие пути не
+входят в scope. Реальный prune ещё NOT RUN до фиксации кода в текущем PR.
+Новый runner72b27 отдельным readback подтверждён durable-pinned на обеих
+нодах; source/build/import proof не считается принятием vulnerability risk.
