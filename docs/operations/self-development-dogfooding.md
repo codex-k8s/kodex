@@ -2848,3 +2848,33 @@ refresh ConfigMap ещё NOT RUN: обычный supply-chain cutover закры
 отсутствия текущих worker runs. Новый диагностический путь ограничивается
 одной публикацией закрытого callback code с exact UID/resourceVersion/data
 readback, без изменения claim/grant/image/policy или обхода допуска.
+
+05.10.2026 14:37 UTC, следующий адресный пакет:
+Checkpoint5f169a5250a02cb1099c9f918ecfaf15d4ab041c запушен, PR Draft head/body
+readback PASS. Canonical all/build-jobs4/import обе ноды PASS14:34:37UTC;
+fresh post-build render PASS: source5f169a52, fingerprintd9cd4fbb, revision1.
+Это сборка и render, не новая serving admission activation.
+
+Native QA_CATALOG_LABELS_01 после reload/rejoin: generic catalog PASS34ms,
+CURRENT_CONFIGURATION PASS562ms; конкретные подписи «Текущие настройки» и
+«Каталог окружений» отображаются. ROLE_ENVIRONMENTS снова FAIL466ms;
+Console без ошибок. Исторический successful read не закрывает этот дефект.
+Root cause доказан: PostgreSQL40001 при assistant_search_resolve_lease
+FOR SHARE в REPEATABLE READ одновременно с lease renew; source map превращает
+его в Unavailable. Готовится bounded fresh whole-transaction retry,
+authority/lease/fence checks и snapshot consistency сохраняются.
+
+Компактный tool UX: единое native details в header, раскрытие клавиатурой,
+служебные параметры/result/duration внутри. Реальный DOM после hot reload:
+три collapsed tool карточки по38px, state/time/конкретное имя видимы.
+ROOT FE77tests PASS, privacynegative cases сохранены; pixel screenshot и
+keyboard live ещё NOT RUN. Чат user справа, assistant слева без изменения.
+Новый repo-owned диагностический helper ограничен exact одной script change,
+CMUID/RV/dataSHA CAS, source clean SHA и policy/compiler/cluster/node/workspace
+проверками; ROOT23unit PASS270.7ms. Live check/dry-run/apply пока NOT RUN.
+
+14:38 UTC: ROOT FE77 PASS, typecheck/lint/format PASS. Native keyboard Enter
+раскрыл/закрыл единственное details, localized aria-label и exact466ms/code
+видимы только в раскрытии; collapsed38px, expanded219px. Screenshot в приватный
+state path отклонён ограничением Chrome MCP workspace — это ограничение
+сохранения evidence, не доказательство дефекта приложения. Pixel check ещё открыт.

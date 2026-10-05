@@ -2198,6 +2198,8 @@ const ru = {
     graphEdges: "Связи: {count}",
     platformActor: "Платформа",
     toolParameters: "Безопасные параметры",
+    toolDetails: "Подробности",
+    toolDetailsFor: "Подробности: {tool}",
     toolTechnicalId: "Идентификатор инструмента",
     nativeToolNames: {
       CODEX_SHELL: "Работа в терминале",
@@ -6703,6 +6705,8 @@ const en = {
     graphEdges: "Links: {count}",
     platformActor: "Platform",
     toolParameters: "Safe parameters",
+    toolDetails: "Details",
+    toolDetailsFor: "Details: {tool}",
     toolTechnicalId: "Tool identifier",
     nativeToolNames: {
       CODEX_SHELL: "Terminal action",

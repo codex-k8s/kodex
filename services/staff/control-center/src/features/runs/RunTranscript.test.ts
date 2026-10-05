@@ -156,6 +156,67 @@ describe("RunTranscript: названия native инструментов", () =
 });
 
 describe("RunTranscript: managed инструменты", () => {
+  it.each(["ru", "en"] as const)(
+    "сворачивает служебные сведения в одно доступное раскрытие внутри header (%s)",
+    async (locale) => {
+      const html = await render(
+        "get_configuration_catalog",
+        { catalogKind: "ROLE_ENVIRONMENTS" },
+        locale,
+        "get_configuration_catalog:completed",
+      );
+      const header = /<header[^>]*>([^]*?)<\/header>/.exec(html)?.[1] ?? "";
+      const details =
+        /<details[^>]*>([^]*?)<\/details>/.exec(header)?.[1] ?? "";
+      expect(html.match(/<details\b/g)).toHaveLength(1);
+      expect(html.match(/<summary\b/g)).toHaveLength(1);
+      expect(header).toContain('data-state="SUCCEEDED"');
+      expect(header).toContain("<time");
+      expect(header).toContain("run-tool-event__details");
+      expect(details).toContain(
+        locale === "ru"
+          ? 'aria-label="Подробности: Каталог окружений"'
+          : 'aria-label="Details: Environment catalog"',
+      );
+      expect(details).toContain(
+        locale === "ru" ? "Безопасные параметры" : "Safe parameters",
+      );
+      expect(details).toContain(
+        locale === "ru" ? "Безопасный результат" : "Safe result",
+      );
+      const duration =
+        locale === "ru" ? "Длительность: 10 мс" : "Duration: 10 ms";
+      expect(details).toContain(duration);
+      expect(
+        header.replace(/<details[^>]*>[^]*?<\/details>/, ""),
+      ).not.toContain(duration);
+      expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+      expect(html).not.toContain("run-transcript__preview");
+      expect(html).not.toMatch(
+        /RAW_COMMAND_SENTINEL|RAW_OUTPUT_SENTINEL|HIDDEN_REASONING_SENTINEL/,
+      );
+    },
+  );
+  it("не добавляет длительность работающему инструменту и сохраняет содержательный preview вне деталей", async () => {
+    const running = await render(
+      "get_configuration_catalog",
+      {},
+      "ru",
+      "",
+      "RUNNING",
+    );
+    expect(running).not.toContain("Длительность:");
+    expect(title(running)).toBe("Каталог настроек");
+    const meaningful = await render(
+      "get_configuration_catalog",
+      {},
+      "ru",
+      "Доступны две модели",
+    );
+    expect(meaningful).toMatch(
+      /<\/header>[^]*?run-transcript__preview[^]*?Доступны две модели/,
+    );
+  });
   it.each([
     "invoke_integration",
     "context7_resolve_library_id",
@@ -175,7 +236,7 @@ describe("RunTranscript: managed инструменты", () => {
       expect(html).toContain("Input SHA256");
       expect(html).not.toMatch(/<details[^>]*\bopen\b/);
       expect(html).toMatch(
-        /<details[^>]*><summary[^>]*>Безопасный результат[^]*?Invocation Ref/,
+        /<details[^>]*><summary[^>]*>Подробности[^]*?Безопасный результат[^]*?Invocation Ref/,
       );
     },
   );
@@ -330,7 +391,7 @@ describe("RunTranscript: managed инструменты", () => {
 });
 
 describe("RunTranscript: безопасный runtime text", () => {
-  it("показывает ошибку инструмента понятным текстом, а closed code только в закрытых деталях", async () => {
+  it("показывает статус ошибки без служебного preview, а closed code только в закрытых деталях", async () => {
     for (const locale of ["ru", "en"] as const) {
       for (const code of ["TOOL_UNAVAILABLE", "FUTURE_TOOL_ERROR"]) {
         const html = await render(
@@ -340,16 +401,7 @@ describe("RunTranscript: безопасный runtime text", () => {
           code,
           "FAILED",
         );
-        const preview =
-          /class="safe-markdown run-transcript__preview"[^>]*>([^]*?)<\/div>/.exec(
-            html,
-          )?.[1];
-        expect(preview).toContain(
-          locale === "ru"
-            ? "Не удалось выполнить действие"
-            : "The action could not be completed",
-        );
-        expect(preview).not.toContain(code);
+        expect(html).not.toContain("run-transcript__preview");
         expect(html).toMatch(
           new RegExp(`<details[^>]*><summary[^>]*>[^]*?${code}`),
         );

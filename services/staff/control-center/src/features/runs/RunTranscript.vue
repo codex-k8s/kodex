@@ -181,7 +181,7 @@ function toolPreview(
       toolCall.safeResult.trim().replace(/^i18n:/, ""),
     )
   )
-    return t("runs.toolFailed");
+    return undefined;
   return (toolCall.state === "SUCCEEDED" &&
     managedTools.has(toolCall.tool) &&
     toolCall.safeResult === `${toolCall.tool}:completed`) ||
@@ -480,6 +480,56 @@ function bytes(value: number): string {
                     <time :datetime="item.occurredAt">{{
                       time(item.occurredAt)
                     }}</time>
+                    <details
+                      v-if="item.toolCall"
+                      class="run-tool-event__details"
+                    >
+                      <summary
+                        :aria-label="
+                          $t('runs.toolDetailsFor', {
+                            tool: toolLabel(item.toolCall),
+                          })
+                        "
+                      >
+                        {{ $t("runs.toolDetails") }}
+                      </summary>
+                      <div class="run-tool-event__body">
+                        <p
+                          v-if="
+                            nativeTools.has(item.toolCall.tool) ||
+                            managedTools.has(item.toolCall.tool)
+                          "
+                        >
+                          {{ $t("runs.toolTechnicalId") }}:
+                          <code>{{ item.toolCall.tool }}</code>
+                        </p>
+                        <section>
+                          <strong>{{ $t("runs.toolParameters") }}</strong>
+                          <SafeStructuredData
+                            :value="item.toolCall.safeParameters"
+                          />
+                        </section>
+                        <section>
+                          <strong>{{ $t("runs.toolResult") }}</strong>
+                          <SafeMarkdown
+                            v-if="item.toolCall.safeResult"
+                            :content="item.toolCall.safeResult"
+                          />
+                          <p v-else>{{ $t("common.noData") }}</p>
+                        </section>
+                        <small
+                          v-if="
+                            item.toolCall.durationMs !== undefined &&
+                            item.toolCall.state !== 'RUNNING'
+                          "
+                          >{{
+                            $t("runs.toolDuration", {
+                              duration: item.toolCall.durationMs,
+                            })
+                          }}</small
+                        >
+                      </div>
+                    </details>
                   </header>
                   <small
                     v-if="
@@ -514,47 +564,13 @@ function bytes(value: number): string {
                       <Download :size="16" />{{ $t("common.download") }}
                     </button>
                   </section>
-                  <section v-if="item.toolCall" class="run-tool-event">
+                  <template v-if="item.toolCall">
                     <SafeMarkdown
                       v-if="toolPreview(item.toolCall)"
                       :content="toolPreview(item.toolCall) ?? ''"
                       class="run-transcript__preview"
                     />
-                    <details>
-                      <summary>{{ $t("runs.toolParameters") }}</summary>
-                      <p
-                        v-if="
-                          nativeTools.has(item.toolCall.tool) ||
-                          managedTools.has(item.toolCall.tool)
-                        "
-                      >
-                        {{ $t("runs.toolTechnicalId") }}:
-                        <code>{{ item.toolCall.tool }}</code>
-                      </p>
-                      <SafeStructuredData
-                        :value="item.toolCall.safeParameters"
-                      />
-                    </details>
-                    <details>
-                      <summary>{{ $t("runs.toolResult") }}</summary>
-                      <SafeMarkdown
-                        v-if="item.toolCall.safeResult"
-                        :content="item.toolCall.safeResult"
-                      />
-                      <p v-else>{{ $t("common.noData") }}</p>
-                    </details>
-                    <small
-                      v-if="
-                        item.toolCall.durationMs !== undefined &&
-                        item.toolCall.state !== 'RUNNING'
-                      "
-                      >{{
-                        $t("runs.toolDuration", {
-                          duration: item.toolCall.durationMs,
-                        })
-                      }}</small
-                    >
-                  </section>
+                  </template>
                   <template v-else>
                     <SafeMarkdown
                       v-if="
@@ -805,6 +821,7 @@ small {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-top: 4px;
 }
 .run-activity-item__expand {
   border: 0;
@@ -813,17 +830,36 @@ small {
   color: var(--accent);
   cursor: pointer;
 }
-.run-tool-event,
 .run-file-event {
   display: grid;
   gap: 8px;
   margin-top: 8px;
 }
-.run-tool-event details,
 .run-transcript__tool-group {
   padding: 4px 8px;
   background: var(--panel);
   border-radius: 6px;
+}
+.run-tool-event__details {
+  min-width: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.run-tool-event__details[open] {
+  flex: 1 0 100%;
+}
+.run-tool-event__details > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.run-tool-event__body {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  margin-top: 4px;
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
 }
 .run-transcript__service-history {
   margin-top: 4px;
