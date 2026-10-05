@@ -29,7 +29,7 @@ RUN mkdir -p /out/kodex-protected \
 # последним stage этого Dockerfile и не зависит от local-runtime.
 FROM docker.io/library/node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS local-codex-cli
 
-
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0
 RUN set -eu; \
 	npm install --global "${KODEX_CODEX_PACKAGE}"; \
 	binary=$(find /usr/local/lib/node_modules/@openai/codex -type f \
@@ -92,7 +92,7 @@ ARG OAPI_CODEGEN_VERSION=v2.7.1
 ARG PROTOC_GEN_GO_VERSION=v1.36.11
 ARG PROTOC_GEN_GO_GRPC_VERSION=v1.6.2
 ARG GOLANGCI_LINT_VERSION=v2.12.2
-ARG GOIMPORTS_VERSION=v0.46.0
+ARG GOIMPORTS_VERSION=v0.49.0
 ARG GOFUMPT_VERSION=v0.10.0
 ARG STATICCHECK_VERSION=v0.7.0
 ARG BUF_VERSION=v1.71.0
@@ -105,7 +105,9 @@ ENV GOBIN=/out/kodex-protected
 
 COPY services/jobs/agent-runner/build-go-tool.sh /opt/kodex/build-go-tool.sh
 
-RUN apk add --no-cache ca-certificates git \
+RUN --mount=type=cache,id=kodex-public-go-mod,target=/go/pkg/mod,sharing=shared \
+	--mount=type=cache,id=kodex-public-go-build-1.26.6,target=/root/.cache/go-build,sharing=shared \
+	apk add --no-cache ca-certificates git \
 	&& mkdir -p "${GOBIN}" \
 	&& sh /opt/kodex/build-go-tool.sh github.com/pressly/goose/v3/cmd/goose@"${GOOSE_VERSION}" \
 	&& sh /opt/kodex/build-go-tool.sh github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@"${OAPI_CODEGEN_VERSION}" \
@@ -124,10 +126,15 @@ RUN apk add --no-cache ca-certificates git \
 # Canonical upstream packages собираются независимо от runner и 13 Go tools.
 FROM build AS platform-cli-build
 
+ARG GH_CLI_VERSION=2.95.0
+ARG KUBECTL_VERSION=v1.36.2
+ARG HELM_VERSION=v4.2.1
 ENV GOBIN=/out/kodex-platform
 
 COPY --chmod=0555 services/jobs/agent-runner/build-go-tool.sh /usr/local/bin/kodex-build-go-tool
-RUN set -eu; \
+RUN --mount=type=cache,id=kodex-public-go-mod,target=/go/pkg/mod,sharing=shared \
+	--mount=type=cache,id=kodex-public-go-build-1.26.6,target=/root/.cache/go-build,sharing=shared \
+	set -eu; \
 	apk add --no-cache ca-certificates git; \
 	test "$(go env GOVERSION)" = "go1.26.6"; \
 	mkdir -p "${GOBIN}"; \

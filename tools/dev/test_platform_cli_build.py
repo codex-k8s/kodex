@@ -123,7 +123,8 @@ class PlatformCLI(unittest.TestCase):
                     "GOBIN": str(self.output), "TMPDIR": str(self.scratch), "LANG": "C"}
         dockerfile = DOCKERFILE.read_text()
         self.stage = dockerfile.split("FROM build AS platform-cli-build\n", 1)[1].split("\nFROM ", 1)[0]
-        self.run = self.stage.split("RUN ", 1)[1].replace("\\\n", "").replace(
+        instruction = self.stage.split("RUN ", 1)[1].replace("\\\n", "")
+        self.run = re.sub(r"^(?:--mount=\S+\s+)*", "", instruction).replace(
             "/usr/local/bin/kodex-build-go-tool", str(SCRIPT))
 
     def build(self, selection, **extra):
@@ -171,7 +172,9 @@ class PlatformCLI(unittest.TestCase):
                 self.assertEqual(target.read_text(), "previous exact output")
 
     def test_full_platform_stage_runtime_versions_and_failed_valid_output(self):
-        environment = dict(self.env, GH_CLI_VERSION="2.95.0", KUBECTL_VERSION="v1.36.2", HELM_VERSION="v4.2.1")
+        arguments = dict(re.findall(r"(?m)^ARG (\w+)=(\S+)$", self.stage))
+        self.assertEqual(arguments, {"GH_CLI_VERSION": "2.95.0", "KUBECTL_VERSION": "v1.36.2", "HELM_VERSION": "v4.2.1"})
+        environment = dict(self.env, **arguments)
         for extra in ({}, {"FIXTURE_RUNTIME_WRONG": "1"}, {"FIXTURE_RUNTIME_FAIL": "1"}):
             result = subprocess.run(["sh", "-c", self.run], env=dict(environment, **extra),
                                     capture_output=True, text=True, timeout=10)
@@ -194,6 +197,14 @@ class PlatformCLI(unittest.TestCase):
             self.assertNotIn(removed, dockerfile)
         self.assertNotIn("mod tidy", SCRIPT.read_text())
         self.assertNotIn("GOSUMDB=off", SCRIPT.read_text())
+
+    def test_cache_mounts_share_only_public_go_inputs_and_keep_output_in_layer(self):
+        dockerfile = DOCKERFILE.read_text()
+        for target in ("/go/pkg/mod", "/root/.cache/go-build"):
+            self.assertEqual(dockerfile.count(f"target={target},sharing=shared"), 2)
+        self.assertNotIn("target=/out", self.stage)
+        self.assertIn("GOBIN=/out/kodex-platform", self.stage)
+        self.assertIn("mod verify", SCRIPT.read_text())
 
 
 if __name__ == "__main__":

@@ -164,6 +164,12 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         for executable in required:
             self.assertIn(executable, dockerfile + manifest)
 
+    def test_local_codex_default_remains_in_its_own_stage(self):
+        dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
+        local = dockerfile.split(" AS local-codex-cli\n", 1)[1].split("\nFROM ", 1)[0]
+        self.assertIn("ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0", local)
+        self.assertLess(local.index("ARG KODEX_CODEX_PACKAGE="), local.index("RUN "))
+
     def test_security_refresh_and_native_browser_are_source_pinned_before_runner(self):
         full = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text().split(" AS full-runtime\n", 1)[1]
         self.assertIn('ARG KODEX_TOOLCHAIN_SECURITY_REVISION=20261005', full)

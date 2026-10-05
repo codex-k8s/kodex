@@ -2246,3 +2246,29 @@ PASS — повторные32 Python и18 npm unit после явного Go re
 до этой исключительно ресурсной правки; новый OCI ещё не объявляется PASS.
 GUIDE-DOC-003 Prettier исправлен штатным formatter, повторный адресный check
 вместе с npm-toolchain PASS. Нормализация существующих таблиц только форматная.
+
+05.10.2026 05:06 UTC, source730bdb1ef56d4d37fddc34a36ceb11305940ba47 + cache/scope delta:
+FAIL — реальный OCI build730 завершился до CLI compilation: при ROOT
+объединении npm patch исчезли ARG defaults самостоятельного platform stage,
+GH_CLI_VERSION оказался неназначенным. Также отсутствовал прежний local Codex
+default. Точный cause исправлен восстановлением defaults в соответствующих
+stage; tests теперь выводят env из actual ARG, а не назначают их сами.
+Ранее32 mock tests не доказывали ARG Docker scope. OCI output/import/pins
+не обновлены, живой SYSTEM по-прежнему использует прежний допустимый runner.
+
+Исполнитель actual remaining11 выявил goimports0.46 FAIL:
+x/mod0.40 требует tools0.49, exact старый source tag откатывает dependency,
+bounded closure закрыто останавливает build. Source pin обновлён до официального
+tools0.49.0, без ослабления floor. Actual11 после этой единственной правки
+PASS: goose57s/protoc2/protocgrpc3/golangcilint49/goimports3/gofumpt3/
+staticcheck7/buf56/yq29/sqlc83/mockgen3. Вместе с прежними grpcurl/oapi
+подтверждены13 GoCLI host; ещё три platformCLI подтверждены отдельно выше.
+Exact frozen helper исполнителя остаётся317d6341; ROOT resource budget описан
+отдельно, это не выдаётся за финальный OCI digest или admission.
+
+PASS — ROOT34 Python tests после ARG-scope/cache regression, ShellCheck/diff.
+Два independent Go stages используют одинаковые public module/build cache
+mounts, sharing=shared, без export cache в image. Exact compiler, SumDB,
+mod verify, floors и metadata guards сохраняются; /out не cache mount.
+Context7 /docker/docs проверен: cache mounts и multi-stage/ARG semantics.
+Новый полный OCI/admission остаются NOT RUN до следующей сборки.
