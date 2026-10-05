@@ -2928,3 +2928,28 @@ Admission callback теперь наблюдаем: два actual failed-predece
 Это не отсутствие создания Job. Transport target/endpoint/network selectors
 проверяются; root cause ещё UNKNOWN. Метрики Fail/Expire в текущем CP не
 экспонируются: отсутствие counter не означает ноль вызовов.
+
+15:05–15:22 UTC, checkpoint77e2f11183e4f87662ab20633a2579ffbfc07fc9:
+native QA_CATALOG_RENEW_FIX_02 PASS: catalog15:05:09, current configuration
+15:05:14, три окружения15:05:18/23/29. Проверены actual tool event states,
+не только текст ответа модели. Screenshot15:07:55 PASS: user справа,
+assistant слева, компактные группы инструментов без наложений; Console
+без ошибок, reload/rejoin и realtime PASS. Runtime Pod завершился до exact
+input/image readback: этот отдельный proof NOT RUN.
+
+Host/CP Pod source hashes двух файлов retry совпали; точный CP UID и
+hot executable hash сняты. Canonical all/build-jobs4/import source77e2f111
+PASS; новые admission/builder/tools/authority digests записаны штатным
+скриптом. Fresh post-build render PASS: source77e2f111, revision1,
+fingerprint362114f442ed52c2dbca8bf86b9cb0c757ac10133419f30d19bba58915e2ea2f.
+Это ещё не активация новых worker images. Первая сборка нового порядка слоёв
+потребовала import195.9s; ускорение последующей Go-only сборки NOT RUN.
+
+Exact native callback Pod net namespace: DNS к ClusterDNS и TCP к CP Service
+и Endpoint8443 PASS; HTTP/1 reset не является HTTP/2/RPC proof. Actual CRI
+closed flags: trusted profile=true, approved target=true, proxy configured=false.
+Serving CP plaintext branch и handshake подтверждены; TLS/proxy гипотезы
+исключены. Callback Unavailable остаётся FAIL/UNKNOWN cause, terminal receipt
+не получен. Owner read15:21:43UTC: pendingAdmissions1, build/promotion/runtime/
+lease0; promoted19 и published pins SHA28e8bf55 неизменны. Нет ручных SQL
+изменений, новых workloads или ослабления сетевых/claim/grant проверок.

@@ -14,7 +14,7 @@ updated: 2026-10-05
 Перенос проверен; цель снова выполняется. CEL-политики исправлены, штатный
 apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e35fa4e`.
 Пять компонентов и архив сессий восстановлены; выполняется native QA.
-Текущий checkpoint кода: `c5ed80d48c8a73b6a2aceebab75fddd133b27bef`.
+Текущий checkpoint кода: `77e2f11183e4f87662ab20633a2579ffbfc07fc9`.
 Ниже перечисленные старые checkpoints относятся к истории, а не к текущему HEAD.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).
@@ -60,15 +60,25 @@ apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e3
 Native SYSTEM typed plan применён; recipe v8/generation6, build завершён.
 Admission scan завершился технической ошибкой прежнего projection handler;
 artifact остаётся CLAIMED/PENDING. Подготовленные новые worker images собраны
-и импортированы на обе ноды на source5f169a5, но пока не активированы:
+и импортированы на обе ноды на source77e2f111, но пока не активированы:
 ordinary cutover требует закрытия текущей attempt. Узкий repo-owned
 диагностический refresh применён с exact ConfigMap CAS/readback; callback
 recovery исследуется без изменения claim, grant, policy или image pins.
 
-Повторный ROLE_ENVIRONMENTS отказ доказан как PostgreSQL40001 при конкурентном
-lease renew и REPEATABLE READ/FOR SHARE. Готовится bounded whole-transaction
-retry с повторной проверкой authority; общий component guard отдельно
-проверяется на актуальность после расширения migration graph.
+Повторный ROLE_ENVIRONMENTS отказ устранён bounded whole-transaction retry
+только для PostgreSQL40001: новая транзакция повторно проверяет authority,
+lease и fence. Адресные unit и SYSTEM/PROJECT PostgreSQL component PASS.
+В native QA_CATALOG_RENEW_FIX_02 пять реальных tool events успешны, в том
+числе три последовательных ROLE_ENVIRONMENTS; скриншот и Console проверены.
+Устаревшие ожидания component fixture обновлены до утверждённого graph
+100nodes/253edges без изменения production guard или applied migration.
+
+Admission recovery остаётся открытым: exact native Pod DNS и TCP к CP
+проверены; actual client trusted profile и отсутствие proxy подтверждены.
+Serving CP использует plaintext gRPC, поэтому TLS mismatch исключён.
+Это не доказательство успешного RPC: callback по-прежнему возвращает
+Unavailable; следующий узкий шаг — actual short-name DNS и HTTP/2 transport.
+Секреты, claim, grant, NetworkPolicy и SQL-состояние не изменялись.
 
 Далее: штатный terminal callback → activation проверенных worker images →
 fresh native build/полный report/owner risk decision/подписанный admission/
