@@ -2953,3 +2953,19 @@ Serving CP plaintext branch и handshake подтверждены; TLS/proxy г�
 не получен. Owner read15:21:43UTC: pendingAdmissions1, build/promotion/runtime/
 lease0; promoted19 и published pins SHA28e8bf55 неизменны. Нет ручных SQL
 изменений, новых workloads или ослабления сетевых/claim/grant проверок.
+
+15:37–15:41 UTC: ROOT отдельной сборкой CP на Go1.26.6/CGO0/trimpath/
+buildvcsfalse получил SHA25634e6c418155a505cc7c7c151698ff967df1dbf103c9025136f329400cca0dd84,
+точно совпавший с serving PID3482. Это подтверждает текущий retry binary,
+а не только source mount. SHORTtarget DNS с actual Pod search/ndots PASS.
+Строгий HTTP/2 proof NOT RUN: единственный preverified namespace GET получил
+curl7 до HTTP, но после запроса lifetime/CNI identity не успели подтвердить;
+connection refused и root cause из этого не выводятся.
+
+Подготовлен dev-only streaming transport classifier для следующего штатного
+callback: только DNS/REFUSED/TIMEOUT/PREFACE/OTHER, raw records не сохраняются
+и не публикуются. Один fixed Bash child сохраняет original callback status,
+EOF фильтра ожидается до выхода; production script не изменён. Общие exact
+CM/source/policy/cluster guards сохранены. ROOT43unit PASS313ms с privacy,
+неизменностью command intent и CAS negative cases. Actual same admission
+image Bash/Busybox syntax проверены. Live check/dry-run/apply ещё NOT RUN.

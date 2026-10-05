@@ -42,13 +42,17 @@ export function validateOptions(o) {
   check(/^[1-9][0-9]*$/.test(o.resourceVersion ?? '') && sha.test(o.baselineDataSHA256 ?? ''), 'CONFIGMAP_PIN_INVALID');
 }
 
-export function candidateConfigMap(current, candidate, o) {
+export function verifyConfigMapBoundary(current, o) {
   check(current.apiVersion === 'v1' && current.kind === 'ConfigMap' && current.metadata?.name === name && current.metadata?.namespace === namespace, 'CONFIGMAP_IDENTITY_INVALID');
   check(current.metadata.uid === o.configmapUID && current.metadata.resourceVersion === o.resourceVersion && !current.metadata.deletionTimestamp, 'CONFIGMAP_CAS_MISMATCH');
   check((!Object.hasOwn(current, 'immutable') || current.immutable === false) && !Object.hasOwn(current, 'binaryData'), 'CONFIGMAP_SHAPE_INVALID');
   const labels = current.metadata.labels;
   check(labels?.['app.kubernetes.io/part-of'] === 'kodex' && labels?.['kodex.dev/local-profile'] === 'hot-reload' && labels?.['kodex.dev/security-profile'] === 'trusted-cluster', 'CONFIGMAP_PROFILE_INVALID');
   check(current.data && Object.values(current.data).every(value => typeof value === 'string') && fingerprint(current.data) === o.baselineDataSHA256, 'CONFIGMAP_DATA_MISMATCH');
+}
+
+export function candidateConfigMap(current, candidate, o) {
+  verifyConfigMapBoundary(current, o);
   const baseline = current.data['image-admission.sh'];
   check(typeof baseline === 'string' && digest(baseline) === BASELINE_SCRIPT_SHA256, 'SCRIPT_BASELINE_MISMATCH');
   check(baseline.split(oldLine).length === 2 && candidate === baseline.replace(oldLine, newLines) && digest(candidate) === CANDIDATE_SCRIPT_SHA256, 'SCRIPT_CHANGE_NOT_APPROVED');
@@ -71,7 +75,7 @@ export function verifyReadback(actual, expected, beforeRV, dryRun = false) {
 
 // Все effect-операции принадлежат одному namespace/name. kubectl stderr никогда
 // не выводится: admission warnings/errors могут содержать request или raw data.
-export function refresh(o, candidate, io) {
+export function refresh(o, candidate, io, approveCandidate = candidateConfigMap) {
   validateOptions(o);
   const get = (...args) => JSON.parse(io.kubectl(['get', ...args, '-o', 'json']));
   let policyPins;
@@ -101,7 +105,7 @@ export function refresh(o, candidate, io) {
   const currentCM = () => get('-n', namespace, 'configmap', name);
   boundary();
   io.source(o);
-  const current = currentCM(), expected = candidateConfigMap(current, candidate, o);
+  const current = currentCM(), expected = approveCandidate(current, candidate, o);
   const report = { context: o.context, sourceRevision: o.sourceRevision, configmapUID: o.configmapUID, beforeResourceVersion: o.resourceVersion, beforeDataSHA256: o.baselineDataSHA256, candidateDataSHA256: fingerprint(expected.data), candidateScriptSHA256: digest(candidate) };
   if (o.mode === 'check') return { ...report, status: 'CHECKED' };
   const replace = dryRun => JSON.parse(io.kubectl(['-n', namespace, 'replace', '--validate=strict', ...(dryRun ? ['--dry-run=server'] : []), '-f', '-', '-o', 'json'], JSON.stringify(expected)));
@@ -118,7 +122,7 @@ export function refresh(o, candidate, io) {
   return { ...report, resourceVersion: observed.metadata.resourceVersion, status: 'APPLIED' };
 }
 
-function main() {
+export function runRefreshCLI(entrypoint = 'refresh-image-admission-diagnostics.mjs', transform = value => value, approveCandidate = candidateConfigMap) {
   const names = { context: 'context', 'source-root': 'sourceRoot', 'source-revision': 'sourceRevision', 'api-server': 'apiServer', 'cluster-uid': 'clusterUID', 'namespace-uid': 'namespaceUID', 'configmap-uid': 'configmapUID', 'resource-version': 'resourceVersion', 'baseline-data-sha256': 'baselineDataSHA256', 'server-node-uid': 'serverNodeUID', 'agent-node-uid': 'agentNodeUID' };
   const args = process.argv.slice(2), o = { mode: args.shift() };
   while (args.length) {
@@ -127,7 +131,9 @@ function main() {
     o[key] = args.shift();
   }
   validateOptions(o);
-  check(realpathSync(SOURCE_ROOT) === SOURCE_ROOT && fileURLToPath(import.meta.url) === `${SOURCE_ROOT}/tools/dev/refresh-image-admission-diagnostics.mjs`, 'ENTRYPOINT_SOURCE_MISMATCH');
+  check(realpathSync(SOURCE_ROOT) === SOURCE_ROOT &&
+    fileURLToPath(import.meta.url) === `${SOURCE_ROOT}/tools/dev/refresh-image-admission-diagnostics.mjs` &&
+    realpathSync(process.argv[1]) === `${SOURCE_ROOT}/tools/dev/${entrypoint}`, 'ENTRYPOINT_SOURCE_MISMATCH');
   const deadline = Date.now() + 60000;
   const run = (command, args, input) => {
     check(Date.now() < deadline, 'BUDGET_EXHAUSTED');
@@ -142,7 +148,7 @@ function main() {
   const readCandidate = () => {
     const path = `${SOURCE_ROOT}/${SCRIPT}`, stat = lstatSync(path);
     check(stat.isFile() && !stat.isSymbolicLink() && realpathSync(path) === path && stat.size < (256 << 10), 'SOURCE_FILE_INVALID');
-    return readFileSync(path, 'utf8');
+    return transform(readFileSync(path, 'utf8'));
   };
   const candidate = readCandidate();
   const result = refresh(o, candidate, {
@@ -150,12 +156,12 @@ function main() {
     endpoint: () => run(kubectl, ['--kubeconfig=/home/s/.kube/config', '--context=k3d-kodex', 'config', 'view', '--minify', '-o', 'jsonpath={.clusters[0].cluster.server}']),
     source: () => verifySourceProof(run('git', ['-C', SOURCE_ROOT, 'rev-parse', 'HEAD']),
       run('git', ['-C', SOURCE_ROOT, 'status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none']), readCandidate(), candidate, o),
-  });
+  }, approveCandidate);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { main(); } catch (error) {
+  try { runRefreshCLI(); } catch (error) {
     // Только собственный закрытый code, никогда Error.message внешней команды.
     const code = /^[A-Z_]+$/.test(error?.message ?? '') ? error.message : 'REFRESH_FAILED';
     process.stderr.write(`Image admission diagnostics refresh failed: ${code}\n`);
