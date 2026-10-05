@@ -3049,3 +3049,100 @@ fresh idle/очистка workspace/отсутствие native Job/Pod, policy/
 cluster/nodes, controller0 и неизменность published pins повторяются.
 Неверные UID/RV/data/source, дополнительные effects, stale owner и drift
 закрыто отклонены до записи. Live restore и повторная активация ещё NOT RUN.
+
+16:24–16:40 UTC, checkpoint `6efc5104cb53d23d5c3ca9d507bbbf1da495ebba`:
+прежние CEL/projection/callback/SSA FAIL выше сохраняются как история;
+следующие PASS не превращают их в успешные прошлые проверки.
+
+Repo-owned restore CHECK/server dry-run/CAS APPLY/readback PASS16:24:29 UTC.
+ConfigMap UID `cc73eb9b-f263-496a-b383-05070e5f845f` сохранён, RV456244,
+dataSHA256 `dc297e676f88545be3e5e5091113a72c97f6c06d7f45e087a0c70824bb334457`,
+canonical scriptSHA256 `3d61890702c0157e944823a7282bb662865fdd7c333de05daf84840138db5e55`.
+Fixed manager `kodex-local-dev`; force-conflicts и удаление managedFields
+не использовались. Свежие idle owner/workspace/job/policy/source guards и
+неизменность published pins проверены; это возврат одной script, не bypass.
+
+Fresh render source `6efc5104`, suffix `wn8P5b`, fingerprint
+`b16b308610835de8977b54d183d310ebb7cdcbcab941e2d212296059383b1ce6` — PASS.
+Ordinary supply-chain apply/readback полностью PASS16:30:31 UTC;
+пять Deployment desired/ready/updated/available=1, admission controller
+возобновлён. Worker images собраны на `b5fe1bec`, Go inputs до `6efc5104`
+не менялись; сокращённые digest отпечатки: builder `120c7`, admission `9907`,
+tools `137c9`, authority `710a22`. Сокращения не заменяют exact release pins.
+Builder имел два startup restart с ErrMaterialization, но сам восстановился
+до Ready16:29:02 UTC. Подпричина UNKNOWN; speculative fix не выполнялся.
+
+16:32 UTC host/CP mounted `client.go` SHA256
+`14e74b94ee2c7518281fa39bb31da1d7fb7405b822dbb0cef80a08d0f6ab15de` MATCH.
+Runtime source annotation CP соответствует `6efc5104`; annotation/mount proof
+не объявляется SHA работающего binary. Owner READ16:31 UTC, до нового build:
+pendingAdmissions0, promotedArtifactCount19, published pins префикса
+`28e8bf55` неизменны.
+
+Native SYSTEM39 в диалоге `cnv_h4JZw1FWPxVrsK_gxSx5gWgr` завершён:
+шесть реальных read tool events SUCCESS и один propose. Единственный typed
+план обновления recipe подтверждён штатным UI16:39:37 UTC: recipe v9/generation7,
+specSHA256 `742bdccb9ea4c2d831a8d135c1f90199fe8671490c54be3b034e18e256b31a61`.
+Прежний digest Dockerfile `FROM` с префиксом `72b27` сохранён. Отдельного REQUEST_BUILD
+и ручного изменения состояния не было. Созданный этим переходом build
+`imgbld_391ktSUxZEzhsxVdJjm97i0r`, attempt1, достиг
+COMPLETED/version12/100%16:40:12 UTC — PASS.
+
+Полный report/admission/risk/promotion для нового exact build пока NOT RUN.
+Checklist2–15 и6.1 остаются OPEN; активация, шесть read tools и build100%
+не являются полной native QA, runtime/prompt proof или dogfooding acceptance.
+
+16:40–16:49 UTC, тот же source `6efc5104`: новый native admission завершил
+сканирование и создал полный отчёт, не технический отказ. Artifact
+`imgart_-PQ2z3H-QfPi7dAYxUgBMsHm`, generation7, manifest
+`sha256:1c82da820d9d4053ec6b56ed1f2073e468696edd97fc93235f88579b7ef59de4`
+достиг REJECTED/version3/admissionRevision1 в16:44:28 UTC.
+Claim Pod exit0, exact admission image/Job UID/PVC Bound2Gi/RWO проверены;
+scan наблюдался RunningReady без restart. После terminal Job/PVC очищены.
+
+Полный persisted projection: 1 777 795 байт, SHA256
+`c503f02a94e7003090e9171f01807da946c7e96e41f83d996244df6cb4025b96`;
+4640 matches/4634 groups/2938 advisories, blocking2, suppressed2315,
+unresolvedNoFix459. Exact report/build/manifest/receipt bindings MATCH.
+GET отчёта READY/complete=true; фильтр blockingOnly вернул ровно два
+HIGH npm finding: undici6.27.0, GHSA-rfgv-xxqx-mfg5, fixed6.28.1;
+tar7.5.19, GHSA-r292-9mhp-454m, fixed7.5.21. Это текущий gen7, не старый отчёт.
+
+Chrome: штатная risk modal680×435, обязательная причина, disabled submit
+до ввода и Cancel проверены; screenshot просмотрен, horizontal overflow=false,
+Console error/warn отсутствуют. Первоначальное подозрение на исчезновение
+modal не подтвердилось: она находится в середине accessibility snapshot.
+Frontend по этому подозрению не менялся.
+
+OWNER UI16:48:41 UTC сохранил ACCEPT_RISK только для exact образа/отчёта/
+policy; причина ограничивает решение локальным QA/dogfooding и не отменяет
+integrity/provenance/signature/network checks. Decision
+`imgrisk_Fs7xGePjbIQyVsockGaQu9hE` имеет проверенные immutable digest и pins.
+Прежняя attempt1 `imgadm_-zSJ1wCf6wJv7xi5L5NTa4eL` остаётся REJECTED с
+совпадающим terminal snapshot и прежним отчётом. Создана отдельная attempt2
+`imgadm_qzaTBu3oOljYWt2PD7iWimEH`, CLAIMED; exact prior receipt/evidence и
+sourceAdmissionRevision1 сохранены. Новый ACCEPTED admission и promotion
+пока NOT RUN. Checklist2–15/6.1 остаётся OPEN.
+
+16:50–16:53 UTC: native attempt2 завершилась ACCEPTED/version3
+в16:50:49 UTC, artifact admissionRevision2. Новый signed receipt SHA256
+`07d29b0e38f288aed84ef8e2167946fb894b84382ff72e376dbf2f8c3df34446`,
+evidence OCI digest
+`sha256:c6082dc8f351b8b1638b46fe3319cf83f424696e4ed9d8a2d1419d0a781f0d87`.
+Report revision2 сохраняет полный projection c503f02a и оба blocking finding;
+прежние REJECTED attempt/report/receipt не переписаны. Native sign/admit
+завершены, без ручного verdict или изменения policy.
+
+OWNER UI promotion POST202 отправлен16:51 UTC. Последующий protected GET200
+подтвердил recipe version10/promotedImageReady=true, artifact version10/
+ACCEPTED/PROMOTED, reference
+`pull.kodex.127.0.0.2.nip.io/kodex/roles@sha256:1c82da820d9d4053ec6b56ed1f2073e468696edd97fc93235f88579b7ef59de4`.
+Полный inventory SHA53059121 связан с exact image/provenance/build/runtime:
+37 из38 обязательных программ VERIFIED, npm PROBE_FAILED (не MISSING).
+Причина и исправление проверки npm пока OPEN; full38/38 не заявляется.
+
+Native SYSTEM40 отправлен16:53:37 UTC через штатный UI для одного typed
+Environment draft с собственным promoted artifact; прочие действующие
+настройки сохраняются. Диалог `cnv_w4f5OYasOOhU0d5wGhiF8p4I`, turn
+`trn_VYIz6sGW21I-sg2G06BapeeT`, run `run_ncKQ_eJKk4Dcst5eAeWHlK74`.
+Apply/publish новой среды и runtime/prompt proof после неё пока NOT RUN.

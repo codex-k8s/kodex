@@ -4,26 +4,31 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-05
 ---
 
 # Текущее состояние
 
 05.10.2026 владелец явно возобновил работу после переноса хранилища.
-Перенос проверен; цель снова выполняется. CEL-политики исправлены, штатный
-apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e35fa4e`.
-Пять компонентов и архив сессий восстановлены; выполняется native QA.
-Текущий запушенный checkpoint кода: `b5fe1bec30e2bc4ef09f207e18803a6195c374e3`.
-Поверх него устраняется узкий SSA ownership conflict диагностического script;
-точный следующий SHA и live readback фиксируются в журнале.
+Перенос проверен; цель снова выполняется. Текущий checkpoint source:
+`6efc5104cb53d23d5c3ca9d507bbbf1da495ebba`. CEL-политики и SSA ownership
+диагностического script исправлены; штатный supply-chain apply/readback
+полностью завершён 05.10.2026 в16:30:31 UTC. Все пять Deployment имеют
+desired/ready/updated/available=1; admission controller возобновлён.
+Native SYSTEM применил новый typed plan через UI, recipe v9/generation7;
+его build завершён. Полный отчёт READY, первый admission REJECTED по двум
+HIGH npm findings. OWNER UI принял exact риск для локального QA/dogfooding;
+вторая attempt ACCEPTED, собственный artifact PROMOTED. Начат SYSTEM40
+для назначения образа окружению. Inventory37/38 VERIFIED; npm PROBE_FAILED
+исследуется. Environment publish и новый runtime/prompt proof ещё NOT RUN.
 Ниже перечисленные старые checkpoints относятся к истории, а не к текущему HEAD.
 
 - Issue: [#1797](https://github.com/codex-k8s/kodex/issues/1797).
 - Draft PR: [#1798](https://github.com/codex-k8s/kodex/pull/1798), не слит.
 - Ветка: `kodex-agent/issue-1797-self-development-bootstrap`.
-- Последняя фиксация кода и технических документов: `99f397c56a7dd97831011d70be73e82eb8999afd`.
-- Checkpoint завершения сборки и паузы: `1cde8237c535e19bc0cdcd742c64ce6a8f6251b3`.
+- Исторический checkpoint реализации до CEL repair: `99f397c56a7dd97831011d70be73e82eb8999afd`.
+- Исторический checkpoint завершения сборки и паузы: `1cde8237c535e19bc0cdcd742c64ce6a8f6251b3`.
 - После этого checkpoint исправлена CEL-типизация admission policies;
   точный source и результаты адресных проверок фиксируются в журнале.
 - Полное задание: [65 разделов QA](../qa/full-qa-task.md).
@@ -59,16 +64,18 @@ apply/readback завершён на source `b40f278477cf977e058a90c8bcd163550e3
 
 ## Текущая точка продолжения
 
-Native SYSTEM typed plan применён; recipe v8/generation6, build завершён.
-Admission scan завершился технической ошибкой прежнего projection handler;
+Предыдущий native recipe v8/generation6 завершил build, но его
+admission scan завершился технической ошибкой прежнего projection handler;
 artifact штатно завершён FAILED/ADMISSION_LEASE_EXPIRED; claim/lease очищены,
 attempt terminal snapshot совпадает, один owner expiry receipt подтверждён.
-Подготовленные новые worker images собраны и импортированы на обе ноды
-на sourceb5fe1bec, но полная активация пока не завершена: ordinary SSA
-отказал на ownership одного диагностического script. Admission controller
-оставлен остановленным; CP/gateway/frontend доступны. Готовится exact CAS
-возврат canonical script с правильным field manager без force-conflicts,
-после чего штатный supply-chain apply/readback повторяется.
+Прежний SSA отказ16:09:52 UTC сохранён в журнале. Exact repo-owned restore
+CHECK/server dry-run/APPLY завершён16:24:29 UTC: canonical script восстановлен
+с field manager `kodex-local-dev`, без force-conflicts и удаления managedFields.
+Новые worker images собраны на source `b5fe1bec` и импортированы на обе ноды;
+Go inputs между `b5fe1bec` и `6efc5104` не менялись. Свежий render `6efc5104`
+и полный ordinary supply-chain apply/readback PASS16:30:31 UTC подтвердили
+активацию. Builder после двух startup restart с ErrMaterialization сам
+восстановился до Ready16:29:02 UTC; точная подпричина UNKNOWN.
 
 Повторный ROLE_ENVIRONMENTS отказ устранён bounded whole-transaction retry
 только для PostgreSQL40001: новая транзакция повторно проверяет authority,
@@ -78,28 +85,45 @@ lease и fence. Адресные unit и SYSTEM/PROJECT PostgreSQL component PAS
 Устаревшие ожидания component fixture обновлены до утверждённого graph
 100nodes/253edges без изменения production guard или applied migration.
 
-Admission recovery остаётся открытым: exact native Pod DNS и TCP к CP
+Предыдущий admission recovery завершён: exact native Pod DNS и TCP к CP
 проверены; actual client trusted profile и отсутствие proxy подтверждены.
 Serving CP использует plaintext gRPC, поэтому TLS mismatch исключён.
 Три native callback подтвердили REFUSED через закрытый потоковый classifier.
 Двухсекундная dev-диагностика дала штатный terminal receipt и очистку workspace;
 источник временного TCP отказа окончательно не доказан. Production bounded
 WaitForReady только Fail/Expire уже реализован и проверен disposable TCP,
-без повтора полученной server error; новый worker binary ещё не активирован.
-Секреты, claim, grant, NetworkPolicy и SQL-состояние не изменялись.
+без повтора полученной server error; новый worker binary теперь активирован.
+Ручного изменения SQL-состояния, claim/grant или ослабления NetworkPolicy
+не было; terminal выполнен штатной owner-транзакцией.
 
-Далее: штатный terminal callback → activation проверенных worker images →
-fresh native build/полный report/owner risk decision/подписанный admission/
-promotion → typed SYSTEM environment → новый turn и tool/prompt proof →
+Native SYSTEM39 в диалоге `cnv_h4JZw1FWPxVrsK_gxSx5gWgr` завершён:
+шесть read tool events SUCCESS и один propose. Единственный typed plan
+обновления recipe подтверждён через UI16:39:37 UTC; отдельный REQUEST_BUILD
+и ручная подмена состояния не использовались. Авторитетный результат:
+recipe v9/generation7, specSHA256
+`742bdccb9ea4c2d831a8d135c1f90199fe8671490c54be3b034e18e256b31a61`;
+Прежний digest `FROM` с префиксом `72b27` сохранён. Build
+`imgbld_391ktSUxZEzhsxVdJjm97i0r`, attempt1, COMPLETED/version12/100%
+подтверждён16:40:12 UTC. Новый artifact `imgart_-PQ2z3H-QfPi7dAYxUgBMsHm`
+получил полный READY отчёт и REJECTED/version3/admissionRevision1.
+Report SHA256 `c503f02a94e7003090e9171f01807da946c7e96e41f83d996244df6cb4025b96`,
+4640 matches/2938 advisories/blocking2. OWNER UI16:48:41 UTC принял риск
+для exact image/report/policy. Прежний REJECTED snapshot сохранён, отдельная
+attempt2 `imgadm_qzaTBu3oOljYWt2PD7iWimEH` ACCEPTED16:50:49 UTC.
+После OWNER UI promotion artifact достиг ACCEPTED/PROMOTED/version10,
+recipe version10/promotedImageReady=true; exact digest `1c82da82` сохранён.
+Inventory37/38 VERIFIED; npm PROBE_FAILED — открытое замечание.
+
+Далее: typed SYSTEM environment → новый turn и tool/prompt proof →
 SYSTEM создаёт проект и PROJECT → шесть ролей, grants и реальный Workflow.
 Основной checklist2–15/6.1 остаётся открытым до фактических доказательств.
 
-# Последние фактические проверки
+# Исторические проверки и сохранённые FAIL
 
 - PASS: на source `99f397c5` каноническая supply-chain сборка четырёх компонентов
   с `build-jobs=4` и импортом exact digests на обе ноды.
 - PASS: свежий render того же source. Это не serving/live acceptance.
-- PASS: maintenance barrier ранее подтверждён; пять Deployment оставлены
+- Исторический PASS: maintenance barrier подтверждён; пять Deployment оставлены
   с `spec/status replicas=0`, активных работ нет, promoted pins сохранены.
 - FAIL: частичный apply остановлен на CEL warning существующей
   `kodex-image-admission-controller-workspaces`, generation/observedGeneration 2.
@@ -112,7 +136,7 @@ SYSTEM создаёт проект и PROJECT → шесть ролей, grants 
   завершился при предыдущем apply в 09:25 UTC. Прежняя трактовка отказа как
   preflight «до любых эффектов» была неверной: отказ случился после частичного
   apply, на проверке компиляции политики. Serving CP/gateway и контроллеры
-  не возобновлены; полная активация и её readback ещё NOT RUN.
+  на тот момент не возобновлены; полная активация и её readback тогда NOT RUN.
 - NOT RUN: живое принятие риска, повторный admission/promotion и полный dogfooding.
 - Открытое замечание безопасности ещё не закрыто; подтверждение устранения NOT RUN.
 - Общее историческое форматирование журнала имеет отдельный FAIL;
@@ -137,6 +161,29 @@ Maintenance503 устранён штатной активацией после �
 Готовность Deployment и вход не объявляются завершением пользовательских
 сценариев: последующие этапы выполняются через помощников и штатный UI.
 
+## Последний checkpoint активации: 16:24–16:40 UTC
+
+- PASS: restore на прежнем ConfigMap UID
+  `cc73eb9b-f263-496a-b383-05070e5f845f`, RV456244;
+  dataSHA256 `dc297e676f88545be3e5e5091113a72c97f6c06d7f45e087a0c70824bb334457`;
+  canonical scriptSHA256 `3d61890702c0157e944823a7282bb662865fdd7c333de05daf84840138db5e55`.
+- PASS: fresh render source `6efc5104`, suffix `wn8P5b`, fingerprint
+  `b16b308610835de8977b54d183d310ebb7cdcbcab941e2d212296059383b1ce6`;
+  обычный supply-chain apply/readback полностью завершён16:30:31 UTC.
+- PASS: все пять Deployment desired/ready/updated/available=1. Worker image
+  digest префиксы: builder `120c7`, admission `9907`, tools `137c9`, authority
+  `710a22`; это сокращённые отпечатки, не замена exact release pins.
+- PASS: host/CP mounted `client.go` SHA256
+  `14e74b94ee2c7518281fa39bb31da1d7fb7405b822dbb0cef80a08d0f6ab15de`
+  совпадает16:32 UTC. Runtime source annotation CP соответствует `6efc5104`;
+  это не доказательство SHA работающего binary.
+- PASS: owner READ16:31 UTC до нового build — pendingAdmissions0,
+  promotedArtifactCount19, published pins префикса `28e8bf55` неизменны.
+- PASS: native SYSTEM39, один подтверждённый UI план обновления recipe и build
+  COMPLETED/version12/100%; не полный admission или dogfooding acceptance.
+- NOT RUN: новый полный report/admission/risk/promotion, runtime tool/prompt
+  proof и остальные пользовательские сценарии; checklist2–15/6.1 открыт.
+
 # Оставшиеся действия
 
 - [x] Сверить GitHub HEAD, рабочую ветку, сохранённые данные и фактическое
@@ -149,8 +196,9 @@ Maintenance503 устранён штатной активацией после �
       штатно возобновить контроллеры. Не применять старый render вслепую.
 - [ ] Проверить Chrome: скриншот, вёрстку/UX, Console, relevant Network,
       WebSocket и логи backend. Чужие вкладки не закрывать.
-- [ ] Штатно собрать новый native образ для evidence v5; проверить отчёт,
-      решение ADMIN/OWNER, повторный admission и promotion. Checkbox 6.1 пока открыт.
+- [ ] Для уже завершённого build `imgbld_391ktSUxZEzhsxVdJjm97i0r` проверить полный
+      evidence v5/report, решение ADMIN/OWNER при необходимости, подписанный
+      admission и promotion. Checkbox 6.1 пока открыт.
 - [ ] Через SYSTEM выполнить самонастройку, Context7/web/repository/prompt proof,
       создание проекта `Kodex | Dev` и отдельного Project Assistant.
 - [ ] Через PROJECT создать шесть ролей, окружения, grants, файлы и SOFTWARE_CHANGE;
