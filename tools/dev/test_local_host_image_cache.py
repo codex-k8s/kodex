@@ -1,10 +1,14 @@
 """Регрессии адресной очистки host images без подключения к Docker."""
 
 import copy
+import contextlib
 import importlib.util
+import io
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 
 SPEC = importlib.util.spec_from_file_location("local_host_image_cache", Path(__file__).with_name("local-host-image-cache.py"))
@@ -151,7 +155,47 @@ class Tests(unittest.TestCase):
         calls = []
         docker.run = lambda args: calls.append(args)
         docker.remove(OLD)
-        self.assertEqual(calls, [["image", "rm", OLD]])
+        self.assertEqual(calls, [["image", "rm", "--no-prune", OLD]])
+
+    def test_dependent_child_conflict_never_retries_with_force(self):
+        with patch.object(CACHE.subprocess, "run", return_value=SimpleNamespace(
+                returncode=1, stdout=b"", stderr=b"dependent child images PRIVATE_SENTINEL")) as run:
+            with self.assertRaisesRegex(CACHE.Failure, "^DOCKER_REMOVE_CONFLICT$"):
+                CACHE.Docker().remove(OLD)
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0][-4:], ["image", "rm", "--no-prune", OLD])
+
+    def test_cli_error_has_only_closed_code(self):
+        for stderr, code in ((b"conflict: must be forced PRIVATE_SENTINEL", "DOCKER_REMOVE_CONFLICT"),
+                             (b"image is referenced in multiple repositories PRIVATE_SENTINEL", "DOCKER_REMOVE_CONFLICT"),
+                             (b"image is being used by PRIVATE_SENTINEL", "DOCKER_IMAGE_IN_USE"),
+                             (b"No such image PRIVATE_SENTINEL", "DOCKER_IMAGE_NOT_FOUND"),
+                             (b"PRIVATE_SENTINEL", "DOCKER_COMMAND_FAILED")):
+            with self.subTest(code=code), patch.object(CACHE.subprocess, "run", return_value=SimpleNamespace(
+                    returncode=1, stdout=b"", stderr=stderr)):
+                with self.assertRaisesRegex(CACHE.Failure, "^" + code + "$"):
+                    CACHE.Docker().remove(OLD)
+
+    def test_timeout_distinct_from_rejected_delete(self):
+        with patch.object(CACHE.subprocess, "run", side_effect=CACHE.subprocess.TimeoutExpired("PRIVATE_SENTINEL", 30)):
+            with self.assertRaisesRegex(CACHE.Failure, "^DOCKER_TIMEOUT$"):
+                CACHE.Docker().remove(OLD)
+
+    def test_main_preserves_closed_reason_and_partial_receipt(self):
+        self.docker.remove = lambda _ref: (_ for _ in ()).throw(CACHE.Failure("DOCKER_REMOVE_CONFLICT"))
+        output = io.StringIO()
+        with patch.object(CACHE, "Images", return_value=self.images), contextlib.redirect_stdout(output):
+            self.assertEqual(CACHE.main(["prune", "--target", OLD]), 1)
+        self.assertEqual(CACHE.json.loads(output.getvalue()),
+                         {"state": "FAILED", "code": "DOCKER_REMOVE_CONFLICT", "removed": []})
+
+    def test_main_never_prints_unknown_exception_text(self):
+        self.docker.remove = lambda _ref: (_ for _ in ()).throw(CACHE.Failure("PRIVATE_SENTINEL"))
+        output = io.StringIO()
+        with patch.object(CACHE, "Images", return_value=self.images), contextlib.redirect_stdout(output):
+            self.assertEqual(CACHE.main(["prune", "--target", OLD]), 1)
+        self.assertNotIn("PRIVATE_SENTINEL", output.getvalue())
+        self.assertEqual(CACHE.json.loads(output.getvalue())["code"], "CLEANUP_ABORTED")
 
 
 if __name__ == "__main__":

@@ -2407,3 +2407,34 @@ DiskPressure=False; `/tmp` free180134 inode. Новая инвентаризац
 Incidental repo `.kube/cache` не содержит config/key по metadata names;
 созданный discovery cache пока KEEP. Собственная вкладка22 регулярно reload,
 чужие29/41/42 не изменены.
+
+05.10.2026 07:42 UTC, journal checkpointba30d6dff27cde72e15f5f05df11f1813650c53a:
+PASS — отдельный runner-policy17 Node tests104.697s в budget180s;
+первоначальный timeout60s сохранён выше как FAIL. Proto reproducible codegen
+на exact risk checkpointb34fd081 PASS, исходники не изменились.
+Ready-чек выявил integration-gateway ImagePullBackOff с05:11UTC;
+repo-owned import readback подтвердил descriptor/pin FAIL. Повторный import
+того же exact saved OCI digest767967636f6b1fbbef7af3acfb5c7d03063d6e053660d7b66bd966d3be7e59e1
+PASS на обеих нодах; исходный Pod сам перешёл Running/Ready без удаления
+Pod, rollout или смены версии. Это восстановление текущего image store,
+не проверка функциональности интеграции либо всего кластера.
+
+Перед source cutover old repo-owned owner readback обнаружил
+openBuilds0/pendingAdmissions0/activeRuntimeRuns0/claimedRuntimeLeases0,
+но pendingPromotions1. Работу не объявляли idle и переход не выполняли.
+Code inspection установил: ordinary ACCEPTED автоматически получает
+PENDING до owner request, а claim требует отдельную QUEUED/PROMOTING request.
+Новый отдельный local maintenance read path и disposable negative fixtures
+различают незапрошенный кандидат и фактическую работу; live proof ещё NOT RUN.
+Никакой кандидат не публиковался и данные не менялись ради обхода guard.
+
+PASS — новая exact npm cleanup категория удалила1534 cache files/2013dirs,
+479,354,880 allocated bytes;4917 защищённых source/log/lock entries неизменны.
+Непосредственный df gain467,599,360 bytes, не logical image size.
+Случайный `.kube/cache` (38files/71dirs) после полного process/mount readback
+перенесён same-filesystem в private recoverable quarantine, contents не читались;
+пустой repo `.kube` оставлен, исходники не затронуты.
+ROOT18 helper unit PASS0.006s для `docker image rm --no-prune` и закрытых
+conflict/timeout diagnostics. Не выбранные parents теперь не подлежат rm;
+предыдущие3 direct image IDs удалены, число автоматически затронутых parents
+исторически UNKNOWN. Оставшиеся8 Docker IDs KEEP, новых rmi не было.

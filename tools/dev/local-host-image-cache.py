@@ -21,6 +21,14 @@ DIGEST = re.compile(r"sha256:[a-f0-9]{64}")
 TAG = re.compile(r"kodex-local/image-admission-tools:[a-f0-9]{64}")
 REPOSITORY = "kodex-local/image-admission-tools"
 LIMIT = 128
+ERROR_CODES = frozenset((
+    "DOCKER_UNAVAILABLE", "DOCKER_TIMEOUT", "DOCKER_COMMAND_FAILED", "DOCKER_REMOVE_CONFLICT",
+    "DOCKER_IMAGE_IN_USE", "DOCKER_IMAGE_NOT_FOUND", "DOCKER_OUTPUT_EXCEEDED", "DOCKER_OUTPUT_INVALID",
+    "IMAGE_LIST_INVALID", "CONTAINER_LIST_INVALID", "CONTAINER_IMAGES_INVALID", "TARGET_INVALID",
+    "IMAGE_INVALID", "IMAGE_OUTSIDE_SCOPE", "CRI_IMAGES_INVALID", "POD_READBACK_FAILED", "POD_IMAGE_INVALID",
+    "PINS_UNAVAILABLE", "BUILD_PENDING", "TARGETS_INVALID", "IMAGE_PROTECTED", "IMAGE_IN_USE",
+    "PINS_CHANGED", "IMAGE_CHANGED", "AUDIT_TARGET_FORBIDDEN",
+))
 
 
 class Failure(Exception):
@@ -42,10 +50,24 @@ class Docker:
                      "DOCKER_CONFIG": "/nonexistent"}, capture_output=True,
                 timeout=30, check=False,
             )
-        except (OSError, subprocess.TimeoutExpired):
+        except subprocess.TimeoutExpired:
+            # Timeout не доказывает отсутствие эффекта: сначала authoritative readback.
+            raise Failure("DOCKER_TIMEOUT") from None
+        except OSError:
             raise Failure("DOCKER_UNAVAILABLE") from None
-        require(result.returncode == 0, "DOCKER_COMMAND_FAILED")
-        require(len(result.stdout) <= 2 << 20, "DOCKER_OUTPUT_EXCEEDED")
+        require(len(result.stdout) <= 2 << 20 and len(result.stderr) <= 1 << 20, "DOCKER_OUTPUT_EXCEEDED")
+        if result.returncode != 0:
+            code = "DOCKER_COMMAND_FAILED"
+            if arguments[:2] == ["image", "rm"]:
+                # Закрытая классификация; исходные stderr/headers/paths не выдаются.
+                if (b"must be forced" in result.stderr or b"dependent child images" in result.stderr or
+                        b"multiple repositories" in result.stderr):
+                    code = "DOCKER_REMOVE_CONFLICT"
+                elif b"being used by" in result.stderr:
+                    code = "DOCKER_IMAGE_IN_USE"
+                elif b"No such image" in result.stderr:
+                    code = "DOCKER_IMAGE_NOT_FOUND"
+            raise Failure(code)
         return result.stdout.decode("utf-8", "strict")
 
     def image_ids(self):
@@ -89,8 +111,8 @@ class Docker:
         return value
 
     def remove(self, image_id):
-        # Без force: появившийся между readback и удалением контейнер сохранит image.
-        self.run(["image", "rm", image_id])
+        # Без force; невыбранные untagged parents сохраняются даже при успешном rm.
+        self.run(["image", "rm", "--no-prune", image_id])
 
     def runtime_images(self):
         """Защищаем live Pod refs и CRI pinned manifests обоих exact local nodes."""
@@ -213,8 +235,9 @@ def main(argv=None):
         require(args.mode == "prune" or not args.target, "AUDIT_TARGET_FORBIDDEN")
         print(json.dumps(images.audit() if args.mode == "audit" else images.prune(args.target), sort_keys=True))
         return 0
-    except (Failure, UnicodeError):
-        print(json.dumps({"state": "FAILED", "code": "CLEANUP_ABORTED", "removed": images.removed}))
+    except (Failure, UnicodeError) as error:
+        code = str(error) if isinstance(error, Failure) and str(error) in ERROR_CODES else "CLEANUP_ABORTED"
+        print(json.dumps({"state": "FAILED", "code": code, "removed": images.removed}))
         return 1
 
 
