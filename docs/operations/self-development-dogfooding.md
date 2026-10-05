@@ -2346,3 +2346,16 @@ risk binding SHA6a215e12d869bc86a0d8798537b37fafcbc4b731c3d34282e7f000b608250499
 Context7 `/anchore/grype` подтвердил inline `ignoredMatches` и закрытые fix states.
 CP/worker/UI integrated build, fresh typed admission и browser acceptance
 нового решения о риске — NOT RUN. Checkbox6.1 не отмечен.
+
+05.10.2026 06:35 UTC, housekeeping checkpoint8185130a:
+PASS — дополнительный exact OCI prune удалил31 obsolete archive,
+2,541,181,952 bytes; открытые FD отсутствовали, current/restore pins неизменны.
+Обе ноды Ready=True, DiskPressure=False. Из-за параллельных записей кэша
+net df gain не равен сумме удалённых файлов.
+Новый `tools/dev/local-host-image-cache.py` ограничен только repo-owned
+host Docker tools images: exact IDs/tags/manifests, current/restore pins,
+живые Pod refs, pinned CRI обоих node и все Docker container image IDs.
+Unknown aliases, changed pins и pending build закрыто запрещают удаление;
+force/volume/global prune отсутствуют.13 адресных unit PASS.
+Live Docker prune до интеграции helper — NOT RUN; logical size слоёв
+не обозначается как реально освобождённое место.
