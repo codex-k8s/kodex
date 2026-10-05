@@ -2052,3 +2052,16 @@ Destructive Job/PVC cleanup helper удалён, пустой inventory пров
 каждого policy delete. Дополнительные8 сценариев и общий46-fixture suite PASS.
 Новая activation live, новый recipe/rebuild/admission/promote и SYSTEM publish
 пока NOT RUN; checkbox6/7 OPEN.
+
+05.10.2026 02:54 UTC, source8685d90cf5aac0c65ed8d96c5523cc49c5249f27:
+FAIL — первый supply-chain apply остановился на actual yq4.54.1 parse error
+в новом RBAC readback: object keys без кавычек. Mocked unit не проверял
+реальный синтаксис yq. Controller остался replicas0; managed workspace не
+удалялась. Forward migration JobUID6acaaae9-ea06-4956-9138-cf6b10dc5232
+завершился успешно; exact Role уже содержит PVC update. CP/controllers rollout
+и новое admission flow не объявлены PASS.
+Исправлены quoted map keys; добавлен адресный regression с настоящим yq и
+multi-document synthetic input, включая foreign namespace rejection.
+ROOT47 deployment/render fixtures PASS; actual projection свежего private
+render выбрала ровно Role/RoleBinding. Context7 /mikefarah/yq подтверждает
+create-map синтаксис с quoted keys. Повторная activation ещё NOT RUN.

@@ -402,7 +402,7 @@ readback_local_image_admission_controller_rbac() {
   expected=$(yq -o=json -I=0 '
     select((.kind == "Role" or .kind == "RoleBinding") and
       .metadata.namespace == "kodex-system" and .metadata.name == "image-admission-controller") |
-    {kind: .kind, rules: .rules, roleRef: .roleRef, subjects: .subjects}
+    {"kind": .kind, "rules": .rules, "roleRef": .roleRef, "subjects": .subjects}
   ' "$render" | jq -scS 'sort_by(.kind)')
   [[ "$(jq -r length <<<"$expected")" == 2 ]] ||
     fail 'image admission controller RBAC registry is incomplete'

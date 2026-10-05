@@ -573,6 +573,22 @@ reconcile_local_immutable_image_admission_policy
                 self.assertEqual(result.stdout.count('deleted'), deletes)
                 if error: self.assertIn(error, result.stderr)
 
+    def test_controller_rbac_projection_runs_with_actual_yq(self):
+        source = SCRIPT.read_text()
+        function = re.search(r'(?ms)^readback_local_image_admission_controller_rbac\(\) \{.*?^\}', source).group(0)
+        expression = re.search(r"yq -o=json -I=0 '([^']+)'", function).group(1)
+        metadata = {'namespace': 'kodex-system', 'name': 'image-admission-controller'}
+        resources = [{'kind': 'Role', 'metadata': metadata, 'rules': []},
+                     {'kind': 'RoleBinding', 'metadata': metadata, 'subjects': [], 'roleRef': {}},
+                     {'kind': 'Role', 'metadata': dict(metadata, namespace='foreign'), 'rules': []}]
+        result = subprocess.run(['yq', '-o=json', '-I=0', expression],
+                                input='\n---\n'.join(json.dumps(item) for item in resources),
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        projected = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual([item['kind'] for item in projected], ['Role', 'RoleBinding'])
+        self.assertTrue(all(set(item) == {'kind', 'rules', 'roleRef', 'subjects'} for item in projected))
+
     def test_exact_controller_rbac_readback_rejects_missing_update_and_extra_rights(self):
         source = SCRIPT.read_text()
         function = re.search(r'(?ms)^readback_local_image_admission_controller_rbac\(\) \{.*?^\}', source).group(0)
