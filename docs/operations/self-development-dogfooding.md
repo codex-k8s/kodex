@@ -158,6 +158,35 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 20:18 UTC — generation3 promotion, rejoin и компактный helper
+
+Source `7bf596eb3343d1776581c95cb0380909dbeab299`. Общий artifact
+`imgart_THoFlnjHuhrHifqa3o1u0IBC` generation3: owner risk exact текущего
+полного отчёта → admission attempt2 ACCEPTED → native promotion POST202
+один раз → job Succeeded → recipe version6/promotedReady=true. Inventory
+VERIFIED, 42 verified tools, required missing0. Два blocking HIGH приняты
+только для bounded локального QA; полный отчёт и технические проверки
+сохранены, production acceptance NOT RUN. ENV/bindings ещё generation2,
+следующие ходы только после native публикации новых revisions.
+
+Экраны/UX: Workflow prospective catalog/query200 и компактный preview
+modal PASS; native helper history partial page23→41/reload/rejoin PASS,
+selected old conversation сохранён вне WS snapshot25, turns2/live.
+Desktop/390 screenshots PASS. 320 Close переносился на отдельную строку:
+FAIL → e35b9922 → screenshot PASS, все controls в одной строке,
+docWidth320/viewport320. ROOT38 layout units PASS. Ни polling entities,
+ни закрытия чужих вкладок. Раннее USER название ENV диалога PASS;
+после terminal проверка ещё идёт. Unit platform ROOT0.779с PASS,
+canonical disposable PG title→terminal frozen1e12 PASS3.746с.
+
+Callback d5b925: неверная local catalog selection имеет безопасный
+recoverable CATALOG_INPUT_INVALID, owner RPC failure не маскируется;
+ROOT full callback suite PASS1.148с, live recovery NOT RUN.
+PROJECT ENV proposal run `run_mWgOCzdvduidMB2r3SXgkVU4` отправлен один раз,
+RUNNING. Ordinary6, delegation, ApprovalPolicy effects, bootstrap merge
+и full dogfooding остаются NOT RUN; открытые checkbox не отмечаются.
+
+
 06.10.2026 20:05 UTC, source `9931f8700616fde2f6424bf49e2e7e7799b937cb`.
 Callback descriptor UPDATE_ROLE_IMAGE_RECIPE использовал CREATE; закрытый
 server action registry теперь единственный источник действия. ROOT callback

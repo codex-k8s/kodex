@@ -10,6 +10,45 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 20:18 UTC, source `7bf596eb3343d1776581c95cb0380909dbeab299`.
+Common generation3 опубликован: recipe version6, active artifact
+`imgart_THoFlnjHuhrHifqa3o1u0IBC`, manifest
+`sha256:e63cf411bc29ed5df7a59eb352c35f44e72a86c0c14dc94f67b3320c5878dd05`.
+Native promotion POST202 выполнен один раз; owner GET200 promotedReady=true,
+promotion job Succeeded. Inventory VERIFIED: 42 verified, обязательных
+пропусков0; прежние selected38 ещё не означают новые ENV/binding pins.
+Полный report2938 advisories/4640 matches сохранён; два блокирующих HIGH
+имеют отдельное exact generation3 owner risk decision для локального QA.
+После него новая admission attempt2 ACCEPTED; технические проверки не
+ослаблялись. Это не production acceptance и не отсутствие уязвимостей.
+
+PROJECT helper готовит только свою ENV revision: conversation
+`cnv_F75snM12VdMicu7ZtZIy6tkE`, USER `trn_IzctIUNAit0ojqRYoT7hV5sk`,
+run `run_mWgOCzdvduidMB2r3SXgkVU4`. Send один раз, RUNNING;
+сначала прочитать результат, не повторять. Далее Validate/Apply,
+Validate/Impact/Publish и review5/write1 revisions с сохранением38tools,
+политик и Developer-only Secret. Ordinary six/delegation пока NOT RUN.
+
+Cache9931 native partial-page/rejoin PASS: owner23→41, выбранный старый
+диалог отсутствует в WS snapshot25, но после reload остаётся выбранным,
+turns2/loading=false/realtime live. Нет entity polling. Desktop/390/320
+helper screenshots PASS; 320 header сначала FAIL, source e35b9922 исправил
+перенос Close, повторный screenshot PASS без horizontal overflow.
+ROOT layout38/38 PASS. Callback d5b925 даёт recoverable CATALOG_INPUT_INVALID
+для локального неверного screen/selection, без owner authority расширения;
+callback full unit PASS1.148с, live recovery ещё NOT RUN.
+Title7bf596eb: безопасная тема USER перед техническим телом сохраняется;
+terminal ResultSummary больше не переименовывает диалог. ROOT platform
+unit PASS0.779с; canonical disposable PG на frozen1e12 PASS3.746с,
+USER title/source/revision после terminal unchanged. Native ранний title
+нового ENV хода виден, terminal readback ещё ожидается.
+Remote/PR exact520393ba подтверждён; source7bf596eb ещё не push.
+SSO absolute07.10 06:23:10UTC/10:23 Саратов, auto-renew действует отдельно.
+Chrome5 собственная,6 чужая; reload20:16UTC, следующий до20:21.
+Full65/bootstrap acceptance/merge/dogfooding OPEN.
+
+## Предыдущий checkpoint 20:05
+
 06.10.2026 20:05 UTC, source `9931f8700616fde2f6424bf49e2e7e7799b937cb`.
 PROJECT helper обновил существующий common recipe штатным sparse UPDATE:
 run `run_GUxxNxc2vlc-sUPtxGBf116x`, plan
