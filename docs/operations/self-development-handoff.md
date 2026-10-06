@@ -10,6 +10,42 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 17:36 UTC. Активированный и опубликованный checkpoint
+`23fb3236b683120311104ca4ec0ebe83bb2c17d9`, remote и DraftPR1798 exact
+readback PASS. Интегрированы PROJECT self-grants, ordinary native
+`launch_workflow`, recoverable search input, сохранение опубликованного
+окружения при CREATE_AGENT и объединённые чтения обычных grant-планов.
+Штатные scoped migrate/core apply/readback PASS; forward migrations00300
+и00400 применены, source/Pod hashes CP/controller/frontend равны.
+ROOT: combined FE169/169 + forced typecheck/scoped lint PASS; CP app/transport/
+repository, callback, gateway units PASS; Project grants PG11.93с,
+Workflow8 сценариев PG14.33с, bootstrap preservation PG4.29с PASS.
+Это локальные проверки, не завершённый FullQA.
+
+Manager19 grant-план `pln_5XzCaSew9GYp1KaNAwUpZQUK` APPLIED один раз:
+revision1/version3, квитанция `rct_k8cckiOOOFFso_9fkSUF4gk1`.
+Exact19 intent до Apply совпал. Native editor:6 GET вместо повторных
+per-operation чтений, все HTTP200, Console0; ранее мешавшие429 устранены.
+Fresh owner readback: Context7 version18/два enabled NONE для Manager,
+GitHub version34/17 enabled NONE. Lexical15 также применены ранее.
+Оставшиеся4 роли требуют fresh proposal по полному JSON и текущим pins,
+по одной роли после каждого Apply. Сотрудников и среды повторно не создавать.
+
+Текущий source дополнен `f07fc155` whole-message history: старый SQL
+обрезал USER до4000 символов; теперь целые последние20 сообщений в
+JSON-encoded бюджете512KiB. ROOT адресные owner0.071с и runner0.050с PASS;
+source-only SYSTEM/PROJECT PG7.43с PASS. Live history acceptance ещё OPEN.
+Runner для исторического USER больше64KiB требует новой compiled OCI;
+старый образ не выдавать за максимальный Unicode proof. Компактность
+wrapper grant-карточек ещё дорабатывается. PROJECT20 batch и контракт
+web_search — отдельные адресные доработки; native acceptance ещё OPEN.
+Далее: remaining grants, PROJECT self-grants, helper ENV current recovery
+через новую публикацию, hosted web overlays, protected Developer-only
+write environment, files, ordinary role actual proofs, SOFTWARE_CHANGE,
+bootstrap merge/readback и реальный внутренний dogfooding. Full65 OPEN.
+
+## Предыдущий checkpoint 17:15
+
 06.10.2026 17:15 UTC, source/remote/PR1798 `54d3e906`, Draft сохранён.
 CREATE6 уже APPLIED один раз: `pln_IYH9Nn_pxou-3opkdWdw3tBr`, квитанция
 `rct_TJXFjn2n93ao36sDl7qGOGmV`. Не повторять CREATE. Actual6refs и планы

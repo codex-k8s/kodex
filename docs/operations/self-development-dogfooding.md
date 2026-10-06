@@ -150,6 +150,38 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 17:36 UTC, активированный и опубликованный SHA
+`23fb3236b683120311104ca4ec0ebe83bb2c17d9`, DraftPR1798 readback PASS.
+ROOT combined contracts/policy92 и exact service identity registry согласованы;
+scoped local migrations00300/00400 и core apply/readback PASS, host/Pod hashes
+для CP self-grants/Workflow, controller tool и frontend Editor совпадают.
+PROJECT self-grants и ordinary launch реализованы и проверены component,
+но их native сценарии ещё NOT RUN. ROOT Project grants PG11.93с,
+Workflow8 сценариев PG14.33с PASS; bootstrap preservation PG4.29с PASS.
+Combined FE169/169, forced typecheck/scoped ESLint, CP/callback/gateway units,
+authority codegen/service policy/SQL boundary PASS. CI/full65 не подменяются
+локальными результатами.
+
+Native Manager grant-план `pln_5XzCaSew9GYp1KaNAwUpZQUK` revision1/version3
+APPLIED, квитанция `rct_k8cckiOOOFFso_9fkSUF4gk1`, один Apply.
+Все19 exact keys/recipient/NONE/enabled сверены до применения.
+После исправления shared reads editor отправил6 GET для двух connections
+вместо отдельного набора для каждой операции: HTTP200, Console0, Apply
+доступен. Fresh GET подтверждает Context7pair и GitHub17 Manager grants;
+connection versions18/34. Вместе с Lexical15 это34 из108 обязательных grants;
+remaining74 требуют fresh owner-hydrated proposal и последовательного Apply.
+Wrapper остаётся слишком высоким; следующая адресная UI волна уменьшает его.
+
+История старых USER сообщений действительно обрезалась SQL до4000 символов:
+Architect получил только первые9 из18 JSON операций. Новый source
+`f07fc155` сохраняет целые20 сообщений в512KiB JSON-encoded budget,
+исключает только целый старый префикс. ROOT owner history0.071с и runner
+history0.050с PASS; isolated SYSTEM/PROJECT resume PG7.43с PASS.
+Live next-turn acceptance и maxemoji через новую compiled runner OCI OPEN.
+Прежний canary FAIL в tmpfs worktree воспроизведён на baseline; тот же
+frozen source в disk-backed worktree canary PASS без ослабления filesystem
+guard. Новых ordinary исполнений/Workflow пока нет; Full65 OPEN.
+
 06.10.2026 17:15 UTC, рабочий source/remote/PR1798 `54d3e906`, Draft.
 Шесть сотрудников созданы own PROJECT помощником native планом
 `pln_IYH9Nn_pxou-3opkdWdw3tBr`: revision1/version3/APPLIED, квитанция
