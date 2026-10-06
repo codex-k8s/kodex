@@ -14,6 +14,7 @@ import (
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -133,6 +134,11 @@ func TestIntegrationGrantApprovalPoliciesComponent(t *testing.T) {
 				t.Fatal("active grant policy changed")
 			}
 			if policy != "NONE" {
+				execute(command.CompleteExecution, worker, policy+"-original-complete", nil, command.CompleteExecutionInput{
+					LeaseRef: stringMap(claimed[0], "leaseRef"), Fence: stringMap(claimed[0], "fence"),
+					Generation: runtimeRevisionMapInt64(claimed[0], "generation"), Success: true,
+					ResultSummary: "Waiting for the synthetic integration result", Usage: turnUsageFixture(),
+				})
 				before, err := service.ClaimIntegrationInvocations(ctx, gateway, "policy-gateway", 1)
 				if err != nil || len(before) != 0 {
 					t.Fatal("unapproved effect was claimed")
@@ -151,11 +157,68 @@ func TestIntegrationGrantApprovalPoliciesComponent(t *testing.T) {
 				t.Fatal("claim lost exact selected grant pins")
 			}
 			execute(command.CompleteIntegrationInvocation, gateway, policy+"-failure", nil, command.IntegrationInvocationInput{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: work[0]["generation"].(int64), SafeErrorCode: "INTEGRATION_REQUEST_REJECTED"})
+			if policy != "NONE" {
+				events, _, _, readErr := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: run.Ref, Limit: 500})
+				if readErr != nil {
+					t.Fatal("read integration callback", readErr)
+				}
+				found := false
+				for _, event := range events {
+					if event.Delta.Message == nil || event.Delta.Message.Source.Origin != "CALLBACK_CONTINUATION" {
+						continue
+					}
+					found = true
+					if event.Actor.Kind != "AGENT" || event.Delta.Message.Text != callbackContinuationPublicText || event.Delta.Node == nil || event.Delta.Node.InputSummary != callbackContinuationPublicText {
+						t.Fatal("integration callback exposed runtime instruction or inferred a successful effect")
+					}
+				}
+				if !found {
+					t.Fatal("integration failure continuation lost typed source")
+				}
+			}
 			freshRun, err := service.GetRun(ctx, owner, run.Ref)
 			if err != nil {
 				t.Fatal(err)
 			}
 			execute(command.CancelRun, owner, policy+"-cancel", &freshRun.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Synthetic policy fixture cleanup"})
+			if policy == "HUMAN_EACH_EFFECT" {
+				run = execute(command.LaunchRun, owner, "reject-callback-run", nil, command.LaunchRunInput{ProjectRef: project.Ref, Title: "Rejected effect", Task: "Synthetic rejected effect", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}).Run
+				claimed = execute(command.ClaimExecution, worker, "reject-callback-runtime", nil, command.LeaseInput{WorkloadInstance: "policy-runtime", Limit: 1}).RuntimeItems
+				if len(claimed) != 1 {
+					t.Fatal("rejected callback origin runtime was not claimed")
+				}
+				rejected, err := call("policy-rejected-effect", "COMMENT")
+				if err != nil {
+					t.Fatal(err)
+				}
+				execute(command.CompleteExecution, worker, "reject-original-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(claimed[0], "leaseRef"), Fence: stringMap(claimed[0], "fence"), Generation: runtimeRevisionMapInt64(claimed[0], "generation"), Success: true, ResultSummary: "Waiting for the owner decision", Usage: turnUsageFixture()})
+				gate, err := service.GetOwnerGate(ctx, owner, stringMap(rejected, "gateRef"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				execute(command.ResolveOwnerGate, owner, "reject-callback-gate", &gate.Version, command.GateResolutionInput{GateRef: gate.Ref, Decision: "REJECT"})
+				events, _, _, readErr := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: run.Ref, Limit: 500})
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				found := false
+				for _, event := range events {
+					if event.Delta.Message != nil && event.Delta.Message.Source.Origin == "CALLBACK_CONTINUATION" {
+						found = true
+						if event.Delta.Message.Text != callbackContinuationPublicText {
+							t.Fatal("rejected invocation was presented as successful or exposed runtime input")
+						}
+					}
+				}
+				if !found {
+					t.Fatal("owner rejection did not preserve callback origin")
+				}
+				freshRun, err = service.GetRun(ctx, owner, run.Ref)
+				if err != nil {
+					t.Fatal(err)
+				}
+				execute(command.CancelRun, owner, "reject-callback-cancel", &freshRun.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Synthetic rejected callback cleanup"})
+			}
 		})
 	}
 	t.Run("cancel_project_graph", func(t *testing.T) {

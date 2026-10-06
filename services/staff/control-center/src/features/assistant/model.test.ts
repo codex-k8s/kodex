@@ -182,6 +182,7 @@ describe("assistant очередь после позднего ответа пр
     state: AssistantTurn["state"],
     runRef: string,
   ): AssistantTurn => ({
+    source: { origin: "ORDINARY" as const },
     ref: `trn_${String(sequence)}`,
     sequence,
     role,

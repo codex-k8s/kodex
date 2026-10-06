@@ -101,6 +101,7 @@ function conversation(value: AssistantPlan = plan()): AssistantConversation {
     projectRef: "prj_sales",
     turns: [
       {
+        source: { origin: "ORDINARY" as const },
         ref: "trn_sales",
         sequence: 1,
         role: "ASSISTANT",
@@ -116,6 +117,7 @@ function conversation(value: AssistantPlan = plan()): AssistantConversation {
 
 function userTurn(state: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED") {
   return {
+    source: { origin: "ORDINARY" as const },
     ref: "trn_user",
     sequence: 2,
     role: "USER" as const,
@@ -1113,6 +1115,7 @@ describe("assistant workspace store", () => {
       turns: [
         userTurn("COMPLETED"),
         {
+          source: { origin: "ORDINARY" as const },
           ref: "trn_result",
           sequence: 3,
           role: "ASSISTANT" as const,

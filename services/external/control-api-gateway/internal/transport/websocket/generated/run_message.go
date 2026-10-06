@@ -7,4 +7,5 @@ type RunMessage struct {
 	Phase    RunMessagePhase `json:"phase"`
 	Revision int64           `json:"revision"`
 	Text     string          `json:"text"`
+	Source   MessageSource   `json:"source"`
 }

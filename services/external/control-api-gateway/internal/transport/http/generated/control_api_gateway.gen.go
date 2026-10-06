@@ -3424,6 +3424,24 @@ func (e MembershipPlatformRole) Valid() bool {
 	}
 }
 
+// Defines values for MessageSourceOrigin.
+const (
+	CALLBACKCONTINUATION MessageSourceOrigin = "CALLBACK_CONTINUATION"
+	ORDINARY             MessageSourceOrigin = "ORDINARY"
+)
+
+// Valid indicates whether the value is a known member of the MessageSourceOrigin enum.
+func (e MessageSourceOrigin) Valid() bool {
+	switch e {
+	case CALLBACKCONTINUATION:
+		return true
+	case ORDINARY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NextAction.
 const (
 	NextActionADDTURN                NextAction = "ADD_TURN"
@@ -10269,6 +10287,7 @@ type AssistantTurn struct {
 	RunRef           *OpaqueRef         `json:"runRef,omitempty"`
 	RunVersion       *int64             `json:"runVersion,omitempty"`
 	Sequence         int64              `json:"sequence"`
+	Source           MessageSource      `json:"source"`
 	State            AssistantTurnState `json:"state"`
 }
 
@@ -11965,6 +11984,14 @@ type MemoryRecordSpecification struct {
 	Title          string     `json:"title"`
 }
 
+// MessageSource defines model for MessageSource.
+type MessageSource struct {
+	Origin MessageSourceOrigin `json:"origin"`
+}
+
+// MessageSourceOrigin defines model for MessageSource.Origin.
+type MessageSourceOrigin string
+
 // ModelCapability defines model for ModelCapability.
 type ModelCapability struct {
 	Available                   bool        `json:"available"`
@@ -13549,6 +13576,7 @@ type RunMessage struct {
 	Phase    RunMessagePhase `json:"phase"`
 	Ref      OpaqueRef       `json:"ref"`
 	Revision int64           `json:"revision"`
+	Source   MessageSource   `json:"source"`
 	Text     string          `json:"text"`
 }
 

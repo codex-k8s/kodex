@@ -1129,15 +1129,25 @@ components:
         turnRef: { $ref: "#/components/schemas/OpaqueRef" }
         turnNumber: { type: integer, format: int64, minimum: 1 }
         attempt: { type: integer, format: int32, minimum: 1 }
+    MessageOrigin:
+      type: string
+      enum: [ORDINARY, CALLBACK_CONTINUATION]
+    MessageSource:
+      type: object
+      additionalProperties: false
+      required: [origin]
+      properties:
+        origin: { $ref: "#/components/schemas/MessageOrigin" }
     RunMessage:
       type: object
       additionalProperties: false
-      required: [ref, phase, revision, text]
+      required: [ref, phase, revision, text, source]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         phase: { $ref: "#/components/schemas/RunMessagePhase" }
         revision: { type: integer, format: int64, minimum: 1 }
         text: { type: string, minLength: 1, maxLength: 100000 }
+        source: { $ref: "#/components/schemas/MessageSource" }
     RunMessagePhase:
       type: string
       enum: [USER, COMMENTARY, FINAL]

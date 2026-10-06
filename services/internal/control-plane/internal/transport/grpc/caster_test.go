@@ -11,6 +11,19 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+func TestMessageSourceCasterPreservesClosedOrigins(t *testing.T) {
+	for origin, want := range map[string]controlplanev1.MessageOrigin{
+		"ORDINARY":              controlplanev1.MessageOrigin_MESSAGE_ORIGIN_ORDINARY,
+		"CALLBACK_CONTINUATION": controlplanev1.MessageOrigin_MESSAGE_ORIGIN_CALLBACK_CONTINUATION,
+		"":                      controlplanev1.MessageOrigin_MESSAGE_ORIGIN_UNSPECIFIED,
+		"UNKNOWN":               controlplanev1.MessageOrigin_MESSAGE_ORIGIN_UNSPECIFIED,
+	} {
+		if got := castMessageSource(entity.MessageSource{Origin: origin}).GetOrigin(); got != want {
+			t.Fatalf("message origin = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestCatalogCardsPreserveAbsentActivityAndOwnerProjection(t *testing.T) {
 	t.Parallel()
 	empty := castProject(entity.Project{IntegrationState: "NONE"})
@@ -318,10 +331,10 @@ func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
 	conversation := castConversation(entity.AssistantConversation{
 		Ref: "cnv-example", ProjectRef: "prj-example",
 		Turns: []entity.AssistantTurn{
-			{Ref: "trn-user-1", Sequence: 6, Actor: "USER", Content: "Первый запрос", State: "COMPLETED", CreatedAt: firstPlanAt.Add(-time.Second)},
-			{Ref: "trn-assistant-1", Sequence: 7, Actor: "SYSTEM_ASSISTANT", Content: "Первый план подготовлен", State: "COMPLETED", CreatedAt: firstAnswerAt},
-			{Ref: "trn-user-2", Sequence: 8, Actor: "USER", Content: "Переработай", State: "COMPLETED", CreatedAt: secondPlanAt.Add(-time.Second)},
-			{Ref: "trn-assistant-2", Sequence: 9, Actor: "SYSTEM_ASSISTANT", Content: "Второй план подготовлен", State: "COMPLETED", CreatedAt: secondAnswerAt},
+			{Ref: "trn-user-1", Sequence: 6, Actor: "USER", Content: "Первый запрос", State: "COMPLETED", CreatedAt: firstPlanAt.Add(-time.Second), Source: entity.MessageSource{Origin: "ORDINARY"}},
+			{Ref: "trn-assistant-1", Sequence: 7, Actor: "SYSTEM_ASSISTANT", Content: "Первый план подготовлен", State: "COMPLETED", CreatedAt: firstAnswerAt, Source: entity.MessageSource{Origin: "ORDINARY"}},
+			{Ref: "trn-user-2", Sequence: 8, Actor: "USER", Content: "Переработай", State: "COMPLETED", CreatedAt: secondPlanAt.Add(-time.Second), Source: entity.MessageSource{Origin: "ORDINARY"}},
+			{Ref: "trn-assistant-2", Sequence: 9, Actor: "SYSTEM_ASSISTANT", Content: "Второй план подготовлен", State: "COMPLETED", CreatedAt: secondAnswerAt, Source: entity.MessageSource{Origin: "ORDINARY"}},
 		},
 		Plans: []entity.AssistantPlan{
 			{Ref: "pln-example-1", ConversationRef: "cnv-example", ProjectRef: "prj-example",

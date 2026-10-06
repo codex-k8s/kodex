@@ -130,6 +130,7 @@ import { requestConfirmation } from "@/shared/ui/confirmation";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { runPath } from "@/shared/routes";
 
@@ -166,6 +167,7 @@ function operationTargetKindLabel(kind: string): string {
 }
 
 const { t } = useI18n();
+const serverMessage = useServerMessage();
 const route = useRoute();
 const router = useRouter();
 const assistantFormActive = computed(() => route.query.assistantForm === "1");
@@ -214,6 +216,8 @@ function turnHasPublishedMessage(turn: AssistantTurn): boolean {
   );
 }
 function transcriptTurnContent(turn: AssistantTurn): string {
+  if (turn.source.origin === "CALLBACK_CONTINUATION")
+    return serverMessage("i18n:CALLBACK_CONTINUATION_PUBLIC");
   const failureKey =
     turn.role === "ASSISTANT"
       ? assistantFailureMessageKey(turn.content, turn.state)

@@ -19,6 +19,23 @@ import (
 //go:embed sql/runtime_activity__execution.sql
 var queryRuntimeActivityExecution string
 
+//go:embed sql/runtime_message__source.sql
+var queryRuntimeMessageSource string
+
+const callbackContinuationPublicText = "i18n:CALLBACK_CONTINUATION_PUBLIC"
+
+// Источник выводится из сохранённого turn и canonical callback lineage.
+// Текст сообщения, actor из запроса и локаль не участвуют в классификации.
+func readRuntimeMessageSource(ctx context.Context, tx pgx.Tx, organizationID, runRef, turnRef, nodeRef string) (entity.MessageSource, error) {
+	var source entity.MessageSource
+	if err := tx.QueryRow(ctx, queryRuntimeMessageSource, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "run_ref": runRef, "turn_ref": turnRef, "node_ref": nodeRef,
+	}).Scan(&source.Origin); err != nil || (source.Origin != "ORDINARY" && source.Origin != "CALLBACK_CONTINUATION") {
+		return entity.MessageSource{}, errs.ErrUnavailable
+	}
+	return source, nil
+}
+
 //go:embed sql/runtime_activity__lock_root.sql
 var queryRuntimeActivityLockRoot string
 
@@ -100,6 +117,7 @@ func attachToolCallActivity(ctx context.Context, tx pgx.Tx, current scope, event
 type runtimeActivityTurnInput struct {
 	Content string
 	Actor   entity.RunEventActor
+	Source  entity.MessageSource
 }
 
 func readRuntimeActivityExecution(ctx context.Context, tx pgx.Tx, organizationID, rootRunID, nodeRef string) (*entity.RunEventExecution, runtimeActivityTurnInput, error) {
@@ -111,6 +129,13 @@ func readRuntimeActivityExecution(ctx context.Context, tx pgx.Tx, organizationID
 		&input.Content, &input.Actor.Kind, &input.Actor.Ref, &input.Actor.Name)
 	if err != nil || execution.TurnNumber < 1 || execution.Attempt < 1 {
 		return nil, runtimeActivityTurnInput{}, errs.ErrUnavailable
+	}
+	input.Source, err = readRuntimeMessageSource(ctx, tx, organizationID, execution.RunRef, execution.TurnRef, execution.NodeRef)
+	if err != nil {
+		return nil, runtimeActivityTurnInput{}, err
+	}
+	if input.Source.Origin == "CALLBACK_CONTINUATION" {
+		input.Content = callbackContinuationPublicText
 	}
 	return &execution, input, nil
 }

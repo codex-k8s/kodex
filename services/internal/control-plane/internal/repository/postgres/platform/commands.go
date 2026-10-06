@@ -1990,6 +1990,9 @@ func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pg
 			return entity.RunEvent{}, bindingErr
 		}
 		delta.Execution = execution
+		if turnInput.Source.Origin == "CALLBACK_CONTINUATION" {
+			delta.Node.InputSummary = callbackContinuationPublicText
+		}
 		if delta.Node.Type == "AGENT_EXECUTION" && (eventType == "TURN_QUEUED" || eventType == "TURN_STARTED" || eventType == "RUN_CREATED" || eventType == "DELEGATION_CREATED") {
 			// Полный пользовательский текст хранится в authoritative turn, а не
 			// восстанавливается из усечённой подписи узла.
@@ -2000,7 +2003,7 @@ func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pg
 				"turn_ref": execution.TurnRef, "attempt": execution.Attempt, "activity_kind": "MESSAGE", "activity_ref": execution.TurnRef,
 			}).Scan(&existingSequence, &existingDelta, &existingTool)
 			if errors.Is(existingErr, pgx.ErrNoRows) {
-				delta.Message = &entity.RunMessage{Ref: execution.TurnRef, Phase: "USER", Revision: 1, Text: turnInput.Content}
+				delta.Message = &entity.RunMessage{Ref: execution.TurnRef, Phase: "USER", Revision: 1, Text: turnInput.Content, Source: turnInput.Source}
 				inputActor = &turnInput.Actor
 			} else if existingErr != nil {
 				return entity.RunEvent{}, errs.ErrUnavailable
@@ -2008,6 +2011,8 @@ func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pg
 		}
 	}
 	if message != nil {
+		// Provider не может назначить служебное происхождение сообщения.
+		message.Source = entity.MessageSource{Origin: "ORDINARY"}
 		if delta.Execution == nil || !validPublishedMessage(message) {
 			return entity.RunEvent{}, errs.ErrInvalid
 		}

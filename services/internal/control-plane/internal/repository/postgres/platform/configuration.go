@@ -1205,7 +1205,7 @@ func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.C
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "i18n:ASSISTANT_TURN_QUEUED", "RUNNING", "QUEUED"); err != nil {
 		return commandOutcome{}, err
 	}
-	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "QUEUED", RunRef: runRef, RunVersion: 1, CreatedAt: time.Now().UTC()}}
+	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "QUEUED", RunRef: runRef, RunVersion: 1, CreatedAt: time.Now().UTC(), Source: entity.MessageSource{Origin: "ORDINARY"}}}
 	result := command.Result{Conversation: &conversation}
 	if identity.Scope == "SYSTEM" {
 		assistant, err := repository.getAssistantTx(ctx, tx, scope)

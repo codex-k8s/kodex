@@ -67,7 +67,7 @@ func assistantSizeConversations(count int, content string) []*cp.AssistantConver
 		values[i] = &cp.AssistantConversation{Ref: fmt.Sprintf("cnv_fixture_%02d", i), Version: 7, ProjectRef: "prj_fixture01",
 			State: cp.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE, AssistantScope: cp.AssistantScope_ASSISTANT_SCOPE_PROJECT,
 			AssistantRef: "agt_fixture01", AssistantProfileRef: "aprf_fixture01",
-			Turns: []*cp.AssistantTurn{{Ref: "trn_fixture01", Sequence: 1, Role: "USER", Content: content, State: "COMPLETED", AttachmentSetRef: "att_fixture01"}}}
+			Turns: []*cp.AssistantTurn{{Ref: "trn_fixture01", Sequence: 1, Role: "USER", Content: content, State: "COMPLETED", AttachmentSetRef: "att_fixture01", Source: &cp.MessageSource{Origin: cp.MessageOrigin_MESSAGE_ORIGIN_ORDINARY}}}}
 	}
 	return values
 }

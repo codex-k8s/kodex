@@ -331,6 +331,11 @@ var errPublicAvatarShape = errors.New("public agent avatar response is invalid")
 var errPublicRuntimeEnvironmentShape = errors.New("public runtime environment response is invalid")
 
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) (normalizationErr error) {
+	if descriptor.FullName() == "controlplane.v1.RunMessage" || descriptor.FullName() == "controlplane.v1.AssistantTurn" {
+		if source, ok := value["source"].(map[string]any); !ok || source["origin"] == nil {
+			return errors.New("public message source is missing")
+		}
+	}
 	defer func() {
 		if normalizationErr != nil && descriptor.FullName() == "controlplane.v1.OwnerGate" {
 			normalizationErr = errOwnerGateShape
@@ -429,6 +434,22 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 			return err
 		}
 		value[field.JSONName()] = normalized
+	}
+	if descriptor.FullName() == "controlplane.v1.RunEvent" {
+		if message, ok := value["message"].(map[string]any); ok {
+			if source, ok := message["source"].(map[string]any); ok && source["origin"] == "CALLBACK_CONTINUATION" {
+				actor, actorOK := value["actor"].(map[string]any)
+				execution, executionOK := value["execution"].(map[string]any)
+				if !actorOK || actor["kind"] != "RUN_EVENT_ACTOR_KIND_AGENT" || !executionOK || execution["turnRef"] != message["ref"] || message["phase"] != "RUN_MESSAGE_PHASE_USER" {
+					return errors.New("public callback message binding is invalid")
+				}
+			}
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.AssistantTurn" {
+		if source := value["source"].(map[string]any); source["origin"] == "CALLBACK_CONTINUATION" && value["role"] != "SYSTEM_RECEIPT" {
+			return errors.New("public callback turn role is invalid")
+		}
 	}
 	if descriptor.FullName() == "controlplane.v1.WorkflowVersion" {
 		for _, key := range []string{"version", "revision"} {
@@ -652,6 +673,16 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 	switch field.Kind() {
 	case protoreflect.EnumKind:
+		if field.Enum().FullName() == "controlplane.v1.MessageOrigin" {
+			switch value {
+			case "MESSAGE_ORIGIN_ORDINARY":
+				return "ORDINARY", nil
+			case "MESSAGE_ORIGIN_CALLBACK_CONTINUATION":
+				return "CALLBACK_CONTINUATION", nil
+			default:
+				return nil, errors.New("public message origin is invalid")
+			}
+		}
 		if normalized, owned, err := normalizeRunSessionReadinessEnum(value, field); owned {
 			return normalized, err
 		}

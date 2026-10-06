@@ -27,7 +27,7 @@ func TestAssistantTurnResponsePreservesScopeAndOptionalSystemAssistant(t *testin
 			conversation := entity.AssistantConversation{
 				Ref: "cnv_fixture", Version: 3, Title: "Проверка ответа", State: "ACTIVE",
 				AssistantScope: test.scope, AssistantRef: "agt_fixture", ProjectRef: test.project, AssistantProfileRef: test.profile,
-				Turns: []entity.AssistantTurn{{Ref: "trn_fixture", Sequence: 1, Actor: "USER", Content: "Проверка", State: "QUEUED", RunRef: "run_fixture", RunVersion: 1}},
+				Turns: []entity.AssistantTurn{{Ref: "trn_fixture", Sequence: 1, Actor: "USER", Content: "Проверка", State: "QUEUED", RunRef: "run_fixture", RunVersion: 1, Source: entity.MessageSource{Origin: "ORDINARY"}}},
 			}
 			response := castAssistantTurnResult(command.Result{Conversation: &conversation, Assistant: test.assistant})
 			if !proto.Equal(response.GetConversation(), castConversation(conversation)) {

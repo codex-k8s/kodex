@@ -1490,6 +1490,19 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
 	edgeRows.Close()
+	for index := range graph.Nodes {
+		node := &graph.Nodes[index]
+		if node.Type != "AGENT_EXECUTION" || node.TurnRef == "" || (node.ParentNodeRef == "" && node.Attempt <= 1) {
+			continue
+		}
+		source, err := readRuntimeMessageSource(ctx, tx, scope.organizationID, node.RunRef, node.TurnRef, node.Ref)
+		if err != nil {
+			return entity.Run{}, entity.RunGraph{}, err
+		}
+		if source.Origin == "CALLBACK_CONTINUATION" {
+			node.InputSummary = callbackContinuationPublicText
+		}
+	}
 	if err := projectArtifactResults(ctx, tx, scope, &command.Result{Graph: &graph}); err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
@@ -1576,6 +1589,31 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		return nil, 0, false, err
 	}
 	for index := range result {
+		if node := result[index].Delta.Node; node != nil && node.Type == "AGENT_EXECUTION" && node.TurnRef != "" && (node.ParentNodeRef != "" || node.Attempt > 1) {
+			source, err := readRuntimeMessageSource(ctx, tx, scope.organizationID, node.RunRef, node.TurnRef, node.Ref)
+			if err != nil {
+				return nil, 0, false, err
+			}
+			if source.Origin == "CALLBACK_CONTINUATION" {
+				node.InputSummary = callbackContinuationPublicText
+			}
+		}
+		if message := result[index].Delta.Message; message != nil {
+			message.Source = entity.MessageSource{Origin: "ORDINARY"}
+			if message.Phase == "USER" {
+				execution := result[index].Delta.Execution
+				if execution == nil || message.Ref != execution.TurnRef {
+					return nil, 0, false, errs.ErrUnavailable
+				}
+				message.Source, err = readRuntimeMessageSource(ctx, tx, scope.organizationID, execution.RunRef, execution.TurnRef, execution.NodeRef)
+				if err != nil {
+					return nil, 0, false, err
+				}
+				if message.Source.Origin == "CALLBACK_CONTINUATION" {
+					message.Text = callbackContinuationPublicText
+				}
+			}
+		}
 		if err := repository.projectGateIntent(ctx, tx, scope, result[index].Delta.Gate, true); err != nil {
 			return nil, 0, false, err
 		}
@@ -2330,6 +2368,20 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		return errs.ErrUnavailable
 	}
 	rows.Close()
+	for index := range item.Turns {
+		turn := &item.Turns[index]
+		turn.Source = entity.MessageSource{Origin: "ORDINARY"}
+		if turn.Actor != "AGENT" || turn.RunRef == "" {
+			continue
+		}
+		turn.Source, err = readRuntimeMessageSource(ctx, tx, scope.organizationID, turn.RunRef, turn.Ref, "")
+		if err != nil {
+			return err
+		}
+		if turn.Source.Origin == "CALLBACK_CONTINUATION" {
+			turn.Content = callbackContinuationPublicText
+		}
+	}
 	planRows, err := tx.Query(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref)
 	if err != nil {
 		return errs.ErrUnavailable

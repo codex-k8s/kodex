@@ -120,6 +120,7 @@ export class AssistantRetryNetwork {
         },
         turns: [
           {
+            source: { origin: "ORDINARY" as const },
             ref: `turn_retry_${String(index)}`,
             sequence: 1,
             role: "USER",
@@ -508,6 +509,7 @@ export class AssistantRetryNetwork {
         const retried = this.workspace(retriedRunRef, "QUEUED", 2);
         this.runs.set(retriedRunRef, retried);
         value.turns.push({
+          source: { origin: "ORDINARY" as const },
           ref: "turn_retry_attempt_2",
           sequence: value.turns.length + 1,
           role: "USER",

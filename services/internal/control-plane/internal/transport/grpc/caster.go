@@ -537,7 +537,7 @@ func castEvent(value entity.RunEvent) *controlplanev1.RunEvent {
 			TurnRef: execution.TurnRef, TurnNumber: execution.TurnNumber, Attempt: execution.Attempt}
 	}
 	if message := value.Delta.Message; message != nil {
-		event.Message = &controlplanev1.RunMessage{Ref: message.Ref, Phase: controlplanev1.RunMessagePhase(controlplanev1.RunMessagePhase_value["RUN_MESSAGE_PHASE_"+message.Phase]), Revision: message.Revision, Text: message.Text}
+		event.Message = &controlplanev1.RunMessage{Ref: message.Ref, Phase: controlplanev1.RunMessagePhase(controlplanev1.RunMessagePhase_value["RUN_MESSAGE_PHASE_"+message.Phase]), Revision: message.Revision, Text: message.Text, Source: castMessageSource(message.Source)}
 	}
 	if value.Delta.Node != nil {
 		event.Node = castNode(*value.Delta.Node)
@@ -760,10 +760,10 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 	}
 	nextPlan := 0
 	appendPlan := func(plan *entity.AssistantPlan, sequence int64) {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: plan.Ref, Sequence: sequence, Role: "ASSISTANT", Content: plan.Summary, State: "COMPLETED", Plan: castPlan(plan), CreatedAt: timestamp(plan.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: plan.Ref, Sequence: sequence, Role: "ASSISTANT", Content: plan.Summary, State: "COMPLETED", Plan: castPlan(plan), CreatedAt: timestamp(plan.CreatedAt), Source: castMessageSource(entity.MessageSource{Origin: "ORDINARY"})})
 	}
 	for _, turn := range value.Turns {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, RunRef: turn.RunRef, RunVersion: turn.RunVersion, CreatedAt: timestamp(turn.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, RunRef: turn.RunRef, RunVersion: turn.RunVersion, CreatedAt: timestamp(turn.CreatedAt), Source: castMessageSource(turn.Source)})
 		if turn.Sequence >= nextSequence {
 			nextSequence = turn.Sequence + 1
 		}
@@ -784,6 +784,10 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		nextPlan++
 	}
 	return result
+}
+
+func castMessageSource(source entity.MessageSource) *controlplanev1.MessageSource {
+	return &controlplanev1.MessageSource{Origin: controlplanev1.MessageOrigin(controlplanev1.MessageOrigin_value["MESSAGE_ORIGIN_"+source.Origin])}
 }
 
 func publicAssistantTurnRole(role string) string {

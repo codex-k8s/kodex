@@ -3238,11 +3238,16 @@ export type RunEventExecution = {
     attempt: number;
 };
 
+export type MessageSource = {
+    origin: 'ORDINARY' | 'CALLBACK_CONTINUATION';
+};
+
 export type RunMessage = {
     ref: OpaqueRef;
     phase: 'USER' | 'COMMENTARY' | 'FINAL';
     revision: number;
     text: string;
+    source: MessageSource;
 };
 
 export type RunEventActor = {
@@ -4429,6 +4434,7 @@ export type AssistantTurn = {
     ref: OpaqueRef;
     sequence: number;
     role: 'USER' | 'ASSISTANT' | 'SYSTEM_RECEIPT';
+    source: MessageSource;
     content: string;
     state: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
     runRef?: OpaqueRef;

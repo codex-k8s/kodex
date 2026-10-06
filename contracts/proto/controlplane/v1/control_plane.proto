@@ -1217,12 +1217,24 @@ message RunEventExecution {
   int32 attempt = 6;
 }
 
+// Происхождение назначает владелец по persisted turn и canonical lineage.
+enum MessageOrigin {
+  MESSAGE_ORIGIN_UNSPECIFIED = 0;
+  MESSAGE_ORIGIN_ORDINARY = 1;
+  MESSAGE_ORIGIN_CALLBACK_CONTINUATION = 2;
+}
+
+message MessageSource {
+  MessageOrigin origin = 1;
+}
+
 message RunMessage {
   string ref = 1;
   RunMessagePhase phase = 2;
   int64 revision = 3;
   // Только опубликованное сообщение, не reasoning; UTF-8, максимум 64 KiB.
   string text = 4;
+  MessageSource source = 5;
 }
 
 message RunEventActor {
@@ -1708,6 +1720,7 @@ message AssistantTurn {
   string attachment_set_ref = 8;
   string run_ref = 9;
   int64 run_version = 10;
+  MessageSource source = 11;
 }
 
 enum AssistantTurnDeliveryMode {

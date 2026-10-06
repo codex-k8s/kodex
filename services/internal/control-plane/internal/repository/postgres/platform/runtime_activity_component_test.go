@@ -68,11 +68,14 @@ func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 		t.Fatal("execution missing")
 	}
 	lease := command.LeaseInput{LeaseRef: stringMap(claims[0], "leaseRef"), Fence: stringMap(claims[0], "fence"), Generation: runtimeRevisionMapInt64(claims[0], "generation")}
-	message := entity.RunMessage{Ref: "msg_activity_commentary", Phase: "COMMENTARY", Revision: 1, Text: "Проверяю текущую задачу.\n" + strings.Repeat("Длинный опубликованный текст. ", 200)}
+	message := entity.RunMessage{Ref: "msg_activity_commentary", Phase: "COMMENTARY", Revision: 1, Text: "Проверяю текущую задачу.\n" + strings.Repeat("Длинный опубликованный текст. ", 200), Source: entity.MessageSource{Origin: "CALLBACK_CONTINUATION"}}
 	lease.Message = &message
 	first := execute(command.ReportExecutionProgress, progress, "message", nil, lease).Event
 	if first.Delta.Execution == nil || first.Delta.Execution.SessionRef == "" || first.Delta.Execution.TurnNumber != 1 || first.Delta.Execution.Attempt != 1 || first.Delta.Message == nil || first.Delta.Message.Text != message.Text {
 		t.Fatal("published message lost exact pins or text")
+	}
+	if first.Delta.Message.Source.Origin != "ORDINARY" {
+		t.Fatal("provider supplied source changed public message origin")
 	}
 	replay := execute(command.ReportExecutionProgress, progress, "message-replay", nil, lease).Event
 	if replay.Ref != first.Ref || replay.Sequence != first.Sequence {
@@ -101,6 +104,9 @@ func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 	var inputFound, messageFound, closed bool
 	for _, event := range events {
 		if event.Delta.Message != nil {
+			if event.Delta.Message.Source.Origin != "ORDINARY" {
+				t.Fatal("ordinary owner or provider message was classified as callback")
+			}
 			inputFound = inputFound || event.Delta.Message.Phase == "USER" && event.Delta.Message.Text == "Owner input must remain visible."
 			messageFound = messageFound || event.Ref == first.Ref && event.Delta.Message.Text == first.Delta.Message.Text
 		}

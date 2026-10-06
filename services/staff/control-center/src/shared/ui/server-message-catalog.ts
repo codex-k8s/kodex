@@ -460,6 +460,10 @@ export const serverTokenTranslations = {
     "Продолжение по результату поставлено в очередь",
     "Result callback continuation queued",
   ],
+  CALLBACK_CONTINUATION_PUBLIC: [
+    "Продолжаю работу после решения или результата действия",
+    "Continuing after the decision or action result",
+  ],
   CHILD_AGENT_RESULT_DELIVERED: [
     "Результат дочернего сотрудника доставлен",
     "Child employee result delivered",
@@ -527,6 +531,11 @@ export const serverTokenTranslations = {
     "Действие интеграции завершено",
     "Integration action completed",
   ],
+  INTEGRATION_ACTION_STARTED: [
+    "Действие интеграции началось",
+    "Integration action started",
+  ],
+  PROTECTED_INPUT: ["Защищённые входные данные", "Protected input"],
   INTEGRATION_ACTION_SUCCEEDED: [
     "Действие интеграции выполнено успешно",
     "Integration action succeeded",

@@ -701,6 +701,7 @@ describe("компактное представление exact хода", () =>
         type: "TURN_QUEUED",
         messageKind: "USER_MESSAGE",
         message: {
+          source: { origin: "ORDINARY" as const },
           ref: "msg_user",
           phase: "USER",
           revision: 1,
@@ -852,6 +853,7 @@ const events: PresentedRunEvent[] = [
       attempt: 1,
     },
     message: {
+      source: { origin: "ORDINARY" as const },
       ref: "msg_commentary",
       phase: "COMMENTARY",
       revision: 1,
@@ -887,6 +889,7 @@ function required<T>(value: T | undefined): T {
 
 describe("terminal receipt раньше terminal RunEvent", () => {
   const user: AssistantTurn = {
+    source: { origin: "ORDINARY" as const },
     ref: "trn_example",
     sequence: 1,
     role: "USER",
@@ -1307,6 +1310,7 @@ describe("terminal receipt раньше terminal RunEvent", () => {
           {
             ...progress,
             message: {
+              source: { origin: "ORDINARY" as const },
               ref: "msg_user",
               phase: "USER",
               revision: 1,
@@ -1322,6 +1326,7 @@ describe("terminal receipt раньше terminal RunEvent", () => {
           {
             ...progress,
             message: {
+              source: { origin: "ORDINARY" as const },
               ref: "msg_comment",
               phase: "COMMENTARY",
               revision: 1,
@@ -1357,6 +1362,7 @@ describe("terminal receipt раньше terminal RunEvent", () => {
           {
             ...progress,
             message: {
+              source: { origin: "ORDINARY" as const },
               ref: "msg_final",
               phase: "FINAL",
               revision: 1,
@@ -1505,6 +1511,7 @@ describe("terminal receipt раньше terminal RunEvent", () => {
 describe("working fallback после tool", () => {
   it("между завершённым tool и следующим вызовом оставляет только нижний fallback", () => {
     const user: AssistantTurn = {
+      source: { origin: "ORDINARY" as const },
       ref: "trn_example",
       sequence: 1,
       role: "USER",
@@ -1587,6 +1594,7 @@ describe("working fallback после tool", () => {
 
 describe("assistantTurnHasAuthoritativeActivity", () => {
   const user: AssistantTurn = {
+    source: { origin: "ORDINARY" as const },
     ref: "trn_example",
     sequence: 1,
     role: "USER",
@@ -1720,6 +1728,7 @@ describe("assistantTurnHasAuthoritativeActivity", () => {
   });
   it("скрывает USER/FINAL fallback только по точному опубликованному сообщению", () => {
     const message = {
+      source: { origin: "ORDINARY" as const },
       ref: "msg_exact",
       phase: "USER" as const,
       revision: 1,
@@ -1886,6 +1895,7 @@ describe("buildRunActivityItems", () => {
         {
           ...completion,
           message: {
+            source: { origin: "ORDINARY" as const },
             ref: "msg_fixture123",
             phase: "COMMENTARY",
             revision: 1,
@@ -1940,6 +1950,7 @@ describe("buildRunActivityItems", () => {
     const user = {
       ...base,
       message: {
+        source: { origin: "ORDINARY" as const },
         ref: "msg_user_long",
         phase: "USER" as const,
         revision: 1,
@@ -1981,6 +1992,7 @@ describe("buildRunActivityItems", () => {
         ...base,
         summary: "Не использовать fallback",
         message: {
+          source: { origin: "ORDINARY" as const },
           ref: "msg_oversized",
           phase,
           revision: 1,
@@ -2108,6 +2120,7 @@ describe("buildRunActivityItems", () => {
         sequence: 1,
         execution: { ...required(base.execution), turnNumber: 2 },
         message: {
+          source: { origin: "ORDINARY" as const },
           ref: "msg_final",
           revision: 1,
           phase: "FINAL",
@@ -2120,6 +2133,7 @@ describe("buildRunActivityItems", () => {
         sequence: 90,
         summary: "Короткий summary",
         message: {
+          source: { origin: "ORDINARY" as const },
           ref: "msg_progress",
           revision: 1,
           phase: "COMMENTARY",
@@ -2154,6 +2168,7 @@ describe("buildRunActivityItems", () => {
       {
         ...base,
         message: {
+          source: { origin: "ORDINARY" as const },
           ref: "msg_final",
           phase: "FINAL",
           revision: 1,

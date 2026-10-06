@@ -50,8 +50,12 @@ export function buildAssistantChatTimeline(
       left.sequence - right.sequence || left.ref.localeCompare(right.ref),
   );
   for (const anchor of turns) {
-    if (anchor.role !== "USER" || !anchor.runRef) continue;
+    const callback =
+      anchor.role === "SYSTEM_RECEIPT" &&
+      anchor.source.origin === "CALLBACK_CONTINUATION";
+    if ((!callback && anchor.role !== "USER") || !anchor.runRef) continue;
     if (
+      !callback &&
       turns.filter(
         (turn) => turn.role === "USER" && turn.runRef === anchor.runRef,
       ).length !== 1
@@ -94,7 +98,7 @@ export function buildAssistantChatTimeline(
         execution.sessionRef === run.sessionRef &&
         execution.turnRef === anchor.ref &&
         execution.turnNumber === anchor.sequence &&
-        execution.attempt === run.attempt &&
+        (callback || execution.attempt === run.attempt) &&
         graph.nodes.some(
           (node) =>
             node.ref === execution.nodeRef &&
@@ -113,9 +117,16 @@ export function buildAssistantChatTimeline(
   }
   const result: AssistantChatTimelineEntry[] = [];
   for (const turn of turns) {
-    if (visible.has(turn.ref))
-      result.push({ kind: "TURN", id: turn.ref, turn });
     const bound = byAnchor.get(turn.ref);
+    const callbackReplaced =
+      turn.source.origin === "CALLBACK_CONTINUATION" &&
+      bound?.some(
+        (event) =>
+          event.message?.source.origin === "CALLBACK_CONTINUATION" &&
+          event.message.ref === turn.ref,
+      );
+    if (visible.has(turn.ref) && !callbackReplaced)
+      result.push({ kind: "TURN", id: turn.ref, turn });
     if (bound)
       result.push({
         kind: "ACTIVITY",

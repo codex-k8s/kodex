@@ -21,6 +21,7 @@ const turn = (
   runRef: string,
   role: AssistantTurn["role"] = "USER",
 ): AssistantTurn => ({
+  source: { origin: "ORDINARY" as const },
   ref,
   sequence,
   runRef,
@@ -115,6 +116,7 @@ function event(anchor: AssistantTurn, sequence: number): RunEvent {
       attempt: 1,
     },
     message: {
+      source: { origin: "ORDINARY" as const },
       ref: `msg_${anchor.ref}_${String(sequence)}`,
       phase: "COMMENTARY",
       revision: 1,
@@ -146,6 +148,107 @@ function graph(anchor: AssistantTurn): RunGraph {
     ],
   };
 }
+
+describe("server-owned callback continuation", () => {
+  it("сворачивает один exact callback receipt и повторы, сохраняя USER/final", () => {
+    const callback = turn(
+      "trn_callback_fixture",
+      3,
+      first.runRef ?? "",
+      "SYSTEM_RECEIPT",
+    );
+    callback.source = { origin: "CALLBACK_CONTINUATION" };
+    callback.content = "PRIVATE_CALLBACK_PROMPT";
+    const execution = event(callback, 20);
+    execution.type = "TURN_QUEUED";
+    execution.actor = {
+      kind: "AGENT",
+      ref: conversation.assistantRef,
+      name: "Помощник",
+    };
+    if (!execution.execution)
+      throw new Error("Missing callback execution fixture");
+    execution.execution.attempt = 2;
+    execution.message = {
+      ref: callback.ref,
+      phase: "USER",
+      revision: 1,
+      text: "PRIVATE_CALLBACK_PROMPT",
+      source: callback.source,
+    };
+    const callbackGraph = graph(callback);
+    const callbackNode = callbackGraph.nodes[0];
+    if (!callbackNode) throw new Error("Missing callback node fixture");
+    callbackNode.attempt = 2;
+    const current = { ...conversation, turns: [first, final, callback] };
+    const ownerRun = run(first);
+    const timeline = buildAssistantChatTimeline(
+      current,
+      current.turns,
+      "org_owned_fixture",
+      { [ownerRun.ref]: ownerRun },
+      { [ownerRun.ref]: callbackGraph },
+      [execution, { ...execution, ref: "evt_repeat_fixture", sequence: 21 }],
+    );
+    expect(
+      timeline
+        .filter((entry) => entry.kind === "TURN")
+        .map((entry) => entry.turn.ref),
+    ).toEqual([first.ref, final.ref]);
+    const items = buildRunTranscriptItems(
+      timeline.flatMap((entry) =>
+        entry.kind === "ACTIVITY" ? entry.events : [],
+      ),
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]?.kind).toBe("agent");
+    expect(items[0]?.summary).toBe("i18n:CALLBACK_CONTINUATION_PUBLIC");
+    expect(JSON.stringify(items)).not.toContain("PRIVATE_CALLBACK_PROMPT");
+  });
+
+  it("не сворачивает чужой run/pin и обычную реплику по её тексту", () => {
+    const callback = turn(
+      "trn_callback_fixture",
+      3,
+      first.runRef ?? "",
+      "SYSTEM_RECEIPT",
+    );
+    callback.source = { origin: "CALLBACK_CONTINUATION" };
+    const execution = event(callback, 20);
+    execution.actor = {
+      kind: "AGENT",
+      ref: conversation.assistantRef,
+      name: "Помощник",
+    };
+    execution.message = {
+      ref: callback.ref,
+      phase: "USER",
+      revision: 1,
+      text: "Continue the original task",
+      source: callback.source,
+    };
+    const foreign = run(callback);
+    if (!foreign.assistantPin) throw new Error("Missing assistant pin fixture");
+    foreign.assistantPin.conversationRef = "cnv_foreign_fixture";
+    const current = { ...conversation, turns: [callback] };
+    const timeline = buildAssistantChatTimeline(
+      current,
+      current.turns,
+      "org_owned_fixture",
+      { [foreign.ref]: foreign },
+      { [foreign.ref]: graph(callback) },
+      [execution],
+    );
+    expect(timeline[0]?.kind).toBe("TURN");
+    execution.message.source = { origin: "ORDINARY" };
+    const item = buildRunTranscriptItems([execution])[0];
+    expect(item?.summary).toBe("Continue the original task");
+    expect(item?.kind).toBe("initiator");
+    execution.message.source = callback.source;
+    execution.actor.kind = "USER";
+    expect(buildRunTranscriptItems([execution])[0]?.summary).toBeUndefined();
+  });
+});
 const runs = Object.fromEntries(
   [first, second].map((anchor) => [anchor.runRef ?? "", run(anchor)]),
 );

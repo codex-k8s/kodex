@@ -30,6 +30,7 @@ export interface RunActivityItem {
   artifact?: Artifact;
   execution?: RunEvent["execution"];
   phase?: NonNullable<RunEvent["message"]>["phase"];
+  messageOrigin?: NonNullable<RunEvent["message"]>["source"]["origin"];
   revision?: number;
   historical: boolean;
   eventType?: RunEvent["type"];
@@ -166,6 +167,7 @@ export function buildRunTranscriptItems(
     )
       continue;
     const message = publishedRunMessage(event);
+    const callback = message?.source.origin === "CALLBACK_CONTINUATION";
     const tool =
       scope &&
       event.toolCall &&
@@ -177,11 +179,13 @@ export function buildRunTranscriptItems(
         : undefined;
     const kind: RunActivityItem["kind"] = tool
       ? "tool"
-      : message?.phase === "USER"
-        ? "initiator"
-        : message
-          ? "agent"
-          : "system";
+      : callback
+        ? "agent"
+        : message?.phase === "USER"
+          ? "initiator"
+          : message
+            ? "agent"
+            : "system";
     const revision = tool?.revision ?? message?.revision;
     const key =
       scope && revision !== undefined
@@ -219,9 +223,11 @@ export function buildRunTranscriptItems(
             : undefined) ??
         context.platform ??
         "",
-      summary: event.message
-        ? message?.text
-        : (presented.displaySummary ?? event.summary),
+      summary: callback
+        ? "i18n:CALLBACK_CONTINUATION_PUBLIC"
+        : event.message
+          ? message?.text
+          : (presented.displaySummary ?? event.summary),
       progress: message
         ? undefined
         : event.message
@@ -234,12 +240,13 @@ export function buildRunTranscriptItems(
       occurredAt: previous?.occurredAt ?? event.occurredAt,
       sequence: previous?.sequence ?? event.sequence,
       state: event.nodeState ?? event.runState,
-      messageKind: event.messageKind,
+      messageKind: callback ? "INTERMEDIATE_MESSAGE" : event.messageKind,
       toolCall: tool,
       artifactRef: event.artifactRef,
       artifact: event.artifact,
       execution: scope ? event.execution : undefined,
-      phase: message?.phase,
+      phase: callback ? undefined : message?.phase,
+      messageOrigin: message?.source.origin,
       revision,
       historical: !scope,
       eventType: event.type,
@@ -286,6 +293,11 @@ export function publishedRunMessage(event: RunEvent): RunEvent["message"] {
     Number.isSafeInteger(message.revision) &&
     message.revision >= 1 &&
     ["USER", "COMMENTARY", "FINAL"].includes(message.phase) &&
+    ["ORDINARY", "CALLBACK_CONTINUATION"].includes(message.source.origin) &&
+    (message.source.origin !== "CALLBACK_CONTINUATION" ||
+      (message.phase === "USER" &&
+        event.actor?.kind === "AGENT" &&
+        message.ref === event.execution?.turnRef)) &&
     withinBudget
     ? message
     : undefined;

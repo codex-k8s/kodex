@@ -469,7 +469,7 @@ func (server *Server) RenewExecution(ctx context.Context, request *controlplanev
 func (server *Server) ReportExecutionProgress(ctx context.Context, request *controlplanev1.ReportExecutionProgressRequest) (*controlplanev1.ReportExecutionProgressResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Progress: request.GetProgress()}
 	if message := request.GetMessage(); message != nil {
-		payload.Message = &entity.RunMessage{Ref: message.GetRef(), Phase: enumSuffix(message.GetPhase(), "RUN_MESSAGE_PHASE_"), Revision: message.GetRevision(), Text: message.GetText()}
+		payload.Message = &entity.RunMessage{Ref: message.GetRef(), Phase: enumSuffix(message.GetPhase(), "RUN_MESSAGE_PHASE_"), Revision: message.GetRevision(), Text: message.GetText(), Source: entity.MessageSource{Origin: "ORDINARY"}}
 	}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName, command.ReportExecutionProgress, nil, payload)
 	if err != nil {

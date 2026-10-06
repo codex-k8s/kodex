@@ -15519,15 +15519,22 @@ components:
         turnRef: { $ref: "#/components/schemas/OpaqueRef" }
         turnNumber: { type: integer, format: int64, minimum: 1 }
         attempt: { type: integer, format: int32, minimum: 1 }
+    MessageSource:
+      type: object
+      additionalProperties: false
+      required: [origin]
+      properties:
+        origin: { type: string, enum: [ORDINARY, CALLBACK_CONTINUATION] }
     RunMessage:
       type: object
       additionalProperties: false
-      required: [ref, phase, revision, text]
+      required: [ref, phase, revision, text, source]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         phase: { type: string, enum: [USER, COMMENTARY, FINAL] }
         revision: { type: integer, format: int64, minimum: 1 }
         text: { type: string, minLength: 1, maxLength: 100000 }
+        source: { $ref: "#/components/schemas/MessageSource" }
     RunEventActor:
       type: object
       additionalProperties: false
@@ -18202,11 +18209,12 @@ components:
     AssistantTurn:
       type: object
       additionalProperties: false
-      required: [ref, sequence, role, content, state, createdAt]
+      required: [ref, sequence, role, content, state, createdAt, source]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         sequence: { type: integer, format: int64, minimum: 1 }
         role: { type: string, enum: [USER, ASSISTANT, SYSTEM_RECEIPT] }
+        source: { $ref: "#/components/schemas/MessageSource" }
         content: { type: string, maxLength: 32768 }
         state:
           {

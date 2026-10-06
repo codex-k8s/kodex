@@ -87,6 +87,7 @@ const event: PresentedRunEvent = {
     attempt: 1,
   },
   message: {
+    source: { origin: "ORDINARY" as const },
     ref: "msg_commentary",
     phase: "COMMENTARY",
     revision: 1,
@@ -212,6 +213,7 @@ describe("RunActivityDrawer", () => {
       ref: "evt_final",
       sequence: 5,
       message: {
+        source: { origin: "ORDINARY" as const },
         ref: "msg_final",
         phase: "FINAL",
         revision: 1,

@@ -43,7 +43,9 @@ func TestRunCancellationServiceCodeDoesNotClassifyContent(t *testing.T) {
 		assertNoCancellationServiceCode(t, event)
 	}
 	for _, mutate := range []func(*cp.RunEvent){
-		func(event *cp.RunEvent) { event.Message = &cp.RunMessage{Text: "i18n:RUN_CANCELLED"} },
+		func(event *cp.RunEvent) {
+			event.Message = &cp.RunMessage{Text: "i18n:RUN_CANCELLED", Source: &cp.MessageSource{Origin: cp.MessageOrigin_MESSAGE_ORIGIN_ORDINARY}}
+		},
 		func(event *cp.RunEvent) { event.ToolCall = &cp.RunToolCall{} },
 		func(event *cp.RunEvent) { event.ArtifactRef = "art_fixture001" },
 		func(event *cp.RunEvent) { event.Progress = "Additional outcome" },
@@ -57,7 +59,7 @@ func TestRunCancellationServiceCodeDoesNotClassifyContent(t *testing.T) {
 		mutate(event)
 		assertNoCancellationServiceCode(t, event)
 	}
-	got, err := messageMap(&cp.RunMessage{Text: "i18n:RUN_CANCELLED"})
+	got, err := messageMap(&cp.RunMessage{Text: "i18n:RUN_CANCELLED", Source: &cp.MessageSource{Origin: cp.MessageOrigin_MESSAGE_ORIGIN_ORDINARY}})
 	if err != nil {
 		t.Fatal(err)
 	}

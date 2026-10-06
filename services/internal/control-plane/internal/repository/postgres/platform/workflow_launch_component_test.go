@@ -14,6 +14,7 @@ import (
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -98,6 +99,27 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		items := execute(command.ClaimExecution, worker, key, command.LeaseInput{WorkloadInstance: "workflow-launch-fixture", Limit: 1}, nil).RuntimeItems
 		if len(items) != 1 || stringMap(items[0], "runRef") != run {
 			t.Fatalf("claim %s: expected %s, got %v", key, run, items)
+		}
+		if strings.Contains(key, "callback") || strings.Contains(key, "continuation") {
+			events, _, _, readErr := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: run, Limit: 500})
+			if readErr != nil {
+				t.Fatal("read callback public events", readErr)
+			}
+			found := false
+			for _, event := range events {
+				if event.Delta.Execution == nil || event.Delta.Execution.NodeRef != stringMap(items[0], "nodeRef") || event.Delta.Message == nil || event.Delta.Message.Phase != "USER" {
+					continue
+				}
+				if event.Delta.Message.Source.Origin == "CALLBACK_CONTINUATION" {
+					found = true
+					if event.Delta.Message.Text != callbackContinuationPublicText || event.Delta.Node == nil || event.Delta.Node.InputSummary != callbackContinuationPublicText {
+						t.Fatal("callback public projection exposed runtime instruction")
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("canonical callback source is missing for %s", key)
+			}
 		}
 		return items[0]
 	}

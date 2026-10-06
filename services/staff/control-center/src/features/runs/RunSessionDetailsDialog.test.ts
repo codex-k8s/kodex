@@ -212,6 +212,7 @@ describe("RunSessionDetailsDialog", () => {
       sequence: 4,
       messageKind: "USER_MESSAGE",
       message: {
+        source: { origin: "ORDINARY" as const },
         ref: "msg_user",
         revision: 1,
         phase: "USER",
@@ -249,6 +250,7 @@ describe("RunSessionDetailsDialog", () => {
       messageKind: "FINAL_MESSAGE",
       nodeState: "SUCCEEDED",
       message: {
+        source: { origin: "ORDINARY" as const },
         ref: "msg_final",
         revision: 1,
         phase: "FINAL",
@@ -332,6 +334,7 @@ describe("RunSessionDetailsDialog", () => {
           execution,
           messageKind: "FINAL_MESSAGE",
           message: {
+            source: { origin: "ORDINARY" as const },
             ref: "msg_final",
             revision: 1,
             phase: "FINAL",
@@ -444,6 +447,7 @@ describe("RunSessionDetailsDialog", () => {
               execution,
               messageKind: "USER_MESSAGE",
               message: {
+                source: { origin: "ORDINARY" as const },
                 ref: "msg_user",
                 revision: 1,
                 phase: "USER",
@@ -455,6 +459,7 @@ describe("RunSessionDetailsDialog", () => {
               execution,
               messageKind: "INTERMEDIATE_MESSAGE",
               message: {
+                source: { origin: "ORDINARY" as const },
                 ref: "msg_commentary",
                 revision: 1,
                 phase: "COMMENTARY",

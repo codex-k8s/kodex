@@ -2,6 +2,18 @@ AUTOMATION_VARIABLE_NAME:
   other: Название Автоматизации
 PROJECT_ASSISTANT_ROLE:
   other: Помощник Проекта
+CALLBACK_CONTINUATION_PUBLIC:
+  other: Продолжаю работу после решения или результата действия
+IMAGE_ADMISSION_FAILED:
+  other: Проверка допуска образа завершилась с ошибкой
+IMAGE_ADMISSION_LEASE_EXPIRED:
+  other: Срок работы проверки истёк; допуск образа завершён с ошибкой
+IMAGE_ADMISSION_POLICY_CHANGED:
+  other: Политика допуска образа изменилась
+INTEGRATION_ACTION_STARTED:
+  other: Действие интеграции началось
+PROTECTED_INPUT:
+  other: Защищённые входные данные
 PROJECT_ASSISTANT_CREATED:
   other: Помощник Проекта создан
 AUTOMATION_VARIABLE_TASK:

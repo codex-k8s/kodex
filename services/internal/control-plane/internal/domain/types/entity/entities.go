@@ -554,6 +554,11 @@ type RunEventExecution struct {
 type RunMessage struct {
 	Ref, Phase, Text string
 	Revision         int64
+	Source           MessageSource
+}
+
+type MessageSource struct {
+	Origin string
 }
 
 type RunEventActor struct {
@@ -852,6 +857,7 @@ type AssistantTurn struct {
 	Sequence, RunVersion                                            int64
 	CreatedAt                                                       time.Time
 	CompletedAt                                                     *time.Time
+	Source                                                          MessageSource
 }
 
 type AssistantConversation struct {
