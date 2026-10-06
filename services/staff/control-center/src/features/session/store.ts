@@ -61,6 +61,10 @@ import {
 } from "@/shared/api/problem";
 import { runtimeConfig } from "@/shared/config/runtime";
 import {
+  clearIngressProxyRecovery,
+  ingressProxyRecoveryCode,
+} from "@/shared/api/proxy-session-recovery";
+import {
   assertRuntimeResourceAddressIdentity,
   runtimeResourceAddressScope,
   runtimeResourceScopeKey,
@@ -231,6 +235,7 @@ export const useSessionStore = defineStore("session", () => {
       String(value.sessionRevision),
     );
     problem.value = undefined;
+    clearIngressProxyRecovery();
   }
 
   async function redirectAuthorization(
@@ -302,6 +307,10 @@ export const useSessionStore = defineStore("session", () => {
 
   function handleRenewalFailure(error: unknown): void {
     const normalized = asProblem(error);
+    if (normalized.code === ingressProxyRecoveryCode) {
+      problem.value = normalized;
+      return;
+    }
     if (
       normalized.kind === "unauthorized" ||
       !timing ||

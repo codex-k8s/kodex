@@ -7,6 +7,10 @@ import {
   ownerRequestSignal,
   OwnerContextChangedError,
 } from "./owner-lifetime";
+import {
+  ingressProxyRecoveryCode,
+  recoverIngressProxySession,
+} from "./proxy-session-recovery";
 
 export type ProblemKind =
   | "unauthorized"
@@ -232,6 +236,13 @@ export async function unwrap<T>(
     throw problem;
   }
   if (!result.response.ok || result.error !== undefined) {
+    if (recoverIngressProxySession(result.error, result.response))
+      throw new AppProblem({
+        status: 401,
+        code: ingressProxyRecoveryCode,
+        kind: "unavailable",
+        retryable: false,
+      });
     const problem = normalizeProblem(result.error, result.response);
     notifyUnauthorized(problem);
     throw problem;

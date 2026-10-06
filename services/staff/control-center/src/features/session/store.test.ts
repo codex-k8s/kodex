@@ -33,6 +33,43 @@ vi.mock("@/shared/api/problem", () => ({
   unwrap: async (request: Promise<unknown>) => await request,
 }));
 import { useSessionStore } from "./store";
+import {
+  ingressProxyRecoveryCode,
+  ingressProxyRecoveryKey,
+} from "@/shared/api/proxy-session-recovery";
+
+test("proxy recovery сохраняет BFF identity и durable receipts до validated readback", async () => {
+  const session = useSessionStore();
+  await session.probe();
+  const identity = session.connectionIdentity;
+  values.set(ingressProxyRecoveryKey, "1");
+  values.set("existing-unknown-receipt", "receipt-fixture");
+  api.getOwnerSession.mockRejectedValueOnce({
+    code: ingressProxyRecoveryCode,
+    kind: "unavailable",
+    retryable: false,
+  });
+  await session.refreshMetadata();
+  expect(session.phase).toBe("authenticated");
+  expect(session.connectionIdentity).toBe(identity);
+  expect(values.get(ingressProxyRecoveryKey)).toBe("1");
+  expect(values.get("existing-unknown-receipt")).toBe("receipt-fixture");
+  await session.refreshMetadata();
+  expect(session.phase).toBe("authenticated");
+  expect(values.has(ingressProxyRecoveryKey)).toBe(false);
+  expect(values.get("existing-unknown-receipt")).toBe("receipt-fixture");
+});
+
+test("не сбрасывает proxy loop guard при невалидном metadata", async () => {
+  const session = useSessionStore();
+  await session.probe();
+  values.set(ingressProxyRecoveryKey, "1");
+  api.getOwnerSession.mockResolvedValueOnce({
+    data: metadata({ version: 0 }),
+  });
+  await session.refreshMetadata();
+  expect(values.get(ingressProxyRecoveryKey)).toBe("1");
+});
 
 const state = "a".repeat(43);
 const authorizationUrl = `https://identity.example.test/auth?state=${state}`;
