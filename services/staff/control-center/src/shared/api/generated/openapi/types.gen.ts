@@ -3397,6 +3397,23 @@ export type SystemAssistantIntegrationGrantCandidates = {
     nextPageToken?: string;
 };
 
+export type ProjectAssistantIntegrationGrantCandidates = {
+    scopeKind: 'ORGANIZATION';
+    organizationRef: OpaqueRef;
+    projectRef: OpaqueRef;
+    assistantProfileRef: OpaqueRef;
+    profileVersion: number;
+    assistantRef: OpaqueRef;
+    assistantVersion: number;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    definitionVersion: string;
+    definitionDigest: string;
+    items: Array<SystemAssistantIntegrationGrantCandidate>;
+    total: number;
+    nextPageToken?: string;
+};
+
 export type OwnerGate = {
     ref: OpaqueRef;
     version: number;
@@ -4352,7 +4369,7 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
+    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
     action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
@@ -4451,7 +4468,7 @@ export type AssistantContextDescriptor = {
     entityRef: string;
     entityName: string;
     entityVersion?: number;
-    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
 };
 
 export type AssistantPlanReceipt = {
@@ -11673,6 +11690,38 @@ export type GetSystemAssistantIntegrationGrantCandidatesResponses = {
 };
 
 export type GetSystemAssistantIntegrationGrantCandidatesResponse = GetSystemAssistantIntegrationGrantCandidatesResponses[keyof GetSystemAssistantIntegrationGrantCandidatesResponses];
+
+export type GetProjectAssistantIntegrationGrantCandidatesData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query: {
+        connectionRef: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/assistant/integration-grant-candidates';
+};
+
+export type GetProjectAssistantIntegrationGrantCandidatesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetProjectAssistantIntegrationGrantCandidatesError = GetProjectAssistantIntegrationGrantCandidatesErrors[keyof GetProjectAssistantIntegrationGrantCandidatesErrors];
+
+export type GetProjectAssistantIntegrationGrantCandidatesResponses = {
+    /**
+     * Exact профиль, подключение и capability policy
+     */
+    200: ProjectAssistantIntegrationGrantCandidates;
+};
+
+export type GetProjectAssistantIntegrationGrantCandidatesResponse = GetProjectAssistantIntegrationGrantCandidatesResponses[keyof GetProjectAssistantIntegrationGrantCandidatesResponses];
 
 export type ChangeSystemAssistantIntegrationGrantData = {
     body: SystemAssistantIntegrationGrantInput;

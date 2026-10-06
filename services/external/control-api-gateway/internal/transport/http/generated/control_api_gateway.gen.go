@@ -614,6 +614,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT                  AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
 	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                             AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
 	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT                       AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCHANGEPROJECTASSISTANTINTEGRATIONGRANT       AssistantContextDescriptorAllowedOperations = "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT"
 	AssistantContextDescriptorAllowedOperationsCHANGESYSTEMASSISTANTINTEGRATIONGRANT        AssistantContextDescriptorAllowedOperations = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
 	AssistantContextDescriptorAllowedOperationsCREATEAGENT                                  AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
 	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT                       AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
@@ -654,6 +655,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCHANGEPROJECTASSISTANTINTEGRATIONGRANT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCHANGESYSTEMASSISTANTINTEGRATIONGRANT:
 		return true
@@ -815,6 +818,7 @@ const (
 	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT                  AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
 	AssistantPlanOperationTypeCHANGECAPABILITY                             AssistantPlanOperationType = "CHANGE_CAPABILITY"
 	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT                       AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCHANGEPROJECTASSISTANTINTEGRATIONGRANT       AssistantPlanOperationType = "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT"
 	AssistantPlanOperationTypeCHANGESYSTEMASSISTANTINTEGRATIONGRANT        AssistantPlanOperationType = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
 	AssistantPlanOperationTypeCREATEAGENT                                  AssistantPlanOperationType = "CREATE_AGENT"
 	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT                       AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
@@ -855,6 +859,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCHANGECAPABILITY:
 		return true
 	case AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT:
+		return true
+	case AssistantPlanOperationTypeCHANGEPROJECTASSISTANTINTEGRATIONGRANT:
 		return true
 	case AssistantPlanOperationTypeCHANGESYSTEMASSISTANTINTEGRATIONGRANT:
 		return true
@@ -3874,6 +3880,21 @@ func (e ProjectLifecycle) Valid() bool {
 	case ProjectLifecyclePURGEPENDING:
 		return true
 	case ProjectLifecycleTRASHED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectAssistantIntegrationGrantCandidatesScopeKind.
+const (
+	ProjectAssistantIntegrationGrantCandidatesScopeKindORGANIZATION ProjectAssistantIntegrationGrantCandidatesScopeKind = "ORGANIZATION"
+)
+
+// Valid indicates whether the value is a known member of the ProjectAssistantIntegrationGrantCandidatesScopeKind enum.
+func (e ProjectAssistantIntegrationGrantCandidatesScopeKind) Valid() bool {
+	switch e {
+	case ProjectAssistantIntegrationGrantCandidatesScopeKindORGANIZATION:
 		return true
 	default:
 		return false
@@ -9417,16 +9438,16 @@ func (e GetProviderAccountParamsUsagePurpose) Valid() bool {
 
 // Defines values for ListRunsParamsTargetType.
 const (
-	AGENT    ListRunsParamsTargetType = "AGENT"
-	WORKFLOW ListRunsParamsTargetType = "WORKFLOW"
+	ListRunsParamsTargetTypeAGENT    ListRunsParamsTargetType = "AGENT"
+	ListRunsParamsTargetTypeWORKFLOW ListRunsParamsTargetType = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the ListRunsParamsTargetType enum.
 func (e ListRunsParamsTargetType) Valid() bool {
 	switch e {
-	case AGENT:
+	case ListRunsParamsTargetTypeAGENT:
 		return true
-	case WORKFLOW:
+	case ListRunsParamsTargetTypeWORKFLOW:
 		return true
 	default:
 		return false
@@ -12213,6 +12234,27 @@ type ProjectLanguage string
 
 // ProjectLifecycle defines model for Project.Lifecycle.
 type ProjectLifecycle string
+
+// ProjectAssistantIntegrationGrantCandidates defines model for ProjectAssistantIntegrationGrantCandidates.
+type ProjectAssistantIntegrationGrantCandidates struct {
+	AssistantProfileRef OpaqueRef                                           `json:"assistantProfileRef"`
+	AssistantRef        OpaqueRef                                           `json:"assistantRef"`
+	AssistantVersion    int64                                               `json:"assistantVersion"`
+	ConnectionRef       OpaqueRef                                           `json:"connectionRef"`
+	ConnectionVersion   int64                                               `json:"connectionVersion"`
+	DefinitionDigest    string                                              `json:"definitionDigest"`
+	DefinitionVersion   string                                              `json:"definitionVersion"`
+	Items               []SystemAssistantIntegrationGrantCandidate          `json:"items"`
+	NextPageToken       *string                                             `json:"nextPageToken,omitempty"`
+	OrganizationRef     OpaqueRef                                           `json:"organizationRef"`
+	ProfileVersion      int64                                               `json:"profileVersion"`
+	ProjectRef          OpaqueRef                                           `json:"projectRef"`
+	ScopeKind           ProjectAssistantIntegrationGrantCandidatesScopeKind `json:"scopeKind"`
+	Total               int64                                               `json:"total"`
+}
+
+// ProjectAssistantIntegrationGrantCandidatesScopeKind defines model for ProjectAssistantIntegrationGrantCandidates.ScopeKind.
+type ProjectAssistantIntegrationGrantCandidatesScopeKind string
 
 // ProjectAssistantProfile defines model for ProjectAssistantProfile.
 type ProjectAssistantProfile struct {
@@ -16562,6 +16604,14 @@ type CreateProjectAssistantParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// GetProjectAssistantIntegrationGrantCandidatesParams defines parameters for GetProjectAssistantIntegrationGrantCandidates.
+type GetProjectAssistantIntegrationGrantCandidatesParams struct {
+	ConnectionRef OpaqueRef  `form:"connectionRef" json:"connectionRef"`
+	Query         *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize      *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken     *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // CreateAttachmentSetDraftParams defines parameters for CreateAttachmentSetDraft.
 type CreateAttachmentSetDraftParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -19563,6 +19613,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/projects/{projectRef}/assistant)
 	CreateProjectAssistant(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateProjectAssistantParams)
+
+	// (GET /api/v1/projects/{projectRef}/assistant/integration-grant-candidates)
+	GetProjectAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params GetProjectAssistantIntegrationGrantCandidatesParams)
 
 	// (POST /api/v1/projects/{projectRef}/attachment-sets)
 	CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateAttachmentSetDraftParams)
@@ -35050,6 +35103,93 @@ func (siw *ServerInterfaceWrapper) CreateProjectAssistant(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetProjectAssistantIntegrationGrantCandidates operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProjectAssistantIntegrationGrantCandidatesParams
+
+	// ------------- Required query parameter "connectionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "connectionRef", r.URL.Query(), &params.ConnectionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "connectionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectAssistantIntegrationGrantCandidates(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateAttachmentSetDraft operation middleware
 func (siw *ServerInterfaceWrapper) CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request) {
 
@@ -49544,6 +49684,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.UploadArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant", wrapper.GetProjectAssistant)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant", wrapper.CreateProjectAssistant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant/integration-grant-candidates", wrapper.GetProjectAssistantIntegrationGrantCandidates)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/attachment-sets", wrapper.CreateAttachmentSetDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.ListProjectMemberships)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.AddProjectMembership)
