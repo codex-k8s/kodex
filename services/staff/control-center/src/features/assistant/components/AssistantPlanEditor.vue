@@ -14,7 +14,7 @@ import {
   Save,
   Trash2,
 } from "@lucide/vue";
-import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
+import { computed, onScopeDispose, ref, shallowRef, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
@@ -22,6 +22,10 @@ import AssistantCapabilityPlanForm from "@/features/assistant/components/Assista
 import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
 import { createIntegrationGrantReadBundle } from "../integration-grant-read-bundle";
 import { createProjectIntegrationGrantReadBundle } from "../project-integration-grant-read-bundle";
+import {
+  commonProjectGrantBatchContext,
+  type ProjectGrantBatchContext,
+} from "../project-grant-batch-context";
 import AssistantSystemIntegrationGrantPlanForm from "./AssistantSystemIntegrationGrantPlanForm.vue";
 import AssistantProjectIntegrationGrantPlanForm from "./AssistantProjectIntegrationGrantPlanForm.vue";
 import { projectIntegrationGrantReceiptRef } from "../project-integration-grant-plan";
@@ -341,6 +345,21 @@ const capabilityFormTouched = ref(false);
 const integrationGrantValidity = ref<Record<string, boolean>>({});
 const integrationGrantTouched = ref(false);
 const grantExpanded = ref<Record<string, boolean>>({});
+const grantContextId = `assistant-grant-context-${useId()}`;
+const projectGrantContexts = ref<
+  Record<string, ProjectGrantBatchContext | undefined>
+>({});
+const commonProjectGrantContext = computed(() => {
+  try {
+    return commonProjectGrantBatchContext(
+      operationInputs(operations.value),
+      projectGrantContexts.value,
+      platform.bootstrap?.organizationRef,
+    );
+  } catch {
+    return undefined;
+  }
+});
 function compactGrantOperation(operation: EditablePlanOperation): boolean {
   return (
     (operation.value.type === "CHANGE_INTEGRATION_GRANT" &&
@@ -413,6 +432,7 @@ const editorTarget = ref<EditorTarget>();
 function resetDraft(): void {
   footerActionsOpen.value = false;
   grantExpanded.value = {};
+  projectGrantContexts.value = {};
   grantReadBundle.value.close();
   grantReadBundle.value = createIntegrationGrantReadBundle();
   projectGrantReadBundle.value.close();
@@ -1413,8 +1433,23 @@ function validationProblemLabel(problem: string): string {
         />
       </div>
 
+      <p
+        v-if="commonProjectGrantContext"
+        :id="grantContextId"
+        class="assistant-plan-editor__grant-context"
+      >
+        <strong>{{ $t("assistant.settings.projectScope") }}</strong>
+        <span
+          >{{ $t("assistant.planEditor.grantConnection") }}:
+          {{ commonProjectGrantContext.connectionName }}</span
+        >
+      </p>
       <div
         class="assistant-plan-operations"
+        :role="commonProjectGrantContext ? 'group' : undefined"
+        :aria-labelledby="
+          commonProjectGrantContext ? grantContextId : undefined
+        "
         :class="{
           'assistant-plan-operations--grant-batch':
             compactGrantBatch || compactProjectGrantBatch,
@@ -1786,6 +1821,8 @@ function validationProblemLabel(problem: string): string {
               :operation="operation"
               :read-bundle="projectGrantReadBundle"
               :compact="compactProjectGrantBatch"
+              :shared-context="Boolean(commonProjectGrantContext)"
+              @context="projectGrantContexts[operation.value.ref] = $event"
               @expanded="grantExpanded[operation.value.ref] = $event"
               :applied-grant-ref="
                 projectIntegrationGrantReceiptRef(
@@ -2954,6 +2991,15 @@ function validationProblemLabel(problem: string): string {
   display: grid;
   gap: 12px;
   margin-top: 14px;
+}
+.assistant-plan-editor__grant-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 12px 0 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
 }
 .assistant-plan-operations--grant-batch {
   max-height: 480px;

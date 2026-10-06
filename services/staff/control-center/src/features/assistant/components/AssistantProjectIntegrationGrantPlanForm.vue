@@ -21,6 +21,10 @@ import {
 } from "../project-integration-grant-plan";
 import { validSystemGrantSelection } from "../system-integration-grants";
 import {
+  projectGrantBatchContext,
+  type ProjectGrantBatchContext,
+} from "../project-grant-batch-context";
+import {
   createProjectIntegrationGrantReadBundle,
   type ProjectIntegrationGrantReadBundle,
 } from "../project-integration-grant-read-bundle";
@@ -39,11 +43,13 @@ const props = defineProps<{
   appliedGrantRef?: string;
   readBundle?: ProjectIntegrationGrantReadBundle;
   compact?: boolean;
+  sharedContext?: boolean;
 }>();
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
   expanded: [value: boolean];
+  context: [value: ProjectGrantBatchContext | undefined];
   parameter: [key: string, value: string | boolean | string[]];
 }>();
 const platform = usePlatformStore();
@@ -108,6 +114,19 @@ const valid = computed(
     validSystemGrantSelection(candidate.value, policy.value, paths.value),
 );
 watch(valid, (selected) => emit("valid", selected), { immediate: true });
+const batchContext = computed(() =>
+  valid.value && input.value
+    ? projectGrantBatchContext(
+        input.value,
+        platform.bootstrap?.organizationRef,
+        connection.value?.name,
+      )
+    : undefined,
+);
+watch(batchContext, (context) => emit("context", context), {
+  immediate: true,
+  flush: "sync",
+});
 watch(
   [
     () =>
@@ -219,14 +238,23 @@ onBeforeUnmount(() => ownerLifetime.removeEventListener("abort", ownerReset));
     <button
       v-if="compact && connection && candidate"
       class="button button--ghost project-grant-plan__summary"
+      :class="{
+        'project-grant-plan__summary--shared': sharedContext && batchContext,
+      }"
       type="button"
       :aria-expanded="expanded"
       :aria-controls="`${id}-fields`"
       @click="expanded = !expanded"
     >
       <ChevronDown :size="16" aria-hidden="true" />
-      <strong>{{ $t("assistant.settings.projectScope") }}</strong>
-      <span>{{ connection.name }} · {{ candidate.capability.name }}</span>
+      <strong v-if="!sharedContext || !batchContext">{{
+        $t("assistant.settings.projectScope")
+      }}</strong>
+      <span class="project-grant-plan__capability"
+        ><template v-if="!sharedContext || !batchContext"
+          >{{ connection.name }} · </template
+        >{{ candidate.capability.name }}</span
+      >
       <span
         >{{
           $t(
@@ -349,6 +377,24 @@ onBeforeUnmount(() => ownerLifetime.removeEventListener("abort", ownerReset));
 }
 .project-grant-plan__summary svg {
   flex-shrink: 0;
+}
+.project-grant-plan__summary--shared {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 4px 6px;
+  line-height: 1.3;
+}
+.project-grant-plan__summary--shared svg {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+.project-grant-plan__summary--shared span {
+  grid-column: 2;
+}
+.project-grant-plan__summary--shared .project-grant-plan__capability {
+  font-weight: 600;
 }
 .project-grant-plan__summary[aria-expanded="true"] svg {
   transform: rotate(180deg);

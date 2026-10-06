@@ -8,6 +8,34 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("homogeneous PROJECT batch переносит только сверенный общий контекст над списком, детали остаются mounted", () => {
+    expect(source).toContain("commonProjectGrantBatchContext(");
+    expect(source).toContain("projectGrantContexts.value = {}");
+    expect(source).toMatch(
+      /:aria-labelledby="\s*commonProjectGrantContext \? grantContextId : undefined\s*"/,
+    );
+    expect(source).toContain(
+      ':shared-context="Boolean(commonProjectGrantContext)"',
+    );
+    expect(source).toContain(
+      '@context="projectGrantContexts[operation.value.ref] = $event"',
+    );
+    expect(source.indexOf('v-if="commonProjectGrantContext"')).toBeLessThan(
+      source.indexOf('class="assistant-plan-operations"'),
+    );
+    const form = readFileSync(
+      new URL(
+        "./AssistantProjectIntegrationGrantPlanForm.vue",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    expect(form).toContain('v-if="!sharedContext || !batchContext"');
+    expect(form).toContain('v-show="!compact || expanded"');
+    expect(form).toContain("grid-template-columns: 16px minmax(0, 1fr)");
+    expect(form).toContain('flush: "sync"');
+    expect(form).not.toContain('v-if="expanded"');
+  });
   it("mobile оставляет Validate/Apply видимыми, а второстепенные действия раскрывает штатным popover", () => {
     const footer = source.slice(
       source.indexOf('<footer class="assistant-plan-editor__footer">'),

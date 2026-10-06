@@ -11,6 +11,11 @@ import {
 import { createI18n } from "vue-i18n";
 import type { AssistantPlanOperationInput } from "@/shared/api/generated/openapi/types.gen";
 import { editableOperations } from "../model";
+import {
+  commonProjectGrantBatchContext,
+  projectGrantBatchContext,
+  type ProjectGrantBatchContext,
+} from "../project-grant-batch-context";
 
 const api = vi.hoisted(() => ({
   getIntegrationConnection: vi.fn(),
@@ -125,6 +130,7 @@ interface State {
   ownerValid: Ref<boolean>;
   candidate: Ref<unknown>;
   expanded: Ref<boolean>;
+  batchContext: Ref<ProjectGrantBatchContext | undefined>;
 }
 const apps: App[] = [];
 afterEach(() => {
@@ -163,7 +169,7 @@ async function setup(
   ).setup;
   const app = renderer.createApp(
     defineComponent({
-      emits: ["valid", "dirty", "parameter"],
+      emits: ["valid", "dirty", "parameter", "context", "expanded"],
       setup(_props, context) {
         state = original(
           { ...options, operation: editable, disabled: false },
@@ -188,6 +194,7 @@ describe("Форма exact PROJECT grant plan", () => {
       response: new Response(null, { status: 200 }),
       data: {
         ref: pins.connectionRef,
+        name: "Документация проекта",
         version: 10,
         definitionVersion: pins.definitionVersion,
         definitionDigest: pins.definitionDigest,
@@ -274,6 +281,14 @@ describe("Форма exact PROJECT grant plan", () => {
       snapshot.capabilityKey = `github.read.${String(index)}`;
     return next;
   }
+  function requiredOperation(
+    operations: AssistantPlanOperationInput[],
+    index: number,
+  ): AssistantPlanOperationInput {
+    const operation = operations[index];
+    if (!operation) throw new Error("Missing operation fixture");
+    return operation;
+  }
   function batchPage(start = 0, end = 24) {
     return {
       ...page,
@@ -308,6 +323,42 @@ describe("Форма exact PROJECT grant plan", () => {
     const { readBundle, states } = await batch();
     expect(
       states.every((state) => state.valid.value && !state.expanded.value),
+    ).toBe(true);
+    const operations = Array.from({ length: 20 }, (_, index) =>
+      batchOperation(index),
+    );
+    const contexts = Object.fromEntries(
+      states.map((state, index) => [
+        requiredOperation(operations, index).ref,
+        state.batchContext.value,
+      ]),
+    );
+    expect(
+      commonProjectGrantBatchContext(operations, contexts, pins.organizationRef)
+        ?.connectionName,
+    ).toBe("Документация проекта");
+    expect(
+      commonProjectGrantBatchContext(
+        operations,
+        { ...contexts, operation_7: undefined },
+        pins.organizationRef,
+      ),
+    ).toBeUndefined();
+    expect(
+      commonProjectGrantBatchContext(operations, contexts, undefined),
+    ).toBeUndefined();
+    expect(
+      commonProjectGrantBatchContext(operations, contexts, "foreign_org"),
+    ).toBeUndefined();
+    const changed = structuredClone(operations);
+    requiredOperation(changed, 7).parameters.enabled = false;
+    requiredOperation(changed, 7).after.enabled = false;
+    expect(
+      commonProjectGrantBatchContext(changed, contexts, pins.organizationRef),
+    ).toBeUndefined();
+    api.owner.abort();
+    expect(
+      states.every((state) => state.batchContext.value === undefined),
     ).toBe(true);
     expect(api.getIntegrationConnection).toHaveBeenCalledTimes(1);
     expect(api.getProjectAssistant).toHaveBeenCalledTimes(1);
@@ -361,7 +412,90 @@ describe("Форма exact PROJECT grant plan", () => {
     expect(states.filter((state) => state.valid.value)).toHaveLength(19);
     expect(states[3]?.valid.value).toBe(false);
     expect(states[3]?.failed.value).toBe(true);
+    expect(states[3]?.batchContext.value).toBeUndefined();
     readBundle.close();
+  });
+  it.each([
+    { projectRef: "other_project" },
+    { assistantProfileRef: "other_profile" },
+    { projectAssistantRef: "other_helper" },
+    { agentVersion: 10 },
+    { profileVersion: 2 },
+    { connectionRef: "other_connection" },
+    { definitionVersion: "2.0" },
+    { definitionDigest: "b".repeat(64) },
+    { enabled: false },
+    { approvalScopePaths: ["owner"] },
+  ])(
+    "общая подпись не объединяет различные owner/policy pins %j",
+    (changed) => {
+      const operations = [batchOperation(0), batchOperation(1)];
+      for (const snapshot of [
+        requiredOperation(operations, 1).parameters,
+        requiredOperation(operations, 1).before,
+        requiredOperation(operations, 1).after,
+      ])
+        Object.assign(snapshot, changed);
+      if (changed.connectionRef)
+        requiredOperation(operations, 1).target.ref = changed.connectionRef;
+      const contexts = Object.fromEntries(
+        operations.map((operation) => [
+          operation.ref,
+          projectGrantBatchContext(
+            operation,
+            pins.organizationRef,
+            "Документация проекта",
+          ),
+        ]),
+      );
+      expect(
+        commonProjectGrantBatchContext(
+          operations,
+          contexts,
+          pins.organizationRef,
+        ),
+      ).toBeUndefined();
+    },
+  );
+  it("общая подпись закрыта для одной/смешанной операции и различного проверенного имени", () => {
+    const operations = [batchOperation(0), batchOperation(1)];
+    const contexts = Object.fromEntries(
+      operations.map((operation) => [
+        operation.ref,
+        projectGrantBatchContext(
+          operation,
+          pins.organizationRef,
+          "Документация проекта",
+        ),
+      ]),
+    );
+    expect(
+      commonProjectGrantBatchContext(
+        [requiredOperation(operations, 0)],
+        contexts,
+        pins.organizationRef,
+      ),
+    ).toBeUndefined();
+    contexts.operation_1 = {
+      ...contexts.operation_1,
+      key: contexts.operation_1?.key ?? "",
+      connectionName: "Другое подключение",
+    };
+    expect(
+      commonProjectGrantBatchContext(
+        operations,
+        contexts,
+        pins.organizationRef,
+      ),
+    ).toBeUndefined();
+    requiredOperation(operations, 1).type = "CHANGE_INTEGRATION_GRANT";
+    expect(
+      commonProjectGrantBatchContext(
+        operations,
+        contexts,
+        pins.organizationRef,
+      ),
+    ).toBeUndefined();
   });
   it.each([
     { total: 25 },
