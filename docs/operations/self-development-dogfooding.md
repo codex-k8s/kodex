@@ -28,6 +28,14 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
 
 ## Решения владельца и режим
 
+- До 07.10.2026 08:30 по Саратову выполнять текущую цель автономно;
+  в согласованных границах выбирать рекомендуемое решение без ожидания
+  владельца. Проверить действующие SSO limits и установить 12 часов для
+  рабочей сессии штатным repo-owned путём; состояние Chrome MCP проверять
+  отдельно, потому что срок SSO не гарантирует сохранение MCP approval.
+  Каждый новый экран или компонент проверять сразу: screenshot, Console,
+  relevant Network, затем исправление и повторная проверка на hot reload.
+  В журнале явно отмечать проверенный экран и результат, не только код.
 - Bootstrap PR разрешено сливать автономно после фактических проверок без
   нового owner gate; запрещено обходить GitHub protection/checks.
 - Доработки внешнего host-агента не отправлять на отдельный review: быстрые
@@ -149,6 +157,43 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 | UI consumer acquire/release | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию |
 
 ## Журнал
+
+06.10.2026 18:07 UTC. ROOT source7687f133, предыдущий remote/PR1798
+exact341a8c6f PASS, Draft сохранён. Все108 ordinary grants завершены:
+Manager19 (`pln_5XzCaSew9GYp1KaNAwUpZQUK`), Architect18
+(`pln_ewbTMOMjIzoWWn-RjHWZqMFN`), Documentation15
+(`pln_ibAXrRdBpIWMhEJnlPShUnOF`), Security15
+(`pln_CGyOGZ0LREdK2uNx8TDqU37I`), Developer26
+(`pln_AUpEjYihgI7kUEqexTyuTj9d`), Lexical15
+(`pln_q04zzdhgdrkSFPPN4BalIMAj`). Каждый revision1/version3 APPLIED,
+fresh owner GET exact intended recipient/keys/enabled/NONE, connections
+Context7v26/GitHubv100. Квитанции Architect
+`rct_P5b5VMDK9COesk69MW9-C0o6`, Documentation
+`rct_RsPVWIdkaD8iNhVbtF5UHVYz`, Security
+`rct_KpTUPd4d0I0PjeOFVz5A2Vbt`, Developer
+`rct_NRHKK66UqSDH4oszmaQ5Z9Pp` подтверждают18/15/15/26 effects.
+
+Compiled full runner source69d15d5a: manifest
+`sha256:57966474a0d8c653e7dec1a0c819c78eda6f33df930ea59f05c837eb76531638`,
+binary `86d7320b9735e357b88695fb694a7b444f4cd2ca691cb52da90519cc67c8fc38`,
+provenance `31a1f1745961ac88844b5d868e75a7dc88f67e0bd0ded5b0b8be73c59f2b50e4`.
+Штатный341 render fingerprint
+`718c3e05f66a8fc711342f6ad2728e54fadb411195d1fdd690007800d1a52d69`,
+supply-chain apply/readback PASS. Live standard catalog HTTP200 exact579;
+BuildKit UID2b9b0029-4394-448e-9067-19a11cedbacb Ready/restart0.
+Первые два quiesce FAIL на terminal inventory; третий stable PASS17:56.
+Узкий source7687 terminal-subset fix сохраняет повторный CRI proof и exact
+identity/spec/lineage; ROOT21 regression tests PASS13.410с, bash-n PASS.
+Его новый live quiesce отдельно NOT RUN: текущая активация завершилась на341.
+
+ROOT341 combined FE171/1714.85с, forced typecheck PASS; Gateway HTTP9.689с,
+runner history0.038с PASS. Source1f6b06b1 сжимает mobile footer, но native
+mobile screenshot acceptance ещё OPEN. Desktop PROJECT chat screenshot18:07:
+USER справа, один compact active indicator слева, overflow0/Console0,
+bootstrap/session/catalog/initial conversation HTTP200. Новое common image
+UPDATE запрошено у PROJECT helper; admission нового generation и actual
+ordinary proofs ещё OPEN. Полный65 QA, PROJECT20/ENV/web/files/Workflow/
+bootstrap merge/финальный внутренний dogfooding не объявляются завершёнными.
 
 06.10.2026 17:36 UTC, активированный и опубликованный SHA
 `23fb3236b683120311104ca4ec0ebe83bb2c17d9`, DraftPR1798 readback PASS.

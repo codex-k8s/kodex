@@ -10,6 +10,40 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 18:07 UTC. Source `7687f133`: предыдущий remote/PR checkpoint
+`341a8c6f642007c97138fc0345f281204fea7b9e` exact readback PASS.
+Все108 ordinary grants применены нативно: Manager19, Architect18,
+Developer26, Documentation15, Security15, Lexical15. Fresh owner readback
+подтверждает exact keys/recipient/enabled/NONE; Context7 version26,
+GitHub version100. Старые планы повторно не применять.
+
+Новый compiled runner `57966474a0d8c653e7dec1a0c819c78eda6f33df930ea59f05c837eb76531638`
+доставлен штатным build/import, render341 supply-chain apply/readback PASS;
+каталог standard уже возвращает точный новый FROM. BuildKit Ready/restart0.
+Два transient quiesce FAIL не скрыты; третий stable quiesce PASS.
+Source7687 исправляет terminal inventory race без ослабления CRI/identity;
+ROOT Cutover+Evicted21 PASS13.410с. Mobile footer patch source1f6b06b1,
+native mobile acceptance ещё OPEN. ROOT341 FE171/171 и forced typecheck PASS.
+
+Native PROJECT helper сейчас готовит UPDATE существующего common recipe
+`imgrec_zS2F5VUJeRIu_zOXWuF6lXdw`, conversation
+`cnv_CNyVXxZeI_sdFkn577oCSQsC`, run `run_-er0G4gXFvvrpQ7ZDGGycNt_`.
+Повторный CREATE/BUILD не нужен: UPDATE same standard key выбирает новый
+серверный template и атомарно запускает generation2 build. После нового
+admission/promotion восстановить helper current ENV и перевести38 tools
+на новый artifact, сохраняя own policies/selected consumers.
+PROJECT20 self-grants, hosted web6, Developer protected credential/files,
+actual role/Workflow proofs, bootstrap merge и финальный dogfooding OPEN.
+
+Рабочая Chrome5 авторизована; чужая6 не затрагивается. До07.10 08:30 Саратов
+работать автономно по дополнению в checklist. Проверка12h session policy
+идёт отдельно: SSO max12h уже есть, idle8h; existing browser family может
+сохранять меньший absolute expiry. Изменение policy не равно продлению
+текущей сессии; свежий login/защищённые свежие действия проверять честно.
+Последний full reload18:05UTC, следующий до18:10UTC.
+
+## Предыдущий checkpoint 17:36
+
 06.10.2026 17:36 UTC. Активированный и опубликованный checkpoint
 `23fb3236b683120311104ca4ec0ebe83bb2c17d9`, remote и DraftPR1798 exact
 readback PASS. Интегрированы PROJECT self-grants, ordinary native
