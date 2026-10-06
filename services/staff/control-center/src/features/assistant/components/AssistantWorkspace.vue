@@ -2988,6 +2988,11 @@ onBeforeUnmount(() => {
 .assistant-fab:focus-visible {
   filter: brightness(0.94);
 }
+/* Контекстная панель и модалка не должны делить кнопки с помощником. */
+:global(body:has([aria-modal="true"], .run-activity-overlay)) .assistant-fab {
+  visibility: hidden;
+  pointer-events: none;
+}
 .assistant-overlay {
   position: fixed;
   z-index: 70;

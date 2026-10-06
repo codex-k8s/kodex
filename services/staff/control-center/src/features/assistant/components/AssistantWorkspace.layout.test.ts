@@ -45,6 +45,15 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("не перекрывает отправку в панели запуска и действия в модалках", () => {
+    const rule = styles
+      .split(
+        ':global(body:has([aria-modal="true"], .run-activity-overlay)) .assistant-fab {',
+      )[1]
+      ?.split("}")[0];
+    expect(rule).toContain("visibility: hidden");
+    expect(rule).toContain("pointer-events: none");
+  });
   it("называет главную страницу понятно и не дублирует маршрут в компактном контексте", () => {
     expect(source).toContain('route.name === "home"');
     expect(source).toContain('return t("nav.home")');
