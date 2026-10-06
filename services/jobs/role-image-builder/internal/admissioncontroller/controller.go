@@ -292,6 +292,11 @@ func (controller *Controller) recoverFailedAdmission(ctx context.Context, policy
 	}
 	name := "mc-admit-" + workspace.Labels[idLabel] + "-admit"
 	previous, err := controller.client.BatchV1().Jobs(controller.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if uid != "" && (apierrors.IsNotFound(err) || err == nil && jobFailed(previous)) {
+		if closed, proofErr := controller.cleanupOwnerTerminalRecovery(ctx, freshWorkspace, runID, jobs); proofErr != nil || closed {
+			return proofErr
+		}
+	}
 	if err == nil {
 		if !validManagedJob(previous, controller.config.Namespace, "admit") || previous.Annotations[runIDAnnotation] != runID || !uidPattern.MatchString(string(previous.UID)) {
 			return errors.New("image admission recovery job conflicts")

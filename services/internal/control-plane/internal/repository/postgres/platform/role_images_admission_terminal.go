@@ -8,6 +8,7 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repositoryport "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -26,7 +27,18 @@ func matchesAdmissionTerminalReceipt(receipt admissionClaimReceipt, input reposi
 }
 
 func (repository *Repository) GetAdmissionTerminal(ctx context.Context, input repositoryport.AdmissionTerminalInput) (repositoryport.AdmissionTerminalProof, error) {
-	current, err := repository.resolveScope(ctx, input.Principal)
+	return repository.getAdmissionTerminal(ctx, input.Principal, input.ClaimIdempotencyKey, &input)
+}
+
+func (repository *Repository) GetAdmissionRecoveryTerminal(ctx context.Context, principal value.Principal, claimKey string) (repositoryport.AdmissionTerminalProof, error) {
+	if principal.Validate() != nil || principal.CallerWorkload != "image-admission-controller" || principal.Permission != "platform.role-images.admission.recovery-terminal.get" {
+		return repositoryport.AdmissionTerminalProof{}, errs.ErrForbidden
+	}
+	return repository.getAdmissionTerminal(ctx, principal, claimKey, nil)
+}
+
+func (repository *Repository) getAdmissionTerminal(ctx context.Context, principal value.Principal, claimKey string, expected *repositoryport.AdmissionTerminalInput) (repositoryport.AdmissionTerminalProof, error) {
+	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return repositoryport.AdmissionTerminalProof{}, err
 	}
@@ -38,14 +50,16 @@ func (repository *Repository) GetAdmissionTerminal(ctx context.Context, input re
 	var receipt admissionClaimReceipt
 	var intent string
 	var payload []byte
-	err = tx.QueryRow(ctx, queryRoleImagesGetAdmissionClaimReceipt, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "claim_key": input.ClaimIdempotencyKey}).Scan(&intent, &payload)
+	err = tx.QueryRow(ctx, queryRoleImagesGetAdmissionClaimReceipt, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "claim_key": claimKey}).Scan(&intent, &payload)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return repositoryport.AdmissionTerminalProof{}, errs.ErrForbidden
 	}
 	if err != nil {
 		return repositoryport.AdmissionTerminalProof{}, errs.ErrUnavailable
 	}
-	if intent != roleImageDigest(struct{ Key string }{input.ClaimIdempotencyKey}) || json.Unmarshal(payload, &receipt) != nil || !matchesAdmissionTerminalReceipt(receipt, input) || receipt.AuthorityGeneration > input.Principal.CredentialRevision {
+	if intent != roleImageDigest(struct{ Key string }{claimKey}) || json.Unmarshal(payload, &receipt) != nil ||
+		receipt.Artifact.Ref == "" || receipt.Artifact.Version == 0 || receipt.Fence == 0 || receipt.AuthorityGeneration == 0 || receipt.AdmissionAttemptRef == "" || receipt.AdmissionAttempt == 0 ||
+		(expected != nil && (!matchesAdmissionTerminalReceipt(receipt, *expected) || receipt.AuthorityGeneration > principal.CredentialRevision)) {
 		return repositoryport.AdmissionTerminalProof{}, errs.ErrForbidden
 	}
 	result := repositoryport.AdmissionTerminalProof{ClaimedArtifact: receipt.Artifact, AttemptRef: receipt.AdmissionAttemptRef, Attempt: receipt.AdmissionAttempt, ClaimFence: receipt.Fence, ClaimAuthorityGeneration: receipt.AuthorityGeneration, RiskAcceptanceSHA256: receipt.RiskAcceptanceSHA256, SourceAdmissionRevision: receipt.SourceAdmissionRevision, SourceAdmissionReceiptSHA256: receipt.SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest: receipt.SourceEvidenceManifestDigest}

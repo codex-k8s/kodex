@@ -32,7 +32,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 90 and .policy.authority_abi_version == 2 and
+	.policy_revision == 91 and .policy.authority_abi_version == 2 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.query.organization.role-images.vulnerability-report.get" or .operation_id == "platform.query.role-images.vulnerability-report.get") |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
       .authority_proof_producer_id == "control-plane.oidc" and .authority_sources == ["OIDC_SESSION", "DOMAIN_STATE"] and
@@ -106,7 +106,13 @@ jq -e '
     .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"} and .project_required == false)] | length) == 1 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.query.config-overlays.revisions.list" or .operation_id == "platform.query.config-overlays.revisions.get") |
     select(.request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"} and .project_required == false)] | length) == 2 and
-	(.policy.authority_proof_producers | length) == 15 and
+	(.policy.authority_proof_producers | length) == 16 and
+  ([.policy.operation_bindings[] | select(.caller_workload_id == "image-admission-controller") | .operation_id] | sort) ==
+    ["platform.role-images.admission.recovery-terminal.get", "platform.role-images.supply-work.get"] and
+  all(.policy.operation_bindings[] | select(.caller_workload_id == "image-admission-controller");
+    .target_workload_id == "control-plane" and .authority_sources == ["DOMAIN_STATE"] and .project_required == false and
+    .authority_proof_producer_id == "control-plane.image-admission-controller" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"}) and
   ([.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge") | .operation_id] | sort) ==
     ["platform.email.authorization.resolve", "platform.email.configuration.report", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"] and
   all(.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge");

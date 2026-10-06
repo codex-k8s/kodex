@@ -139,6 +139,38 @@ func TestRoleImageAdmissionTerminalComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read exact superseded B1 terminal: %v", err)
 	}
+	controller := worker
+	controller.CallerWorkload, controller.Permission = "image-admission-controller", "platform.role-images.admission.recovery-terminal.get"
+	// Credential поколения разных workload не сравниваются между собой.
+	controller.CredentialRevision = 1
+	controllerProof, err := r.GetAdmissionRecoveryTerminal(ctx, controller, b1Key)
+	if err != nil || !reflect.DeepEqual(controllerProof, proof) || readSnapshot() != before {
+		t.Fatalf("controller original receipt terminal proof: %v", err)
+	}
+	for _, scenario := range []string{"live", "key", "actor", "tenant", "workload", "permission", "credential"} {
+		t.Run("controller-"+scenario, func(t *testing.T) {
+			p, key := controller, b1Key
+			switch scenario {
+			case "live":
+				key = b2Key
+			case "key":
+				key = "unknown-claim-receipt"
+			case "actor":
+				p.ActorID = foreignActor.ActorID
+			case "tenant":
+				p.AuthorityTenant = "org_synthetic_foreign_tenant"
+			case "workload":
+				p.CallerWorkload = "image-admission"
+			case "permission":
+				p.Permission = "platform.role-images.supply-work.get"
+			case "credential":
+				p.CredentialRevision = 0
+			}
+			if _, err := r.GetAdmissionRecoveryTerminal(ctx, p, key); !errors.Is(err, errs.ErrForbidden) || readSnapshot() != before {
+				t.Fatalf("invalid controller recovery read %s: %v", scenario, err)
+			}
+		})
+	}
 	// Immutable receipt сравнивается в каноническом JSON: time.Time после
 	// PostgreSQL→JSON roundtrip может иметь иной Location при том же instant.
 	artifactJSONMatches := reflect.DeepEqual(asJSON(proof.ClaimedArtifact), asJSON(claim.Artifact))

@@ -1708,6 +1708,16 @@
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {
+      "operation_id": "platform.role-images.admission.recovery-terminal.get",
+      "source_binding_sha256": "d1abdb287d5d3bb48f0a0c458479197c8229533dabff49099755aa01501304df",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.supply-work.get",
+      "source_binding_sha256": "1bbfbdcc1008e19742bc17e2ecf5f035f4bda42144296f11e18bc17d6aedc3b0",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
       "operation_id": "platform.role-images.builds.claim",
       "source_binding_sha256": "919c27a7df6fd8297a05efea2c06b439f9992475f65b25f5543498860682cf66",
       "actor_mode": "SERVICE_OWNER_RESOLVED"

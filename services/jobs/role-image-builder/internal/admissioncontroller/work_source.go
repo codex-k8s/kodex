@@ -64,3 +64,35 @@ func (source *ControlPlaneWorkSource) GetAvailability(ctx context.Context) (Work
 func (source *ControlPlaneWorkSource) Close() error {
 	return source.client.Close()
 }
+
+func (source *ControlPlaneWorkSource) GetRecoveryTerminal(ctx context.Context, runID string) (RecoveryTerminalProof, error) {
+	callCtx, cancel := context.WithTimeout(ctx, source.rpcDeadline)
+	defer cancel()
+	result, err := source.client.RoleImages.GetImageAdmissionRecoveryTerminal(callCtx, &controlplanev1.GetImageAdmissionRecoveryTerminalRequest{AdmissionRunId: runID})
+	if err != nil {
+		return RecoveryTerminalProof{}, err
+	}
+	response := result.GetTerminalProof()
+	a := response.GetClaimedArtifact()
+	if a == nil {
+		return RecoveryTerminalProof{}, errors.New("image admission recovery terminal artifact is absent")
+	}
+	var state string
+	switch response.GetTerminalState() {
+	case controlplanev1.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_ACCEPTED:
+		state = "ACCEPTED"
+	case controlplanev1.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_REJECTED:
+		state = "REJECTED"
+	case controlplanev1.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_FAILED:
+		state = "FAILED"
+	case controlplanev1.ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_CANCELLED:
+		state = "CANCELLED"
+	default:
+		return RecoveryTerminalProof{}, errors.New("image admission recovery terminal state is invalid")
+	}
+	proof := RecoveryTerminalProof{RunID: runID, State: state, ArtifactRef: a.GetRef(), BuildRef: a.GetBuildRef(), AttemptRef: response.GetAdmissionAttemptRef(), Attempt: response.GetAdmissionAttempt(), ClaimVersion: a.GetVersion(), ClaimFence: response.GetClaimFence(), ClaimGeneration: response.GetClaimAuthorityGeneration(), TerminalVersion: response.GetTerminalArtifactVersion(), TerminalFence: response.GetTerminalFence(), TerminalAttemptVersion: response.GetTerminalAttemptVersion()}
+	if !validRecoveryTerminal(proof, runID) {
+		return RecoveryTerminalProof{}, errors.New("image admission recovery terminal proof is incomplete")
+	}
+	return proof, nil
+}

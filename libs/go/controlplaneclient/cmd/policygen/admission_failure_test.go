@@ -19,3 +19,16 @@ func TestAdmissionTechnicalCommandsBindCanonicalExactTuple(t *testing.T) {
 		}
 	}
 }
+
+func TestControllerRecoveryHasDedicatedReadOnlyProfile(t *testing.T) {
+	operation := "platform.role-images.admission.recovery-terminal.get"
+	method := controlplaneclient.ImageAdmissionControllerOperations()[operation]
+	if method == "" || operationRequestProfile(operation, method) != (requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}) {
+		t.Fatal("controller recovery read profile absent")
+	}
+	for _, other := range []map[string]string{controlplaneclient.ImageAdmissionOperations(), controlplaneclient.RoleImageBuilderOperations(), controlplaneclient.ImagePromotionOperations(), controlplaneclient.ControlAPIGatewayOperations()} {
+		if other[operation] != "" {
+			t.Fatal("controller recovery permission leaked")
+		}
+	}
+}

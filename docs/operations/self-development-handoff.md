@@ -10,6 +10,20 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 06:02 UTC — на clean frontend checkpoint `d686f24a`
+интегрированы28 файлов controller-only terminal recovery и bounded paused
+reader delivery, policy91. ROOT Go CP/worker/client units/vet, PG31negative
+component4.08с, CLI/policy/registry13/13, Proto codegen, authority codegen,
+SQL boundary PASS. Frozen bytes совпали28/28 после canonical JCS generation;
+затем operations.go только штатно отформатирован gofmt, client повторно PASS.
+Frontend весь раздел образов167/167 и render helper13/13 также PASS.
+Следующее действие — единственный image-admission OCI build на новом clean
+checkpoint, CP source/readiness proof, reader plan/apply; reader остаётся
+PAUSED=true после exact old PVC cleanup. Затем fresh canonical supply-chain
+apply/readback доставляет новый bridge. Пока live recovery НЕ доказан,
+никаких ручных deletes, SQL или повторного REQUEST_BUILD. Browser всё ещё
+SSO; full65 и PROJECT own image/ENV38/four smokes остаются OPEN.
+
 06.10.2026 05:56 UTC — на checkpoint `4a76c24a` дополнительно внесена
 защита пересборки: active build отключает кнопку и handler; terminal build
 показывает «Пересобрать» и штатное подтверждение с повторной проверкой scope,

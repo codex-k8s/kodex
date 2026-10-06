@@ -27,3 +27,21 @@ func TestTrustedAdmissionTechnicalCommandsAreExactAndLeastPrivilege(t *testing.T
 		}
 	}
 }
+
+func TestTrustedAdmissionRecoveryTerminalIsControllerReadOnly(t *testing.T) {
+	authorizer, err := trustedClusterAuthorizer(transportprofile.TrustedCluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, caller := range []string{"image-admission-controller", "image-admission", "role-image-builder", "image-promotion", "control-api-gateway"} {
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(serviceidentity.ProfileMetadataKey, transportprofile.TrustedCluster, serviceidentity.CallerMetadataKey, "spiffe://kodex.local/ns/kodex-system/sa/"+caller))
+		admission, err := authorizer.Admit(ctx, cp.RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName)
+		if caller == "image-admission-controller" {
+			if err != nil || admission.ActorMode != serviceidentity.ServiceActor || admission.ProjectRequired || admission.Permission != "platform.role-images.admission.recovery-terminal.get" {
+				t.Fatal("closed controller recovery route unavailable")
+			}
+		} else if err == nil {
+			t.Fatal("controller terminal read leaked to another caller")
+		}
+	}
+}

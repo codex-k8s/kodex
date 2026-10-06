@@ -39,3 +39,19 @@ func castImageAdmissionTerminal(proof repository.AdmissionTerminalProof) (*cp.Ge
 	}
 	return &cp.GetImageAdmissionTerminalResponse{TerminalState: state, ClaimedArtifact: castImageArtifact(proof.ClaimedArtifact), AdmissionAttemptRef: proof.AttemptRef, AdmissionAttempt: proof.Attempt, ClaimFence: proof.ClaimFence, ClaimAuthorityGeneration: proof.ClaimAuthorityGeneration, TerminalArtifactVersion: proof.TerminalArtifactVersion, TerminalFence: proof.TerminalFence, TerminalAttemptVersion: proof.TerminalAttemptVersion, RiskAcceptanceSha256: proof.RiskAcceptanceSHA256, SourceAdmissionRevision: proof.SourceAdmissionRevision, SourceAdmissionReceiptSha256: proof.SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest: proof.SourceEvidenceManifestDigest}, nil
 }
+
+func (server *RoleImageServer) GetImageAdmissionRecoveryTerminal(ctx context.Context, request *cp.GetImageAdmissionRecoveryTerminalRequest) (*cp.GetImageAdmissionRecoveryTerminalResponse, error) {
+	p, err := roleImagePrincipal(ctx, cp.RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	proof, err := server.service.GetAdmissionRecoveryTerminal(ctx, p, request.GetAdmissionRunId())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	terminal, err := castImageAdmissionTerminal(proof)
+	if err != nil {
+		return nil, err
+	}
+	return &cp.GetImageAdmissionRecoveryTerminalResponse{TerminalProof: terminal}, nil
+}

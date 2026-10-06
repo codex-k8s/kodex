@@ -4309,3 +4309,36 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   не доказывает owner terminal cleanup; PVC вручную не удалялся.
   Новый reader остаётся paused до штатного fresh supply-chain apply.
   Runtime recovery/B2 admission/promotion и весь full65 ещё OPEN.
+
+### 06.10.2026 06:00–06:02 UTC — controller exact proof и reader-first delivery
+
+- На base `d686f24a3b05b2b69c88feb713ff9dc6dd118605` интегрирован
+  frozen28file patch SHA256
+  `cdd0d623ad553f00c6bf4bc5c65bf9a2906ba7e9f791e41dfc0fad8b59d4183e`.
+  Controller-only RPC получает run locator, server-resolved actor/tenant и
+  original claim receipt; terminal proof readonly RepeatableRead закреплён
+  всеми исходными artifact/build/attempt/digest/source/risk pins. Worker
+  credential generation не сравнивается с controller generation. Старые
+  Fail/Expire/Record не ослаблены, grants не возобновляются. Policy91 имеет
+  закрытый generated controller profile; прежний ручной append удалён.
+- Controller сохраняет cursor до exact owner terminal proof, затем заново
+  читает Jobs/PVC и использует UID/resourceVersion preconditions. Live/deny/
+  unknown/active Job/drift сохраняют workspace. Случай Jobs0 после TTL при
+  прежнем PVC также покрыт. Новый repo-owned helper меняет только Deployment
+  image+pause=true единственным fenced PATCH; old immutable CM/policy/run
+  сохраняются. Отдельного resume нет: новый bridge приходит только штатным
+  fresh supply-chain apply/readback после пустого managed inventory.
+- ROOT PASS: CP domain0.034с/transport0.746с/platform0.622с/app0.215с;
+  controller16.361с, imageowner0.290с/bridge0.031с/app0.039с;
+  sharedclient/policygen, CP и worker vet. Первый worker запуск FAIL из-за
+  двух неверных package paths; повтор с canonical paths PASS, source defect
+  отсутствует. Disposable PostgreSQL31 negatives PASS4.08с/package4.151с,
+  worker-grant и runner read-only diagnostics PASS. CLI/policy/registry13/13
+  PASS3.71с; authority codegen/SQL boundary/Buf lint/codegen/diff check PASS.
+  Buf remote rate limit штатно обработан exact local plugins.
+- Canonical JCS regenerated; frozen source manifest28/28 совпал. Затем один
+  operations.go отформатирован gofmt, client units повторно PASS.
+  Дополнительные frontend RoleImages167/167 PASS5.07с и fresh-render helper
+ 13/13 PASS11.30с на checkpointd686. Проверки не заменяют live delivery.
+- Build OCI, reader Apply/Ready и old workspace cleanup пока NOT RUN.
+  Chrome MCP доступен, вкладка SSO; native visual/search NOT RUN. Full65 OPEN.

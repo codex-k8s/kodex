@@ -41,7 +41,8 @@ func TestImageSupplyChainWorkerOperationsAreExact(t *testing.T) {
 			name: "controller",
 			got:  ImageAdmissionControllerOperations(),
 			want: map[string]string{
-				"platform.role-images.supply-work.get": controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName,
+				"platform.role-images.supply-work.get":                 controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName,
+				"platform.role-images.admission.recovery-terminal.get": controlplanev1.RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName,
 			},
 		},
 		{

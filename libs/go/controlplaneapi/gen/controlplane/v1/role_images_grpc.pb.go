@@ -43,6 +43,7 @@ const (
 	RoleImageService_FailImageAdmission_FullMethodName                       = "/controlplane.v1.RoleImageService/FailImageAdmission"
 	RoleImageService_ExpireImageAdmissionClaim_FullMethodName                = "/controlplane.v1.RoleImageService/ExpireImageAdmissionClaim"
 	RoleImageService_GetImageAdmissionTerminal_FullMethodName                = "/controlplane.v1.RoleImageService/GetImageAdmissionTerminal"
+	RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName        = "/controlplane.v1.RoleImageService/GetImageAdmissionRecoveryTerminal"
 	RoleImageService_ClaimImagePromotion_FullMethodName                      = "/controlplane.v1.RoleImageService/ClaimImagePromotion"
 	RoleImageService_AuthorizeImagePromotion_FullMethodName                  = "/controlplane.v1.RoleImageService/AuthorizeImagePromotion"
 	RoleImageService_CompleteImagePromotion_FullMethodName                   = "/controlplane.v1.RoleImageService/CompleteImagePromotion"
@@ -83,6 +84,7 @@ type RoleImageServiceClient interface {
 	FailImageAdmission(ctx context.Context, in *FailImageAdmissionRequest, opts ...grpc.CallOption) (*FailImageAdmissionResponse, error)
 	ExpireImageAdmissionClaim(ctx context.Context, in *ExpireImageAdmissionClaimRequest, opts ...grpc.CallOption) (*ExpireImageAdmissionClaimResponse, error)
 	GetImageAdmissionTerminal(ctx context.Context, in *GetImageAdmissionTerminalRequest, opts ...grpc.CallOption) (*GetImageAdmissionTerminalResponse, error)
+	GetImageAdmissionRecoveryTerminal(ctx context.Context, in *GetImageAdmissionRecoveryTerminalRequest, opts ...grpc.CallOption) (*GetImageAdmissionRecoveryTerminalResponse, error)
 	ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error)
 	AuthorizeImagePromotion(ctx context.Context, in *AuthorizeImagePromotionRequest, opts ...grpc.CallOption) (*AuthorizeImagePromotionResponse, error)
 	CompleteImagePromotion(ctx context.Context, in *CompleteImagePromotionRequest, opts ...grpc.CallOption) (*CompleteImagePromotionResponse, error)
@@ -336,6 +338,16 @@ func (c *roleImageServiceClient) GetImageAdmissionTerminal(ctx context.Context, 
 	return out, nil
 }
 
+func (c *roleImageServiceClient) GetImageAdmissionRecoveryTerminal(ctx context.Context, in *GetImageAdmissionRecoveryTerminalRequest, opts ...grpc.CallOption) (*GetImageAdmissionRecoveryTerminalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetImageAdmissionRecoveryTerminalResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *roleImageServiceClient) ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimImagePromotionResponse)
@@ -401,6 +413,7 @@ type RoleImageServiceServer interface {
 	FailImageAdmission(context.Context, *FailImageAdmissionRequest) (*FailImageAdmissionResponse, error)
 	ExpireImageAdmissionClaim(context.Context, *ExpireImageAdmissionClaimRequest) (*ExpireImageAdmissionClaimResponse, error)
 	GetImageAdmissionTerminal(context.Context, *GetImageAdmissionTerminalRequest) (*GetImageAdmissionTerminalResponse, error)
+	GetImageAdmissionRecoveryTerminal(context.Context, *GetImageAdmissionRecoveryTerminalRequest) (*GetImageAdmissionRecoveryTerminalResponse, error)
 	ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error)
 	AuthorizeImagePromotion(context.Context, *AuthorizeImagePromotionRequest) (*AuthorizeImagePromotionResponse, error)
 	CompleteImagePromotion(context.Context, *CompleteImagePromotionRequest) (*CompleteImagePromotionResponse, error)
@@ -485,6 +498,9 @@ func (UnimplementedRoleImageServiceServer) ExpireImageAdmissionClaim(context.Con
 }
 func (UnimplementedRoleImageServiceServer) GetImageAdmissionTerminal(context.Context, *GetImageAdmissionTerminalRequest) (*GetImageAdmissionTerminalResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetImageAdmissionTerminal not implemented")
+}
+func (UnimplementedRoleImageServiceServer) GetImageAdmissionRecoveryTerminal(context.Context, *GetImageAdmissionRecoveryTerminalRequest) (*GetImageAdmissionRecoveryTerminalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetImageAdmissionRecoveryTerminal not implemented")
 }
 func (UnimplementedRoleImageServiceServer) ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimImagePromotion not implemented")
@@ -948,6 +964,24 @@ func _RoleImageService_GetImageAdmissionTerminal_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RoleImageService_GetImageAdmissionRecoveryTerminal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetImageAdmissionRecoveryTerminalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).GetImageAdmissionRecoveryTerminal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).GetImageAdmissionRecoveryTerminal(ctx, req.(*GetImageAdmissionRecoveryTerminalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RoleImageService_ClaimImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimImagePromotionRequest)
 	if err := dec(in); err != nil {
@@ -1104,6 +1138,10 @@ var RoleImageService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetImageAdmissionTerminal",
 			Handler:    _RoleImageService_GetImageAdmissionTerminal_Handler,
+		},
+		{
+			MethodName: "GetImageAdmissionRecoveryTerminal",
+			Handler:    _RoleImageService_GetImageAdmissionRecoveryTerminal_Handler,
 		},
 		{
 			MethodName: "ClaimImagePromotion",

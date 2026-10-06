@@ -42,6 +42,7 @@ service RoleImageService {
   rpc FailImageAdmission(FailImageAdmissionRequest) returns (FailImageAdmissionResponse);
   rpc ExpireImageAdmissionClaim(ExpireImageAdmissionClaimRequest) returns (ExpireImageAdmissionClaimResponse);
   rpc GetImageAdmissionTerminal(GetImageAdmissionTerminalRequest) returns (GetImageAdmissionTerminalResponse);
+  rpc GetImageAdmissionRecoveryTerminal(GetImageAdmissionRecoveryTerminalRequest) returns (GetImageAdmissionRecoveryTerminalResponse);
   rpc ClaimImagePromotion(ClaimImagePromotionRequest) returns (ClaimImagePromotionResponse);
   rpc AuthorizeImagePromotion(AuthorizeImagePromotionRequest) returns (AuthorizeImagePromotionResponse);
   rpc CompleteImagePromotion(CompleteImagePromotionRequest) returns (CompleteImagePromotionResponse);
@@ -611,6 +612,14 @@ message ExpireImageAdmissionClaimResponse {
   RoleImageAdmissionFailure admission_failure = 1;
 }
 // Ключ исходной claim и полный immutable tuple являются locator, не authority.
+// Controller передаёт только managed run locator; actor/tenant и исходный tuple
+// назначает владелец по canonical claim receipt, не из payload.
+message GetImageAdmissionRecoveryTerminalRequest {
+  string admission_run_id = 1;
+}
+message GetImageAdmissionRecoveryTerminalResponse {
+  GetImageAdmissionTerminalResponse terminal_proof = 1;
+}
 message GetImageAdmissionTerminalRequest {
   string claim_idempotency_key = 1;
   string image_artifact_ref = 2;

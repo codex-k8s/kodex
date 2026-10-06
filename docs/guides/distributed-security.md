@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.3
+version: 1.7.4
 updated: 2026-10-06
 ---
 
@@ -1488,6 +1488,15 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   новый claim. `PermissionDenied`, `NotFound`, expiry старого tuple и отсутствие
   ресурса не доказывают terminal. Чтение не меняет verdict/history, не
   возобновляет claim/grant и не разрешает stale completion либо promotion.
+  Если consumer — controller, отдельный readonly caller profile разрешает
+  только original receipt внутри server-resolved actor/tenant; координаты
+  прежнего claimant и source pins не принимаются из payload. Поколения
+  credentials разных workloads не сравниваются. Reader-first delivery меняет
+  только exact controller image и pause-флаг по UID/resourceVersion/spec CAS,
+  сохраняет прежнюю immutable policy и orchestration revision. Такой reader
+  удаляет только завершённые exact managed Jobs/PVC после owner terminal proof;
+  отказ, live claim и активный Job сохраняют workspace. Новая работа остаётся
+  приостановленной до canonical supply-chain apply/readback нового worker image.
 - Локальный одноразовый helper доступа к credentials задаёт каждому kubectl
   явный приватный cache-dir вне repository и проверяет owner/mode/inode перед
   ограниченным cleanup. Отсутствие HOME в очищенном окружении не доказывает

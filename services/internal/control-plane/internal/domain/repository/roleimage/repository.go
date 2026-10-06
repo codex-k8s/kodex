@@ -188,6 +188,7 @@ type Repository interface {
 	FailAdmission(context.Context, AdmissionFailureInput) (entity.RoleImageAdmissionFailure, error)
 	ExpireAdmission(context.Context, AdmissionExpiryInput) (entity.RoleImageAdmissionFailure, error)
 	GetAdmissionTerminal(context.Context, AdmissionTerminalInput) (AdmissionTerminalProof, error)
+	GetAdmissionRecoveryTerminal(context.Context, value.Principal, string) (AdmissionTerminalProof, error)
 	ClaimPromotion(context.Context, value.Principal, string) (entity.ImagePromotionClaim, error)
 	RequestPromotion(context.Context, PromotionRequestInput) (entity.RoleImagePromotionReceipt, error)
 	AuthorizePromotion(context.Context, PromotionAuthorizeInput) (entity.ImagePromotionAuthorization, error)
