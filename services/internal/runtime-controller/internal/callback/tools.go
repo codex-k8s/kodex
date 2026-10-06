@@ -96,7 +96,7 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 	if raw, selected := arguments["operation_types"]; selected {
 		requested, ok := raw.([]any)
 		if !ok || len(requested) > maximumAssistantDiscoveredSchemas {
-			return nil, errors.New("configuration catalog selection is invalid")
+			return nil, errAssistantCatalogSelection
 		}
 		allowed := make(map[string]struct{}, len(operationTypes))
 		for _, kind := range operationTypes {
@@ -106,13 +106,13 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		for _, value := range requested {
 			kind, ok := value.(string)
 			if !ok {
-				return nil, errors.New("configuration catalog selection is invalid")
+				return nil, errAssistantCatalogSelection
 			}
 			if _, permitted := allowed[kind]; !permitted {
-				return nil, errors.New("configuration catalog selection is invalid")
+				return nil, errAssistantCatalogSelection
 			}
 			if _, duplicate := selectedTypes[kind]; duplicate {
-				return nil, errors.New("configuration catalog selection is invalid")
+				return nil, errAssistantCatalogSelection
 			}
 			selectedTypes[kind] = struct{}{}
 		}

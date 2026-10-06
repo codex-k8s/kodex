@@ -753,6 +753,10 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	structured := result
 	if err != nil {
 		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
+		if params.Name == "get_configuration_catalog" && projectionErr == nil && errors.Is(err, errAssistantCatalogSelection) {
+			structured = map[string]any{"error_code": assistantCatalogInputInvalidCode, "retryable": true,
+				"guidance": assistantCatalogInputInvalidGuidance}
+		}
 		if params.Name == "find_platform_resources" && projectionErr == nil {
 			switch assistantSearchFailureClass(err) {
 			case assistantSearchInputShapeInvalid, assistantSearchQueryInvalid:
@@ -805,6 +809,9 @@ func invalidAssistantPlan(reason string) error {
 }
 
 func controlFailureClass(err error) string {
+	if class := assistantCatalogFailureClass(err); class != "" {
+		return class
+	}
 	if class := assistantSearchFailureClass(err); class != "" {
 		return class
 	}
