@@ -3701,6 +3701,12 @@ const ru = {
     },
   },
   assistant: {
+    contextRoutes: {
+      images: "Образы помощника",
+      newImage: "Новый образ помощника",
+      image: "Образ помощника",
+      secrets: "Секреты помощника",
+    },
     resources: {
       title: "Образ, секреты и окружение помощника",
       images: "Каталог образов",
@@ -8197,6 +8203,12 @@ const en = {
   },
   assistant: {
     ...ru.assistant,
+    contextRoutes: {
+      images: "Assistant images",
+      newImage: "New assistant image",
+      image: "Assistant image",
+      secrets: "Assistant secrets",
+    },
     resources: {
       title: "Assistant image, secrets, and environment",
       images: "Image catalog",

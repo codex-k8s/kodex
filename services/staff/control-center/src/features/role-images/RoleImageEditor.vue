@@ -634,7 +634,7 @@ onBeforeUnmount(() => {
           <Hammer :size="18" aria-hidden="true" />
           <div>
             <span>{{ t("roleImages.buildHistory") }}</span>
-            <small v-if="currentBuild">
+            <small v-if="currentBuild" class="lifecycle-step__build-meta">
               {{ currentBuild.progressPercent }}% ·
               {{ new Date(currentBuild.updatedAt).toLocaleString() }}
             </small>
@@ -1340,7 +1340,7 @@ onBeforeUnmount(() => {
 }
 .lifecycle-step {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: start;
   gap: 10px;
 }
@@ -1353,12 +1353,29 @@ onBeforeUnmount(() => {
   min-width: 0;
   gap: 3px;
 }
+.lifecycle-step > .status-badge {
+  grid-column: 2;
+  justify-self: start;
+  box-sizing: border-box;
+  max-width: 100%;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
 .lifecycle-step span,
 .lifecycle-step small {
   overflow: hidden;
   color: var(--text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.lifecycle-step > div > span,
+.lifecycle-step > div > .lifecycle-step__build-meta {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
 }
 .editor-layout {
   display: grid;

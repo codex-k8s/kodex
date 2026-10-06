@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RouteLocationNormalizedLoaded } from "vue-router";
 
+import { i18n } from "@/app/i18n";
 import {
   assistantContextIdentity,
+  assistantContextRouteLabelKey,
   assistantContextTitle,
   conversationMatchesContext,
   resolveAssistantContext,
@@ -15,6 +17,8 @@ import type {
   Run,
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
+
+vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 
 function route(
   fullPath: string,
@@ -70,6 +74,104 @@ it("показывает поздно загруженное имя текуще
 
   expect(assistantContextTitle(current, { ...current, entityName: "" })).toBe(
     "Координатор продаж",
+  );
+});
+
+describe("подписи экранов системного помощника", () => {
+  it.each([
+    [
+      "system-assistant-environment",
+      "/organization/assistant/environment?draftRef=draft_synthetic#tools",
+      "Окружение помощника",
+      "Assistant environment",
+    ],
+    [
+      "system-role-images",
+      "/organization/role-images?view=published",
+      "Образы помощника",
+      "Assistant images",
+    ],
+    [
+      "system-role-image-new",
+      "/organization/role-images/new",
+      "Новый образ помощника",
+      "New assistant image",
+    ],
+    [
+      "system-role-image",
+      "/organization/role-images/imgrec_synthetic?revisionRef=rev_synthetic",
+      "Образ помощника",
+      "Assistant image",
+    ],
+    [
+      "system-runtime-secrets",
+      "/organization/secrets?draftRef=draft_synthetic&planRef=plan_synthetic",
+      "Секреты помощника",
+      "Assistant secrets",
+    ],
+  ])(
+    "%s показывает название без технических ссылок и сохраняет контекст",
+    (name, fullPath, russianTitle, englishTitle) => {
+      const current = route(fullPath, {});
+      current.name = name;
+      const descriptor = resolveAssistantContext(current, sources).descriptor;
+      const before = structuredClone(descriptor);
+      const identity = assistantContextIdentity(descriptor);
+      const key = assistantContextRouteLabelKey(current.name);
+      expect(key).toBeDefined();
+      const previousLocale = i18n.global.locale.value;
+      try {
+        for (const locale of ["ru", "en"] as const) {
+          i18n.global.locale.value = locale;
+          expect(
+            assistantContextTitle(
+              descriptor,
+              undefined,
+              key ? i18n.global.t(key) : undefined,
+            ),
+          ).toBe(locale === "ru" ? russianTitle : englishTitle);
+        }
+      } finally {
+        i18n.global.locale.value = previousLocale;
+      }
+      expect(descriptor).toEqual(before);
+      expect(descriptor.route).toBe(fullPath);
+      expect(assistantContextIdentity(descriptor)).toBe(identity);
+      expect(descriptor.allowedOperations).toEqual([]);
+    },
+  );
+
+  it("сохраняет приоритет имени ресурса над названием экрана", () => {
+    const descriptor = resolveAssistantContext(
+      route("/organization/role-images/imgrec_synthetic", {}),
+      sources,
+    ).descriptor;
+    expect(
+      assistantContextTitle(
+        { ...descriptor, entityName: "Инструменты разработки" },
+        { ...descriptor, entityName: "Сохранённое имя" },
+        "Образ помощника",
+      ),
+    ).toBe("Инструменты разработки");
+    expect(
+      assistantContextTitle(
+        descriptor,
+        { ...descriptor, entityName: "Сохранённое имя" },
+        "Образ помощника",
+      ),
+    ).toBe("Сохранённое имя");
+  });
+
+  it.each([undefined, "unknown-route", "runtime-environment", Symbol("route")])(
+    "не назначает системную подпись неизвестному или проектному маршруту %s",
+    (name) => {
+      expect(assistantContextRouteLabelKey(name)).toBeUndefined();
+      const descriptor = resolveAssistantContext(
+        route("/projects/prj_sales/environments/env_synthetic", {}),
+        sources,
+      ).descriptor;
+      expect(assistantContextTitle(descriptor)).toBe(descriptor.route);
+    },
   );
 });
 

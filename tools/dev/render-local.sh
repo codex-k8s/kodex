@@ -516,7 +516,11 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-repository" =
       "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" |
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(RUNNER_DIGEST) |
-    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256)
+    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256) |
+    with(.spec.template.spec.containers[] | select(.name == "role-image-builder");
+      .startupProbe.failureThreshold = 225 |
+      .startupProbe.periodSeconds = 2
+    )
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull");
     .spec.template.metadata.annotations."kodex.dev/pull-credential-generation" = "1" |

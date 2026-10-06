@@ -84,7 +84,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	if err := executor.Check(startup); err != nil {
+	if err := checkStartupInfrastructure(lifecycle, executor, config); err != nil {
 		return err
 	}
 	job, err := runner.New(state.controlPlane, executor, business, runner.Config{RenewInterval: config.RenewInterval})
@@ -155,6 +155,15 @@ func runBuildLoop(run func(context.Context) error, state *runtimeState, config C
 
 type localInfrastructureChecker interface {
 	Check(context.Context) error
+}
+
+func checkStartupInfrastructure(lifecycle context.Context, executor localInfrastructureChecker, config Config) error {
+	// Холодный pull/solve использует тот же ограниченный бюджет, что и readiness,
+	// независимо от короткой инициализации telemetry/RPC. Check синхронно
+	// завершает дочерние процессы до открытия listeners и запуска workers.
+	infrastructure, cancelInfrastructure := context.WithTimeout(lifecycle, config.ReadinessTimeout)
+	defer cancelInfrastructure()
+	return executor.Check(infrastructure)
 }
 
 type readinessIntervalWaiter func(context.Context, time.Duration) error

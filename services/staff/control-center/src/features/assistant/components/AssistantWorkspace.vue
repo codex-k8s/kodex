@@ -55,6 +55,7 @@ import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   assistantContextIdentity,
+  assistantContextRouteLabelKey,
   assistantContextTitle,
   conversationMatchesContext,
   readableContextOperations,
@@ -428,7 +429,12 @@ const contextTitle = computed(() => {
   ) {
     return t(`managed.kinds.${kind}`);
   }
-  return assistantContextTitle(props.context, checkedContext.value);
+  const routeLabelKey = assistantContextRouteLabelKey(route.name);
+  return assistantContextTitle(
+    props.context,
+    checkedContext.value,
+    routeLabelKey ? t(routeLabelKey) : undefined,
+  );
 });
 const checkedOperations = computed(() =>
   checkedContext.value

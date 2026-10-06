@@ -101,13 +101,35 @@ export function assistantContextIdentity(
 export function assistantContextTitle(
   routeContext: AssistantContextDescriptor,
   conversationContext?: AssistantContextDescriptor,
+  routeLabel?: string,
 ): string {
   return (
     routeContext.entityName ||
     conversationContext?.entityName ||
+    routeLabel ||
     routeContext.route ||
     "Kodex"
   );
+}
+
+// Подпись экрана не меняет маршрут, привязки сущностей и серверные полномочия.
+export function assistantContextRouteLabelKey(
+  routeName: RouteLocationNormalizedLoaded["name"],
+): string | undefined {
+  switch (routeName) {
+    case "system-assistant-environment":
+      return "assistant.resources.environment";
+    case "system-role-images":
+      return "assistant.contextRoutes.images";
+    case "system-role-image-new":
+      return "assistant.contextRoutes.newImage";
+    case "system-role-image":
+      return "assistant.contextRoutes.image";
+    case "system-runtime-secrets":
+      return "assistant.contextRoutes.secrets";
+    default:
+      return undefined;
+  }
 }
 
 function routeParameter(

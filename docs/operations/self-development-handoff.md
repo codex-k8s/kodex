@@ -10,6 +10,65 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 02:34 UTC: Chrome MCP доступен, рабочая вкладка2; чужая1 не
+изменяется. Gen9 прошёл повторный exact admission ACCEPTED, attempt2
+`imgadm_YuXhic6umcMP_9Iwyowjp4rO`, version3/fence3. Native promotion
+отправлена02:31:21; protected readback02:32 подтвердил recipe version14,
+ACTIVE/promotedImageReady=true. SYSTEM49 отправлен02:33:26 в новом диалоге:
+один PREPARE_RUNTIME_ENVIRONMENT_REVISION для собственного gen9 и всех38
+VERIFIED tools; ожидается план, затем Validate/Apply/impact/Publish. Actual
+native GitHub/web/Context7/context повторить только после публикации ENV.
+
+В MAIN поверх664 интегрированы context labels, полный builder startup budget
+и читаемые lifecycle headers образа. ROOT44 frontend tests, scoped ESLint,
+Prettier, forced typecheck и diff check PASS. Screenshot02:31 показывает
+полные заголовки/дату и отдельные badges; Console error/warn нет. Host/Pod
+RoleImageEditor.vue SHA совпал `d1a956df7625fdf6aea504a96b5c6c0f62d09a7881ee276941cf22defc52b3c0`.
+Builder patch unit/race/vet/release render PASS, rebuild/deploy ещё NOT RUN:
+штатный supply-chain apply требует пустых runs и admission jobs.
+Следующие исторические записи сохраняются для точного происхождения этапов.
+
+02:37 UTC SYSTEM49 plan `pln_rCRoX_t_nolYbHyLsHJOwvD2` APPLIED/version3,
+draft `renvd_1g97PER-hHlU88ncx8PP4H-s` DRAFT/version1. Protected readback
+сохраняет38 tools/gen9 и прежнюю policy/resources/env. Fresh OIDC выполнен;
+дальше проверить тот же draft, impact SYSTEM consumer и однократно Publish.
+Новый draft/повторный Apply не создавать. GitHub/web/context smokes NOT RUN.
+
+Последний checkpoint `66487240bab7353985798703572043d91cfe9c29` запушен.
+На06.10.2026 02:17 UTC Chrome MCP работает; новый full runner6a3a и
+supply-chain images доставлены repo-owned build/import/render/apply/readback
+цепочкой. Protected runner binary SHA256 `fed9b665…`. Provider своего
+помощника пока остаётся на published gen8: новый relay не является
+доказательством обновлённого provider binary. SYSTEM48 в conversation
+`cnv_-UftNBSDaGG3HnzhgHqHh_85` создал UPDATE собственного standard recipe
+через свежий server template; первый запрос потребовал несуществующий base
+в IMAGE_ARTIFACTS, поэтому план не создался. Уточнение отправлено через
+штатный UI, новый план создан; Validate/Apply, gen9 build/admission/promotion
+и ENV publish ожидаются. Повторять старый SYSTEM43 нельзя. Затем повторить
+реальные GitHub/web/Context7/context smoke и exact provider ACK/preview proof.
+
+Рабочий tree поверх664 содержит frontend human-readable context label;
+28 unit, typecheck/ESLint/Prettier PASS, HMR screenshot и Console/Network
+проверены. Не выдавать этот tree за чистый SHA. Isolated исполнитель готовит
+builder cold-start budget + exact startupProbe/render exception; MAIN им
+не изменён, live исправление пока NOT RUN. PROJECT bootstrap и полный QA OPEN.
+
+02:23 UTC: SYSTEM48 единственный plan `pln_YzWaw2f04PUd4X2mWWqdOXQC`
+применён02:18:26, recipe version13/generation9. Build
+`imgbld_fIWZV7jMBKR9aSM1MUpL4QE2` завершён02:19:15; admission candidate/
+failure ещё отсутствуют, Jobs/PVC admission не обнаружены. Диагностика
+этой задержки продолжается; не создавать новый build или рецепт без причины.
+ROOT интегрировал полный builder budget patch; unit и release render PASS,
+race/vet выполняются, rebuild/deploy NOT RUN. Provider всё ещё gen8.
+
+02:25 UTC: admission gen9 REJECTED по двум прежним HIGH tar/undici,
+artifact `imgart_NHv1LvucHTIw0loY_zzx74tS`, manifest7af3ff53. Owner UI
+принял новый exact риск для локального QA; повторная admission attempt
+начата. Предыдущая задержка не требует controller fix: фильтр ROOT по слову
+admission пропускал фактические mc-admit Jobs/PVC. Исправленный inventory
+02:27 подтвердил успешные claim/scan/sign и ACTIVE admit. ROOT race/vet PASS. Далее дождаться
+ACCEPTED, native promotion, SYSTEM ENV publication и actual tool smokes.
+
 06.10.2026 в01:34 UTC Chrome MCP восстановлен после нового разрешения
 владельца; goal активен. Рабочая вкладка2 доступна, чужая вкладка1 не
 изменялась. Штатный SSO восстановил вход. На source

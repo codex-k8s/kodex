@@ -3592,3 +3592,134 @@ namespace functions/web/mcp__kodex явно получают DirectModelOnly.
 выдаётся за проверку закреплённого0.160.0. Новый full runner build/import,
 canonical render/apply, native recipe gen9/admission/promotion/environment
 и actual shell/web/MCP пока NOT RUN. Старый gen8 snapshot не переписывается.
+
+### 06.10.2026 02:00–02:17 UTC — новый runner доставлен, начато обновление рецепта
+
+Checkpoint `66487240bab7353985798703572043d91cfe9c29` запушен; source full
+runner и supply-chain build закреплён на этом SHA. Repo-owned full runner
+build/import PASS02:00: manifest
+`sha256:6a3a991aeacd9d9b5216d8d26e9e5c94a3e191ee158c26a2ca1c9944b2c3f118`,
+input digest `713138fade01027943d30db729e6e41586d847cc044de089240fad55a17d2618`,
+protected binary SHA256
+`fed9b665ac6fdad80b112f52129d3e50e9d99786ab0ceaefbe5ad8f60fc2a68e`.
+Обе ноды получили exact import/pins. Параллельная сборка четырёх supply-chain
+компонентов PASS02:01:22; builder digest `548acce2…`, admission `1ee16667…`,
+admission tools `2e1e018e…`, internal authority `c475eebc…`.
+
+Первый render оказался сделан до завершения обновления public pins и не
+применялся. Второй fresh render завершён02:04:24; source fingerprint
+`7fdf0593a7a2fcac46bdf04504e61056a4d6c458a9f9a3a3947dd6641b118236`,
+role-image input manifest `8ea7c193…`, новые worker digests подтверждены.
+Canonical supply-chain apply PASS02:09:57, readback PASS02:10:28. Это
+проверка доставки, не application acceptance. Control Plane, Runtime
+Controller, builder и admission controller Ready. Builder при холодном
+старте дважды восстановился с `BuildKit execution failed`; точная причина
+этих двух отказов UNKNOWN. Отдельно доказан недостаточный shared startup
+budget и готовится адресное исправление с согласованным startupProbe budget,
+без ослабления реальной инфраструктурной проверки.
+
+Warm Pod штатно заменён, UID `3b2459f0-6059-4683-b029-9bc3cd05be5c`,
+три контейнера Ready/restart0. Новый relay использует base6a3a, но provider
+и role runtime всё ещё используют собственный опубликованный gen8 image.
+Поэтому native tool fix пока НЕ считается реально проверенным: требуется
+gen9 build/admission/promotion и публикация собственного окружения.
+
+Chrome MCP работает, рабочая вкладка2 reload02:13 UTC с пустым draft,
+чужая вкладка1 не изменялась. Поверх source664 применён четырёхфайловый
+frontend patch: вместо сырого route в обычном контексте помощника показана
+понятная локализованная подпись экрана; descriptor, entity pins и authority
+не меняются. ROOT28/28 unit PASS, typecheck/ESLint/Prettier и diff check
+PASS. HMR screenshot подтверждает «Окружение помощника», compact lifecycle,
+commentary и свёрнутые tool calls; Console error/warn нет, session/bootstrap/
+configuration reads200. Это доказательство рабочего tree, не чистого нового SHA.
+
+SYSTEM48 отправлен02:14:12, conversation `cnv_-UftNBSDaGG3HnzhgHqHh_85`,
+turn `trn_88YPGQoFiY-O_Gh3xJycLccv`, run `run_4T7oWIJ1whkOXEPdgJp3i_zJ`.
+Первый план не создан: запрос ROOT ошибочно требовал найти платформенный
+base в IMAGE_ARTIFACTS. Этот каталог содержит promoted пользовательские
+образы, а не текущий trusted base. Protected recipe read200 подтвердил
+gen8/version12, standard и единственный FROM без пользовательских RUN.
+Deployment readback подтвердил новый trusted base6a3a. В02:16:44 отправлено
+уточнение: явный environmentKey=standard выбирает свежий серверный шаблон,
+Dockerfile/name вручную не передаются; before/after проверяются в плане.
+Native план с единственным UPDATE создан02:17; Apply/build/admission пока
+NOT RUN. Ни PROJECT bootstrap, ни шесть ролей, ни весь65-section QA ещё
+не завершены; общие checkbox по этому частичному результату не отмечены.
+
+02:18:26 native Validate/Apply плана `pln_YzWaw2f04PUd4X2mWWqdOXQC`
+revision1/version3/APPLIED PASS; receipt `rct_xZiliEhI1wj3YxdeynCSOxFn`,
+audit `aud_e85J33EVQxshyiN9RRFimIwb`. Exact before/after закрепили SYSTEM
+recipe version12, прежнюю base85b5 и новую base6a3a; имя/scope/assistant
+не изменились. Protected readback200: recipe version13/generation9,
+standard Dockerfile из одного FROM. Штатно создан build
+`imgbld_fIWZV7jMBKR9aSM1MUpL4QE2`, COMPLETED02:19:15/version13.
+На02:23 допуск ещё не получен: owner read не возвращает candidate/failure,
+admission controller Ready/restart0, admission Jobs/PVC пока не найдены.
+Это WAITING/UNKNOWN причина задержки, не PASS допуска; выполняется
+адресная диагностика eligibility/consumer. Новая base не назначена provider.
+
+В рабочий tree интегрировано полное исправление builder startup budget:
+отдельный bounded lifecycle-child context для синхронного executor.Check,
+сохранены startup barrier/cancel/join/readiness и ошибки. Base startupProbe
+225×2с даёт минимум448с, больше максимальных120+300с на28с; local renderer
+сохраняет это исключение только builder. Адресный release render проверяет
+оба профиля, staging/production, local transformation, defaults30/180с и
+неизменность probes других контейнеров. ROOT Go app unit PASS0.024с,
+bounded web-only release test PASS; race/vet выполняются. Исполнитель
+unit/race/vet PASS. Rebuild/deploy/live cold smoke исправления пока NOT RUN.
+Host/Pod context.ts SHA совпал `cf8e810273f9e4a312ec62d232f1e6509f20530d5c23119e40b47ff3543ad9de`.
+
+02:24 protected UI/readback200 подтвердил gen9 artifact
+`imgart_NHv1LvucHTIw0loY_zzx74tS`, version3, digest
+`sha256:7af3ff536a944eb0f21b8db6bf364f295013771c56c31b601d496564eca7abe8`,
+inventory VERIFIED, первая attempt `imgadm_9ghcVG_Wqpdzm9U-lchYuPes`
+REJECTED. Full report READY:4640 совпадений,2938 уникальных,2 блокирующих
+HIGH tar7.5.19/undici6.27.0. Предыдущие snapshots Job/PVC пропустили
+исполнение: исходный фильтр по слову admission не охватывал фактический
+префикс mc-admit. Это ошибка наблюдения ROOT, не дефект controller.
+В02:25 owner UI принял риск exact gen9 image/report projection
+`45d480d18a008da1269716520bab92171a7568cf7e7833e509aab5fcd708bbe3`
+только для разрешённого локального QA/dogfooding. Это новое решение,
+не наследование допуска gen8; скан/подпись/происхождение и tool inventory
+сохраняются. Повторная attempt начата, ACCEPTED/promotion ещё NOT RUN.
+ROOT race app PASS1.122с, vet PASS; startup budget patch пока не доставлен.
+
+02:27 исправленный read-only inventory по префиксу mc-admit подтвердил
+attempt2: claim COMPLETED02:25:34, scan COMPLETED02:26:13,
+sign COMPLETED02:26:30, admit ACTIVE02:26:49; workspace Bound. Значения
+секретов и payload рабочих документов не читались. Нет оснований изменять
+WorkAvailability/claim или обходить обычную цепочку.
+
+02:30 protected readback200: gen9 admission ACCEPTED, artifact version6,
+attempt2 version3/fence3, receiptSHA
+`6d3cef9352a6333ca8ea45cc2a3837d86cf418b800e9863fe289ee9aa9c8b4e3`,
+evidenceManifest `sha256:eefe2b464e30e9a00ffa5a9a42b6159dd4227367fd26e355dd27abd79259e932`.
+02:31:21 native promotion начата; canonical mc-admit promotion Job ACTIVE,
+02:32 readback200 подтвердил recipe version14/ACTIVE/promotedImageReady=true.
+Имена/ref/digest exact нового gen9 сохранены; это не обновление provider ENV.
+SYSTEM49 отправлен02:33:26 через новый диалог собственного окружения:
+единственный PREPARE_RUNTIME_ENVIRONMENT_REVISION, fresh catalog/schema,
+полный38-tool inventory и сохранение текущих policy/resources/env/grants.
+Validate/Apply/Publish и новые tool smokes пока NOT RUN.
+
+ROOT применил двухфайловый frontend patch lifecycle headers: заголовки/дата
+используют всю ширину, badge отдельной строкой, digest остаётся компактным.
+44/44 tests двух suites PASS3.13с, scoped ESLint/Prettier/forced typecheck
+и diff check PASS. Screenshot02:31 подтвердил читаемость трёх статусов;
+Console error/warn нет, relevant GET200. Host/Pod Editor.vue SHA совпал
+`d1a956df7625fdf6aea504a96b5c6c0f62d09a7881ee276941cf22defc52b3c0`.
+Это evidence текущего рабочего tree поверх664, не ещё нового checkpoint.
+
+SYSTEM49 native plan `pln_rCRoX_t_nolYbHyLsHJOwvD2` создан02:34:18,
+conversation `cnv_0UuTnBtmG6bitYrWPALKHojr`, run
+`run_pyd67GA9oQl9-lf238FImSmA`, turn `trn_pWKWfjcBh1vS9i6hHmZbBdzg`.
+Одна операция на собственный ENV version23, target/systemAssistant exact;
+38 уникальных команд, описания непустые. VERIFIED принадлежит исходному
+artifact inventory, а не полю platform в runtime tool DTO: отсутствие такого
+поля само по себе не означает непроверенный tool. Validate PASS, Apply
+02:35:12 PASS/version3/APPLIED, receipt `rct_U_fA1c_JJo3PsGqyHWVieSVe`,
+audit `aud_Q-Xp_SJ-hwjg99YYAZ1_2NqK`, новый draft
+`renvd_1g97PER-hHlU88ncx8PP4H-s` version1/DRAFT. Protected GET200 подтвердил
+38 tools/gen9,2CPU/4096MiB, volumes[],0 secretBindings,LANG/LC_ALL и прежние10
+readonly HTTPS rules. Проверка draft потребовала fresh OIDC; штатный вход
+выполнен02:37, после него validation/publication ещё ожидаются.
