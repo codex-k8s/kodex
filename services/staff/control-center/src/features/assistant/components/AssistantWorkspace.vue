@@ -71,6 +71,7 @@ import {
   type AssistantIntegrationPublicationRequest,
 } from "@/features/assistant/events";
 import {
+  assistantActiveUserTurn,
   assistantAwaitingReply,
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
@@ -467,7 +468,7 @@ const awaitingReply = computed(() =>
 );
 const showWorkingFallback = computed(() => {
   if (!awaitingReply.value) return false;
-  const runRef = store.selectedConversation?.turns.at(-1)?.runRef;
+  const runRef = assistantActiveUserTurn(store.selectedConversation)?.runRef;
   const run = runRef ? platform.runs[runRef] : undefined;
   const graph = run
     ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])

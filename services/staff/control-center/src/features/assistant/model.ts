@@ -4,6 +4,7 @@ import type {
   AssistantPlanOperation,
   AssistantPlanOperationInput,
   AssistantPlanTarget,
+  AssistantTurn,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 import { projectAssistantConnectionPlanOwner } from "./project-connection-plan";
@@ -539,16 +540,36 @@ export function assistantLaunchedRunTarget(
     : undefined;
 }
 
+export function assistantActiveUserTurn(
+  conversation?: AssistantConversation,
+): AssistantTurn | undefined {
+  if (conversation?.state !== "ACTIVE") return undefined;
+  let running: AssistantTurn | undefined;
+  let queued: AssistantTurn | undefined;
+  for (const turn of conversation.turns) {
+    if (turn.role !== "USER") continue;
+    if (
+      turn.state === "RUNNING" &&
+      (!running || turn.sequence < running.sequence)
+    )
+      running = turn;
+    if (turn.state === "QUEUED" && (!queued || turn.sequence < queued.sequence))
+      queued = turn;
+  }
+  return running ?? queued;
+}
+
 export function assistantAwaitingReply(
   conversation?: AssistantConversation,
 ): boolean {
-  const latest = conversation?.turns.at(-1);
-  return Boolean(
-    latest &&
-    (latest.state === "QUEUED" ||
-      latest.state === "RUNNING" ||
-      (latest.role === "USER" && latest.state === "COMPLETED")),
+  if (conversation?.state !== "ACTIVE") return false;
+  if (assistantActiveUserTurn(conversation)) return true;
+  const latest = conversation.turns.reduce<AssistantTurn | undefined>(
+    (current, turn) =>
+      !current || turn.sequence > current.sequence ? turn : current,
+    undefined,
   );
+  return latest?.role === "USER" && latest.state === "COMPLETED";
 }
 
 export interface EditablePlanOperation {

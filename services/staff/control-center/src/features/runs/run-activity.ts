@@ -518,16 +518,18 @@ export function assistantTranscriptReplacesWorkingFallback(
   nodes: readonly RunNode[],
   events: readonly RunEvent[],
 ): boolean {
-  const latest = conversation?.turns.at(-1);
+  const anchors = conversation?.turns.filter(
+    (turn) => turn.role === "USER" && turn.runRef === run?.ref,
+  );
+  const anchor = anchors?.length === 1 ? anchors[0] : undefined;
   if (
     !conversation ||
+    conversation.state !== "ACTIVE" ||
     !organizationRef ||
     !run ||
-    !latest ||
-    latest.role === "SYSTEM_RECEIPT" ||
-    latest.runRef !== run.ref ||
-    !Number.isSafeInteger(latest.runVersion) ||
-    (latest.runVersion ?? 0) < run.version ||
+    !anchor ||
+    !Number.isSafeInteger(anchor.runVersion) ||
+    (anchor.runVersion ?? 0) < run.version ||
     run.source !== "SYSTEM_ASSISTANT" ||
     run.target.type !== "SYSTEM_ASSISTANT"
   )
@@ -547,11 +549,6 @@ export function assistantTranscriptReplacesWorkingFallback(
     pin.profileRef !== conversation.assistantProfileRef
   )
     return false;
-  const anchors = conversation.turns.filter(
-    (turn) => turn.role === "USER" && turn.runRef === run.ref,
-  );
-  const anchor = anchors.length === 1 ? anchors[0] : undefined;
-  if (!anchor) return false;
   const bound = events.filter((event) => {
     const execution = event.execution;
     if (

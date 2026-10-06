@@ -1214,6 +1214,56 @@ describe("terminal receipt раньше terminal RunEvent", () => {
     },
   );
 
+  it("exact progress активного USER заменяет fallback после queued USER и позднего старого ответа", () => {
+    const pending: AssistantConversation = {
+      ...conversation,
+      turns: [
+        { ...user, runVersion: ownedRun.version, state: "RUNNING" },
+        {
+          ...user,
+          ref: "trn_queued",
+          sequence: user.sequence + 1,
+          runRef: "run_queued",
+          state: "QUEUED",
+        },
+        {
+          ...user,
+          ref: "trn_old_reply",
+          sequence: user.sequence + 2,
+          role: "ASSISTANT",
+          runRef: "run_previous",
+          state: "COMPLETED",
+        },
+      ],
+    };
+    const check = (candidate: AssistantConversation, entries: RunEvent[]) =>
+      assistantTranscriptReplacesWorkingFallback(
+        candidate,
+        "org_example",
+        ownedRun,
+        [boundNode],
+        entries,
+      );
+    expect(check(pending, [progress])).toBe(true);
+    expect(
+      check({ ...pending, turns: [...pending.turns].reverse() }, [progress]),
+    ).toBe(true);
+    expect(check(pending, [])).toBe(false);
+    expect(check(pending, [{ ...progress, runRef: "run_previous" }])).toBe(
+      false,
+    );
+    expect(check({ ...pending, state: "ARCHIVED" }, [progress])).toBe(false);
+    expect(
+      check(
+        {
+          ...pending,
+          turns: [...pending.turns, { ...user, ref: "trn_duplicate" }],
+        },
+        [progress],
+      ),
+    ).toBe(false);
+  });
+
   it("чужой/старый/unsigned progress и неподтверждённый owner read не suppress fallback нового хода", () => {
     const pending: AssistantConversation = {
       ...conversation,

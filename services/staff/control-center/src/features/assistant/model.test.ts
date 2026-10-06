@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { reactive } from "vue";
+import { computed, reactive } from "vue";
 
 import {
   assistantAgentEnvironmentBindingTarget,
+  assistantActiveUserTurn,
   assistantAwaitingReply,
   assistantCreatedScheduleTarget,
   assistantCreatedEntityTarget,
@@ -25,6 +26,7 @@ import {
 } from "@/features/assistant/model";
 import type {
   AssistantConversation,
+  AssistantTurn,
   AssistantPlan,
   AssistantPlanReceipt,
   AssistantPlanOperation,
@@ -149,7 +151,11 @@ describe("assistant reply indicator", () => {
   const conversation = (
     role: "USER" | "ASSISTANT",
     state: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED",
-  ) => ({ turns: [{ role, state }] }) as AssistantConversation;
+  ) =>
+    ({
+      state: "ACTIVE",
+      turns: [{ role, state, sequence: 1 }],
+    }) as AssistantConversation;
 
   it("ожидает ответ после принятого сообщения пользователя", () => {
     expect(assistantAwaitingReply(conversation("USER", "COMPLETED"))).toBe(
@@ -166,6 +172,103 @@ describe("assistant reply indicator", () => {
       false,
     );
     expect(assistantAwaitingReply()).toBe(false);
+  });
+});
+
+describe("assistant очередь после позднего ответа предыдущего запуска", () => {
+  const turn = (
+    sequence: number,
+    role: AssistantTurn["role"],
+    state: AssistantTurn["state"],
+    runRef: string,
+  ): AssistantTurn => ({
+    ref: `trn_${String(sequence)}`,
+    sequence,
+    role,
+    state,
+    runRef,
+    content: "Тестовое сообщение",
+    createdAt: "2026-10-07T00:00:00Z",
+  });
+  const queuedConversation = (): AssistantConversation =>
+    ({
+      state: "ACTIVE",
+      turns: [
+        turn(1, "USER", "COMPLETED", "run_first"),
+        turn(2, "USER", "RUNNING", "run_q1"),
+        turn(3, "USER", "QUEUED", "run_q2"),
+        turn(4, "ASSISTANT", "COMPLETED", "run_first"),
+      ],
+    }) as AssistantConversation;
+
+  it("сохраняет ожидание и exact RUNNING USER, когда последним пришёл старый ответ", () => {
+    const value = queuedConversation();
+    expect(assistantAwaitingReply(value)).toBe(true);
+    expect(assistantActiveUserTurn(value)?.runRef).toBe("run_q1");
+    const reordered = { ...value, turns: [...value.turns].reverse() };
+    expect(assistantAwaitingReply(reordered)).toBe(true);
+    expect(assistantActiveUserTurn(reordered)?.runRef).toBe("run_q1");
+    expect(value.turns.map((item) => item.sequence)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("выбирает RUNNING прежде QUEUED и первый queued по server sequence", () => {
+    const value = queuedConversation();
+    value.turns[1] = turn(2, "USER", "QUEUED", "run_q1");
+    expect(
+      assistantActiveUserTurn({ ...value, turns: [...value.turns].reverse() })
+        ?.runRef,
+    ).toBe("run_q1");
+    value.turns[2] = turn(3, "USER", "RUNNING", "run_q2");
+    expect(assistantActiveUserTurn(value)?.runRef).toBe("run_q2");
+  });
+
+  it("реактивно следует завершению, interrupt и Stop без перезагрузки", () => {
+    const value = reactive(queuedConversation());
+    const awaiting = computed(() => assistantAwaitingReply(value));
+    const active = computed(() => assistantActiveUserTurn(value)?.runRef);
+    expect(active.value).toBe("run_q1");
+    value.turns[1] = turn(2, "USER", "CANCELLED", "run_q1");
+    value.turns[2] = turn(3, "USER", "CANCELLED", "run_q2");
+    value.turns.push(turn(5, "USER", "RUNNING", "run_interrupt"));
+    expect(awaiting.value).toBe(true);
+    expect(active.value).toBe("run_interrupt");
+    value.turns[4] = turn(5, "USER", "CANCELLED", "run_interrupt");
+    expect(awaiting.value).toBe(false);
+    expect(active.value).toBeUndefined();
+  });
+
+  it.each(["CLOSED", "ARCHIVED"] as const)(
+    "не показывает активность %s диалога",
+    (state) => {
+      const value = { ...queuedConversation(), state };
+      expect(assistantAwaitingReply(value)).toBe(false);
+      expect(assistantActiveUserTurn(value)).toBeUndefined();
+    },
+  );
+
+  it.each(["COMPLETED", "FAILED", "CANCELLED"] as const)(
+    "не выбирает terminal USER %s как активный",
+    (state) => {
+      const value = {
+        ...queuedConversation(),
+        turns: [
+          turn(1, "USER", state, "run_done"),
+          turn(2, "ASSISTANT", state, "run_done"),
+        ],
+      };
+      expect(assistantAwaitingReply(value)).toBe(false);
+      expect(assistantActiveUserTurn(value)).toBeUndefined();
+    },
+  );
+
+  it("не считает queued ASSISTANT активным USER и удалённый диалог активным", () => {
+    const value = {
+      ...queuedConversation(),
+      turns: [turn(1, "ASSISTANT", "QUEUED", "run_other")],
+    };
+    expect(assistantAwaitingReply(value)).toBe(false);
+    expect(assistantActiveUserTurn(value)).toBeUndefined();
+    expect(assistantActiveUserTurn()).toBeUndefined();
   });
 });
 

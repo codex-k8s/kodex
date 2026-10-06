@@ -387,6 +387,7 @@ describe("assistant workspace store", () => {
     setActivePinia(createPinia());
     createConversationMock.mockReset();
     appendTurnMock.mockReset();
+    cancelAssistantTurnMock.mockReset();
     archiveConversationMock.mockReset();
     applyPlanDraftMock.mockReset();
     readAssistantMock.mockReset();
@@ -1043,6 +1044,61 @@ describe("assistant workspace store", () => {
       )?.state,
     ).toBe("RUNNING");
   });
+
+  it("Stop после позднего ответа отменяет только серверный run, сохраняя очередь", async () => {
+    const current: AssistantConversation = {
+      ...conversation(),
+      turns: [
+        {
+          ...userTurn("COMPLETED"),
+          ref: "trn_first",
+          sequence: 1,
+          runRef: "run_first",
+        },
+        {
+          ...userTurn("RUNNING"),
+          ref: "trn_q1",
+          sequence: 2,
+          runRef: "run_q1",
+        },
+        { ...userTurn("QUEUED"), ref: "trn_q2", sequence: 3, runRef: "run_q2" },
+        {
+          ...userTurn("COMPLETED"),
+          ref: "trn_reply",
+          sequence: 4,
+          role: "ASSISTANT",
+          runRef: "run_first",
+        },
+      ],
+    };
+    cancelAssistantTurnMock.mockResolvedValue("run_q1");
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [current];
+    store.selectedRef = current.ref;
+    await store.stopActiveTurn();
+    expect(cancelAssistantTurnMock).toHaveBeenCalledExactlyOnceWith(current);
+    expect(store.selectedConversation?.turns.map((turn) => turn.state)).toEqual(
+      ["COMPLETED", "CANCELLED", "QUEUED", "COMPLETED"],
+    );
+  });
+
+  it.each(["CLOSED", "ARCHIVED"] as const)(
+    "Stop не отправляет mutation для %s",
+    async (state) => {
+      const current: AssistantConversation = {
+        ...conversation(),
+        state,
+        turns: [{ ...userTurn("RUNNING"), runRef: "run_old" }],
+      };
+      const store = useAssistantStore();
+      store.setContext(context, "prj_sales");
+      store.conversations = [current];
+      store.selectedRef = current.ref;
+      await store.stopActiveTurn();
+      expect(cancelAssistantTurnMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("применяет terminal ответ из realtime snapshot без polling", async () => {
     const initial = conversation();

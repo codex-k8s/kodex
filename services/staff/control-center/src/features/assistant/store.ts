@@ -922,7 +922,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
 
   async function stopActiveTurn(): Promise<void> {
     const conversation = selectedConversation.value;
-    if (!conversation) return;
+    if (!conversation || conversation.state !== "ACTIVE") return;
     await runMutation(async () => {
       const runRef = await cancelAssistantTurn(conversation);
       upsertConversation({

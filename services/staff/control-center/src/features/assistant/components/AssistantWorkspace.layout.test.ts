@@ -93,7 +93,7 @@ describe("AssistantWorkspace layout", () => {
     expect(typingStyle).toContain("padding: 6px 10px");
     expect(typingStyle).toContain("border: 0");
     expect(source).toContain(
-      "store.selectedConversation?.turns.at(-1)?.runRef",
+      "assistantActiveUserTurn(store.selectedConversation)?.runRef",
     );
     expect(template).toContain(
       "'assistant-composer__field--active': awaitingReply",
