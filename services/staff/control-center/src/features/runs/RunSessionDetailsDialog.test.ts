@@ -24,13 +24,14 @@ const execution = {
 async function renderActivity(
   events: PresentedRunEvent[],
   currentRun: Run = run,
+  currentNode: RunNode = node,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunSessionDetailsDialog, {
         run: currentRun,
-        node,
-        nodes: [node, toolNode],
+        node: currentNode,
+        nodes: [currentNode, toolNode],
         events,
         artifacts: [],
       }),
@@ -354,6 +355,40 @@ describe("RunSessionDetailsDialog", () => {
     expect(dialogSource.match(/-webkit-line-clamp:/g)).toHaveLength(1);
     expect(dialogSource).toContain("node.progressSummary ||");
     expect(dialogSource).toContain("<SafeMarkdown");
+  });
+
+  it("ставит длинные входные данные на всю ширину и сохраняет полный текст за раскрытием", async () => {
+    const input = "Подготовь полный проверяемый отчёт для команды. ".repeat(80);
+    const html = await renderActivity([], run, {
+      ...node,
+      inputSummary: input,
+    });
+    expect(html).toContain("session-details__long-field");
+    expect(html).toContain(input.trim());
+    expect(html).toContain('id="run-session-input"');
+    expect(html).toMatch(
+      /class="button button--ghost session-details__input-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="run-session-input"/,
+    );
+    expect(html).not.toContain("session-details__input--expanded");
+  });
+
+  it("сохраняет компактные метаданные, ограниченный preview и кнопку контекста32px", () => {
+    expect(dialogSource).toMatch(
+      /\.session-details dl > \.session-details__long-field \{[^}]*grid-template-columns: minmax\(0, 1fr\)/,
+    );
+    expect(dialogSource).toContain(
+      "grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr)",
+    );
+    expect(dialogSource).toMatch(
+      /\.session-details__input \{[^}]*max-height: 150px;[^}]*overflow: auto;/,
+    );
+    expect(dialogSource).toMatch(
+      /\.session-details__input--expanded \{[^}]*max-height: 320px;[^}]*overflow: auto;/,
+    );
+    expect(dialogSource).toMatch(
+      /\.session-details :deep\(\.run-prompt-preview > \.button\) \{[^}]*height: 32px;[^}]*white-space: nowrap;/,
+    );
+    expect(dialogSource).toContain(":title=\"$t('promptContext.preview')\"");
   });
 
   it("показывает доступные launch данные и честные runtime/prompt states", async () => {

@@ -43,6 +43,7 @@ const roleLabel = computed(() =>
     : props.node.role || t(`runs.nodeTypes.${props.node.type}`),
 );
 const revisionDiffOpen = ref(false);
+const inputExpanded = ref(false);
 
 const parentNode = computed(() =>
   props.nodes.find((candidate) => candidate.ref === props.node.parentNodeRef),
@@ -192,11 +193,14 @@ function formatTokenCount(value: number): string {
                 <dt>{{ $t("common.source") }}</dt>
                 <dd>{{ $t(`runs.source.${run.source}`) }}</dd>
               </div>
-              <div>
+              <div class="session-details__long-field">
                 <dt>{{ $t("runs.runContext") }}</dt>
                 <dd>{{ run.title }}</dd>
               </div>
-              <div v-if="rootRun && rootRun.ref !== run.ref">
+              <div
+                v-if="rootRun && rootRun.ref !== run.ref"
+                class="session-details__long-field"
+              >
                 <dt>{{ $t("runs.graph") }}</dt>
                 <dd>{{ rootRun.title }}</dd>
               </div>
@@ -215,13 +219,36 @@ function formatTokenCount(value: number): string {
                 <dt>{{ $t("files.revision") }}</dt>
                 <dd>Run v{{ run.version }} · Graph r{{ run.graphRevision }}</dd>
               </div>
-              <div>
+              <div class="session-details__long-field">
                 <dt>{{ $t("common.input") }}</dt>
                 <dd>
-                  <SafeMarkdown
-                    v-if="node.inputSummary"
-                    :content="node.inputSummary"
-                  />
+                  <template v-if="node.inputSummary">
+                    <div
+                      id="run-session-input"
+                      class="session-details__input"
+                      :class="{
+                        'session-details__input--expanded': inputExpanded,
+                      }"
+                    >
+                      <SafeMarkdown :content="node.inputSummary" />
+                    </div>
+                    <button
+                      v-if="node.inputSummary.length > 240"
+                      type="button"
+                      class="button button--ghost session-details__input-toggle"
+                      :aria-expanded="inputExpanded"
+                      aria-controls="run-session-input"
+                      @click="inputExpanded = !inputExpanded"
+                    >
+                      {{
+                        $t(
+                          inputExpanded
+                            ? "runs.collapseMessage"
+                            : "runs.expandMessage",
+                        )
+                      }}
+                    </button>
+                  </template>
                   <template v-else>{{ $t("common.noData") }}</template>
                 </dd>
               </div>
@@ -269,6 +296,7 @@ function formatTokenCount(value: number): string {
             <RunPromptPreview
               v-if="sessionNode && node.runRef === run.ref"
               :run="run"
+              :title="$t('promptContext.preview')"
             />
             <p v-else class="session-details__unavailable">
               {{ $t("runs.renderedPromptUnavailable") }}
@@ -457,6 +485,31 @@ function formatTokenCount(value: number): string {
 }
 .session-details dl > div:last-child {
   border-bottom: 0;
+}
+.session-details dl > .session-details__long-field {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+.session-details__input {
+  max-height: 150px;
+  overflow: auto;
+}
+.session-details__input--expanded {
+  max-height: 320px;
+  overflow: auto;
+}
+.session-details__input-toggle {
+  margin-top: 6px;
+}
+.session-details :deep(.run-prompt-preview > .button) {
+  display: block;
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .session-details dt {
   color: var(--subtle);
