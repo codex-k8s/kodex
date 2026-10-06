@@ -8,6 +8,22 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("PROJECT batch использует собственный exact-profile bundle, не ordinary/SYSTEM fallback", () => {
+    expect(source).toContain(':read-bundle="projectGrantReadBundle"');
+    expect(source).toContain(':compact="compactProjectGrantBatch"');
+    expect(source).toContain("projectGrantReadBundle.value.close()");
+    expect(source).toContain("createProjectIntegrationGrantReadBundle()");
+    const form = readFileSync(
+      new URL(
+        "./AssistantProjectIntegrationGrantPlanForm.vue",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    expect(form).toContain('v-show="!compact || expanded"');
+    expect(form).not.toContain('v-if="expanded"');
+    expect(form).not.toContain("createIntegrationGrantReadBundle");
+  });
   it("сворачивает batch grant поля, не размонтирует проверку и делит scoped bundle одной ревизии", () => {
     expect(source).toContain(':read-bundle="grantReadBundle"');
     expect(source).toContain(':compact="compactGrantBatch"');
@@ -117,8 +133,21 @@ describe("AssistantPlanEditor layout", () => {
   });
   it("не предлагает редактировать уже применённый или readonly план", () => {
     expect(source).toMatch(
-      /<p v-if="editable" class="assistant-plan-friendly__hint">\s*{{ \$t\("assistant\.planEditor\.friendlyHint"\) }}/,
+      /<p(?=[^>]*v-if="editable")(?=[^>]*class="assistant-plan-friendly__hint")[^>]*>\s*{{ \$t\("assistant\.planEditor\.friendlyHint"\) }}/,
     );
+  });
+  it("свернутая grant строка скрывает повторный title/hint/snapshot, но сохраняет выбор и раскрытие", () => {
+    expect(source).toContain("assistant-plan-operation--compact-grant");
+    expect(source).toContain("grid-template-columns: 24px minmax(0, 1fr) 28px");
+    expect(source).toContain(
+      'v-show="grantOperationDetailsVisible(operation)"',
+    );
+    expect(source).toContain(
+      '@expanded="grantExpanded[operation.value.ref] = $event"',
+    );
+    expect(source).toContain('v-model="operation.value.selected"');
+    expect(source).toContain('class="assistant-plan-friendly__snapshot"');
+    expect(source).not.toContain('v-if="grantExpanded');
   });
   it("показывает модель помощника штатной формой без прямой публикации", () => {
     expect(source).toContain("<AssistantRuntimeConfigurationPlanForm");

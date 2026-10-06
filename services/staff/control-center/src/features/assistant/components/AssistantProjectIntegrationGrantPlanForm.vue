@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onScopeDispose,
+  ref,
+  useId,
+  watch,
+} from "vue";
 import { usePlatformStore } from "@/features/platform/store";
+import { ChevronDown } from "@lucide/vue";
 import {
   operationInputs,
   operationParameter,
@@ -13,18 +21,15 @@ import {
 } from "../project-integration-grant-plan";
 import { validSystemGrantSelection } from "../system-integration-grants";
 import {
-  readProjectGrantCandidates,
-  readProjectGrantOwner,
-} from "../project-integration-grants";
-import { getIntegrationConnection } from "@/shared/api/generated/openapi/sdk.gen";
+  createProjectIntegrationGrantReadBundle,
+  type ProjectIntegrationGrantReadBundle,
+} from "../project-integration-grant-read-bundle";
 import type {
   IntegrationConnection,
   SystemAssistantIntegrationGrantCandidate,
   SystemAssistantIntegrationGrantInput,
 } from "@/shared/api/generated/openapi/types.gen";
-import { requestSignal } from "@/shared/api/client";
 import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
-import { unwrap } from "@/shared/api/problem";
 import { approvalScopeOptions } from "@/features/integrations/approval-scope-options";
 import { allowedIntegrationApprovalPolicies } from "@/features/integrations/ui/model";
 
@@ -32,10 +37,13 @@ const props = defineProps<{
   operation: EditablePlanOperation;
   disabled: boolean;
   appliedGrantRef?: string;
+  readBundle?: ProjectIntegrationGrantReadBundle;
+  compact?: boolean;
 }>();
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
+  expanded: [value: boolean];
   parameter: [key: string, value: string | boolean | string[]];
 }>();
 const platform = usePlatformStore();
@@ -45,6 +53,10 @@ const connection = ref<IntegrationConnection>();
 const candidate = ref<SystemAssistantIntegrationGrantCandidate>();
 const loading = ref(false);
 const failed = ref(false);
+const expanded = ref(false);
+watch(expanded, (value) => emit("expanded", value));
+const localReadBundle = createProjectIntegrationGrantReadBundle();
+onScopeDispose(() => localReadBundle.close());
 function value(key: string): unknown {
   try {
     return operationParameter(props.operation, key);
@@ -97,14 +109,17 @@ const valid = computed(
 );
 watch(valid, (selected) => emit("valid", selected), { immediate: true });
 watch(
-  () =>
-    JSON.stringify([
-      platform.bootstrap?.organizationRef,
-      input.value?.target,
-      input.value?.expectedVersion,
-      input.value?.before,
-      props.appliedGrantRef,
-    ]),
+  [
+    () =>
+      JSON.stringify([
+        platform.bootstrap?.organizationRef,
+        input.value?.target,
+        input.value?.expectedVersion,
+        input.value?.before,
+        props.appliedGrantRef,
+      ]),
+    () => props.readBundle,
+  ],
   async (_key, _previous, onCleanup) => {
     connection.value = undefined;
     candidate.value = undefined;
@@ -124,68 +139,34 @@ watch(
     const signal = AbortSignal.any([controller.signal, ownerLifetime]);
     loading.value = true;
     try {
-      const connectionResponse = await unwrap(
-        getIntegrationConnection({
-          path: {
-            connectionRef: operation.parameters.connectionRef as string,
-          },
-          signal: requestSignal(signal),
-          cache: "no-store",
-        }),
+      const snapshot = await (props.readBundle ?? localReadBundle).read(
+        operation,
+        platform.bootstrap?.organizationRef,
+        signal,
+        Boolean(props.appliedGrantRef),
       );
       signal.throwIfAborted();
-      const selected = connectionResponse.data;
-      if (
-        selected.ref !== operation.parameters.connectionRef ||
-        (props.appliedGrantRef
-          ? selected.version <
-            (operation.expectedVersion ?? Number.POSITIVE_INFINITY)
-          : selected.version !== operation.expectedVersion)
-      )
-        throw new Error("System assistant grant plan readback mismatch");
-      const owner = await readProjectGrantOwner(
-        platform.bootstrap?.organizationRef ?? "",
-        operation.parameters.projectRef as string,
-        operation.parameters.projectAssistantRef as string,
-        signal,
+      const found = snapshot.page.items.find(
+        (item) => item.capability.key === operation.parameters.capabilityKey,
       );
-      const seen = new Set<string>();
-      let cursor: string | undefined;
-      for (let pageCount = 0; pageCount < 10; pageCount++) {
-        const page = await readProjectGrantCandidates(
-          owner,
-          selected,
-          operation.parameters.capabilityKey as string,
-          cursor,
-          signal,
-        );
-        signal.throwIfAborted();
-        const found = page.items.find(
-          (item) => item.capability.key === operation.parameters.capabilityKey,
-        );
-        if (found) {
-          if (
-            !(props.appliedGrantRef
-              ? projectIntegrationGrantAppliedCandidate(
-                  operation,
-                  page,
-                  found,
-                  props.appliedGrantRef,
-                )
-              : projectIntegrationGrantPlanCandidate(operation, page, found))
-          )
-            throw new Error("System assistant grant plan pins changed");
-          connection.value = selected;
-          candidate.value = found;
-          return;
-        }
-        if (!page.nextPageToken) break;
-        if (seen.has(page.nextPageToken))
-          throw new Error("System assistant grant plan cursor repeated");
-        seen.add(page.nextPageToken);
-        cursor = page.nextPageToken;
-      }
-      throw new Error("System assistant grant plan capability unavailable");
+      if (
+        !found ||
+        !(props.appliedGrantRef
+          ? projectIntegrationGrantAppliedCandidate(
+              operation,
+              snapshot.page,
+              found,
+              props.appliedGrantRef,
+            )
+          : projectIntegrationGrantPlanCandidate(
+              operation,
+              snapshot.page,
+              found,
+            ))
+      )
+        throw new Error("Project assistant grant plan pins changed");
+      connection.value = snapshot.connection;
+      candidate.value = found;
     } catch {
       if (!signal.aborted) failed.value = true;
     } finally {
@@ -228,12 +209,46 @@ onBeforeUnmount(() => ownerLifetime.removeEventListener("abort", ownerReset));
 </script>
 <template>
   <div class="project-grant-plan">
-    <p>{{ $t("assistant.planEditor.projectGrantFixedTarget") }}</p>
+    <p v-if="!compact">
+      {{ $t("assistant.planEditor.projectGrantFixedTarget") }}
+    </p>
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
     <p v-if="!ownerValid || failed" class="field-error" role="alert">
       {{ $t("assistant.planEditor.grantStale") }}
     </p>
-    <template v-if="connection && candidate">
+    <button
+      v-if="compact && connection && candidate"
+      class="button button--ghost project-grant-plan__summary"
+      type="button"
+      :aria-expanded="expanded"
+      :aria-controls="`${id}-fields`"
+      @click="expanded = !expanded"
+    >
+      <ChevronDown :size="16" aria-hidden="true" />
+      <strong>{{ $t("assistant.settings.projectScope") }}</strong>
+      <span>{{ connection.name }} · {{ candidate.capability.name }}</span>
+      <span
+        >{{
+          $t(
+            value("enabled") === true
+              ? "assistant.planEditor.grantEnableShort"
+              : "assistant.planEditor.grantDisableShort",
+          )
+        }}
+        ·
+        {{
+          policy
+            ? $t(`integrations.approvalPolicies.${policy}`)
+            : $t("integrations.chooseApprovalPolicy")
+        }}</span
+      >
+    </button>
+    <div
+      v-if="connection && candidate"
+      v-show="!compact || expanded"
+      :id="`${id}-fields`"
+      class="project-grant-plan__fields"
+    >
       <dl>
         <dt>{{ $t("assistant.planEditor.grantConnection") }}</dt>
         <dd>{{ connection.name }}</dd>
@@ -302,7 +317,7 @@ onBeforeUnmount(() => ownerLifetime.removeEventListener("abort", ownerReset));
           >
         </fieldset>
       </template>
-    </template>
+    </div>
   </div>
 </template>
 <style scoped>
@@ -310,6 +325,33 @@ onBeforeUnmount(() => ownerLifetime.removeEventListener("abort", ownerReset));
   display: grid;
   gap: 10px;
   min-width: 0;
+}
+.project-grant-plan__fields {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.project-grant-plan__summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 4px 12px;
+  height: auto;
+  min-height: 32px;
+  max-width: 100%;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.project-grant-plan__summary span,
+.project-grant-plan__summary strong {
+  min-width: 0;
+}
+.project-grant-plan__summary svg {
+  flex-shrink: 0;
+}
+.project-grant-plan__summary[aria-expanded="true"] svg {
+  transform: rotate(180deg);
 }
 .project-grant-plan fieldset {
   display: grid;

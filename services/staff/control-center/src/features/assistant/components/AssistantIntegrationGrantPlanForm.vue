@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, useId, watch } from "vue";
+import { ChevronDown } from "@lucide/vue";
 
 import {
   operationParameter,
@@ -32,6 +33,7 @@ const fieldPrefix = `assistant-integration-grant-${useId()}`;
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
+  expanded: [value: boolean];
   parameter: [key: string, value: string | boolean | string[]];
 }>();
 const connection = ref<IntegrationConnection>();
@@ -41,6 +43,7 @@ const loading = ref(false);
 const problem = ref(false);
 const candidateProblem = ref(false);
 const expanded = ref(false);
+watch(expanded, (value) => emit("expanded", value));
 const localReadBundle = createIntegrationGrantReadBundle();
 onScopeDispose(() => localReadBundle.close());
 
@@ -257,6 +260,7 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
       :aria-controls="`${fieldPrefix}-fields`"
       @click="expanded = !expanded"
     >
+      <ChevronDown :size="16" aria-hidden="true" />
       <strong>{{ recipient.name }}</strong>
       <span
         >{{ connection.name }} ·
@@ -468,6 +472,12 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
 .assistant-grant-form__summary span,
 .assistant-grant-form__summary strong {
   min-width: 0;
+}
+.assistant-grant-form__summary svg {
+  flex-shrink: 0;
+}
+.assistant-grant-form__summary[aria-expanded="true"] svg {
+  transform: rotate(180deg);
 }
 .assistant-grant-form p {
   margin: 0;

@@ -20,6 +20,7 @@ import AssistantCodeEditorModal from "@/features/assistant/components/AssistantC
 import AssistantCapabilityPlanForm from "@/features/assistant/components/AssistantCapabilityPlanForm.vue";
 import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
 import { createIntegrationGrantReadBundle } from "../integration-grant-read-bundle";
+import { createProjectIntegrationGrantReadBundle } from "../project-integration-grant-read-bundle";
 import AssistantSystemIntegrationGrantPlanForm from "./AssistantSystemIntegrationGrantPlanForm.vue";
 import AssistantProjectIntegrationGrantPlanForm from "./AssistantProjectIntegrationGrantPlanForm.vue";
 import { projectIntegrationGrantReceiptRef } from "../project-integration-grant-plan";
@@ -336,8 +337,37 @@ const capabilityFormValidity = ref<Record<string, boolean>>({});
 const capabilityFormTouched = ref(false);
 const integrationGrantValidity = ref<Record<string, boolean>>({});
 const integrationGrantTouched = ref(false);
+const grantExpanded = ref<Record<string, boolean>>({});
+function compactGrantOperation(operation: EditablePlanOperation): boolean {
+  return (
+    (operation.value.type === "CHANGE_INTEGRATION_GRANT" &&
+      compactGrantBatch.value) ||
+    (operation.value.type === "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" &&
+      compactProjectGrantBatch.value)
+  );
+}
+function grantOperationDetailsVisible(
+  operation: EditablePlanOperation,
+): boolean {
+  return (
+    !compactGrantOperation(operation) ||
+    showPlanDetails.value ||
+    grantExpanded.value[operation.value.ref] === true
+  );
+}
 const grantReadBundle = shallowRef(createIntegrationGrantReadBundle());
 onScopeDispose(() => grantReadBundle.value.close());
+const projectGrantReadBundle = shallowRef(
+  createProjectIntegrationGrantReadBundle(),
+);
+onScopeDispose(() => projectGrantReadBundle.value.close());
+const compactProjectGrantBatch = computed(
+  () =>
+    operations.value.filter(
+      (operation) =>
+        operation.value.type === "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT",
+    ).length > 1,
+);
 const compactGrantBatch = computed(
   () =>
     operations.value.filter(
@@ -349,7 +379,10 @@ const grantSnapshotConflict = computed(
     props.plan.state === "INVALID" &&
     props.plan.operations.some(
       (operation) =>
-        operation.type === "CHANGE_INTEGRATION_GRANT" &&
+        [
+          "CHANGE_INTEGRATION_GRANT",
+          "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT",
+        ].includes(operation.type) &&
         operation.validationProblems.some(
           (problem) =>
             problem === "snapshot-conflict" || problem === "version-conflict",
@@ -375,8 +408,11 @@ type EditorTarget =
 const editorTarget = ref<EditorTarget>();
 
 function resetDraft(): void {
+  grantExpanded.value = {};
   grantReadBundle.value.close();
   grantReadBundle.value = createIntegrationGrantReadBundle();
+  projectGrantReadBundle.value.close();
+  projectGrantReadBundle.value = createProjectIntegrationGrantReadBundle();
   // Дочерние формы сообщают о валидности при монтировании. После обновления
   // плана их нужно создать заново, даже если ссылки на операции не изменились.
   draftGeneration.value += 1;
@@ -1369,13 +1405,23 @@ function validationProblemLabel(problem: string): string {
 
       <div
         class="assistant-plan-operations"
-        :class="{ 'assistant-plan-operations--grant-batch': compactGrantBatch }"
+        :class="{
+          'assistant-plan-operations--grant-batch':
+            compactGrantBatch || compactProjectGrantBatch,
+        }"
       >
         <article
           v-for="(operation, index) in operations"
           :key="`${draftGeneration}:${operation.value.ref}`"
           class="assistant-plan-operation"
-          :class="`assistant-plan-operation--${operationActionLabel(operation.value.action)}`"
+          :class="[
+            `assistant-plan-operation--${operationActionLabel(operation.value.action)}`,
+            {
+              'assistant-plan-operation--compact-grant':
+                compactGrantOperation(operation) &&
+                !grantOperationDetailsVisible(operation),
+            },
+          ]"
         >
           <header>
             <label class="assistant-plan-operation__select">
@@ -1384,8 +1430,17 @@ function validationProblemLabel(problem: string): string {
                 :name="`assistant-operation-selected-${index}`"
                 type="checkbox"
                 :disabled="!editable || !operation.value.permitted"
+                :aria-label="
+                  compactGrantOperation(operation)
+                    ? operation.value.title ||
+                      operationTargetLabel(operation.value.target)
+                    : undefined
+                "
               />
-              <span class="assistant-operation-kind">
+              <span
+                v-show="grantOperationDetailsVisible(operation)"
+                class="assistant-operation-kind"
+              >
                 {{
                   $t(
                     `assistant.planEditor.actions.${operationActionLabel(operation.value.action)}`,
@@ -1393,7 +1448,10 @@ function validationProblemLabel(problem: string): string {
                 }}
               </span>
             </label>
-            <span class="assistant-plan-operation__title">
+            <span
+              v-show="grantOperationDetailsVisible(operation)"
+              class="assistant-plan-operation__title"
+            >
               {{
                 operation.value.title ||
                 operationTargetLabel(operation.value.target)
@@ -1544,7 +1602,11 @@ function validationProblemLabel(problem: string): string {
             v-if="friendlyPlanOperationType(operation)"
             class="assistant-plan-friendly"
           >
-            <p v-if="editable" class="assistant-plan-friendly__hint">
+            <p
+              v-if="editable"
+              class="assistant-plan-friendly__hint"
+              v-show="grantOperationDetailsVisible(operation)"
+            >
               {{ $t("assistant.planEditor.friendlyHint") }}
             </p>
             <AssistantLaunchRunForm
@@ -1698,6 +1760,7 @@ function validationProblemLabel(problem: string): string {
               :project-ref="plan.projectRef"
               :read-bundle="grantReadBundle"
               :compact="compactGrantBatch"
+              @expanded="grantExpanded[operation.value.ref] = $event"
               :disabled="!editable"
               @valid="integrationGrantValidity[operation.value.ref] = $event"
               @dirty="integrationGrantTouched = true"
@@ -1711,6 +1774,9 @@ function validationProblemLabel(problem: string): string {
                 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT'
               "
               :operation="operation"
+              :read-bundle="projectGrantReadBundle"
+              :compact="compactProjectGrantBatch"
+              @expanded="grantExpanded[operation.value.ref] = $event"
               :applied-grant-ref="
                 projectIntegrationGrantReceiptRef(
                   plan,
@@ -2490,7 +2556,10 @@ function validationProblemLabel(problem: string): string {
                 </p>
               </template>
             </template>
-            <details class="assistant-plan-friendly__snapshot">
+            <details
+              v-show="grantOperationDetailsVisible(operation)"
+              class="assistant-plan-friendly__snapshot"
+            >
               <summary>
                 {{ $t("assistant.planEditor.transitionDetails") }}
               </summary>
@@ -2826,6 +2895,33 @@ function validationProblemLabel(problem: string): string {
 }
 .assistant-plan-operation--update {
   border-left-color: var(--warning);
+}
+.assistant-plan-operation--compact-grant {
+  grid-template-columns: 24px minmax(0, 1fr) 28px;
+  align-items: start;
+}
+.assistant-plan-operation--compact-grant > header {
+  display: contents;
+}
+.assistant-plan-operation--compact-grant .assistant-plan-operation__select {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 32px;
+}
+.assistant-plan-operation--compact-grant .assistant-plan-operation__number {
+  grid-column: 3;
+  grid-row: 1;
+  line-height: 32px;
+}
+.assistant-plan-operation--compact-grant > .assistant-plan-friendly {
+  grid-column: 2;
+  grid-row: 1;
+  gap: 0;
+  min-width: 0;
+}
+.assistant-plan-operation--compact-grant > .field-error,
+.assistant-plan-operation--compact-grant > .assistant-validation-list {
+  grid-column: 2 / -1;
 }
 .assistant-plan-operation > header,
 .assistant-plan-operation__select,
