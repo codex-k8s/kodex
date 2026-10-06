@@ -187,13 +187,87 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 			"capability_key": "synthetic.journal.write", "idempotency_key": key,
 		}, map[string]any{"action": action, "value": value})
 	}
-	first, err := call("scoped-first", "UPDATE", "first")
+	const privatePreviewValue = "scoped-private-preview-first"
+	first, err := call("scoped-first", "UPDATE", privatePreviewValue)
 	if err != nil || stringMap(first, "state") != "WAITING_APPROVAL" || stringMap(first, "gateRef") == "" {
 		t.Fatalf("first scoped effect must wait: state=%q err=%v", stringMap(first, "state"), err)
 	}
 	gate, err := service.GetOwnerGate(ctx, owner, stringMap(first, "gateRef"))
 	if err != nil || gate.IntegrationIntent == nil {
 		t.Fatalf("read scoped approval preview: %v", err)
+	}
+	assertEffectPreview := func(current entity.OwnerGate, visible bool) {
+		t.Helper()
+		if current.IntegrationIntent == nil {
+			t.Fatal("scoped intent is missing")
+		}
+		effect := current.IntegrationIntent.EffectPreview
+		fields, ok := effect["fields"].([]any)
+		if !ok || effect["contentComplete"] != visible {
+			t.Fatal("scoped effect preview has incorrect completeness")
+		}
+		if !visible {
+			encoded, err := json.Marshal(effect)
+			if err != nil || len(fields) != 0 || strings.Contains(string(encoded), privatePreviewValue) {
+				t.Fatal("scoped input leaked without decision permission")
+			}
+			return
+		}
+		values := make(map[string]any)
+		for _, item := range fields {
+			field, ok := item.(map[string]any)
+			if !ok || field["opaque"] != false || field["truncated"] != false {
+				t.Fatal("scoped effect lost safe field descriptors")
+			}
+			key, ok := field["key"].(string)
+			if !ok {
+				t.Fatal("scoped effect field key is missing")
+			}
+			values[key] = field["value"]
+		}
+		if len(values) != 2 || values["action"] != "UPDATE" || values["value"] != privatePreviewValue {
+			t.Fatal("owner lost bounded immutable effect inputs")
+		}
+	}
+	assertEffectPreview(gate, true)
+	listed, _, _, err := service.ListOwnerGates(ctx, owner, query.Filter{ProjectRef: project.Project.Ref})
+	if err != nil || len(listed) != 1 || listed[0].Ref != gate.Ref {
+		t.Fatal("owner gate list lost exact scoped gate", err)
+	}
+	assertEffectPreview(listed[0], true)
+	viewerInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000009331", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Scoped preview viewer", CallerWorkload: "control-api-gateway", Operation: "platform.query.bootstrap",
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, viewerInput); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatal("unbound scoped viewer was accepted", err)
+	}
+	subjects, _, err := service.ListAccessSubjects(ctx, owner, query.Filter{Query: viewerInput.ExternalDisplayName}, "USER")
+	if err != nil || len(subjects) != 1 {
+		t.Fatal("scoped viewer subject is missing", err)
+	}
+	viewerOrganization, err := service.Execute(ctx, command.Command{Kind: command.AddPlatformMembership, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "scoped-viewer-organization"}, Payload: command.PlatformMembershipInput{
+			UserRef: subjects[0].Ref, Role: "MEMBER", Active: true,
+		}})
+	if err != nil || viewerOrganization.Membership == nil {
+		t.Fatal("scoped viewer organization membership is missing", err)
+	}
+	viewerMember, err := service.Execute(ctx, command.Command{Kind: command.AddMembership, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "scoped-viewer-membership"}, Payload: command.MembershipInput{
+			ProjectRef: project.Project.Ref, UserRef: subjects[0].Ref, Permissions: []string{"VIEW"}, Active: true,
+		}})
+	if err != nil || viewerMember.Membership == nil {
+		t.Fatal("view-only scoped membership is missing", err)
+	}
+	viewer := resolvedTestPrincipal(t, ctx, repository, viewerInput, "control-api-gateway")
+	viewerGate, err := service.GetOwnerGate(ctx, viewer, gate.Ref)
+	if err != nil {
+		t.Fatal("view-only scoped gate read failed", err)
+	}
+	assertEffectPreview(viewerGate, false)
+	if len(viewerGate.NextActions) != 0 {
+		t.Fatal("view-only scoped gate gained decision actions")
 	}
 	preview, ok := gate.IntegrationIntent.EffectPreview["approvalScope"].(map[string]any)
 	if !ok {
@@ -226,6 +300,7 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 		t.Fatal(err)
 	}
 	eventPreview := eventGate.IntegrationIntent.EffectPreview
+	assertEffectPreview(eventGate, false)
 	eventScope := eventPreview["approvalScope"].(map[string]any)
 	redactedSelected, ok := eventScope["selected"].([]map[string]string)
 	if !ok || len(redactedSelected) != 1 || redactedSelected[0]["path"] != "/action" || len(eventPreview["fields"].([]any)) != 0 {
@@ -241,6 +316,27 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 		Payload:  command.GateResolutionInput{GateRef: stringMap(first, "gateRef"), Decision: "APPROVE"}})
 	if err != nil || approved.Gate == nil || approved.Gate.State != "APPROVED" {
 		t.Fatalf("approve scoped effect: %v", err)
+	}
+	assertEffectPreview(*approved.Gate, true)
+	historical, err := service.GetOwnerGate(ctx, owner, gate.Ref)
+	if err != nil || historical.State != "APPROVED" || len(historical.NextActions) != 0 {
+		t.Fatal("terminal scoped history revived decision actions", err)
+	}
+	assertEffectPreview(historical, true)
+	viewerHistorical, err := service.GetOwnerGate(ctx, viewer, gate.Ref)
+	if err != nil {
+		t.Fatal("view-only terminal scoped history read failed", err)
+	}
+	assertEffectPreview(viewerHistorical, false)
+	var persistedGates, leakedGates int64
+	if err := pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE position($2 in safe_delta::text)>0)
+FROM control_plane.run_events WHERE gate_ref=$1`, gate.Ref, privatePreviewValue).Scan(&persistedGates, &leakedGates); err != nil || persistedGates < 2 || leakedGates != 0 {
+		t.Fatal("persisted scoped events exposed private preview", err)
+	}
+	var outboxEvents, leakedOutbox int64
+	if err := pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE position($2 in convert_from(payload,'UTF8'))>0)
+FROM control_plane.outbox_events WHERE ordering_key=$1`, "run:"+run.Run.Ref, privatePreviewValue).Scan(&outboxEvents, &leakedOutbox); err != nil || outboxEvents == 0 || leakedOutbox != 0 {
+		t.Fatal("scoped outbox exposed private preview", err)
 	}
 	firstClaim, err := service.ClaimIntegrationInvocations(ctx, gateway, "scoped-gateway", 1)
 	if err != nil || len(firstClaim) != 1 || stringMap(firstClaim[0], "invocationRef") != stringMap(first, "invocationRef") {

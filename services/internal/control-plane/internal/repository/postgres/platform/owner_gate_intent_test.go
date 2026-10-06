@@ -94,6 +94,51 @@ func TestScopedGatePreviewRedactsValuesWithoutDecisionPermission(t *testing.T) {
 	}
 }
 
+func TestGitHubIssueCommentGatePreviewUsesShippedBounds(t *testing.T) {
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, large := range []bool{false, true} {
+		body := "Проверка безопасного комментария"
+		if large {
+			body = strings.Repeat("я", gatePreviewFieldBytes)
+		}
+		raw, err := json.Marshal(map[string]any{"issue_number": 1797, "body": body})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(raw)
+		preview, err := integrationGatePreview(definitions, "github", "github.issue.comment.create", "github.issue.comment.create", raw, hex.EncodeToString(sum[:]))
+		if err != nil || preview["contentComplete"] != !large {
+			t.Fatal("comment completeness changed", err)
+		}
+		fields, ok := preview["fields"].([]any)
+		if !ok || len(fields) != 2 {
+			t.Fatal("comment preview lost safe fields")
+		}
+		for _, item := range fields {
+			field := item.(map[string]any)
+			if field["opaque"] != false {
+				t.Fatal("safe comment field became opaque")
+			}
+			switch field["key"] {
+			case "issue_number":
+				if field["value"] != int64(1797) || field["type"] != "INTEGER" {
+					t.Fatal("comment preview changed issue binding")
+				}
+			case "body":
+				text, ok := field["value"].(string)
+				if !ok || !utf8.ValidString(text) || len(text) > gatePreviewFieldBytes || field["truncated"] != large || !strings.HasPrefix(body, text) {
+					t.Fatal("comment preview bypassed bounded UTF-8 text")
+				}
+			default:
+				t.Fatal("comment preview added an unknown field")
+			}
+		}
+	}
+}
+
 func TestGateConsequencesDistinguishExecutionAndDelivery(t *testing.T) {
 	decisions := []string{"APPROVE", "REJECT", "CANCEL", "REQUEST_CHANGES"}
 	for _, kind := range []string{"ordinary", "integration", "delivery"} {

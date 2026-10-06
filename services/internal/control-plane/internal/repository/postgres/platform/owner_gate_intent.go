@@ -80,8 +80,6 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		if approval == string(integrationpackage.ApprovalHumanScoped) {
 			// Для параметризованного согласования исходные аргументы не входят
 			// в событие запуска и не раскрываются тем, кто видит Gate без права решения.
-			intent.EffectPreview["fields"] = []any{}
-			intent.EffectPreview["contentComplete"] = false
 			showScopeValues := false
 			if actorScoped {
 				tx, ok := runner.(pgx.Tx)
@@ -95,6 +93,10 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 					return accessErr
 				}
 				showScopeValues = accessErr == nil
+			}
+			if !showScopeValues {
+				intent.EffectPreview["fields"] = []any{}
+				intent.EffectPreview["contentComplete"] = false
 			}
 			definition, definitionErr := repository.integrationPackage(ctx, runner, current.organizationID,
 				intent.ConnectionRef, intent.DefinitionKey, definitionVersion, definitionDigest)
