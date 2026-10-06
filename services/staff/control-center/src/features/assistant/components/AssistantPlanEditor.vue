@@ -2900,7 +2900,7 @@ function validationProblemLabel(problem: string): string {
   grid-template-columns: 24px minmax(0, 1fr) 28px;
   align-items: start;
 }
-.assistant-plan-operation--compact-grant > header {
+.assistant-plan-operation.assistant-plan-operation--compact-grant > header {
   display: contents;
 }
 .assistant-plan-operation--compact-grant .assistant-plan-operation__select {
