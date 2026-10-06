@@ -431,7 +431,13 @@ func containsString(values []string, expected string) bool {
 
 func validSessionContext(messages []RunnerSessionMessage) bool {
 	for _, message := range messages {
-		if !containsString([]string{"USER", "ASSISTANT", "SYSTEM"}, message.Role) || len(message.Content) > 64<<10 {
+		if message.Role == "USER" {
+			if !ValidAssistantTurnContent(message.Content) {
+				return false
+			}
+			continue
+		}
+		if !containsString([]string{"ASSISTANT", "SYSTEM"}, message.Role) || len(message.Content) > 64<<10 {
 			return false
 		}
 	}

@@ -1,11 +1,14 @@
 package httptransport
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"strings"
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -258,8 +261,18 @@ func (server *Server) UpdateAssistantConversationTitle(w http.ResponseWriter, r 
 	writeMessage(w, http.StatusOK, response, "conversation", "")
 }
 func (server *Server) AddAssistantTurn(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.AddAssistantTurnParams) {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maximumJSONBody+1))
+	if err != nil || len(raw) > maximumJSONBody || !utf8.Valid(raw) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(raw))
 	body, ok := decodeJSON[generated.AddAssistantTurnJSONBody](w, r)
 	if !ok {
+		return
+	}
+	if !runtimecontract.ValidAssistantTurnContent(body.Content) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")

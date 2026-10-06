@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
@@ -1130,6 +1131,12 @@ func (service *Service) Execute(ctx context.Context, input command.Command) (com
 func (service *Service) executeResolved(ctx context.Context, input command.Command) (command.Result, error) {
 	if !knownCommand(input.Kind) || input.Payload == nil {
 		return command.Result{}, errs.ErrInvalid
+	}
+	if input.Kind == command.AddAssistantTurn {
+		payload, ok := input.Payload.(command.AssistantTurnInput)
+		if !ok || !runtimecontract.ValidAssistantTurnContent(payload.Content) {
+			return command.Result{}, errs.ErrInvalid
+		}
 	}
 	input.Mutation.Operation = "controlplane." + strings.ToLower(string(input.Kind))
 	intentPayload := input.Payload

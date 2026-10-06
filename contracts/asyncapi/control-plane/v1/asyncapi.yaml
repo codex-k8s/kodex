@@ -47,7 +47,7 @@ operations:
       orderingKey: organizationRef+rootRunRef
       sequenceField: sequence
       deduplicationKey: eventId
-      maximumPayloadBytes: 65536
+      maximumPayloadBytes: 258048
     x-consumers:
       - service: control-api-gateway
         effect: WAKE_AUTHORIZED_RUN_STREAM_CATCH_UP

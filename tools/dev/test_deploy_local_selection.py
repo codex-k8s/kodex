@@ -34,6 +34,17 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertIn("local render is invalid", result.stderr)
         self.assertNotIn("workload selection", result.stderr)
 
+    def test_exact_broker_bootstrap_is_only_a_migration_selection(self):
+        result = self.run_selection("control-plane-broker-bootstrap", "migrate")
+        self.assertIn("local render is invalid", result.stderr)
+        self.assertNotIn("workload selection", result.stderr)
+        for stage in ("core", "data", "network", "supply-chain"):
+            result = self.run_selection("control-plane-broker-bootstrap", stage)
+            self.assertIn("workload selection requires", result.stderr)
+        for workload in ("foreign-broker-bootstrap", "control-plane-broker-bootstrap-extra"):
+            result = self.run_selection(workload, "migrate")
+            self.assertIn("migration workload selection requires", result.stderr)
+
     def test_archive_is_an_explicit_core_selection_only(self):
         result = self.run_selection("session-archive")
         self.assertNotEqual(result.returncode, 0)

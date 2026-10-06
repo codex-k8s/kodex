@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/eventing/browserstate"
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/kodex/libs/go/eventing/sessionrevocation"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -77,12 +78,27 @@ func bootstrapBroker(ctx context.Context) error {
 			initial: 250 * time.Millisecond,
 			maximum: 5 * time.Second,
 		}, func(config natsjetstream.Config) (brokerPublisher, error) {
-			return natsjetstream.New(config)
+			publisher, err := natsjetstream.New(config)
+			if err != nil {
+				return nil, err
+			}
+			if config.Stream == "CONTROL_PLANE" {
+				return &controlPlaneBootstrapPublisher{publisher}, nil
+			}
+			return publisher, nil
 		}); err != nil {
 			return err
 		}
 	}
+	fmt.Println(brokerBootstrapCompleted)
 	return nil
+}
+
+// Только environment-owned bootstrap принимает точный прежний message-limit.
+type controlPlaneBootstrapPublisher struct{ *natsjetstream.Publisher }
+
+func (publisher *controlPlaneBootstrapPublisher) EnsureStream(ctx context.Context) error {
+	return publisher.EnsureStreamWithMessageLimitUpgrade(ctx, 64<<10)
 }
 
 type brokerPublisher interface {
@@ -98,6 +114,8 @@ type brokerRetryPolicy struct {
 }
 
 const minimumBrokerConnectTimeout = 100 * time.Millisecond
+
+const brokerBootstrapCompleted = "control-plane broker bootstrap completed: stream=CONTROL_PLANE maximum_message_bytes=262144"
 
 func loadBrokerBootstrapConfig() (natsjetstream.Config, time.Duration, error) {
 	replicas, err := strconv.Atoi(strings.TrimSpace(os.Getenv("CONTROL_PLANE_NATS_REPLICAS")))
@@ -117,7 +135,7 @@ func loadBrokerBootstrapConfig() (natsjetstream.Config, time.Duration, error) {
 		CAFile: os.Getenv("CONTROL_PLANE_NATS_CA_FILE"), CertificateFile: os.Getenv("CONTROL_PLANE_NATS_CERTIFICATE_FILE"),
 		PrivateKeyFile: os.Getenv("CONTROL_PLANE_NATS_PRIVATE_KEY_FILE"), CredentialsFile: os.Getenv("CONTROL_PLANE_NATS_CREDENTIALS_FILE"),
 		Stream: "CONTROL_PLANE", Subjects: []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"},
-		Replicas: replicas, MaxMessageBytes: 64 << 10, MaxMessages: 10_000_000, MaxBytes: maximumBytes,
+		Replicas: replicas, MaxMessageBytes: runtimecontract.MaximumControlPlaneStreamMessageBytes, MaxMessages: 10_000_000, MaxBytes: maximumBytes,
 		MaxPerSubject: 1_000_000, MaxAge: 30 * 24 * time.Hour, DuplicateWindow: 2 * time.Minute, ConnectTimeout: 5 * time.Second,
 	}, timeout, nil
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -1065,7 +1066,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 
 func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantTurnInput)
-	if !ok || payload.ConversationRef == "" || strings.TrimSpace(payload.Content) == "" ||
+	if !ok || payload.ConversationRef == "" || !runtimecontract.ValidAssistantTurnContent(payload.Content) ||
 		!contains([]string{"QUEUE", "INTERRUPT_ACTIVE"}, payload.DeliveryMode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}

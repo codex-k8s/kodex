@@ -86,6 +86,10 @@ func New(config Config) (*Publisher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrConnect, err)
 	}
+	if connection.MaxPayload() < int64(config.MaxMessageBytes) {
+		connection.Close()
+		return nil, errors.New("NATS server payload limit is below stream contract")
+	}
 	js, err := jetstream.New(connection)
 	if err != nil {
 		connection.Close()
@@ -146,6 +150,39 @@ func (publisher *Publisher) reconcileEmptyStream(ctx context.Context, stream jet
 	}
 	if _, err := publisher.jetstream.UpdateStream(ctx, expectedStreamConfig(publisher.config)); err != nil {
 		return fmt.Errorf("update empty NATS JetStream stream: %w", err)
+	}
+	return publisher.Check(ctx)
+}
+
+// EnsureStreamWithMessageLimitUpgrade принадлежит release bootstrap, не runtime.
+// Непустой поток меняет только MaxMsgSize при exact прежнем контракте.
+func (publisher *Publisher) EnsureStreamWithMessageLimitUpgrade(ctx context.Context, previous int32) error {
+	if previous <= 0 || previous >= publisher.config.MaxMessageBytes {
+		return errors.New("NATS stream message limit upgrade is invalid")
+	}
+	stream, err := publisher.jetstream.Stream(ctx, publisher.config.Stream)
+	if errors.Is(err, jetstream.ErrStreamNotFound) {
+		return publisher.EnsureStream(ctx)
+	}
+	if err != nil {
+		return errors.New("read NATS stream before message limit upgrade")
+	}
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return errors.New("read NATS stream info before message limit upgrade")
+	}
+	if streamCompatible(info.Config, publisher.config) {
+		return publisher.Check(ctx)
+	}
+	old := publisher.config
+	old.MaxMessageBytes = previous
+	if !streamCompatible(info.Config, old) {
+		return errors.New("NATS stream previous contract mismatch")
+	}
+	next := info.Config
+	next.MaxMsgSize = publisher.config.MaxMessageBytes
+	if _, err := publisher.jetstream.UpdateStream(ctx, next); err != nil {
+		return errors.New("update NATS stream message limit")
 	}
 	return publisher.Check(ctx)
 }

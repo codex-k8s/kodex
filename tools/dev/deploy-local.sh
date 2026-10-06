@@ -11,7 +11,7 @@ usage() {
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
     '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|supply-chain-quiesce|builder-runtime|core|integration-egress|runtime-rbac]' \
-    '  [--workload <exact-core-deployment|stt-tts-service|control-plane-migrate>]' >&2
+    '  [--workload <exact-core-deployment|stt-tts-service|control-plane-migrate|control-plane-broker-bootstrap>]' >&2
 }
 
 context=""
@@ -46,8 +46,8 @@ case "$stage" in full|data|network|migrate|supply-chain|supply-chain-quiesce|bui
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
   if [[ "$stage" == migrate ]]; then
-    [[ "$selected_workload" == control-plane-migrate ]] ||
-      fail 'migration workload selection requires control-plane-migrate'
+    [[ "$selected_workload" == control-plane-migrate || "$selected_workload" == control-plane-broker-bootstrap ]] ||
+      fail 'migration workload selection requires control-plane-migrate or control-plane-broker-bootstrap'
   else
     [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service|clamav-db-updater|session-archive)$ ]] ||
       fail 'workload selection requires an exact core deployment'

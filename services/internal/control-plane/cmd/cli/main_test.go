@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 type fakeBrokerPublisher struct {
@@ -16,6 +17,19 @@ type fakeBrokerPublisher struct {
 	closeCalls  int
 	ensureErr   error
 	closeErr    error
+}
+
+func TestBrokerBootstrapPinsUnicodeRunEventStreamLimit(t *testing.T) {
+	t.Setenv("CONTROL_PLANE_NATS_REPLICAS", "1")
+	t.Setenv("CONTROL_PLANE_NATS_MAX_BYTES", "1073741824")
+	t.Setenv("CONTROL_PLANE_BROKER_BOOTSTRAP_TIMEOUT", "60s")
+	config, _, err := loadBrokerBootstrapConfig()
+	if err != nil || config.Stream != "CONTROL_PLANE" || config.MaxMessageBytes != runtimecontract.MaximumControlPlaneStreamMessageBytes {
+		t.Fatal("bootstrap and runtime event size pins differ")
+	}
+	if runtimecontract.MaximumControlPlaneStreamMessageBytes != 256<<10 {
+		t.Fatal("stream limit is not the pinned forward revision")
+	}
 }
 
 func (publisher *fakeBrokerPublisher) EnsureStream(context.Context) error {

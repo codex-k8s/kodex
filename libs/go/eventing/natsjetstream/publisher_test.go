@@ -3,6 +3,7 @@ package natsjetstream
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,58 @@ type fakeManagedStream struct {
 	jetstream.Stream
 	info    jetstream.StreamInfo
 	infoErr error
+}
+
+func TestReleaseMessageLimitUpgradeIsExactAndForwardOnly(t *testing.T) {
+	config := Config{Stream: "CONTROL_PLANE", Subjects: []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"}, Replicas: 1, MaxMessageBytes: 256 << 10, MaxMessages: 1000, MaxBytes: 32 << 20, MaxPerSubject: 100, MaxAge: time.Hour, DuplicateWindow: time.Minute}
+	previous := config
+	previous.MaxMessageBytes = 64 << 10
+	for name, mutate := range map[string]func(*jetstream.StreamConfig){
+		"exact":          func(*jetstream.StreamConfig) {},
+		"foreign-stream": func(c *jetstream.StreamConfig) { c.Name = "OTHER" },
+		"subjects":       func(c *jetstream.StreamConfig) { c.Subjects = []string{"other.*"} },
+		"storage":        func(c *jetstream.StreamConfig) { c.Storage = jetstream.MemoryStorage },
+		"replicas":       func(c *jetstream.StreamConfig) { c.Replicas++ },
+		"capacity":       func(c *jetstream.StreamConfig) { c.MaxBytes++ },
+		"messages":       func(c *jetstream.StreamConfig) { c.MaxMsgs++ },
+		"per-subject":    func(c *jetstream.StreamConfig) { c.MaxMsgsPerSubject++ },
+		"age":            func(c *jetstream.StreamConfig) { c.MaxAge++ },
+		"dedup":          func(c *jetstream.StreamConfig) { c.Duplicates++ },
+		"delete":         func(c *jetstream.StreamConfig) { c.DenyDelete = false },
+		"purge":          func(c *jetstream.StreamConfig) { c.DenyPurge = false },
+		"rollup":         func(c *jetstream.StreamConfig) { c.AllowRollup = true },
+		"mirror":         func(c *jetstream.StreamConfig) { c.Mirror = &jetstream.StreamSource{Name: "OTHER"} },
+		"unknown-limit":  func(c *jetstream.StreamConfig) { c.MaxMsgSize++ },
+	} {
+		t.Run(name, func(t *testing.T) {
+			actual := expectedStreamConfig(previous)
+			actual.Description = "Preserve environment-owned metadata"
+			mutate(&actual)
+			before := jetstream.StreamInfo{Config: actual, State: jetstream.StreamState{Msgs: 10, Bytes: 1000, Consumers: 2}}
+			stream := &fakeManagedStream{info: before}
+			manager := &fakeJetStream{stream: stream}
+			publisher := &Publisher{jetstream: manager, config: config}
+			err := publisher.EnsureStreamWithMessageLimitUpgrade(t.Context(), 64<<10)
+			if name != "exact" {
+				if err == nil || manager.updateCalls != 0 {
+					t.Fatal("unrelated stream drift was changed")
+				}
+				return
+			}
+			actual.MaxMsgSize = config.MaxMessageBytes
+			if err != nil || manager.updateCalls != 1 || !reflect.DeepEqual(manager.updatedConfig, actual) || !reflect.DeepEqual(stream.info.State, before.State) {
+				t.Fatal("upgrade changed more than message size")
+			}
+			if err := publisher.EnsureStreamWithMessageLimitUpgrade(t.Context(), 64<<10); err != nil || manager.updateCalls != 1 {
+				t.Fatal("upgrade replay changed stream")
+			}
+			for _, invalid := range []int32{0, config.MaxMessageBytes, config.MaxMessageBytes + 1} {
+				if publisher.EnsureStreamWithMessageLimitUpgrade(t.Context(), invalid) == nil || manager.updateCalls != 1 {
+					t.Fatal("invalid or reverse upgrade accepted")
+				}
+			}
+		})
+	}
 }
 
 func (stream *fakeManagedStream) Info(context.Context, ...jetstream.StreamInfoOpt) (*jetstream.StreamInfo, error) {
@@ -30,6 +83,7 @@ type fakeJetStream struct {
 	streamErr     error
 	createErr     error
 	updateErr     error
+	skipUpdate    bool
 	updateCalls   int
 	updatedConfig jetstream.StreamConfig
 }
@@ -51,8 +105,31 @@ func (manager *fakeJetStream) UpdateStream(_ context.Context, config jetstream.S
 	if manager.updateErr != nil {
 		return nil, manager.updateErr
 	}
-	manager.stream.info.Config = config
+	if !manager.skipUpdate {
+		manager.stream.info.Config = config
+	}
 	return manager.stream, nil
+}
+
+func TestReleaseMessageLimitUpgradeRequiresExactReadback(t *testing.T) {
+	config := Config{Stream: "CONTROL_PLANE", Subjects: []string{"control_plane.platform.*.events"}, Replicas: 1, MaxMessageBytes: 256 << 10, MaxMessages: 1000, MaxBytes: 32 << 20, MaxPerSubject: 100, MaxAge: time.Hour, DuplicateWindow: time.Minute}
+	previous := config
+	previous.MaxMessageBytes = 64 << 10
+	for _, test := range []struct {
+		name    string
+		manager *fakeJetStream
+	}{
+		{"read-denied", &fakeJetStream{streamErr: errors.New("synthetic denied")}},
+		{"update-denied", &fakeJetStream{stream: &fakeManagedStream{info: jetstream.StreamInfo{Config: expectedStreamConfig(previous)}}, updateErr: errors.New("synthetic denied")}},
+		{"readback-mismatch", &fakeJetStream{stream: &fakeManagedStream{info: jetstream.StreamInfo{Config: expectedStreamConfig(previous)}}, skipUpdate: true}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			publisher := &Publisher{jetstream: test.manager, config: config}
+			if publisher.EnsureStreamWithMessageLimitUpgrade(t.Context(), 64<<10) == nil {
+				t.Fatal("unproven stream upgrade returned success")
+			}
+		})
+	}
 }
 
 func TestExpectedStreamContract(t *testing.T) {
