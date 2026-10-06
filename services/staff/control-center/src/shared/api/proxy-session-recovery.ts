@@ -111,7 +111,14 @@ export function recoverIngressProxySession(
 }
 
 export function clearIngressProxyRecovery(
-  storage: Pick<Storage, "removeItem"> = window.sessionStorage,
+  storage?: Pick<Storage, "removeItem">,
 ): void {
-  storage.removeItem(ingressProxyRecoveryKey);
+  try {
+    if (!storage && typeof window === "undefined") return;
+    const target = storage ?? window.sessionStorage;
+    target.removeItem(ingressProxyRecoveryKey);
+  } catch {
+    // Marker не является authority. Недоступный storage не отменяет
+    // валидный BFF readback и не раскрывается в диагностике.
+  }
 }

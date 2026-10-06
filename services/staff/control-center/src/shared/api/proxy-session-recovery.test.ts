@@ -1,10 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clearIngressProxyRecovery,
   ingressProxyRecoveryKey,
   isIngressProxyUnauthorized,
   recoverIngressProxySession,
 } from "./proxy-session-recovery";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function response(
   url = "https://kodex.fixture/api/v1/session",
@@ -38,6 +43,45 @@ function context(pathname = "/projects/prj_fixture/agents/agt_fixture") {
 }
 
 describe("closed ingress proxy recovery", () => {
+  it("очистка в SSR не требует window", () => {
+    vi.stubGlobal("window", undefined);
+    expect(() => clearIngressProxyRecovery()).not.toThrow();
+    const removeItem = vi.fn();
+    clearIngressProxyRecovery({ removeItem });
+    expect(removeItem).toHaveBeenCalledExactlyOnceWith(ingressProxyRecoveryKey);
+  });
+
+  it("недоступный storage getter не ломает очистку и не логируется", () => {
+    const error = vi.spyOn(console, "error");
+    const warn = vi.spyOn(console, "warn");
+    const getter = vi.fn(() => {
+      throw new DOMException("Private fixture", "SecurityError");
+    });
+    vi.stubGlobal(
+      "window",
+      Object.defineProperty({}, "sessionStorage", {
+        get: getter,
+      }),
+    );
+    expect(() => clearIngressProxyRecovery()).not.toThrow();
+    expect(getter).toHaveBeenCalledOnce();
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("ошибка removeItem не ломает очистку и не логируется", () => {
+    const error = vi.spyOn(console, "error");
+    const warn = vi.spyOn(console, "warn");
+    const removeItem = vi.fn(() => {
+      throw new DOMException("Private fixture", "SecurityError");
+    });
+    vi.stubGlobal("window", { sessionStorage: { removeItem } });
+    expect(() => clearIngressProxyRecovery()).not.toThrow();
+    expect(removeItem).toHaveBeenCalledExactlyOnceWith(ingressProxyRecoveryKey);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("storage failure не превращает proxy response в retry/owner invalidation", () => {
     const current = context();
     current.storage.getItem = () => {
