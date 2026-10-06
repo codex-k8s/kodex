@@ -2,9 +2,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { createSSRApp, h } from "vue";
+import { renderToString } from "vue/server-renderer";
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import { i18n } from "@/app/i18n";
 import { serverMessageTokens } from "./server-message-catalog";
+import { serverMessageKey } from "./server-message";
+import SafeSummary from "./SafeSummary.vue";
+import SafeMarkdown from "./SafeMarkdown.vue";
 import {
   serverPermissionKeys,
   serverPermissionTokens,
@@ -28,6 +33,42 @@ function closedCases(path: string, functionName: string): string[] {
 }
 
 describe("полнота закрытого реестра server tokens", () => {
+  it.each([
+    ["ru", "Не удалось подготовить файлы результата"],
+    ["en", "Could not prepare result files"],
+  ] as const)(
+    "показывает отказ файлов результата, а не ошибку ответа модели, в %s",
+    async (locale, expected) => {
+      const key = "serverMessages.RUNTIME_ARTIFACT_INVALID";
+      expect(serverMessageKey("i18n:RUNTIME_ARTIFACT_INVALID")).toBe(key);
+      expect(i18n.global.t(key, {}, { locale })).toBe(expected);
+      const unknown = "i18n:RUNTIME_ARTIFACT_INTERNAL_DIAGNOSTIC";
+      expect(serverMessageKey(unknown)).toBeUndefined();
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        const app = createSSRApp({
+          render: () =>
+            h("main", [
+              h(SafeSummary, { content: "i18n:RUNTIME_ARTIFACT_INVALID" }),
+              h(SafeMarkdown, { content: "i18n:RUNTIME_ARTIFACT_INVALID" }),
+              h(SafeSummary, { content: unknown }),
+            ]),
+        });
+        app.use(i18n);
+        const html = await renderToString(app);
+        expect(html.split(expected)).toHaveLength(3);
+        expect(html).toContain(i18n.global.t("serverMessages.unsupported"));
+        expect(html).not.toContain("RUNTIME_ARTIFACT");
+        expect(html).not.toContain("i18n:");
+        expect(html).not.toContain(
+          i18n.global.t("serverMessages.PROVIDER_RESPONSE_INVALID"),
+        );
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+    },
+  );
   it("покрывает закрытый terminal outcome runner, включая неподтверждённый результат", () => {
     const runner = readFileSync(
       new URL(

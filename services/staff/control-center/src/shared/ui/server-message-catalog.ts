@@ -237,6 +237,10 @@ export const serverTokenTranslations = {
     "Входные данные превышают допустимый размер",
     "Runtime input exceeds the size limit",
   ],
+  RUNTIME_ARTIFACT_INVALID: [
+    "Не удалось подготовить файлы результата",
+    "Could not prepare result files",
+  ],
   RUNTIME_WORKFLOW_INCOMPLETE: [
     "Процесс завершился до выполнения всех этапов",
     "Workflow ended before all steps were executed",
@@ -745,6 +749,18 @@ export const serverTokenTranslations = {
   RESULT_ARTIFACT_AVAILABLE: [
     "Файл результата доступен",
     "Result file available",
+  ],
+  IMAGE_ADMISSION_POLICY_CHANGED: [
+    "Политика допуска образа изменилась",
+    "Image admission policy changed",
+  ],
+  IMAGE_ADMISSION_FAILED: [
+    "Проверка допуска образа завершилась с ошибкой",
+    "Image admission check failed",
+  ],
+  IMAGE_ADMISSION_LEASE_EXPIRED: [
+    "Срок работы проверки истёк; допуск образа завершён с ошибкой",
+    "Admission worker lease expired; image admission failed",
   ],
   ROLE_IMAGE_BUILD_COMPLETED: [
     "Сборка образа роли завершена",
