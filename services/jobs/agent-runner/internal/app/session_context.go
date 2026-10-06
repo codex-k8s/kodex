@@ -26,7 +26,11 @@ func appendSessionContext(builder *strings.Builder, input model.Input) (bool, er
 		return false, errSessionContext
 	}
 	for _, message := range messages {
-		if (message.Role != "USER" && message.Role != "ASSISTANT" && message.Role != "SYSTEM") ||
+		if message.Role == "USER" {
+			if !runtimecontract.ValidAssistantTurnContent(message.Content) {
+				return false, errSessionContext
+			}
+		} else if (message.Role != "ASSISTANT" && message.Role != "SYSTEM") ||
 			len(message.Content) > 64<<10 || !utf8.ValidString(message.Content) {
 			return false, errSessionContext
 		}

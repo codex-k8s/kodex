@@ -75,9 +75,14 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 			}
 			conversation := invoke(command.CreateAssistantConversation, owner, scopeKind+"-create", command.AssistantConversationInput{AssistantScope: scopeKind, ProjectRef: projectRef}).Conversation
 			var restoreWhenQueued func()
+			originalJSON := `{"operations":[{"instructions":"` + strings.Repeat("Полный исходный JSON 😀 <>& ", 600) + `"}],"complete":true}`
 			claim := func(key string) map[string]any {
 				t.Helper()
-				invoke(command.AddAssistantTurn, owner, scopeKind+key+"-turn", command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: "Synthetic " + key, DeliveryMode: "QUEUE"})
+				content := "Synthetic " + key
+				if key == "first" {
+					content = originalJSON
+				}
+				invoke(command.AddAssistantTurn, owner, scopeKind+key+"-turn", command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: content, DeliveryMode: "QUEUE"})
 				if restoreWhenQueued != nil {
 					restoreWhenQueued()
 					restoreWhenQueued = nil
@@ -105,6 +110,18 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 			}
 			restoreWhenQueued = prepareAssistantSessionArchiveRoundTrip(t, ctx, r, service, worker, owner, conversation.Ref, conversation.SessionRef, scopeKind)
 			second := claim("second")
+			messages := runtimeRevisionSessionContext(second["sessionContext"])
+			if len(messages) < 2 || messages[0].Role != "USER" || messages[0].Content != originalJSON || !json.Valid([]byte(messages[0].Content)) {
+				t.Fatal("next turn received a truncated or foreign original USER JSON")
+			}
+			var persistedHistory []byte
+			if err := pool.QueryRow(ctx, `SELECT safe_snapshot->'sessionContext' FROM control_plane.runtime_revisions WHERE ref=$1`, stringMap(second, "runtimeRevisionRef")).Scan(&persistedHistory); err != nil {
+				t.Fatal(err)
+			}
+			var persistedMessages []map[string]string
+			if json.Unmarshal(persistedHistory, &persistedMessages) != nil || len(persistedMessages) < 2 || persistedMessages[0]["content"] != originalJSON {
+				t.Fatal("immutable runtime snapshot lost exact original USER JSON")
+			}
 			if stringMap(second, "codexSessionID") != threadID {
 				var raw []byte
 				pool.QueryRow(ctx, `SELECT safe_snapshot FROM control_plane.runtime_revisions WHERE ref=$1`, stringMap(first, "runtimeRevisionRef")).Scan(&raw)

@@ -620,7 +620,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			var attachmentSets []map[string]string
 			_ = jsonUnmarshal(rawAttachmentSets, &attachmentSets)
 			var sessionContext []map[string]string
-			_ = jsonUnmarshal(rawSessionContext, &sessionContext)
+			if err := jsonUnmarshal(rawSessionContext, &sessionContext); err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			sessionContext = boundedRuntimeSessionHistory(sessionContext)
 			eligibilityStage = "runtime_environment"
 			var environmentValues []runtimecontract.RuntimeEnvironmentValue
 			var secretProjections []runtimecontract.RuntimeSecretProjection

@@ -530,10 +530,11 @@ SELECT n.id::text,
                             ORDER BY history.turn_number)
            FROM (
                SELECT previous.actor_kind,
-                      left(previous.content, 4000) AS content,
+                      previous.content,
                       previous.turn_number
                FROM control_plane.session_turns previous
                WHERE previous.session_id = r.session_id
+                 AND previous.organization_id = r.organization_id
                  AND previous.id <> COALESCE(n.turn_id, '00000000-0000-0000-0000-000000000000'::uuid)
                  AND previous.state = 'COMPLETED'
                ORDER BY previous.turn_number DESC
