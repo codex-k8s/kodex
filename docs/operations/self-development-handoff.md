@@ -10,6 +10,50 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 14:43 UTC: интегрированы `5bac2db1` (чистые selector titles) и
+`39c32661` (owner admission maintenance). ROOT unit платформы/домена/transport,
+frontend51/51 и canonical disposable PostgreSQL maintenance+terminal6.548с —
+PASS. CP source/Pod hash совпал; новый executable достиг штатного owner path.
+Native B2 candidate теперь `imgart_DOWAU85cQyEvSJa9HCtvHnJF`, version2,
+REJECTED/REJECTED, точный build `imgbld_iRwqjIa2JPvXyR0Hiu5fnyqa`.
+Report GET200/UNAVAILABLE раскрывает immutable policy SHA42534137…53a3b;
+serving CM SHA655cf88f…7987e. Policy drift B2 теперь доказан, не UNKNOWN.
+Старый artifact не принят под новой policy, risk decision не подделывалось.
+
+После этого однократно подтверждён native REQUEST_BUILD:
+`imgbld_7pbc1JCasxAgOXbVvEgLb2lI`, created14:42:36.819789 UTC,
+recipe version2/generation1, attempt1, QUEUED. Не повторять кнопку до
+авторитетного terminal. Следующий этап — B3 admission/report/promotion,
+проверенный полный toolchain → PROJECT ENV38 → четыре own-environment smoke.
+Если baseline inventory неполный, собственный recipe обновляет PROJECT
+помощник подтверждаемым typed plan; baseline не выдавать за готовый ENV38.
+Предварительный PROJECT06 hosted web SUCCEEDED, exact run/tool readback
+сохранён в журнале; ранний ACK/binary этого хода NOT RUN. Chrome5 активен,
+диалог PROJECT06 восстановился после reload; чужая6 не затрагивалась.
+Live screenshot selector fix просмотрен; требуется честная UX-интерпретация
+stale REJECTED без сообщения о якобы проваленном security scan. Full65 OPEN.
+
+## Предыдущие checkpoints и доказательства
+
+06.10.2026 14:30 UTC: Chrome MCP восстановлен, рабочая вкладка5
+авторизована; чужая вкладка6 не затрагивалась. Source/remote/PR1798 совпадают
+на `f157b3034dfe1c90916bb33269cac72fe43ccf98`, PR остаётся Draft.
+Native PROJECT GET рецепта B2, профиля и runtime configuration — HTTP200;
+build B2 COMPLETED, но admission/promotion ещё отсутствуют. Скриншот
+показывает «Ожидает допуска». Это НЕ готовый собственный образ.
+
+Статически найден цикл: availability скрывает старую policy, а owner
+terminalization запускается только внутри claim. При единственном stale
+PENDING claim никогда не начинается. Исправляется tenant-scoped maintenance
+в существующем availability/claim, без ослабления candidate eligibility,
+без нового RPC и без подделки scanner verdict. Actual policy drift B2 пока
+UNKNOWN: его существующий owner GET не раскрывает PENDING artifact.
+Следующий шаг: regression/component → CP hot reload → штатный owner cleanup
+→ native REJECTED candidate/readback; лишь затем подтверждённая пересборка
+с server-owned новой policy. До этого третью build не запускать.
+Runtime controller Ready1, pause=false, UID и imageID c17d3c сохранены;
+проверка14:30 не заменяет полный PROJECT QA. Полный checklist остаётся OPEN.
+
 06.10.2026 09:05 UTC: checkpoint
 `14ddfc07b4255780a43348cb19ef6b6dab0b5f58` опубликован в той же ветке;
 exact remote и PR1798 head совпали, Draft сохранён. Runtime delivery остаётся
@@ -34,8 +78,6 @@ eligible vulnerability report → promotion → ENV38. Не запускать �
 полный dogfooding; пункты основного checklist остаются открытыми.
 Chrome MCP connected, рабочая вкладка пока SSO: native UI/Network acceptance
 NOT RUN. Изменения `4449303e` опубликованы в checkpoint14ddfc07.
-
-## Предыдущие checkpoints и доказательства
 
 06.10.2026 06:05–06:08 UTC — clean HEAD
 `80b7d26280411ec3acdaa6b921f660050a572809`; image-admission OCI собран и

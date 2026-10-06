@@ -4492,3 +4492,69 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   timeout300s. Новый запрос выполняется; live PROJECT UI/Network ещё NOT RUN.
   Следующий этап — B2 native readback/admission/promotion и ENV38, затем
   сотрудники/grants/Workflow. Full65 OPEN.
+
+### 06.10.2026 14:18–14:35 UTC — восстановление Chrome и PROJECT native web
+
+- PASS на source `f157b3034dfe1c90916bb33269cac72fe43ccf98`: Chrome MCP
+  подключён, рабочая вкладка5 авторизована, чужая вкладка6 не менялась.
+  Native GET PROJECT profile/runtime configuration/recipe B2 — HTTP200;
+  recipe version1/generation1, build COMPLETED, artifact/report/promotion
+  ещё отсутствуют. Видимое «Ожидает допуска» не является acceptance образа.
+  Кластерный readback: четыре связанных Deployment Ready1/available1;
+  controller UID/паузаfalse/imageID c17d3c сохранены.
+- Статически найден maintenance starvation: availability исключает старую
+  policy, а её terminalization достижима только внутри claim. Live drift B2
+  пока UNKNOWN; его PENDING artifact в human-native GET не проецируется.
+  Исправляется owner availability/claim; новая build до terminal proof не
+  запускалась. Отдельный scanner verdict не синтезируется.
+- PASS предварительной PROJECT06 проверки hosted native web: новый диалог
+  `cnv_O6uTNb5k5kHpk804Jg7BR1dN`, POST create201/turn202;
+  run `run_dW28rUELG_DrCSaFq2AzsXnI` SUCCEEDED, currentSequence9/complete=true.
+  `CODEX_WEB_SEARCH` имеет один call ref с revision1 RUNNING → revision2
+  SUCCEEDED, actionSEARCH/query_count1, safe resultCOMPLETED. Поиск использовал
+  публичный запрос Vue; итог содержит официальную ссылку и читаемое имя
+  PROJECT помощника. Screenshot просмотрен: user справа, commentary/tool/final
+  слева, действия компактны; Console error/warn0. После reload диалог и
+  результат сохранены. Собственный ENV38 этим предварительным ходом НЕ доказан.
+- NOT RUN для PROJECT06: distinct binary и ранний provider ACK не сохранены
+  до cleanup terminal Pod. Проверенный RUN/tool transcript не подменяет этот
+  пробел. В следующих собственных ENV38 smoke захват запускается заранее.
+- Source `5bac2db1`: два selector display в редакторе образа показывают только
+  название; native options сохраняют count/recommended, id/name/value/change
+  и disabled semantics. Адресные54/54 unit, lint/format/forced typecheck — PASS
+  на isolated source `ddc4de8b`; ROOT hot reload DOM подтверждает два control
+  высотой32px, чистые title и полные option metadata. ROOT повтор51/51PASS,
+  desktop screenshot после hot reload просмотрен; Console error/warn0.
+  Полный PROJECT/full65 OPEN.
+
+### 06.10.2026 14:39–14:43 UTC — maintenance и actual policy drift B2
+
+- Source `39c326616be635c5bb0d94ea9209852676e8a7b7`, контракт/migration/OCI
+  inputs не менялись. Read-only availability включает прежний owner stale
+  cleanup. Candidate eligibility сохранена. Owner claim TX закрывает весь
+  artifact/attempt/promotion graph, сохраняет terminal snapshots/audit/receipt;
+  replay не выполняет свежую maintenance. Persisted scanner verdict не создан.
+- ROOT PASS: Go platform/domain roleimage/grpc units0.585/0.028/0.575с;
+  canonical disposable PostgreSQL maintenance5.27с +terminal1.22с,
+  package6.548с, exit0. Проверены SHA-only rotation, live/expired claims,
+  CANCELLED attempt, rollback whole graph/audit, receipt pins/replay,
+  чужой active tenant, no-work/current-policy, native GET и REQUEST_BUILD.
+  Worker-grant/runner-policy readbacks PASS; отдельные formal/remote suites
+  не заявляются. Common invariant закреплён в GUIDE-DOC-003.
+- CP Pod source hash файла claim точно совпал с host:
+  `0f704d1830dfb3d3e374e19798049eb5ab177ef3fc1737f52d20fabfb2c073ee`.
+  Hot-reload build failure0. Native GET после штатного controller claim200:
+  B2 artifact `imgart_DOWAU85cQyEvSJa9HCtvHnJF` version2,
+  admission/promotion REJECTED, build `imgbld_iRwqjIa2JPvXyR0Hiu5fnyqa`.
+  UI больше не показывает вечное ожидание; PROMOTE отсутствует.
+- Existing owner report GET200/UNAVAILABLE/REBUILD_FOR_REPORT подтвердил
+  immutable B2 policyRevision1/SHA
+  `42534137c4372d3537d631aaf01c398100114506ab3da1b1d05d5514ffd53a3b`.
+  Actual serving CM revision1/SHA
+  `655cf88f0e74f931fec557ce0ed0ec1798ffd9f3ede1763d2316b8cab2e7987e`.
+  Live policy drift теперь PASS; отдельный ABI drift UNKNOWN. Не выполнялись
+  live SQL, новый RPC, scan verdict override или принятие старого evidence.
+- После terminal/drift proof однократно native REQUEST_BUILD с подтверждением:
+  B3 `imgbld_7pbc1JCasxAgOXbVvEgLb2lI`, created14:42:36.819789 UTC,
+  recipe version2/generation1/attempt1, initialQUEUED. B3 admission/report/
+  promotion и ENV38 пока NOT RUN; не повторять эффект по transient read.

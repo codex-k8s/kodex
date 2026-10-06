@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.7
+version: 1.7.8
 updated: 2026-10-06
 ---
 
@@ -1516,6 +1516,19 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   context задаётся deny-all allowlist фактических COPY-входов с последними
   private exclusions; ignore-файл входит в input digest/cache key. Closed COPY
   сам по себе не доказывает исключение private files из передаваемого context.
+- Read-only availability включает не только claimable admission, но и
+  owner-maintenance устаревших PENDING/CLAIMED внутри того же tenant. Иначе
+  новая policy скрывает единственную старую работу раньше достижения её
+  terminalization. Maintenance использует прежний специализированный claim,
+  не расширяет candidate eligibility и не создаёт scanner verdict. Owner
+  одной транзакцией закрывает artifact/attempt/promotion, отзывает authority,
+  сохраняет точные terminal snapshots в idempotency receipt и аудит; при
+  отсутствии нового candidate возвращает NotFound только после commit.
+  Replay прежнего receipt не выполняет новые effects. Если отдельного события
+  нет, существующее eligible чтение latest recipe/candidate является
+  авторитетным terminal read path; REJECTED не даёт права promotion.
+  Повторная сборка получает свежие server-owned policy/runtime pins, а не
+  принимает прежний immutable artifact под обновлённой policy.
 - Локальный одноразовый helper доступа к credentials задаёт каждому kubectl
   явный приватный cache-dir вне repository и проверяет owner/mode/inode перед
   ограниченным cleanup. Отсутствие HOME в очищенном окружении не доказывает
