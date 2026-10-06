@@ -10,6 +10,35 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 16:52 UTC, source/remote/PR1798 `5907c6dd`, Draft сохранён.
+Доставлен input fix: native24995 Unicode/37970 UTF-8 bytes принят HTTP202,
+conversation `cnv_EDNBjsUp5rWGKNedBeKeK_KX`,
+run `run_eBj8VVkUZCUjL-FdSHzLj_1w`. Actual provider ACK: task/provider/inbox
+SHA равны, текст не усечён. Но proposal пока BLOCKED на fresh agent search
+TOOL_UNAVAILABLE (safe backend class assistant_search_query_invalid, не
+отсутствие инструмента); шести сотрудников ещё нет. Root передал свежий полный owner
+GET список (только helper) в том же чате; продолжение выполняется. Не повторять
+CREATE6 до terminal/proposal/readback. ROOT disposable PG SYSTEM/PROJECT4.40с,
+runtimecontract/stream/domain/CLI и deploy29 PASS; штатные scoped migration
+и broker-bootstrap apply/readback PASS, Goose version20261006000100,
+CONTROL_PLANE256KiB строгий bootstrap readback. Core CP apply/readback PASS,
+readiness restored и host/Pod hashes равны. Временный bootstrap503 во время
+rollout завершился; fresh browser bootstrap/project/system GET200.
+Полный maxemoji через старый runner image пока NOT RUN, не приписывать его
+новому source.
+
+Два окружения созданы own PROJECT helper планом
+`pln_O1B4d8m_i9ejqQlnmROQY01W` и опубликованы native UI после свежей SSO:
+selfdev-review `renv_am09ABl3ulJb9PRi4QQ_E_I4` /
+`renvv_Ktq1lHbuH05t_oTtys65K8XU`, selfdev-write
+`renv_NjHA7WWnyjCtNggYCTdLeV5W` / `renvv_HOBE-FojCP1g1CozM4ySGrQr`.
+Обе ACTIVE/version1/revision1, tools38, новый common artifact
+`imgart_ZrFk---i258qcWqzCA1WF8_p`; values/secrets/volumes пусты, KubernetesNONE.
+Write credential/bindings/grants ещё OPEN. GitHub PROJECT self-grant и
+ordinary Manager launch реализуются в изолированных worktrees. Full65 OPEN.
+
+## Предыдущий checkpoint 16:33
+
 06.10.2026 16:33 UTC, source `6aa8fb16`; последний подтверждённый
 remote/PR1798 checkpoint `b3693f47`. APPLIED image plan UX исправлен,
 ROOT35/35 PASS; native desktop/Console0 и source/Pod hash PASS.

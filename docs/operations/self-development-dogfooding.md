@@ -150,6 +150,56 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 16:52 UTC, source/remote/PR1798 `5907c6dd`: устранён реальный
+HTTP503 на большом сообщении. Новый общий validator допускает32768 Unicode
+codepoints без нормализации; forward migration согласует task/safe_delta/outbox,
+runEvents payload258048bytes и CONTROL_PLANEstream256KiB. Release bootstrap
+меняет только message limit при exact прежнем контракте64KiB, остальные
+pins и ordinary runtime guards сохранены. ROOT: disposable SYSTEM/PROJECT
+component4.40с/package4.465с с exact roundtrip/replay/no-effect и Goose up/noop
+PASS; runtimecontract0.190с, stream0.008с, CLI0.041с/domain0.306с и29 deploy
+selector tests3.199с PASS. Native scoped migrate/broker bootstrap apply/readback
+и core CP apply/readback PASS; live migration20261006000100, strict broker
+maximum_message_bytes262144, CP readiness restored. Source/Pod hashes нового
+validator117ac1b48e19f29be663188e36e0990cff5261b3ac2a03ebc91a1ba1ea7649d0
+и app84812b49ab52f84aa83fbd0e358b3604b7be9e70566580d4bb94320a4c841f0d равны.
+Временный503 на bootstrap при rollout завершился fresh browser GET200;
+появление экрана входа не означало потери owner session.
+
+Два CREATE_RUNTIME_ENVIRONMENT_DRAFT подготовлены own PROJECT helper после
+смены контекста с ROLE_IMAGE на PROJECT environments, план
+`pln_O1B4d8m_i9ejqQlnmROQY01W` revision1. Native Validate200/Apply200,
+две операции APPLIED одной транзакцией; затем свежая owner SSO, отдельные
+Validate и Publish UI без выбранных consumers. selfdev-review:
+`renv_am09ABl3ulJb9PRi4QQ_E_I4` / `renvv_Ktq1lHbuH05t_oTtys65K8XU`;
+selfdev-write: `renv_NjHA7WWnyjCtNggYCTdLeV5W` /
+`renvv_HOBE-FojCP1g1CozM4ySGrQr`. Drafts обе version3/PUBLISHED;
+environments ACTIVE/version1/revision1, digest
+`6fee5a70778a404dad97beb6c580bc5657e3795f280b68ea696be5fec59d77fd`,
+common artifact `imgart_ZrFk---i258qcWqzCA1WF8_p`, tools38, values/secrets0,
+volumes0/KubernetesNONE. Desktop screenshot публикации проверен;
+Console0 после второго сценария. Mobile ещё NOT RUN.
+
+Повтор full6-role сообщения24995codepoints/37970bytes принят native HTTP202:
+conversation `cnv_EDNBjsUp5rWGKNedBeKeK_KX`,
+run `run_eBj8VVkUZCUjL-FdSHzLj_1w`,
+session `ses_12yYoLkvQ9yrmuHH7KNIHi1z`,
+turn `trn_AEVFdQsjRAe4E8a5TTZuw4-F`, attempt1.
+Actual provider ACK доказал task/provider/inbox SHA
+`d29753cc96c0b26c76ec0b37f8a4bddd13b5f4eda4bb5140e2a42707fbe1687e`,
+37970bytes и EQUAL; AGENTS.md49453bytes/file EQUAL. Старый helper ENV3/B3
+и binaryf8a44936 неизменны: этот PASS не подтверждает maxemoji через новый
+runner. Proposal остановился на agent search TOOL_UNAVAILABLE без effects.
+Backend safe diagnostics уточнили причину: assistant_search_query_invalid,
+не потеря инструмента или owner RPC. Поиск сохранил ограничения2..160 символов;
+точный неверный query не раскрывался. Эта причина не устранялась ослаблением
+проверок.
+Свежий полный owner GET список — только helperREADYv7 — передан в том же
+чате, разрешённое продолжение выполняется. CREATE6/bindings108grants/Workflow
+и full65 ещё OPEN. Ошибка диагностического SDK вызова до runtime-config
+инициализации и ошибочный missing-path400 не являются приложенческими FAIL;
+исправленные read-only запросы вернули200. Чужая вкладка не изменялась.
+
 06.10.2026 16:33 UTC, source `6aa8fb16`: отображение APPLIED-плана образа
 исправлено; ROOT35/35 адресных unit PASS. Native просмотр показывает настоящее
 имя сотрудника и локализованное окружение, без ложной ошибки каталога и
