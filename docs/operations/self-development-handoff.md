@@ -10,29 +10,34 @@ updated: 2026-10-06
 
 # Текущее состояние
 
-06.10.2026 15:45 UTC: source `49b4586a`; source/remote/PR1798 на предыдущем
-checkpoint `4b365489` подтверждены, Draft сохранён. Собственный ENV38
-опубликован: rev2/version2/READY и binding version2. Реальные Context7,
-hosted web и identity/search/workspace checks — PASS; public Git — FAIL128
-при webAccess NONE. Образ и executable каждого хода подтверждены ранним
-ACK; сравнение input/inbox/instructions hashes сохранено в журнале.
+06.10.2026 16:00 UTC: source `41979459`, затем небольшое уточнение текста
+SSO в рабочем дереве. Последний remote/PR1798 checkpoint `431e86c1`
+подтверждён, Draft сохранён. Fresh SSO Validate path исправлен: возвращается
+exact ref/version server draft, после входа нет автоматических mutations.
+Native explicit Validate и Publish выполнены, выбран только PROJECT helper.
+Теперь ENV38 version3/revision3/READY, binding version3; разрешены только
+github.com HTTPS443 GET/HEAD/POST и raw.githubusercontent.com HTTPS443 GET/HEAD.
+Образ B3, все38 tools и configuration version2 сохранены.
 
-Typed policy-only plan применён один раз, создал draft
-`renvd_mxzhnTkWXNtaIrwEcPY_5Rwo`, version1/DRAFT, base revision2.
-Разрешает только github.com HTTPS443 GET/HEAD/POST и raw.githubusercontent.com
-HTTPS443 GET/HEAD. Native Validate вернул403 FRESH_AUTHENTICATION_REQUIRED;
-штатная форма пока не предлагает свежий SSO. Адресный frontend fix готовится,
-Publish ещё НЕ выполнен, published policy остаётся NONE. DNS source/render
-согласованы; actual DNS после очистки прежнего Pod — UNKNOWN, не доказанный
-кластерный дефект. После fix: fresh SSO → explicit Validate/Publish только
-PROJECT helper → exact binding/readiness → один public Git повтор с ранним ACK.
+Public GitV2 — PASS: native git2.39.5 и public HEAD
+`d43bd605ec7b41335ec038a84a896b1ab5b0d189`, оба exit0. Ранний ACK exact
+run/session/turn/attempt подтверждает ENV3/binding3/image/executable/input.
+Separate DNS probe UNKNOWN после cleanup, но реальный Git-путь работает;
+кластерный DNS source fix не требовался. После fresh SSO full RUN preview
+HTTP200 для context и Git ходов: hashes полного prompt равны actual AGENTS.md,
+PURPOSE hashes равны input/inbox; содержимое не выводилось.
 
-RUN safe-preview UI интегрирован (`49b4586a`):29/29 units и forced typecheck
-PASS. Native чтение HTTP200, но UI FAIL из-за ошибочно обязательного optional
-contextPin; исправляется adapter/test без изменения authority/fulltext.
-Chrome5 connected/authenticated; чужая6 не менялась. Full65 OPEN; следующие
-этапы —6 сотрудников, общая toolchain/write-review среды/grants/Workflow,
-bootstrap merge и реальная dogfooding задача.
+RUN safe-preview native UI — PASS: HTTP200, AVAILABLE, без полного текста,
+optional contextPin не синтезируется; header clamp3, screenshot и Console0.
+ROOT55/55 адресных unit3.66с, forced typecheck и scoped lint — PASS.
+Source/Pod hashes frontend/editor и runtime-controller равны, оба Ready.
+Повторная combined Context7/web/context проверка уже выполняется на ENV3;
+ранний ACK сохранён. GitHub connection и6сотрудников ещё не созданы.
+Готовятся exact typed prompts connection/grants и shared environments.
+Для exact common recipe name kodex-selfdev требуется новый штатный build:
+metadata-only rename B3 не поддержан; старые admission receipts не переносить.
+Chrome5 connected/authenticated; чужая6 не менялась. Full65 OPEN, затем
+SOFTWARE_CHANGE, bootstrap merge и реальная dogfooding задача.
 
 ## Предыдущий checkpoint ENV38
 

@@ -150,6 +150,36 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 16:00 UTC, source `41979459`: fresh SSO fix и optional RUN pin
+fix интегрированы. ROOT55/55 units3.66с, forced typecheck, scoped lint PASS;
+native RUN preview AVAILABLE/HTTP200, safe-only, header clamp3 и screenshot
+PASS, Console0. Fresh SSO возвратил exact network draft version1 без
+автоматического Validate/Publish. Затем native Validate→VALID/version2 и
+однократный Publish с единственным PROJECT helper выполнены.
+ENV3 published `renvv_zyj3Iu6FSksZLCjwctMTZphK`, digest
+`1c30b26d21f1812f81f1ffaca7dc2d792599484dd70235394c8f7b99729b2c74`,
+binding version3/digest
+`19cfd2861fbfdee13be61ff7934e75bf49b32a474cf9f8f05423e4a515ca2ddb`.
+Resources/image/tools38/values0/secrets0/configuration2 сохранены; shell web
+доступ разрешён только двум exact GitHub/raw HTTPS443 правилам.
+
+GitV2 реального PROJECT run `run_RLF3Wbc_IYFeu0ArCKla_qYP`, session
+`ses_V59g8MVybg0phVleNt2-QkZE`, turn `trn_Y4iaKDpKeG033X_doPxv7WZm`,
+attempt1 — PASS: git2.39.5, public HEADd43bd605, оба native exit0.
+Pod UID `0bcb632e-7593-4962-b1af-546e184b2dee`, own B3 image и обе binary
+SHAf8a44936…095f подтверждены ранним ACK. Actual task/provider/inbox SHA
+`8cc9b1a5973f1508170f40019a94575c2343e1c08d8903ab970a3ec6cc7ea65b`
+равны; instructions/file сравнение EQUAL. DNS/proxy metadata корректны,
+отдельный getent UNKNOWN из-за cleanup; реальный Git read работает.
+
+Fresh-authorized full RUN previews context и GitV2 HTTP200: полный prompt
+SHA соответственно `0c082d11…ca4d1c` и `a8dda2cb…edf3e6` равен actual
+AGENTS.md SHA/bytes12383 и11852. PURPOSE_SHA совпадает с task/inbox SHA,
+marker=true, template/service/variable/materialization pins сохранены.
+Full text, credentials и headers не выводились. Combined Context7/web/context
+на ENV3 в работе, ранний ACK exact38tools/ENV3/binding3/input EQUAL сохранён.
+Полный QA OPEN; six roles/connection/grants/Workflow/dogfooding ещё NOT RUN.
+
 06.10.2026 15:45 UTC, source `49b4586a`: safe RUN-preview UI добавлен;
 ROOT29/29 units2.02с и forced typecheck — PASS. Native preview POST200
 на exact saved RUN, но UI — FAIL: optional contextPin ошибочно обязательный.
