@@ -15,7 +15,160 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint } from "../release/scoped-release.mjs";
-import { inspectSource } from "../release/application-source.mjs";
+import { sourceGitArguments } from "../release/application-source.mjs";
+
+export const recoveryBuildContextRules = [
+  "**",
+  "!libs",
+  "!libs/go",
+  "!libs/go/**",
+  "!services",
+  "!services/jobs",
+  "!services/jobs/role-image-builder",
+  "!services/jobs/role-image-builder/**",
+  "!tools",
+  "!tools/dev",
+  "!tools/dev/Dockerfile.local-image-supply-chain",
+  "!tools/dev/Dockerfile.local-image-supply-chain.dockerignore",
+  "!tools/render-image-admission-job.sh",
+  "**/.env",
+  "**/.env.*",
+  "**/.kodex-env",
+  "**/.kodex-remote-env",
+  "**/credentials.env",
+  "**/credentials.json",
+  "**/secrets.env",
+  "**/secrets/**",
+  "**/*.key",
+  "**/*.pem",
+  "**/kubeconfig",
+  "**/.git/**",
+  "**/node_modules/**",
+];
+
+// Только прежний trusted checkout: новый source/mount/cutover не создаётся.
+// Ignored private env проверяется по metadata, никогда не читается.
+export function inspectRecoveryReaderSource(path) {
+  requireValue(
+    realpathSync(path) === path && lstatSync(path).isDirectory(),
+    "SOURCE_ROOT_INVALID",
+  );
+  const git = (...args) =>
+    execFileSync("git", sourceGitArguments(path, ...args), {
+      encoding: "utf8",
+      timeout: 10000,
+      maxBuffer: 8 << 20,
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  requireValue(
+    git("rev-parse", "--show-toplevel") === path &&
+      [
+        "https://github.com/codex-k8s/kodex",
+        "https://github.com/codex-k8s/kodex.git",
+        "git@github.com:codex-k8s/kodex",
+        "git@github.com:codex-k8s/kodex.git",
+      ].includes(git("remote", "get-url", "origin")) &&
+      git("status", "--porcelain", "--untracked-files=all") === "",
+    "SOURCE_CHECKOUT_NOT_EXACT",
+  );
+  const revision = git("rev-parse", "HEAD");
+  requireValue(/^[a-f0-9]{40}$/.test(revision), "SOURCE_REVISION_INVALID");
+  const directories = new Set();
+  const checkDirectory = (relative) => {
+    if (directories.has(relative)) return;
+    const stat = lstatSync(`${path}${relative ? "/" + relative : ""}`);
+    requireValue(
+      stat.isDirectory() && (stat.mode & 0o005) === 0o005,
+      "SOURCE_RUNTIME_ACCESS_REQUIRED",
+    );
+    directories.add(relative);
+  };
+  checkDirectory("");
+  for (const entry of git("ls-files", "--stage", "-z")
+    .split("\0")
+    .filter(Boolean)) {
+    const match = /^(100644|100755) [a-f0-9]{40} 0\t(.+)$/.exec(entry);
+    requireValue(match, "SOURCE_TRACKED_ENTRY_UNSUPPORTED");
+    const parts = match[2].split("/");
+    requireValue(
+      parts.every((p) => p && p !== "." && p !== "..") &&
+        !parts.some((p) =>
+          /^(?:\.env(?:\..*)?|\.kodex-env|\.kodex-remote-env|credentials\.env|secrets\.env)$/.test(
+            p,
+          ),
+        ),
+      "SOURCE_PRIVATE_INPUT_TRACKED",
+    );
+    for (let index = 1; index < parts.length; index++)
+      checkDirectory(parts.slice(0, index).join("/"));
+    const stat = lstatSync(`${path}/${match[2]}`),
+      required = match[1] === "100755" ? 0o005 : 0o004;
+    requireValue(
+      stat.isFile() && (stat.mode & required) === required,
+      "SOURCE_RUNTIME_ACCESS_REQUIRED",
+    );
+  }
+  for (const name of [".env", ".kodex-env", ".kodex-remote-env"]) {
+    let stat;
+    try {
+      stat = lstatSync(`${path}/${name}`);
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
+    requireValue(
+      stat.isFile() &&
+        stat.uid === process.getuid() &&
+        (stat.mode & 0o077) === 0,
+      "SOURCE_PRIVATE_INPUT_INVALID",
+    );
+    git("check-ignore", "--quiet", "--", name);
+  }
+  const rules = readFileSync(
+    `${path}/tools/dev/Dockerfile.local-image-supply-chain.dockerignore`,
+    "utf8",
+  )
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+  requireValue(
+    fingerprint(rules) === fingerprint(recoveryBuildContextRules),
+    "SOURCE_BUILD_CONTEXT_BOUND_REQUIRED",
+  );
+  return { revision };
+}
+
+export function requireExistingRecoveryMount(workload, source, state, name) {
+  const template = workload.spec?.template,
+    mountPath =
+      name === "staff-control-center"
+        ? "/workspace/services/staff/control-center"
+        : "/workspace";
+  const hostPath =
+    name === "staff-control-center"
+      ? source + "/services/staff/control-center"
+      : source;
+  const app = template?.spec?.containers?.filter((c) => c.name === name) ?? [];
+  requireValue(
+    template?.metadata?.labels?.["kodex.dev/security-profile"] ===
+      "trusted-cluster" &&
+      template.metadata.annotations?.["kodex.dev/source-root"] === source &&
+      template.metadata.annotations?.["kodex.dev/cache-root"] ===
+        state + "/cache" &&
+      app.length === 1 &&
+      app[0].volumeMounts?.some(
+        (m) =>
+          m.mountPath === mountPath &&
+          m.readOnly === true &&
+          !m.subPath &&
+          !m.subPathExpr &&
+          template.spec.volumes?.some(
+            (v) => v.name === m.name && v.hostPath?.path === hostPath,
+          ),
+      ),
+    "EXACT_EXISTING_SOURCE_MOUNT_REQUIRED",
+  );
+}
 
 const requireValue = (value, code) => {
   if (!value) throw new Error(code);
@@ -331,7 +484,7 @@ function main(args) {
     state = realpathSync(options["--state-directory"]);
   requireValue(
     source === options["--source-root"] &&
-      inspectSource(source).revision === revision &&
+      inspectRecoveryReaderSource(source).revision === revision &&
       state === options["--state-directory"] &&
       state !== source &&
       !state.startsWith(source + "/") &&
@@ -425,14 +578,17 @@ function main(args) {
         (c) => c.name === controllerName,
       ),
       name = literal(app, "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP").value;
-    const cp = get("deployment", "control-plane");
-    requireValue(
-      cp.spec.template.metadata.annotations?.["kodex.dev/source-root"] ===
-        source &&
-        cp.spec.template.metadata.annotations?.["kodex.dev/cache-root"] ===
-          `${state}/cache`,
-      "EXACT_CONTROL_PLANE_SOURCE_REQUIRED",
-    );
+    for (const name of [
+      "control-plane",
+      "control-api-gateway",
+      "staff-control-center",
+    ])
+      requireExistingRecoveryMount(
+        get("deployment", name),
+        source,
+        state,
+        name,
+      );
     return {
       clusterUID: get("namespace", "kube-system", false).metadata.uid,
       namespaceUID: get("namespace", namespace, false).metadata.uid,
@@ -524,7 +680,7 @@ function main(args) {
       "OLD_POLICY_BINDING_CHANGED",
     );
     requireValue(
-      inspectSource(source).revision === revision,
+      inspectRecoveryReaderSource(source).revision === revision,
       "SOURCE_CHANGED_DURING_DELIVERY",
     );
     receipt("APPLIED");

@@ -4342,3 +4342,44 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
  13/13 PASS11.30с на checkpointd686. Проверки не заменяют live delivery.
 - Build OCI, reader Apply/Ready и old workspace cleanup пока NOT RUN.
   Chrome MCP доступен, вкладка SSO; native visual/search NOT RUN. Full65 OPEN.
+
+### 06.10.2026 06:03–06:08 UTC — OCI и reader preflight
+
+- Clean checkpoint `80b7d26280411ec3acdaa6b921f660050a572809` содержит
+  controller recovery и публичный helper. Один image-admission OCI bundle
+  собран штатным build-local-image-supply-chain.sh; canonical import/readback
+  завершился exit0. Manifest
+  `sha256:3600742039b4e950882ca20f9f6b4c891d048d2f837b47fdd4a6065f71ca2380`;
+  это точный source80b, НЕ доказательство running controller.
+- Source/Pod CP PASS: Ready=true, restart counts прежние4/0;
+  policy hash `b4d3265f47f38d9932f1e3e67ca87463eea118b41485cd54776e53954db48d6f`
+  и RPC hash `982558ae3dc1bbd971c6f0e087c71bf214200244734c69f2bf6ea65038c77ce3`
+  равны host. В ограниченном fresh log window0 policy-invalid/build-failed;
+  это source/startup proof, ещё НЕ live terminal RPC acceptance.
+- Reader plan FAIL `SOURCE_CHECKOUT_NOT_EXACT` до создания плана/PATCH.
+  Ошибочно переиспользована boundary protected source-cutover для image-only
+  delivery существующего trusted local controller. Дорабатывается отдельная
+  source inspection с exact clean SHA/canonical repository/existing readonly
+  mounts, не меняющая common protected guard. Дополнительно закрывается
+  Dockerfile-specific allowlist build context; owner files не перемещаются.
+- Live cleanup/fresh B2 claim/admission/promotion всё ещё NOT RUN. Ни
+  guard bypass, ни manual delete, ни дополнительный build request не
+  выполнялись. Browser login остаётся SSO, native visual/search NOT RUN.
+  Full65 OPEN; следующий шаг — адресный helper fix и штатная доставка.
+
+### 06.10.2026 06:19 UTC — отдельный source profile paused reader
+
+- Поверх `80b7d26280411ec3acdaa6b921f660050a572809` внесены 10 файлов
+  source-profile/context fix; SHA256 manifest совпал10/10. Общий protected
+  source inspector не изменён. Reader сверяет прежние readonly source mounts
+  CP/gateway/PWA, exact clean revision и закрытый canonical GitHub origin.
+- Dockerfile-specific deny-all allowlist ограничивает build context реальными
+  COPY-входами; его правила включены в cache input digest. Встроенный тест
+  использует Docker/Moby matcher, а не приближённую glob-семантику.
+- ROOT PASS на изменённом дереве: reader8/8 + authority build1/1, всего9/9,
+  7.52с; cache invalidation1/1, 1.62с; Go vet, Bash syntax и diff-check.
+  Новый canonical OCI/build/import и reader delivery/terminal cleanup NOT RUN.
+  Следующий шаг — clean checkpoint, один image-admission build, fenced reader
+  plan/apply, точный cleanup readback и fresh supply-chain apply/readback.
+- Browser MCP connected; Kodex остаётся на SSO. Native visual/search NOT RUN.
+  Full65 OPEN, user acceptance и дальнейший PROJECT bootstrap не завершены.

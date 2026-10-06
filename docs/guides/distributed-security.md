@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.4
+version: 1.7.5
 updated: 2026-10-06
 ---
 
@@ -1497,6 +1497,15 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   удаляет только завершённые exact managed Jobs/PVC после owner terminal proof;
   отказ, live claim и активный Job сохраняют workspace. Новая работа остаётся
   приостановленной до canonical supply-chain apply/readback нового worker image.
+  Проверка прежнего trusted checkout для paused image-only reader не является
+  protected source cutover: она сохраняет exact realpath/clean HEAD, закрытый
+  credential-free GitHub origin (с `.git` либо без), runtime file access и
+  существующие readonly mounts CP/gateway/PWA. Ignored owner-private `.env`
+  допускается только по metadata, без чтения, загрузки, переноса или нового
+  mount. Общий protected source inspector не ослабляется. Dockerfile-specific
+  context задаётся deny-all allowlist фактических COPY-входов с последними
+  private exclusions; ignore-файл входит в input digest/cache key. Closed COPY
+  сам по себе не доказывает исключение private files из передаваемого context.
 - Локальный одноразовый helper доступа к credentials задаёт каждому kubectl
   явный приватный cache-dir вне repository и проверяет owner/mode/inode перед
   ограниченным cleanup. Отсутствие HOME в очищенном окружении не доказывает

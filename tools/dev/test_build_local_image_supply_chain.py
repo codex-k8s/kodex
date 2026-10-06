@@ -156,6 +156,7 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         self.state.mkdir()
         for path in (
             "tools/dev/Dockerfile.local-image-supply-chain",
+            "tools/dev/Dockerfile.local-image-supply-chain.dockerignore",
             "infra/dockerfile-frontend/Dockerfile",
             "infra/admission-tools/Dockerfile",
             "tools/render-image-admission-job.sh",
@@ -248,6 +249,15 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         result = self.run_build()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(max(item["active"] for item in self.events()), 1)
+
+    def test_context_allowlist_change_invalidates_oci_cache(self):
+        first = self.run_build(1, component="image-admission")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        before = len(self.events())
+        (self.source / "tools/dev/Dockerfile.local-image-supply-chain.dockerignore").write_text("changed fixture rules\n")
+        second = self.run_build(1, component="image-admission")
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual([event["target"] for event in self.events()[before:] if event["kind"] == "start"], ["image-admission"])
 
     def test_cached_import_requires_exact_reference_and_digest_on_every_node(self):
         import hashlib

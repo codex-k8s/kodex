@@ -10,6 +10,21 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 06:05–06:08 UTC — clean HEAD
+`80b7d26280411ec3acdaa6b921f660050a572809`; image-admission OCI собран и
+штатно импортирован/readback на узлах, manifest
+`sha256:3600742039b4e950882ca20f9f6b4c891d048d2f837b47fdd4a6065f71ca2380`.
+CP Ready, source/Pod RPC и canonical policy hashes равны; startup policy/
+build errors в свежих логах0. Reader plan FAIL `SOURCE_CHECKOUT_NOT_EXACT`
+до любого cluster write: helper ошибочно использовал boundary отдельного
+protected source-cutover. Готовится narrow image-only source inspection
+по existing trusted CP/Gateway/FE mount proof без изменения общего
+protected inspector, плюс закрытый Docker build context. Owner files
+не менялись. Apply/old PVC cleanup/fresh B2 admission ещё NOT RUN; новые
+Jobs/build/plan эффекты не запускались. Chrome MCP доступен, вкладка SSO.
+Далее интегрировать адресный fix, новый clean checkpoint и точный OCI,
+reader plan/apply→owner proof cleanup→fresh supply-chain apply/readback.
+
 06.10.2026 06:02 UTC — на clean frontend checkpoint `d686f24a`
 интегрированы28 файлов controller-only terminal recovery и bounded paused
 reader delivery, policy91. ROOT Go CP/worker/client units/vet, PG31negative
@@ -662,3 +677,12 @@ Native40 UI теперь показывает собственный образ 
 Новые runtime receipt
 и corrected image проверять только после canonical rebuild; прежний immutable
 gen7 не содержит будущего protected binary. Полный checklist остаётся открыт.
+
+06.10.2026 06:19 UTC: поверх `80b7d262` внесён source-profile/context fix
+для paused image-only reader. ROOT проверил manifest10/10, reader+authority
+CLI9/9 и cache invalidation1/1; общий protected source guard неизменен.
+Следующий шаг: clean checkpoint, canonical build только image-admission,
+fenced plan/apply нового reader, exact terminal cleanup, затем fresh обычный
+supply-chain apply/readback. Не удалять workspace/Jobs вручную, не возобновлять
+pending работу старым bridge. Chrome connected, но Kodex SSO; живые UI-проверки
+пока NOT RUN. Все незавершённые пользовательские этапы остаются открытыми.

@@ -32,6 +32,7 @@ done
 [[ "$build_jobs" =~ ^[1-4]$ ]] || fail 'build jobs must be between 1 and 4'
 
 [[ "$source_root" == /* && -f "$source_root/tools/dev/Dockerfile.local-image-supply-chain" &&
+  -f "$source_root/tools/dev/Dockerfile.local-image-supply-chain.dockerignore" &&
   -f "$source_root/services/jobs/role-image-builder/Dockerfile" &&
   -f "$source_root/services/internal/internal-rpc-authority/Dockerfile" ]] ||
   fail 'source root is invalid'
@@ -103,6 +104,7 @@ compute_input_digest() {
     tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
       -C "$source_root" -cf - \
       tools/dev/Dockerfile.local-image-supply-chain \
+      tools/dev/Dockerfile.local-image-supply-chain.dockerignore \
       infra/dockerfile-frontend/Dockerfile \
       tools/render-image-admission-job.sh \
       infra/admission-tools/Dockerfile \
