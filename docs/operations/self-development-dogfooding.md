@@ -5,7 +5,7 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-05
+updated: 2026-10-06
 ---
 
 # Цель и источники
@@ -3456,3 +3456,123 @@ SSO и current resource versions, затем выполнить сохранён
 помощника, опубликовать draft штатным UI и проверить следующий actual turn.
 Рекомендуемая owner диагностика: chrome://inspect/#remote-debugging и
 видимый запрос разрешения подключения, если он появился.
+
+### 06.10.2026 01:34–01:40 UTC — MCP восстановлен, SYSTEM43 применён
+
+Source `b37a4cd874021a2b89d890665340b19be866bf7f`, PR1798 OPEN/Draft,
+GitHub head совпадает; ветка прежняя, дерево было чистым. Chrome MCP
+list_pages/snapshot/reload рабочей вкладки2 PASS после разрешения владельца;
+чужая вкладка1 не изменялась. После штатного SSO опубликованный generation8
+открывается: recipe/artifact/report GET200, Console без error/warn,
+скриншот подтверждает компактный прокручиваемый список findings и доступный
+отчёт после публикации. Исправление readonly historical report теперь
+подтверждено живым UI, а не только unit-тестами. Четыре основные deployment
+имеют1/1 Ready; это не заменяет runtime acceptance.
+
+Native SYSTEM43 отправлен01:35:28 UTC в conversation
+`cnv_5YudWurOxrTc6Brkt_w9l-OO`, turn `trn_3YIfuQd6bQjwp2vrQD_G6d7D`,
+run `run_f6x0V5O7QriojDGNuVfJI1_e`. Авторитетная история содержит20 событий
+с TURN_COMPLETED; native catalogue теперь реально возвращает eligibility
+и полный inventory кандидата. План `pln_EkM-JbvzVJxqdrZ2ktrGNLQ4`, revision1,
+содержит одну PREPARE_RUNTIME_ENVIRONMENT_REVISION. Validate PASS;
+Apply01:37:32 UTC PASS, version3/APPLIED, receipt
+`rct_xpaXZZxmKxarpQ1XTpT3LtvN`, audit `aud_JJ93xsSbAh44TgrjdsphWhUp`.
+Создан draft `renvd_wGlC64Th2PBA8plnYzNv24Vc`, version1/DRAFT с exact
+gen8 artifact и38 уникальными verified commands. Семантическое сравнение
+с published revision22 подтверждает прежние resources/volumes/values,
+Kubernetes NONE,10 HTTPS GET/HEAD rules и0 secret bindings. Имена default
+environment представлены i18n keys в draft и локализованным текстом в read
+view; это не изменение значения. Derived policy fields не сравниваются с
+сырой draft specification как одинаковая JSON-структура.
+
+Один click Apply по устаревшему UID завершился interaction timeout без
+mutation; свежий snapshot/click выполнил единственный Apply. Это не
+повторная команда и не второй draft. Native draft Validate закрылся
+REAUTH_REQUIRED: fresh owner SSO обязателен. На штатном password-only
+Keycloak reauth выявлен FAIL автоматического входа; адресное исправление
+выполняется отдельно. Publication, next gen8 runtime ACK и четыре read
+smokes остаются NOT RUN. Общие checklist пункты не отмечены по частичному
+успеху; bootstrap PR не слит.
+
+### 06.10.2026 01:42–01:54 UTC — publication и actual gen8 turn доказаны
+
+На base source `b37a4cd874021a2b89d890665340b19be866bf7f` выполнены новые
+локальные изменения повторного SSO и подписи consumer. ROOT повторил
+адресные проверки: 18/18 node unit и17/17 frontend unit PASS. Адресные
+ESLint/Prettier и полный typecheck PASS у исполнителя; первоначальная
+ошибка TS2353 в новой PROJECT fixture исправлена до успешного повторения.
+Чистый SHA новых изменений фиксируется следующим checkpoint, не подменяет
+исторический base SHA. Проверка новой подписи в самой impact модалке
+NOT RUN; live props после reload передают только имя собственного SYSTEM
+consumer, Console без error/warn.
+
+Fresh owner SSO реально завершён01:42:36 UTC на штатном password-only
+экране. Validate01:42:44: draft version2/VALID, validation digest
+`62ebf1c6a2c94cfff1af34b649c6d6c74843616f48d2b968752024f5b0e1afa0`.
+Native Publish около01:43:10 завершён единственный раз: draft version3/
+PUBLISHED; environment `renv_aSMtfZ2vp9GgOHqTOZnGhWE4` revision23,
+currentVersion `renvv_qE0XImvx5yGjMbAp4nDeCFwd`, тот же digest.
+Protected GET01:51–01:52 impact `rvip_kSx_Anv06zNsPyLwziNnX2Sj`
+version2/APPLIED, total1; item `rvit_fUdbApS3qY_MWKOdZe_9Vtp6`
+APPLIED для consumer `agt_Lf-P7HY-oWW2d-y3NGuAoClw`, binding
+`aenv_ooM08gNXkIDvyuBqJfnv87DD` version2→3, consumer result version15,
+resultRevisionRef exact currentVersion. Warm штатно заменён01:43:25:
+UID `ff3001e4-f7d8-4baa-8732-06a942e19245`, три контейнера Ready/restart0.
+
+SYSTEM44 Context7: native turn `trn_JwFJreWsfNmE9TzZAl4p4fqi`, run
+`run__fsQse9aISE4N1LPvuWh0GZu`, session `ses_fjr8gPT69ENofwiSjVHqgENE`,
+Pod `runtime-turn-d6cfe2229a82f7a5` UID
+`b19ce908-a376-4d40-9083-8347540b4fdf`. Два реальных Context7 вызова
+завершены успешно, TURN_COMPLETED01:44:20. Actual
+PROVIDER_INPUT_ACKNOWLEDGED подтвердил RR `rrev_tf2bxBffG3Is10Dy7suBtME3`
+digest `62e0e119e69e15188c3c0ce91c1a43c319332b7bca2f36080cc5ac1f561e140f`,
+runtime config `rconf_zyBrbfmGbttvW9j7qGxKdZZ9` version7, ENV23/binding3,
+gen8 image `sha256:a1f1ba75c3ddec037ca1443aa228de105d20e1a1c39973999916777c720605cf`,
+38 tools, gpt-6.1-sol/medium. Instruction/file SHA одинаковый
+`e975e52bfdf52234e40ba6117bd48d7a5a25a31aff63c5fec9ea32732c81173a`,
+67027 bytes/EQUAL; provider input/inbox SHA одинаковый
+`19384ca5a682c997460fccf9a3384fda3ac60f1f3d60b7e33a30208b5fb74c18`,
+18186 bytes/EQUAL, task_in_prompt true. Template digest
+`f4926f1b566084b89033593f9804e9ec04d04e706c659c769ccc30f070a1d962`,
+materialization digest
+`d751b14970c02c3cb483d568535ff24949bd8bef7090a4d5b34784b61f69df69`.
+Protected runtime-revision-diff GET200 независимо подтвердил exact RR и
+смену ENV22→23/binding2→3/image gen7→8. Это actual turn/start proof,
+не подмена файлом idle init. Поздняя попытка process read после terminal
+не нашла provider-runtime, поэтому running process hash отдельно NOT RUN.
+
+SYSTEM45 GitHub: conversation `cnv_8UOxN5xnKj8iO8B-Xs-bTcuG`, turn
+`trn_hiM7TzywSLun7pimbnk6smRh`, run `run_VTNUonWt8Qe-oy2fXH12Wg4z`,
+Pod UID `56804963-8d7a-4388-8508-8055d03e3e44`. Actual ACK подтвердил
+новые pins/input EQUAL, но native command не выполнился:
+`code-mode host is disabled`. Чтение репозитория NOT RUN, не network FAIL.
+SYSTEM46 Web: conversation `cnv_JKuonRRcMGQu2kVaeW59YmB3`, turn
+`trn_BSVSVBOrjMD4Uwh7oxAuimtV`, run `run_G4rywWEPnzNtmjqYu-vHo2n1`;
+hosted search завершился тем же инструментальным отказом, внешний поиск
+NOT RUN. Непроверенный текст ответа не считается доказательством web access.
+SYSTEM47 context: conversation `cnv_CyVlBbSL_UTiOqtQ-ILSMAhh`, turn
+`trn_hsZVk3U7l47JNdcZ_bi-tyH7`, run `run_0DJPsvKH997M4l9bLC_GHYRj`;
+native CURRENT_CONFIGURATION/catalog PASS, SYSTEM scope без project leak.
+Actual ACK RR `rrev_Vzs_UmiuPU8oYLuec_J62wC9`, input/file EQUAL,
+task_in_prompt true, ENV23/gen8/tools38. Три отдельных turn Pods реально
+перекрывались во времени; singleton warm не сериализовал эти запуски.
+
+Следующий шаг — адресно исправить native tool routing для CLI0.160.0,
+сохранив изоляцию и запреты credential paths, доставить новый runner
+repo-owned цепочкой и повторить GitHub/web native проверки. Context7 и
+официальная OpenAI config reference проверены; чужие вкладки не трогались,
+рабочая вкладка2 reload01:51 UTC с пустым assistant draft. Полная preview/
+input сверка, PROJECT bootstrap, шесть ролей и весь65-section QA ещё OPEN;
+bootstrap PR не слит, общие checkbox не отмечены по частичному результату.
+
+01:53 UTC: защищённый readonly RUN preview через generated frontend adapter
+для `run__fsQse9aISE4N1LPvuWh0GZu` вернул200/complete, diagnostics пусты,
+fullMaterializedPrompt отсутствует. Его template digest `f4926f1b…`
+и materialization digest `d751b149…` точно совпали с actual SYSTEM44 ACK,
+а templateRef совпал с immutable instruction pin. Safe sections остаются
+редактированными placeholders; их content hash не выдаётся за digest полного
+текста. Первоначальный универсальный AGENT catalog helper с RUN target
+получил400/INVALID_REQUEST; правильный RUN preview adapter успешно прочитал
+snapshot. Это read probe, не провал рабочего пользовательского экрана.
+После штатного reload01:54 UTC проверяется новая Console. Подробная проверка
+переменных/markers и контекста всех шести ролей остаётся отдельным OPEN этапом.

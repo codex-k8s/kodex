@@ -9,6 +9,7 @@ import RuntimeEnvironmentImageToolsSelector from "@/features/runtime/RuntimeEnvi
 import RuntimeResourceManagementLinks from "@/features/runtime/RuntimeResourceManagementLinks.vue";
 import RuntimeEnvironmentDraftActions from "@/features/runtime/RuntimeEnvironmentDraftActions.vue";
 import { useSessionStore } from "@/features/session/store";
+import { usePlatformStore } from "@/features/platform/store";
 import { useRoute, useRouter } from "vue-router";
 import {
   assertActiveRuntimeResourceIdentity,
@@ -47,6 +48,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ draftSaved: [draft: RuntimeEnvironmentDraft] }>();
 const session = useSessionStore();
+const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
 const view = ref<Awaited<ReturnType<typeof loadAgentRuntime>>>();
@@ -81,6 +83,17 @@ const input = reactive<RuntimeEnvironmentInput>({
 });
 const initial = ref("");
 const environment = computed(() => view.value?.environment);
+const consumerNames = computed<Record<string, string>>(() => {
+  const bootstrap = platform.bootstrap;
+  if (
+    props.resourceScope.kind !== "ORGANIZATION" ||
+    bootstrap?.organizationRef !== props.resourceScope.organizationRef ||
+    bootstrap.assistant.ref !== props.agentRef ||
+    !bootstrap.assistant.name
+  )
+    return {};
+  return { [bootstrap.assistant.ref]: bootstrap.assistant.name };
+});
 const normalized = computed(() => normalizeRuntimeEnvironmentInput(input));
 const validation = computed(() => validateEnvironmentInput(normalized.value));
 
@@ -303,6 +316,7 @@ onBeforeUnmount(reset);
             : resourceScope
         "
         :environment="environment"
+        :consumer-names="consumerNames"
         :specification="normalized"
         :can-edit="canEdit"
         :valid="!validation.length && Boolean(imageCatalog) && imageAvailable"

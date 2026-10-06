@@ -1,4 +1,5 @@
 import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
+import { readFileSync } from "node:fs";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { Ref } from "vue";
 import { captureSetupState } from "@/test-utils/setup-harness";
@@ -32,6 +33,15 @@ vi.mock("@/shared/api/mutation", () => ({
   idempotencyKey: mutation.key,
 }));
 import Component from "./RuntimeEnvironmentDraftActions.vue";
+it("передаёт подписи потребителей в impact selector без изменения выбранных item refs", () => {
+  const source = readFileSync(
+    new URL("./RuntimeEnvironmentDraftActions.vue", import.meta.url),
+    "utf8",
+  );
+  expect(Component.props).toHaveProperty("consumerNames");
+  expect(source).toContain(':consumer-names="consumerNames"');
+  expect(source).toContain('@publish="publish"');
+});
 const scope = { kind: "ORGANIZATION", organizationRef: "org_fixture" } as const;
 const specification = {
   name: "Среда",

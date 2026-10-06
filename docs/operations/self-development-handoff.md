@@ -5,10 +5,60 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-05
+updated: 2026-10-06
 ---
 
 # Текущее состояние
+
+06.10.2026 в01:34 UTC Chrome MCP восстановлен после нового разрешения
+владельца; goal активен. Рабочая вкладка2 доступна, чужая вкладка1 не
+изменялась. Штатный SSO восстановил вход. На source
+`b37a4cd874021a2b89d890665340b19be866bf7f` опубликованный generation8 и его
+исторический vulnerability report открываются после reload: relevant GET200,
+Console без error/warn, вёрстка проверена скриншотом. Control Plane,
+Runtime Controller, frontend и secret-broker имеют1/1 Ready.
+
+SYSTEM43 действительно отправлен01:35:28 UTC: conversation
+`cnv_5YudWurOxrTc6Brkt_w9l-OO`, turn `trn_3YIfuQd6bQjwp2vrQD_G6d7D`,
+run `run_f6x0V5O7QriojDGNuVfJI1_e`. Помощник прочитал новый сквозной
+каталог, подтвердил ACCEPTED/PROMOTED и38 required VERIFIED tools, создал
+план `pln_EkM-JbvzVJxqdrZ2ktrGNLQ4`, revision1. Native Validate → Apply
+завершены01:37:32 UTC, plan version3/APPLIED; создан draft
+`renvd_wGlC64Th2PBA8plnYzNv24Vc`, version1/DRAFT. Образ gen8 и38 уникальных
+команд подтверждены. Ресурсы, тома, переменные, отсутствие secret bindings,
+Kubernetes NONE и10 read-only HTTPS rules сохранены; сравнение проводится
+по семантике, поскольку published policy содержит derived fields, а имена
+default environment возвращаются локализованными, draft хранит i18n keys.
+
+01:42–01:45 UTC: password-only повторный SSO исправлен и проверен штатным
+входом; 18/18 адресных unit PASS. Существующий draft прошёл Validate,
+impact и единственную публикацию: version3/PUBLISHED, environment revision23,
+currentVersion `renvv_qE0XImvx5yGjMbAp4nDeCFwd`, digest
+`62ebf1c6a2c94cfff1af34b649c6d6c74843616f48d2b968752024f5b0e1afa0`.
+Protected GET impact `rvip_kSx_Anv06zNsPyLwziNnX2Sj` подтвердил APPLIED
+и единственный APPLIED item `rvit_fUdbApS3qY_MWKOdZe_9Vtp6` для SYSTEM
+consumer `agt_Lf-P7HY-oWW2d-y3NGuAoClw`: binding version2→3 указывает
+на exact published revision. Повторные SYSTEM43/Apply/Publish не нужны.
+
+Новые реальные ходы SYSTEM44/45/47 подтвердили actual provider ACK,
+ENV23, gen8 image и38 tools; переданные instructions/input совпадают
+с материализацией по контрольным суммам. SYSTEM44 Context7 и SYSTEM47
+определение системного контекста PASS. SYSTEM45 GitHub read и SYSTEM46
+hosted web search пока FAIL: `code-mode host is disabled`, инструменты
+не выполнили внешние запросы. Это не доказательство сетевого отказа.
+Адресное исправление tool routing выполняется в runner config с сохранением
+sandbox/security boundaries; после доставки нового runner повторить оба
+native сценария и доказать actual pins. RUN preview SYSTEM44 отдельно
+прочитан01:53 UTC: complete/200, template и materialization digests точно
+совпали с actual ACK без раскрытия полного текста. Проверка переменных/
+markers всех ролей, PROJECT bootstrap, шесть ролей и полный QA остаются OPEN.
+
+Подпись SYSTEM consumer в публикации исправлена; 17/17 frontend unit PASS,
+typecheck/ESLint/Prettier PASS. Live read-only props после reload подтверждают
+правильную SYSTEM подпись, Console без ошибок. Новый скриншот модалки с
+этой подписью ещё NOT RUN: ненужный новый draft ради проверки не создавался.
+
+## Предыдущий checkpoint до восстановления подключения
 
 05.10.2026 владелец явно возобновил работу после переноса хранилища.
 Перенос проверен. На19:32 UTC этап BLOCKED: Chrome MCP list_pages и
@@ -54,9 +104,9 @@ Chrome MCP list_pages зависает по таймауту; новая browser
 - Полное задание: [65 разделов QA](../qa/full-qa-task.md).
 - Checklist и подробный хронологический журнал: [самонастройка](self-development-dogfooding.md).
 
-# Следующий native ход SYSTEM43
+# Выполненный native ход SYSTEM43 — историческая инструкция
 
-После восстановления Chrome MCP отправить собственному SYSTEM помощнику:
+Следующий текст уже выполнен; не отправлять повторно:
 
 ```text
 SYSTEM43. Подготовь один план с PREPARE_RUNTIME_ENVIRONMENT_REVISION для

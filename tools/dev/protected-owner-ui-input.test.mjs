@@ -586,6 +586,197 @@ test("native form только exact SSO: Boolean результат и failclos
   }
 });
 
+test("password-only reauth требует неизменную readonly owner identity и ту же native форму", async () => {
+  for (const state of [
+    "VALID",
+    "MISMATCH",
+    "CASE_MISMATCH",
+    "READONLY",
+    "ATTRIBUTE",
+    "IDENTITY_FORM",
+    "IDENTITY_TYPE",
+    "FORM_ID",
+    "FOREIGN_ACTION",
+    "CSP",
+    "RESPONSE",
+    "JSON",
+    "FETCH_IDENTITY",
+    "FETCH_PASSWORD",
+    "FETCH_READONLY",
+    "FETCH_ATTRIBUTE",
+    "FETCH_SWAP_IDENTITY",
+    "FETCH_SWAP_PASSWORD",
+    "FETCH_SWAP_BUTTON",
+    "FETCH_FORM",
+    "FETCH_ACTION",
+    "FETCH_METHOD",
+    "FETCH_ORIGIN",
+    "FETCH_USERNAME",
+    "JSON_SWAP_IDENTITY",
+    "EVENT_IDENTITY",
+    "EVENT_PASSWORD",
+    "EVENT_SWAP_PASSWORD",
+    "EVENT_ACTION",
+    "EVENT_THROW",
+    "CLICK_THROW",
+  ]) {
+    let clicked = 0,
+      fetched = 0;
+    const events = [];
+    const form = {
+      id: state === "FORM_ID" ? "other-form" : "kc-form-login",
+      action: `${inputOrigin}/realms/kodex/login-actions/authenticate`,
+      method: "post",
+    };
+    const location = { origin: inputOrigin };
+    class Input {
+      value = "";
+      disabled = false;
+      readOnly = false;
+      form = form;
+      constructor(type) {
+        this.type = type;
+      }
+      hasAttribute(name) {
+        return name === "readonly" && this.readOnlyAttribute === true;
+      }
+      dispatchEvent(event) {
+        events.push(event.type);
+        assert.equal(this, password);
+        if (state === "EVENT_IDENTITY") attempted.value = "SYNTHETIC_OTHER";
+        if (state === "EVENT_PASSWORD") password.value = "SYNTHETIC_OTHER";
+        if (state === "EVENT_SWAP_PASSWORD")
+          elements["#password"] = new Input("password");
+        if (state === "EVENT_ACTION") form.action += "?changed=1";
+        if (state === "EVENT_THROW")
+          throw new Error("SYNTHETIC_SECRET_NEVER_RETURN");
+      }
+    }
+    const attempted = new Input("text"),
+      password = new Input("password");
+    attempted.form = null;
+    attempted.readOnly = true;
+    attempted.readOnlyAttribute = true;
+    attempted.value =
+      state === "MISMATCH"
+        ? "SYNTHETIC_OTHER"
+        : state === "CASE_MISMATCH"
+          ? "synthetic_user"
+          : "SYNTHETIC_USER";
+    const button = {
+      disabled: false,
+      form,
+      click: () => {
+        if (state === "CLICK_THROW")
+          throw new Error("SYNTHETIC_SECRET_NEVER_RETURN");
+        clicked++;
+      },
+    };
+    const elements = {
+      "#username": null,
+      "#kc-attempted-username": attempted,
+      "#password": password,
+      "#kc-login": button,
+      "#kc-form-login": form,
+    };
+    if (state === "READONLY") attempted.readOnly = false;
+    if (state === "ATTRIBUTE") attempted.readOnlyAttribute = false;
+    if (state === "IDENTITY_FORM") attempted.form = form;
+    if (state === "IDENTITY_TYPE") attempted.type = "hidden";
+    if (state === "FOREIGN_ACTION")
+      form.action = "https://foreign.invalid/login";
+    const value = {
+      username: "SYNTHETIC_USER",
+      password: "SYNTHETIC_PASSWORD",
+    };
+    const invoke = runInNewContext(`(${browserInputScript(port)})`, {
+      location,
+      document: {
+        contains: (element) => Object.values(elements).includes(element),
+        querySelector: (selector) => elements[selector] ?? null,
+      },
+      HTMLInputElement: Input,
+      Event: class {
+        constructor(type) {
+          this.type = type;
+        }
+      },
+      URL,
+      fetch: async () => {
+        fetched++;
+        if (state === "CSP") throw new Error("SYNTHETIC_SECRET_NEVER_RETURN");
+        if (state === "FETCH_IDENTITY") attempted.value = "SYNTHETIC_OTHER";
+        if (state === "FETCH_PASSWORD") password.value = "SYNTHETIC_USER_INPUT";
+        if (state === "FETCH_READONLY") attempted.readOnly = false;
+        if (state === "FETCH_ATTRIBUTE") attempted.readOnlyAttribute = false;
+        if (state === "FETCH_SWAP_IDENTITY")
+          elements["#kc-attempted-username"] = new Input("text");
+        if (state === "FETCH_SWAP_PASSWORD")
+          elements["#password"] = new Input("password");
+        if (state === "FETCH_SWAP_BUTTON")
+          elements["#kc-login"] = { ...button };
+        if (state === "FETCH_FORM") {
+          password.form = { ...form };
+          button.form = password.form;
+          elements["#kc-form-login"] = password.form;
+        }
+        if (state === "FETCH_ACTION") form.action += "?changed=1";
+        if (state === "FETCH_METHOD") form.method = "get";
+        if (state === "FETCH_ORIGIN")
+          location.origin = "https://foreign.invalid";
+        if (state === "FETCH_USERNAME")
+          elements["#username"] = new Input("text");
+        return {
+          ok: state !== "RESPONSE",
+          json: async () => {
+            if (state === "JSON")
+              throw new Error("SYNTHETIC_SECRET_NEVER_RETURN");
+            if (state === "JSON_SWAP_IDENTITY")
+              elements["#kc-attempted-username"] = new Input("text");
+            return value;
+          },
+        };
+      },
+    });
+    assert.equal(await invoke(), state === "VALID", state);
+    assert.equal(clicked, state === "VALID" ? 1 : 0, state);
+    assert.equal(
+      password.value,
+      state === "VALID"
+        ? "SYNTHETIC_PASSWORD"
+        : state === "FETCH_PASSWORD"
+          ? "SYNTHETIC_USER_INPUT"
+          : "",
+      state,
+    );
+    assert.equal(
+      attempted.value,
+      state === "MISMATCH"
+        ? "SYNTHETIC_OTHER"
+        : state === "CASE_MISMATCH"
+          ? "synthetic_user"
+          : ["FETCH_IDENTITY", "EVENT_IDENTITY"].includes(state)
+            ? "SYNTHETIC_OTHER"
+            : "SYNTHETIC_USER",
+      state,
+    );
+    if (state === "VALID") assert.deepEqual(events, ["input", "change"]);
+    if (
+      [
+        "READONLY",
+        "ATTRIBUTE",
+        "IDENTITY_FORM",
+        "IDENTITY_TYPE",
+        "FORM_ID",
+        "FOREIGN_ACTION",
+      ].includes(state)
+    )
+      assert.equal(fetched, 0, state);
+    if (fetched && !["CSP", "RESPONSE", "JSON"].includes(state))
+      assert.deepEqual(value, { username: "", password: "" }, state);
+  }
+});
+
 test("raw exception чтения ключей не утекает, истечение после peer check закрывает выдачу", async () => {
   const f = fixture({
       readSecrets: () => {

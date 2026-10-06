@@ -388,27 +388,38 @@ export function browserInputScript(port) {
   requireInput(Number.isInteger(port) && port > 0 && port <= 65535);
   return `async () => {
     if (location.origin !== ${JSON.stringify(inputOrigin)}) return false;
-    const username = document.querySelector("#username"), password = document.querySelector("#password"), button = document.querySelector("#kc-login");
+    const username = document.querySelector("#username"), attempted = document.querySelector("#kc-attempted-username"), password = document.querySelector("#password"), button = document.querySelector("#kc-login");
+    const identity = username || attempted;
     const validForm = () => {
       try {
-        return location.origin === ${JSON.stringify(inputOrigin)} && username instanceof HTMLInputElement && password instanceof HTMLInputElement && password.type === "password" && button && document.contains(username) && document.contains(password) && document.contains(button) && document.querySelector("#username") === username && document.querySelector("#password") === password && document.querySelector("#kc-login") === button && username.disabled === false && password.disabled === false && button.disabled === false && username.form && username.form === password.form && username.form === button.form && username.form.method.toLowerCase() === "post" && new URL(username.form.action).origin === location.origin;
+        return location.origin === ${JSON.stringify(inputOrigin)} && identity instanceof HTMLInputElement && password instanceof HTMLInputElement && password.type === "password" && button && document.contains(identity) && document.contains(password) && document.contains(button) && document.querySelector("#username") === username && document.querySelector("#kc-attempted-username") === attempted && document.querySelector("#password") === password && document.querySelector("#kc-login") === button && identity.disabled === false && password.disabled === false && button.disabled === false && password.form && password.form === button.form && password.form.method.toLowerCase() === "post" && new URL(password.form.action).origin === location.origin && (username ? username.form === password.form : attempted.type === "text" && attempted.readOnly === true && attempted.hasAttribute("readonly") && attempted.form === null && password.form.id === "kc-form-login" && document.querySelector("#kc-form-login") === password.form);
       } catch { return false; }
     };
     if (!validForm()) return false;
-    const form = username.form, action = form.action;
-    let value;
+    const form = password.form, action = form.action, originalIdentity = identity.value, originalPassword = password.value;
+    const stableForm = () => validForm() && password.form === form && form.action === action;
+    let value, written = false, submitted = false;
     try {
       const response = await fetch(${JSON.stringify(`https://${inputHost}:${port}${inputPath}`)}, {method:"POST", credentials:"omit", cache:"no-store", redirect:"error", headers:{"Content-Type":"application/json"}, body:${JSON.stringify(JSON.stringify({ intent: inputIntent }))}});
       if (!response.ok) return false;
       value = await response.json();
       if (Object.keys(value).length !== 2 || ![value.username, value.password].every((text) => typeof text === "string" && text.length > 0 && text.length <= 16384)) return false;
-      if (!validForm() || username.form !== form || form.action !== action) return false;
-      username.value = value.username; password.value = value.password;
-      for (const input of [username, password]) for (const type of ["input", "change"]) input.dispatchEvent(new Event(type, {bubbles:true}));
-      if (!validForm() || username.form !== form || form.action !== action) { username.value = ""; password.value = ""; return false; }
-      button.click(); return true;
+      if (!stableForm() || identity.value !== originalIdentity || password.value !== originalPassword || (!username && identity.value !== value.username)) return false;
+      written = true;
+      if (username) username.value = value.username;
+      password.value = value.password;
+      const ready = () => stableForm() && identity.value === value.username && password.value === value.password;
+      if (!ready()) return false;
+      for (const input of username ? [username, password] : [password]) for (const type of ["input", "change"]) {
+        input.dispatchEvent(new Event(type, {bubbles:true}));
+        if (!ready()) return false;
+      }
+      button.click(); submitted = true; return true;
     } catch { return false; }
-    finally { if (value) { value.username = ""; value.password = ""; } }
+    finally {
+      if (written && !submitted) for (const input of username ? [username, password] : [password]) { try { input.value = ""; } catch {} }
+      if (value) { value.username = ""; value.password = ""; }
+    }
   }`;
 }
 

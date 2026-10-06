@@ -47,6 +47,7 @@ const props = defineProps<{
   valid: boolean;
   initialDraftRef?: string;
   expectedDraftVersion?: number;
+  consumerNames?: Record<string, string>;
 }>();
 const emit = defineEmits<{
   draftLoaded: [draft: RuntimeEnvironmentDraft];
@@ -548,6 +549,7 @@ onBeforeUnmount(() => {
       <PublicationImpactSelection
         :plan="plan"
         :busy="busy"
+        :consumer-names="consumerNames"
         @publish="publish"
       />
     </ModalDialog>

@@ -1,5 +1,23 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { reactive, type ComputedRef } from "vue";
+import { describe, expect, it, vi } from "vitest";
+import { captureSetupState } from "@/test-utils/setup-harness";
+import type { RuntimeResourceScope } from "@/features/runtime/resource-scope";
+
+const platform = reactive<{
+  bootstrap:
+    | { organizationRef: string; assistant: { ref: string; name: string } }
+    | undefined;
+}>({ bootstrap: undefined });
+vi.mock("@/features/platform/store", () => ({
+  usePlatformStore: () => platform,
+}));
+vi.mock("@/features/session/store", () => ({ useSessionStore: () => ({}) }));
+vi.mock("vue-router", () => ({ useRoute: () => ({}), useRouter: () => ({}) }));
+vi.mock("@/features/agents/detail/runtime-api", () => ({
+  loadAgentRuntime: () => new Promise(() => {}),
+}));
+import Panel from "./AssistantEnvironmentSettingsPanel.vue";
 
 const panel = readFileSync(
   new URL("./AssistantEnvironmentSettingsPanel.vue", import.meta.url),
@@ -11,6 +29,53 @@ const runtime = readFileSync(
 );
 
 describe("Полная форма настройки помощника", () => {
+  it("подписывает только текущего системного потребителя из метаданных его организации", async () => {
+    platform.bootstrap = {
+      organizationRef: "org_synthetic",
+      assistant: { ref: "agt_synthetic", name: "Системный помощник" },
+    };
+    const props = reactive<{
+      agentRef: string;
+      canEdit: boolean;
+      resourceScope: RuntimeResourceScope;
+      imageCatalog: undefined;
+    }>({
+      agentRef: "agt_synthetic",
+      canEdit: true,
+      resourceScope: { kind: "ORGANIZATION", organizationRef: "org_synthetic" },
+      imageCatalog: undefined,
+    });
+    const state = (await captureSetupState(Panel, undefined, props)) as {
+      consumerNames: ComputedRef<Record<string, string>>;
+    };
+    expect(state.consumerNames.value).toEqual({
+      agt_synthetic: "Системный помощник",
+    });
+    platform.bootstrap.assistant.name = "Новое имя помощника";
+    expect(state.consumerNames.value).toEqual({
+      agt_synthetic: "Новое имя помощника",
+    });
+    props.agentRef = "agt_unknown";
+    expect(state.consumerNames.value).toEqual({});
+    props.agentRef = "agt_synthetic";
+    props.resourceScope = {
+      kind: "PROJECT",
+      projectRef: "prj_synthetic",
+    };
+    expect(state.consumerNames.value).toEqual({});
+    props.resourceScope = {
+      kind: "ORGANIZATION",
+      organizationRef: "org_other",
+    };
+    expect(state.consumerNames.value).toEqual({});
+    props.resourceScope = {
+      kind: "ORGANIZATION",
+      organizationRef: "org_synthetic",
+    };
+    platform.bootstrap = undefined;
+    expect(state.consumerNames.value).toEqual({});
+    expect(panel).toContain(':consumer-names="consumerNames"');
+  });
   it("сохраняет immutable snapshot вместо фиктивного образа и очистки инструментов/секретов", () => {
     expect(panel).toContain(
       "editableAssistantEnvironment(current, props.resourceScope)",
