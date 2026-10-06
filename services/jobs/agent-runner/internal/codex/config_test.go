@@ -62,7 +62,11 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	metadata, err := toml.Decode(string(raw), &config)
 	profile := config.Permissions[config.DefaultPermissions]
 	if !metadata.IsDefined("features", "code_mode_host") || config.Features.CodeModeHost ||
-		!metadata.IsDefined("features", "memories") || !metadata.IsDefined("memories", "generate_memories") ||
+		!metadata.IsDefined("features", "code_mode", "enabled") || config.Features.CodeMode.Enabled ||
+		!metadata.IsDefined("features", "code_mode_only") || config.Features.CodeModeOnly {
+		t.Fatal("native tools are not explicitly routed away from the disabled code-mode host")
+	}
+	if !metadata.IsDefined("features", "memories") || !metadata.IsDefined("memories", "generate_memories") ||
 		!metadata.IsDefined("memories", "use_memories") || config.Features.Memories || config.Memories.GenerateMemories || config.Memories.UseMemories {
 		t.Fatal("provider local memory is not explicitly disabled")
 	}
@@ -74,7 +78,7 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 		config.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		config.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
 		config.MCPServers["kodex"].ToolTimeoutSeconds != runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds ||
-		!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) {
+		!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"functions", "web", "mcp__kodex"}) {
 		t.Fatalf("provider permission boundary is incomplete: %#v", config)
 	}
 	for path := range profile.Filesystem {
@@ -107,7 +111,10 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 				t.Fatal(err)
 			}
 			var config runtimeConfig
-			if _, err := toml.Decode(string(raw), &config); err != nil || config.Permissions[config.DefaultPermissions].Extends != expected {
+			if _, err := toml.Decode(string(raw), &config); err != nil || config.Permissions[config.DefaultPermissions].Extends != expected ||
+				config.ApprovalPolicy != input.CodexApprovalPolicy || config.Features.CodeModeHost ||
+				config.Features.CodeModeOnly || config.Features.CodeMode.Enabled ||
+				!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"functions", "web", "mcp__kodex"}) {
 				t.Fatalf("sandbox %s expanded to %#v: %v", sandbox, config.Permissions, err)
 			}
 		})

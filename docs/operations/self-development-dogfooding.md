@@ -3576,3 +3576,19 @@ fullMaterializedPrompt отсутствует. Его template digest `f4926f1b�
 snapshot. Это read probe, не провал рабочего пользовательского экрана.
 После штатного reload01:54 UTC проверяется новая Console. Подробная проверка
 переменных/markers и контекста всех шести ролей остаётся отдельным OPEN этапом.
+
+### 06.10.2026 01:56 UTC — исправлена причина отказа native tools
+
+Checkpoint `df7817299929fac45054a97dce748ebde4d1cc10` запушен, exact
+remote/PR head подтверждён; PR1798 остаётся Draft/OPEN, body актуализирован.
+Следующий пакет меняет только runner config/tests и закрепляет общий
+инвариант в GUIDE-DOC-003. Context7 и первичный source tag rust-v0.160.0
+подтвердили: model.tool_mode имеет приоритет, поэтому одного enabled=false
+недостаточно при CodeModeOnly. Отключённый host не включается; закрытые
+namespace functions/web/mcp__kodex явно получают DirectModelOnly.
+Прежние sandbox/approval/deny paths/tool policy и authority сохраняются.
+Адресная регрессия RED на старом config; полный codex unit PASS4.603s
+у исполнителя и4.702s у ROOT, go vet/build PASS. Host CLI0.160.1 не
+выдаётся за проверку закреплённого0.160.0. Новый full runner build/import,
+canonical render/apply, native recipe gen9/admission/promotion/environment
+и actual shell/web/MCP пока NOT RUN. Старый gen8 snapshot не переписывается.

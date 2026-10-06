@@ -63,6 +63,7 @@ type runtimeConfig struct {
 
 type runtimeFeatures struct {
 	CodeModeHost bool                  `toml:"code_mode_host"`
+	CodeModeOnly bool                  `toml:"code_mode_only"`
 	CodeMode     runtimeCodeModeConfig `toml:"code_mode"`
 	Memories     bool                  `toml:"memories"`
 }
@@ -75,6 +76,7 @@ type runtimeMemories struct {
 }
 
 type runtimeCodeModeConfig struct {
+	Enabled                  bool     `toml:"enabled"`
 	DirectOnlyToolNamespaces []string `toml:"direct_only_tool_namespaces"`
 }
 
@@ -180,8 +182,12 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		Personality:   overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: historyPersistence},
-		Features: runtimeFeatures{CodeModeHost: false, CodeMode: runtimeCodeModeConfig{
-			DirectOnlyToolNamespaces: []string{"mcp__kodex"},
+		// В Codex rust-v0.160.0 model.tool_mode имеет приоритет над feature flags.
+		// DirectModelOnly сохраняет native tools при CodeModeOnly без запуска host;
+		// меняется только маршрутизация, прежние permission/authority checks остаются.
+		// Источник: codex-rs/core/src/tools/spec_plan.rs, tag rust-v0.160.0.
+		Features: runtimeFeatures{CodeModeHost: false, CodeModeOnly: false, CodeMode: runtimeCodeModeConfig{
+			Enabled: false, DirectOnlyToolNamespaces: []string{"functions", "web", "mcp__kodex"},
 		}},
 		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
 			Filesystem: map[string]string{
@@ -206,7 +212,12 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		decoded.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
 		!metadata.IsDefined("features", "code_mode_host") || decoded.Features.CodeModeHost ||
-		len(decoded.Features.CodeMode.DirectOnlyToolNamespaces) != 1 || decoded.Features.CodeMode.DirectOnlyToolNamespaces[0] != "mcp__kodex" ||
+		!metadata.IsDefined("features", "code_mode_only") || decoded.Features.CodeModeOnly ||
+		!metadata.IsDefined("features", "code_mode", "enabled") || decoded.Features.CodeMode.Enabled ||
+		len(decoded.Features.CodeMode.DirectOnlyToolNamespaces) != 3 ||
+		decoded.Features.CodeMode.DirectOnlyToolNamespaces[0] != "functions" ||
+		decoded.Features.CodeMode.DirectOnlyToolNamespaces[1] != "web" ||
+		decoded.Features.CodeMode.DirectOnlyToolNamespaces[2] != "mcp__kodex" ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
 		decoded.ShellEnvironmentPolicy.Inherit != "all" || !sameEnvironmentFilters(decoded.ShellEnvironmentPolicy.Filters, filters) ||
 		decoded.Permissions[permissionProfileName].Filesystem[filepath.Join(input.CodexHome, "auth.json")] != "deny" {

@@ -597,6 +597,19 @@ authority. Readback различает свежую owner-конфигураци
 provider или успешный native call. Неизвестные режимы и вложенный arbitrary
 TOML закрыто отклоняются, без legacy feature flags.
 
+Маршрутизация native tools не является источником полномочий. Для закреплённого
+Codex0.160.0 provider-owned `model.tool_mode` может иметь приоритет над
+отключением code mode: `CodeModeOnly` не получает обычный Direct fallback.
+При выключенном code-mode host платформа явно материализует DirectModelOnly
+только для закрытых namespace `functions`, `web`, `mcp__kodex`; feature
+flags host/only/enabled остаются false. Это изменение способа вызова, не
+выдача sandbox, shell egress, MCP grants или credential access. Проверка
+tool policy и прежние deny paths сохраняются; произвольный namespace и
+arbitrary TOML от клиента не принимаются. При обновлении SDK требуется
+проверить точные namespace и parser/spec_plan закреплённой версии, затем
+реальные shell/web/MCP ходы с новым admitted image и immutable runtime pins.
+Наличие executable в inventory или успешный Go test этого не заменяет.
+
 Закрытый реестр provider transport проверяется по закреплённой версии SDK:
 в него входят точные обязательные bootstrap/account-discovery маршруты,
 а не только inference endpoint. Read-only discovery не расширяет shell/WebAccess
