@@ -100,4 +100,31 @@ describe("Компактная presentation общего редактора и r
     expect(source).toContain('$t("runtimeOverlay.effortCost")');
     expect(source).toContain('<small v-if="selectedEffort === undefined">');
   });
+
+  it("Runtime/Overlay heading отделяет badge от полного текста на узком экране", () => {
+    const source = readFileSync(
+      new URL("./AgentRuntimePanel.vue", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(
+      /\.runtime-panel__head,\s*\.overlay-panel__head \{\s*display: flex;\s*min-width: 0;\s*flex-wrap: wrap;/,
+    );
+    expect(source).toMatch(
+      /\.runtime-panel__head > div,\s*\.overlay-panel__head > div \{\s*min-width: 0;\s*flex: 1 1 220px;\s*overflow-wrap: anywhere;/,
+    );
+    expect(source).toMatch(
+      /\.runtime-panel__head > \.status-badge,\s*\.overlay-panel__head > \.status-badge \{\s*align-self: flex-start;\s*white-space: normal;\s*overflow-wrap: anywhere;/,
+    );
+    const mobile = source.slice(source.indexOf("@media (max-width: 640px)"));
+    expect(mobile).toMatch(
+      /\.runtime-panel__head,\s*\.overlay-panel__head \{\s*flex-direction: column;/,
+    );
+    expect(mobile).toMatch(
+      /\.runtime-panel__head > div,\s*\.overlay-panel__head > div \{\s*width: 100%;\s*flex: none;/,
+    );
+    expect(source).toContain("<p>{{ copy.runtime.overlayHelp }}</p>");
+    expect(source).toContain(
+      ":state=\"overlayDirty ? 'DRAFT' : overlayState\"",
+    );
+  });
 });

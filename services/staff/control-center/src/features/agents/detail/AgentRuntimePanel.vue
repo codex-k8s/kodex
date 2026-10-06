@@ -950,9 +950,23 @@ onBeforeUnmount(reset);
 .runtime-panel__head,
 .overlay-panel__head {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+.runtime-panel__head > div,
+.overlay-panel__head > div {
+  min-width: 0;
+  flex: 1 1 220px;
+  overflow-wrap: anywhere;
+}
+.runtime-panel__head > .status-badge,
+.overlay-panel__head > .status-badge {
+  align-self: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .runtime-panel h2,
 .overlay-panel h3,
@@ -1072,6 +1086,16 @@ onBeforeUnmount(reset);
   margin-inline-start: 0;
 }
 @media (max-width: 640px) {
+  .runtime-panel__head,
+  .overlay-panel__head {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .runtime-panel__head > div,
+  .overlay-panel__head > div {
+    width: 100%;
+    flex: none;
+  }
   .runtime-panel__summary {
     grid-template-columns: 1fr;
   }
