@@ -3781,7 +3781,7 @@ onBeforeUnmount(() => {
     padding-top: 14px;
   }
   .assistant-drawer__identity {
-    flex: 1 1 80px;
+    flex: 1 1 0;
   }
   .assistant-scope-selector {
     order: 1;

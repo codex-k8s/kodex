@@ -215,6 +215,20 @@ describe("AssistantWorkspace layout", () => {
     expect(mobile).toMatch(/border-radius:\s*0/);
   });
 
+  it("сжимает название на узком mobile, сохраняя кнопки header в одном ряду", () => {
+    const mobile = styles.slice(
+      styles.indexOf(
+        "@media (max-width: 720px) {",
+        styles.indexOf(".assistant-composer__protected-link:focus-visible"),
+      ),
+    );
+    const identity = mobile
+      .split(".assistant-drawer__identity {")[1]
+      ?.split("}")[0];
+    expect(identity).toContain("flex: 1 1 0");
+    expect(identity).not.toContain("80px");
+  });
+
   it("оставляет scroll только логу и закрепляет composer", () => {
     expect(styles).toMatch(
       /\.assistant-chat-log\s*\{[\s\S]*?flex:\s*1 1 auto[\s\S]*?overflow:\s*auto/,
