@@ -158,6 +158,47 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 18:17 UTC. Source0196920f: исправлен сквозной каталог рецептов
+SQL→domain→Proto field22→CP mapper→callback; `environment_key` берётся из
+сохранённого scoped recipe, в других видах каталога запрещён. ROOT callback
+1.005с, CP transport0.544с/repository0.639с PASS. Ошибочные ROOT package
+paths отдельно исправлены; их setup FAIL не объявляются unit дефектами.
+Mandatory wrapper FAIL: stale risk policy expected91/current92; component
+fixture FAIL: expected100/253 graph против canonical forward00300 101/264.
+Точные canonical fixtures исправляются отдельно, проверки не ослабляются;
+адресный catalog PostgreSQL после fixture ещё NOT RUN.
+
+Native common UPDATE `pln_0OHDh9VomCYeRKpMasbO63hK` revision1 APPLIED один
+раз: recipeversion3/generation2, новый точный FROM579. Build
+`imgbld_Ug8J0YP8HJBupkvJJRIC8n-j` COMPLETED/version13; новый admission/
+risk/promotion ещё OPEN, отсутствие activeArtifact не выдаётся за допуск.
+Каталог не содержал ключ среды, helper отказался угадывать; owner fresh GET
+подтвердил standard и дал truthful input. Это обнаруженный live пробел,
+а не доказательство исправленного catalog tool acceptance.
+
+PROJECT GitHub READ20 native plan `pln_pjN5SwzhMRQSgUR24dPUsu2t`
+revision1/version3 APPLIED18:15:24, квитанция
+`rct_btneuPZV3ngdDcFe5nduklp5`, exact20 operationReceipts APPLIED.
+До Apply exact20keys/H/P/profile1/agent7/definition2.3.1/connection100/NONE
+совпали. Editor shared bundle отправил4 GET одной ревизии, HTTP200/Console0.
+После HMR был transient502 GET; authoritative повторное чтение подтвердило
+APPLIED, mutation не повторялась. Managed Git actual tool proof ещё OPEN.
+
+Mobile PROJECT20 editor390×844 screenshot: footer84px, две кнопки44×178px,
+Действия открывает штатный popover, horizontal overflow0/Console0. Native
+Apply доступен/выполнен; карточки пока119–136px и видны3, дальнейшее
+уплотнение общего header запланировано без размонтирования validators.
+Desktop plan image Dockerfile editor screenshot/Console0/Validate/Apply PASS.
+
+SSO policy sourceb8ac95a0 опубликован в том же DraftPR1798 и применён узким
+repo-owned stage: четыре realm SSO/RememberMe limits43200, rememberMe=true,
+fresh exact readback PASS. Client overrides отсутствуют, access-token300/
+client3600, refresh rotationtrue/reuse0 сохранены. ROOT10 policy units PASS.
+Existing /api/v1/session absoluteExpiresAt20:58:54UTC, remaining2.80h:
+политика не расширяет уже выданную family. Открыт штатный forced login
+freshAuthentication=true (prompt=login/max_age=0), actual новое12h окно
+ещё NOT RUN. MCP approval и SSO lifetime не смешиваются. Full65 OPEN.
+
 06.10.2026 18:07 UTC. ROOT source7687f133, предыдущий remote/PR1798
 exact341a8c6f PASS, Draft сохранён. Все108 ordinary grants завершены:
 Manager19 (`pln_5XzCaSew9GYp1KaNAwUpZQUK`), Architect18
