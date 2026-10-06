@@ -54,7 +54,7 @@ describe("возврат к серверному черновику после O
     );
     expect(
       consumeEnvironmentDraftReference(draft.projectRef, undefined, target),
-    ).toBe(draft.ref);
+    ).toEqual({ ref: draft.ref, version: draft.version });
     expect(
       consumeEnvironmentDraftReference(draft.projectRef, undefined, target),
     ).toBeUndefined();
@@ -81,4 +81,25 @@ describe("возврат к серверному черновику после O
       consumeEnvironmentDraftReference(draft.projectRef, undefined, target),
     ).toThrow();
   });
+  it.each([undefined, 0, -1, 1.5, "1", Number.MAX_SAFE_INTEGER + 1])(
+    "не принимает отсутствующую или недопустимую version=%s",
+    (version) => {
+      const target = storage();
+      rememberEnvironmentDraft(draft, target);
+      target.setItem(
+        environmentDraftReauthKey,
+        JSON.stringify({
+          ref: draft.ref,
+          projectRef: draft.projectRef,
+          environmentRef: "",
+          expiresAt: Date.now() + 60_000,
+          version,
+        }),
+      );
+      expect(() =>
+        consumeEnvironmentDraftReference(draft.projectRef, undefined, target),
+      ).toThrow();
+      expect(target.length).toBe(0);
+    },
+  );
 });

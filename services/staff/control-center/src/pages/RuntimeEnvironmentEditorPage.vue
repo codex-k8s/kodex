@@ -604,16 +604,34 @@ async function restoreAfterFreshAuthentication(): Promise<void> {
     },
   );
   if (!completed) return;
-  const ref = consumeEnvironmentDraftReference(
+  const reference = consumeEnvironmentDraftReference(
     projectRef.value,
     environmentRef.value,
     window.sessionStorage,
   );
-  if (!ref) return;
-  applyServerDraft(
-    await readEnvironmentDraft(projectRef.value, ref, draftController.signal),
+  if (!reference) return;
+  const project = projectRef.value;
+  const environment = environmentRef.value;
+  const generation = initializationGeneration;
+  const draft = await readEnvironmentDraft(
+    project,
+    reference.ref,
+    draftController.signal,
   );
-  await router.replace({ query: { ...route.query, draftRef: ref } });
+  if (
+    disposed ||
+    draftController.signal.aborted ||
+    generation !== initializationGeneration ||
+    project !== projectRef.value ||
+    environment !== environmentRef.value
+  )
+    return;
+  if (draft.ref !== reference.ref || draft.version !== reference.version)
+    throw new Error(
+      "Runtime environment draft version changed during reauthentication",
+    );
+  applyServerDraft(draft);
+  await router.replace({ query: { ...route.query, draftRef: reference.ref } });
   reauthRestored.value = true;
 }
 
@@ -699,18 +717,53 @@ async function validateDraft(): Promise<void> {
     return;
   busy.value = true;
   problem.value = undefined;
+  const draft = serverDraft.value;
   try {
     applyServerDraft(
       await transitionEnvironmentDraft(
         "validate",
-        serverDraft.value,
+        draft,
         draftController.signal,
       ),
     );
   } catch (error) {
-    if (!disposed) problem.value = asProblem(error);
+    await handleDraftPolicyProblem(asProblem(error), draft);
   } finally {
     if (!disposed) busy.value = false;
+  }
+}
+
+function matchesCurrentDraft(draft: RuntimeEnvironmentDraft): boolean {
+  return (
+    !disposed &&
+    !draftController.signal.aborted &&
+    serverDraft.value?.ref === draft.ref &&
+    serverDraft.value.version === draft.version &&
+    draft.projectRef === projectRef.value &&
+    (draft.environmentRef || undefined) === environmentRef.value
+  );
+}
+
+async function handleDraftPolicyProblem(
+  normalized: AppProblem,
+  draft: RuntimeEnvironmentDraft,
+): Promise<void> {
+  if (!matchesCurrentDraft(draft)) return;
+  if (!requiresRuntimeEnvironmentPolicyReauth(normalized)) {
+    problem.value = normalized;
+    return;
+  }
+  try {
+    rememberEnvironmentDraft(draft, window.sessionStorage);
+    await session.beginRuntimeEnvironmentPolicyReauth({
+      ...(environmentRef.value ? { environmentRef: environmentRef.value } : {}),
+      operation: currentOperation(),
+      projectRef: projectRef.value,
+      ...(assistantForm.value ? { surface: "assistant" as const } : {}),
+    });
+  } catch (reauthError) {
+    window.sessionStorage.removeItem(environmentDraftReauthKey);
+    if (matchesCurrentDraft(draft)) problem.value = asProblem(reauthError);
   }
 }
 
@@ -955,24 +1008,7 @@ async function publish(selected: string[]): Promise<void> {
       publicationAttempt.value = undefined;
       publicationUnknown.value = false;
     }
-    if (!requiresRuntimeEnvironmentPolicyReauth(normalized)) {
-      problem.value = normalized;
-      return;
-    }
-    try {
-      rememberEnvironmentDraft(serverDraft.value, window.sessionStorage);
-      await session.beginRuntimeEnvironmentPolicyReauth({
-        ...(environmentRef.value
-          ? { environmentRef: environmentRef.value }
-          : {}),
-        operation: currentOperation(),
-        projectRef: projectRef.value,
-        ...(assistantForm.value ? { surface: "assistant" as const } : {}),
-      });
-    } catch (reauthError) {
-      window.sessionStorage.removeItem(environmentDraftReauthKey);
-      problem.value = asProblem(reauthError);
-    }
+    await handleDraftPolicyProblem(normalized, serverDraft.value);
   } finally {
     if (!disposed) busy.value = false;
   }

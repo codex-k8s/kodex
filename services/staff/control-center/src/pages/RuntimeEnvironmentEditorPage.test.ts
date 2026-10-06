@@ -27,6 +27,7 @@ const runtime = vi.hoisted(() => ({
   environmentVersionCursors: {},
   environmentReadiness: {},
   environmentAgents: {},
+  environmentAgentCursors: {},
   loading: {},
   loadPromotedRoleImageArtifact: vi.fn(),
   loadEnvironment: vi.fn(),
@@ -34,6 +35,17 @@ const runtime = vi.hoisted(() => ({
   searchPromotedRoleImagePage: vi.fn(),
 }));
 const cleanup = vi.hoisted(() => [] as Array<() => void>);
+const session = vi.hoisted(() => ({
+  beginRuntimeEnvironmentPolicyReauth: vi.fn(),
+}));
+const draftApi = vi.hoisted(() => ({
+  createEnvironmentDraft: vi.fn(),
+  saveEnvironmentDraft: vi.fn(),
+  publishEnvironmentDraft: vi.fn(),
+  readEnvironmentDraft: vi.fn(),
+  transitionEnvironmentDraft: vi.fn(),
+}));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("vue", async (original) => ({
   ...(await original<typeof import("vue")>()),
   onMounted: vi.fn(),
@@ -45,18 +57,32 @@ const route = reactive({
 });
 vi.mock("vue-router", () => ({
   useRoute: () => route,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => router,
   onBeforeRouteLeave: vi.fn(),
   onBeforeRouteUpdate: vi.fn(),
 }));
 vi.mock("@/features/runtime/store", () => ({ useRuntimeStore: () => runtime }));
-vi.mock("@/features/session/store", () => ({ useSessionStore: () => ({}) }));
+vi.mock("@/features/session/store", () => ({ useSessionStore: () => session }));
+vi.mock("@/features/runtime/environment-drafts", async (original) => ({
+  ...(await original<typeof import("@/features/runtime/environment-drafts")>()),
+  ...draftApi,
+}));
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import RuntimeEnvironmentEditorPage from "./RuntimeEnvironmentEditorPage.vue";
 import { i18n } from "@/app/i18n";
+import { AppProblem } from "@/shared/api/problem";
+import {
+  environmentDraftReauthKey,
+  rememberEnvironmentDraft,
+} from "@/features/runtime/environment-draft-reauth";
+import {
+  createRuntimeEnvironmentPolicyIntent,
+  recordRuntimeEnvironmentPolicyReauthCompletion,
+} from "@/features/session/reauth";
 const mountedEditors: Array<() => void> = [];
 afterEach(() => {
   for (const dispose of mountedEditors.splice(0)) dispose();
+  vi.unstubAllGlobals();
 });
 
 async function editor(localized = false) {
@@ -68,6 +94,9 @@ async function editor(localized = false) {
     descriptionFieldValue: Ref<string>;
     serverDraft: Ref<RuntimeEnvironmentDraft | undefined>;
     draftSavedAtDisplay: Ref<string>;
+    draftDirty: Ref<boolean>;
+    problem: Ref<AppProblem | undefined>;
+    reauthRestored: Ref<boolean>;
     specification: Ref<{ name: string; description: string }>;
     imageArtifact: Ref<RoleImageArtifact | undefined>;
     imageInventoryReady: Ref<boolean>;
@@ -78,6 +107,8 @@ async function editor(localized = false) {
     applyServerDraft(draft: RuntimeEnvironmentDraft): void;
     loadImageArtifact(recipe: string, artifact: string): Promise<void>;
     load(): Promise<void>;
+    validateDraft(): Promise<void>;
+    restoreAfterFreshAuthentication(): Promise<void>;
   };
 }
 
@@ -128,6 +159,258 @@ beforeEach(() => {
   cleanup.length = 0;
   route.params.projectRef = "project_1";
   route.params.environmentRef = "environment_1";
+  route.query = {};
+  runtime.environments = {};
+});
+
+function browserStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    key: (index) => [...values.keys()][index] ?? null,
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+    removeItem: (key) => {
+      values.delete(key);
+    },
+    clear: () => values.clear(),
+  };
+}
+function savedDraft(): RuntimeEnvironmentDraft {
+  return {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
+    projectRef: "project_1",
+    environmentRef: "environment_1",
+    ref: "draft_synthetic",
+    version: 1,
+    state: "DRAFT",
+    expectedEnvironmentVersion: 1,
+    validationDigest: "",
+    diagnostics: [],
+    specification: {
+      name: "Окружение",
+      description: "",
+      imageArtifactRef: "",
+      tools: [],
+      values: [],
+      secretBindings: [],
+    },
+  };
+}
+const freshAuthenticationProblem = new AppProblem({
+  status: 403,
+  code: "FRESH_AUTHENTICATION_REQUIRED",
+  retryable: false,
+  kind: "forbidden",
+});
+
+describe("проверка черновика после свежего SSO", () => {
+  beforeEach(() => {
+    runtime.environments = {
+      environment_1: { ref: "environment_1", version: 1 },
+    };
+  });
+  it("на fresh 403 сохраняет только точный draft ref/version и начинает SSO без повторной mutation", async () => {
+    const storage = browserStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    route.query = { assistantForm: "1" };
+    const state = await editor(true);
+    const draft = savedDraft();
+    state.applyServerDraft(draft);
+    expect(state.draftDirty.value).toBe(false);
+    draftApi.transitionEnvironmentDraft.mockRejectedValueOnce(
+      freshAuthenticationProblem,
+    );
+    await state.validateDraft();
+    expect(
+      session.beginRuntimeEnvironmentPolicyReauth,
+    ).toHaveBeenCalledExactlyOnceWith({
+      environmentRef: "environment_1",
+      operation: "PUBLISH",
+      projectRef: "project_1",
+      surface: "assistant",
+    });
+    expect(
+      JSON.parse(storage.getItem(environmentDraftReauthKey) ?? "{}") as unknown,
+    ).toMatchObject({ ref: draft.ref, version: draft.version });
+    expect(storage.getItem(environmentDraftReauthKey)).not.toContain(
+      "specification",
+    );
+    expect(draftApi.transitionEnvironmentDraft).toHaveBeenCalledTimes(1);
+    expect(state.serverDraft.value).toEqual(draft);
+  });
+  it("после возврата читает точный server draft, а Validate запускает только следующий явный клик", async () => {
+    const storage = browserStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const draft = savedDraft();
+    rememberEnvironmentDraft(draft, storage);
+    recordRuntimeEnvironmentPolicyReauthCompletion(
+      createRuntimeEnvironmentPolicyIntent(
+        "project_1",
+        "PUBLISH",
+        "environment_1",
+      ),
+      storage,
+    );
+    draftApi.readEnvironmentDraft.mockResolvedValueOnce(draft);
+    const state = await editor(true);
+    await state.restoreAfterFreshAuthentication();
+    expect(draftApi.readEnvironmentDraft.mock.calls[0]?.slice(0, 2)).toEqual([
+      "project_1",
+      draft.ref,
+    ]);
+    expect(state.serverDraft.value).toEqual(draft);
+    expect(state.reauthRestored.value).toBe(true);
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith({
+      query: { draftRef: draft.ref },
+    });
+    expect(storage.getItem(environmentDraftReauthKey)).toBeNull();
+    expect(draftApi.transitionEnvironmentDraft).not.toHaveBeenCalled();
+    expect(draftApi.createEnvironmentDraft).not.toHaveBeenCalled();
+    expect(draftApi.saveEnvironmentDraft).not.toHaveBeenCalled();
+    expect(draftApi.publishEnvironmentDraft).not.toHaveBeenCalled();
+    draftApi.transitionEnvironmentDraft.mockResolvedValueOnce({
+      ...draft,
+      state: "VALID",
+      version: 2,
+    });
+    await state.validateDraft();
+    expect(draftApi.transitionEnvironmentDraft).toHaveBeenCalledTimes(1);
+    expect(state.serverDraft.value?.state).toBe("VALID");
+  });
+  it("при изменившейся версии после SSO не принимает новую ревизию и не выполняет mutation", async () => {
+    const storage = browserStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const draft = savedDraft();
+    rememberEnvironmentDraft(draft, storage);
+    recordRuntimeEnvironmentPolicyReauthCompletion(
+      createRuntimeEnvironmentPolicyIntent(
+        "project_1",
+        "PUBLISH",
+        "environment_1",
+      ),
+      storage,
+    );
+    draftApi.readEnvironmentDraft.mockResolvedValueOnce({
+      ...draft,
+      version: 2,
+    });
+    const state = await editor(true);
+    await expect(state.restoreAfterFreshAuthentication()).rejects.toThrow(
+      "version",
+    );
+    expect(state.serverDraft.value).toBeUndefined();
+    expect(state.reauthRestored.value).toBe(false);
+    expect(draftApi.transitionEnvironmentDraft).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+  it("несохранённый или изменённый локально draft не запускает проверку/SSO", async () => {
+    const state = await editor(true);
+    await state.validateDraft();
+    state.applyServerDraft(savedDraft());
+    state.input.description = "Несохранённое изменение";
+    await state.validateDraft();
+    expect(draftApi.transitionEnvironmentDraft).not.toHaveBeenCalled();
+    expect(session.beginRuntimeEnvironmentPolicyReauth).not.toHaveBeenCalled();
+    expect(draftApi.createEnvironmentDraft).not.toHaveBeenCalled();
+    expect(draftApi.saveEnvironmentDraft).not.toHaveBeenCalled();
+    expect(draftApi.publishEnvironmentDraft).not.toHaveBeenCalled();
+  });
+  it("сохранённый draft нового окружения возвращается по CREATE без повторного создания", async () => {
+    const storage = browserStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    Reflect.deleteProperty(route.params, "environmentRef");
+    const draft = {
+      ...savedDraft(),
+      environmentRef: undefined,
+      expectedEnvironmentVersion: 0,
+    };
+    const state = await editor(true);
+    state.applyServerDraft(draft);
+    draftApi.transitionEnvironmentDraft.mockRejectedValueOnce(
+      freshAuthenticationProblem,
+    );
+    await state.validateDraft();
+    expect(
+      session.beginRuntimeEnvironmentPolicyReauth,
+    ).toHaveBeenCalledExactlyOnceWith({
+      operation: "CREATE",
+      projectRef: "project_1",
+    });
+    recordRuntimeEnvironmentPolicyReauthCompletion(
+      createRuntimeEnvironmentPolicyIntent("project_1", "CREATE"),
+      storage,
+    );
+    draftApi.readEnvironmentDraft.mockResolvedValueOnce(draft);
+    await state.restoreAfterFreshAuthentication();
+    expect(state.serverDraft.value).toEqual(draft);
+    expect(draftApi.transitionEnvironmentDraft).toHaveBeenCalledTimes(1);
+  });
+  it("поздний fresh 403 и readback не переходят в другой project scope", async () => {
+    const storage = browserStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const draft = savedDraft();
+    const state = await editor(true);
+    state.applyServerDraft(draft);
+    const validation = pending<RuntimeEnvironmentDraft>();
+    draftApi.transitionEnvironmentDraft.mockReturnValueOnce(validation.promise);
+    const checking = state.validateDraft();
+    route.params.projectRef = "project_other";
+    validation.reject(freshAuthenticationProblem);
+    await checking;
+    expect(session.beginRuntimeEnvironmentPolicyReauth).not.toHaveBeenCalled();
+    expect(storage.getItem(environmentDraftReauthKey)).toBeNull();
+    route.params.projectRef = "project_1";
+    rememberEnvironmentDraft(draft, storage);
+    recordRuntimeEnvironmentPolicyReauthCompletion(
+      createRuntimeEnvironmentPolicyIntent(
+        "project_1",
+        "PUBLISH",
+        "environment_1",
+      ),
+      storage,
+    );
+    const readback = pending<RuntimeEnvironmentDraft>();
+    draftApi.readEnvironmentDraft.mockReturnValueOnce(readback.promise);
+    const restoring = state.restoreAfterFreshAuthentication();
+    route.params.projectRef = "project_other";
+    readback.resolve(draft);
+    await restoring;
+    expect(state.reauthRestored.value).toBe(false);
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(draftApi.transitionEnvironmentDraft).toHaveBeenCalledTimes(1);
+  });
+  it("обычный 403 не переходит в SSO, а ошибка redirect очищает metadata и остаётся видимой", async () => {
+    const storage = browserStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const state = await editor(true);
+    state.applyServerDraft(savedDraft());
+    const forbidden = new AppProblem({
+      status: 403,
+      code: "ACCESS_DENIED",
+      retryable: false,
+      kind: "forbidden",
+    });
+    draftApi.transitionEnvironmentDraft.mockRejectedValueOnce(forbidden);
+    await state.validateDraft();
+    expect(state.problem.value).toBe(forbidden);
+    expect(session.beginRuntimeEnvironmentPolicyReauth).not.toHaveBeenCalled();
+    session.beginRuntimeEnvironmentPolicyReauth.mockRejectedValueOnce(
+      forbidden,
+    );
+    draftApi.transitionEnvironmentDraft.mockRejectedValueOnce(
+      freshAuthenticationProblem,
+    );
+    await state.validateDraft();
+    expect(state.problem.value).toBe(forbidden);
+    expect(storage.getItem(environmentDraftReauthKey)).toBeNull();
+    expect(draftApi.transitionEnvironmentDraft).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("компактная шапка редактора окружения", () => {
