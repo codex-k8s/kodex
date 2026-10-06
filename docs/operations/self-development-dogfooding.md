@@ -158,6 +158,86 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 23:29 UTC — история решений и повторное подключение GitHub
+
+Source `442ffee2`, remote/PR до следующего push `29be58de`.
+
+- PASS: terminal-only Gate fix интегрирован; ROOT disposable PostgreSQL
+  `TestScopedIntegrationApprovalComponent` на442ffee2: PASS2.083с,
+  worker-grant/runner-policy readbacks PASS. Retired OPEN и его исполнение
+  по-прежнему закрыты; terminal история не использует старую схему.
+- PASS: свежий native owner ListOwnerGates GET200 вернул все4 исторических
+  решения. Прежние SCOPED APPROVED/REJECTED сохранены, поля retired схемы
+  скрыты. Это исправление прежнего403, не выдача новых полномочий.
+- PASS: RunPage bounded recovery интегрирован73313a02; ROOT4frontend suites,
+  59tests PASS4.22с на442ffee2. Source/Pod SHA RunPage и Gate projection
+  совпали. Полный native rejoin повтор ещё выполняется.
+- PASS: protected credential effect один, C126; native TEST завершён,
+  fresh C128/CONNECTED/credentialsConfigured=true/GitHub2.4.0.
+  Exact owner impact GET200 по-прежнему содержит один прежний consumer.
+  Generation fix069c7375 сохраняет immutable pins/full-byte guards.
+- PASS: первый native PROJECT restoration read действительно сверил21
+  прежних disabled/NONE grants. Ранний provider ACK same Pod UID captured;
+  task9047B/SHA95260b62… совпал с фактическим отправленным текстом, inbox и
+  instructions EQUAL,38tools/2Context7 grants. Новые GitHub grants ещё не
+  активированы. Helper остановился без proposal, потому что его ограниченный
+  каталог не показывает часть owner-only metadata; передано свежепроверенное
+  owner observation для подготовки плана, не runtime authority.
+- FAIL UX: на Integrations desktop credentials badge выступает за колонку
+  и склеивается с соседним счётчиком. Screenshot выполнен, Console0;
+  локальный layout fix выполняется отдельно, без изменения grants.
+
+Restoration117, managed Draft/Git/review/response, concurrency, bootstrap
+merge/fresh main и финальный внутренний Workflow остаются OPEN.
+
+### 06.10.2026 23:20 UTC — последовательная передача работы подтверждена
+
+Source `02c74e99`; последний подтверждённый remote/PR `29be58de`.
+Callback fix `ef5fc7df`, отдельный coordinator-step regression и инвариант
+`bc2fee92`; Bootstrap fixture-only fix `c8b03a6f`; подписи каталога и
+локализация отказа дочернего процесса `a2aa2e5f`.
+
+- PASS: canonical disposable WorkflowLaunchComponent на `bc2fee92`,
+  10 сценариев/16.525с, worker-grant и runner-policy readbacks. Frozen
+  Bootstrap fixture `26761dda`: 83 сценария, FAIL0/SKIP0,92.179с. Последний
+  результат не объявляется полным current-SHA baseline.
+- PASS: новый ordinary Manager `run_-LsSTVaXlF0N8poCLGfE5NZ2` принял ровно
+  один required Workflow `run_t0OMsHLpuJgYVNsSmcAktO24`. Architect
+  `run_BB34aRLTOKmIlzIVxXUT8mPf` и Documentation
+  `run_ojzpdUHgGeHQbCS7g16EF_f9` SUCCEEDED; coordinator продолжения2/3
+  и финальный parent SUCCEEDED. Documentation действительно материализован;
+  прежний цикл2–15 не повторился. Это read-only smoke, не полный review.
+- PASS: source/Pod callback Go и SQL SHA совпали. Ранний parent ACK same UID,
+  input/task/inbox2406B/SHA89d5accd… совпали с submitted input;
+  Architect/Documentation и coordinator continuation ACK захвачены отдельно.
+  Binary readback относится к файлу того же образа, не к `/proc` процесса.
+- PASS: owner protected content GET200 полностью прочитал
+  `art_xGmmR9573I8NP2eIO-kW_xSf`,3184B,
+  SHA `a07825272b0d846f711d0d5b4feb3e937256c0c5e69d5fe45f82d000748b9940`,
+  и `art_H4psj0f0_Ho6aQUiD9AHBcMp`,4044B,
+  SHA `f84f1e12e72adf988ff2e1ce710e0cddcdfb3b7400716adb219fb7f71598ad54`.
+  Размеры/SHA равны authoritative metadata, оба ACTIVE/CLEAN;
+  второй содержит точный digest первого и исходного файла.
+- FAIL: новый Run экран получил project owner-gates403 и показал toast;
+  новый SHIPPED package против исторического SCOPED pin исследуется с
+  disposable regression. Не скрывать OPEN/current-authority отказ.
+- FAIL: после HMR exact route временно показал пустой каталог вместо
+  доступного run; после reload восстановился. PLATFORM availableKinds не
+  содержал RUN. Проверяется bounded exact read recovery без сохранения
+  отозванной cache authority. Screenshot/Console/Network выполнены.
+- PASS: UI-копия GitHub2.4 опубликована и native привязана к прежнему C.
+  Fresh C125/NOT_CONNECTED,117 прежних grants disabled, configuration4,
+  revision `mrev_5rLtCVbDvTWb9V54JQFOMrJa`, digest509d0168…; exact
+  owner impact содержит одну прежнюю connection. Credential/test и typed
+  restoration117 ещё OPEN. Не использовать прежний CONNECTED как доказательство.
+- PASS: защищённый preflight helper44 tests/327мс на02c74e99. Живой
+  preflight закрыто остановился до изменения C; исправляется ошибочное
+  отождествление catalog generation301 с copy provenance300 при одинаковой
+  immutable package version/digest. Проверка полного content не ослабляется.
+
+Managed Draft PR/Git/review/response, полная session concurrency,
+bootstrap merge/fresh main и финальный внутренний Workflow остаются OPEN.
+
 ### 06.10.2026 23:02 UTC — реальный callback дефект и компактные результаты
 
 Source `ce20e4c2`, предыдущий frontend source `8aa626b2`; последний

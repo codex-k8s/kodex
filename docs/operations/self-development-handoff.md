@@ -10,6 +10,49 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 23:29UTC: source442ffee2, remote/PR29be58de до следующего push.
+Terminal Gate history native GET200/4 решения, ROOT PG PASS2.083с;
+RunPage recovery59units PASS4.22с, source/Pod hashes совпали. Protected
+credential one-effect PASS C126, native TEST→fresh C128/CONNECTED2.4.
+Все117 прежних GitHub grants пока disabled; текущий helper restoration
+conversation `cnv_BgE1NqdHfrfSBeWRI8zPQGhO`, initial run
+`run_HxGOk8z7U2HM4WRLu54IqHuX` прочитал21 tuples, proposal пока не создан.
+Owner metadata clarification отправлен23:28UTC; не повторять неизвестный
+effect, читать actual plan/receipt. Далее seven typed plans + exact117 tuple
+readback, только затем native Manager→Developer DraftPR→Reviewer COMMENT→
+Developer response Issue1797. Готов bounded pack, baseSHA назначить после
+exact ROOT push. Integrations badge overflow чинится отдельно. Цель ACTIVE.
+
+## Предыдущий checkpoint23:20
+
+06.10.2026 23:20 UTC: source `02c74e99`, remote/PR последний подтверждён
+`29be58de`. Native последовательный read-only Workflow PASS: parent
+`run_-LsSTVaXlF0N8poCLGfE5NZ2`, child `run_t0OMsHLpuJgYVNsSmcAktO24`,
+Architect `run_BB34aRLTOKmIlzIVxXUT8mPf`, Documentation
+`run_ojzpdUHgGeHQbCS7g16EF_f9` — все SUCCEEDED. Coordinator callbacks2/3
+доставлены без бесконечного ожидания; оба файла полностью прочитаны, SHA/size
+равны metadata, Documentation содержит digest Architect/source.
+ROOT canonical Workflow PG10 PASS16.525с наbc2fee92; frozen fixture Bootstrap
+83 PASS92.179с, не current-SHA полный baseline. Подробнее новый журнал23:20.
+
+GitHub2.4 UI-copy native PUBLISHED/bound: C125/NOT_CONNECTED,117 existing
+grants disabled; configuration `mcfg_haevEUO0q3MYYzhlW6jOLAIU` version4,
+revision `mrev_5rLtCVbDvTWb9V54JQFOMrJa`, digest509d0168….
+Protected preflight перед effect отказал: catalog generation301, provenance
+300 при том же package2.4/c7bf…; узкий fix различает observed generation и
+immutable identity, не меняет historical provenance. Далее credential→TEST→
+семь typed restore plans exact117 before tuples. Не запускать ordinary
+Git/PR цикл до CONNECTED и полного readback restoration.
+
+Два live UX FAIL чинятся отдельно: project owner-gates403 после retirement
+старого SCOPED package pin; exact Run route теряет cache после HMR/PLATFORM
+snapshot без RUN, reload возвращает экран. OPEN authority не ослаблять,
+старый graph не выдавать за авторитетный run. Chrome5 own, foreign6 не трогать;
+reload каждые5мин. SSOabsolute07.10 06:23UTC, deadline04:30UTC.
+Цель ACTIVE, полный QA/Git/review/concurrency/final Workflow ещё OPEN.
+
+## Предыдущий checkpoint23:02
+
 06.10.2026 23:02 UTC: source `ce20e4c2`, последний подтверждённый remote/PR
 `61e374e4`. Callback origin `a3057b43`, Context7 scope `4fd8f902`, compact
 Project results `8aa626b2`, typed Draft package `ce20e4c2` интегрированы.
