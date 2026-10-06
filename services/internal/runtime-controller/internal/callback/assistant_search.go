@@ -32,14 +32,56 @@ func assistantResourceSearchTool() map[string]any {
 
 const maximumAssistantSearchResults = 10
 
+const (
+	assistantSearchFailureMessage        = "assistant resource search failed"
+	assistantSearchContextInvalid        = "assistant_search_context_invalid"
+	assistantSearchInputShapeInvalid     = "assistant_search_input_shape_invalid"
+	assistantSearchQueryInvalid          = "assistant_search_query_invalid"
+	assistantSearchOwnerFailed           = "assistant_search_owner_failed"
+	assistantSearchResponseShapeInvalid  = "assistant_search_response_shape_invalid"
+	assistantSearchResultIdentityInvalid = "assistant_search_result_identity_invalid"
+	assistantSearchResultRouteInvalid    = "assistant_search_result_route_invalid"
+)
+
+type assistantSearchError struct {
+	class string
+	cause error
+}
+
+func (err *assistantSearchError) Error() string { return assistantSearchFailureMessage }
+func (err *assistantSearchError) Unwrap() error {
+	if err == nil {
+		return nil
+	}
+	return err.cause
+}
+
+func assistantSearchFailureClass(err error) string {
+	var failure *assistantSearchError
+	if !errors.As(err, &failure) || failure == nil {
+		return ""
+	}
+	switch failure.class {
+	case assistantSearchContextInvalid, assistantSearchInputShapeInvalid, assistantSearchQueryInvalid,
+		assistantSearchOwnerFailed, assistantSearchResponseShapeInvalid, assistantSearchResultIdentityInvalid,
+		assistantSearchResultRouteInvalid:
+		return failure.class
+	default:
+		return ""
+	}
+}
+
 func (server *Server) findPlatformResources(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.IsAssistant() || !onlyKeys(arguments, "query") || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
-		return nil, errors.New("assistant resource search is not available")
+	if !input.IsAssistant() || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
+		return nil, &assistantSearchError{class: assistantSearchContextInvalid}
+	}
+	if !onlyKeys(arguments, "query") {
+		return nil, &assistantSearchError{class: assistantSearchInputShapeInvalid}
 	}
 	query, ok := arguments["query"].(string)
 	query = strings.TrimSpace(query)
 	if !ok || len([]rune(query)) < 2 || len([]rune(query)) > 160 {
-		return nil, errors.New("assistant resource search query is invalid")
+		return nil, &assistantSearchError{class: assistantSearchQueryInvalid}
 	}
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
@@ -47,21 +89,21 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Query: query,
 	})
 	if err != nil {
-		return nil, err
+		return nil, &assistantSearchError{class: assistantSearchOwnerFailed, cause: err}
 	}
 	if response == nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 || len(response.GetResults()) > maximumAssistantSearchResults {
-		return nil, errors.New("assistant resource search result is invalid")
+		return nil, &assistantSearchError{class: assistantSearchResponseShapeInvalid}
 	}
 	items := make([]map[string]any, 0, len(response.GetResults()))
 	for _, item := range response.GetResults() {
 		if item == nil || !validAssistantResourceRef(item.GetRef()) ||
 			(item.GetKind() != controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_INTEGRATION && !validAssistantResourceRef(item.GetProjectRef())) ||
 			(item.GetKind() == controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_INTEGRATION && item.GetProjectRef() != "") {
-			return nil, errors.New("assistant resource search result is invalid")
+			return nil, &assistantSearchError{class: assistantSearchResultIdentityInvalid}
 		}
 		kind, route := assistantResourceRoute(item)
 		if kind == "" {
-			return nil, errors.New("assistant resource search result is invalid")
+			return nil, &assistantSearchError{class: assistantSearchResultRouteInvalid}
 		}
 		items = append(items, map[string]any{
 			"kind": kind, "ref": item.GetRef(), "project_ref": item.GetProjectRef(),

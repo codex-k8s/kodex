@@ -793,6 +793,9 @@ func invalidAssistantPlan(reason string) error {
 }
 
 func controlFailureClass(err error) string {
+	if class := assistantSearchFailureClass(err); class != "" {
+		return class
+	}
 	if class, _ := assistantPlanFailureDiagnostic(err); class != "" {
 		return class
 	}
