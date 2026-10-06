@@ -11,6 +11,19 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+func TestTerminalOwnerGateHistoryIsClosed(t *testing.T) {
+	for _, state := range []string{"APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED"} {
+		if !terminalOwnerGateHistory(state) {
+			t.Fatalf("terminal state rejected: %s", state)
+		}
+	}
+	for _, state := range []string{"", "OPEN", "UNKNOWN", "FAILED", "approved"} {
+		if terminalOwnerGateHistory(state) {
+			t.Fatalf("non-terminal or unknown state accepted: %s", state)
+		}
+	}
+}
+
 func TestIntegrationGatePreviewBoundsAndOpaqueFields(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {

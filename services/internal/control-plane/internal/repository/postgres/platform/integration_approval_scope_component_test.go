@@ -402,6 +402,16 @@ SET reserved_effects=max_effects WHERE origin_gate_id=(SELECT id FROM control_pl
 	if err != nil || stringMap(changed, "state") != "WAITING_APPROVAL" || stringMap(changed, "gateRef") == "" {
 		t.Fatalf("changed typed scope skipped gate: state=%q err=%v", stringMap(changed, "state"), err)
 	}
+	rejected, err := call("scoped-rejected", "DELETE", "rejected")
+	if err != nil || stringMap(rejected, "state") != "WAITING_APPROVAL" {
+		t.Fatalf("prepare rejected scoped history: %v", err)
+	}
+	rejection, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "scoped-history-reject", ExpectedVersion: &gateVersion},
+		Payload:  command.GateResolutionInput{GateRef: stringMap(rejected, "gateRef"), Decision: "REJECT"}})
+	if err != nil || rejection.Gate == nil || rejection.Gate.State != "REJECTED" {
+		t.Fatalf("reject scoped history: %v", err)
+	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "scoped-change-paths", ExpectedVersion: &granted.Connection.Version},
 		Payload: command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_SCOPED", ConnectionRef: connection.Connection.Ref,
@@ -442,4 +452,80 @@ SET reserved_effects=max_effects WHERE origin_gate_id=(SELECT id FROM control_pl
 	if err != nil || len(claims) != 0 {
 		t.Fatalf("revoked scope still claimed effect: count=%d err=%v", len(claims), err)
 	}
+	next := modified
+	next.Metadata.Version = "100.0.0"
+	content, err := json.Marshal(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextDigest := sha256.Sum256(content)
+	next.Digest = hex.EncodeToString(nextDigest[:])
+	t.Run("retired-open-guard", func(t *testing.T) {
+		repository.integrationDefinitions["synthetic"] = next
+		defer func() { repository.integrationDefinitions["synthetic"] = modified }()
+		if _, readErr := service.GetOwnerGate(ctx, owner, stringMap(changed, "gateRef")); !errors.Is(readErr, domainerrs.ErrForbidden) {
+			t.Fatal("retired OPEN package preview was accepted", readErr)
+		}
+		if _, _, _, listErr := service.ListOwnerGates(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, State: "OPEN"}); !errors.Is(listErr, domainerrs.ErrForbidden) {
+			t.Fatal("retired OPEN catalog preview was accepted", listErr)
+		}
+		if _, approveErr := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "scoped-retired-open-approve", ExpectedVersion: &gateVersion},
+			Payload:  command.GateResolutionInput{GateRef: stringMap(changed, "gateRef"), Decision: "APPROVE"}}); !errors.Is(approveErr, domainerrs.ErrConflict) {
+			t.Fatal("retired/revoked OPEN gate approval was accepted", approveErr)
+		}
+	})
+	currentRun, err := service.GetRun(ctx, owner, run.Run.Ref)
+	if err != nil {
+		t.Fatal("read current run before terminal history", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "scoped-terminal-history-cancel", ExpectedVersion: &currentRun.Version},
+		Payload:  command.RunCommandInput{RunRef: currentRun.Ref}}); err != nil {
+		t.Fatal("close active graph before terminal history", err)
+	}
+	t.Run("retired-terminal-history", func(t *testing.T) {
+		// Смена поставленного пакета не переиздаёт immutable invocation pins.
+		// Проверяем тот же owner read path после штатного reconciliation.
+		repository.integrationDefinitions["synthetic"] = next
+		tx, beginErr := pool.Begin(ctx)
+		if beginErr != nil {
+			t.Fatal(beginErr)
+		}
+		if reconcileErr := repository.reconcileIntegrationDefinitions(ctx, tx); reconcileErr != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal("reconcile current shipped package", reconcileErr)
+		}
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			t.Fatal(commitErr)
+		}
+		readTx, beginErr := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+		if beginErr != nil {
+			t.Fatal(beginErr)
+		}
+		_, retiredErr := repository.integrationPackage(ctx, readTx, ownerScope.organizationID,
+			connection.Connection.Ref, "synthetic", modified.Metadata.Version, modified.Digest)
+		_ = readTx.Rollback(ctx)
+		if !errors.Is(retiredErr, domainerrs.ErrForbidden) {
+			t.Fatal("retired executable package was accepted", retiredErr)
+		}
+		listed, _, _, listErr := service.ListOwnerGates(ctx, owner, query.Filter{ProjectRef: project.Project.Ref})
+		if listErr != nil || len(listed) != 4 {
+			t.Fatal("retired terminal package poisoned owner gate catalog", listErr)
+		}
+		for _, historical := range listed {
+			if historical.State == "OPEN" || len(historical.NextActions) != 0 || historical.IntegrationIntent == nil {
+				t.Fatal("history gained active decision authority")
+			}
+			effect := historical.IntegrationIntent.EffectPreview
+			fields, known := effect["fields"].([]any)
+			if !known || len(fields) != 0 || effect["contentComplete"] != false || effect["approvalScope"] != nil || effect["inputDigest"] == "" {
+				t.Fatal("retired schema expanded historical input")
+			}
+			single, singleErr := service.GetOwnerGate(ctx, owner, historical.Ref)
+			if singleErr != nil || single.Ref != historical.Ref || single.State != historical.State || single.Version != historical.Version {
+				t.Fatal("retired terminal single read lost owner snapshot", singleErr)
+			}
+		}
+	})
 }
