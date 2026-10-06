@@ -9,6 +9,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import RunPage from "@/pages/RunPage.vue";
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem } from "@/shared/api/problem";
+import { serverTokenTranslations } from "@/shared/ui/server-message-catalog";
 
 beforeAll(() => {
   vi.stubGlobal("window", {
@@ -25,6 +26,8 @@ function messages() {
   return {
     serverMessages: {
       RUN_COORDINATION_ROLE: "Координатор запуска",
+      REQUIRED_WORKFLOW_FAILED:
+        serverTokenTranslations.REQUIRED_WORKFLOW_FAILED[0],
     },
     common: {
       status: "Состояние",
@@ -282,5 +285,21 @@ describe("RunPage runtime presentation", () => {
     const noEventsHtml = await renderToString(noEventsApp);
     expect(noEventsHtml).toContain("История запуска завершена");
     expect(noEventsHtml).not.toContain("· #");
+
+    currentRun.state = "FAILED";
+    currentRun.safeErrorCode = "REQUIRED_WORKFLOW_FAILED";
+    currentRun.safeErrorMessage = "REQUIRED_WORKFLOW_FAILED";
+    const failedApp = createSSRApp(RunPage);
+    failedApp.use(pinia);
+    failedApp.use(router);
+    failedApp.use(
+      createI18n({ legacy: false, locale: "ru", messages: { ru: messages() } }),
+    );
+    const failedHtml = await renderToString(failedApp);
+    expect(failedHtml).toMatch(
+      /Запуск завершён с ошибкой: обязательный дочерний процесс не выполнен\. <code[^>]*>REQUIRED_WORKFLOW_FAILED<\/code>/,
+    );
+    expect(failedHtml).not.toContain("REQUIRED_WORKFLOW_FAILED <code>");
+    expect(failedHtml).not.toContain("i18n:REQUIRED_WORKFLOW_FAILED");
   });
 });

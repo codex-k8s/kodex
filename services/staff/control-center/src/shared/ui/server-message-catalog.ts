@@ -38,6 +38,10 @@ export const serverTokenTranslations = {
     "Провайдер модели временно недоступен. Повторите запрос позже.",
     "The model provider is temporarily unavailable. Try again later.",
   ],
+  REQUIRED_WORKFLOW_FAILED: [
+    "Запуск завершён с ошибкой: обязательный дочерний процесс не выполнен.",
+    "The run failed because a required child workflow did not complete successfully.",
+  ],
   RUNTIME_LEASE_EXPIRED: [
     "Срок аренды исполнения истёк",
     "Runtime lease expired",

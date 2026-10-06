@@ -2,6 +2,7 @@
 import { Copy, Info, FileCode2, Plus, Search, ShieldCheck } from "@lucide/vue";
 import { ref, useId } from "vue";
 import IntegrationIntegerBounds from "./IntegrationIntegerBounds.vue";
+import { integrationFieldTypeKey } from "./field-type";
 import { useI18n } from "vue-i18n";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
 import {
@@ -58,9 +59,7 @@ function toggleDetails(key: string): void {
   expandedKey.value = expandedKey.value === key ? "" : key;
 }
 function fieldType(field: IntegrationConfigurationField): string {
-  if (field.valueType === "URL") return "URL";
-  if (field.valueType === "STRING_LIST") return "список строк";
-  return "строка";
+  return t(integrationFieldTypeKey(field.valueType));
 }
 function categoryLabel(category: string): string {
   const key = `integrationsRedesign.packageCategories.${category}`;

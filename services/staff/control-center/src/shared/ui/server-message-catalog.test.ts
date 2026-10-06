@@ -34,6 +34,27 @@ function closedCases(path: string, functionName: string): string[] {
 
 describe("полнота закрытого реестра server tokens", () => {
   it.each([
+    [
+      "ru",
+      "Запуск завершён с ошибкой: обязательный дочерний процесс не выполнен.",
+    ],
+    [
+      "en",
+      "The run failed because a required child workflow did not complete successfully.",
+    ],
+  ] as const)(
+    "объясняет отказ обязательного дочернего процесса в %s",
+    (locale, text) => {
+      const key = serverMessageKey("i18n:REQUIRED_WORKFLOW_FAILED");
+      expect(key).toBe("serverMessages.REQUIRED_WORKFLOW_FAILED");
+      expect(i18n.global.t(key ?? "", {}, { locale })).toBe(text);
+      expect(
+        serverMessageKey("i18n:REQUIRED_WORKFLOW_UNKNOWN_PRIVATE_ERROR"),
+      ).toBeUndefined();
+      expect(serverMessageKey("REQUIRED_WORKFLOW_FAILED")).toBeUndefined();
+    },
+  );
+  it.each([
     ["ru", "Не удалось подготовить файлы результата"],
     ["en", "Could not prepare result files"],
   ] as const)(

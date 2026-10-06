@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useServerMessage } from "@/shared/ui/server-message";
+import { runListSummary } from "@/shared/ui/run-summary";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
   Activity,
@@ -865,7 +866,13 @@ onBeforeUnmount(() => {
                 class="run-canvas-summary__error"
                 role="status"
               >
-                {{ serverMessage(run.safeErrorMessage || run.safeErrorCode) }}
+                {{
+                  serverMessage(
+                    run.state === "FAILED"
+                      ? (runListSummary(run) ?? "")
+                      : run.safeErrorMessage || run.safeErrorCode,
+                  )
+                }}
                 <code>{{ run.safeErrorCode }}</code>
               </p>
               <RouterLink
