@@ -329,4 +329,29 @@ func testRoleImageAdmissionPolicyRotation(t *testing.T, ctx context.Context, rep
 	if err != nil || detail.PromotionCandidate != nil || len(detail.Builds) == 0 || detail.Builds[0].Ref != requested.Build.Ref {
 		t.Fatal("rebuild exposed stale terminal artifact as the new build candidate")
 	}
+	// Следующий сценарий использует прежнюю policy: закрываем оставленный claim
+	// штатной stale maintenance, а не оставляем ему глобальную очередь fixture.
+	if err := repository.ConfigureRoleImages(originalConfig); err != nil {
+		t.Fatal("restore role image policy before fixture cleanup")
+	}
+	if _, err := repository.ClaimAdmission(ctx, worker, "role-image-admission-policy-cleanup"); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatal("stale current-policy fixture claim did not close through maintenance")
+	}
+	var currentClosed bool
+	if err := repository.pool.QueryRow(ctx, `SELECT
+		attempt.state='CANCELLED' AND attempt.finished_at IS NOT NULL
+		AND artifact.admission_state='REJECTED' AND artifact.admission_verdict=''
+		AND artifact.admission_claimant_workload IS NULL
+		AND artifact.admission_authority_generation=0
+		AND artifact.admission_claim_token_sha256 IS NULL
+		AND artifact.admission_claim_expires_at IS NULL
+		FROM control_plane.image_admission_attempts attempt
+		JOIN control_plane.image_artifacts artifact ON artifact.id=attempt.artifact_id
+		WHERE attempt.ref=$1`, currentClaim.AdmissionAttemptRef).Scan(&currentClosed); err != nil || !currentClosed {
+		t.Fatalf("fixture cleanup retained an active admission attempt or authority: closed=%t err=%v", currentClosed, err)
+	}
+	availability, err = repository.GetSupplyWorkAvailability(ctx, worker)
+	if err != nil || availability.AdmissionAvailable {
+		t.Fatal("fixture cleanup left stale admission maintenance available")
+	}
 }

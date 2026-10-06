@@ -58,9 +58,26 @@ func testBootstrapRunnerAdvancesForNewAgent(t *testing.T, ctx context.Context, r
 		firstReadback.Environment.CurrentVersion.Image.Digest != original.DefaultImageDigest {
 		t.Fatalf("existing agent bootstrap pin changed: before=%#v after=%#v", firstConfiguration.EnvironmentBinding, firstReadback.EnvironmentBinding)
 	}
-	if secondConfiguration.Environment.CurrentVersion.Image.Reference != next.DefaultImageReference ||
-		secondConfiguration.Environment.CurrentVersion.Image.Digest != next.DefaultImageDigest ||
-		secondConfiguration.EnvironmentBinding.VersionRef == firstConfiguration.EnvironmentBinding.VersionRef {
-		t.Fatalf("new agent did not select next bootstrap runner: binding=%#v image=%#v", secondConfiguration.EnvironmentBinding, secondConfiguration.Environment.CurrentVersion.Image)
+	if secondConfiguration.EnvironmentBinding.VersionRef != firstConfiguration.EnvironmentBinding.VersionRef ||
+		secondConfiguration.Environment.CurrentVersion.Image.Digest != original.DefaultImageDigest {
+		t.Fatal("new agent replaced the project's published environment revision")
+	}
+	// CREATE не публикует новую ревизию общего ENV; только новый Project получает
+	// новый bootstrap image. Оба пути проверяются без ручной смены binding.
+	nextProject, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "bootstrap-runner-next-project"},
+		Payload:  command.ProjectInput{Name: "Next bootstrap runner project", Language: "en"}})
+	if err != nil || nextProject.Project == nil {
+		t.Fatal("create next bootstrap runner project")
+	}
+	third := createLifecycleAgent(t, ctx, service, owner, nextProject.Project.Ref, "bootstrap-runner-third", "Next project runner agent")
+	thirdConfiguration, err := service.GetAgentRuntimeConfiguration(ctx, owner, third.Ref)
+	if err != nil {
+		t.Fatal("read next project bootstrap runner")
+	}
+	if thirdConfiguration.Environment.CurrentVersion.Image.Reference != next.DefaultImageReference ||
+		thirdConfiguration.Environment.CurrentVersion.Image.Digest != next.DefaultImageDigest ||
+		thirdConfiguration.EnvironmentBinding.VersionRef == firstConfiguration.EnvironmentBinding.VersionRef {
+		t.Fatal("new project did not select next bootstrap runner")
 	}
 }
