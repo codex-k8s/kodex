@@ -158,6 +158,63 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 20:47 UTC — очередь/rejoin и адресные UX исправления
+
+Source `4d0b6202` плюс однострочный mobile minimap fix. ROOT SafeMarkdown
+230/230 PASS1.99с, graph14/14 PASS3.57с. Native session transcript теперь
+показывает execution-local output path как code, href на несуществующий
+app route отсутствует; authoritative artifact mapping не угадывается.
+Session details safe prompt preview AVAILABLE, Console0. Desktop и
+mobile390/320 screenshots: summary/legend по умолчанию компактны,
+подробности раскрываются; minimap перенесён вниз и не перекрывает узлы.
+Context7 официальная документация Vue Flow по MiniMap/theming проверена.
+Длинный task в узкой левой колонке session details — отдельный UX fix OPEN.
+
+Actual helper QUEUE/rejoin: `cnv_1W4V_xOxL2Cmxp_5tD-nOOkC`, native
+active→Q1→Q2, RUNNING/QUEUED/QUEUED persisted после reload, realtime live,
+порядок USER и refs сохранён. Все три Run затем SUCCEEDED в FIFO порядке.
+Ранний active ACK/rejoin CAPTURED: task expected/inbox/instructions EQUAL,
+tools38/grants22, exact generation3/ENV6/binding5; same Pod binary совпал.
+
+FAIL UX active selector: late ASSISTANT final первого Run скрывает
+Stop/interrupt, хотя Q1 RUNNING/Q2 QUEUED. Native click interrupt не выполнил
+POST; interrupt и Stop NOT RUN, не считать отсутствие кнопки успешной
+отменой. Исправляется выбор active USER по всей истории; далее повтор
+только недоказанной ветви. Сохранение результата ordinary Manager остаётся
+FAIL до нового provider publication/runner OCI и exact artifact readback.
+
+### 06.10.2026 20:38 UTC — семь generation3 pins и первый ordinary completion
+
+Source/remote/PR `805cf434f555d08a224506fe5074d7c88961b07e`, exact readback
+PASS. Helper/review5/write1 typed UPDATE plans APPLIED/version3; native
+Validate/Impact/Publish и owner readback PASS. Helper ENV revision6/binding5;
+пять review и один write ENV revision3, ordinary binding4/agent7,
+selected tools38. Helper/review digest
+`e49e631b4dc8bdfc8a820121e482dc95926be79aa0f0d84e7d1951b9d493aa59`,
+write digest
+`ad1aaab7ce1654aeb6ef65bae35ce868364b2b881c0c06cd0958b3aab0bf6501`.
+Developer-only Secret metadata binding сохранён, review без него.
+
+Actual helper generation3 ACK и same-UID Pod rejoin PASS на
+`run_wQeJ4iwu_nnxh9XvmDAR2eDj`: inbox/instructions EQUAL,
+tools38/grants22/capabilities22, exact promoted image и ENV pins.
+Binary SHA совпал в same Pod/image; serving-process hash этим не доказан.
+Task expected comparison этого capture NOT RUN. Native ранний USER title
+и неизменность после terminal PASS; address-specific publication screens
+desktop screenshot/Console0/Network200 PASS.
+
+Ordinary Manager `run_nAkERlrcWNgVm2985xKib-6d` реально выполнил input
+file manifest/metadata/full preview, Context7 resolve/query, hosted search
+и page open, два Git exec exit0 и собственный managed GitHub READ.
+Хронология содержит 13 tools, commentary и final; полный output artifact
+НЕ сохранён: completion FAIL `RUNTIME_ARTIFACT_INVALID`.
+Коллектор исправляется; показ PROVIDER_RESPONSE_INVALID вместо локального
+отказа также исправляется. Ранний ACK потерян до фиксации, повторный capture
+после cleanup NOT CAPTURED. Не объявлять all-role/prompt/outbox acceptance.
+Остальные пять запусков пока NOT RUN. Native Run graph/history desktop
+screenshot PASS, Console0, owner reads200; execution-local output markdown
+link ведёт на несуществующий app route, frontend fix в работе.
+
 ### 06.10.2026 20:18 UTC — generation3 promotion, rejoin и компактный helper
 
 Source `7bf596eb3343d1776581c95cb0380909dbeab299`. Общий artifact

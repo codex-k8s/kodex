@@ -10,6 +10,80 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 20:47 UTC, source `4d0b6202` плюс mobile minimap bottom8 и журнал.
+Remote/PR пока805cf434. SafeMarkdown ROOT230/230 PASS1.99с;
+mobile graph ROOT14/14 PASS3.57с. Native output path теперь code без
+сломанных /workspace href; session detail owner preview AVAILABLE/Console0.
+Graph desktop/390/320 screenshots PASS после compact summary/legend
+и переноса minimap вниз; minimap не пересекает узлы. Узкий task столбик
+session details исправляется отдельно, не считать все компоненты принятыми.
+
+QUEUE/rejoin actual PASS: conversation `cnv_1W4V_xOxL2Cmxp_5tD-nOOkC`,
+active `run_5s3tLw7-zdPVEM-u79Q7SjgK`, Q1
+`run_vfP5tgfjdaBWd7JC6z5-yd_5`, Q2 `run_BxyeL6zurpLAx4tRJP8-BL-7`.
+Сразу после native enqueue состояния RUNNING/QUEUED/QUEUED сохранились
+после hard reload и rejoin live; все три затем SUCCEEDED в FIFO порядке.
+Active task SHA256 `924e9b1456b30e93704ffc60838ca8a92ebbadbd03dd4dc9084328019957fc61`,
+actual ACK/rejoin CAPTURED, task/inbox/instructions EQUAL, same Pod UID
+`1612cce4-b24d-4820-9b79-35e787385cb3`, binary48160445 совпал.
+Однако поздний ASSISTANT final первого хода оказался последним в массиве:
+Stop/interrupt ошибочно исчезли при Q1 RUNNING/Q2 QUEUED. Click молнии
+не стал интерактивным, POST не выполнен. Interrupt/Stop NOT RUN,
+frontend active-USER selector исправляется; повторить только эту ветвь.
+Не отправленный interrupt draft не считается turn.
+
+Runner collector fix включает provider-side безопасную публикацию
+private files, а не требование chmod в пользовательском task. Нужен новый
+compiled OCI, native common recipe/admission/promotion и ENV revisions,
+после них bounded actual six. Пока completion первого Manager FAIL.
+Chrome5 reload20:45:57, следующий до20:50:57; чужая6 не затронута.
+Full65/bootstrap merge/dogfooding OPEN.
+
+## Предыдущий checkpoint 20:38
+
+06.10.2026 20:38 UTC, source и remote/PR
+`805cf434f555d08a224506fe5074d7c88961b07e` подтверждены exact readback.
+Generation3 штатно опубликован во всех семи конфигурациях: helper ENV
+revision6/binding5; review ENV revision3 для пяти ролей и write ENV
+revision3 только Developer; все шесть ordinary bindings version4,
+agent version7. Tools38 сохранены; Developer-only Secret binding
+не перенесён в review ENV. Повторные owner GET200 подтверждают pins.
+
+Helper обновлял ENV typed plans, затем native Validate/Impact/Publish:
+helper `pln_5MkG3Lt05Qj0MxgpaVY22Y2k`, review5
+`pln_BLHN3gpTPiChPHinVlqogsWr`, write1
+`pln_IaQG6h8FYgutezbViHjVW3e6`; все APPLIED/version3.
+Helper actual generation3 ACK/rejoin и same-Pod image binary PASS:
+run `run_wQeJ4iwu_nnxh9XvmDAR2eDj`, session
+`ses_jxWv9uBK1YkDzwVE2fQp4QJ3`, Pod
+`runtime-turn-90513fcc51f6b2fc`, UID
+`95db69bb-ebfd-46d1-afc5-cf8996c3e49a`.
+Task expected comparison в этом capture NOT RUN; binary proof относится
+к файлу same Pod/image, не к serving process. Ранний USER title и сохранение
+после terminal native PASS. Publication screens desktop/Console0 PASS.
+
+Первый ordinary Manager `run_nAkERlrcWNgVm2985xKib-6d`, session
+`ses_BOKTYwG37hfPPar73gR2Q4OX`, task SHA256
+`428fcb1519deb595581c812764c1b9a8f63fe398b231b5e8834970192745bb50`:
+реальные file manifest/metadata/full preview, Context7 resolve/query,
+hosted SEARCH/OPEN_PAGE, native Git и managed GitHub READ завершились;
+transcript показывает 13 tools и final. Однако completion FAIL
+`RUNTIME_ARTIFACT_INVALID`: нет server artifact receipt, не считать
+outbox сохранённым по одному ответу модели. UI ошибочно отображает
+PROVIDER_RESPONSE_INVALID; исправляются collector и точная диагностика.
+Ранний ACK прежнего capture не сохранён, повтор после cleanup NOT CAPTURED;
+точные ordinary prompt pins пока NOT RUN, не выводить их из ответа модели.
+
+Architect NewRun подготовлен с exact task/file; Launch ещё НЕ выполнен.
+Не запускать остальные пять с известным broken collector до исправления.
+Run graph/history screenshot desktop и Console0/owner reads200 PASS;
+execution-local markdown link ошибочно превращается в app route — узкий
+frontend fix готовится. Full65/bootstrap merge/dogfooding OPEN.
+Chrome5 рабочая/6 чужая; navigation20:36UTC, следующий до20:41.
+SSO absolute07.10 06:23:10UTC/10:23Саратов покрывает автономное окно.
+
+## Предыдущий checkpoint 20:18
+
 06.10.2026 20:18 UTC, source `7bf596eb3343d1776581c95cb0380909dbeab299`.
 Common generation3 опубликован: recipe version6, active artifact
 `imgart_THoFlnjHuhrHifqa3o1u0IBC`, manifest
