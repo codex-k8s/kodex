@@ -10,6 +10,32 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 21:31 UTC, source/remote/PR
+`61546c00cc0e40344c5a5a3764049128677ec702`, exact readback PASS21:13.
+Retained promotion Job удалён штатным TTL; canonical supply-chain
+quiesce/apply/readback завершились PASS21:18–21:24 на fresh clean render.
+Все пять владельцев supply-chain восстановлены; host/Pod SHA256 двух
+изменённых runtime файлов совпали21:29. Это delivery, не all6 acceptance.
+
+Помощник создал `pln_2an1tLKiG5ftj3AnwRuApOnT`: native Validate/Apply
+PASS21:30, receipt `rct_EmJkD6ivYWAyW6vzqX7uWfYs`, version3/APPLIED.
+Before/after меняет только Dockerfile и derived specSha256; recipe version7,
+generation4, managed revision4. Штатно создан build
+`imgbld_q3P9HxenyhOu30yleNET9qWH`; admission/promotion и новые семь ENV
+пока NOT RUN. Новое OCI содержит исправление публикации outbox, но его
+actual runtime acceptance требует новых запусков после promotion/bindings.
+
+Frontend exact61546: isolated lint/typecheck/build PASS; предыдущие
+368 suites/3088 tests PASS относятся к идентичному frontend source tree.
+Native cancellation fold FAIL: HTTP/WS заранее локализуют summary,
+поэтому raw-code classifier не сворачивает дубли. Исправление в работе:
+закрытый public serviceCode через общий mapper, без locale phrase matching.
+Screenshot плана: равные controls, доступный footer и внутренняя прокрутка;
+Console0. SSO absolute07.10 06:23:10UTC покрывает автономное окно;
+Chrome5 регулярно обновляется, foreign6 не затрагивается. Цель ACTIVE.
+
+## Предыдущий checkpoint 21:08
+
 06.10.2026 21:08 UTC, source `8d4456d966eb434f9b9abed17a11374f44f97d4d`
 плюс журнал. Remote/PR `3b1e88588a505f893ffd6f06fa9b4be4b06abc1b`
 exact readback и компактное тело PR PASS21:06.

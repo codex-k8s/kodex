@@ -158,6 +158,30 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 21:32 UTC — восстановление supply-chain и recipe generation4
+
+Source/remote/PR `61546c00cc0e40344c5a5a3764049128677ec702`, exact
+readback PASS21:13. Canonical fresh-render supply-chain quiesce/apply/readback
+PASS21:18–21:24 после штатного TTL terminal promotion Job. Пять владельцев
+восстановлены; hash readback host/Pod двух runtime файлов совпал21:29.
+Это не acceptance новых агентов.
+
+Помощник actual `run_sQ_jbaIdoxGuqw9rj7aULrFX` создал один typed UPDATE:
+`pln_2an1tLKiG5ftj3AnwRuApOnT`, native Validate/Apply PASS21:30,
+APPLIED/version3, receipt `rct_EmJkD6ivYWAyW6vzqX7uWfYs`. Before/after
+сохраняет name/role/environment и меняет только Dockerfile/derived hash.
+Recipe version7/generation4/revision4; build
+`imgbld_q3P9HxenyhOu30yleNET9qWH` COMPLETED21:30:53. Admission/promotion,
+семь новых ENV и actual all6 пока NOT RUN.
+
+Frontend isolated exact61546 lint/typecheck/build PASS; frontend tree
+совпадает с source3088 unit PASS. Native cancellation repeat FAIL:
+HTTP/WS localizes summary раньше consumer. Исправление closed serviceCode
+в работе; не сопоставлять тексты локали и не скрывать meaningful events.
+Screenshot плана PASS: controls одинаковой высоты, footer доступен,
+internal scroll; Console0, relevant owner GET200. Chrome5 reload21:31,
+SSO absolute07.10 06:23:10UTC; foreign6 не затронута. Цель ACTIVE.
+
 ### 06.10.2026 21:08 UTC — закрытая переписка и полный frontend unit
 
 Source `8d4456d966eb434f9b9abed17a11374f44f97d4d`, remote/PR3b1e8858
