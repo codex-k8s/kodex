@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -81,6 +82,27 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 	coordinator = *execute(command.ChangeAgentCapability, owner, "coord-launch-cap", command.AgentBindingInput{AgentRef: coordinator.Ref, BindingRef: "platform.run.launch", Enabled: true}, &coordinator.Version).Agent
 	specialist := createLifecycleAgent(t, ctx, service, owner, project.Ref, "workflow-launch-specialist", "Specialist")
 	specialist = *execute(command.ChangeAgentCapability, owner, "specialist-launch-cap", command.AgentBindingInput{AgentRef: specialist.Ref, BindingRef: "platform.run.launch", Enabled: true}, &specialist.Version).Agent
+	// Настроенная Agent-пара Context7 не входит в delegate-only scope coordinator.
+	// Для такого execution нельзя требовать probe или добавлять managed MCP profile.
+	context7 := *execute(command.CreateConnection, owner, "context7-create", command.ConnectionInput{DefinitionKey: "context7", Name: "Coordinator Context7", PublicConfiguration: map[string]any{"base_url": "https://mcp.context7.com"}}, nil).Connection
+	if _, err := pool.Exec(ctx, `WITH credential AS (
+		INSERT INTO control_plane.integration_credential_revisions
+		(ref,organization_id,connection_id,revision,secret_ref,secret_uid,secret_resource_version,content_sha256,created_by)
+		SELECT 'icr_workflow_'||ref,organization_id,id,1,'kodex-system/synthetic#api_key',
+		'60000000-0000-4000-8000-000000000001'::uuid,'1',repeat('a',64),created_by
+		FROM control_plane.integration_connections WHERE ref=$1 RETURNING id,connection_id)
+		UPDATE control_plane.integration_connections c SET credential_revision_id=credential.id,
+		state='CONNECTED',masked_credentials_state='CONFIGURED',version=version+1
+		FROM credential WHERE c.id=credential.connection_id`, context7.Ref); err != nil {
+		t.Fatal("configure coordinator synthetic credential metadata")
+	}
+	context7, err = service.GetIntegrationConnection(ctx, owner, context7.Ref)
+	if err != nil {
+		t.Fatal("read coordinator Context7 fixture")
+	}
+	for _, capability := range []string{"context7.library.resolve", "context7.docs.query"} {
+		context7 = *execute(command.ChangeIntegrationGrant, owner, "context7-"+capability, command.IntegrationGrantInput{ConnectionRef: context7.Ref, CapabilityKey: capability, AgentRef: coordinator.Ref, ApprovalPolicy: "NONE", Enabled: true}, &context7.Version).Connection
+	}
 	draft := entity.WorkflowVersion{Name: "Required workflow", Purpose: "Bounded lifecycle", CoordinatorAgentRef: coordinator.Ref, Concurrency: 1, TimeoutSeconds: 3600, CompletionCriteria: "Verified child result", ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{{Key: "step", Position: 1, Name: "Step", AgentRef: specialist.Ref, Instructions: "Complete bounded step.", ExpectedResult: "Verified result", TimeoutSeconds: 900, RequiredCapabilityKeys: []string{"platform.run.launch"}}}}
 	workflow := execute(command.CreateWorkflow, owner, "create", command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &draft}, nil).Workflow
 	workflow = execute(command.ValidateWorkflow, owner, "validate", command.WorkflowInput{Ref: workflow.Ref}, &workflow.Version).Workflow
@@ -185,6 +207,14 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 				t.Fatal("server-owned origin or own WF root mismatch")
 			}
 			childLease := claim(scenario+"-child-claim", child.Run.Ref)
+			capabilities, ok := childLease["capabilities"].([]string)
+			if !ok || len(capabilities) != 1 || capabilities[0] != "platform.run.delegate" || len(runtimeRevisionGrants(childLease["integrationGrants"])) != 0 {
+				t.Fatal("coordinator adopted capabilities outside published execution scope")
+			}
+			profiles, ok := childLease["managedMCPProfiles"].([]runtimecontract.ManagedMCPProfile)
+			if !ok || len(profiles) != 0 {
+				t.Fatal("coordinator adopted an excluded managed MCP profile")
+			}
 			var grandchild *entity.Run
 			var nestedParentLease, grandchildLease map[string]any
 			if scenario == "parent-cancel" || scenario == "owner-child-cancel" || scenario == "nested-success" || scenario == "early-nested-success" || scenario == "owner-child-gate-reject" {

@@ -589,14 +589,14 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 			}
 			return f
 		}
-		startup := func(f fixture) error {
+		startup := func(f fixture, capabilityScopes ...[]string) error {
 			t.Helper()
 			tx, err := pool.Begin(ctx)
 			if err != nil {
 				t.Fatal("begin pending fixture read")
 			}
 			defer func() { _ = tx.Rollback(ctx) }()
-			if err := requireManagedMCPStartupDependencies(ctx, tx, f.organizationID, f.agent.Ref, f.grants); err != nil {
+			if err := requireManagedMCPStartupDependencies(ctx, tx, f.organizationID, f.agent.Ref, f.grants, capabilityScopes...); err != nil {
 				return err
 			}
 			_, err = runtimeManagedMCPProfilesForStartup(ctx, tx, f.organizationID, "AGENT", f.agent.Ref, f.agent.Ref, project.Ref, f.grants)
@@ -614,6 +614,21 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 		cold := prepare("cold")
 		if !errors.Is(startup(cold), errs.ErrConflict) {
 			t.Fatal("missing real probe did not fail closed")
+		}
+		excluded := cold
+		excluded.grants = nil
+		for _, scopes := range [][][]string{{{"platform.run.delegate"}, nil}, {{}, nil}, {nil, {}}} {
+			if err := startup(excluded, scopes...); err != nil {
+				t.Fatal("excluded Context7 dependency blocked constrained execution")
+			}
+		}
+		for _, capability := range []string{runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability} {
+			if !errors.Is(startup(excluded, []string{capability}), errs.ErrConflict) {
+				t.Fatal("allowed Context7 capability did not require full dependency pair")
+			}
+		}
+		if !errors.Is(startup(cold, []string{"platform.run.delegate"}), errs.ErrConflict) {
+			t.Fatal("excluded scope adopted Context7 grants")
 		}
 		due(cold, "tst_pendingcold", 0, 1, "")
 		for poll := 0; poll < 2; poll++ {

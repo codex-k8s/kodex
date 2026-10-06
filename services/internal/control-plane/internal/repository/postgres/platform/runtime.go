@@ -807,7 +807,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				mcpScopeKind, mcpScopeRef = "PROJECT", candidate.assistantProfileRef
 			}
 			eligibilityStage = "managed_mcp"
-			if err := requireManagedMCPStartupDependencies(ctx, tx, scope.organizationID, agentRef, runtimeRevisionGrants(integrationGrants)); err != nil {
+			if err := requireManagedMCPStartupDependencies(ctx, tx, scope.organizationID, agentRef, runtimeRevisionGrants(integrationGrants), workflowCapabilities, humanGateCapabilities); err != nil {
 				return commandOutcome{}, err
 			}
 			managedMCPProfiles, err := runtimeManagedMCPProfilesForStartup(ctx, tx, scope.organizationID, mcpScopeKind, mcpScopeRef, agentRef, projectRef, runtimeRevisionGrants(integrationGrants))

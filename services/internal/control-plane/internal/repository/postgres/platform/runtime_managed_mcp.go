@@ -11,6 +11,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -28,7 +29,15 @@ var errManagedMCPHealthPending = errors.New("managed MCP health probe is pending
 // Недоступный enabled dependency не исчезает из required startup только потому,
 // что общий callable каталог исключил DEGRADED connection. Этот guard не выдаёт
 // tools или grants: рабочий список остаётся результатом прежней actor authority.
-func requireManagedMCPStartupDependencies(ctx context.Context, tx pgx.Tx, organizationID, agentRef string, grants []runtimecontract.RunnerIntegrationGrant) error {
+func requireManagedMCPStartupDependencies(ctx context.Context, tx pgx.Tx, organizationID, agentRef string, grants []runtimecontract.RunnerIntegrationGrant, capabilityScopes ...[]string) error {
+	if !managedMCPStartupScopeRequired(capabilityScopes...) {
+		for _, grant := range grants {
+			if grant.DefinitionKey == "context7" {
+				return errs.ErrConflict
+			}
+		}
+		return nil
+	}
 	resolve, query, valid := managedMCPPendingGrantPair(grants)
 	var required, matched int64
 	err := tx.QueryRow(ctx, queryRuntimeManagedMCPStartupDependencies, pgx.StrictNamedArgs{
@@ -48,6 +57,14 @@ func requireManagedMCPStartupDependencies(ctx context.Context, tx pgx.Tx, organi
 		return errs.ErrConflict
 	}
 	return nil
+}
+
+// Required dependency относится к разрешённому execution scope, а не ко всем
+// настройкам Agent. Ни один допустимый Context7 key не разрешает неполную пару:
+// nil scope сохраняет прежний startup guard, явное пустое пересечение его исключает.
+func managedMCPStartupScopeRequired(capabilityScopes ...[]string) bool {
+	layers := append([][]string{{runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability}}, capabilityScopes...)
+	return len(promptservice.Intersection(layers...)) != 0
 }
 
 // Ожидание относится только к очереди startup. Рабочий call по-прежнему обязан
