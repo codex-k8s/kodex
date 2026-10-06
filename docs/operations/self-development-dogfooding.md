@@ -150,6 +150,46 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 17:15 UTC, рабочий source/remote/PR1798 `54d3e906`, Draft.
+Шесть сотрудников созданы own PROJECT помощником native планом
+`pln_IYH9Nn_pxou-3opkdWdw3tBr`: revision1/version3/APPLIED, квитанция
+`rct_TJXFjn2n93ao36sDl7qGOGmV`, ровно6 CREATE без повторного эффекта.
+Индивидуальные исходные инструкции сохранены полностью; добавлен штатный
+190-символьный template интеграций, исходный текст совпадает точным suffix.
+Все6 own runtime configurations: gpt-6.1-sol, published medium overlay.
+
+| Роль | Actual agentRef | Применённая среда | План привязки |
+| --- | --- | --- | --- |
+| Manager | `agt_MPH0YpY7PXej_VLOZcYW3T74` | selfdev-review | `pln_QuHXYOBsUZHKFUS9EVSoNuCU` |
+| Architect | `agt_KmYyn3hhyr6GQ8an4KbZgO3R` | selfdev-review | `pln_9ftmbkZjbN0l631jt-c19bq7` |
+| Developer | `agt_pWHh9efzn_Ug0qYiMdVlqjeb` | selfdev-write | `pln_-SyhIEzhH3TT3BfmmcnAkbXv` |
+| Documentation Reviewer | `agt_L2Dz5H6p7P9NIzkOaRwJ4t0O` | selfdev-review | `pln_R2I4OJHZ4QV4Uea133Hfn0ll` |
+| Security Reviewer | `agt_4uL98uA20yVhOcAIBeQfI8IP` | selfdev-review | `pln_dTiXNUcZkCPHbClP5okBn8Hg` |
+| Lexical Guardian | `agt__KzHZ3YqxmxOp0yR4eve33NK` | selfdev-review | `pln_qKU9YYEb6K1EmOtB7C47yTQh` |
+
+Каждая привязка подготовлена в своём AGENT context, отдельно Validate/Apply.
+Fresh native GET всех6: HTTP200, agentVersion2/bindingVersion2,
+exact опубликованные среды, общий accepted/promoted artifact
+`imgart_ZrFk---i258qcWqzCA1WF8_p`, tools38, secrets0. Это ещё не proof
+фактического исполнения сотрудников; protected write credential OPEN.
+Manager search успешно повторён с корректной короткой query; предыдущий
+отказ input validation не выдаётся за отсутствие ресурса или сети.
+
+Lexical15 managed grants применены native планом
+`pln_q04zzdhgdrkSFPPN4BalIMAj`, revision1/version3/APPLIED:
+Context7pair и GitHub13, всё NONE; authoritative GitHub GET подтверждает
+ровно13 enabled grants этому сотруднику, connection version4→17.
+Остальные пять grant-планов подготовлены, но после первого Apply их старые
+connection pins ожидаемо конфликтуют. Не применяются вслепую: помощник
+создаёт fresh подтверждаемый proposal с сохранённым exact intent.
+Выявлен UX-пробел явного обновления INVALID snapshot-conflict плана.
+
+Параллельно в изолированных worktrees исправляются: recoverable неверный
+search input без ослабления2..160; bootstrap CREATE обычного сотрудника,
+неявно меняющий current revision существующего default/helper окружения;
+PROJECT self-grants и ordinary Manager workflow launch. Source-only unit/PG
+результаты этих worktrees не считаются активацией или live PASS. Full65 OPEN.
+
 06.10.2026 16:52 UTC, source/remote/PR1798 `5907c6dd`: устранён реальный
 HTTP503 на большом сообщении. Новый общий validator допускает32768 Unicode
 codepoints без нормализации; forward migration согласует task/safe_delta/outbox,

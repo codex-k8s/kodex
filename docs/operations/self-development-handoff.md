@@ -10,6 +10,25 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 17:15 UTC, source/remote/PR1798 `54d3e906`, Draft сохранён.
+CREATE6 уже APPLIED один раз: `pln_IYH9Nn_pxou-3opkdWdw3tBr`, квитанция
+`rct_TJXFjn2n93ao36sDl7qGOGmV`. Не повторять CREATE. Actual6refs и планы
+binding приведены в журнале: все6 agentVersion2/bindingVersion2, native
+Validate/Apply/readback PASS, Developer→selfdev-write, остальные→selfdev-review,
+общий promoted artifact/tools38, модель gpt-6.1-sol/medium. Secrets ещё0.
+Lexical15 grant-план `pln_q04zzdhgdrkSFPPN4BalIMAj` APPLIED; остальные5
+old snapshots требуют fresh подтверждаемого proposal после изменения
+connection versions. Architect новый proposal запрошен; не обходить OCC.
+CREATE ordinary ошибочно advanced default/helper ENV current revision3→4;
+старые bindings сохранились pinned3, defect исправляется отдельной волной.
+PROJECT self-grants и ordinary Manager workflow launch source-only проверки
+выполняются в отдельных worktrees; combined codegen/активация/native ещё OPEN.
+Никаких исполнений ordinary сотрудников или настоящего SOFTWARE_CHANGE пока
+не было. Полный65 QA OPEN, secrets/files/role proofs/grants/workflow/merge
+bootstrap и конечный dogfooding PR остаются впереди.
+
+## Предыдущий checkpoint 16:52
+
 06.10.2026 16:52 UTC, source/remote/PR1798 `5907c6dd`, Draft сохранён.
 Доставлен input fix: native24995 Unicode/37970 UTF-8 bytes принят HTTP202,
 conversation `cnv_EDNBjsUp5rWGKNedBeKeK_KX`,
