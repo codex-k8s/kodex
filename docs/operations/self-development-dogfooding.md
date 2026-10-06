@@ -158,6 +158,42 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 21:04 UTC — реальные Stop/interrupt и новый runner publication
+
+Source `f5bb8064bdca166639b753ce7994b73ec37b6056`; remote/PR последняя
+проверка `3c0ad175`. Повтор QUEUE/hard-reload/rejoin:
+`cnv_NB02Oezr4WHyHvxd5KbqrHXB`, три actual Run SUCCEEDED FIFO.
+Ранний ACK/rejoin CAPTURED, task/inbox/instructions EQUAL; same Pod
+UID5341f86e-d193-440a-880f-b787952557a9, tools38/grants22/generation3.
+Active USER вместо последнего элемента массива: ROOT279/279 PASS1.53с.
+
+Native INTERRUPT при actual RUNNING `run_P22rbQJoK-KI6r7cvHrpcpA7`
+→ CANCELLED_BY_OWNER/version2; fresh priority turn12
+`run__Daw8lVbhLXaGrWOggWi7paC` → RUNNING → native Stop → CANCELLED.
+Новая turn13 `run_e305kPU6wiAJ5XFi8-zpQlBK` → SUCCEEDED; reload/rejoin
+сохраняет старые cancel states. Остаток pending очереди при interrupt
+NOT RUN в этой отдельной ветви. Screenshot/Console0, native command
+Network200/202; cancelled дубли и пустая карточка исправляются отдельно.
+
+Детали сессии: input/роль/источник не сжаты в value-столбец,
+desktop screenshot/DOM/no-horizontal-overflow PASS; ROOT120/120 PASS2.79с.
+Catalog exact artifact failure + три admission tokens: ROOT27/27 PASS1.60с;
+закрытые unknown/completeness guards не ослаблены.
+
+Provider-side fd publication устраняет общий 0600/atomic-replace gap между
+writer/collector UID, не требует chmod от модели. ROOT focused runner,
+workspace/completion, CP whitelist и offline dual-UID kernel PASS.
+Full OCI/source07235f2/import/provenance PASS, image manifest
+`sha256:fac2d905030ece6629a0f1e62282b5e3d4b744e2fb8d31c9e44f718664f4ae7b`.
+Historical Manager FAIL не переписывается; новый actual outbox proof NOT RUN.
+
+Fresh render PASS; supply-chain quiesce FAIL на retained terminal promotion
+job с TTL3600с (completion20:17:40UTC). Пять reader/writer Deployments paused0,
+workspace PVC0. Дождаться штатной TTL очистки, затем свежий render/apply/
+readback и native generation4/admit/promote/семь новых ENV bindings.
+Jobs/evidence не удалять вручную, guards не обходить. Maintenance503 отделять
+от продуктовых ошибок. Остальные пять ordinary и full Workflow OPEN.
+
 ### 06.10.2026 20:47 UTC — очередь/rejoin и адресные UX исправления
 
 Source `4d0b6202` плюс однострочный mobile minimap fix. ROOT SafeMarkdown

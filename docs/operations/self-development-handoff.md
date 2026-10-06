@@ -10,6 +10,52 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 21:04 UTC, source `f5bb8064bdca166639b753ce7994b73ec37b6056`.
+Remote/PR последний exact readback `3c0ad175`; новый checkpoint ещё не push.
+QUEUE повтор на `cnv_NB02Oezr4WHyHvxd5KbqrHXB`: три реальных хода FIFO,
+hard reload в RUNNING/QUEUED/QUEUED, realtime live, все SUCCEEDED.
+Ранний ACK CAPTURED: task/inbox/instructions EQUAL, exact generation3,
+tools38/grants22, same Pod UID `5341f86e-d193-440a-880f-b787952557a9`.
+
+Active-USER selector исправлен в a7349e27, ROOT279/279 PASS1.53с.
+Отдельный actual RUNNING `run_P22rbQJoK-KI6r7cvHrpcpA7` native INTERRUPT
+отменил с CANCELLED_BY_OWNER/version2; новая priority turn12
+`run__Daw8lVbhLXaGrWOggWi7paC` действительно RUNNING, native Stop
+отменил с тем же safe code/version2. Следующая turn13
+`run_e305kPU6wiAJ5XFi8-zpQlBK` SUCCEEDED. Terminal states сохранились
+после reload. Сохранение остатка очереди при interrupt в этом повторе
+NOT RUN: отдельная ветвь не имела pending соседнего сообщения.
+Скриншот/Console0/Network: native commands подтверждены, но замечены
+дубли cancelled service rows и пустая карточка; адресный fix в работе.
+
+Session details: длинные input/роль/источник full-width; desktop screenshot
+и DOM236px вместо узкого value-столбца PASS, нет горизонтального overflow.
+ROOT120/120 PASS2.79с. Локализация закрытого artifact failure и трёх
+admission tokens: ROOT27/27 PASS1.60с; browser repeat после восстановления.
+
+Runner publication integrated07235f2: ROOT focused codex0.048/app6.322с,
+workspace/completion3.546с, CP whitelist0.045с, dual-UID offline kernel5stages
+PASS. Исторический Manager completion по-прежнему FAIL, его exact errno
+UNKNOWN. Новый full runner OCI собран/imported:
+`registry.local.kodex/kodex/agent-runner@sha256:fac2d905030ece6629a0f1e62282b5e3d4b744e2fb8d31c9e44f718664f4ae7b`;
+binary `be793827a019a423bf84efde729889268baf6683c32ea68ab4765b3ea0940447`,
+provenance `632cd22a3d74bc7bbeffac32d3db96987237ef1ba116c422e68f9d4494a7668a`.
+Fresh render07235f2 PASS, authority source revision1.
+
+Supply-chain quiesce FAIL на строгом inventory barrier: retained terminal
+promotion job `mc-admit-0757e6f04a5fa83d121d00932154dc6b-promote`, completion
+20:17:40UTC, TTL3600с. Все пять supply-chain Deployments штатно paused0;
+managed workspace PVC отсутствует. Не удалять job вручную и не обходить
+guard. После штатной TTL очистки около21:17:40UTC нужен fresh clean-source
+render, canonical supply-chain apply/readback, native generation4
+build/admit/risk/promotion и новые семь bindings. Browser 503 во время
+этой явной maintenance-паузы не считать новым продуктовым дефектом.
+Helper/ordinary/grants/workflow mutations в maintenance не запускать.
+SSO family absolute07.10 06:23:10UTC покрывает автономное окно; Chrome5
+reload каждые5мин, foreign6 не трогать. Full65/bootstrap merge/dogfooding OPEN.
+
+## Предыдущий checkpoint 20:47
+
 06.10.2026 20:47 UTC, source `4d0b6202` плюс mobile minimap bottom8 и журнал.
 Remote/PR пока805cf434. SafeMarkdown ROOT230/230 PASS1.99с;
 mobile graph ROOT14/14 PASS3.57с. Native output path теперь code без
