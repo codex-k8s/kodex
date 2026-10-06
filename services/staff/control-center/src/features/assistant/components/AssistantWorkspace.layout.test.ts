@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { compileStyle } from "@vue/compiler-sfc";
 
 import { describe, expect, it } from "vitest";
 
@@ -48,11 +49,24 @@ describe("AssistantWorkspace layout", () => {
   it("не перекрывает отправку в панели запуска и действия в модалках", () => {
     const rule = styles
       .split(
-        ':global(body:has([aria-modal="true"], .run-activity-overlay)) .assistant-fab {',
+        ':global(body:has([aria-modal="true"], .run-activity-overlay) .assistant-fab) {',
       )[1]
       ?.split("}")[0];
     expect(rule).toContain("visibility: hidden");
     expect(rule).toContain("pointer-events: none");
+    const compiled = compileStyle({
+      source: styles.replace("<style scoped>", "").replace("</style>", ""),
+      filename: "AssistantWorkspace.vue",
+      id: "data-v-test",
+      scoped: true,
+    });
+    expect(compiled.errors).toEqual([]);
+    expect(compiled.code).toContain(
+      'body:has([aria-modal="true"], .run-activity-overlay) .assistant-fab {',
+    );
+    expect(compiled.code).not.toContain(
+      'body:has([aria-modal="true"], .run-activity-overlay) {',
+    );
   });
   it("называет главную страницу понятно и не дублирует маршрут в компактном контексте", () => {
     expect(source).toContain('route.name === "home"');
