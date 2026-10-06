@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { createOwnerSessionClient } from "./owner-session-client.mjs";
 import { selectedSessionCookies } from "./owner-session-storage.mjs";
@@ -32,6 +33,14 @@ const safeCodes = new Set([
 ]);
 const maximumResponseBytes = 1 << 20;
 const maximumSSOMilliseconds = 100_000;
+const managedPinKeys = [
+  "managedConfigurationRef",
+  "managedConfigurationVersion",
+  "managedRevisionRef",
+  "managedRevisionDigest",
+];
+const sha256 = (value) =>
+  createHash("sha256").update(value, "utf8").digest("hex");
 
 function failure(code) {
   const error = new Error(code);
@@ -68,6 +77,19 @@ function version(value) {
   return Number.isSafeInteger(value) && value > 0;
 }
 function validCLI(value) {
+  const pinCount = managedPinKeys.filter((key) =>
+    Object.hasOwn(value, key),
+  ).length;
+  requireValue(
+    pinCount === 0 ||
+      (pinCount === managedPinKeys.length &&
+        value.definitionKey === "github" &&
+        opaqueRef(value.managedConfigurationRef) &&
+        version(value.managedConfigurationVersion) &&
+        opaqueRef(value.managedRevisionRef) &&
+        /^[a-f0-9]{64}$/.test(value.managedRevisionDigest)),
+    "CLI_INVALID",
+  );
   requireValue(
     value.mode === "integration-credential" &&
       Object.hasOwn(mappings, value.definitionKey) &&
@@ -100,10 +122,17 @@ export function parseCredentialCLI(args) {
     ["--secret-key", "secretKey"],
     ["--idempotency-key", "idempotencyKey"],
     ["--confirm", "confirm"],
+    ["--managed-configuration-ref", "managedConfigurationRef"],
+    ["--managed-configuration-version", "managedConfigurationVersion"],
+    ["--managed-revision-ref", "managedRevisionRef"],
+    ["--managed-revision-digest", "managedRevisionDigest"],
   ]);
   const options = Object.create(null);
   requireValue(
-    Array.isArray(args) && args.length === names.size * 2,
+    Array.isArray(args) &&
+      [names.size - managedPinKeys.length, names.size]
+        .map((size) => size * 2)
+        .includes(args.length),
     "CLI_INVALID",
   );
   for (let index = 0; index < args.length; index += 2) {
@@ -124,6 +153,15 @@ export function parseCredentialCLI(args) {
     "CLI_INVALID",
   );
   options.expectedVersion = Number(options.expectedVersion);
+  if (Object.hasOwn(options, "managedConfigurationVersion")) {
+    requireValue(
+      /^[1-9][0-9]{0,15}$/.test(options.managedConfigurationVersion),
+      "CLI_INVALID",
+    );
+    options.managedConfigurationVersion = Number(
+      options.managedConfigurationVersion,
+    );
+  }
   options.origin = exactHTTPSOrigin(options.origin);
   options.identityOrigin = exactHTTPSOrigin(options.identityOrigin);
   return validCLI(options);
@@ -347,6 +385,126 @@ async function readDefinition(client, options) {
   throw failure("CATALOG_INVALID");
 }
 
+// Исключение ограничено неизменённой UI-копией текущего SHIPPED GitHub.
+// Authority и фактическую связь подтверждают owner history и impact, не CLI pins.
+async function requireManagedCopy(client, options, connection, definition) {
+  const path = `/api/v1/managed-configurations/${options.managedConfigurationRef}`;
+  let cursor;
+  const seen = new Set();
+  let target;
+  for (let index = 0; index < 10; index++) {
+    const query = new URLSearchParams({ pageSize: "100" });
+    if (cursor) query.set("pageToken", cursor);
+    const page = await safeJSON(
+      await client.request(`${path}/revisions?${query}`),
+      200,
+      "CATALOG_INVALID",
+    );
+    const config = page.configuration;
+    const provenance = config?.copyProvenance;
+    requireValue(
+      config?.ref === options.managedConfigurationRef &&
+        config.version === options.managedConfigurationVersion &&
+        config.kind === "INTEGRATION_DEFINITION" &&
+        config.managedBy === "UI" &&
+        config.source === "control-center" &&
+        !config.projectRef &&
+        config.archived === false &&
+        config.currentRevision?.ref === options.managedRevisionRef &&
+        config.currentRevision.state === "PUBLISHED" &&
+        config.currentRevision.digest === options.managedRevisionDigest &&
+        provenance?.origin === "SHIPPED" &&
+        provenance.sourceRef === definition.key &&
+        provenance.sourceRevision === definition.definitionVersion &&
+        provenance.sourceVersion === definition.version &&
+        provenance.sourceDigest === definition.digest &&
+        Array.isArray(page.items) &&
+        page.items.length <= 100,
+      "CATALOG_INVALID",
+    );
+    for (const revision of page.items) {
+      if (revision?.ref !== options.managedRevisionRef) continue;
+      requireValue(!target, "CATALOG_INVALID");
+      target = revision;
+    }
+    cursor = page.nextPageToken;
+    if (!cursor) break;
+    requireValue(
+      typeof cursor === "string" &&
+        cursor.length <= 2048 &&
+        !seen.has(cursor) &&
+        index < 9,
+      "CATALOG_INVALID",
+    );
+    seen.add(cursor);
+  }
+  requireValue(
+    target?.state === "PUBLISHED" &&
+      target.contentFormat === "JSON" &&
+      target.digest === options.managedRevisionDigest &&
+      target.digest === connection.definitionDigest &&
+      typeof target.content === "string" &&
+      Buffer.byteLength(target.content, "utf8") <= 256 * 1024 &&
+      sha256(target.content) === target.digest &&
+      connection.definitionVersion === definition.definitionVersion,
+    "CATALOG_INVALID",
+  );
+  const prefix = `{"apiVersion":"integrations.kodex.io/v1","kind":"IntegrationPackage","metadata":{"key":"github","version":"${definition.definitionVersion}","origin":`;
+  requireValue(
+    target.content.startsWith(`${prefix}"UI"},"spec":`) &&
+      sha256(`${prefix}"SHIPPED"${target.content.slice(prefix.length + 4)}`) ===
+        definition.digest,
+    "CATALOG_INVALID",
+  );
+  requireValue(
+    Array.isArray(definition.capabilities) &&
+      definition.capabilities.length > 0 &&
+      Array.isArray(connection.capabilities) &&
+      connection.capabilities.length === definition.capabilities.length &&
+      new Set(connection.capabilities.map((item) => item.key)).size ===
+        connection.capabilities.length &&
+      definition.capabilities.every((base) =>
+        connection.capabilities.some(
+          (item) =>
+            item.key === base.key &&
+            item.operation === base.operation &&
+            item.resourceKind === base.resourceKind &&
+            item.risk === base.risk &&
+            typeof item.inputSchema === "string" &&
+            /^[a-f0-9]{64}$/.test(item.inputSchemaSha256) &&
+            sha256(item.inputSchema) === item.inputSchemaSha256 &&
+            item.inputSchemaSha256 === base.inputSchemaSha256,
+        ),
+      ),
+    "CATALOG_INVALID",
+  );
+  const query = new URLSearchParams({
+    pageSize: "100",
+    query: options.connectionRef,
+  });
+  const impact = await safeJSON(
+    await client.request(
+      `${path}/revisions/${options.managedRevisionRef}/impact?${query}`,
+    ),
+    200,
+    "CATALOG_INVALID",
+  );
+  requireValue(
+    impact.configurationRef === options.managedConfigurationRef &&
+      impact.targetRevisionRef === options.managedRevisionRef &&
+      /^[a-f0-9]{64}$/.test(impact.digest) &&
+      !impact.nextPageToken &&
+      impact.total === 1 &&
+      Array.isArray(impact.consumers) &&
+      impact.consumers.length === 1 &&
+      impact.consumers[0].kind === "INTEGRATION_CONNECTION" &&
+      impact.consumers[0].ref === connection.ref &&
+      impact.consumers[0].revisionRef === options.managedRevisionRef &&
+      version(impact.consumers[0].version),
+    "CATALOG_INVALID",
+  );
+}
+
 export async function configureExactIntegrationCredential(
   options,
   dependencies = {},
@@ -398,10 +556,13 @@ export async function configureExactIntegrationCredential(
         definition.adapterOwner === "integration-gateway" &&
         definition.executionRoute === "MANAGED_MCP" &&
         definition.credentialSecretKey === mapping.credentialKey &&
-        definition.definitionVersion === connection.definitionVersion &&
-        definition.digest === connection.definitionDigest,
+        (options.managedConfigurationRef ||
+          (definition.definitionVersion === connection.definitionVersion &&
+            definition.digest === connection.definitionDigest)),
       "CATALOG_INVALID",
     );
+    if (options.managedConfigurationRef)
+      await requireManagedCopy(client, options, connection, definition);
     requireValue(
       connection.credentialsConfigured === false &&
         Array.isArray(connection.nextActions) &&

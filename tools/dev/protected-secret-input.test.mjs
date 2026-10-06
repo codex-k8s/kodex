@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
   authenticateIsolatedOwner,
@@ -145,6 +146,11 @@ function fixture(change = {}, selectedOptions = options()) {
           currentUser: { ref: "usr_synthetic" },
           ...(change.bootstrap ?? {}),
         });
+      if (url.pathname.startsWith("/api/v1/managed-configurations/")) {
+        assert.equal(init.method ?? "GET", "GET");
+        if (change.managed) return json(change.managed(url));
+        assert.fail("Unexpected managed read");
+      }
       if (url.pathname === "/api/v1/integration-definitions") {
         if (change.catalog) return change.catalog(url);
         return json({
@@ -257,6 +263,266 @@ test("GitHub использует только отдельный agent integrat
   );
   assert.deepEqual(f.reads.at(-1), ["CODEX_GITHUB_AGENT_INTEGRATION_TOKEN"]);
   assert.equal(f.calls.filter((call) => call.method === "PUT").length, 1);
+});
+
+function managedFixture(change = {}) {
+  const hash = (raw) => createHash("sha256").update(raw).digest("hex");
+  const schema =
+    '{"additionalProperties":false,"properties":{"draft":{"type":"boolean"}},"type":"object"}';
+  const capability = {
+    key: "github.pull_request.create",
+    operation: "CREATE",
+    risk: "WRITE",
+    resourceKind: "GITHUB_REPOSITORY",
+    inputSchema: schema,
+    inputSchemaSha256: hash(schema),
+  };
+  const raw =
+    '{"apiVersion":"integrations.kodex.io/v1","kind":"IntegrationPackage","metadata":{"key":"github","version":"2.3.1","origin":"UI"},"spec":{"credential":{"secretKey":"token","kind":"TOKEN"}}}';
+  const content = change.content ?? raw;
+  const digest = hash(content);
+  const shippedDigest = hash(
+    raw.replace('"origin":"UI"', '"origin":"SHIPPED"'),
+  );
+  const selected = {
+    ...options(),
+    definitionKey: "github",
+    secretKey: "CODEX_GITHUB_AGENT_INTEGRATION_TOKEN",
+    managedConfigurationRef: "mcfg_synthetic01",
+    managedConfigurationVersion: 3,
+    managedRevisionRef: "mrev_synthetic01",
+    managedRevisionDigest: digest,
+  };
+  const revision = {
+    ref: selected.managedRevisionRef,
+    state: "PUBLISHED",
+    contentFormat: "JSON",
+    content,
+    digest,
+  };
+  const config = {
+    ref: selected.managedConfigurationRef,
+    version: 3,
+    kind: "INTEGRATION_DEFINITION",
+    managedBy: "UI",
+    source: "control-center",
+    archived: false,
+    currentRevision: revision,
+    copyProvenance: {
+      origin: "SHIPPED",
+      sourceRef: "github",
+      sourceRevision: "2.3.1",
+      sourceVersion: 300,
+      sourceDigest: shippedDigest,
+    },
+  };
+  const impact = {
+    configurationRef: config.ref,
+    targetRevisionRef: revision.ref,
+    digest: "c".repeat(64),
+    total: 1,
+    consumers: [
+      {
+        kind: "INTEGRATION_CONNECTION",
+        ref: selected.connectionRef,
+        revisionRef: revision.ref,
+        version: 1,
+      },
+    ],
+  };
+  const f = fixture(
+    {
+      ...change,
+      connection: {
+        definitionDigest: digest,
+        capabilities: [capability],
+        ...change.connection,
+      },
+      readback: { definitionDigest: digest, ...change.readback },
+      definition: {
+        version: 300,
+        digest: shippedDigest,
+        capabilities: [capability],
+        ...change.definition,
+      },
+      managed: (url) =>
+        url.pathname.endsWith("/impact")
+          ? { ...impact, ...change.impact }
+          : {
+              configuration: { ...config, ...change.config },
+              items: [{ ...revision, ...change.revision }],
+              ...change.history,
+            },
+    },
+    selected,
+  );
+  // Fixture receipt должен сохранять bound pins, как настоящий owner.
+  const fetchAPI = f.deps.fetchAPI;
+  f.deps.fetchAPI = async (url, init) => {
+    const response = await fetchAPI(url, init);
+    if (
+      url.pathname.endsWith("/credential") &&
+      response.status === 200 &&
+      !change.effect
+    ) {
+      const value = await response.json();
+      return json({ ...value, definitionDigest: digest });
+    }
+    return response;
+  };
+  return { ...f, selected, revision, config, impact, capability };
+}
+
+test("exact SHIPPED UI-copy: owner history/current/content/schema + actual impact binding до одного PUT", async () => {
+  const f = managedFixture();
+  assert.deepEqual(
+    { ...parseCredentialCLI(argumentsFor(f.selected)) },
+    f.selected,
+  );
+  assert.equal(
+    (await configureExactIntegrationCredential(f.selected, f.deps)).status,
+    "PASS",
+  );
+  assert.equal(f.calls.filter((call) => call.method === "PUT").length, 1);
+  assert.equal(
+    f.calls.filter((call) =>
+      call.path.startsWith("/api/v1/managed-configurations/"),
+    ).length,
+    2,
+  );
+  assert.equal(f.reads.length, 2);
+});
+
+test("managed pins all-or-none, exact GitHub only; неизвестные CLI aliases запрещены", () => {
+  const f = managedFixture();
+  for (const key of [
+    "managedConfigurationRef",
+    "managedConfigurationVersion",
+    "managedRevisionRef",
+    "managedRevisionDigest",
+  ]) {
+    const value = { ...f.selected };
+    delete value[key];
+    assert.throws(
+      () => parseCredentialCLI(argumentsFor(value)),
+      /^Error: CLI_INVALID$/,
+    );
+  }
+  for (const patch of [
+    { managedConfigurationVersion: 0 },
+    { managedConfigurationVersion: "9007199254740992" },
+    { managedRevisionDigest: "b" },
+    { definitionKey: "context7", secretKey: "CONTEXT7_API_KEY" },
+  ])
+    assert.throws(
+      () => parseCredentialCLI(argumentsFor({ ...f.selected, ...patch })),
+      /^Error: CLI_INVALID$/,
+    );
+});
+
+test("managed mismatch/unpublished/custom/source/schema/foreign/no binding закрыты до provider key и PUT", async () => {
+  const baseline = managedFixture();
+  for (const change of [
+    { config: { ref: "mcfg_foreign001" } },
+    { config: { version: 4 } },
+    { config: { managedBy: "GIT" } },
+    { config: { projectRef: "prj_foreign001" } },
+    { config: { archived: true } },
+    { config: { source: "foreign" } },
+    {
+      config: {
+        currentRevision: { ...baseline.revision, ref: "mrev_foreign001" },
+      },
+    },
+    {
+      config: {
+        copyProvenance: {
+          ...baseline.config.copyProvenance,
+          sourceDigest: "b".repeat(64),
+        },
+      },
+    },
+    { revision: { state: "VALID" } },
+    { revision: { contentFormat: "YAML" } },
+    { revision: { digest: "b".repeat(64) } },
+    { revision: { content: `${baseline.revision.content} ` } },
+    {
+      content: baseline.revision.content.replace(
+        '"secretKey":"token"',
+        '"secretKey":"foreign"',
+      ),
+    },
+    {
+      content: baseline.revision.content.replace(
+        '"origin":"UI"',
+        '"origin":"GIT"',
+      ),
+    },
+    { definition: { digest: "b".repeat(64) } },
+    {
+      connection: {
+        capabilities: [{ ...baseline.capability, inputSchema: "{}" }],
+      },
+    },
+    {
+      connection: { capabilities: [baseline.capability, baseline.capability] },
+    },
+    { impact: { configurationRef: "mcfg_foreign001" } },
+    { impact: { targetRevisionRef: "mrev_foreign001" } },
+    {
+      impact: {
+        consumers: [{ ...baseline.impact.consumers[0], ref: "int_foreign001" }],
+      },
+    },
+    {
+      impact: {
+        consumers: [
+          { ...baseline.impact.consumers[0], revisionRef: "mrev_foreign001" },
+        ],
+      },
+    },
+    { impact: { consumers: [], total: 0 } },
+    { impact: { nextPageToken: "more" } },
+    { history: { nextPageToken: "repeat" } },
+    { history: { items: [baseline.revision, baseline.revision] } },
+  ]) {
+    const f = managedFixture(change);
+    assert.equal(
+      (await configureExactIntegrationCredential(f.selected, f.deps)).status,
+      "FAIL",
+    );
+    assert.equal(f.reads.length, 1);
+    assert.equal(f.calls.filter((call) => call.method === "PUT").length, 0);
+    assert.equal(f.closed(), 1);
+  }
+});
+
+test("managed unknown outcome не повторяет PUT; stdout не содержит provider/package content", async () => {
+  const f = managedFixture({
+    effect: () => {
+      throw new Error(token);
+    },
+  });
+  let output = "";
+  assert.equal(
+    await main(argumentsFor(f.selected), {
+      ...f.deps,
+      output: (value) => {
+        output += value;
+      },
+    }),
+    2,
+  );
+  assert.deepEqual(JSON.parse(output), {
+    status: "UNKNOWN",
+    code: "UNKNOWN_OUTCOME",
+  });
+  assert.equal(f.calls.filter((call) => call.method === "PUT").length, 1);
+  assert.ok(
+    !output.includes(token) &&
+      !output.includes(password) &&
+      !output.includes("IntegrationPackage"),
+  );
 });
 
 test("owner/connection/catalog mismatch отклоняется до чтения provider key и PUT", async () => {
