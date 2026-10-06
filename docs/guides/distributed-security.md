@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.8
+version: 1.7.9
 updated: 2026-10-06
 ---
 
@@ -1540,6 +1540,9 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   отсутствие credential/discovery cache в рабочем каталоге. Значения выбранных
   credentials передаются только exact HTTPS native form, без tool arguments,
   логов, cookie injection и отключения TLS/CSP.
+  Owner-approved UI fill отдельно связывает local same-UID Chrome PID/start/socket, exact page и свежие server-owned project/environment/sole-consumer OCC pins; Node-only credentials не получают этого исключения.
+  Только пустое masked поле exact Secret заполняется закреплённым DOM handle, без navigation retarget, reveal, trace/body/логов или автоматического Save/Publish.
+  Fresh-auth, owner confirmation и impact selection остаются штатными UI guards; неизвестный исход fill не повторяется, наружу выходят только закрытые коды.
 - Materializer недоверенного build input принадлежит deployable, получает
   отдельную pull-only mTLS/application identity и destination-bound egress.
   Он принимает только exact OCI manifest digest и single-layer descriptor,
