@@ -9,6 +9,7 @@ import {
 import { MiniMap } from "@vue-flow/minimap";
 import {
   Bot,
+  ChevronDown,
   ListTree,
   Maximize2,
   Minus,
@@ -72,6 +73,7 @@ const { t } = useI18n();
 
 const flowId = "run-session-graph";
 const viewMode = ref<"graph" | "outline">("graph");
+const legendExpanded = ref(false);
 const outline = ref<HTMLElement>();
 const userAdjustedView = ref(false);
 const programmaticViewportChange = ref(false);
@@ -640,41 +642,58 @@ function compareNodes(left: RunNode, right: RunNode): number {
       <header>
         <Network :size="16" aria-hidden="true" />
         <strong>{{ $t("runs.connections") }}</strong>
+        <button
+          type="button"
+          class="graph-legend__toggle icon-button"
+          :aria-expanded="legendExpanded"
+          aria-controls="run-graph-legend-details"
+          :aria-label="$t('runs.connections')"
+          :title="$t('common.details')"
+          @click="legendExpanded = !legendExpanded"
+        >
+          <ChevronDown :size="16" aria-hidden="true" />
+        </button>
       </header>
-      <div class="graph-legend__edges">
-        <span
-          v-for="type in legendEdgeTypes"
-          :key="type"
-          class="graph-legend__item"
-        >
-          <i
-            class="graph-legend__line"
-            :class="`graph-legend__line--${type.toLowerCase()}`"
+      <div
+        id="run-graph-legend-details"
+        class="graph-legend__details"
+        :class="{ 'graph-legend__details--expanded': legendExpanded }"
+      >
+        <div class="graph-legend__edges">
+          <span
+            v-for="type in legendEdgeTypes"
+            :key="type"
+            class="graph-legend__item"
+          >
+            <i
+              class="graph-legend__line"
+              :class="`graph-legend__line--${type.toLowerCase()}`"
+            />
+            {{ edgeLegendLabel(type) }}
+          </span>
+        </div>
+        <div class="graph-legend__states">
+          <span
+            v-if="nodes.some((node) => node.type === 'ROOT_PROCESS')"
+            class="graph-legend__item"
+          >
+            <Workflow :size="14" aria-hidden="true" />
+            {{ $t("runs.nodeTypes.ROOT_PROCESS") }}
+          </span>
+          <span
+            v-for="label in agentLegendLabels"
+            :key="label"
+            class="graph-legend__item"
+          >
+            <Bot :size="14" aria-hidden="true" />
+            {{ label }}
+          </span>
+          <StatusBadge
+            v-for="state in legendStates"
+            :key="state"
+            :state="state"
           />
-          {{ edgeLegendLabel(type) }}
-        </span>
-      </div>
-      <div class="graph-legend__states">
-        <span
-          v-if="nodes.some((node) => node.type === 'ROOT_PROCESS')"
-          class="graph-legend__item"
-        >
-          <Workflow :size="14" aria-hidden="true" />
-          {{ $t("runs.nodeTypes.ROOT_PROCESS") }}
-        </span>
-        <span
-          v-for="label in agentLegendLabels"
-          :key="label"
-          class="graph-legend__item"
-        >
-          <Bot :size="14" aria-hidden="true" />
-          {{ label }}
-        </span>
-        <StatusBadge
-          v-for="state in legendStates"
-          :key="state"
-          :state="state"
-        />
+        </div>
       </div>
     </aside>
   </section>
@@ -893,6 +912,17 @@ function compareNodes(left: RunNode, right: RunNode): number {
   color: var(--muted);
   font-size: 0.76rem;
 }
+.graph-legend > header strong {
+  flex: 1;
+  min-width: 0;
+}
+.graph-legend__details {
+  display: grid;
+  gap: 8px;
+}
+.graph-legend__toggle {
+  display: none;
+}
 .graph-legend__edges,
 .graph-legend__states {
   flex-wrap: wrap;
@@ -951,7 +981,28 @@ function compareNodes(left: RunNode, right: RunNode): number {
     bottom: 8px;
     left: 8px;
     width: auto;
-    max-height: 108px;
+    padding: 4px 8px;
+  }
+  .graph-legend > header {
+    justify-content: space-between;
+  }
+  .graph-legend__toggle {
+    display: inline-flex;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+  }
+  .graph-legend__toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+  .graph-legend__details {
+    display: none;
+  }
+  .graph-legend__details--expanded {
+    display: grid;
+    max-height: min(180px, 30dvh);
     overflow: auto;
   }
 }

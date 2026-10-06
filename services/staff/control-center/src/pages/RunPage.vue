@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { useServerMessage } from "@/shared/ui/server-message";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
-import { Activity, Bot, ListChecks, PanelRightOpen } from "@lucide/vue";
+import {
+  Activity,
+  Bot,
+  ChevronDown,
+  ListChecks,
+  PanelRightOpen,
+} from "@lucide/vue";
 import {
   type ComponentPublicInstance,
   computed,
@@ -303,6 +309,7 @@ const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
 const artifactProblem = ref<AppProblem>();
 const activityOpen = ref(false);
+const summaryExpanded = ref(false);
 const activityNodeRef = ref<string>();
 const activityDrawer = ref<HTMLElement>();
 const nodeInspectorOpen = ref(false);
@@ -827,41 +834,62 @@ onBeforeUnmount(() => {
           </nav>
 
           <aside class="run-canvas-summary">
-            <div>
-              <strong>{{ run.target.displayName }}</strong>
-              <span>{{ $t(`runs.source.${run.source}`) }}</span>
-            </div>
-            <StatusBadge :state="run.state" />
-            <span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span>
-            <p
-              v-if="run.safeErrorCode"
-              class="run-canvas-summary__error"
-              role="status"
-            >
-              {{ serverMessage(run.safeErrorMessage || run.safeErrorCode) }}
-              <code>{{ run.safeErrorCode }}</code>
-            </p>
-            <RouterLink
-              v-if="run.retryOfRunRef"
-              :to="
-                runPath(run.retryOfRunRef, routeProjectRef ?? run.projectRef)
-              "
-            >
-              {{ $t("runs.previousAttempt") }}
-            </RouterLink>
-            <span
-              class="live-indicator"
-              :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
-            >
-              ●
-              {{
-                $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
-              }}
-              <template v-if="sessionGraph.sequence > 0">
-                · #{{ sessionGraph.sequence }}</template
+            <div class="run-canvas-summary__heading">
+              <strong :title="run.target.displayName">{{
+                run.target.displayName
+              }}</strong>
+              <StatusBadge :state="run.state" />
+              <button
+                type="button"
+                class="run-canvas-summary__toggle icon-button"
+                :aria-expanded="summaryExpanded"
+                aria-controls="run-canvas-summary-details"
+                :aria-label="$t('common.details')"
+                :title="$t('common.details')"
+                @click="summaryExpanded = !summaryExpanded"
               >
-            </span>
-            <RunTokenUsage :usage="run.usage" compact />
+                <ChevronDown :size="16" aria-hidden="true" />
+              </button>
+            </div>
+            <div
+              id="run-canvas-summary-details"
+              class="run-canvas-summary__details"
+              :class="{
+                'run-canvas-summary__details--expanded': summaryExpanded,
+              }"
+            >
+              <span>{{ $t(`runs.source.${run.source}`) }}</span>
+              <span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span>
+              <p
+                v-if="run.safeErrorCode"
+                class="run-canvas-summary__error"
+                role="status"
+              >
+                {{ serverMessage(run.safeErrorMessage || run.safeErrorCode) }}
+                <code>{{ run.safeErrorCode }}</code>
+              </p>
+              <RouterLink
+                v-if="run.retryOfRunRef"
+                :to="
+                  runPath(run.retryOfRunRef, routeProjectRef ?? run.projectRef)
+                "
+              >
+                {{ $t("runs.previousAttempt") }}
+              </RouterLink>
+              <span
+                class="live-indicator"
+                :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
+              >
+                ●
+                {{
+                  $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
+                }}
+                <template v-if="sessionGraph.sequence > 0">
+                  · #{{ sessionGraph.sequence }}</template
+                >
+              </span>
+              <RunTokenUsage :usage="run.usage" compact />
+            </div>
           </aside>
 
           <section id="run-graph-panel" class="graph-panel">
@@ -1333,7 +1361,6 @@ onBeforeUnmount(() => {
   top: 14px;
   left: 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
   width: min(360px, calc(100% - 190px));
   gap: 6px 10px;
   padding: 11px 12px;
@@ -1343,9 +1370,16 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
   backdrop-filter: blur(8px);
 }
-.run-canvas-summary > div {
+.run-canvas-summary__heading,
+.run-canvas-summary__details {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px 10px;
   min-width: 0;
+}
+.run-canvas-summary__toggle {
+  display: none;
 }
 .run-canvas-summary strong,
 .run-canvas-summary span,
@@ -1354,8 +1388,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.run-canvas-summary > div span,
-.run-canvas-summary > span,
+.run-canvas-summary__details > span,
 .run-canvas-summary a {
   color: var(--muted);
   font-size: 0.75rem;
@@ -1453,6 +1486,37 @@ onBeforeUnmount(() => {
     top: 62px;
     left: 8px;
     width: min(320px, calc(100% - 16px));
+    padding: 6px 8px;
+  }
+  .run-canvas-summary__heading {
+    grid-template-columns: minmax(0, 1fr) auto 32px;
+    align-items: center;
+    gap: 6px;
+  }
+  .run-canvas-summary__heading strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+  .run-canvas-summary__toggle {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+  }
+  .run-canvas-summary__toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+  .run-canvas-summary__details {
+    display: none;
+  }
+  .run-canvas-summary__details--expanded {
+    display: grid;
+    max-height: min(260px, 40dvh);
+    overflow: auto;
   }
   .run-workspace-toolbar {
     top: 8px;

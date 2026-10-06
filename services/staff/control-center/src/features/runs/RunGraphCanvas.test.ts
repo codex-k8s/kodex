@@ -128,7 +128,7 @@ async function render(
       locale: "ru",
       messages: {
         ru: {
-          common: { unknownStatus: "Статус недоступен" },
+          common: { unknownStatus: "Статус недоступен", details: "Подробнее" },
           runs: {
             graph: "Граф выполнения",
             graphControls: "Управление графом",
@@ -262,6 +262,17 @@ describe("RunGraphCanvas", () => {
     expect(html).not.toContain("Ошибка");
     expect(html).not.toContain("graph-edge-label");
     expect(html).not.toContain(">DELEGATED_TO<");
+  });
+
+  it("сохраняет легенду, но по умолчанию сворачивает её мобильную панель", async () => {
+    const html = await render();
+    expect(html).toMatch(
+      /class="graph-legend__toggle[^"]*"[^>]*aria-expanded="false"[^>]*aria-controls="run-graph-legend-details"/,
+    );
+    expect(html).toContain('id="run-graph-legend-details"');
+    expect(html).not.toContain("graph-legend__details--expanded");
+    expect(html).toContain("Делегирование ИИ-сотрудника");
+    expect(html).toContain("Подготовка отчёта");
   });
   it("легенда различает доказанного помощника, сотрудника и неизвестную сессию", async () => {
     const assistant = await render({ node_agent: "ASSISTANT" });

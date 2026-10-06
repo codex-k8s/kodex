@@ -247,6 +247,12 @@ describe("RunPage runtime presentation", () => {
     expect(html).toContain("run-page-body");
     expect(html).toContain("run-workspace");
     expect(html).toContain("run-canvas-summary");
+    expect(html).toContain("run-canvas-summary__heading");
+    expect(html).toMatch(
+      /class="run-canvas-summary__toggle[^"]*"[^>]*aria-expanded="false"[^>]*aria-controls="run-canvas-summary-details"/,
+    );
+    expect(html).toContain('id="run-canvas-summary-details"');
+    expect(html).not.toContain("run-canvas-summary__details--expanded");
     expect(html).toContain("История запуска завершена");
     expect(html).toContain("· #1");
     expect(html).not.toContain("Данные поступают в реальном времени");
