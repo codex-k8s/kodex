@@ -13,7 +13,12 @@ function artifactPath(artifact: Artifact): string {
 </script>
 
 <template>
-  <div class="artifact-list">
+  <div
+    class="artifact-list"
+    role="region"
+    :aria-label="$t('workboard.recentResults')"
+    tabindex="0"
+  >
     <RouterLink
       v-for="artifact in artifacts"
       :key="artifact.ref"
@@ -24,7 +29,7 @@ function artifactPath(artifact: Artifact): string {
         ><File :size="17" aria-hidden="true"
       /></span>
       <div class="artifact-item__body">
-        <h3>{{ artifact.fileName }}</h3>
+        <h3 :title="artifact.fileName">{{ artifact.fileName }}</h3>
         <p>
           {{ $t(`files.source.${artifact.source}`) }} ·
           {{ new Date(artifact.createdAt).toLocaleString() }}
@@ -36,12 +41,23 @@ function artifactPath(artifact: Artifact): string {
 </template>
 
 <style scoped>
+.artifact-list {
+  min-width: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+.artifact-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .artifact-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  min-height: 58px;
+  min-height: 60px;
   padding: 9px 16px;
   border-bottom: 1px solid var(--hairline);
   color: inherit;
@@ -76,9 +92,19 @@ function artifactPath(artifact: Artifact): string {
   color: var(--muted);
   font-size: 0.75rem;
 }
+.artifact-item h3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 @media (max-width: 560px) {
+  .artifact-list {
+    max-height: 400px;
+  }
   .artifact-item {
     grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 4px;
   }
   .artifact-item > :last-child {
     grid-column: 2;
