@@ -748,6 +748,13 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	structured := result
 	if err != nil {
 		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
+		if params.Name == "find_platform_resources" && projectionErr == nil {
+			switch assistantSearchFailureClass(err) {
+			case assistantSearchInputShapeInvalid, assistantSearchQueryInvalid:
+				structured = map[string]any{"error_code": assistantSearchInputInvalidCode, "retryable": true,
+					"guidance": assistantSearchInputInvalidGuidance}
+			}
+		}
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
 			guidance := "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names."

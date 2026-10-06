@@ -67,7 +67,8 @@ func TestAssistantSearchSchemaMatchesClosedQueryInput(t *testing.T) {
 	properties := schema["properties"].(map[string]any)
 	query := properties["query"].(map[string]any)
 	if schema["additionalProperties"] != false || !reflect.DeepEqual(schema["required"], []string{"query"}) ||
-		len(properties) != 1 || query["type"] != "string" || query["minLength"] != 2 || query["maxLength"] != 160 {
+		len(properties) != 1 || query["type"] != "string" || query["minLength"] != 2 || query["maxLength"] != 160 ||
+		query["description"] != assistantSearchQueryDescription {
 		t.Fatal("resource search schema differs from its closed handler input")
 	}
 }

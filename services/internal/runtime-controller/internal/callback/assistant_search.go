@@ -11,10 +11,12 @@ import (
 )
 
 func assistantResourceSearchTool() map[string]any {
+	query := stringSchema(2, 160)
+	query["description"] = assistantSearchQueryDescription
 	return map[string]any{
 		"name":        "find_platform_resources",
-		"description": "Find projects, AI employees, workflows, runs, role images, runtime environments, schedules, integration connections and secret metadata visible to the initiating user. Secret values are never returned. Use exact opaque refs from results. When a result belongs to another project, ask the user to open its route before proposing changes; this tool never changes browser context or grants access.",
-		"inputSchema": objectSchema([]string{"query"}, map[string]any{"query": stringSchema(2, 160)}),
+		"description": "Search resource metadata visible to the initiating user; never returns secret values. Use exact result refs. For another project, ask the user to open its route before proposing changes. Search never changes context or grants access.",
+		"inputSchema": objectSchema([]string{"query"}, map[string]any{"query": query}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "results", "truncated"}, map[string]any{
 			"current_project_ref": map[string]any{"type": "string"},
 			"results": map[string]any{"type": "array", "maxItems": maximumAssistantSearchResults,
@@ -33,6 +35,9 @@ func assistantResourceSearchTool() map[string]any {
 const maximumAssistantSearchResults = 10
 
 const (
+	assistantSearchQueryDescription      = "Specific name or opaque ref: 2..160 trimmed Unicode codepoints, not blank. Search is not full inventory."
+	assistantSearchInputInvalidCode      = "SEARCH_INPUT_INVALID"
+	assistantSearchInputInvalidGuidance  = "Retry at most once with only query: a specific resource name or exact opaque ref containing 2 to 160 Unicode codepoints after trimming surrounding whitespace. Do not send an empty query, task text, kind, ref or filters as separate fields. For supported configuration discovery, use get_configuration_catalog with the current schema; its agent list is turn-pinned and does not prove a complete fresh inventory. If authoritative discovery is unavailable, ask the owner for readback instead of guessing resources."
 	assistantSearchFailureMessage        = "assistant resource search failed"
 	assistantSearchContextInvalid        = "assistant_search_context_invalid"
 	assistantSearchInputShapeInvalid     = "assistant_search_input_shape_invalid"
