@@ -1240,6 +1240,7 @@ const (
 	HistoryPersistence   ConfigOverlayFieldKey = "history.persistence"
 	ModelReasoningEffort ConfigOverlayFieldKey = "model_reasoning_effort"
 	Personality          ConfigOverlayFieldKey = "personality"
+	WebSearch            ConfigOverlayFieldKey = "web_search"
 )
 
 // Valid indicates whether the value is a known member of the ConfigOverlayFieldKey enum.
@@ -1252,6 +1253,8 @@ func (e ConfigOverlayFieldKey) Valid() bool {
 	case ModelReasoningEffort:
 		return true
 	case Personality:
+		return true
+	case WebSearch:
 		return true
 	default:
 		return false
