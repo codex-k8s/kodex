@@ -1971,6 +1971,8 @@ message AssistantConfigurationCatalogEntry {
   string promotion_state = 19;
   // Только IMAGE_ARTIFACTS: полный безопасный inventory с immutable evidence pins.
   ImageToolInventory verified_tool_inventory = 20;
+  // Только ROLE_IMAGE_RECIPES: текущий сохранённый ключ окружения рецепта.
+  string environment_key = 22;
 }
 
 message AssistantConfigurationCatalogResponse {

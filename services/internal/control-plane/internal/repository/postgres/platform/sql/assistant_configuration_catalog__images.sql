@@ -2,7 +2,8 @@
 SELECT CASE WHEN @artifacts THEN artifact.ref ELSE recipe.ref END,recipe.name,
        CASE WHEN @artifacts THEN artifact.version ELSE recipe.version END,recipe.generation,
        CASE WHEN @artifacts THEN artifact.promoted_reference ELSE '' END,
-       CASE WHEN @artifacts THEN artifact.manifest_digest ELSE '' END
+       CASE WHEN @artifacts THEN artifact.manifest_digest ELSE '' END,
+       CASE WHEN @artifacts THEN '' ELSE recipe.specification->>'EnvironmentKey' END
 FROM control_plane.role_image_recipes recipe
 LEFT JOIN control_plane.projects project ON project.id=recipe.project_id AND project.organization_id=recipe.organization_id
 LEFT JOIN control_plane.image_artifacts artifact ON artifact.id=recipe.active_image_artifact_id

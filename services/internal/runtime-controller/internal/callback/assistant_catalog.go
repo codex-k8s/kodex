@@ -298,6 +298,9 @@ func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, reques
 			"version": entry.GetVersion(), "recipe_generation": entry.GetRecipeGeneration(), "reference": entry.GetReference(),
 			"manifest_digest": entry.GetManifestDigest(), "catalog_revision": entry.GetCatalogRevision(), "catalog_digest": entry.GetCatalogDigest(),
 			"reasoning_efforts": append([]string{}, entry.GetReasoningEfforts()...), "default_reasoning_effort": entry.GetDefaultReasoningEffort()}
+		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_IMAGE_RECIPES {
+			projection["environment_key"] = entry.GetEnvironmentKey()
+		}
 		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ASSISTANTS {
 			if entry.GetScopeKind() == "ORGANIZATION" {
 				projection["name"] = assistantCatalogResourceName(input, entry.GetRef(), entry.GetName())
@@ -369,10 +372,10 @@ func validAssistantConfigurationCatalogEntry(input runtimecontract.RunnerInput, 
 		}
 		allowed["provider"], allowed["model"], allowed["catalog_revision"], allowed["catalog_digest"], allowed["reasoning_efforts"], allowed["default_reasoning_effort"] = true, true, true, true, true, true
 	case controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_IMAGE_RECIPES:
-		if !validAssistantResourceRef(entry.GetRef()) || entry.GetVersion() < 1 || entry.GetRecipeGeneration() < 1 {
+		if !validAssistantResourceRef(entry.GetRef()) || entry.GetVersion() < 1 || entry.GetRecipeGeneration() < 1 || !assistantCatalogEnvironmentKeyPattern.MatchString(entry.GetEnvironmentKey()) {
 			return false
 		}
-		allowed["version"], allowed["recipe_generation"] = true, true
+		allowed["version"], allowed["recipe_generation"], allowed["environment_key"] = true, true, true
 	case controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS:
 		if !validAssistantResourceRef(entry.GetRef()) || entry.GetVersion() < 1 || entry.GetRecipeGeneration() < 1 ||
 			!strings.HasPrefix(entry.GetManifestDigest(), "sha256:") || !validAssistantCatalogDigest(strings.TrimPrefix(entry.GetManifestDigest(), "sha256:")) ||
@@ -395,7 +398,8 @@ func validAssistantConfigurationCatalogEntry(input runtimecontract.RunnerInput, 
 		"recipe_generation": entry.GetRecipeGeneration() != 0, "reference": entry.GetReference() != "", "manifest_digest": entry.GetManifestDigest() != "",
 		"catalog_revision": entry.GetCatalogRevision() != "", "catalog_digest": entry.GetCatalogDigest() != "", "reasoning_efforts": len(entry.GetReasoningEfforts()) != 0,
 		"default_reasoning_effort": entry.GetDefaultReasoningEffort() != "", "runtime_environment_ref": entry.GetRuntimeEnvironmentRef() != "",
-		"admission_verdict": entry.GetAdmissionVerdict() != "", "promotion_state": entry.GetPromotionState() != "", "verified_tool_inventory": entry.GetVerifiedToolInventory() != nil}
+		"admission_verdict": entry.GetAdmissionVerdict() != "", "promotion_state": entry.GetPromotionState() != "", "verified_tool_inventory": entry.GetVerifiedToolInventory() != nil,
+		"environment_key": entry.GetEnvironmentKey() != ""}
 	for field, supplied := range present {
 		if supplied && !allowed[field] {
 			return false

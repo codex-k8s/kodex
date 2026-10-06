@@ -98,6 +98,7 @@ func assistantFreshCatalogFixture(scope runtimecontract.AssistantScope, kind str
 		selector["account_ref"], selector["runtime_profile_ref"] = input.ProviderAccountRef, input.RuntimeProfileRef
 	case "ROLE_IMAGE_RECIPES":
 		entry.Ref, entry.Version, entry.RecipeGeneration = "imgrec_owned123", 4, 2
+		entry.EnvironmentKey = "standard"
 	case "IMAGE_ARTIFACTS":
 		entry.Ref, entry.Version, entry.RecipeGeneration = "imgart_owned123", 5, 2
 		entry.ManifestDigest = "sha256:" + strings.Repeat("b", 64)
@@ -134,6 +135,12 @@ func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T)
 				catalog := result.(map[string]any)["assistant_configuration_catalog"].(map[string]any)
 				entries := catalog["entries"].([]map[string]any)
 				fieldCount := 16
+				if kind == "ROLE_IMAGE_RECIPES" {
+					if entries[0]["environment_key"] != "standard" {
+						t.Fatal("recipe catalog lost authoritative environment selection")
+					}
+					fieldCount++
+				}
 				if kind == "IMAGE_ARTIFACTS" {
 					fieldCount += 3
 				}
@@ -236,6 +243,32 @@ func TestAssistantFreshCatalogEnvironmentLocatorIsOnlyAssistantMetadata(t *testi
 		server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
 		if _, err := server.configurationCatalog(t.Context(), input, arguments); (err == nil) != (ref == "") {
 			t.Fatal("unbound or malformed assistant environment locator was handled incorrectly")
+		}
+	}
+}
+
+func TestAssistantFreshCatalogRecipeEnvironmentKeyIsClosedPerKind(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		for _, kind := range assistantConfigurationCatalogKinds {
+			t.Run(string(scope)+"/"+kind, func(t *testing.T) {
+				input, arguments, response := assistantFreshCatalogFixture(scope, kind)
+				response.AssistantConfigurationCatalog.Entries[0].EnvironmentKey = "standard"
+				client := &assistantDefinitionCatalogClient{response: response}
+				server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+				_, err := server.configurationCatalog(t.Context(), input, arguments)
+				if (err == nil) != (kind == "ROLE_IMAGE_RECIPES") {
+					t.Fatal("recipe environment key escaped per-kind closed metadata boundary")
+				}
+			})
+		}
+		for _, key := range []string{"", "Standard", "standard/path", "standard\n", strings.Repeat("a", 101)} {
+			input, arguments, response := assistantFreshCatalogFixture(scope, "ROLE_IMAGE_RECIPES")
+			response.AssistantConfigurationCatalog.Entries[0].EnvironmentKey = key
+			client := &assistantDefinitionCatalogClient{response: response}
+			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+			if _, err := server.configurationCatalog(t.Context(), input, arguments); err == nil {
+				t.Fatal("recipe catalog accepted missing or malformed environment key")
+			}
 		}
 	}
 }

@@ -380,7 +380,7 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 		}
 		for _, entry := range result.Entries {
 			item := &controlplanev1.AssistantConfigurationCatalogEntry{Ref: entry.Ref, Name: entry.Name, Provider: entry.Provider, Model: entry.Model, Version: entry.Version, RecipeGeneration: entry.RecipeGeneration, Reference: entry.Reference, ManifestDigest: entry.ManifestDigest, CatalogRevision: entry.CatalogRevision, CatalogDigest: entry.CatalogDigest, ReasoningEfforts: entry.ReasoningEfforts, DefaultReasoningEffort: entry.DefaultReasoningEffort, ScopeKind: entry.ScopeKind, OrganizationRef: entry.OrganizationRef, ProjectRef: entry.ProjectRef, AssistantProfileRef: entry.AssistantProfileRef, RuntimeEnvironmentRef: entry.RuntimeEnvironmentRef,
-				AdmissionVerdict: entry.AdmissionVerdict, PromotionState: entry.PromotionState}
+				AdmissionVerdict: entry.AdmissionVerdict, PromotionState: entry.PromotionState, EnvironmentKey: entry.EnvironmentKey}
 			if kind == "IMAGE_ARTIFACTS" {
 				item.VerifiedToolInventory = castImageToolInventory(entry.ToolInventory, entry.ToolInventorySHA256)
 			}

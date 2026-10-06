@@ -43,6 +43,21 @@ var queryAssistantCurrentConfigurationRestoreExpiry string
 
 // Сценарий вызывается публичной обязательной profile suite; callbacks только
 // синтетические, provider и пользовательский браузер не используются.
+func testAssistantRecipeCatalogEnvironmentKey(t *testing.T, ctx context.Context, service *platformservice.Service, reader value.Principal, lease map[string]any, recipe entity.RoleImageRecipe) {
+	t.Helper()
+	result, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64),
+		entity.AssistantConfigurationCatalogRequest{Kind: "ROLE_IMAGE_RECIPES", AssistantRef: stringMap(lease, "agentRef"), Query: recipe.Ref})
+	if err != nil || len(result.Entries) != 1 {
+		t.Fatal("exact scoped recipe discovery failed")
+	}
+	entry := result.Entries[0]
+	if entry.Ref != recipe.Ref || entry.Version != int64(recipe.Version) || entry.RecipeGeneration != int64(recipe.Generation) ||
+		entry.ScopeKind != recipe.ScopeKind || entry.OrganizationRef != recipe.OrganizationRef || entry.ProjectRef != recipe.ProjectRef ||
+		entry.EnvironmentKey != recipe.Input.EnvironmentKey || entry.EnvironmentKey == "" || entry.Reference != "" || entry.ManifestDigest != "" || entry.ToolInventory != nil {
+		t.Fatal("recipe discovery lost exact persisted environment/owner/version or disclosed artifact-only metadata")
+	}
+}
+
 func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner, worker, reader value.Principal, lease map[string]any, sourceScope string) {
 	t.Helper()
 	prefix := "helper-configuration-" + sourceScope
@@ -70,6 +85,13 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		for _, entry := range result.Entries {
 			if entry.OrganizationRef != result.OrganizationRef || kind != "ASSISTANTS" && (entry.ScopeKind != result.ScopeKind || entry.ProjectRef != result.ProjectRef || entry.AssistantProfileRef != result.AssistantProfileRef) {
 				t.Fatalf("%s catalog mixed owner", kind)
+			}
+		}
+		if kind == "ROLE_IMAGE_RECIPES" {
+			for _, entry := range result.Entries {
+				if entry.EnvironmentKey == "" {
+					t.Fatal("recipe catalog lost persisted environment selection")
+				}
 			}
 		}
 		if kind == "IMAGE_ARTIFACTS" {
@@ -571,6 +593,7 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		if err != nil || len(detail.Builds) != 1 {
 			t.Fatal("canonical project candidate build missing")
 		}
+		testAssistantRecipeCatalogEnvironmentKey(t, ctx, service, reader, lease, detail.Recipe)
 		testAssistantCatalogCandidatePromotion(t, ctx, r, service, owner, reader, lease, catalog, detail, prefix, readCatalog)
 		testAssistantProjectImageTemplateSelection(t, ctx, r, service, owner, lease)
 		system, err := service.GetSystemAssistant(ctx, owner)
@@ -610,6 +633,7 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	if len(readCatalog("ROLE_IMAGE_RECIPES").Entries) == 0 {
 		t.Fatal("owned recipe absent from discovery")
 	}
+	testAssistantRecipeCatalogEnvironmentKey(t, ctx, service, reader, lease, detail.Recipe)
 	testAssistantCatalogCandidatePromotion(t, ctx, r, service, owner, reader, lease, catalog, detail, prefix, readCatalog)
 	detail, err = r.GetOrganization(ctx, resolved, recipeRef)
 	if err != nil {

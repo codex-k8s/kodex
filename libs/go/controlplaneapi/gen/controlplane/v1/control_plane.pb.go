@@ -16780,8 +16780,10 @@ type AssistantConfigurationCatalogEntry struct {
 	PromotionState string `protobuf:"bytes,19,opt,name=promotion_state,json=promotionState,proto3" json:"promotion_state,omitempty"`
 	// Только IMAGE_ARTIFACTS: полный безопасный inventory с immutable evidence pins.
 	VerifiedToolInventory *ImageToolInventory `protobuf:"bytes,20,opt,name=verified_tool_inventory,json=verifiedToolInventory,proto3" json:"verified_tool_inventory,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Только ROLE_IMAGE_RECIPES: текущий сохранённый ключ окружения рецепта.
+	EnvironmentKey string `protobuf:"bytes,22,opt,name=environment_key,json=environmentKey,proto3" json:"environment_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AssistantConfigurationCatalogEntry) Reset() {
@@ -16952,6 +16954,13 @@ func (x *AssistantConfigurationCatalogEntry) GetVerifiedToolInventory() *ImageTo
 		return x.VerifiedToolInventory
 	}
 	return nil
+}
+
+func (x *AssistantConfigurationCatalogEntry) GetEnvironmentKey() string {
+	if x != nil {
+		return x.EnvironmentKey
+	}
+	return ""
 }
 
 type AssistantConfigurationCatalogResponse struct {
@@ -80113,7 +80122,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06offset\x18\x04 \x01(\x05R\x06offset\x12\x1f\n" +
 	"\vaccount_ref\x18\x05 \x01(\tR\n" +
 	"accountRef\x12.\n" +
-	"\x13runtime_profile_ref\x18\x06 \x01(\tR\x11runtimeProfileRef\"\xcd\x06\n" +
+	"\x13runtime_profile_ref\x18\x06 \x01(\tR\x11runtimeProfileRef\"\xf6\x06\n" +
 	"\"AssistantConfigurationCatalogEntry\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
@@ -80137,7 +80146,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x17runtime_environment_ref\x18\x11 \x01(\tR\x15runtimeEnvironmentRef\x12+\n" +
 	"\x11admission_verdict\x18\x12 \x01(\tR\x10admissionVerdict\x12'\n" +
 	"\x0fpromotion_state\x18\x13 \x01(\tR\x0epromotionState\x12[\n" +
-	"\x17verified_tool_inventory\x18\x14 \x01(\v2#.controlplane.v1.ImageToolInventoryR\x15verifiedToolInventory\"\x85\x05\n" +
+	"\x17verified_tool_inventory\x18\x14 \x01(\v2#.controlplane.v1.ImageToolInventoryR\x15verifiedToolInventory\x12'\n" +
+	"\x0fenvironment_key\x18\x16 \x01(\tR\x0eenvironmentKey\"\x85\x05\n" +
 	"%AssistantConfigurationCatalogResponse\x12F\n" +
 	"\x04kind\x18\x01 \x01(\x0e22.controlplane.v1.AssistantConfigurationCatalogKindR\x04kind\x12#\n" +
 	"\rassistant_ref\x18\x02 \x01(\tR\fassistantRef\x12\x1d\n" +

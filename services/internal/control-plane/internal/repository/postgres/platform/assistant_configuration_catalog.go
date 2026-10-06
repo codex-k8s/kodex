@@ -189,7 +189,7 @@ func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.
 			case "PROVIDER_ACCOUNTS":
 				scanErr = rows.Scan(&entry.Ref, &entry.Name, &entry.Provider, &entry.Version)
 			case "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS":
-				scanErr = rows.Scan(&entry.Ref, &entry.Name, &entry.Version, &entry.RecipeGeneration, &entry.Reference, &entry.ManifestDigest)
+				scanErr = rows.Scan(&entry.Ref, &entry.Name, &entry.Version, &entry.RecipeGeneration, &entry.Reference, &entry.ManifestDigest, &entry.EnvironmentKey)
 			}
 			if scanErr != nil {
 				rows.Close()

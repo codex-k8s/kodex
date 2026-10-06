@@ -18,6 +18,7 @@ type AssistantConfigurationCatalogEntry struct {
 	ScopeKind, OrganizationRef, ProjectRef, AssistantProfileRef string
 	CatalogRevision, CatalogDigest, DefaultReasoningEffort      string
 	RuntimeEnvironmentRef                                       string
+	EnvironmentKey                                              string
 	ReasoningEfforts                                            []string
 	Version, RecipeGeneration                                   int64
 	AdmissionVerdict, PromotionState                            string
