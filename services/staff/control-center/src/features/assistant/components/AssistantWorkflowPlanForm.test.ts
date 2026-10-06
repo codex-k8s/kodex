@@ -181,7 +181,7 @@ function toggle(open: boolean): Event {
 }
 
 it.each(["ru", "en"] as const)(
-  "33 этапа оставляют один lazy editor, все заголовки видимы (%s)",
+  "33 этапа сначала показывают только заголовки без лишних редакторов (%s)",
   async (locale) => {
     const previous = i18n.global.locale.value;
     i18n.global.locale.value = locale;
@@ -196,11 +196,9 @@ it.each(["ru", "en"] as const)(
       expect(
         html.match(/class="workflow-step-disclosure__summary"/gu),
       ).toHaveLength(33);
-      expect(
-        html.match(/class="workflow-step-disclosure__body"/gu),
-      ).toHaveLength(1);
-      expect(html.match(/class="test-picker"/gu)).toHaveLength(1);
-      expect(html.match(/class="test-template"/gu)).toHaveLength(2);
+      expect(html).not.toContain('class="workflow-step-disclosure__body"');
+      expect(html).not.toContain('class="test-picker"');
+      expect(html).not.toContain('class="test-template"');
       expect(html).toContain("Этап 33");
     } finally {
       i18n.global.locale.value = previous;
@@ -211,6 +209,7 @@ it.each(["ru", "en"] as const)(
 it("переключение этапа не меняет параметры и сохраняет полную проверку", async () => {
   const { props, state, events } = mount();
   await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  expect(state.openStepIndex.value).toBeUndefined();
   const original = operationInputs([props.operation]);
   state.toggleStep(20, toggle(true));
   state.toggleStep(0, toggle(false));

@@ -74,7 +74,7 @@ const stepKeys = new Set([
 ]);
 const agentReadback = ref<Record<string, Agent | null>>({});
 const selectableAgents = new Map<string, Agent>();
-const openStepIndex = ref<number | undefined>(0);
+const openStepIndex = ref<number | undefined>();
 const isUpdate = computed(
   () => props.operation.value.type === "UPDATE_WORKFLOW",
 );
@@ -454,7 +454,7 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
 watch(
   () => [props.projectRef, props.operation.value.ref],
   () => {
-    openStepIndex.value = 0;
+    openStepIndex.value = undefined;
   },
 );
 </script>

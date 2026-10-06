@@ -114,7 +114,7 @@ function selectAgent(value: unknown, step?: WorkflowStepInput): void {
 }
 const busy = ref(false);
 const publishedCapabilitiesStep = ref("");
-const openStepIndex = ref<number | undefined>(0);
+const openStepIndex = ref<number | undefined>();
 function toggleStep(index: number, event: Event) {
   if ((event.currentTarget as HTMLDetailsElement).open)
     openStepIndex.value = index;
