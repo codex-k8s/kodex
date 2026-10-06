@@ -4649,3 +4649,40 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
 - OwnENV38 smoke и следующий team/bootstrap/dogfooding ещё OPEN; checklist
   не отмечен по одной публикации. GitHub connection отсутствует; Context7
   две exact helper grants присутствуют, но ownENV38 invocation ещё проверяется.
+
+### 06.10.2026 15:33 UTC — реальные smoke собственного PROJECT ENV38
+
+Source `21c12180`, затем header UX `d02a06e3`; remote/PR1798 exact21c12180
+readback PASS, Draft сохранён. Каждый smoke — отдельный conversation,
+turn1/attempt1, собственный B3 manifest1ac22394…a94f1f, ENV/binding version2,
+tools38. Ранний provider ACK захвачен до cleanup; actual role/provider
+binary SHA `f8a44936452d36642806982db4d6b1939f7c064d74ffe48e89fbad3a513c095f`.
+
+| Сценарий | Actual run/session/turn | Результат |
+| --- | --- | --- |
+| Context7 | `run_c0efySXhM9OuQMotfF6c31ZC` / `ses_uRluAygg0B5EHX455CzSqzLB` / `trn_2A1EPPwO9IuaSMyI-KP9x64E` | PASS: resolve и query SUCCEEDED, exact две own grants/NONE, `/websites/vuejs`, официальный источник |
+| Hosted web | `run__kD_QpW7jpqlOqNsC5T1c3iE` / `ses_ltcm3tx3OAcIro2dnnZhWjIf` / `trn_FSIGcTvlZNp4ewZx59l3Swit` | PASS: native CODEX_WEB_SEARCH SEARCH/OPEN_PAGE SUCCEEDED, официальный vuejs.org, persisted transcript после reload |
+| Project context | `run_SIxvK7QufkaqAIIRbRlIsF8z` / `ses_u5k5CA2koeyQhrfDmH_gVlm0` / `trn_ErPZZiaipO7SMX_iZkZ4Pxqj` | PASS: PROJECT identity/current config/pinned revision точны; native search SUCCEEDED; только хеши двух файлов |
+| Public Git | `run_JEYKlFYQ9zoOKPwPKPztIliN` / `ses_ko7TuVyTR3FWxwol90GVHv9j` / `trn_IaI2RSVLmbZSg3iQb5YULe1F` | FAIL repo read: git2.39.5 PASS, ls-remote exit128 — proxy DNS unresolved; текущая web policy NONE тоже требует штатной настройки |
+
+Task/provider/inbox SHA совпадают, comparisons EQUAL для всех четырёх ACK:
+Context7 `cde2e65a8f69086d4362ae4990f2c852c4cdbfae2f73e9d3c004acc56c8a259d`;
+web `9eaf92d28c1cb2054b633378c9917935991355d59ef084b92aa2b761ec338e49`;
+context `0918b1139dea5183fe1963f75d0264135bd51287708e3c10879560eed9edb78d`;
+Git `c5d6f08175d2f8676f97f20709c92d804e0cef33def03413d27c8e6b236bad20`.
+Canonical actual RUN safe prompt preview200/complete/diagnostics0 и exact
+template/materialization digest совпали с ACK каждого хода. Materialization:
+C7 `1fbd2fc4d822c7e1dd9b74cc4cfbb289a4b16dba29ff406cfbb18412f7f28276`;
+web `5fbcd8e8dbbdae4cc96ff430c229bfcf02dc760fa53d2e603b36d6da666d0c13`;
+context `badf56b556b668e4d7cbfb4f86dba5b6a59988633fd26a641bc024a282d89d0b`;
+Git `24e8df55e6d8c9eb52e31fbb88d70df99f969c18f441795881110a7646ffb298`.
+Safe sections — placeholders, не full input; full privileged read NOT RUN
+после ожидаемого FRESH_AUTHENTICATION_REQUIRED. Native context read только
+AGENTS.md/inbox hashes совпал с ACK, текст файлов не раскрывался.
+
+Старый TOOL_UNAVAILABLE поиска не повторился на exact query Kodex; причина
+старого отказа остаётся UNKNOWN. Diagnostic-only classes не выдавать за
+доказанное исправление старого запроса. Для Git подготовляется отдельный
+typed network plan, без ручного обхода policy/DNS/TLS, wildcard или credential.
+Header UX root35/35 unit PASS, native mobile screenshot после patch ещё
+проверяется. Console error/warn0; Full65 и checklist8 остаются OPEN.
