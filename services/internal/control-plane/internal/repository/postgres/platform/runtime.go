@@ -2135,10 +2135,11 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID, originStepKey, originNodeRef string
 	var originHumanGate, requiredContinuation bool
 	var attempt int32
+	var callbackContext []byte
 	err := tx.QueryRow(ctx, queryRuntimeCallbackResolveContinuation, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"parent_node_id":  parentNodeID,
-	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &originStepKey, &originHumanGate, &requiredContinuation, &originNodeRef)
+	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &originStepKey, &originHumanGate, &requiredContinuation, &originNodeRef, &callbackContext)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -2153,7 +2154,10 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 	}).Scan(&lockedSessionID, &turnNumber); err != nil || lockedSessionID != sessionID {
 		return false, errs.ErrUnavailable
 	}
-	const continuationTask = "Continue the task using all completed child-agent results in the session context. Produce the final response and do not repeat completed delegations."
+	continuationTask, err := callbackContinuationTask(callbackContext)
+	if err != nil {
+		return false, err
+	}
 	turnRef, _ := newRef("trn")
 	var turnID string
 	if err := tx.QueryRow(ctx, queryRuntimeCallbackInsertContinuationTurn, pgx.StrictNamedArgs{

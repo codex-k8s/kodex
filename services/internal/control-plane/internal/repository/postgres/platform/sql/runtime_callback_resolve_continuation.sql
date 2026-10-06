@@ -11,26 +11,67 @@ SELECT parent_node.run_id::text,
        parent_node.workflow_step_key,
        parent_node.human_gate_after,
        EXISTS(SELECT 1 FROM control_plane.required_workflow_launches launch WHERE launch.origin_node_id=parent_node.id),
-       parent_node.ref
+       parent_node.ref,
+       jsonb_build_object(
+           'completedChildren', COALESCE((
+               SELECT jsonb_agg(jsonb_build_object(
+                   'runRef', child.ref,
+                   'nodeRef', child_node.ref,
+                   'state', child_node.state,
+                   'resultSummary', child.result_summary,
+                   'artifactRefs', COALESCE((
+                       SELECT jsonb_agg(artifact.ref ORDER BY artifact.ref)
+                       FROM control_plane.artifacts artifact
+                       JOIN control_plane.runs artifact_run ON artifact_run.id = artifact.run_id
+                       WHERE artifact.organization_id = parent_node.organization_id
+                         AND artifact_run.organization_id = parent_node.organization_id
+                         AND (artifact_run.id = child.id OR artifact_run.root_run_id = child.id)
+                   ), '[]'::jsonb)
+               ) ORDER BY callback_edge.created_at, callback_edge.ref)
+               FROM control_plane.run_edges callback_edge
+               JOIN control_plane.callback_receipts receipt ON receipt.callback_edge_id = callback_edge.id
+               JOIN control_plane.run_nodes child_node ON child_node.id = callback_edge.source_node_id
+               JOIN control_plane.runs child ON child.id = receipt.child_run_id
+               WHERE callback_edge.organization_id = parent_node.organization_id
+                 AND callback_edge.root_run_id = root.id
+                 AND callback_edge.target_node_id = parent_node.id
+                 AND callback_edge.type = 'CALLBACK_TO'
+                 AND child_node.organization_id = parent_node.organization_id
+                 AND child.organization_id = parent_node.organization_id
+                 AND (
+                     child_node.run_id = child.id
+                     OR EXISTS (
+                         SELECT 1 FROM control_plane.required_workflow_launches launch
+                         WHERE launch.organization_id = parent_node.organization_id
+                           AND launch.origin_root_run_id = root.id
+                           AND launch.origin_node_id = parent_node.id
+                           AND launch.proxy_node_id = child_node.id
+                           AND launch.callback_edge_id = callback_edge.id
+                           AND launch.child_root_run_id = child.id
+                           AND launch.state IN ('SUCCEEDED', 'FAILED', 'CANCELLED')
+                     )
+                 )
+                 AND child_node.state IN ('SUCCEEDED', 'FAILED', 'CANCELLED')
+           ), '[]'::jsonb),
+           'remainingStepKeys', COALESCE((
+               SELECT jsonb_agg(step.value ->> 'Key' ORDER BY step.position)
+               FROM jsonb_array_elements(COALESCE(workflow_version.spec -> 'Steps', '[]'::jsonb))
+                    WITH ORDINALITY AS step(value, position)
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM control_plane.run_nodes delegated
+                   WHERE delegated.organization_id = parent_node.organization_id
+                     AND delegated.root_run_id = root.id
+                     AND delegated.workflow_step_key = step.value ->> 'Key'
+                     AND delegated.materialization_state = 'MATERIALIZED'
+               )
+           ), '[]'::jsonb)
+       )
 FROM control_plane.run_nodes parent_node
 JOIN control_plane.runs parent_run ON parent_run.id = parent_node.run_id
 JOIN control_plane.runs root ON root.id = parent_node.root_run_id
 JOIN control_plane.agents parent_agent ON parent_agent.id = parent_node.agent_id
 LEFT JOIN control_plane.workflow_versions workflow_version
   ON workflow_version.id = root.workflow_version_id
-LEFT JOIN LATERAL (
-    SELECT count(*) FILTER (
-        WHERE step.value ->> 'AgentRef' <> workflow_version.spec ->> 'CoordinatorAgentRef'
-          AND NOT EXISTS (
-            SELECT 1
-            FROM control_plane.run_nodes delegated
-            WHERE delegated.root_run_id = root.id
-              AND delegated.workflow_step_key = step.value ->> 'Key'
-              AND delegated.materialization_state = 'MATERIALIZED'
-        )
-    ) AS missing_steps
-    FROM jsonb_array_elements(COALESCE(workflow_version.spec -> 'Steps', '[]'::jsonb)) step(value)
-) workflow_progress ON true
 WHERE parent_node.organization_id = @organization_id::uuid
   AND parent_node.id = @parent_node_id::uuid
   AND parent_node.state = 'SUCCEEDED'
@@ -60,7 +101,6 @@ WHERE parent_node.organization_id = @organization_id::uuid
         AND callback_edge.target_node_id = parent_node.id
         AND callback_edge.type = 'CALLBACK_TO'
       )
-      OR (root.workflow_version_id IS NOT NULL AND workflow_progress.missing_steps > 0)
   )
   AND NOT EXISTS (
       SELECT 1

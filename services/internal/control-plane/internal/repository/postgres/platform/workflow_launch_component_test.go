@@ -2,7 +2,9 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"testing"
@@ -185,6 +187,70 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		}
 		return state, origin, root, exact, leases, turns
 	}
+	t.Run("two-step-authoritative-callback", func(t *testing.T) {
+		specialist = *execute(command.ChangeAgentCapability, owner, "two-artifact-cap", command.AgentBindingInput{AgentRef: specialist.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}, &specialist.Version).Agent
+		twoStep := draft
+		twoStep.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+		twoStep.Steps[0].Key = "step001"
+		twoStep.Steps[0].RequiredCapabilityKeys = []string{"platform.run.launch", runtimecontract.ArtifactCapability}
+		second := twoStep.Steps[0]
+		second.Key, second.Position, second.Name = "step002", 2, "Documentation"
+		twoStep.Steps = append(twoStep.Steps, second)
+		wf := execute(command.CreateWorkflow, owner, "two-create", command.WorkflowInput{ProjectRef: project.Ref, Name: "Two steps", Purpose: draft.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &twoStep}, nil).Workflow
+		wf = execute(command.ValidateWorkflow, owner, "two-validate", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		wf = execute(command.PublishWorkflow, owner, "two-publish", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		selectedWorkflow = wf.Ref
+		parent := execute(command.LaunchRun, owner, "two-parent", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: manager.Ref}, Task: "Complete both steps once."}, nil).Run
+		origin := claim("two-parent-claim", parent.Ref)
+		child := launch("two-launch", origin)
+		complete("two-parent-complete", origin, true)
+		coord := claim("two-coord-claim", child.Run.Ref)
+		first := execute(command.DelegateExecution, worker, "two-first", command.DelegateInput{LeaseRef: stringMap(coord, "leaseRef"), Fence: stringMap(coord, "fence"), Generation: runtimeRevisionMapInt64(coord, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step001", Task: "Produce authoritative first result."}, nil).Run
+		complete("two-coord-complete", coord, true)
+		firstLease := claim("two-first-claim", first.Ref)
+		body := []byte("Verified architecture result")
+		digest := sha256.Sum256(body)
+		firstInput := command.CompleteExecutionInput{LeaseRef: stringMap(firstLease, "leaseRef"), Fence: stringMap(firstLease, "fence"), Generation: runtimeRevisionMapInt64(firstLease, "generation"), Success: true, ResultSummary: "Authoritative architecture completed", Usage: turnUsageFixture(), Artifacts: []command.CompletedArtifact{{FileName: "architecture.txt", MediaType: "text/plain", SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(body)), Content: body}}}
+		firstResult := execute(command.CompleteExecution, worker, "two-first-complete", firstInput, nil)
+		callback := claim("two-first-callback", child.Run.Ref)
+		task := stringMap(callback, "task")
+		if !strings.Contains(task, first.Ref) || !strings.Contains(task, "Authoritative architecture completed") || !strings.Contains(task, "step002") {
+			t.Fatal("current callback task lacks authoritative result and next step")
+		}
+		if len(firstResult.Run.ArtifactRefs) != 1 || !strings.Contains(task, firstResult.Run.ArtifactRefs[0]) {
+			t.Fatal("current callback task lacks authoritative child artifact ref")
+		}
+		next := execute(command.DelegateExecution, worker, "two-second", command.DelegateInput{LeaseRef: stringMap(callback, "leaseRef"), Fence: stringMap(callback, "fence"), Generation: runtimeRevisionMapInt64(callback, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step002", Task: "Use the first result for documentation."}, nil).Run
+		complete("two-first-callback-complete", callback, true)
+		secondLease := claim("two-second-claim", next.Ref)
+		complete("two-second-complete", secondLease, true)
+		complete("two-second-complete", secondLease, true)
+		complete("two-second-callback-complete", claim("two-second-callback", child.Run.Ref), true)
+		complete("two-parent-callback-complete", claim("two-parent-callback", parent.Ref), true)
+		if read(child.Run.Ref).State != "SUCCEEDED" || read(parent.Ref).State != "SUCCEEDED" {
+			t.Fatal("two-step workflow did not complete")
+		}
+		if len(execute(command.ClaimExecution, worker, "two-no-repeat", command.LeaseInput{WorkloadInstance: "workflow-launch-fixture", Limit: 1}, nil).RuntimeItems) != 0 {
+			t.Fatal("completed callback was repeated")
+		}
+		// Незавершённый step002 сам по себе не является новым callback.
+		idleParent := execute(command.LaunchRun, owner, "idle-parent", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: manager.Ref}, Task: "Do not repeat empty continuations."}, nil).Run
+		idleOrigin := claim("idle-parent-claim", idleParent.Ref)
+		idleWF := launch("idle-launch", idleOrigin)
+		complete("idle-parent-complete", idleOrigin, true)
+		idleCoord := claim("idle-coord-claim", idleWF.Run.Ref)
+		idleChild := execute(command.DelegateExecution, worker, "idle-first", command.DelegateInput{LeaseRef: stringMap(idleCoord, "leaseRef"), Fence: stringMap(idleCoord, "fence"), Generation: runtimeRevisionMapInt64(idleCoord, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step001", Task: "Complete one child."}, nil).Run
+		complete("idle-coord-complete", idleCoord, true)
+		complete("idle-first-complete", claim("idle-first-claim", idleChild.Ref), true)
+		complete("idle-callback-complete", claim("idle-callback", idleWF.Run.Ref), true)
+		if read(idleWF.Run.Ref).State != "FAILED" || read(idleWF.Run.Ref).SafeErrorCode != "RUNTIME_WORKFLOW_INCOMPLETE" {
+			t.Fatal("missing published step did not terminate incomplete workflow")
+		}
+		complete("idle-parent-callback-complete", claim("idle-parent-callback", idleParent.Ref), true)
+		if len(execute(command.ClaimExecution, worker, "idle-no-repeat", command.LeaseInput{WorkloadInstance: "workflow-launch-fixture", Limit: 1}, nil).RuntimeItems) != 0 {
+			t.Fatal("missing workflow step generated another callback without new receipt")
+		}
+	})
 	for _, scenario := range []string{"parent-cancel", "owner-child-cancel", "parent-failure", "success", "nested-success", "early-nested-success", "owner-child-gate-reject"} {
 		t.Run(scenario, func(t *testing.T) {
 			selectedWorkflow = workflow.Ref
