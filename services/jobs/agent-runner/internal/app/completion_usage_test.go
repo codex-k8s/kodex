@@ -26,7 +26,7 @@ import (
 
 func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 	usage := runtimecontract.TokenUsage{TotalTokens: 150, InputTokens: 100, CachedInputTokens: 30, CacheWriteInputTokens: 10, OutputTokens: 50, ReasoningOutputTokens: 20, ModelContextWindow: 32768}
-	for _, mode := range []string{"workspace", "cancelled workspace", "empty message", "oversized message", "invalid utf8", "publish result", "collect artifacts", "completion archive", "provider failure", "success", "before execution"} {
+	for _, mode := range []string{"workspace", "cancelled workspace", "empty message", "oversized message", "invalid utf8", "publish result", "collect artifacts", "completion archive", "provider failure", "provider outbox failure", "success", "before execution"} {
 		t.Run(mode, func(t *testing.T) {
 			input := model.Input{RuntimeRevisionRef: "rrev_fixture", RuntimeRevisionVersion: 1, RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3, LeaseRef: "lease_fixture", ExecutionBindingDigest: strings.Repeat("b", 64), WorkspaceRoot: t.TempDir(), WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1()}
 			result := codex.Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic result", Usage: usage}
@@ -53,11 +53,15 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 				wantCode = "RUNTIME_INPUT_INVALID"
 			case "collect artifacts":
 				input.Capabilities = []string{runtimecontract.ArtifactCapability}
+				wantCode = "RUNTIME_ARTIFACT_INVALID"
 			case "completion archive":
 				result.SessionID = "incomplete-archive-binding"
 			case "provider failure":
 				result.Outcome, result.FailureCode = "FAILED", "usage_limit_exceeded"
 				wantCode = "PROVIDER_RATE_LIMITED"
+			case "provider outbox failure":
+				result.Outcome, result.FailureCode = "FAILED", "RUNTIME_ARTIFACT_INVALID"
+				wantCode = "RUNTIME_ARTIFACT_INVALID"
 			case "success":
 				wantCode = ""
 			case "before execution":
@@ -83,6 +87,9 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 				var payload runtimecontract.RunnerCompletionRequest
 				if json.Unmarshal(raw, &payload) != nil || payload.Validate() != nil || payload.Usage != wantUsage || payload.SafeErrorCode != wantCode || payload.Success != (mode == "success") || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt || len(payload.Artifacts) != 0 {
 					t.Error("completion lost measured usage or terminal provenance")
+				}
+				if (mode == "provider outbox failure" || mode == "collect artifacts") && payload.ResultSummary != "i18n:RUNTIME_ARTIFACT_INVALID" {
+					t.Error("artifact completion lost its closed failure summary")
 				}
 				mu.Lock()
 				defer mu.Unlock()

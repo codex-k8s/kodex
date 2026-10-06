@@ -1690,6 +1690,16 @@ gate — `make test-runtime-admission-gate`, предел процесса 60 с
 
 ## Полнота deployable
 
+Outbox текущего execution публикует фактический provider writer после штатного
+stop/join app-server и до terminal handoff. UID10002 через nofollow directory/file
+descriptors проверяет provider-owned regular inode, единственную hard link,
+размер и текущую pathname identity, назначает только group29000/read0640
+и сверяет результат. Private0600 и atomic replace не требуют действий модели.
+Runner UID10001 не получает CAP_CHOWN, приватный provider home или authority
+другого execution; symlink, foreign owner, специальные файлы и превышение
+границ закрывают completion с безопасным `RUNTIME_ARTIFACT_INVALID`.
+Публикация согласуется с workspace canary/cleanup через прежний directory lock.
+
 Восстановленный native history принадлежит фактическому writer/capture UID,
 а не UID контейнера, передающего запрос. В текущем Pod ABI Codex app-server
 и захват rollout исполняются в `provider-runtime` с UID10002; RESTORE создаёт

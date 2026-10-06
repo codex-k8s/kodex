@@ -305,6 +305,9 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 	}
 	if result.Outcome != "SUCCEEDED" {
 		_, message, _ := codex.TerminalPresentation(result.FailureCode)
+		if result.FailureCode == "RUNTIME_ARTIFACT_INVALID" {
+			message = "i18n:RUNTIME_ARTIFACT_INVALID"
+		}
 		return completeResultFailure(ctx, input, client, result, message)
 	}
 	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 64<<10 || !utf8.ValidString(result.FinalMessage) {
@@ -385,7 +388,9 @@ func safeFailureCode(code string) string {
 		return "RUNTIME_PROFILE_UNSUPPORTED"
 	case "context_window_exceeded", "session_budget_exceeded", "thread_rollback_failed", "active_turn_not_steerable":
 		return "RUNTIME_PROFILE_UNSUPPORTED"
-	case "provider_error_info_invalid", "provider_interrupted", "provider_other_error", "RUNTIME_RESULT_INVALID", "RUNTIME_ARTIFACT_INVALID":
+	case "RUNTIME_ARTIFACT_INVALID":
+		return "RUNTIME_ARTIFACT_INVALID"
+	case "provider_error_info_invalid", "provider_interrupted", "provider_other_error", "RUNTIME_RESULT_INVALID":
 		return "PROVIDER_RESPONSE_INVALID"
 	case "RUNTIME_INPUT_INVALID", "RUNTIME_WORKSPACE_INVALID":
 		return "RUNTIME_INPUT_INVALID"
@@ -969,6 +974,11 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 		if statErr != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 1<<20 {
 			file.Close()
 			continue
+		}
+		metadata, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || metadata.Nlink != 1 {
+			file.Close()
+			return nil, errors.New("runtime artifact metadata is invalid")
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(file, 1<<20+1))
 		closeErr := file.Close()

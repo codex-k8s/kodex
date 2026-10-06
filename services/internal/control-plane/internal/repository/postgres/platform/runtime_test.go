@@ -201,6 +201,13 @@ func TestRuntimeSafeErrorCodeAcceptsMCPUnavailable(t *testing.T) {
 	}
 }
 
+func TestRuntimeSafeErrorCodeAcceptsArtifactFailureOnly(t *testing.T) {
+	t.Parallel()
+	if !runtimeSafeErrorCode("RUNTIME_ARTIFACT_INVALID") || runtimeSafeErrorCode("RUNTIME_ARTIFACT_INTERNAL_DIAGNOSTIC") {
+		t.Fatal("artifact completion failure code boundary is invalid")
+	}
+}
+
 func TestAssistantTerminalTurnDoesNotChangeConversationTitles(t *testing.T) {
 	t.Parallel()
 	query := queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt

@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -491,6 +492,13 @@ func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, 
 		defer cancel()
 		if err := commit(commitContext, input, payload); err != nil {
 			return result, errors.New("commit refreshed provider authentication")
+		}
+	}
+	if executionErr == nil && result.Outcome == "SUCCEEDED" && !input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) {
+		if err := publishProviderOutbox(ctx, input); err != nil {
+			result.Outcome = "FAILED"
+			result.FailureCode = "RUNTIME_ARTIFACT_INVALID"
+			result.FinalMessage = "i18n:RUNTIME_ARTIFACT_INVALID"
 		}
 	}
 	return result, executionErr

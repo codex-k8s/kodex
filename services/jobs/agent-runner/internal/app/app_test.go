@@ -39,6 +39,28 @@ func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
 	}
 }
 
+func TestRuntimeArtifactFailureCodeRemainsClosed(t *testing.T) {
+	t.Parallel()
+	if safeFailureCode("RUNTIME_ARTIFACT_INVALID") != "RUNTIME_ARTIFACT_INVALID" ||
+		safeFailureCode("RUNTIME_ARTIFACT_INTERNAL_DIAGNOSTIC") != "RUNTIME_UNAVAILABLE" {
+		t.Fatal("artifact failure normalization changed its closed boundary")
+	}
+}
+
+func TestCollectArtifactsRejectsHardlinkWithoutReadingTarget(t *testing.T) {
+	root := t.TempDir()
+	if os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770) != nil {
+		t.Fatal("prepare isolated outbox")
+	}
+	outside := filepath.Join(t.TempDir(), "private-sentinel")
+	if os.WriteFile(outside, []byte("private synthetic payload"), 0o600) != nil || os.Link(outside, filepath.Join(root, ".kodex/outbox", "linked.md")) != nil {
+		t.Fatal("prepare isolated hardlink")
+	}
+	if _, err := collectArtifacts(model.Input{WorkspaceRoot: root}, "done"); err == nil || strings.Contains(err.Error(), outside) || strings.Contains(err.Error(), "payload") {
+		t.Fatal("collector accepted an outside hardlink or exposed its content")
+	}
+}
+
 func TestRuntimeMCPFailureCodeIsPreservedForCompletion(t *testing.T) {
 	t.Parallel()
 
