@@ -434,6 +434,12 @@ function eventKind(
   background: var(--panel);
 }
 .session-details__summary p {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-width: 0;
   margin: 3px 0 0;
   color: var(--muted);
   font-size: 0.84rem;

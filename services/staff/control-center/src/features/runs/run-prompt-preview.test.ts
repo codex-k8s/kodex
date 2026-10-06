@@ -60,16 +60,44 @@ it("читает сохранённый RUN напрямую с пустым ш�
   });
 });
 
+it("принимает фактическую форму RUN ответа без необязательного contextPin и не создаёт pin", async () => {
+  const serverPreview = { ...preview };
+  delete serverPreview.contextPin;
+  respond(serverPreview);
+  const result = await loadRunPromptPreview(
+    "run_example",
+    new AbortController().signal,
+  );
+  expect(result).toEqual(serverPreview);
+  expect(result).not.toHaveProperty("contextPin");
+});
+
 it.each([
   { ...preview, fullMaterializedPrompt: "PRIVATE_FULL_PROMPT" },
   { ...preview, templateDigest: "invalid" },
   { ...preview, templateRef: undefined },
-  { ...preview, contextPin: undefined },
+  { ...preview, contextPin: null },
+  { ...preview, contextPin: {} },
+  { ...preview, contextPin: { digest: "invalid" } },
   { ...preview, sections: [] },
   { ...preview, sections: [{ source: "FOREIGN", content: "safe" }] },
   { ...preview, slots: [{ source: "PLATFORM", slot: "FOREIGN", position: 1 }] },
 ])("закрыто отвергает full disclosure или повреждённые pins", async (value) => {
   respond(value);
+  await expect(
+    loadRunPromptPreview("run_example", new AbortController().signal),
+  ).rejects.toThrow("Invalid safe run prompt preview boundary");
+});
+
+it.each([
+  "templateDigest",
+  "materializationDigest",
+  "serviceTemplateDigest",
+  "variableSnapshotDigest",
+])("сохраняет обязательность %s без contextPin", async (key) => {
+  const serverPreview = { ...preview };
+  delete serverPreview.contextPin;
+  respond({ ...serverPreview, [key]: "invalid" });
   await expect(
     loadRunPromptPreview("run_example", new AbortController().signal),
   ).rejects.toThrow("Invalid safe run prompt preview boundary");

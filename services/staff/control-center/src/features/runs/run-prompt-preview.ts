@@ -44,9 +44,19 @@ export async function loadRunPromptPreview(
     )
   ).data;
   active.throwIfAborted();
-  const contextPin = result.contextPin;
+  const contextPin: unknown = result.contextPin;
+  const contextDigest =
+    contextPin !== null &&
+    typeof contextPin === "object" &&
+    "digest" in contextPin
+      ? contextPin.digest
+      : undefined;
   if (
-    !contextPin ||
+    contextPin !== undefined &&
+    (typeof contextDigest !== "string" || !digestPattern.test(contextDigest))
+  )
+    throw new Error("Invalid safe run prompt preview boundary");
+  if (
     result.fullMaterializedPrompt !== undefined ||
     typeof result.templateRef !== "string" ||
     !referencePattern.test(result.templateRef) ||
@@ -63,7 +73,6 @@ export async function loadRunPromptPreview(
       result.materializationDigest,
       result.serviceTemplateDigest,
       result.variableSnapshotDigest,
-      contextPin.digest,
     ].every(
       (digest) => typeof digest === "string" && digestPattern.test(digest),
     ) ||
@@ -123,6 +132,8 @@ export async function loadRunPromptPreview(
       slot,
       content,
     })),
-    contextPin: { digest: contextPin.digest },
+    ...(typeof contextDigest === "string"
+      ? { contextPin: { digest: contextDigest } }
+      : {}),
   };
 }

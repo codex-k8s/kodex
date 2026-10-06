@@ -4,6 +4,7 @@ import { createI18n } from "vue-i18n";
 import { describe, expect, it } from "vitest";
 
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
+import dialogSource from "@/features/runs/RunSessionDetailsDialog.vue?raw";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
 import type {
   Artifact,
@@ -150,6 +151,19 @@ const toolEvent: PresentedRunEvent = {
 };
 
 describe("RunSessionDetailsDialog", () => {
+  it("ограничивает только сводку шапки тремя строками, не усекая полный результат", () => {
+    const headerStyle = dialogSource.match(
+      /\.session-details__summary p \{([^}]+)\}/,
+    )?.[1];
+    expect(headerStyle).toContain("-webkit-line-clamp: 3");
+    expect(headerStyle).toContain("-webkit-box-orient: vertical");
+    expect(headerStyle).toContain("overflow: hidden");
+    expect(headerStyle).toContain("min-width: 0");
+    expect(dialogSource.match(/-webkit-line-clamp:/g)).toHaveLength(1);
+    expect(dialogSource).toContain("node.progressSummary ||");
+    expect(dialogSource).toContain("<SafeMarkdown");
+  });
+
   it("показывает доступные launch данные и честные runtime/prompt states", async () => {
     const app = createSSRApp({
       render: () =>
