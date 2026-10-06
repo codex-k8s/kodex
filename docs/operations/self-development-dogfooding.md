@@ -158,6 +158,49 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 23:37 UTC — точное восстановление прав и компактный план
+
+Source `8ed7d298`; remote/PR readback `b60bb7a2`, следующая публикация
+ещё не выполнена.
+
+- PASS: PROJECT план `pln_vjkobaaNvfnOTEf-pqYXpwR9` проверен и APPLIED
+  штатной формой,21 операций одной транзакцией. Fresh C149/CONNECTED;
+  независимое сравнение всех117 записей: нет новых/пропавших refs или
+  изменений recipient/capability/resourceScope/policy/approvalScopePaths;
+  enabled только21 прежних helper grants. Остальные96 пока disabled.
+- PASS: ROOT52 frontend tests на8ed7d298,3suites/1.85с. План в чате
+  показывает первые5 операций, раскрывает остальные, сохраняет полный
+  selected count и предупреждения скрытых проблем. Native screenshot этого
+  плана после fix ещё NOT RUN; скриншот текущего диалога/Console0 выполнен.
+- BLOCKED сценарий: PROJECT helper Developer24 restore завершился без
+  proposal, потому что обычный каталог разрешает лишь собственные grants.
+  Проверяется причина ограничения; это не PASS настройки команды.
+  Штатный SYSTEM proposal запущен, результат ещё не подтверждён.
+- PASS input proof: PROJECT/SYSTEM actual task10205B/SHA7da60d3c… равен
+  provider ACK; инструкции/inbox EQUAL, same Pod UID и no restarts.
+  PROJECT G4 captured; SYSTEM использует отдельный admitted generation10.
+  Полный materialized prompt и приватные значения в журнал не включены.
+- PASS: после reload прежний exact Run/graph и диалог восстановились;
+  native GET graph/events/owner-gates200, Console0. Это browser rejoin,
+  не проверка backend restart или10 одновременных runtime executions.
+
+Полное restoration117, Git/Draft/review/response, native concurrency и
+финальный внутренний Workflow по-прежнему OPEN.
+
+Уточнение23:41UTC: ordinary CHANGE_INTEGRATION_GRANT уже разрешена PROJECT
+в CP, но только в exact AGENT/WORKFLOW/INTEGRATION контексте. На RUN
+схемы действительно нет; это не общий запрет настройки сотрудников.
+После native перехода на Developer AGENT схема доступна, однако exposed
+каталог не даёт прочитать его disabled grants. Own helper catalog не
+подменяет ordinary recipient read. Реализуется закрытый leased read;
+навигационная подсказка и cursor400 истории исправляются независимо.
+Native SYSTEM ход `run_6Gu8vT99Yu2Ons2NvB0Zfcj3` и PROJECT AGENT ход
+`run_Snn4BY1X1Wh6PZcaQpMD3UPu` завершились без proposal/effect. ROOT
+fresh owner Developer24 read C149 подтвердил совпадение всех tuples;
+передано только owner observation для штатной CP hydration/validation.
+Это не PASS полного self-service discovery. Console400 при пагинации
+зафиксирован как FAIL, не замаскирован последующим успешным чтением.
+
 ### 06.10.2026 23:29 UTC — история решений и повторное подключение GitHub
 
 Source `442ffee2`, remote/PR до следующего push `29be58de`.

@@ -10,6 +10,33 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 23:37UTC: source `8ed7d298`, remote/PR подтверждены
+`b60bb7a2` (новая карточка плана ещё не опубликована). PROJECT helper
+restoration plan `pln_vjkobaaNvfnOTEf-pqYXpwR9` APPLIED, 21 операций;
+fresh C149/CONNECTED, все117 refs/recipient/capability/scope/policy совпали
+с before, enabled только21 helper grants. Developer24 PROJECT ход
+`run_wjcKsrDHYwqZB0YzI1u1cLTd` завершён без proposal: restricted schemas
+не предоставляют CHANGE_INTEGRATION_GRANT. Диагноз scope выполняется;
+штатный SYSTEM ход `run_6Gu8vT99Yu2Ons2NvB0Zfcj3` сейчас RUNNING,
+conversation `cnv_N2YFZzO0EWDBCk5unAmbf809`. Не повторять неизвестные effects.
+PROJECT/SYSTEM actual task10205B/SHA7da60d3c… равен ACK; обе инструкции и
+inbox EQUAL. SYSTEM использует свой admitted образ generation10, не G4.
+ROOT52 frontend tests на8ed7d298 PASS1.85с. Карточка5+раскрытие остальных
+интегрирована; её native screenshot ещё NOT RUN. Chrome5 own,6 чужая;
+последний manual reload23:34UTC. Цель ACTIVE, deadline04:30UTC.
+
+Уточнение23:41UTC: RUN context не даёт ordinary grants, native exact
+Developer AGENT context дал схему CHANGE_INTEGRATION_GRANT. Но helper
+не имеет свежего ordinary recipient catalog (own helper каталог не
+подходит); добавляется закрытый leased read. SYSTEM и PROJECT AGENT
+предыдущие ходы завершились без effects. PROJECT clarification после
+ROOT fresh owner Developer24 read C149 сейчас `run_GdEvnASHcSlP3o8_Y-gYa93H`
+RUNNING в conversation `cnv_0OgfTAvKunh0LVzY69VpXCMW`; при UNKNOWN не
+повторять. Native history cursor400 при route/context transition чинится
+отдельно; scope/readback не обходить.
+
+## Предыдущий checkpoint23:29
+
 06.10.2026 23:29UTC: source442ffee2, remote/PR29be58de до следующего push.
 Terminal Gate history native GET200/4 решения, ROOT PG PASS2.083с;
 RunPage recovery59units PASS4.22с, source/Pod hashes совпали. Protected
