@@ -11998,6 +11998,7 @@ components:
             enum:
               [
                 model_reasoning_effort,
+                web_search,
                 personality,
                 allow_login_shell,
                 history.persistence,
@@ -12026,8 +12027,8 @@ components:
         fields:
           {
             type: array,
-            minItems: 4,
-            maxItems: 4,
+            minItems: 5,
+            maxItems: 5,
             items: { $ref: "#/components/schemas/ConfigOverlayField" },
           }
     ConfigOverlayDraftInput:

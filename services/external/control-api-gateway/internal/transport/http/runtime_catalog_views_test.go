@@ -13,6 +13,7 @@ import (
 	"time"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -144,9 +145,15 @@ func TestRuntimeOverlayNativeSearchReadPath(t *testing.T) {
 		t.Fatal("native search schema or safe diagnostic was lost on HTTP readback")
 	}
 	for _, field := range body.OverlaySchema.Fields {
+		if !generated.ConfigOverlayFieldKey(field.Key).Valid() {
+			t.Fatalf("native search readback violates generated OpenAPI enum: key=%s", field.Key)
+		}
 		if field.Key == "web_search" && (field.ValueType != "string" || field.DefaultValue != "cached" || !slices.Equal(field.AllowedValues, search.AllowedValues)) {
 			t.Fatal("native search modes or default changed on HTTP readback")
 		}
+	}
+	if generated.ConfigOverlayFieldKey("web_search_custom").Valid() {
+		t.Fatal("generated OpenAPI enum accepts an unknown overlay key")
 	}
 }
 
