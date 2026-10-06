@@ -1023,6 +1023,9 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 				return err
 			}
 			item.NextActions = runActions(item.State, allowed("run.cancel") || allowed("run.cancel.own"), false)
+			if err := repository.applyContinuationAction(ctx, tx, scope, item); err != nil {
+				return err
+			}
 			return projectArtifactResults(ctx, tx, scope, &command.Result{Run: item})
 		}, func(ctx context.Context, tx pgx.Tx) (int64, error) {
 			var total int64
