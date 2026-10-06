@@ -945,3 +945,71 @@ func TestNormalizeRoleImageUpdatePinsCurrentProjectAndRecipe(t *testing.T) {
 		t.Fatalf("role image update was not server-bound: %#v", operation)
 	}
 }
+
+func TestRoleImageUpdateCatalogUsesCanonicalServerAction(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		t.Run(string(scope), func(t *testing.T) {
+			input := assistantConfigurationFixture(scope)
+			input.AssistantContext.AllowedOperations = []string{"CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE"}
+			catalog, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE"}})
+			if err != nil {
+				t.Fatal("canonical role image schema discovery failed")
+			}
+			schemas := catalog.(map[string]any)["operation_schemas"].([]map[string]any)
+			if len(schemas) != 2 {
+				t.Fatal("discovery lost the distinct create and update operations")
+			}
+			for _, schema := range schemas {
+				kind := assistantSchemaType(schema)
+				properties := schema["properties"].(map[string]any)
+				if properties["action"].(map[string]any)["const"] != assistantServerAction(kind) {
+					t.Fatal("discovered role image action differs from the server normalizer")
+				}
+				if !reflect.DeepEqual(schema["required"], []string{"type", "title", "summary", "parameters"}) {
+					t.Fatal("role image discovery requires caller-owned action, target or OCC pins")
+				}
+				parameters := properties["parameters"].(map[string]any)
+				fields := parameters["properties"].(map[string]any)
+				if fields["expectedVersion"] != nil || fields["specSha256"] != nil || fields["action"] != nil {
+					t.Fatal("role image parameters expose server-owned hydration fields")
+				}
+				if kind == "UPDATE_ROLE_IMAGE_RECIPE" {
+					target := properties["target"].(map[string]any)
+					if fields["recipeRef"] == nil || fields["environmentKey"] == nil || properties["expectedVersion"] == nil ||
+						!reflect.DeepEqual(target["required"], []string{"kind", "name", "ref", "version"}) {
+						t.Fatal("optional update envelope does not describe complete OCC target pins")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestServerHydratedCatalogActionsMatchClosedRegistry(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		input := assistantConfigurationFixture(scope)
+		input.AssistantContext = nil
+		input.RuntimeEnvironmentRef = "renv_fixture123"
+		for _, schema := range assistantPlanOperationSchemas(input) {
+			kind := assistantSchemaType(schema)
+			if !assistantServerHydratedOperation(kind) {
+				continue
+			}
+			properties := schema["properties"].(map[string]any)
+			if properties["action"].(map[string]any)["const"] != assistantServerAction(kind) {
+				t.Fatalf("server-hydrated descriptor action diverged for %s", kind)
+			}
+			if !reflect.DeepEqual(schema["required"], []string{"type", "title", "summary", "parameters"}) {
+				t.Fatalf("server-hydrated descriptor requires authority fields for %s", kind)
+			}
+		}
+		for _, kind := range assistantOperationTypes(input) {
+			if kind == "UPDATE_UNKNOWN_RESOURCE" {
+				t.Fatal("discovery expanded the closed operation registry")
+			}
+		}
+	}
+	if assistantServerHydratedOperation("UPDATE_UNKNOWN_RESOURCE") || assistantServerAction("UPDATE_UNKNOWN_RESOURCE") != "CREATE" {
+		t.Fatal("unknown UPDATE prefix acquired a registered action")
+	}
+}

@@ -763,11 +763,10 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 }
 
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
-	action := "CREATE"
-	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
-		action, requiresVersion = "UPDATE", true
-	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
+	// Discovery и нормализатор используют один закрытый реестр действий.
+	action := assistantServerAction(kind)
+	requiresVersion := action == "UPDATE"
+	if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true
 	} else if kind == "LAUNCH_RUN" || kind == "TEST_INTEGRATION_CONNECTION" {
 		action = "EXECUTE"
