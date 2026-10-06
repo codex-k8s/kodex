@@ -24,6 +24,7 @@ type githubCatalogInput struct {
 	State          string `json:"state"`
 	Head           string `json:"head"`
 	Base           string `json:"base"`
+	Draft          bool   `json:"draft"`
 	Event          string `json:"event"`
 	MergeMethod    string `json:"merge_method"`
 	Number         int    `json:"pull_request_number"`

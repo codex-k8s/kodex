@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 2.3.1
+  version: 2.4.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -480,7 +480,7 @@ spec:
         retryBackoffMilliseconds: 250
     - key: github.pull_request.create
       name: Создать pull request
-      description: Создать pull request в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      description: Создать pull request в одном разрешённом репозитории; draft задаёт черновик, по умолчанию false; ограниченный результат и отдельный receipt эффекта.
       operation: github.pull_request.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
@@ -493,6 +493,7 @@ spec:
         - {"key":"body","type":"STRING","format":"PLAIN","required":false,"maximumLength":32768,"allowEmpty":true}
         - {"key":"head","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"base","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {key: draft, type: BOOLEAN, required: false}
       outputFields:
         - {"key":"number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
         - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
