@@ -4185,3 +4185,46 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   TTL30m (~05:18–05:19 UTC); actual expiry→cleanup→новый claim ещё NOT RUN.
   Вечная блокировка не объявляется доказанной. Третью сборку не запрашивать,
   старый admission не принимать и Job/claim вручную не очищать.
+
+### 06.10.2026 05:06–05:14 UTC — PROJECT live-search plan и stale admission
+
+- Chrome MCP восстановлен: список вкладок получен, рабочая вкладка2 обновлена
+  05:06 UTC; чужие вкладки не менялись. Новый PROJECT05
+  `run_9hENOODf4KHpmTkljWk-SL0n` завершён SUCCEEDED. Подготовлен только один
+  `PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`: hosted `webSearchMode=live`,
+  прежние gpt-6.1-sol/medium, FIXED account и runtime profile сохранены.
+- План `pln_xF-7_dDX7XOEobEwQU1ViNmN` revision1 проверен штатной кнопкой:
+  VALID/version2. Apply ещё НЕ доказан: две попытки клика не стали
+  интерактивными, fresh configuration read200 по-прежнему version1.
+  Screenshot и последующий list_pages перестали отвечать; зависшие запросы
+  наблюдения остановлены, реальный run не перезапускался. Реальный hosted
+  search после применения остаётся NOT RUN.
+- PASS ранний PROJECT05 provider ACK: RuntimeRevision
+  `rrev_y4rJ-HlYhRIF09GUXOTZsLRa`, generation1, PROJECT, собственные Context7
+  grants v1/connectionVersion14, ENVrevision1/tools0. Template
+  `5cc52a4fed5bcb5e14af55381a4abab2220ae073d2b9dd963feeb8670747a054`
+  и materialization
+  `1cfc9756707e57abb6b8888e832fe0fb9cbaae333f8e88e5c8d2c57175d6229f`
+  совпали с protected preview200, complete=true, diagnostics=[];
+  instructions/inbox EQUAL, task_in_prompt=true. Distinct actual binary
+  readback NOT RUN: container уже завершён к моменту exec.
+- Уточнение предыдущей TTL-гипотезы: native B2 через существующий owner trigger
+  сразу переводит старый B1 в REJECTED, отзывает claim и закрывает attempt
+  CANCELLED. Поэтому старые Fail/Expire корректно Forbidden независимо
+  истечения TTL. Consumer recovery продолжает старую попытку и не достигает
+  нового claim: причина требует exact terminal readback, а не ожидания TTL
+  или ослабления callbacks. Production-семантика раннего закрытия сохраняется.
+- PASS ROOT на base `2dc616411c42d04e68bb647f4f0c1d9f51d64ea4` с тремя
+  новыми test/fixture файлами: публичный disposable PostgreSQL regression
+  `TestRoleImageSupersededAdmissionExpiryComponent`, 7.34с, exit0. Проверены
+  native B2 early-terminal, полный отзыв authority, неизменность после stale
+  Record/Fail/Expire и чужого tenant/fence/version, fresh B2 claim; отдельно
+  normal exact expiry, единственные audit/receipt и idempotent replay.
+  Migration, production TTL и живые данные не изменялись. SQL/test patchSHA256
+  `fab641323254672c83b8360d553cff2eec4202b8a75b8f592c11e11377c37bd1`.
+  Этот PASS не заменяет пока не исправленный controller recovery.
+- NEXT: закрытый worker terminal-read path, адресные отрицательные тесты,
+  repo-owned активация исправленного consumer и фактический B2 допуск.
+  В plan-review форме добавить видимый компактный режим поиска; затем native
+  Apply и новый actual search. Own PROJECT image/ENV38, четыре smokes,
+  шесть сотрудников и Workflow остаются OPEN; весь checklist не завершён.

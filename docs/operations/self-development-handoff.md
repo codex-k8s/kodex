@@ -10,6 +10,25 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 05:14 UTC — текущая точка на local HEAD `2dc6164` с адресным
+test/fixture regression. Remote последний проверенный `f99f85a5`; новых push
+ещё не было. PROJECT05 `run_9hENOODf4KHpmTkljWk-SL0n` SUCCEEDED, план
+`pln_xF-7_dDX7XOEobEwQU1ViNmN` revision1 VALID/version2 включает live search
+при сохранении модели/аккаунта. Apply и actual search ещё NOT RUN; повторный
+план не создавать. Последний Chrome reload05:06 UTC; затем clicks Apply
+не стали интерактивными, screenshot/list_pages зависли. Реальный run не
+перезапускать; сначала восстановить MCP observation.
+Прежняя TTL-гипотеза отменена доказательством native B2 early-terminal:
+B1 REJECTED, attempt CANCELLED, authority revoked. ROOT PostgreSQL regression
+PASS7.34с; stale callbacks корректно DENIED, B2 fresh claim достижим в owner.
+Consumer продолжает старый CR и блокирует очередь; готовится закрытый exact
+terminal readback path без ослабления Fail/Expire. Никаких ручных удалений
+Job/claims или третьего REQUEST_BUILD. После активации исправленного consumer
+проверить свежий B2 report/risk/promotion, own PROJECT ENV38/network и четыре
+функциональных smoke. Затем шесть ролей и Workflow, full65 остаётся OPEN.
+Доказательства PROJECT05 ACK/preview и точная граница browser/local проверок —
+журнал05:06–05:14. Более старые записи ниже — исторические.
+
 06.10.2026 05:00 UTC — более свежая точка: local HEAD `2faf1116`, remote ещё
 `f99f85a5`; поверх HEAD проверен двухфайловый image-role supporting fix.
 PROJECT03 typed plan `pln_DeQMbeyX-EaD0cSK3eZt4qKW` уже APPLIEDv3, две
