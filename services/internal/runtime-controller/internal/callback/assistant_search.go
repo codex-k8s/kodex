@@ -114,11 +114,30 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 			"kind": kind, "ref": item.GetRef(), "project_ref": item.GetProjectRef(),
 			"title": truncateRunes(item.GetTitle(), 160), "subtitle": truncateRunes(item.GetSubtitle(), 160),
 			"state": item.GetState(), "route": route,
-			"requires_context_switch": item.GetProjectRef() != "" && item.GetProjectRef() != input.ProjectRef ||
-				(kind == "INTEGRATION" && (input.AssistantContext == nil || input.AssistantContext.EntityKind != "INTEGRATION_CONNECTION" || input.AssistantContext.EntityRef != item.GetRef())),
+			"requires_context_switch": assistantSearchRequiresContextSwitch(input, kind, item.GetRef(), item.GetProjectRef(), route),
 		})
 	}
 	return map[string]any{"current_project_ref": input.ProjectRef, "results": items, "truncated": response.GetTruncated()}, nil
+}
+
+// Подсказка навигации не меняет экранный контекст и серверные полномочия.
+func assistantSearchRequiresContextSwitch(input runtimecontract.RunnerInput, kind, ref, projectRef, route string) bool {
+	if projectRef != "" && projectRef != input.ProjectRef {
+		return true
+	}
+	current := input.AssistantContext
+	switch kind {
+	case "INTEGRATION":
+		return current == nil || current.EntityKind != "INTEGRATION_CONNECTION" || current.EntityRef != ref
+	case "AGENT", "WORKFLOW":
+		if current == nil || current.EntityKind != kind || current.EntityRef != ref {
+			return true
+		}
+		currentRoute, err := url.Parse(current.Route)
+		return err != nil || currentRoute.IsAbs() || currentRoute.Host != "" || currentRoute.Path != route
+	default:
+		return false
+	}
 }
 
 func validAssistantResourceRef(ref string) bool {

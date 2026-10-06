@@ -62,6 +62,45 @@ func TestAssistantSearchDiagnosticsPreserveSystemAndProjectSuccess(t *testing.T)
 	}
 }
 
+func TestAssistantSearchHintsExactResourceContextWithoutGrantingAuthority(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		for _, test := range []struct {
+			name, kind, ref, project, currentKind, currentRef, currentRoute string
+			want                                                            bool
+		}{
+			{"agent from run", "AGENT", "agt_target123", "prj_current123", "RUN", "run_current123", "/projects/prj_current123/runs/run_current123", true},
+			{"other agent", "AGENT", "agt_target123", "prj_current123", "AGENT", "agt_other123", "/projects/prj_current123/agents/agt_other123", true},
+			{"exact agent", "AGENT", "agt_target123", "prj_current123", "AGENT", "agt_target123", "/projects/prj_current123/agents/agt_target123?tab=instructions", false},
+			{"agent ref with other route", "AGENT", "agt_target123", "prj_current123", "AGENT", "agt_target123", "/projects/prj_current123/runs/run_current123", true},
+			{"workflow from project", "WORKFLOW", "wfl_target123", "prj_current123", "PROJECT", "prj_current123", "/projects/prj_current123", true},
+			{"exact workflow", "WORKFLOW", "wfl_target123", "prj_current123", "WORKFLOW", "wfl_target123", "/projects/prj_current123/workflows/wfl_target123", false},
+			{"other project", "AGENT", "agt_target123", "prj_other123", "AGENT", "agt_target123", "/projects/prj_other123/agents/agt_target123", true},
+			{"integration mismatch", "INTEGRATION", "int_target123", "", "AGENT", "agt_target123", "/projects/prj_current123/agents/agt_target123", true},
+			{"exact integration", "INTEGRATION", "int_target123", "", "INTEGRATION_CONNECTION", "int_target123", "/integrations?connectionRef=int_target123", false},
+			{"run remains read only", "RUN", "run_target123", "prj_current123", "PROJECT", "prj_current123", "/projects/prj_current123", false},
+			{"environment no blanket restriction", "RUNTIME_ENVIRONMENT", "renv_target123", "prj_current123", "PROJECT", "prj_current123", "/projects/prj_current123", false},
+			{"image no blanket restriction", "ROLE_IMAGE", "imgrec_target123", "prj_current123", "PROJECT", "prj_current123", "/projects/prj_current123", false},
+		} {
+			t.Run(string(scope)+"/"+test.name, func(t *testing.T) {
+				input, _, _ := assistantOwnCurrentFixture(scope)
+				input.ProjectRef = "prj_current123"
+				input.AssistantContext = &runtimecontract.RunnerAssistantContext{EntityKind: test.currentKind, EntityRef: test.currentRef, Route: test.currentRoute, AllowedOperations: []string{"UNCHANGED"}}
+				kind := controlplanev1.SearchResultKind(controlplanev1.SearchResultKind_value["SEARCH_RESULT_KIND_"+test.kind])
+				client := &assistantSearchDiagnosticClient{response: &controlplanev1.SearchAssistantResourcesResponse{Results: []*controlplanev1.SearchResult{{Kind: kind, Ref: test.ref, ProjectRef: test.project, Title: "Resource"}}}}
+				server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+				result, err := server.findPlatformResources(t.Context(), input, map[string]any{"query": "Resource"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				items := result.(map[string]any)["results"].([]map[string]any)
+				if len(items) != 1 || items[0]["requires_context_switch"] != test.want || client.calls != 1 || input.AssistantContext.AllowedOperations[0] != "UNCHANGED" || input.AssistantContext.Route != test.currentRoute {
+					t.Fatal("resource search hint changed owner context, operation authority or exact route semantics")
+				}
+			})
+		}
+	}
+}
+
 func TestAssistantSearchSchemaMatchesClosedQueryInput(t *testing.T) {
 	schema := assistantResourceSearchTool()["inputSchema"].(map[string]any)
 	properties := schema["properties"].(map[string]any)
