@@ -1,34 +1,32 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, onScopeDispose, ref, useId, watch } from "vue";
 
 import {
   operationParameter,
   type EditablePlanOperation,
 } from "@/features/assistant/model";
-import { capabilityCandidates } from "@/features/integrations/grant-candidates";
+import {
+  createIntegrationGrantReadBundle,
+  type IntegrationGrantReadBundle,
+} from "../integration-grant-read-bundle";
 import { allowedIntegrationApprovalPolicies } from "@/features/integrations/ui/model";
 import {
   approvalScopeOptions,
   validApprovalScopeSelection,
 } from "@/features/integrations/approval-scope-options";
-import { requestSignal } from "@/shared/api/client";
-import {
-  getAgent,
-  getIntegrationConnection,
-  getWorkflow,
-} from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   Agent,
   IntegrationConnection,
   IntegrationGrantCapabilityCandidate,
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
-import { unwrap } from "@/shared/api/problem";
 
 const props = defineProps<{
   operation: EditablePlanOperation;
   projectRef?: string;
   disabled: boolean;
+  readBundle?: IntegrationGrantReadBundle;
+  compact?: boolean;
 }>();
 const fieldPrefix = `assistant-integration-grant-${useId()}`;
 const emit = defineEmits<{
@@ -42,6 +40,9 @@ const candidate = ref<IntegrationGrantCapabilityCandidate>();
 const loading = ref(false);
 const problem = ref(false);
 const candidateProblem = ref(false);
+const expanded = ref(false);
+const localReadBundle = createIntegrationGrantReadBundle();
+onScopeDispose(() => localReadBundle.close());
 
 function parameter(key: string): unknown {
   try {
@@ -150,51 +151,50 @@ const valid = computed(() =>
 watch(valid, (value) => emit("valid", value), { immediate: true });
 
 watch(
-  [() => props.projectRef, connectionRef, recipientKind, recipientRef] as const,
-  ([projectRef, connRef, kind, targetRef], _previous, onCleanup) => {
+  [
+    () => props.projectRef,
+    connectionRef,
+    recipientKind,
+    recipientRef,
+    capabilityKey,
+    enabled,
+    () => props.operation.value.expectedVersion,
+    () => props.readBundle,
+  ] as const,
+  (
+    [projectRef, connRef, kind, targetRef, key, , version],
+    _previous,
+    onCleanup,
+  ) => {
     connection.value = undefined;
     recipient.value = undefined;
+    candidate.value = undefined;
     loading.value = false;
     problem.value = false;
-    if (!projectRef || !connRef || !kind || !targetRef) return;
+    candidateProblem.value = false;
+    if (!projectRef || !connRef || !kind || !targetRef || !key || !version)
+      return;
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     loading.value = true;
-    const targetRequest =
-      kind === "AGENT"
-        ? unwrap(
-            getAgent({
-              path: { agentRef: targetRef },
-              signal: requestSignal(controller.signal),
-            }),
-          )
-        : unwrap(
-            getWorkflow({
-              path: { workflowRef: targetRef },
-              signal: requestSignal(controller.signal),
-            }),
-          );
-    void Promise.all([
-      unwrap(
-        getIntegrationConnection({
-          path: { connectionRef: connRef },
-          signal: requestSignal(controller.signal),
-        }),
-      ),
-      targetRequest,
-    ])
-      .then(([connectionResponse, targetResponse]) => {
+    void (props.readBundle ?? localReadBundle)
+      .read(
+        {
+          projectRef,
+          connectionRef: connRef,
+          recipientKind: kind,
+          recipientRef: targetRef,
+          connectionVersion: version,
+        },
+        controller.signal,
+      )
+      .then((snapshot) => {
         if (controller.signal.aborted) return;
-        const nextConnection = connectionResponse.data;
-        const nextRecipient = targetResponse.data;
-        if (
-          nextConnection.ref !== connRef ||
-          nextRecipient.ref !== targetRef ||
-          nextRecipient.projectRef !== projectRef
-        )
-          throw new Error("Assistant integration grant readback mismatch");
-        connection.value = nextConnection;
-        recipient.value = nextRecipient;
+        connection.value = snapshot.connection;
+        recipient.value = snapshot.recipient;
+        candidate.value = snapshot.candidates.find(
+          (item) => item.capability.key === key,
+        );
       })
       .catch(() => {
         if (!controller.signal.aborted) problem.value = true;
@@ -202,60 +202,6 @@ watch(
       .finally(() => {
         if (!controller.signal.aborted) loading.value = false;
       });
-  },
-  { immediate: true },
-);
-
-watch(
-  [
-    () => props.projectRef,
-    connection,
-    recipientKind,
-    recipientRef,
-    capabilityKey,
-    enabled,
-  ] as const,
-  (
-    [projectRef, currentConnection, kind, targetRef, key],
-    _previous,
-    onCleanup,
-  ) => {
-    candidate.value = undefined;
-    candidateProblem.value = false;
-    if (!projectRef || !currentConnection || !kind || !targetRef || !key)
-      return;
-    const controller = new AbortController();
-    onCleanup(() => controller.abort());
-    void (async () => {
-      try {
-        const load = capabilityCandidates({
-          connectionRef: currentConnection.ref,
-          projectRef,
-          recipientKind: kind,
-          recipientRef: targetRef,
-        });
-        const seen = new Set<string>();
-        let cursor: string | undefined;
-        for (let pageCount = 0; pageCount < 10; pageCount++) {
-          const page = await load(key, cursor, controller.signal);
-          if (controller.signal.aborted) return;
-          if (page.pins.connectionVersion !== currentConnection.version)
-            throw new Error("Integration grant candidate version changed");
-          const found = page.items.find((item) => item.capability.key === key);
-          if (found) {
-            candidate.value = found;
-            return;
-          }
-          if (!page.nextPageToken) return;
-          if (seen.has(page.nextPageToken))
-            throw new Error("Repeated integration grant candidate cursor");
-          seen.add(page.nextPageToken);
-          cursor = page.nextPageToken;
-        }
-      } catch {
-        if (!controller.signal.aborted) candidateProblem.value = true;
-      }
-    })();
   },
   { immediate: true },
 );
@@ -303,7 +249,61 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
     <p v-if="problem" class="field-error" role="alert">
       {{ $t("assistant.planEditor.grantLoadFailed") }}
     </p>
-    <template v-if="connection && recipient">
+    <button
+      v-if="compact && connection && recipient"
+      class="button button--ghost assistant-grant-form__summary"
+      type="button"
+      :aria-expanded="expanded"
+      :aria-controls="`${fieldPrefix}-fields`"
+      @click="expanded = !expanded"
+    >
+      <strong>{{ recipient.name }}</strong>
+      <span
+        >{{ connection.name }} ·
+        {{
+          selectedCapability?.name ||
+          $t("assistant.planEditor.capabilityUnknown")
+        }}</span
+      >
+      <span
+        >{{
+          $t(
+            enabled === true
+              ? "assistant.planEditor.grantEnableShort"
+              : "assistant.planEditor.grantDisableShort",
+          )
+        }}
+        ·
+        {{
+          ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"].includes(
+            stringParameter("approvalPolicy"),
+          )
+            ? $t(
+                `integrations.approvalPolicies.${stringParameter("approvalPolicy")}`,
+              )
+            : $t("integrations.chooseApprovalPolicy")
+        }}</span
+      >
+    </button>
+    <p
+      v-if="compact && !disabled && connection && recipient && !valid"
+      class="field-error"
+      role="alert"
+    >
+      {{
+        $t(
+          versionMatches
+            ? "assistant.planEditor.grantUnavailable"
+            : "assistant.planEditor.grantStale",
+        )
+      }}
+    </p>
+    <div
+      v-if="connection && recipient"
+      v-show="!compact || expanded"
+      :id="`${fieldPrefix}-fields`"
+      class="assistant-grant-form__fields"
+    >
       <p>
         {{ $t("assistant.planEditor.grantConnection") }}:
         <strong>{{ connection.name }}</strong>
@@ -438,7 +438,7 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
         {{ $t("assistant.planEditor.grantNothingToRevoke") }}
       </p>
       <p>{{ $t("assistant.planEditor.grantFixedTarget") }}</p>
-    </template>
+    </div>
   </div>
 </template>
 
@@ -446,6 +446,27 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
 .assistant-grant-form {
   display: grid;
   gap: 10px;
+  min-width: 0;
+}
+.assistant-grant-form__fields {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.assistant-grant-form__summary {
+  height: auto;
+  min-height: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  text-align: left;
+  gap: 4px 12px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  max-width: 100%;
+}
+.assistant-grant-form__summary span,
+.assistant-grant-form__summary strong {
   min-width: 0;
 }
 .assistant-grant-form p {

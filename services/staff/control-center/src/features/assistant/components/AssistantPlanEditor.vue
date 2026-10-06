@@ -13,12 +13,13 @@ import {
   Save,
   Trash2,
 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
 import AssistantCapabilityPlanForm from "@/features/assistant/components/AssistantCapabilityPlanForm.vue";
 import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
+import { createIntegrationGrantReadBundle } from "../integration-grant-read-bundle";
 import AssistantSystemIntegrationGrantPlanForm from "./AssistantSystemIntegrationGrantPlanForm.vue";
 import AssistantProjectIntegrationGrantPlanForm from "./AssistantProjectIntegrationGrantPlanForm.vue";
 import { projectIntegrationGrantReceiptRef } from "../project-integration-grant-plan";
@@ -335,6 +336,26 @@ const capabilityFormValidity = ref<Record<string, boolean>>({});
 const capabilityFormTouched = ref(false);
 const integrationGrantValidity = ref<Record<string, boolean>>({});
 const integrationGrantTouched = ref(false);
+const grantReadBundle = shallowRef(createIntegrationGrantReadBundle());
+onScopeDispose(() => grantReadBundle.value.close());
+const compactGrantBatch = computed(
+  () =>
+    operations.value.filter(
+      (operation) => operation.value.type === "CHANGE_INTEGRATION_GRANT",
+    ).length > 1,
+);
+const grantSnapshotConflict = computed(
+  () =>
+    props.plan.state === "INVALID" &&
+    props.plan.operations.some(
+      (operation) =>
+        operation.type === "CHANGE_INTEGRATION_GRANT" &&
+        operation.validationProblems.some(
+          (problem) =>
+            problem === "snapshot-conflict" || problem === "version-conflict",
+        ),
+    ),
+);
 const inputProblem = ref("");
 const draftGeneration = ref(0);
 const validationProblemKeys: Record<string, string> = {
@@ -354,6 +375,8 @@ type EditorTarget =
 const editorTarget = ref<EditorTarget>();
 
 function resetDraft(): void {
+  grantReadBundle.value.close();
+  grantReadBundle.value = createIntegrationGrantReadBundle();
   // Дочерние формы сообщают о валидности при монтировании. После обновления
   // плана их нужно создать заново, даже если ссылки на операции не изменились.
   draftGeneration.value += 1;
@@ -1344,7 +1367,10 @@ function validationProblemLabel(problem: string): string {
         />
       </div>
 
-      <div class="assistant-plan-operations">
+      <div
+        class="assistant-plan-operations"
+        :class="{ 'assistant-plan-operations--grant-batch': compactGrantBatch }"
+      >
         <article
           v-for="(operation, index) in operations"
           :key="`${draftGeneration}:${operation.value.ref}`"
@@ -1670,6 +1696,8 @@ function validationProblemLabel(problem: string): string {
               v-else-if="operation.value.type === 'CHANGE_INTEGRATION_GRANT'"
               :operation="operation"
               :project-ref="plan.projectRef"
+              :read-bundle="grantReadBundle"
+              :compact="compactGrantBatch"
               :disabled="!editable"
               @valid="integrationGrantValidity[operation.value.ref] = $event"
               @dirty="integrationGrantTouched = true"
@@ -2579,6 +2607,12 @@ function validationProblemLabel(problem: string): string {
     </div>
 
     <footer class="assistant-plan-editor__footer">
+      <p
+        v-if="grantSnapshotConflict && canRequestChanges && editable"
+        class="assistant-plan-editor__grant-conflict"
+      >
+        {{ $t("assistant.planEditor.grantRefreshHint") }}
+      </p>
       <span>
         {{
           $t("assistant.planEditor.selected", {
@@ -2595,7 +2629,13 @@ function validationProblemLabel(problem: string): string {
           :disabled="busy"
           @click="requestChanges"
         >
-          {{ $t("common.requestChanges") }}
+          {{
+            $t(
+              grantSnapshotConflict
+                ? "assistant.planEditor.grantRefreshPlan"
+                : "common.requestChanges",
+            )
+          }}
         </button>
         <button
           v-if="canReject"
@@ -2758,6 +2798,19 @@ function validationProblemLabel(problem: string): string {
   display: grid;
   gap: 12px;
   margin-top: 14px;
+}
+.assistant-plan-operations--grant-batch {
+  max-height: 480px;
+  overflow-y: auto;
+  min-width: 0;
+}
+.assistant-plan-operations--grant-batch > .assistant-plan-operation {
+  padding: 8px;
+  gap: 6px;
+}
+.assistant-plan-editor__grant-conflict {
+  flex-basis: 100%;
+  margin: 0;
 }
 .assistant-plan-operation {
   display: grid;
@@ -3044,6 +3097,7 @@ function validationProblemLabel(problem: string): string {
 }
 .assistant-plan-editor__footer {
   justify-content: space-between;
+  flex-wrap: wrap;
   border-top: 1px solid var(--border);
   border-bottom: 0;
 }

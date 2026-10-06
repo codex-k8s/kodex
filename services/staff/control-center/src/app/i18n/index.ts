@@ -4259,6 +4259,11 @@ const ru = {
         "Изменение права вступит в силу только после проверки и подтверждения плана.",
       grantConnection: "Подключение",
       grantRecipient: "Получатель",
+      grantEnableShort: "Выдать",
+      grantDisableShort: "Отозвать",
+      grantRefreshPlan: "Обновить план через помощника",
+      grantRefreshHint:
+        "Данные изменились. Нужен новый план с повторной проверкой разрешений.",
       grantCapability: "Возможность интеграции",
       grantEnable: "Выдать разрешение (снимите, чтобы отозвать существующее)",
       grantLoadFailed:
@@ -8803,6 +8808,11 @@ const en = {
         "This permission changes only after the plan is validated and confirmed.",
       grantConnection: "Connection",
       grantRecipient: "Recipient",
+      grantEnableShort: "Grant",
+      grantDisableShort: "Revoke",
+      grantRefreshPlan: "Refresh plan with assistant",
+      grantRefreshHint:
+        "The data changed. A new plan must recheck the permissions.",
       grantCapability: "Integration capability",
       grantEnable: "Grant permission (clear to revoke an existing grant)",
       grantLoadFailed:

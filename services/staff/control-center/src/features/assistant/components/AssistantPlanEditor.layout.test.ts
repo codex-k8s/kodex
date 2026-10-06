@@ -8,6 +8,31 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("сворачивает batch grant поля, не размонтирует проверку и делит scoped bundle одной ревизии", () => {
+    expect(source).toContain(':read-bundle="grantReadBundle"');
+    expect(source).toContain(':compact="compactGrantBatch"');
+    expect(source).toContain("grantReadBundle.value.close()");
+    expect(source).toContain(
+      "grantReadBundle.value = createIntegrationGrantReadBundle()",
+    );
+    expect(source).toContain("assistant-plan-operations--grant-batch");
+    expect(source).toContain("max-height: 480px");
+    const form = readFileSync(
+      new URL("./AssistantIntegrationGrantPlanForm.vue", import.meta.url),
+      "utf8",
+    );
+    expect(form).toContain('v-show="!compact || expanded"');
+    expect(form).toContain(':aria-expanded="expanded"');
+    expect(form).not.toContain('v-if="expanded"');
+  });
+  it("INVALID snapshot conflict предлагает помощнику новый план, а не автоматический rebase", () => {
+    expect(source).toContain('props.plan.state === "INVALID"');
+    expect(source).toContain('problem === "snapshot-conflict"');
+    expect(source).toContain("assistant.planEditor.grantRefreshPlan");
+    expect(source).toContain("assistant.planEditor.grantRefreshHint");
+    expect(source).toContain('emit("requestChanges")');
+    expect(source).not.toContain("refreshStale");
+  });
   it("после Apply открывает точный авторитетный черновик прямо из modal", () => {
     expect(source).toContain("<AssistantEnvironmentDraftCard");
     expect(source).toContain('v-if="draftContinuationPlan"');
