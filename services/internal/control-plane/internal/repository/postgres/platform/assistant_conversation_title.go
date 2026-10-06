@@ -5,6 +5,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 const assistantConversationTitleMaximumRunes = 80
@@ -18,6 +20,9 @@ var assistantTitleStructuredProtectedInput = regexp.MustCompile(`(?i)["'](?:cred
 // attachments, protected forms, materialized prompt или runtime credentials.
 // Сомнительный текст не переносится в более широко видимую метадату диалога.
 func assistantUserMessageTitle(content string) string {
+	if !runtimecontract.ValidAssistantTurnContent(content) {
+		return ""
+	}
 	text := assistantAutomaticTitleText(content)
 	if text == "" {
 		text = assistantUserMessageLeadingTitle(content)
@@ -59,12 +64,12 @@ func assistantUserMessageLeadingTitle(content string) string {
 	return assistantAutomaticTitleText(prefix)
 }
 
-// Из JSON-запроса допустима только явно написанная человеком тема перед
-// структурой. Значения и идентификаторы из структуры не становятся названием.
+// Из технического запроса допустима только явно написанная человеком тема
+// перед структурой, кодом или идентификатором. Защитные проверки охватывают весь
+// исходник; последующее тело не превращается в публичное название.
 func assistantUserMessageStructuredTitle(content string) string {
-	if len(content) > 64<<10 || !utf8.ValidString(content) ||
-		assistantTitleProtectedInput.MatchString(content) || assistantTitleStructuredProtectedInput.MatchString(content) ||
-		strings.Contains(content, "```") {
+	if !runtimecontract.ValidAssistantTurnContent(content) ||
+		assistantTitleProtectedInput.MatchString(content) || assistantTitleStructuredProtectedInput.MatchString(content) {
 		return ""
 	}
 	text := strings.Join(strings.Fields(content), " ")
@@ -73,11 +78,18 @@ func assistantUserMessageStructuredTitle(content string) string {
 	}) >= 0 {
 		return ""
 	}
-	index := strings.IndexAny(text, "{[")
-	if index < 1 {
+	index := strings.IndexAny(text, "{[`")
+	if technical := assistantTitleTechnicalInput.FindStringIndex(text); technical != nil && (index < 0 || technical[0] < index) {
+		index = technical[0]
+	}
+	if index == 0 {
 		return ""
 	}
-	return assistantAutomaticTitleText(strings.TrimRight(text[:index], " :"))
+	if index > 0 {
+		text = text[:index]
+	}
+	prefix := boundedAssistantConversationTitle(strings.TrimRight(text, " :"), assistantConversationTitleMaximumRunes)
+	return assistantAutomaticTitleText(prefix)
 }
 
 // Автоматические источники предлагают тему, а не отчёт об исполнении.

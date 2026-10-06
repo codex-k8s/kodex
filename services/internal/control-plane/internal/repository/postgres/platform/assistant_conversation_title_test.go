@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
-
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
 
 func TestAssistantUserMessageTitle(t *testing.T) {
@@ -35,6 +33,39 @@ func TestAssistantUserMessageTitle(t *testing.T) {
 	}
 }
 
+func TestAssistantUserMessageTitleKeepsEarlyProseBeforeTechnicalBody(t *testing.T) {
+	t.Parallel()
+	const topic = "Настрой окружение помощника"
+	for _, input := range []string{
+		topic + ":\n```json\n{\"imageArtifactRef\":\"imgart_0123456789abcdefghijklmn\"}\n```",
+		topic + ": renv_0123456789abcdefghijklmn; далее параметры конфигурации",
+		topic + ": sha256:" + strings.Repeat("a", 64),
+		topic + ": {\"description\":\"" + strings.Repeat("詳", 28000) + "\"}",
+	} {
+		if got := assistantUserMessageTitle(input); got != topic {
+			t.Fatalf("safe early topic = %q, want %q", got, topic)
+		}
+	}
+}
+
+func TestAssistantUserMessageTechnicalPrefixPreservesWholeInputGuards(t *testing.T) {
+	t.Parallel()
+	const topic = "Настрой окружение помощника"
+	for _, input := range []string{
+		topic + ":\n```json\n{\"token\":\"SYNTHETIC_PRIVATE_VALUE\"}\n```",
+		topic + ": renv_0123456789abcdefghijklmn password=SYNTHETIC_PRIVATE_VALUE",
+		topic + ": {\"url\":\"https://fixture.invalid/private\"}",
+		topic + ": {\"description\":\"" + strings.Repeat("詳", 32768) + "\"}",
+		topic + ": {\"description\":\"value\"}\u0000",
+		topic + ": {\"description\":\"value\"}\u202e",
+		"```json\n{\"name\":\"Настрой окружение помощника\"}\n```",
+	} {
+		if assistantUserMessageTitle(input) != "" {
+			t.Fatal("invalid or protected technical input reached title metadata")
+		}
+	}
+}
+
 func TestAssistantConversationTitleDoesNotDiscloseProtectedInput(t *testing.T) {
 	t.Parallel()
 	for _, input := range []string{
@@ -51,7 +82,7 @@ func TestAssistantConversationTitleDoesNotDiscloseProtectedInput(t *testing.T) {
 		"Настрой -----BEGIN PRIVATE KEY----- SYNTHETIC_PRIVATE_VALUE",
 	} {
 		if assistantUserMessageTitle(input) != "" || assistantPublicTitleText(input) != "" ||
-			assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: input}) != "" {
+			assistantAutomaticTitleText(input) != "" {
 			t.Fatal("protected text reached conversation metadata")
 		}
 	}
@@ -72,7 +103,7 @@ func TestAssistantUserMessageTitleUsesSafePrefixBeforeLateURL(t *testing.T) {
 			if got := assistantUserMessageTitle(test.input); got != test.want {
 				t.Fatalf("unexpected safe prefix: got %q want %q", got, test.want)
 			}
-			if assistantPublicTitleText(test.input) != "" || assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: test.input}) != "" {
+			if assistantPublicTitleText(test.input) != "" || assistantAutomaticTitleText(test.input) != "" {
 				t.Fatal("late URL changed the shared or terminal title filter")
 			}
 		})
@@ -132,17 +163,17 @@ func TestAssistantUserMessageTitleUsesShortPrefixBeforeURL(t *testing.T) {
 			if got := assistantUserMessageTitle(test.input); got != test.want {
 				t.Fatalf("unexpected short prefix: got %q want %q", got, test.want)
 			}
-			if assistantPublicTitleText(test.input) != "" || assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: test.input}) != "" {
+			if assistantPublicTitleText(test.input) != "" || assistantAutomaticTitleText(test.input) != "" {
 				t.Fatal("short prefix changed the shared or terminal title filter")
 			}
 		})
 	}
 }
 
-func TestAssistantConversationTitleRejectsGenericTerminalSummary(t *testing.T) {
+func TestAssistantModelTitleRejectsGenericSummary(t *testing.T) {
 	t.Parallel()
 	for _, summary := range []string{"готов", "Готово.", "Done!", "План готов", "Настройка завершена", "Изменения применены", "Всё готово", "New conversation", "", "i18n:RUN_COMPLETED"} {
-		if assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: summary}) != "" {
+		if assistantAutomaticTitleText(summary) != "" {
 			t.Fatal("generic completion summary became a title")
 		}
 	}
@@ -153,7 +184,7 @@ func TestAssistantConversationTitleRejectsGenericTerminalSummary(t *testing.T) {
 	}
 }
 
-func TestAssistantConversationTitleRejectsTechnicalAndProgressResults(t *testing.T) {
+func TestAssistantModelTitleRejectsTechnicalAndProgressResults(t *testing.T) {
 	t.Parallel()
 	for _, summary := range []string{
 		"Создан ровно один подтверждаемый typed plan по вашему JSON: `pln_0123456789abcdefghijklmn`, версия 1. Подтвердите изменения.",
@@ -164,7 +195,7 @@ func TestAssistantConversationTitleRejectsTechnicalAndProgressResults(t *testing
 		"Настройка образа sha256:" + strings.Repeat("a", 64),
 		`Настройка окружения ["renv_0123456789abcdefghijklmn"]`,
 	} {
-		if title := assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: summary}); title != "" {
+		if title := assistantAutomaticTitleText(summary); title != "" {
 			t.Fatalf("technical or progress result became title: %q", title)
 		}
 	}
@@ -221,11 +252,8 @@ func TestAssistantUserMessageTitleUsesOnlyHumanPrefixBeforeJSON(t *testing.T) {
 func TestAssistantConversationTitleSQLKeepsExistingNames(t *testing.T) {
 	t.Parallel()
 	const sourceGuard = "title_source = 'SERVER_DEFAULT' AND title = 'i18n:NEW_ASSISTANT_CONVERSATION'"
-	// Один и тот же guard обязателен для title, source и revision: USER_EDITED,
-	// AGENT_PROPOSED и уже содержательный SERVER_DEFAULT нельзя перезаписать.
-	if strings.Count(queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt, sourceGuard+" AND $2 <> ''") != 3 {
-		t.Fatal("terminal update does not preserve existing conversation names")
-	}
+	// Terminal не меняет названия; ранний USER fallback назначается только
+	// точному SERVER_DEFAULT placeholder, а explicit proposal сохраняет USER_EDITED.
 	if strings.Count(queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt, sourceGuard+" AND $8 <> ''") != 2 {
 		t.Fatal("user fallback does not require a meaningful name and exact placeholder")
 	}

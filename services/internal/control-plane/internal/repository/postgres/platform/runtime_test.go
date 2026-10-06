@@ -201,19 +201,14 @@ func TestRuntimeSafeErrorCodeAcceptsMCPUnavailable(t *testing.T) {
 	}
 }
 
-func TestAssistantConversationTitleUsesSuccessfulBoundedAgentResult(t *testing.T) {
+func TestAssistantTerminalTurnDoesNotChangeConversationTitles(t *testing.T) {
 	t.Parallel()
-
-	if title := assistantConversationTitle(command.CompleteExecutionInput{Success: false, ResultSummary: "Do not use"}); title != "" {
-		t.Fatalf("failed result proposed title %q", title)
+	query := queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt
+	if strings.Contains(query, "title") || strings.Contains(query, "$2") {
+		t.Fatal("terminal result can overwrite a conversation title")
 	}
-	if title := assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: "i18n:RUN_COMPLETED"}); title != "" {
-		t.Fatalf("localized fallback proposed title %q", title)
-	}
-	result := "  ## Настройка   проекта и проверка подключения Context7.  В нём сохранены только выбранные изменения. " + strings.Repeat("Дальше. ", 30)
-	title := assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: result})
-	if title != "Настройка проекта и проверка подключения Context7." || len([]rune(title)) > assistantConversationTitleMaximumRunes {
-		t.Fatalf("assistant title = %q", title)
+	if !strings.Contains(query, "version = version + 1") || !strings.Contains(query, "updated_at = clock_timestamp()") || !strings.Contains(query, "WHERE session_id = $1::uuid") {
+		t.Fatal("terminal conversation update lost its exact session or version semantics")
 	}
 }
 

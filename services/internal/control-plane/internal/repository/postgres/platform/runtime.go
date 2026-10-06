@@ -1739,7 +1739,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if targetType == "SYSTEM_ASSISTANT" {
 		if err := repository.recordSystemAssistantTerminalTurn(ctx, tx, scope,
 			sessionID, stringMap(lease, "runID"), nonEmptyResult(payload),
-			map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success], assistantConversationTitle(payload)); err != nil {
+			map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
 			return commandOutcome{}, err
 		}
 	}
@@ -1925,24 +1925,6 @@ func nonEmptyResult(payload command.CompleteExecutionInput) string {
 		return "i18n:RUN_COMPLETED"
 	}
 	return "i18n:" + payload.SafeErrorCode
-}
-
-func assistantConversationTitle(payload command.CompleteExecutionInput) string {
-	if !payload.Success {
-		return ""
-	}
-	text := assistantAutomaticTitleText(payload.ResultSummary)
-	if len([]rune(text)) < 24 {
-		return ""
-	}
-	runes := []rune(text)
-	for index := 23; index < len(runes); index++ {
-		switch runes[index] {
-		case '.', '!', '?':
-			return strings.TrimSpace(string(runes[:index+1]))
-		}
-	}
-	return text
 }
 
 func runtimeSafeErrorCode(code string) bool {
