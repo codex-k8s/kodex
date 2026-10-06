@@ -192,6 +192,247 @@ describe("assistant workspace store", () => {
     turns: [],
   });
 
+  it("после навигации не передаёт общий WS cursor в фильтрованную историю SYSTEM", async () => {
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.setHistoryPageSize(22);
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-cursor",
+    );
+    store.setContext(
+      {
+        ...context,
+        route: "/projects/prj_sales/agents/agt_developer",
+        entityKind: "AGENT",
+        entityRef: "agt_developer",
+      },
+      "prj_sales",
+    );
+    store.setHistoryPageSize(17);
+    readConversationsMock.mockResolvedValue({
+      items: [conversation()],
+      nextPageToken: "owner-17",
+    });
+
+    await store.loadMoreHistory(17);
+
+    expect(readConversationsMock).toHaveBeenCalledExactlyOnceWith(
+      "prj_sales",
+      undefined,
+      expect.any(AbortSignal),
+      {
+        query: "",
+        state: "ACTIVE",
+        assistantScope: "SYSTEM",
+        assistantRef: systemAssistant().ref,
+      },
+      17,
+    );
+    expect(store.nextPageToken).toBe("owner-17");
+    expect(store.selectedRef).toBe(conversation().ref);
+    expect(store.historyProblem).toBeUndefined();
+  });
+
+  it("сохраняет фильтр owner cursor и адаптивный размер после viewport22→17", async () => {
+    const store = useAssistantStore();
+    store.assistant = systemAssistant();
+    store.setHistoryPageSize(22);
+    readConversationsMock
+      .mockResolvedValueOnce({
+        items: [conversation()],
+        nextPageToken: "owner-22",
+      })
+      .mockResolvedValueOnce({
+        items: [{ ...conversation(), ref: "cnv_more" }],
+      });
+    await store.load(context, "prj_sales");
+    store.setHistoryPageSize(17);
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBe("owner-22");
+    expect(readConversationsMock.mock.calls[1]?.[4]).toBe(17);
+    expect(readConversationsMock.mock.calls[1]?.[3]).toEqual(
+      readConversationsMock.mock.calls[0]?.[3],
+    );
+    expect(store.conversations).toHaveLength(2);
+    await store.load(context, "prj_sales");
+    expect(readConversationsMock.mock.calls[2]?.[4]).toBe(17);
+  });
+
+  it("не добавляет assistantRef к cursor первого параллельного SYSTEM чтения", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock
+      .mockResolvedValueOnce({
+        items: [conversation()],
+        nextPageToken: "owner-unpinned",
+      })
+      .mockResolvedValueOnce({ items: [] });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    await store.loadMoreHistory();
+    expect(readConversationsMock.mock.calls[1]?.[3]).toEqual(
+      readConversationsMock.mock.calls[0]?.[3],
+    );
+  });
+
+  it("сохраняет фильтр expanded owner cursor после rejoin и возвращает viewport17", async () => {
+    const items = Array.from({ length: 42 }, (_, index) => ({
+      ...conversation(),
+      ref: `cnv_${String(index)}`,
+    }));
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.setHistoryPageSize(17);
+    store.conversations = items;
+    store.selectedRef = "cnv_41";
+    readConversationsMock
+      .mockResolvedValueOnce({ items, nextPageToken: "expanded-42" })
+      .mockResolvedValueOnce({ items: [] });
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      items.slice(0, 12),
+      "prj_sales",
+      "ws-next",
+    );
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock.mock.calls[0]?.[4]).toBe(42);
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBe("expanded-42");
+    expect(readConversationsMock.mock.calls[1]?.[4]).toBe(17);
+  });
+
+  it("fresh чтение вместо WS cursor объединяет повторный scroll и игнорирует late ACK после смены проекта", async () => {
+    const first = deferred<ListAssistantConversationsResponse>();
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-cursor",
+    );
+    readConversationsMock.mockReturnValueOnce(first.promise);
+    const read = store.loadMoreHistory(17);
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock).toHaveBeenCalledTimes(1);
+    const signal = readConversationsMock.mock.calls[0]?.[2] as AbortSignal;
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    expect(signal.aborted).toBe(true);
+    first.resolve({ items: [conversation()], nextPageToken: "old-owner" });
+    await read;
+    expect(store.conversations).toEqual([]);
+    expect(store.nextPageToken).toBeUndefined();
+    expect(store.loading).toBe(false);
+  });
+
+  it.each([403, 404])(
+    "fresh чтение вместо WS cursor сохраняет закрытый отказ %s без повторного GET",
+    async (status) => {
+      const store = useAssistantStore();
+      store.setContext(context, "prj_sales");
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [conversation()],
+        "prj_sales",
+        "ws-cursor",
+      );
+      readConversationsMock.mockRejectedValueOnce(
+        new AppProblem({
+          status,
+          code: status === 403 ? "FORBIDDEN" : "NOT_FOUND",
+          kind: status === 403 ? "forbidden" : "not-found",
+          retryable: false,
+        }),
+      );
+      await store.loadMoreHistory(17);
+      await store.loadMoreHistory(17);
+      expect(readConversationsMock).toHaveBeenCalledTimes(1);
+      expect(readConversationsMock.mock.calls[0]?.[1]).toBeUndefined();
+      expect(store.problem?.status).toBe(status);
+      expect(store.conversations).toEqual([]);
+      expect(store.selectedRef).toBeUndefined();
+      expect(store.nextPageToken).toBeUndefined();
+    },
+  );
+
+  it("смена SYSTEM pin начинает новую историю без старого owner cursor", async () => {
+    const store = useAssistantStore();
+    store.assistant = systemAssistant();
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "old-owner",
+    });
+    await store.load(context, "prj_sales");
+    store.assistant = { ...systemAssistant(), ref: "ast_new" };
+    readConversationsMock.mockResolvedValueOnce({
+      items: [{ ...conversation(), assistantRef: "ast_new" }],
+    });
+    await store.loadMoreHistory();
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBeUndefined();
+    expect(readConversationsMock.mock.calls[1]?.[3]).toMatchObject({
+      assistantScope: "SYSTEM",
+      assistantRef: "ast_new",
+    });
+    expect(store.selectedConversation?.assistantRef).toBe("ast_new");
+  });
+
+  it("полный WS snapshot закрывает прежнюю cursor цепочку, новая partial страница требует свежий owner read", async () => {
+    const store = useAssistantStore();
+    store.assistant = systemAssistant();
+    readConversationsMock.mockResolvedValueOnce({ items: [conversation()] });
+    await store.load(context, "prj_sales");
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+    );
+    expect(store.nextPageToken).toBeUndefined();
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "new-ws-page",
+    );
+    expect(store.nextPageToken).toBe("new-ws-page");
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "fresh-owner",
+    });
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBeUndefined();
+    expect(store.nextPageToken).toBe("fresh-owner");
+    expect(readConversationsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("поиск и ARCHIVED начинают отдельную owner цепочку и сохраняют её cursor", async () => {
+    const store = useAssistantStore();
+    store.assistant = systemAssistant();
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "active-owner",
+    });
+    await store.load(context, "prj_sales");
+    store.filterHistory("архив", "ARCHIVED");
+    readConversationsMock.mockResolvedValueOnce({
+      items: [{ ...conversation(), state: "ARCHIVED" }],
+      nextPageToken: "archive-owner",
+    });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    readConversationsMock.mockResolvedValueOnce({ items: [] });
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBeUndefined();
+    expect(readConversationsMock.mock.calls[2]?.[1]).toBe("archive-owner");
+    expect(readConversationsMock.mock.calls[2]?.[3]).toEqual({
+      query: "архив",
+      state: "ARCHIVED",
+      assistantScope: "SYSTEM",
+      assistantRef: systemAssistant().ref,
+    });
+  });
+
   it("читает профиль Проекта отдельно и не смешивает историю двух помощников", async () => {
     readAssistantMock.mockResolvedValue(systemAssistant());
     readProjectAssistantMock.mockResolvedValue(profile);
@@ -348,6 +589,7 @@ describe("assistant workspace store", () => {
         assistantScope: "SYSTEM",
         assistantRef: "ast_system_assistant",
       },
+      40,
     );
     pending.resolve({ items: [conversation()] });
     await more;

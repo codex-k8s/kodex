@@ -43,6 +43,14 @@ import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
 
 const realtimeHistoryPageLimit = 10;
 
+type HistoryRequest = {
+  projectRef?: string;
+  filter: NonNullable<Parameters<typeof readConversations>[3]>;
+  pageSize: number;
+  assistantPin?: string;
+  profileRef?: string;
+};
+
 function mergeConversation(
   previous: AssistantConversation | undefined,
   incoming: AssistantConversation,
@@ -92,6 +100,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   const retainedSelectedDetail = ref<AssistantConversation>();
   let historyReadDepth = 1;
   let historyOwnerLoaded = false;
+  let historyRequest: HistoryRequest | undefined;
   let realtimeReadController: AbortController | undefined;
   let realtimeReadRevision = 0;
   let realtimeReadAgain = false;
@@ -175,28 +184,37 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     historyPageSize.value = Math.min(100, Math.max(1, Math.floor(value)));
   }
 
+  function captureHistoryRequest(
+    nextProjectRef = projectRef.value,
+  ): HistoryRequest {
+    return {
+      projectRef: nextProjectRef,
+      filter: {
+        query: historyQuery.value,
+        state: historyState.value,
+        assistantScope: assistantScope.value,
+        ...(activeAssistantRef.value
+          ? { assistantRef: activeAssistantRef.value }
+          : {}),
+      },
+      pageSize: historyPageSize.value ?? 40,
+      assistantPin: activeAssistantRef.value,
+      profileRef: projectAssistant.value?.ref,
+    };
+  }
+
   function readHistory(
-    nextProjectRef: string | undefined,
+    request: HistoryRequest,
     pageToken: string | undefined,
     signal: AbortSignal,
   ) {
-    const filter = {
-      query: historyQuery.value,
-      state: historyState.value,
-      assistantScope: assistantScope.value,
-      ...(activeAssistantRef.value
-        ? { assistantRef: activeAssistantRef.value }
-        : {}),
-    };
-    return historyPageSize.value
-      ? readConversations(
-          nextProjectRef,
-          pageToken,
-          signal,
-          filter,
-          historyPageSize.value,
-        )
-      : readConversations(nextProjectRef, pageToken, signal, filter);
+    return readConversations(
+      request.projectRef,
+      pageToken,
+      signal,
+      request.filter,
+      request.pageSize,
+    );
   }
 
   function selectMatchingConversation(): void {
@@ -254,6 +272,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     controller = new AbortController();
     const signal = controller.signal;
     nextPageToken.value = undefined;
+    historyRequest = undefined;
     historyProblem.value = undefined;
     historyCursors.clear();
     context.value = nextContext;
@@ -281,11 +300,12 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           return;
         }
       }
+      const request = captureHistoryRequest(nextProjectRef);
       const [assistantValue, firstPage] = await Promise.all([
         assistant.value
           ? Promise.resolve(assistant.value)
           : readAssistant(signal),
-        readHistory(nextProjectRef, undefined, signal),
+        readHistory(request, undefined, signal),
       ]);
       if (current !== generation) return;
       assistant.value = assistantValue;
@@ -300,12 +320,13 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       ) {
         if (count++ >= 30) break;
         historyCursors.add(page.nextPageToken);
-        page = await readHistory(nextProjectRef, page.nextPageToken, signal);
+        page = await readHistory(request, page.nextPageToken, signal);
         if (current !== generation) return;
         checkPage(page, nextProjectRef);
         conversationValues.push(...page.items);
       }
       nextPageToken.value = page.nextPageToken;
+      historyRequest = { ...request, assistantPin: activeAssistantRef.value };
       historyReadDepth = count;
       historyOwnerLoaded = true;
       assistant.value = assistantValue;
@@ -353,14 +374,29 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   async function loadMoreHistory(pageSize?: number): Promise<void> {
     const cursor = nextPageToken.value;
     if (!cursor || loading.value || loadingMore.value || busy.value) return;
+    if (pageSize !== undefined) setHistoryPageSize(pageSize);
+    const request = historyRequest;
+    if (
+      !request ||
+      request.projectRef !== projectRef.value ||
+      request.filter.assistantScope !== assistantScope.value ||
+      request.assistantPin !== activeAssistantRef.value ||
+      request.profileRef !== projectAssistant.value?.ref ||
+      request.filter.query !== historyQuery.value ||
+      request.filter.state !== historyState.value
+    ) {
+      // Общий realtime cursor не доказывает параметры owner-истории.
+      // Один свежий read создаёт её цепочку; чужой token не отправляем.
+      if (context.value) await load(context.value, projectRef.value);
+      return;
+    }
     const current = generation;
     controller ??= new AbortController();
     loadingMore.value = true;
     historyProblem.value = undefined;
-    if (pageSize !== undefined) setHistoryPageSize(pageSize);
     try {
       const page = await readHistory(
-        projectRef.value,
+        { ...request, pageSize: historyPageSize.value ?? 40 },
         cursor,
         controller.signal,
       );
@@ -393,6 +429,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     conversations.value = [];
     selectedRef.value = undefined;
     nextPageToken.value = undefined;
+    historyRequest = undefined;
     historyProblem.value = undefined;
     problem.value = undefined;
     loading.value = true;
@@ -488,6 +525,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       conversations.value = [];
       selectedRef.value = undefined;
       nextPageToken.value = undefined;
+      historyRequest = undefined;
     });
   }
 
@@ -528,6 +566,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       pendingCreatedConversationVersions.clear();
       conversations.value = [];
       nextPageToken.value = undefined;
+      historyRequest = undefined;
       historyCursors.clear();
       historyOwnerLoaded = false;
       historyReadDepth = 1;
@@ -652,8 +691,11 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     if (
       assistantScope.value === "SYSTEM" &&
       (!sourceNextPageToken || !historyOwnerLoaded)
-    )
+    ) {
       nextPageToken.value = sourceNextPageToken;
+      historyRequest = undefined;
+      historyOwnerLoaded = false;
+    }
     if (
       selectedRef.value === undefined &&
       typeof window !== "undefined" &&
@@ -684,6 +726,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     conversations.value = [];
     selectedRef.value = undefined;
     nextPageToken.value = undefined;
+    historyRequest = undefined;
     assistant.value = undefined;
     projectAssistant.value = undefined;
     projectAssistantAgent.value = undefined;
@@ -785,6 +828,13 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         historyCursors.clear();
         for (const consumed of cursors) historyCursors.add(consumed);
         nextPageToken.value = cursor;
+        historyRequest = {
+          projectRef: sourceProject,
+          filter,
+          pageSize,
+          assistantPin: sourceAssistant,
+          profileRef: sourceProfile,
+        };
         historyReadDepth = count;
         historyOwnerLoaded = true;
         retainedSelectedDetail.value = undefined;
