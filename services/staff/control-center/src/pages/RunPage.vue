@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useServerMessage } from "@/shared/ui/server-message";
 import { runListSummary } from "@/shared/ui/run-summary";
+import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
   Activity,
@@ -664,6 +665,41 @@ function openCurrentStream(): void {
   realtime.openRun(ref);
   openedStreamRef.value = ref;
 }
+watch(
+  [runRef, () => platform.bootstrap?.organizationRef, hasAuthoritativeSnapshot],
+  (
+    [ref, organizationRef, hasSnapshot],
+    [previousRef, previousOrganizationRef, hadSnapshot],
+  ) => {
+    if (
+      ref !== previousRef ||
+      !organizationRef ||
+      hasSnapshot ||
+      (!hadSnapshot && organizationRef === previousOrganizationRef) ||
+      platform.runLoading[runRef.value] ||
+      platform.runProblems[runRef.value]
+    )
+      return;
+    // Отсутствие RUN в общем rejoin не доказывает отказ exact route.
+    // Старый граф не заменяет новое авторитетное чтение и его проверку доступа.
+    refreshScheduler.cancel();
+    lastRefreshKey = undefined;
+    if (openedStreamRef.value) {
+      realtime.closeRun(openedStreamRef.value);
+      openedStreamRef.value = undefined;
+    }
+    const generation = mutationGeneration;
+    const ownerScope = ownerRequestSignal();
+    void load(ref).then(() => {
+      if (
+        !ownerScope.aborted &&
+        mutationCurrent(generation, ref) &&
+        hasAuthoritativeSnapshot.value
+      )
+        openCurrentStream();
+    });
+  },
+);
 watch(refreshKey, (next) => {
   if (!next || next === lastRefreshKey) return;
   lastRefreshKey = next;
