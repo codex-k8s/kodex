@@ -10,6 +10,13 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 09:05 UTC: checkpoint
+`14ddfc07b4255780a43348cb19ef6b6dab0b5f58` опубликован в той же ветке;
+exact remote и PR1798 head совпали, Draft сохранён. Runtime delivery остаётся
+source4449303e/compiled50545, как проверено ниже. Chrome перезапущен владельцем;
+первый запрос MCP завершился timeout300s, новый запрос выполняется. Native
+PROJECT acceptance не заявляется до восстановления browser/SSO доступа.
+
 06.10.2026 06:57 UTC — runtime delivery source
 `4449303eef362e0c12c8844aa06846c59cb81136`: fresh canonical supply-chain
 apply и readback exit0. Actual pause=false, replicas/Ready1, прежний UID
@@ -26,7 +33,7 @@ eligible vulnerability report → promotion → ENV38. Не запускать �
 продолжить PROJECT smoke, шесть сотрудников, две среды, grants, Workflow и
 полный dogfooding; пункты основного checklist остаются открытыми.
 Chrome MCP connected, рабочая вкладка пока SSO: native UI/Network acceptance
-NOT RUN. Изменения `4449303e` зафиксированы локально; push не подтверждён.
+NOT RUN. Изменения `4449303e` опубликованы в checkpoint14ddfc07.
 
 ## Предыдущие checkpoints и доказательства
 

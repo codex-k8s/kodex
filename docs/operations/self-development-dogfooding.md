@@ -4479,3 +4479,16 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   подхватывается автоматически; отдельного REQUEST_ADMISSION нет. Нельзя
   создавать третью сборку без actual drift/terminal proof. Full65 OPEN.
 - Новый checkpoint локальный; remote push и PR head не подтверждены.
+
+### 06.10.2026 09:05 UTC — публикация проверенных исправлений
+
+- PASS: checkpoint `14ddfc07b4255780a43348cb19ef6b6dab0b5f58` запушен
+  в прежнюю ветку; exact remote и PR1798 head совпали, PR open/Draft.
+  Первый immediate API readback после push не подтвердил новый head;
+  повторное отдельное чтение Git и GitHub подтвердило его. Повторного push,
+  force, merge или готовности полного QA не заявляется.
+- Runtime evidence остаётся на delivery source4449303e/compiled50545.
+  Chrome перезапущен владельцем; первая MCP connection попытка завершилась
+  timeout300s. Новый запрос выполняется; live PROJECT UI/Network ещё NOT RUN.
+  Следующий этап — B2 native readback/admission/promotion и ENV38, затем
+  сотрудники/grants/Workflow. Full65 OPEN.
