@@ -177,6 +177,14 @@ function imageOperation(operation: EditablePlanOperation): boolean {
     operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
   );
 }
+function roleImageEnvironmentName(
+  operation: EditablePlanOperation,
+): string | undefined {
+  const environment = roleImageEnvironments.value.find(
+    (item) => item.key === fieldValue(operation, "environmentKey"),
+  );
+  return environment ? t(environment.nameMessageKey) : undefined;
+}
 const projectTextMediaTypes = [
   "text/plain",
   "text/markdown",
@@ -2171,7 +2179,11 @@ function validationProblemLabel(problem: string): string {
                   {{ $t("assistant.planEditor.systemImageBoundary") }}
                 </p>
                 <div
-                  v-if="operation.value.type === 'CREATE_ROLE_IMAGE_RECIPE'"
+                  v-if="
+                    operation.value.type === 'CREATE_ROLE_IMAGE_RECIPE' &&
+                    (editable ||
+                      roleImageAgentNames[fieldValue(operation, 'agentRef')])
+                  "
                   class="field"
                 >
                   <span>{{ $t("assistant.planEditor.roleImageAgent") }}</span>
@@ -2179,7 +2191,7 @@ function validationProblemLabel(problem: string): string {
                     roleImageAgentNames[fieldValue(operation, "agentRef")] ||
                     $t("assistant.planEditor.roleImageAgentUnavailable")
                   }}</strong>
-                  <small>{{
+                  <small v-if="editable">{{
                     $t("assistant.planEditor.roleImageAgentFixed")
                   }}</small>
                 </div>
@@ -2193,7 +2205,7 @@ function validationProblemLabel(problem: string): string {
                     @input="setField(operation, 'name', $event)"
                   />
                 </label>
-                <label class="field">
+                <label v-if="editable" class="field">
                   <span>{{
                     $t("assistant.planEditor.roleImageEnvironment")
                   }}</span>
@@ -2234,6 +2246,15 @@ function validationProblemLabel(problem: string): string {
                     </option>
                   </select>
                 </label>
+                <div
+                  v-else-if="roleImageEnvironmentName(operation)"
+                  class="field"
+                >
+                  <span>{{
+                    $t("assistant.planEditor.roleImageEnvironment")
+                  }}</span>
+                  <strong>{{ roleImageEnvironmentName(operation) }}</strong>
+                </div>
                 <RoleImageDockerfileEditor
                   v-if="editable || fieldValue(operation, 'dockerfile')"
                   class="assistant-plan-dockerfile"
@@ -2253,7 +2274,7 @@ function validationProblemLabel(problem: string): string {
                   {{ $t("assistant.planEditor.roleImageHistoricalSource") }}
                 </p>
                 <p
-                  v-if="roleImageCatalogProblem"
+                  v-if="editable && roleImageCatalogProblem"
                   class="field-error"
                   role="alert"
                 >
