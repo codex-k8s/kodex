@@ -162,6 +162,77 @@ const managedTools = new Set([
   "context7_resolve_library_id",
   "context7_query_docs",
 ]);
+const nativeShellFields = new Set([
+  "action_count",
+  "action_kinds",
+  "cwd_scope",
+  "exit_code",
+]);
+const nativeDiagnosticFields = new Set(["codex_item_id", "source"]);
+
+function nativeParameters(
+  toolCall: NonNullable<RunActivityItem["toolCall"]>,
+  diagnostic: boolean,
+): [string, unknown][] {
+  return Object.entries(toolCall.safeParameters).filter(([key]) =>
+    diagnostic
+      ? nativeDiagnosticFields.has(key)
+      : toolCall.tool === "CODEX_SHELL" && nativeShellFields.has(key),
+  );
+}
+function nativeOtherParameters(
+  toolCall: NonNullable<RunActivityItem["toolCall"]>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(toolCall.safeParameters).filter(
+      ([key]) =>
+        !nativeDiagnosticFields.has(key) &&
+        !(toolCall.tool === "CODEX_SHELL" && nativeShellFields.has(key)),
+    ),
+  );
+}
+function nativeParameterValue(key: string, value: unknown): unknown {
+  if (
+    key === "action_kinds" &&
+    Array.isArray(value) &&
+    value.every(
+      (kind) =>
+        typeof kind === "string" &&
+        ["READ", "LIST_FILES", "SEARCH", "UNKNOWN"].includes(kind),
+    )
+  )
+    return value.map((kind: string) =>
+      kind === "UNKNOWN"
+        ? t("runs.nativeShellValues.UNKNOWN")
+        : t(`runs.nativeShellActions.${kind}`),
+    );
+  const allowed =
+    key === "cwd_scope"
+      ? ["WORKSPACE", "OUTSIDE_WORKSPACE"]
+      : key === "exit_code"
+        ? ["ZERO", "NONZERO", "UNAVAILABLE"]
+        : [];
+  return typeof value === "string" && allowed.includes(value)
+    ? t(`runs.nativeShellValues.${value}`)
+    : value;
+}
+function nativeResultLabel(
+  toolCall: NonNullable<RunActivityItem["toolCall"]>,
+): string | undefined {
+  if (!nativeTools.has(toolCall.tool)) return undefined;
+  if (toolCall.safeResult === "COMPLETED" && toolCall.state === "SUCCEEDED")
+    return t("states.SUCCEEDED");
+  if (toolCall.safeResult === "RUNNING" && toolCall.state === "RUNNING")
+    return t("states.RUNNING");
+  if (toolCall.safeResult === "CANCELLED" && toolCall.state === "CANCELLED")
+    return t("states.CANCELLED");
+  if (
+    toolCall.state === "FAILED" &&
+    ["FAILED", "DECLINED"].includes(toolCall.safeResult)
+  )
+    return t(`runs.nativeToolResults.${toolCall.safeResult}`);
+  return undefined;
+}
 const configurationCatalogKinds = new Set([
   "ASSISTANTS",
   "RUNTIME_PROFILES",
@@ -503,29 +574,89 @@ function bytes(value: number): string {
                         {{ $t("runs.toolDetails") }}
                       </summary>
                       <div class="run-tool-event__body">
-                        <p
-                          v-if="
-                            nativeTools.has(item.toolCall.tool) ||
-                            managedTools.has(item.toolCall.tool)
-                          "
-                        >
+                        <p v-if="managedTools.has(item.toolCall.tool)">
                           {{ $t("runs.toolTechnicalId") }}:
                           <code>{{ item.toolCall.tool }}</code>
                         </p>
                         <section>
                           <strong>{{ $t("runs.toolParameters") }}</strong>
+                          <template v-if="nativeTools.has(item.toolCall.tool)">
+                            <dl class="run-native-tool__fields">
+                              <template
+                                v-for="[key, value] in nativeParameters(
+                                  item.toolCall,
+                                  false,
+                                )"
+                                :key="key"
+                              >
+                                <dt>
+                                  {{ $t(`runs.nativeToolFields.${key}`) }}
+                                </dt>
+                                <dd>
+                                  <SafeStructuredData
+                                    :depth="1"
+                                    :value="nativeParameterValue(key, value)"
+                                  />
+                                </dd>
+                              </template>
+                            </dl>
+                            <SafeStructuredData
+                              v-if="
+                                Object.keys(
+                                  nativeOtherParameters(item.toolCall),
+                                ).length
+                              "
+                              :value="nativeOtherParameters(item.toolCall)"
+                            />
+                          </template>
                           <SafeStructuredData
+                            v-else
                             :value="item.toolCall.safeParameters"
                           />
                         </section>
                         <section>
                           <strong>{{ $t("runs.toolResult") }}</strong>
+                          <p v-if="nativeResultLabel(item.toolCall)">
+                            {{ nativeResultLabel(item.toolCall) }}
+                          </p>
                           <SafeMarkdown
-                            v-if="item.toolCall.safeResult"
+                            v-else-if="item.toolCall.safeResult"
                             :content="item.toolCall.safeResult"
                           />
                           <p v-else>{{ $t("common.noData") }}</p>
                         </section>
+                        <details
+                          v-if="nativeTools.has(item.toolCall.tool)"
+                          class="run-native-tool__diagnostics"
+                        >
+                          <summary>
+                            {{ $t("runs.nativeToolDiagnostics") }}
+                          </summary>
+                          <dl class="run-native-tool__fields">
+                            <dt>{{ $t("runs.toolTechnicalId") }}</dt>
+                            <dd>
+                              <code>{{ item.toolCall.tool }}</code>
+                            </dd>
+                            <template
+                              v-for="[key, value] in nativeParameters(
+                                item.toolCall,
+                                true,
+                              )"
+                              :key="key"
+                            >
+                              <dt>{{ $t(`runs.nativeToolFields.${key}`) }}</dt>
+                              <dd>
+                                <SafeStructuredData :value="value" :depth="1" />
+                              </dd>
+                            </template>
+                            <template v-if="nativeResultLabel(item.toolCall)">
+                              <dt>{{ $t("runs.nativeToolResultCode") }}</dt>
+                              <dd>
+                                <code>{{ item.toolCall.safeResult }}</code>
+                              </dd>
+                            </template>
+                          </dl>
+                        </details>
                         <small
                           v-if="
                             item.toolCall.durationMs !== undefined &&
@@ -857,7 +988,8 @@ small {
 .run-tool-event__details[open] {
   flex: 1 0 100%;
 }
-.run-tool-event__details > summary:focus-visible {
+.run-tool-event__details > summary:focus-visible,
+.run-native-tool__diagnostics > summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -869,6 +1001,24 @@ small {
   border-radius: 6px;
   background: var(--panel);
   color: var(--text);
+}
+.run-native-tool__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 0.45fr) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 6px 0 0;
+}
+.run-native-tool__fields dt {
+  color: var(--muted);
+}
+.run-native-tool__fields dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.run-native-tool__diagnostics > summary {
+  cursor: pointer;
+  line-height: 32px;
 }
 .run-transcript__service-history {
   margin-top: 4px;

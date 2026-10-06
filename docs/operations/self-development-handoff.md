@@ -10,6 +10,33 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 03:46 UTC: на clean source `ad4005741ade78ba21b408465244f2f54bbc8e4e`
+полный runner и четыре supply-chain image собраны; fresh render, штатный
+supply-chain apply и отдельный exact readback — PASS. Завершённый promotion
+Job и workspace удалились штатно по TTL; ручного удаления или обхода guard
+не было. Новый runner manifest `sha256:5c49c8f4d377a3c170439e011d4012d6cae1dcbe32962abd60cd2194e47d279d`.
+Два ранних builder materialization отказа зафиксированы; Ready восстановлен,
+restartCount=2 не растёт. Причина пока UNKNOWN, отдельный исполнитель
+исследует безопасные метаданные. Реальная gen10 сборка выполняется.
+
+MAIN содержит пять проверенных UX файлов поверх ad400574: безопасное начало
+названия при ссылке позднее в сообщении; компактные локализованные native
+tool details с закрытой технической диагностикой. ROOT95 frontend unit,
+ESLint/Prettier, forced typecheck, адресные Go unit/vet/gofmt/diff check — PASS.
+Host/Pod source hashes совпали; Chrome desktop screenshot и Console/Network
+проверены. Native SYSTEM58 подтвердил новое название сразу после отправки.
+
+SYSTEM58: conversation `cnv_0xlrRwDF4WAOSFl6YqTvI4g-`, run
+`run_t0JfX_RMJ1DMckGDMppx2_9N`, plan `pln_L5MSLWQfqpfwWzwsB6A9whbx`
+VALID → APPLIED через штатный UI, один UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE.
+Подставленный сервером Dockerfile закрепляет новый runner5c49; recipe
+`imgrec_8fwVelZAPPnm993yRFYLuoc5` version15/generation10. Build
+`imgbld_RAoT4N67RLCeVHbjz_QRlBjT` выполняется. Применённый план повторять
+не нужно; дальше admission/report, exact risk decision при необходимости,
+promotion и typed SYSTEM ENV revision25. Нынешний опубликованный ENV24
+пока использует gen9; actual web по gen10 ещё NOT RUN.
+PROJECT, шесть ролей и полный догфудинг остаются OPEN.
+
 06.10.2026 02:57 UTC: checkpoint `1385361b0fb752fd5d8efdfa5f4e07b8dbc00dcf`
 запушен; remote branch совпал. Выбор нового чата и компактный tools editor
 зафиксированы вместе с браузерными доказательствами. Chrome MCP работает,

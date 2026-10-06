@@ -3856,3 +3856,47 @@ HMR screenshot повторил SYSTEM57: обе terminal строки комп�
 `5568b7747cdd134eddc7b90b4aef54f82f92ce24f193c3201e840364ff7c4882` совпал.
 ROOT forced vue-tsc/Prettier PASS; Console error/warn нет. Все результаты
 зафиксированы до checkpoint; immutable runner delivery и web smoke NOT RUN.
+
+### 06.10.2026 03:18–03:46 UTC — actual delivery и SYSTEM gen10
+
+- PASS: clean source `ad4005741ade78ba21b408465244f2f54bbc8e4e`, full runner
+  build и четыре supply-chain image; runner manifest
+  `sha256:5c49c8f4d377a3c170439e011d4012d6cae1dcbe32962abd60cd2194e47d279d`,
+  binary SHA256 `f8a44936452d36642806982db4d6b1939f7c064d74ffe48e89fbad3a513c095f`.
+  Fresh render выполнен. Repo-owned supply-chain apply завершён03:37,
+  отдельный exact readback03:38 — PASS. Это deploy evidence, не native web
+  acceptance. Завершённый promotion Job/workspace удалились штатно по TTL.
+- UNKNOWN: новый builder имеет два ранних exit1 с closed сообщением
+  materialization; текущий Ready=true/restartCount2 стабилен. Причина не
+  объявляется устранённой без доказательства. Новая реальная сборка проверяет
+  рабочий путь; отдельная read-only диагностика продолжается.
+- PASS: полный gen9 inventory содержит50 observations/38 required VERIFIED.
+  Подозрение на отсутствующие yarn/oapi-codegen опровергнуто авторитетным
+  readback: оба VERIFIED и выбраны в опубликованном ENV. Короткий a11y
+  snapshot пропустил строки, но платформа их не потеряла. Новый gen10
+  inventory и ENV потребуют отдельной проверки.
+- PASS на tree поверх ad400574: title helper сохраняет безопасное начало USER
+  запроса, если URL находится позднее; полные secret/email/protected/code
+  guards не ослаблены. ROOT адресные Go unit0.068с/vet/gofmt/diff check PASS.
+  Host/Pod SHA256 helper `01eacf8c5dd8599e14c395e48759d5f8cf02d854b6421b106191b8f05beb2cc4`
+  совпал. Native SYSTEM58 сразу получил осмысленное начало названия, хотя
+  USER input содержит публичную ссылку в конце.
+- PASS на том же tree: native shell tool details показывают краткие
+  локализованные поля; raw lifecycle/source/item ids остаются под закрытой
+  диагностикой, неизвестные безопасные данные и ошибки не скрываются.
+  ROOT95/95 frontend unit1.99с, scoped ESLint/Prettier и forced typecheck PASS.
+  Host/Pod RunTranscript.vue SHA256
+  `275673404bf92b910e19078a28b69e3d71c6ff10ff5d0f24e91d227f85d511b7` совпал.
+  Desktop screenshot, Console без error/warn и relevant reads200 проверены.
+- SYSTEM5803:43:25→03:44:07: conversation
+  `cnv_0xlrRwDF4WAOSFl6YqTvI4g-`, run `run_t0JfX_RMJ1DMckGDMppx2_9N`,
+  session `ses_pnmaqa1OOc98g83KwnhgD6a3`. Actual provider ACK ENV24/gen9,
+  38 tools/instructions/input EQUAL, runtime revision
+  `rrev_JDkECybf2OdIL0wFgQDje7cw`, digest
+  `ce6ef6fa72c7fb1ea79b8c56496e4e9584b437c47fb872d91585122b652d6c62`.
+  Plan `pln_L5MSLWQfqpfwWzwsB6A9whbx` проверен и однократно APPLIED через UI.
+  Один UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE сохраняет имя и использует
+  свежий standard server-owned template с runner5c49. Recipe version15/gen10,
+  build `imgbld_RAoT4N67RLCeVHbjz_QRlBjT` выполняется. Admission/promotion,
+  ENV25 и новые native web/Context7/GitHub/context smokes — NOT RUN.
+  PROJECT/шесть ролей/full QA остаются OPEN; checkbox не закрывались.

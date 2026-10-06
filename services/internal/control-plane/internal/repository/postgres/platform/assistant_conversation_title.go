@@ -16,10 +16,41 @@ var assistantTitleProtectedInput = regexp.MustCompile(`(?i)(?:https?://|[a-z0-9.
 // Сомнительный текст не переносится в более широко видимую метадату диалога.
 func assistantUserMessageTitle(content string) string {
 	text := assistantPublicTitleText(content)
+	if text == "" {
+		text = assistantUserMessageLeadingTitle(content)
+	}
 	if len([]rune(text)) < 8 || genericAssistantConversationTitle(text) {
 		return ""
 	}
 	return boundedAssistantConversationTitle(text, assistantConversationTitleMaximumRunes)
+}
+
+// Ссылка не скрывает безопасное начало запроса. Остальные запреты
+// проверяются по всему исходнику, а общий и модельный фильтры не ослабляются.
+func assistantUserMessageLeadingTitle(content string) string {
+	if len(content) > 64<<10 || !utf8.ValidString(content) ||
+		strings.ContainsAny(content, "{}") || strings.Contains(content, "```") {
+		return ""
+	}
+	text := strings.TrimSpace(strings.TrimLeft(strings.Join(strings.Fields(content), " "), "#*->"))
+	if strings.HasPrefix(text, "i18n:") || strings.IndexFunc(text, func(value rune) bool {
+		return unicode.IsControl(value) || unicode.In(value, unicode.Cf)
+	}) >= 0 {
+		return ""
+	}
+	matches := assistantTitleProtectedInput.FindAllStringIndex(text, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+	for _, match := range matches {
+		switch strings.ToLower(text[match[0]:match[1]]) {
+		case "http://", "https://":
+		default:
+			return ""
+		}
+	}
+	prefix := boundedAssistantConversationTitle(text[:matches[0][0]], assistantConversationTitleMaximumRunes)
+	return assistantPublicTitleText(prefix)
 }
 
 func assistantPublicTitleText(content string) string {

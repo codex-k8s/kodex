@@ -72,6 +72,126 @@ function title(html: string): string {
 
 describe("RunTranscript: названия native инструментов", () => {
   it.each(["ru", "en"] as const)(
+    "компактно локализует safe shell поля, оставляя provenance и lifecycle в закрытой диагностике (%s)",
+    async (locale) => {
+      const parameters = {
+        action_count: 1,
+        action_kinds: ["UNKNOWN"],
+        cwd_scope: "WORKSPACE",
+        exit_code: "ZERO",
+        source: "UNIFIED_EXEC_STARTUP",
+        codex_item_id: "item_fixture",
+      };
+      const before = structuredClone(parameters);
+      const html = await render("CODEX_SHELL", parameters, locale, "COMPLETED");
+      const diagnostic =
+        /<details\b[^>]*class="run-native-tool__diagnostics"[^>]*>([^]*?)<\/details>/.exec(
+          html,
+        );
+      expect(diagnostic).not.toBeNull();
+      const useful = html.replace(diagnostic?.[0] ?? "", "");
+      for (const text of locale === "ru"
+        ? [
+            "Количество действий",
+            "Действия",
+            "Не определено",
+            "Рабочая папка",
+            "Внутри рабочей папки",
+            "Код завершения",
+            "0 (успешно)",
+            "Завершён",
+          ]
+        : [
+            "Action count",
+            "Actions",
+            "Unspecified",
+            "Working directory",
+            "Inside workspace",
+            "Exit code",
+            "0 (successful)",
+            "Succeeded",
+          ])
+        expect(useful).toContain(text);
+      expect(diagnostic?.[1]).toContain(
+        locale === "ru" ? "Технические сведения" : "Technical details",
+      );
+      expect(diagnostic?.[1]).toContain(
+        locale === "ru" ? "Идентификатор Codex" : "Codex item identifier",
+      );
+      expect(diagnostic?.[1]).toContain(
+        locale === "ru" ? "Источник" : "Source",
+      );
+      expect(diagnostic?.[1]).toContain("item_fixture");
+      expect(diagnostic?.[1]).toContain("UNIFIED_EXEC_STARTUP");
+      expect(diagnostic?.[1]).toContain("COMPLETED");
+      expect(useful).not.toMatch(
+        /CODEX_SHELL|item_fixture|UNIFIED_EXEC_STARTUP|COMPLETED|WORKSPACE|ZERO|UNKNOWN/,
+      );
+      expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+      expect(html).not.toMatch(
+        /RAW_COMMAND_SENTINEL|RAW_OUTPUT_SENTINEL|HIDDEN_REASONING_SENTINEL/,
+      );
+      expect(parameters).toEqual(before);
+    },
+  );
+
+  it("не скрывает ошибку и не выдумывает числовой ненулевой exit code", async () => {
+    const html = await render(
+      "CODEX_SHELL",
+      {
+        action_count: 2,
+        action_kinds: ["READ", "SEARCH"],
+        cwd_scope: "OUTSIDE_WORKSPACE",
+        exit_code: "NONZERO",
+        source: "AGENT",
+      },
+      "ru",
+      "FAILED",
+      "FAILED",
+    );
+    expect(html).toContain("чтение файлов");
+    expect(html).toContain("поиск");
+    expect(html).toContain("Вне рабочей папки");
+    expect(html).toContain("Ненулевой (ошибка)");
+    expect(html).toContain("Не удалось выполнить действие");
+    expect(html).toContain('data-state="FAILED"');
+  });
+
+  it("сохраняет неизвестные безопасные поля и содержательный результат прежними viewers", async () => {
+    const html = await render(
+      "CODEX_SHELL",
+      {
+        cwd_scope: "FUTURE_SCOPE",
+        action_kinds: ["FUTURE_ACTION"],
+        future: {
+          count: 3,
+          note: "Безопасный результат",
+          ref: "agt_fixture12345678",
+        },
+      },
+      "ru",
+      "Проверены 3 файла",
+    );
+    expect(html).toContain("FUTURE_SCOPE");
+    expect(html).toContain("FUTURE_ACTION");
+    expect(html).toContain("Future");
+    expect(html).toContain("Безопасный результат");
+    expect(html).toContain("Проверены 3 файла");
+    expect(html).toContain("run-transcript__preview");
+    expect(html).not.toContain("agt_fixture12345678");
+  });
+
+  it("не снимает границу глубины redaction при выделении native параметра", async () => {
+    const html = await render("CODEX_SHELL", {
+      action_count: {
+        one: { two: { three: { four: { five: "DEPTH_SENTINEL" } } } },
+      },
+      codex_item_id: "agt_fixture12345678",
+    });
+    expect(html).not.toMatch(/DEPTH_SENTINEL|agt_fixture12345678/);
+  });
+
+  it.each(["ru", "en"] as const)(
     "не дублирует native COMPLETED под локализованным статусом (%s)",
     async (locale) => {
       const html = await render("CODEX_SHELL", {}, locale, "COMPLETED");
