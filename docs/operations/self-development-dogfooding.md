@@ -158,6 +158,60 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 18:55 UTC. ROOT source `f3591c15`: review ENV обновлена штатным
+PROJECT proposal `pln_DvA6S4rp4zCxZU_l_D2q2_TR` APPLIED/version3,
+receipt `rct_T1744XDi5cNp-qv_DUyhZSzb`, draft
+`renvd_4yxq8LuEjU7gIkpktunLYL45`. Native validation/impact/publication прошли:
+environment version2/current revision2 `renvv_Wmb4j-8g0O3cteIIC41zWddi`,
+new admitted manifest6f89d389…bb1d6bf, tools38; fresh GET200 всех пяти
+ролей подтверждает bindingVersion3 на эту ревизию. Developer/helper не
+выбирались. Screenshot плана публикации: пять читаемых строк, кнопки не
+перекрывают текст; Console0, relevant reads/mutations200/201.
+
+Защищённая форма Project Secret штатно сохранила draft
+`sdft_97gziyHni_lKziM-FHk94u1F`, удалила значение из UI, прошла Validate
+и impact0. Native publication без замены существующих сред: fresh metadata
+GET200 подтверждает `sec_EQYQ7HteyStPJCH7H5EkN8_y`, GH_TOKEN,
+ACTIVE/version2/currentRevision1/project scope. Runtime binding ещё OPEN;
+raw value, request/response bodies, cookies и приватные настройки не
+включались в доказательства или документацию. Unit owner-input55/55
+PASS0.252с; отдельный metadata-only provider ACK capture8/8 PASS0.171с.
+Actual ранний capture пока NOT RUN.
+
+History UX desktop и mobile390px проверены: пять строк321×108px на mobile,
+без пересечения metadata/actions и горизонтального overflow. Source/Pod
+SHA256 страницы совпадает `f43dc547dbd55cc892d866e9d33b041422971acc1a0fe5be6ab94086b1a775f2`.
+Следующий этап: write ENV newimage+Secret только Developer, hosted web6,
+actual input/roles/files/delegation Workflow. Full65 OPEN.
+
+06.10.2026 18:44 UTC. Source `012757cf`: PROJECT ENV38 восстановлена
+штатным typed plan `pln_jd7Ich3ecTWOG_p6HVDceFwy` revision1/APPLIED,
+квитанция `rct_FQA-XMEFbYtX4U0zX42C9sxZ`. Native draft validation200,
+impact201 выбрал ровно helper с binding3; publication200 выполнена один раз.
+Draft `renvd_ToWWszNzIeGjOA7XxEJrxXBz` PUBLISHED/version3; environment
+version4/current revision5 `renvv_arA8qy50yt8mtr4fgCtolctE`, digest
+`a090d002366795fc2968a80a1668fd20a1148d3d0785905f81903f325e6c6c28`.
+Fresh helper GET200: agentVersion8/binding4 на эту же ревизию, новый common
+manifest6f89d389…bb1d6bf/tools38, values0/secrets0. Следующий actual runtime
+на этом образе ещё OPEN. Fresh-auth выполнена штатно, без изменения 12h limits.
+
+Environment desktop/impact и Secrets empty/create screenshot проверены;
+Console0 на стабильном environment, relevant owner requests200/201.
+Ранние диагностические SDK GET до runtime configuration дали DNS errors:
+это ошибка QA-инициатора; после гидратации те же owner reads200.
+История ревизий сжимала metadata длинной кнопкой rollback. Source012757cf
+разделяет metadata/actions, восстановление32px с tooltip/aria; ROOT page
+25/25 PASS3.60с. Desktop readback новой карточки256×96px, визуальная проверка
+многострочной истории/mobile ещё OPEN, source/Pod hash ещё OPEN.
+
+Developer Secret live остановился до ввода значения на закрытом guard.
+Current-revision impact законно total0: Developer уже на target revision.
+Полный список assigned agents является отдельным authoritative read path;
+ошибка guard исправляется без ослабления sole Developer boundary. Secret
+не создан, значение не введено. Новый review ENV image proposal запрошен
+в PROJECT assistant, application/publication ещё OPEN. Все serving
+deployments Ready по fresh readback18:44; полный65/6roles/Workflow OPEN.
+
 06.10.2026 18:32 UTC. ROOT source `9d51def5ab519172774f0ef337c5a2685666a61e`:
 свежая SSO family GET200 имеет absolute expiry07.10 06:23:10UTC
 (10:23 Саратов), то есть полное12h окно. Для этого выполнен штатный logout

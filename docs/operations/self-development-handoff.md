@@ -10,6 +10,38 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 18:55 UTC, sourcef3591c15. Review ENV current2/version2
+`renvv_Wmb4j-8g0O3cteIIC41zWddi` newcommon6f89d/tools38 опубликована,
+все пять review bindingsVersion3 exact fresh GET200. Helper current5/binding4
+остаётся прежним. Developer Secret GH_TOKEN опубликован штатно:
+`sec_EQYQ7HteyStPJCH7H5EkN8_y`, ACTIVE/version2/currentRevision1;
+значение в форме отсутствует. Ни одного write ENV secret binding пока нет.
+Write ENV proposal собирается в собственном новом PROJECT диалоге;
+не повторять Send без authoritative history. Source добавляет closed
+metadata-only ACK capture; ROOT unit8/8 и owner input55/55 PASS.
+Mobile/desktop environment history и source/Pod hash PASS, Console0.
+SSO12h до07.10 10:23 Саратов. Chrome5/чужая6, navigation18:55UTC;
+следующий reload до19:00UTC. Далее write image+Secret impactDonly,
+hostedweb6, actualroles/earlyACK/files/delegation/Workflow. Full65 OPEN.
+
+## Предыдущий checkpoint 18:44
+
+06.10.2026 18:44 UTC, source012757cf. PROJECT ENV38 plan APPLIED/native
+publication200: currentENVversion4/revision5 `renvv_arA8qy50yt8mtr4fgCtolctE`,
+helper agentVersion8/binding4, newcommon6f89d/tools38, values/secrets0.
+Review ENV newimage proposal отправлен в PROJECT dialog на review route;
+не повторять Send после неизвестного исхода, сначала latest history.
+Secret guard отказал ДО private fill: current impact0 не перечисляет уже
+bound Developer. Narrow helper дорабатывает authoritative assigned-agent
+read; DeveloperSecret ещё NOT RUN/не создан. ROOT history UX012757cf25/25
+PASS3.60с, multi-revision/mobile visual OPEN. Все servingDeploymentsReady.
+SSO absolute07.10 06:23:10UTC/10:23 Саратов; рабочаяChrome5/чужая6.
+Далее: review5/write image revisions, protected Developer-only Secret,
+hosted web6/early actual input capture/roles/files/delegation Workflow.
+Full65 OPEN. Последний full navigation18:42UTC, следующий reload до18:47.
+
+## Предыдущий checkpoint 18:32
+
 06.10.2026 18:32 UTC, source9d51def5. Новая SSO12h family подтверждена:
 07.10 06:23:10UTC/10:23 Саратов. Рабочая Chrome5; чужая6 не затрагивается.
 Common generation2 admitted/promoted, artifact `imgart_LfQRLlu5OPM5k0nC3GRCX_dD`,
