@@ -3,6 +3,11 @@
   "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
   "operations": [
     {
+      "operation_id": "platform.query.project-assistant.integration-grant-candidates.get",
+      "source_binding_sha256": "0ebdff94426c24bac142a63f143431ac6dc894d555db348db2630458292ddbcf",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.command.organization.role-images.risk.decide",
       "source_binding_sha256": "f1322573ce992c1d7225f29d66b45a6d0c85610c37c0678adffd6836ddf27721",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
@@ -1880,6 +1885,11 @@
     {
       "operation_id": "platform.runtime.execution.delegate",
       "source_binding_sha256": "3b4d014ffb2522b1d46e7f4bc9ac87cf4e84767a67f57d8db9534a1958e3f071",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.workflow.launch",
+      "source_binding_sha256": "d6e92aaa3530c2ee1aea505d63c0e4b28172c3bfa564c24e24c54185d227412a",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {

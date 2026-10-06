@@ -1,5 +1,5 @@
 -- name: commands_resolvegate_select_active_agent_nodes :one
-SELECT count(*)
+SELECT count(*) + (SELECT count(*) FROM control_plane.required_workflow_launches WHERE origin_root_run_id=$1::uuid AND state='OPEN')
 FROM control_plane.run_nodes
 WHERE root_run_id=$1::uuid
   AND type='AGENT_EXECUTION'

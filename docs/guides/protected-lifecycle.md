@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.4
+version: 1.1.5
 updated: 2026-10-06
 ---
 
@@ -179,6 +179,45 @@ row/OCC/fence-моделью с одним победителем. Повтор 
 request hash возвращает сохранённый результат; новый эффект не создаётся.
 
 ## Решение владельца
+
+### Обязательный дочерний Workflow обычного сотрудника
+
+Native `launch_workflow` использует только closed
+`RuntimeWorkService.LaunchWorkflowExecution`; runtime-controller не получает
+owner `LaunchRun`. CP разрешает organization/project/root actor из текущих
+lease/fence/generation и immutable revision, проверяет materialized и current
+`platform.run.launch`, а также exact `workflow.launch` корневого пользователя.
+Клиент передаёт только locator существующего опубликованного Workflow, task,
+title и input. `AGENT_DELEGATION` назначается сервером. Configuration plan и
+право SYSTEM/PROJECT помощника для этого пути не требуются и не наследуются.
+
+Workflow сохраняет собственный root, version-pinned steps и canonical claim
+scope. Отдельная required relation закрепляет origin root/run/node/session/
+turn/attempt/generation/input/revision, дочерний root, опубликованную workflow
+version и local callback edge. Parent/root не подменяет workflow step scope.
+Graph содержит local proxy node; события и durable callback receipts используют
+существующий ordered run-event и continuation путь.
+
+| Переход required Workflow | Owner-транзакция и результат |
+| --- | --- |
+| launch/materialize | Project-scoped сериализация до row locks; свежая authority; canonical WF root, immutable relation, proxy/edges, receipt/audit/events |
+| claim/start | Текущие root actor, origin capability и exact workflow permission всех required ancestors; собственный свежий RuntimeRevision W |
+| renew | Exact W lease/fence/attempt; parent cancel атомарно отзывает W lease, поэтому stale renew закрыто отклоняется |
+| parent complete | `OPEN` relation не допускает terminal parent; continuation ждёт все required results |
+| W complete | Один terminal relation/proxy transition и durable callback P; FAILED/CANCELLED result не допускает parent SUCCEEDED |
+| parent/root terminal или cancel | Та же транзакция закрывает все required roots и их leases/turns/gates/effects; terminal parent не получает новый callback turn |
+| owner W cancel/reject | Закрывает собственный canonical graph W и required subtree; живой P получает durable CANCELLED/FAILED callback |
+| retry | Новый origin/root/attempt и новая relation; прежние coordinates и result не переписываются |
+| lease expiry / eligibility failure | Существующий ClaimExecution terminal path и та же required reconciliation; не новый timer |
+| owner gate / changes requested | Существующий OCC gate и fresh continuation; required results остаются обязательными; generic gate expiry — NONE/N/A |
+| delete / purge | Сначала штатный terminal/trash, затем exact project purge graph и row-targeted protected cleanup; обычный delete relation запрещён |
+| replay / unknown response | Exact active authority проверяется до receipt replay; accepted intent не создаёт второй child при новом transport key |
+
+Bounded required graph ограничивает cardinality и глубину; переход terminal
+не допускает частично закрытый envelope. Ошибка audit/event/receipt откатывает
+все вложенные terminal transitions. Авторитетный readback: canonical Run/Graph,
+server-owned launch/callback refs в ответе native operation и callback Turn;
+payload actor, tenant, source и parent/root lineage не являются authority.
 
 `OwnerGate` закрепляет назначенные сервером root actor, recipient, process,
 current session/turn/attempt/input, policy, schedule/occurrence/`ScheduledRun`,

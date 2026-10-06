@@ -174,6 +174,7 @@ const (
 	ReportExecutionProgress                   Kind = "REPORT_EXECUTION_PROGRESS"
 	CompleteExecution                         Kind = "COMPLETE_EXECUTION"
 	DelegateExecution                         Kind = "DELEGATE_EXECUTION"
+	LaunchWorkflowExecution                   Kind = "LAUNCH_WORKFLOW_EXECUTION"
 	ProposeAssistantPlan                      Kind = "PROPOSE_ASSISTANT_PLAN"
 	ProposeAssistantMetadata                  Kind = "PROPOSE_ASSISTANT_METADATA"
 	ProposeRunMetadata                        Kind = "PROPOSE_RUN_METADATA"

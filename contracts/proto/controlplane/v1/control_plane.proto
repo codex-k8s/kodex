@@ -393,6 +393,9 @@ service RuntimeWorkService {
   rpc CommitProviderCredentialRefresh(CommitProviderCredentialRefreshRequest) returns (CommitProviderCredentialRefreshResponse);
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
+  // Запускает опубликованный Workflow из exact active execution; actor/project
+  // и обязательную связь родителя назначает владелец, не caller payload.
+  rpc LaunchWorkflowExecution(LaunchWorkflowExecutionRequest) returns (LaunchWorkflowExecutionResponse);
   rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
   rpc ProposeAssistantMetadata(ProposeAssistantMetadataRequest) returns (ProposeAssistantMetadataResponse);
   rpc ProposeRunMetadata(ProposeRunMetadataRequest) returns (ProposeRunMetadataResponse);
@@ -4006,6 +4009,27 @@ message DelegateExecutionResponse {
   Run child_run = 1;
   RunGraph root_graph = 2;
   string callback_edge_ref = 3;
+}
+// Закрытая команда ordinary runtime, не owner-facing LaunchRun.
+message LaunchWorkflowExecutionRequest {
+  MutationContext mutation = 1;
+  // Exact lease/fence/generation берутся controller из immutable execution.
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  // Locator опубликованного Workflow внутри проекта leased execution.
+  string workflow_ref = 5;
+  string task = 6;
+  google.protobuf.Struct input = 7;
+  string title = 8;
+}
+// Workflow сохраняет собственный root и canonical claim/step область.
+message LaunchWorkflowExecutionResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+  // Server-owned required launch и callback; не источник новых полномочий.
+  string launch_ref = 3;
+  string callback_edge_ref = 4;
 }
 message ProposeAssistantPlanRequest {
   MutationContext mutation = 1;

@@ -114,6 +114,8 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 		return repository.completeExecution(ctx, tx, scope, input)
 	case command.DelegateExecution:
 		return repository.delegateExecution(ctx, tx, scope, input)
+	case command.LaunchWorkflowExecution:
+		return repository.launchWorkflowExecution(ctx, tx, scope, input)
 	case command.ProposeAssistantPlan:
 		return repository.proposeAssistantPlan(ctx, tx, scope, input)
 	case command.ProposeAssistantMetadata:
@@ -331,6 +333,7 @@ func toolCapabilityMatches(tool, capability string, integration, configurationAs
 		"propose_assistant_metadata": "platform.presentation.propose",
 		"propose_run_metadata":       "platform.presentation.propose",
 		"delegate_agent":             "platform.run.delegate",
+		"launch_workflow":            "platform.run.launch",
 	}
 	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !configurationAssistant {
 		return false
@@ -495,6 +498,16 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		eligibilityStage := "provider_profile"
 		_, candidateErr := func(tx pgx.Tx) (commandOutcome, error) {
+			var originAllowed bool
+			if err := tx.QueryRow(ctx, queryWorkflowLaunchClaimOrigin, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "root_run_id": candidate.rootRunID}).Scan(&originAllowed); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if !originAllowed {
+				return commandOutcome{}, errs.ErrForbidden
+			}
+			if err := repository.validateRequiredWorkflowAuthorities(ctx, tx, scope, candidate.rootRunID); err != nil {
+				return commandOutcome{}, err
+			}
 			runtimeProvider, err := runtimeExecutionProvider(candidate.provider)
 			if err != nil {
 				return commandOutcome{}, err
@@ -1684,10 +1697,25 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateCurrentRunOutcome, lease["runID"], map[bool]string{true: "SUCCEEDED", false: "FAILED"}[payload.Success], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	var requiredPending, hasRequiredOrigin bool
+	if tx.QueryRow(ctx, queryWorkflowLaunchRunPending, pgx.StrictNamedArgs{"run_id": lease["runID"], "node_id": lease["nodeID"]}).Scan(&requiredPending, &hasRequiredOrigin) != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if requiredPending {
+		humanGateAfter = false
+	}
 	if payload.Success {
+		continued := false
+		if hasRequiredOrigin {
+			var continuationErr error
+			continued, continuationErr = repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID"))
+			if continuationErr != nil {
+				return commandOutcome{}, continuationErr
+			}
+		}
 		var callbackEdgeID, callbackEdgeRef, parentNodeID, parentNodeRef, parentRunID string
 		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunEdgesRootRunIdSourceNodeIdType, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID, &parentNodeRef, &parentRunID)
-		if err == nil {
+		if err == nil && !requiredPending && !continued {
 			if _, callbackErr := repository.recordChildCallback(ctx, tx, scope, callbackRecord{
 				childRunID: lease["runID"].(string), childRunRef: stringMap(lease, "runRef"),
 				rootRunID: stringMap(lease, "rootRunID"), projectID: stringMap(lease, "projectID"),
@@ -1696,11 +1724,13 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			}); callbackErr != nil {
 				return commandOutcome{}, callbackErr
 			}
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, continuationErr := repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID")); continuationErr != nil {
-			return commandOutcome{}, continuationErr
+		if !hasRequiredOrigin {
+			if _, continuationErr := repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID")); continuationErr != nil {
+				return commandOutcome{}, continuationErr
+			}
 		}
 	}
 	if targetType == "SYSTEM_ASSISTANT" {
@@ -1763,9 +1793,16 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 		if active == 0 {
 			rootBecameTerminal = true
-			if planned > 0 {
+			var requiredFailed bool
+			if tx.QueryRow(ctx, queryWorkflowLaunchFailed, pgx.StrictNamedArgs{"root_run_id": lease["rootRunID"]}).Scan(&requiredFailed) != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if planned > 0 || requiredFailed {
 				runState = "FAILED"
 				terminalSafeErrorCode = "RUNTIME_WORKFLOW_INCOMPLETE"
+				if requiredFailed {
+					terminalSafeErrorCode = "REQUIRED_WORKFLOW_FAILED"
+				}
 				if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionFailRootRun, lease["rootRunID"], "i18n:WORKFLOW_STEPS_UNFULFILLED", terminalSafeErrorCode, ""); err != nil {
 					return commandOutcome{}, errs.ErrUnavailable
 				}
@@ -2115,12 +2152,13 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 }
 
 func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string) (bool, error) {
-	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID string
+	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID, originStepKey, originNodeRef string
+	var originHumanGate, requiredContinuation bool
 	var attempt int32
 	err := tx.QueryRow(ctx, queryRuntimeCallbackResolveContinuation, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"parent_node_id":  parentNodeID,
-	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID)
+	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &originStepKey, &originHumanGate, &requiredContinuation, &originNodeRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -2152,6 +2190,25 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 	if _, err := tx.Exec(ctx, queryRuntimeCallbackUpdateSession, pgx.StrictNamedArgs{"session_id": sessionID}); err != nil {
 		return false, errs.ErrUnavailable
 	}
+	if workflowVersionID != "" && requiredContinuation && !strings.HasPrefix(originStepKey, "workflow.coordinator.") {
+		// Published step сохраняет единственный canonical node/key. Как у
+		// owner CHANGES_REQUESTED, callback создаёт новый Turn и attempt,
+		// не придумывая coordinator alias и не меняя immutable launch origin.
+		tag, err := tx.Exec(ctx, queryCommandsResolvegateRequeuePredecessorNode, parentNodeID, turnID, truncate(continuationTask, 1000))
+		if err != nil {
+			return false, errs.ErrUnavailable
+		}
+		if tag.RowsAffected() != 1 {
+			return false, errs.ErrConflict
+		}
+		if _, err = tx.Exec(ctx, queryWorkflowLaunchResumeStepRun, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "run_id": parentRunID}); err != nil {
+			return false, errs.ErrUnavailable
+		}
+		if _, err = repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, originNodeRef, "TURN_QUEUED", originNodeRef, "", "", "", "i18n:CALLBACK_CONTINUATION_QUEUED", "RUNNING", "QUEUED"); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
 	nodeRef, _ := newRef("nod")
 	workflowStepKey := ""
 	if workflowVersionID != "" {
@@ -2169,7 +2226,7 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 		"agent_id":          agentID,
 		"turn_id":           turnID,
 		"workflow_step_key": workflowStepKey,
-		"human_gate_after":  false,
+		"human_gate_after":  requiredContinuation && originHumanGate,
 		"attempt":           attempt + 1,
 		"input_summary":     continuationTask,
 	}).Scan(&nodeID); err != nil {

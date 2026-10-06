@@ -21,6 +21,8 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.LaunchWorkflowExecution:
+		return repository.validateWorkflowLaunchAuthority(ctx, tx, current, input)
 	case command.CreateProjectAssistantIntegrationConnection:
 		payload, valid := input.Payload.(command.ProjectAssistantConnectionInput)
 		if !valid {

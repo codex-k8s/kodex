@@ -12,6 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -47,6 +49,10 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, fmt.Errorf("begin command transaction: %w", errs.ErrUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	launchProjects, err := lockWorkflowLaunchProjects(ctx, tx, scope, input)
+	if err != nil {
+		return command.Result{}, err
+	}
 	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID,
 		input.Mutation.Operation, input.Mutation.IdempotencyKey); err != nil {
 		return command.Result{}, fmt.Errorf("lock command idempotency scope: %w", errs.ErrUnavailable)
@@ -106,6 +112,16 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	outcome, err := repository.applyCommand(ctx, tx, scope, input)
 	if err != nil {
 		return command.Result{}, err
+	}
+	if err := repository.reconcileWorkflowLaunches(ctx, tx, scope, launchProjects); err != nil {
+		return command.Result{}, err
+	}
+	if len(launchProjects) > 0 && outcome.result.Run != nil {
+		run, graph, err := repository.readRunGraphTx(ctx, tx, scope, outcome.result.Run.Ref)
+		if err != nil {
+			return command.Result{}, err
+		}
+		outcome.result.Run, outcome.result.Graph = &run, &graph
 	}
 	// Пустой опрос runtime является наблюдением, а не устойчивым доменным действием.
 	// Receipt и аудит для него превращали бы исправный простой в постоянную запись.
@@ -361,7 +377,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeAssistant(ctx, tx, scope, input)
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
 		command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.DelegateExecution, command.LaunchWorkflowExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
 		command.ProposeRunMetadata, command.RecordRunToolCall:
 		return repository.changeExecution(ctx, tx, scope, input)
 	case command.CompleteSessionSnapshot, command.CompleteSessionRestore,
@@ -1538,7 +1554,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 
 func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
-	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
+	if !ok || payload.ProjectRef == "" || !runtimecontract.ValidAssistantTurnContent(payload.Task) || len([]rune(payload.Title)) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
@@ -2713,6 +2729,13 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 				runState = "WAITING_HUMAN"
 			} else {
 				runState = "SUCCEEDED"
+				var requiredFailed bool
+				if tx.QueryRow(ctx, queryWorkflowLaunchFailed, pgx.StrictNamedArgs{"root_run_id": rootRunID}).Scan(&requiredFailed) != nil {
+					return commandOutcome{}, errs.ErrUnavailable
+				}
+				if requiredFailed {
+					runState = "FAILED"
+				}
 			}
 		}
 	}

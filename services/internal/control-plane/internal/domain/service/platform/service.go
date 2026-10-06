@@ -1120,6 +1120,9 @@ func (service *Service) SimulateAccess(ctx context.Context, p value.Principal, i
 }
 
 func (service *Service) Execute(ctx context.Context, input command.Command) (command.Result, error) {
+	if input.Kind == command.LaunchWorkflowExecution && (input.Principal.CallerWorkload != "runtime-controller" || input.Principal.Permission != "platform.runtime.execution.workflow.launch") {
+		return command.Result{}, errs.ErrForbidden
+	}
 	principal, err := service.principal(ctx, input.Principal)
 	if err != nil {
 		return command.Result{}, err
@@ -1395,7 +1398,7 @@ func knownCommand(kind command.Kind) bool {
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
 		command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.DelegateExecution, command.LaunchWorkflowExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
 		command.ProposeRunMetadata, command.RecordRunToolCall,
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,

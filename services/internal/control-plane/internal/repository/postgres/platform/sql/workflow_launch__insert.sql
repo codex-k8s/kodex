@@ -1,0 +1,5 @@
+-- name: workflow_launch__insert :exec
+INSERT INTO control_plane.required_workflow_launches(ref,organization_id,project_id,root_actor_id,origin_root_run_id,origin_run_id,origin_node_id,origin_session_id,origin_turn_id,origin_runtime_revision_id,origin_generation,origin_attempt,origin_input_digest,origin_revision_digest,workflow_ref,workflow_version_id,request_digest,child_root_run_id,proxy_node_id,callback_edge_id)
+SELECT @launch_ref,@organization_id::uuid,@project_id::uuid,@actor_id::uuid,@root_run_id::uuid,@run_id::uuid,@node_id::uuid,@session_id::uuid,@turn_id::uuid,@revision_id::uuid,@generation,@attempt,@input_digest,@revision_digest,@workflow_ref,child.workflow_version_id,@request_digest,child.id,@proxy_node_id::uuid,edge.id
+FROM control_plane.runs child JOIN control_plane.run_edges edge ON edge.ref=@callback_ref AND edge.organization_id=child.organization_id
+WHERE child.organization_id=@organization_id::uuid AND child.ref=@child_ref AND child.project_id=@project_id::uuid AND child.root_run_id=child.id AND child.initiated_by=@actor_id::uuid;

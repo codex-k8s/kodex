@@ -588,6 +588,9 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
 	}
+	if workflowLaunchAvailable(input) {
+		result = append(result, workflowLaunchTool())
+	}
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, integrationCatalogTool(), integrationTool())
 	}
@@ -701,6 +704,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		result, err = server.proposeRunMetadata(request.Context(), input, params.Arguments, rpc.ID)
 	case "delegate_agent":
 		result, err = server.delegate(request.Context(), input, params.Arguments, rpc.ID)
+	case "launch_workflow":
+		result, err = server.launchWorkflow(request.Context(), input, params.Arguments, rpc.ID)
 	case "invoke_integration":
 		result, err = server.invoke(request.Context(), input, params.Arguments, rpc.ID)
 	case runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool:
@@ -1783,6 +1788,9 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		target, _ := arguments["target_agent_ref"].(string)
 		step, _ := arguments["workflow_step_key"].(string)
 		return map[string]any{"target_agent_ref": target, "workflow_step_key": step}, "platform.run.delegate", "", true
+	case "launch_workflow":
+		workflow, _ := arguments["workflow_ref"].(string)
+		return map[string]any{"workflow_ref": workflow}, "platform.run.launch", "", workflowLaunchAvailable(input)
 	case "invoke_integration":
 		if grant, ok := integrationGrantForCall(input, arguments); ok {
 			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true

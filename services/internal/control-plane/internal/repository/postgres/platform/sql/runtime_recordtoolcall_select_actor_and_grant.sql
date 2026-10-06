@@ -38,6 +38,10 @@ SELECT agent.ref,agent.name,COALESCE(agent.system_key='system-assistant',false),
            AND revision.safe_snapshot->>'projectRef'=project.ref
        ),
        CASE
+         WHEN @tool='launch_workflow' AND @grant_ref='' THEN
+           'platform.run.launch'=ANY(revision.capabilities) AND 'platform.run.launch'=ANY(agent.capabilities)
+           AND agent.enabled AND agent.state IN ('READY','RUNNING') AND agent.system_key IS NULL
+           AND revision.safe_snapshot->>'assistantScope'='NONE'
          WHEN @grant_ref='' THEN true
          WHEN @capability_ref='' AND @tool IN ('search_files','get_file_metadata','preview_file','get_file_manifest') THEN EXISTS (
            SELECT 1 FROM control_plane.runtime_file_catalogs catalog

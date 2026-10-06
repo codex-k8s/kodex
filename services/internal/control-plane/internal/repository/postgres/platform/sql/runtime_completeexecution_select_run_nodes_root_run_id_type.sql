@@ -10,6 +10,9 @@ SELECT (
     FROM control_plane.owner_gates
     WHERE root_run_id=$1::uuid
       AND state='OPEN'
+) + (
+    SELECT count(*) FROM control_plane.required_workflow_launches
+    WHERE origin_root_run_id=$1::uuid AND state='OPEN'
 ), (
     SELECT count(*)
     FROM control_plane.run_nodes
