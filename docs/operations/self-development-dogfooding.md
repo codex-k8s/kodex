@@ -158,6 +158,47 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 23:02 UTC — реальный callback дефект и компактные результаты
+
+Source `ce20e4c2`, предыдущий frontend source `8aa626b2`; последний
+подтверждённый remote/PR `61e374e4`. Callback origin интегрирован
+`a3057b43`, ограниченный Context7 scope — `4fd8f902`. Canonical disposable
+PostgreSQL четыре suites PASS/24.094с; frontend пять suites/177 tests
+PASS/1.59с. Это адресные проверки, не полный QA.
+
+- PASS: свежий owner session GET20023:00:00 показал абсолютный срок
+  07.10.2026 06:23:10 UTC, BACKEND_REFRESH; срок покрывает согласованное окно.
+  Chrome5 регулярно обновляется, чужая6 не затронута.
+- PASS: typed restore plan `pln_2J5MfehvRlyge-_D8iUSkrcV` применён;
+  свежий read20023:00:14: GitHub connection124/CONNECTED,117 enabled grants,
+  helper grant `grt_q30LpmAiHIgptZePhQqxC24L` version4/NONE/[], остальные
+  116 grants совпали с before-list. SCOPED fresh-root REJECT завершён,
+  remote requested line count0; same-root pair2/comments подтверждён ранее.
+- PASS: desktop Project overview recent results300px/scroll1200px, mobile
+  390px400px/scroll1707px, все20 links сохранены, overflow0, Console0,
+  screenshot. Первый mobile capture попал в hot-reload переход и был пуст;
+  повтор после восстановления проверил реальный экран. No pagination claim.
+- FAIL: ordinary Manager `run_flszrjpvf_wwzYgmZ9hVxW44` принял ровно один
+  launch. Child `run_N3am_2iEatYeu_3FVG9IHozj` действительно запустил
+  Architect `run_bxcugul6LeDdqipCnM_-DxGM`, SUCCEEDED, файл
+  `art_B_b92qB1yR9bSDfJieDyzEFh`. Затем coordinator callback повторяется
+  попытками2–15, Documentation остаётся PLANNED. Native Cancel22:59:12 UTC: child
+  CANCELLED; parent затем FAILED/REQUIRED_WORKFLOW_FAILED. Повтор запуска
+  до устранения причины не выполняется. Screenshot/Console/Network проверены;
+  production callback progression исправляется в изолированном worktree.
+- PASS: early Manager ACK same Pod UID/image/binary; task/input/provider
+  2348B/SHA `3e5f3d43d42d50692959e007e0724ce588a5d8cf5e7f4bd8c5b184a6c1a5193a`
+  совпал с submitted task. Owner graph inputSummary сокращён и не является
+  полным prompt proof. Архитектор не доказывает завершение двух шагов.
+- Draft PR typed input интегрирован `ce20e4c2`: package unit PASS3.806с,
+  gateway positive/negative draft tests PASS0.231с. Existing connection ещё
+  2.3.1; native rebind/credential/test/точное восстановление117 grants — NOT RUN.
+  Полный canonical Bootstrap воспроизвёл четыре FAIL на4fd; отдельно
+  исправляются доказанные fixture pollution и устаревшее ожидание runner pin.
+
+Полное QA, session concurrency, Developer Git/PR/review/response,
+bootstrap merge и финальный внутренний Workflow остаются OPEN.
+
 ### 06.10.2026 22:41 UTC — composer, безопасное согласование и реальный отказ Workflow
 
 Source1310e8e7; последний remote/PR99d34e6. Обязательный ListRuns

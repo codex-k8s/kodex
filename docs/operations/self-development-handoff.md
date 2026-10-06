@@ -10,6 +10,42 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 23:02 UTC: source `ce20e4c2`, последний подтверждённый remote/PR
+`61e374e4`. Callback origin `a3057b43`, Context7 scope `4fd8f902`, compact
+Project results `8aa626b2`, typed Draft package `ce20e4c2` интегрированы.
+ROOT disposable PG4 PASS24.094с; frontend5suites177tests PASS1.59с;
+Draft package/gateway tests PASS3.806/0.231с. Полный Bootstrap вновь FAIL
+из-за исследуемых fixture pollution/runner expectation; fix только оснастки
+в отдельном worktree, не считать suite PASS до полного повтора.
+
+Все117 enabled GitHub grants свеже прочитаны23:00:14: connection124/
+CONNECTED2.3.1, helper own grantversion4/NONE/[], остальные116 unchanged.
+SCOPED same-root2comments/1gate и fresh-root REJECT/remote0 подтверждены;
+typed restore plan `pln_2J5MfehvRlyge-_D8iUSkrcV` применён. После Draft2.4
+code rollout необходим native package publication/rebind exact connection,
+protected credential/TEST, typed restore только прежних117 grants; NO guessed
+grants/duplicate connection/legacy preserve. Перед activation читать fresh
+state, не повторять UNKNOWN mutation.
+
+Новый Manager root `run_flszrjpvf_wwzYgmZ9hVxW44` запустил ровно один
+child Workflow `run_N3am_2iEatYeu_3FVG9IHozj`. Architect child
+`run_bxcugul6LeDdqipCnM_-DxGM` SUCCEEDED, свой файл
+`art_B_b92qB1yR9bSDfJieDyzEFh`. Coordinator повторяет continuation
+attempts2–15 вместо запуска Documentation. ROOT native Cancel22:59:12:
+child CANCELLED, parent FAILED/REQUIRED_WORKFLOW_FAILED. Это live FAIL,
+не delegation acceptance; production callback progression чинится отдельно.
+Ранний Manager ACK2348B совпал с submitted taskSHA3e5f3d43…; image/binary
+sameUID EQUAL. Parent terminal, повтор не запускать до fix.
+
+Project overview desktop/mobile390 screenshot PASS: recentresults300/400px,
+20links, overflow0, Console0. Первая mobile screenshot была переходом HMR,
+реальный повтор выполнен. SSO freshGET200 absolute07.10 06:23:10UTC,
+BACKEND_REFRESH, покрывает автономное окно до08:30Саратов. Chrome5 own,
+foreign6 не трогать. Полное65/session concurrency/Git cycle/bootstrap merge/
+финальный внутренний Workflow OPEN; goal ACTIVE.
+
+## Предыдущий checkpoint22:41
+
 06.10.2026 22:41 UTC: source `1310e8e75f02066cf04292971ef46cf2328a33da`,
 последний remote/PR99d34e6. ListRuns ADD_TURN исправлен f6db1475:
 canonical disposable PG4 PASS, native composer сохраняется. Плавающая
