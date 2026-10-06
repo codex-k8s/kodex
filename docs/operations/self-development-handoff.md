@@ -10,6 +10,31 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 16:33 UTC, source `6aa8fb16`; последний подтверждённый
+remote/PR1798 checkpoint `b3693f47`. APPLIED image plan UX исправлен,
+ROOT35/35 PASS; native desktop/Console0 и source/Pod hash PASS.
+Новый common `kodex-selfdev` действительно ACCEPTED/PROMOTED/readytrue:
+recipe `imgrec_zS2F5VUJeRIu_zOXWuF6lXdw` version2, artifact
+`imgart_ZrFk---i258qcWqzCA1WF8_p` version10, manifest
+`sha256:f1b422c4373828e2f8c6b94354d47ff5eccaa354f2445a1c8219297e1900adce`,
+required tools38 VERIFIED. Отдельное exact risk решение и последующий
+подписанный admission/promotion доказаны в журнале; повторно не создавать
+рецепт, не build/risk/promote. Proposal двух новых окружений отправлен,
+Validate/Apply/Publish ещё OPEN.
+
+GitHub connection `int_WU4eTfyUKdPzKebRO0bcuZ2D` CONNECTED/version4,
+native TEST PASS, grants0. READ20 blocked из-за отсутствующего специального
+PROJECT self-grant/catalog path, не credential/network. Six-role prompt
+24995 символов HTTP503, conversation `cnv_ZRCXG_MQ9OHGNoY2Mu1VBDqn`
+version1/turns[]: partial effects нет. В изолированных worktrees реализуются
+три доказанных пробела: end-to-end input32768 Unicode/event/broker/history;
+PROJECT self-grant command и exact discovery; ordinary Manager launch_workflow
+с server-owned required launch relation и полным lifecycle. Не подменять
+внутреннюю команду host/UI запуском. Продолжить реальные native сценарии после
+интеграции и штатной активации. Full65 OPEN; bootstrap PR остаётся Draft.
+
+## Предыдущий checkpoint 16:14
+
 06.10.2026 16:14 UTC, source `420d5993`: compact RUN details transcript
 интегрирован; ROOT96/96 units и forced typecheck PASS, native desktop
 «Подробнее» USER справа/COMMENTARY/FINAL слева/tools8 grouped/overflow0

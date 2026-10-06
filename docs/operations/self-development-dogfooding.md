@@ -83,9 +83,9 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
 - [ ] 5. Безопасный observability/read path фактически materialized prompt:
   instructions, template variables, integrations, identity, tools/MCP,
   files, user/task input с harmless marker, model/reasoning и exact pins.
-- [ ] 6. Общий admitted/promoted образ kodex-selfdev со всем требуемым
+- [x] 6. Общий admitted/promoted образ kodex-selfdev со всем требуемым
   инструментарием; отдельные execution workspaces, без общего mutable PVC.
-- [ ] 6.1. Администратор рассматривает безопасный отчёт уязвимостей образа:
+- [x] 6.1. Администратор рассматривает безопасный отчёт уязвимостей образа:
   пакет и версия, severity, CVE/GHSA/GO со ссылкой и доступное исправление.
   Явное принятие риска с обязательным обоснованием относится только к точному
   artifact/image digest, immutable отчёту и policy. Решение сохраняется в
@@ -149,6 +149,45 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 | UI consumer acquire/release | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию |
 
 ## Журнал
+
+06.10.2026 16:33 UTC, source `6aa8fb16`: отображение APPLIED-плана образа
+исправлено; ROOT35/35 адресных unit PASS. Native просмотр показывает настоящее
+имя сотрудника и локализованное окружение, без ложной ошибки каталога и
+подсказок редактирования. Desktop screenshot PASS, Console errors/warnings0;
+source/Pod SHA256 `ca495bc9e3df3ffd47ad2d92a3b35a95c19845578affda8a6d507ab049807e8f`
+совпадает. Mobile этой модалки ещё NOT RUN. Remote/PR1798 checkpoint
+`b3693f47` подтверждён; новое изменение пока локально.
+
+Новый общий `kodex-selfdev` создан собственным PROJECT helper через
+`pln_d2hNtiiQIwZw3VE4jkTlZWgc`, native Validate/Apply один раз.
+Recipe `imgrec_zS2F5VUJeRIu_zOXWuF6lXdw` version2; build
+`imgbld_9HJWHuUxGWCEJG0WvrYTePVY` COMPLETED/version12; новый artifact
+`imgart_ZrFk---i258qcWqzCA1WF8_p` version10 ACCEPTED/PROMOTED,
+manifest `sha256:f1b422c4373828e2f8c6b94354d47ff5eccaa354f2445a1c8219297e1900adce`.
+Signed inventory `600aa7ac8ffd7315b579087b1dd9094270d8348bfdc995276a5cfedc3b279622`:
+все38 required VERIFIED. Для нового exact отчёта отдельно принято решение
+`imgrisk_guNdK0cpqxc9ELCWKJfc0ull`: undici6.27.0/GHSA-rfgv-xxqx-mfg5
+и tar7.5.19/GHSA-r292-9mhp-454m, с обязательным обоснованием и ограничением
+локальным dogfooding. Report digest
+`f81cca95bfb3f76c99837b4565e64928ff5da002c7a98742be9a2133c9ab849e`;
+подписанный повторный admission2/fence3 receipt
+`70162bf1fb25d18390bdb8eac64a2e3ab513b759e52cba6f4028f344e9e60166`,
+promotion receipt `db94f4e112d49b8bdfbfbb51396b338769249b9fd72e80d5c2fc7f5db910e217`.
+Native protected confirmation и authoritative GET200/readytrue — PASS.
+Риск и receipts B3 не переносились; provenance/ABI/signature не обходились.
+Typed proposal двух окружений selfdev-review/selfdev-write отправлен; их
+создание/публикация и реальные шесть role executions пока OPEN.
+
+GitHub connection `int_WU4eTfyUKdPzKebRO0bcuZ2D` штатно CONNECTED/version4,
+native TEST PASS. READ20 proposal остановился без effects: отсутствует
+специализированный PROJECT self-grant/catalog путь. Исправление выполняется;
+grant0, repository smoke через это подключение NOT RUN. Большой план команды
+24995символов не создал turn: HTTP503/authoritative turns[]. Доказано
+несовпадение API32768 и runs.task20000, а также меньшие event/broker/history
+envelopes. Исправляется ограниченный end-to-end Unicode path forward-only,
+без усечения USER текста. Ordinary Manager также не имеет materialized
+launch_workflow consumer; готовится закрытый execution command с серверным
+происхождением и полным required-child lifecycle. Эти этапы и Full65 OPEN.
 
 06.10.2026 16:14 UTC, source `420d5993`: новый компактный transcript
 диалога RUN интегрирован. ROOT96/96 адресных unit2.67с и forced typecheck
