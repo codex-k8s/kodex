@@ -1,6 +1,6 @@
 -- name: role_images_get_supply_work_availability :one
 SELECT
-  EXISTS (
+  (EXISTS (
     SELECT 1
     FROM control_plane.image_artifacts artifact
     WHERE artifact.organization_id = @organization_id::uuid
@@ -27,7 +27,13 @@ SELECT
         )
         OR (artifact.admission_state = 'CLAIMED' AND artifact.admission_claim_expires_at <= clock_timestamp())
       )
-  ) AS admission_available,
+  ) OR EXISTS (
+    SELECT 1
+    FROM control_plane.image_artifacts artifact
+    WHERE artifact.organization_id = @organization_id::uuid
+      AND artifact.admission_state IN ('PENDING', 'CLAIMED')
+      AND (artifact.policy_revision <> @policy_revision OR artifact.policy_sha256 <> @policy_sha256)
+  )) AS admission_available,
   EXISTS (
     SELECT 1
     FROM control_plane.image_artifacts artifact

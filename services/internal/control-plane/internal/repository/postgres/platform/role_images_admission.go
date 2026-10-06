@@ -56,20 +56,17 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 		"policy_revision": repository.roleImages.PolicyRevision,
 		"policy_sha256":   repository.roleImages.PolicySHA256,
 	}
-	if _, err := tx.Exec(ctx, queryRoleImagesRejectStaleAdmissionCandidates, policyArguments); err != nil {
-		return entity.ImageAdmissionClaim{}, errs.ErrUnavailable
-	}
 	var replay admissionClaimReceipt
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation, key, intent, &replay); receiptErr != nil {
 		return entity.ImageAdmissionClaim{}, receiptErr
 	} else if found {
-		if replay.AdmissionAttemptRef == "" || replay.AdmissionAttempt == 0 {
-			return entity.ImageAdmissionClaim{}, errs.ErrNotFound
-		}
-		if replay.Artifact.Ref == "" && len(replay.Expired) > 0 {
+		if replay.Artifact.Ref == "" && (len(replay.Expired) > 0 || len(replay.Rejected) > 0) {
 			if err := committed(tx, ctx); err != nil {
 				return entity.ImageAdmissionClaim{}, err
 			}
+			return entity.ImageAdmissionClaim{}, errs.ErrNotFound
+		}
+		if replay.AdmissionAttemptRef == "" || replay.AdmissionAttempt == 0 {
 			return entity.ImageAdmissionClaim{}, errs.ErrNotFound
 		}
 		if replay.Artifact.PolicyRevision != repository.roleImages.PolicyRevision ||
@@ -94,6 +91,10 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 		}
 		return repository.admissionClaimFromReceipt(replay), nil
 	}
+	rejected, err := repository.rejectStaleRoleImageAdmissions(ctx, tx, current, policyArguments)
+	if err != nil {
+		return entity.ImageAdmissionClaim{}, err
+	}
 	expired, err := repository.expireRoleImageAdmissions(ctx, tx, current)
 	if err != nil {
 		return entity.ImageAdmissionClaim{}, err
@@ -103,9 +104,9 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 	err = tx.QueryRow(ctx, queryRoleImagesClaimAdmissionCandidate, policyArguments).Scan(
 		&artifactID, &artifactRef, &version, &fence)
 	if errors.Is(err, pgx.ErrNoRows) {
-		if len(expired) > 0 {
+		if len(expired) > 0 || len(rejected) > 0 {
 			if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, key, intent,
-				"IMAGE_ADMISSION_EXPIRY_OUTCOME", admissionClaimReceipt{Expired: expired}); err != nil {
+				"IMAGE_ADMISSION_MAINTENANCE_OUTCOME", admissionClaimReceipt{Expired: expired, Rejected: rejected}); err != nil {
 				return entity.ImageAdmissionClaim{}, err
 			}
 		}
@@ -140,7 +141,7 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 		return entity.ImageAdmissionClaim{}, err
 	}
 	receipt := admissionClaimReceipt{Artifact: artifact, Fence: fence,
-		AuthorityGeneration: principal.CredentialRevision, ClaimExpiresAt: expiresAt, Expired: expired,
+		AuthorityGeneration: principal.CredentialRevision, ClaimExpiresAt: expiresAt, Expired: expired, Rejected: rejected,
 		AdmissionAttemptRef: attempt.Ref, AdmissionAttempt: attempt.Number, RiskAcceptanceJSON: riskJSON, RiskAcceptanceSHA256: riskSHA,
 		SourceAdmissionRevision: attempt.SourceAdmissionRevision, SourceAdmissionReceiptSHA256: sourceReceipt, SourceEvidenceManifestDigest: sourceEvidence}
 	if err := repository.storeRoleImageReceipt(ctx, tx, current, operation, key, intent,
@@ -151,6 +152,45 @@ func (repository *Repository) claimAdmission(ctx context.Context, principal valu
 		return entity.ImageAdmissionClaim{}, err
 	}
 	return repository.admissionClaimFromReceipt(receipt), nil
+}
+
+// Stale maintenance принадлежит claim-транзакции, но не выдаёт устаревший claim.
+func (repository *Repository) rejectStaleRoleImageAdmissions(ctx context.Context, tx pgx.Tx, current scope, arguments pgx.StrictNamedArgs) ([]entity.ImageArtifact, error) {
+	rows, err := tx.Query(ctx, queryRoleImagesRejectStaleAdmissionCandidates, arguments)
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	type rejectedArtifact struct{ ref, projectID string }
+	var rejected []rejectedArtifact
+	for rows.Next() {
+		var item rejectedArtifact
+		if err := rows.Scan(&item.ref, &item.projectID); err != nil {
+			rows.Close()
+			return nil, errs.ErrUnavailable
+		}
+		rejected = append(rejected, item)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	result := make([]entity.ImageArtifact, 0, len(rejected))
+	for _, item := range rejected {
+		artifact, err := scanRoleImageArtifact(tx.QueryRow(ctx, queryRoleImagesGetActiveArtifact, current.organizationID, item.ref))
+		if err != nil {
+			return nil, errs.ErrUnavailable
+		}
+		if err := repository.hydrateImageRiskHistory(ctx, tx, current, &artifact); err != nil {
+			return nil, err
+		}
+		if err := repository.auditRoleImage(ctx, tx, current, item.projectID, "platform.role-images.admission.claim",
+			"IMAGE_ARTIFACT", artifact.Ref, "i18n:IMAGE_ADMISSION_POLICY_CHANGED"); err != nil {
+			return nil, err
+		}
+		result = append(result, artifact)
+	}
+	return result, nil
 }
 
 func (repository *Repository) admissionClaimFromReceipt(receipt admissionClaimReceipt) entity.ImageAdmissionClaim {

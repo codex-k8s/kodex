@@ -39,6 +39,7 @@ type admissionClaimReceipt struct {
 	SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest string
 	SourceAdmissionRevision                                    uint64
 	Expired                                                    []entity.RoleImageAdmissionFailure
+	Rejected                                                   []entity.ImageArtifact
 	Artifact                                                   entity.ImageArtifact
 	Fence                                                      uint64
 	AuthorityGeneration                                        uint64
