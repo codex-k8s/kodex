@@ -110,6 +110,14 @@ const maximumAssistantIntegrationDefinitions = 10
 
 const maximumAssistantConfigurationEntries = 10
 
+// Имя только для модельной проекции: refs, scope и owner snapshot не меняются.
+func assistantCatalogResourceName(input runtimecontract.RunnerInput, ref, name string) string {
+	if input.IsSystemAssistant() && ref != "" && ref == input.AgentRef && name == "i18n:SYSTEM_ASSISTANT_NAME" {
+		return "Системный помощник"
+	}
+	return name
+}
+
 var assistantConfigurationCatalogKinds = []string{"ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION"}
 
 func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput) map[string]any {
@@ -275,6 +283,9 @@ func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, reques
 			"manifest_digest": entry.GetManifestDigest(), "catalog_revision": entry.GetCatalogRevision(), "catalog_digest": entry.GetCatalogDigest(),
 			"reasoning_efforts": append([]string{}, entry.GetReasoningEfforts()...), "default_reasoning_effort": entry.GetDefaultReasoningEffort()}
 		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ASSISTANTS {
+			if entry.GetScopeKind() == "ORGANIZATION" {
+				projection["name"] = assistantCatalogResourceName(input, entry.GetRef(), entry.GetName())
+			}
 			projection["runtime_environment_ref"] = entry.GetRuntimeEnvironmentRef()
 		}
 		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS {

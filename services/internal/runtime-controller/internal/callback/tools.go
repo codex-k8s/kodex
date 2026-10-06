@@ -159,6 +159,9 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		context = map[string]any{"route": input.AssistantContext.Route, "entity_kind": input.AssistantContext.EntityKind,
 			"entity_ref": input.AssistantContext.EntityRef, "entity_name": input.AssistantContext.EntityName,
 			"entity_version": input.AssistantContext.EntityVersion, "allowed_operations": input.AssistantContext.AllowedOperations}
+		if input.AssistantContext.EntityKind == "AGENT" {
+			context["entity_name"] = assistantCatalogResourceName(input, input.AssistantContext.EntityRef, input.AssistantContext.EntityName)
+		}
 	}
 	result := map[string]any{
 		"current_project_ref": input.ProjectRef,

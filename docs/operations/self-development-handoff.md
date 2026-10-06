@@ -10,6 +10,30 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 04:14 UTC: новый clean checkpoint
+`f36e338ad1e1a84ce2a6266f69e36b49214abf35` запушен; независимый readback
+remote/PR1798 head совпал, Draft сохранён. UX loading fix и SYSTEM25/gen10
+proofs зафиксированы. PR body актуализирован, exact readback совпал.
+
+SYSTEM64 создал проект `Kodex | Dev` НЕ вручную host, а штатным typed plan
+`pln_Hjb287DQT2BQnj15EIR5Xx0X`: VALIDv2 → APPLIEDv3 однократно04:10:59.
+Проект `prj_XM2a_cP83D3Fl3gM2xIcbjZh`, version1/language ru,
+agentCount0/workflowCount0, audit `aud_W2KLDM0HmNYwzdwJ3NqrSGl1`:
+assistant.create_project/SYSTEM_ASSISTANT/SUCCEEDED, initiator owner ref.
+Receipt `rct_V8N3l2BQQsJVU1ghMps_T0IF` содержит ровно один новый project ref.
+Навигация проекта и realtime появление в списке проверены. RUN proof:
+`run_tQTVOMheXJYRt80gBJQIrWy6` SUCCEEDED; ENV25/gen10/input EQUAL,
+protected preview200/complete/diagnostics[]/оба digests совпали.
+
+На tree поверх f36e интегрирована узкая model catalog display projection:
+только exact i18n marker собственного SYSTEM → «Системный помощник».
+Authority/refs/scopes/versions/prompt DTO неизменны. ROOT callback unit0.953с,
+vet/gofmt/diff и source/Pod hashes PASS. Новая live проверка идёт в SYSTEM65,
+одновременно запрошен подтверждаемый CREATE_PROJECT_ASSISTANT для созданного
+проекта с собственным persistent template. Реальная конфигурация PROJECT,
+образ/MCP/network/инструменты/38tools и последующие шесть ролей ещё NOT RUN.
+Не применять SYSTEM64 повторно и не создавать дубликат проекта.
+
 06.10.2026 04:08 UTC: checkpoint `c3a21659b825d114e05f3e05b204c889de4fba0b`
 запушен, exact remote/PR1798 head совпал. SYSTEM generation10 штатно собран,
 допущен после отдельного решения администратора по точному новому отчёту

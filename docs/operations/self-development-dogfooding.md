@@ -3959,3 +3959,41 @@ ROOT forced vue-tsc/Prettier PASS; Console error/warn нет. Все резул�
   готовится узкая human-readable display projection без изменения authority.
   PROJECT/шесть сотрудников/full dogfooding пока NOT RUN; общий checklist
   не закрывается по одному только SYSTEM gate.
+
+### 06.10.2026 04:09–04:14 UTC — SYSTEM создаёт проект штатным планом
+
+- PASS: frontend loading fix и предыдущий журнал зафиксированы в checkpoint
+  `f36e338ad1e1a84ce2a6266f69e36b49214abf35`; remote/PR1798 exact head совпали,
+  PR остаётся Draft, body с фактическими SYSTEM gen10/ENV25 proofs обновлён.
+- PASS: перед созданием protected listProjects200 не содержал Kodex | Dev.
+  SYSTEM64 conversation `cnv_BbNpxvvDSGZcE0x17Y4GrWp7`, run
+  `run_tQTVOMheXJYRt80gBJQIrWy6`, session `ses_YGZX2ZMtvpEnrsqkxKvUPNQG`
+  SUCCEEDED; actual provider ENV25/gen10, instructions/input EQUAL,
+  runtime revision `rrev_9zwQCdRJ6AesbyD-fEo-6K9Y`, digest
+  `77353ad1415f0702ce8b1f8fc49f1fb5ba3fe3b07d82a0ab9b8d33fa1bc5a92e`.
+  Protected RUN preview200/complete/diagnostics[]; template f4926f1b и
+  materialization `283604babf6e189ef8a6cf5ec84a0a71f254dd9049b4bf3a1e79d9f83e77a9b4`
+  совпали с ACK, полный prompt не выдавался.
+- PASS: один CREATE_PROJECT содержит только name/purpose/language,
+  без payload actor/owner/organization. План `pln_Hjb287DQT2BQnj15EIR5Xx0X`
+  VALIDv2 → APPLIEDv3 штатно UI04:10:59; receipt
+  `rct_V8N3l2BQQsJVU1ghMps_T0IF`/operation001/APPLIED содержит единственный
+  новый ref `prj_XM2a_cP83D3Fl3gM2xIcbjZh`. Имя Kodex | Dev, version1,
+  язык ru, purpose точный русский, agentCount0/workflowCount0. Audit read200
+  `aud_W2KLDM0HmNYwzdwJ3NqrSGl1`: action assistant.create_project,
+  source SYSTEM_ASSISTANT, executor Системный помощник, initiator owner ref,
+  outcome SUCCEEDED. Проект появился realtime без reload, затем его экран
+  штатно открыт; Console error/warn нет. Host не создавал проект API/SQL.
+- PASS на tree поверх f36e: model catalog меняет только exact name marker
+  собственного SYSTEM-помощника, только в display maps context и ASSISTANTS.
+  ROOT полный callback unit0.953с/vet/gofmt/diff PASS; negative cases сохраняют
+  PROJECT/foreign/kind/marker/user name, exact fenced request и исходный proto.
+  Host/Pod assistant_catalog.go SHA256
+  `c0f1d9d3774e5ed4d4717921f85e6f9becd5d9d617dbd165c25d0089eb005d25`
+  и tools.go `b0faba0aea67793d734238a69dc51f21fb9be2ad3896d6e72df88fb222cc34e5`
+  совпали. Context7 /protocolbuffers/protobuf-go проверен: Clone/Equal.
+  Live marker check запрошен SYSTEM65, пока NOT RUN до фактического ответа.
+- OPEN: SYSTEM65 должен создать отдельный PROJECT helper через свежую schema,
+  с собственным persistent template и project конфигурацией, без SYSTEM secrets
+  и raw push token. После базового создания ещё нужны own image/env/MCP/network
+  и все четыре PROJECT smoke, шесть ролей и полный Workflow. Эти gates не закрыты.
