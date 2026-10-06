@@ -93,7 +93,7 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
   целостности, происхождения, runtime ABI и подписи не подлежат обходу.
   Допуск после принятия риска требует штатного повторного подписанного
   admission, не переписывает прежнее evidence и не выдаётся самим агентом.
-- [ ] 7. System Assistant сам настраивает себя typed plan; подтверждение,
+- [x] 7. System Assistant сам настраивает себя typed plan; подтверждение,
   публикация, Context7/web/GitHub read и prompt proof реальных ходов.
 - [ ] 8. System Assistant создаёт Kodex | Dev и отдельного Project Assistant;
   authoritative ownership/version/audit readback; project isolation,
@@ -3997,3 +3997,46 @@ ROOT forced vue-tsc/Prettier PASS; Console error/warn нет. Все резул�
   с собственным persistent template и project конфигурацией, без SYSTEM secrets
   и raw push token. После базового создания ещё нужны own image/env/MCP/network
   и все четыре PROJECT smoke, шесть ролей и полный Workflow. Эти gates не закрыты.
+
+### 06.10.2026 04:14–04:20 UTC — отдельный PROJECT профиль создан, полная настройка впереди
+
+- PASS: source `9e0a1c2fc8ce2c5b128ffd04e3fbea1732df84d2` запушен,
+  exact remote/PR1798 head совпал, Draft сохранён. SYSTEM65 получил из нового
+  ASSISTANTS каталога читаемое «Системный помощник», старого marker в ответе
+  нет. Узкая catalog projection реально проверена на hot reload, не только unit.
+  SYSTEM selfconfiguration gate п.7 закрыт по gen10/ENV25 и четырём фактическим
+  функциональным проверкам; глобальные MCP/profiles/roles gates остаются OPEN.
+- PASS: SYSTEM65 conversation `cnv_DPL2BtQrZs20URhmz2B88Sha`, run
+  `run_09t8D6Q_GkMQhz8FMxxOJQ_5` SUCCEEDED. Plan
+  `pln_L5twN64-Le-ynOoCqOgAvs2W` содержит один CREATE_PROJECT_ASSISTANT,
+  не CREATE_AGENT. Параметры только name/purpose/projectRef/instructions.
+  Persistent instructions2837 символов сохраняют organization/project/agent
+  Go-template variables и dynamic integrations range; никакие refs или grants
+  не угадывались. Native Validatev2 → APPLIEDv3 однократно04:16:18.
+  Receipt `rct_7r04sKlmcrLvKQBao6MmJHDr`, audit
+  `aud_trqISunmNPgewE1ClF2ACxmV`: assistant.create_project_assistant,
+  SYSTEM_ASSISTANT/SUCCEEDED/owner initiator, ровно один profile ref.
+- PASS: protected getProjectAssistant200 возвращает профиль
+  `asstp_IYn2J-rRlZFTYJgvlwm__8X3`, backing agent
+  `agt_Zcmv_7hgFoTKSWRoIsGR8LHk`, проект
+  `prj_XM2a_cP83D3Fl3gM2xIcbjZh`, name Помощник Kodex | Dev, ACTIVE/version1.
+  Runtime configuration `rconf_oufQzJKAAK4CX1CzcvEzOFxE` version1,
+  gpt-6.1-sol/medium. Собственный PROJECT ENV
+  `renv_zycHL70M8UYGvTAU_W6fgvaB` revision1/ready=true, versionRef
+  `renvv_iVY67yUOWO33XE9syijg9GUd`; binding
+  `aenv_PFnDbPM0TBK_1-9-8aTWE4mu` version1. Он не связан с SYSTEM ENV25.
+  Overlay `cov_AD4dQ-Tn8mykOOFCljSJs8_3` PUBLISHED/version1.
+  В базовом ENV0 tools/0 secretDescriptors: это НЕ полный PROJECT toolchain
+  и НЕ доказательство PROJECT Context7/web/GitHub готовности.
+- Evidence gap: provider ACK SYSTEM65 не успели сохранить до штатного удаления
+  terminal Pod. Не объявлять exact actual ACK этого хода PASS по чужому запуску.
+  Четыре SYSTEM60–63 ACK и SYSTEM64 ACK сохранены; новая PROJECT materialization
+  требует собственной ранней фиксации ACK и protected preview comparison.
+- Chrome reload04:16:50 восстановил профиль/план/историю; fresh Console error/warn
+  нет, relevant profile/runtime/audit reads200. Единственный предыдущий404 вызван
+  ROOT диагностическим GET до окончания apply, не фоновым запросом приложения.
+  Применение завершилось штатно; исходный преждевременный GET не повторял mutation.
+- NEXT: отдельные own PROJECT image/admission/promotion, Environment tools/network,
+  managed Context7, actual instructions preview/materialization и четыре PROJECT
+  smoke; затем шесть ролей, common image/Secret/Files/grants и SOFTWARE_CHANGE.
+  П.8 не закрыт лишь по базовому созданию профиля; полный QA не завершён.

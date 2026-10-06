@@ -10,6 +10,35 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 04:20 UTC: source `9e0a1c2fc8ce2c5b128ffd04e3fbea1732df84d2`
+запушен, remote/PR1798 exact readback PASS. Runtime catalog human name проверен
+живым SYSTEM65, old marker в ответе отсутствует. SYSTEM gen10/ENV25 gate п.7
+закрыт по четырём реальным функциональным проверкам, не по одному Pod Ready.
+
+SYSTEM65 plan `pln_L5twN64-Le-ynOoCqOgAvs2W` VALIDv2 → APPLIEDv3
+однократно04:16:18. Создан отдельный PROJECT helper:
+profile `asstp_IYn2J-rRlZFTYJgvlwm__8X3`, backing agent
+`agt_Zcmv_7hgFoTKSWRoIsGR8LHk`, project `prj_XM2a_cP83D3Fl3gM2xIcbjZh`.
+Audit `aud_trqISunmNPgewE1ClF2ACxmV` SYSTEM_ASSISTANT/SUCCEEDED;
+receipt `rct_7r04sKlmcrLvKQBao6MmJHDr`. Persistent template2837 символов,
+stable organization/project/agent variables и dynamic integration range сохранены.
+GetProjectAssistant/runtime configuration/audit200. Model gpt-6.1-sol medium.
+Собственный PROJECT ENV `renv_zycHL70M8UYGvTAU_W6fgvaB` revision1/ready=true,
+versionRef `renvv_iVY67yUOWO33XE9syijg9GUd`, binding
+`aenv_PFnDbPM0TBK_1-9-8aTWE4mu` version1. В нём0 tools/0 secretDescriptors;
+это лишь базовое создание, НЕ готовый полный PROJECT helper.
+Actual ACK SYSTEM65 не сохранён до terminal Pod cleanup; не считать его
+подтверждённым по ACK другого хода. SYSTEM60–64 proofs остаются сохранёнными.
+
+Chrome рабочая2 reload04:16:50, owner session активна, чужая1 не трогалась.
+Текущий экран — созданный проект; выбран общесистемный помощник, разговор
+SYSTEM65, пустой composer. Далее переключиться на PROJECT для его own typed
+selfconfiguration или продолжить SYSTEM подготовку PROJECT конфигурации по
+свежей schema, без ручной подмены планов. Нужны собственный image/toolchain,
+admission/promotion, tools/network/MCP, Context7/web/GitHub/context smokes и
+раннее сохранение actual provider ACK. Затем шесть ролей/full dogfooding.
+Ни SYSTEM64 CREATE_PROJECT, ни SYSTEM65 CREATE_PROJECT_ASSISTANT не повторять.
+
 06.10.2026 04:14 UTC: новый clean checkpoint
 `f36e338ad1e1a84ce2a6266f69e36b49214abf35` запушен; независимый readback
 remote/PR1798 head совпал, Draft сохранён. UX loading fix и SYSTEM25/gen10
