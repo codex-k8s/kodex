@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -249,6 +250,45 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		complete("idle-parent-callback-complete", claim("idle-parent-callback", idleParent.Ref), true)
 		if len(execute(command.ClaimExecution, worker, "idle-no-repeat", command.LeaseInput{WorkloadInstance: "workflow-launch-fixture", Limit: 1}, nil).RuntimeItems) != 0 {
 			t.Fatal("missing workflow step generated another callback without new receipt")
+		}
+	})
+	t.Run("coordinator-step-materialization", func(t *testing.T) {
+		selfDraft := draft
+		selfDraft.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+		selfStep := draft.Steps[0]
+		selfStep.Key, selfStep.Position, selfStep.AgentRef = "self-finalize", 2, coordinator.Ref
+		selfDraft.Steps = append(selfDraft.Steps, selfStep)
+		wf := execute(command.CreateWorkflow, owner, "self-create", command.WorkflowInput{ProjectRef: project.Ref, Name: "Explicit coordinator step", Purpose: draft.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &selfDraft}, nil).Workflow
+		wf = execute(command.ValidateWorkflow, owner, "self-validate", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		wf = execute(command.PublishWorkflow, owner, "self-publish", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		selectedWorkflow = wf.Ref
+		parent := execute(command.LaunchRun, owner, "self-parent", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: manager.Ref}, Task: "Complete explicit coordinator step once."}, nil).Run
+		origin := claim("self-parent-claim", parent.Ref)
+		child := launch("self-launch", origin)
+		complete("self-parent-complete", origin, true)
+		coord := claim("self-coord-claim", child.Run.Ref)
+		first := execute(command.DelegateExecution, worker, "self-first", command.DelegateInput{LeaseRef: stringMap(coord, "leaseRef"), Fence: stringMap(coord, "fence"), Generation: runtimeRevisionMapInt64(coord, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step", Task: "Complete first step."}, nil).Run
+		complete("self-coord-complete", coord, true)
+		complete("self-first-complete", claim("self-first-claim", first.Ref), true)
+		callback := claim("self-first-callback", child.Run.Ref)
+		if !strings.Contains(stringMap(callback, "task"), "self-finalize") {
+			t.Fatal("unmaterialized published coordinator step was hidden")
+		}
+		self := execute(command.DelegateExecution, worker, "self-final", command.DelegateInput{LeaseRef: stringMap(callback, "leaseRef"), Fence: stringMap(callback, "fence"), Generation: runtimeRevisionMapInt64(callback, "generation"), TargetAgentRef: coordinator.Ref, WorkflowStepKey: "self-finalize", Task: "Complete published final step."}, nil).Run
+		complete("self-first-callback-complete", callback, true)
+		complete("self-final-complete", claim("self-final-claim", self.Ref), true)
+		finalCallback := claim("self-final-callback", child.Run.Ref)
+		var snapshot struct {
+			RemainingStepKeys []string `json:"remainingStepKeys"`
+		}
+		parts := strings.SplitN(stringMap(finalCallback, "task"), "\n\n", 2)
+		if len(parts) != 2 || json.Unmarshal([]byte(parts[1]), &snapshot) != nil || len(snapshot.RemainingStepKeys) != 0 {
+			t.Fatal("materialized coordinator step was proposed again")
+		}
+		complete("self-final-callback-complete", finalCallback, true)
+		complete("self-parent-callback-complete", claim("self-parent-callback", parent.Ref), true)
+		if read(child.Run.Ref).State != "SUCCEEDED" || read(parent.Ref).State != "SUCCEEDED" {
+			t.Fatal("explicit coordinator step did not complete exactly once")
 		}
 	})
 	for _, scenario := range []string{"parent-cancel", "owner-child-cancel", "parent-failure", "success", "nested-success", "early-nested-success", "owner-child-gate-reject"} {
