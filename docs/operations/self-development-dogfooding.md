@@ -158,6 +158,48 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 19:12 UTC. ROOT source `24bb4b04`: write ENV обновлена
+штатным PROJECT plan `pln_iRpm81omLcMXDNJqVXP2w7Oc`, APPLIED/version3,
+receipt `rct_pFK9ogQ_EuPwGX1NxHSz_fWD`. Native публикация выбрала только
+Developer; fresh GET200 подтверждает environment version2/current revision2
+`renvv_vN6a6YQTyy2JXz-PMRoXh5Th`, bindingVersion3 и GH_TOKEN descriptor
+на проектный Secret revision1. Все пять review bindingsVersion3 остались
+на review revision2, без этого секрета; helper binding4/revision5 не изменён.
+
+У всех шести сотрудников штатно Save → Validate → Publish собственных
+overlay: agentVersion6, PUBLISHED/revision3, `web_search = "live"`,
+`model_reasoning_effort = "medium"`. Fresh owner GET200 каждого подтверждает
+точные environment binding refs, model/overlay; успешные web calls каждой
+обычной роли ещё NOT RUN. Runtime desktop screenshot/Console0; mobile390
+editor336px без horizontal overflow, но внешний status badge перекрывает
+description — FAIL UX, исправление в работе. Source/Pod SHA общего редактора
+совпадает `f2172995950f48161914c6c6b292a173547165306df909479c8b9d359eb88aef`.
+ROOT focused frontend9/9 PASS2.75с и forced typecheck PASS. Первый запуск
+unit с неверными путями не нашёл тестов и завершился FAIL; правильный запуск
+указан отдельно, это не дефект приложения. CP title reducer ROOT package
+PASS0.744с; source/Pod SHA совпадает
+`717954c1cec3094626fb2c5a50e2f8029e494b3b6981ee4399e21d71f9a47d3a`.
+Новые live короткие названия пока NOT RUN; старые названия не мигрировались.
+
+Actual PROJECT helper ACK capture: `run_tc0obckxU-JVvSLilLDpgRlf` COMPLETED;
+task/provider/inbox SHA9610c60b…d35 совпал с независимым browser hash.
+Новый file proposal run `run_yOUMgDOgZvqqenFvF05liKHi`: ранний ACK и same-Pod
+rejoin CAPTURED, task/provider/inbox SHA
+`1304e79863becfd80a019ee28c13df5f616ba7ba2935ed0872a0d4008fa0e815`
+равен независимому hash исходного owner task3410bytes; instruction/file
+digests EQUAL, tools38, grants22, точные helper revision/binding/image pins.
+Binary86d732…fc38 EQUAL только как файл того же Pod/image, не serving process.
+CLI expected-task option не был задан: CLI NOT RUN, независимое сравнение
+ROOT PASS. Создание самого Project File и ordinary six-role runs ещё OPEN.
+
+18:59 наблюдался реальный401 на auth-only oauth2-proxy при живой12h BFF
+family: proxy Keycloak client refresh вернул invalid_grant. Штатный reload
+восстановил proxy cookie без продления/ослабления основной family. Fresh
+GET200 сохраняет absolute expiry07.10 06:23:10UTC/10:23 Саратов; deadline
+автономной работы08:30 покрыт. Исправление bounded proxy reauthentication
+в работе, неизвестные mutations не повторяются. Все serving deployments
+Ready по19:10 readback; historical failed pods не удалялись. Full65 OPEN.
+
 06.10.2026 18:55 UTC. ROOT source `f3591c15`: review ENV обновлена штатным
 PROJECT proposal `pln_DvA6S4rp4zCxZU_l_D2q2_TR` APPLIED/version3,
 receipt `rct_T1744XDi5cNp-qv_DUyhZSzb`, draft
