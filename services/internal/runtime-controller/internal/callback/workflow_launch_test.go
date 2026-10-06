@@ -38,7 +38,7 @@ func TestWorkflowLaunchNativeCatalogAndClosedAuthority(t *testing.T) {
 	if !hasTool(input) {
 		t.Fatal("native launch consumer is absent")
 	}
-	for _, variant := range []string{"capability", "assistant", "project", "mode"} {
+	for _, variant := range []string{"capability", "assistant", "system", "missing-scope", "unknown-scope", "project", "mode"} {
 		t.Run(variant, func(t *testing.T) {
 			copy := input
 			switch variant {
@@ -46,6 +46,12 @@ func TestWorkflowLaunchNativeCatalogAndClosedAuthority(t *testing.T) {
 				copy.Capabilities = nil
 			case "assistant":
 				copy.AssistantScope = runtimecontract.AssistantScopeProject
+			case "system":
+				copy.AssistantScope = runtimecontract.AssistantScopeSystem
+			case "missing-scope":
+				copy.AssistantScope = ""
+			case "unknown-scope":
+				copy.AssistantScope = "UNKNOWN"
 			case "project":
 				copy.ProjectRef = ""
 			case "mode":
@@ -53,6 +59,11 @@ func TestWorkflowLaunchNativeCatalogAndClosedAuthority(t *testing.T) {
 			}
 			if hasTool(copy) {
 				t.Fatal("ineligible launch tool was exposed")
+			}
+			client := &workflowLaunchClient{}
+			server := &Server{control: &controlplaneclient.Client{Runtime: client}}
+			if _, err := server.launchWorkflow(t.Context(), copy, map[string]any{"workflow_ref": "wf_workflow001", "task": "bounded"}, nil); err == nil || client.calls != 0 {
+				t.Fatal("ineligible launch reached authoritative owner")
 			}
 		})
 	}

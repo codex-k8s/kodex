@@ -1,5 +1,14 @@
 package runtimecontract
 
+import "slices"
+
+// RuntimeWorkflowLaunchAvailable связывает producer и consumer с одним exact
+// ordinary-профилем immutable input. Текущую authority перед эффектом проверяет CP.
+func RuntimeWorkflowLaunchAvailable(input RunnerInput) bool {
+	return input.Mode == RunnerModeTurn && input.AssistantScope == AssistantScopeNone &&
+		input.ProjectRef != "" && slices.Contains(input.Capabilities, "platform.run.launch")
+}
+
 // RuntimeFileToolsAvailable сохраняет exact профиль опубликованного VFS catalog.
 // Это проверка immutable execution input, не самостоятельный источник authority.
 func RuntimeFileToolsAvailable(input RunnerInput) bool {
@@ -23,6 +32,9 @@ func RuntimeMCPToolNames(input RunnerInput) []string {
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, "delegate_agent")
+	}
+	if RuntimeWorkflowLaunchAvailable(input) {
+		result = append(result, "launch_workflow")
 	}
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, "get_integration_catalog", "invoke_integration")

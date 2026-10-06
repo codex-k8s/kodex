@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,6 +35,31 @@ func TestRuntimeMCPCatalogWireProducer(t *testing.T) {
 	inputs := []fixture{{Name: "ordinary", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeNone}}, {Name: "system-assistant", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem}},
 		{Name: "project-assistant", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeProject, AssistantProfileRef: "asstprof_fixture123", ProjectRef: "prj_fixture123", AgentRef: "agt_fixture123"}},
 		{Name: "files", Input: files}, {Name: "email-and-files", Input: email}, {Name: "delegation", Input: runtimecontract.RunnerInput{DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_fixture"}}}}}
+	for _, launch := range []bool{false, true} {
+		for _, vfs := range []bool{false, true} {
+			for _, delegation := range []bool{false, true} {
+				input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: runtimecontract.AssistantScopeNone, ProjectRef: "prj_fixture"}
+				if vfs {
+					input = files
+					input.AssistantScope = runtimecontract.AssistantScopeNone
+				}
+				if launch {
+					input.Capabilities = []string{"platform.run.launch"}
+				}
+				if delegation {
+					input.DelegationTargets = []runtimecontract.RunnerDelegationTarget{{Ref: "agt_fixture"}}
+				}
+				inputs = append(inputs, fixture{Name: fmt.Sprintf("ordinary-launch-%t-vfs-%t-delegation-%t", launch, vfs, delegation), Input: input})
+			}
+		}
+	}
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: scope, ProjectRef: "prj_fixture", AgentRef: "agt_fixture", Capabilities: []string{"platform.run.launch"}}
+		if scope == runtimecontract.AssistantScopeProject {
+			input.AssistantProfileRef = "asstprof_fixture123"
+		}
+		inputs = append(inputs, fixture{Name: "assistant-launch-" + string(scope), Input: input})
+	}
 	for i := range inputs {
 		request := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":"agent-runner-tools","method":"tools/list","params":{}}`))
 		response := httptest.NewRecorder()

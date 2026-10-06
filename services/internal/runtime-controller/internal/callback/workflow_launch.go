@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"slices"
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -13,7 +12,7 @@ import (
 )
 
 func workflowLaunchAvailable(input runtimecontract.RunnerInput) bool {
-	return input.Mode == runtimecontract.RunnerModeTurn && !input.IsAssistant() && input.ProjectRef != "" && slices.Contains(input.Capabilities, "platform.run.launch")
+	return runtimecontract.RuntimeWorkflowLaunchAvailable(input)
 }
 
 func workflowLaunchTool() map[string]any {
