@@ -10,6 +10,22 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 18:32 UTC, source9d51def5. Новая SSO12h family подтверждена:
+07.10 06:23:10UTC/10:23 Саратов. Рабочая Chrome5; чужая6 не затрагивается.
+Common generation2 admitted/promoted, artifact `imgart_LfQRLlu5OPM5k0nC3GRCX_dD`,
+manifest6f89d389…bb1d6bf, required38VERIFIED; exact новое риск-решение9acZ,
+не перенос старого. Native PROJECT ENV38 proposal в
+`cnv_iGPBwDtqy5KKdwJsWpbBmExq`, run `run_3V5jOr3izuR8T2-I23yFQkPQ`.
+Дальше Validate/Apply draft → impact/Publish только helper, затем review5/
+Developer shared image upgrade и protected Developer-only Secret.
+PROJECT GitHub READ20 APPLIED, GH connectionv120; ordinary108APPLIED/C7v26.
+Canonical fixture12e824 PG24.55с/registry5/Proto PASS; ROOT compact grant
+frontend84/forced typecheck и protected input26 PASS. Native compact mobile
+и Secret path ещё OPEN. Полный65/6actualroles/Workflow/bootstrapmerge/
+реальныйdogfooding остаются OPEN. Следующий own reload не позже18:35UTC.
+
+## Предыдущий checkpoint 18:07
+
 06.10.2026 18:07 UTC. Source `7687f133`: предыдущий remote/PR checkpoint
 `341a8c6f642007c97138fc0345f281204fea7b9e` exact readback PASS.
 Все108 ordinary grants применены нативно: Manager19, Architect18,

@@ -158,6 +158,46 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 18:32 UTC. ROOT source `9d51def5ab519172774f0ef337c5a2685666a61e`:
+свежая SSO family GET200 имеет absolute expiry07.10 06:23:10UTC
+(10:23 Саратов), то есть полное12h окно. Для этого выполнен штатный logout
+текущей прикладной/IdP сессии и новый вход; чужая Chrome6 не затрагивалась.
+Сам по себе prompt=login не сбросил прежний IdP max lifetime. Ранний вызов
+authorization SDK без store state дал локальную ошибку callback — это ошибка
+QA-инициатора, не найденный дефект платформы; штатный store flow исправил её.
+MCP approval поддерживается отдельно list_pages/reload рабочей Chrome5.
+
+ROOT на source12e824: canonical registry92, отрицательные91/93 —5/5 PASS;
+lint-proto/build-proto/SQL boundary PASS. Disposable PostgreSQL
+TestProjectAssistantProfilesComponent PASS24.55с: canonical101nodes/264edges
+после forward00300, exact recipe environment key для SYSTEM/PROJECT,
+purge/worker/runner guards. Applied migrations не менялись.
+ROOT на source9d51def5: protected-input synthetic26/26 PASS0.229с,
+syntax/diff-check PASS; targeted frontend84/84 PASS2.73с и forced typecheck
+PASS. Compact PROJECT shared header интегрирован, native mobile проверка
+ещё OPEN; ошибочные пути первой unit-команды дали только4tests, они не
+выдавались за полный адресный прогон. Новый protected owner UI путь ещё NOT RUN.
+
+Native common generation2 reportREADY:4640matches/2938unique,
+2315scanner-suppressed,459HIGHбезfix; ровно2blocking — прежние undici/tar.
+Для нового exact artifact `imgart_LfQRLlu5OPM5k0nC3GRCX_dD` принято отдельное
+локальное bootstrap риск-решение `imgrisk_9acZIAz8Leiflp46wtPu62n0`
+18:28:26UTC. Старое решение не переносилось. Admission attempt2/fence3
+`imgadm_ynYQGNpbGU0hiChbnLfxKwRe` ACCEPTED; native promotion запрошен один
+раз, fresh recipeGET200 promotedImageReady=true. Новый manifest
+`sha256:6f89d389cd2d3849bc6be4dd3c29332dff064b3c9814c7b3b443d1bc0bb1d6bf`,
+signed inventory916adecd…bdb143, required38/VERIFIED38. Integrity/provenance/
+ABI/signature не обходились. Role-image desktop screenshot/Console0 и
+relevant GET200 проверены; signer сообщает blocked optional TUF refresh,
+фактический подписанный owner admission сохранён. Full65 OPEN.
+
+PROJECT helper native восстановление ENV38 запрошено в новом диалоге
+`cnv_iGPBwDtqy5KKdwJsWpbBmExq`, run `run_3V5jOr3izuR8T2-I23yFQkPQ`,
+turn `trn_aRKZuQAKsuarLwYVhM7bW5cn`. CurrentENV4/tools0 и pinned3/tools38
+подтверждены отдельно; values/Secrets по0 в обоих. Один план с новым common
+artifact и прежними38descriptors/полной policy, без BINDdefault4, без новой
+сборки, grants/model/instructions/Secret effects. Apply/Publish пока OPEN.
+
 06.10.2026 18:17 UTC. Source0196920f: исправлен сквозной каталог рецептов
 SQL→domain→Proto field22→CP mapper→callback; `environment_key` берётся из
 сохранённого scoped recipe, в других видах каталога запрещён. ROOT callback
