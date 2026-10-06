@@ -127,6 +127,25 @@ type PromotionAuthorizeInput struct {
 	ExpectedVersion                                             uint64
 }
 
+// Чтение не возобновляет claim: исходный ключ разрешается внутри owner boundary.
+type AdmissionTerminalInput struct {
+	AdmissionExpiryInput
+	ClaimIdempotencyKey                                                              string
+	RiskAcceptanceSHA256, SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest string
+	SourceAdmissionRevision                                                          uint64
+}
+
+type AdmissionTerminalProof struct {
+	RiskAcceptanceSHA256, SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest string
+	SourceAdmissionRevision                                                          uint64
+	State                                                                            string
+	ClaimedArtifact                                                                  entity.ImageArtifact
+	AttemptRef                                                                       string
+	Attempt                                                                          uint32
+	ClaimFence, ClaimAuthorityGeneration                                             uint64
+	TerminalArtifactVersion, TerminalFence, TerminalAttemptVersion                   uint64
+}
+
 type PromotionCompleteInput struct {
 	Principal                                                  value.Principal
 	IdempotencyKey, ArtifactRef, AuthorizationToken            string
@@ -168,6 +187,7 @@ type Repository interface {
 	RecordAdmission(context.Context, AdmissionRecordInput) (entity.ImageArtifact, error)
 	FailAdmission(context.Context, AdmissionFailureInput) (entity.RoleImageAdmissionFailure, error)
 	ExpireAdmission(context.Context, AdmissionExpiryInput) (entity.RoleImageAdmissionFailure, error)
+	GetAdmissionTerminal(context.Context, AdmissionTerminalInput) (AdmissionTerminalProof, error)
 	ClaimPromotion(context.Context, value.Principal, string) (entity.ImagePromotionClaim, error)
 	RequestPromotion(context.Context, PromotionRequestInput) (entity.RoleImagePromotionReceipt, error)
 	AuthorizePromotion(context.Context, PromotionAuthorizeInput) (entity.ImagePromotionAuthorization, error)

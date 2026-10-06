@@ -78,7 +78,7 @@ func run(ctx context.Context) error {
 		default:
 			return errors.New("image admission failure code is invalid")
 		}
-		return client.Fail(ctx, admissionIdempotencyKey(operation, runID, claim), claim, code)
+		return client.FailWithTerminalRecovery(ctx, admissionIdempotencyKey(operation, runID, claim), idempotencyKey("claim", runID), claim, code)
 	case "claim":
 		claim, err := client.Claim(ctx, idempotencyKey(operation, runID))
 		if err != nil {

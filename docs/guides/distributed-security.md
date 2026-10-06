@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.2
-updated: 2026-10-05
+version: 1.7.3
+updated: 2026-10-06
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -1479,6 +1479,15 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   подтверждённого owner terminal; повтор сохраняет исходный closed error code.
   Сбой terminal callback сохраняет закрытую диагностику gRPC code без remote
   error, claim или payload; marker завершения появляется только после receipt.
+  Если owner уже закрыл прежнюю attempt при смене сборки, worker читает её
+  через отдельный типизированный owner RPC с обычной проверенной identity.
+  Исходная квитанция claim разрешается внутри точных tenant/actor/workload
+  границ; полный immutable tuple и terminal snapshot связывают artifact,
+  build, attempt, version, fence, generation и source/risk digests. Только
+  известный terminal enum разрешает штатную очистку прежних Job/workspace и
+  новый claim. `PermissionDenied`, `NotFound`, expiry старого tuple и отсутствие
+  ресурса не доказывают terminal. Чтение не меняет verdict/history, не
+  возобновляет claim/grant и не разрешает stale completion либо promotion.
 - Локальный одноразовый helper доступа к credentials задаёт каждому kubectl
   явный приватный cache-dir вне repository и проверяет owner/mode/inode перед
   ограниченным cleanup. Отсутствие HOME в очищенном окружении не доказывает

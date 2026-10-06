@@ -10,6 +10,33 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 05:21–05:38 UTC — native PROJECT05 plan
+`pln_xF-7_dDX7XOEobEwQU1ViNmN` уже APPLIED/version3;
+receipt `rct_3Jss9-CVdC7lbbGeiXO4UV3C`, audit
+`aud_VPX3YJEvDH28SXTod50p_exL`. Fresh config
+`rconf_gLQ32wIvuGKKJaQb4t2l910v` version2, overlay
+`cov_NQqIw1FLMwCnFnNwJ8fpgzto` version3 PUBLISHED содержит live search;
+gpt-6.1-sol/medium и аккаунт сохранены. Apply НЕ повторять.
+Actual search ещё NOT RUN: после hard reload05:29 истекла SSO-сессия,
+Chrome MCP наблюдение работает, вход восстанавливается. Screenshot новой
+формы пока NOT RUN; DOM и backend receipt не заменяют визуальную проверку.
+
+На tree поверх `36124c71` интегрированы: три файла web-search формы,
+29 файлов closed terminal admission RPC и три файла исправления исторической
+policy77 test fixture. ROOT79/79 frontend units1.82с, source/Pod hashes,
+Go CP/worker/client units, PostgreSQL terminal component3.19с и25/25
+contract/service-policy/repair units4.52с PASS. При первоначальной интеграции
+canonical JCS получил лишний newline; штатный generator восстановил bytes,
+29/29 source hashes совпали и CP app повторно PASS. Runtime recovery ещё
+NOT RUN: существующий supply-chain apply требует managed Jobs/PVC0, а
+старый B1 cursor сохраняет три Complete Job и PVC; reader с одной сменой image
+не обновляет bridge в old immutable CM. Готовится controller-only exact
+terminal read и bounded repo-owned reader delivery с сохранением старых
+CM/orchestrationRevision/policy/tuple. Guards не отключать, Jobs/claims не
+удалять вручную, третий build не запускать. После exact B1 cleanup — свежий
+B2 report/risk/promotion и own PROJECT ENV38/four smokes. Full65 OPEN.
+Remote последний проверенный `f99f85a5`; новый checkpoint пока локальный.
+
 06.10.2026 05:14 UTC — текущая точка на local HEAD `2dc6164` с адресным
 test/fixture regression. Remote последний проверенный `f99f85a5`; новых push
 ещё не было. PROJECT05 `run_9hENOODf4KHpmTkljWk-SL0n` SUCCEEDED, план

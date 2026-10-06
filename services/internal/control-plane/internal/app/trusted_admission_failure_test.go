@@ -13,7 +13,7 @@ func TestTrustedAdmissionTechnicalCommandsAreExactAndLeastPrivilege(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	for method, permission := range map[string]string{cp.RoleImageService_FailImageAdmission_FullMethodName: "platform.role-images.admission.fail", cp.RoleImageService_ExpireImageAdmissionClaim_FullMethodName: "platform.role-images.admission.expire"} {
+	for method, permission := range map[string]string{cp.RoleImageService_FailImageAdmission_FullMethodName: "platform.role-images.admission.fail", cp.RoleImageService_ExpireImageAdmissionClaim_FullMethodName: "platform.role-images.admission.expire", cp.RoleImageService_GetImageAdmissionTerminal_FullMethodName: "platform.role-images.admission.terminal.get"} {
 		for _, caller := range []string{"image-admission", "image-admission-controller", "role-image-builder", "image-promotion", "control-api-gateway"} {
 			ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(serviceidentity.ProfileMetadataKey, transportprofile.TrustedCluster, serviceidentity.CallerMetadataKey, "spiffe://kodex.local/ns/kodex-system/sa/"+caller))
 			admission, err := authorizer.Admit(ctx, method)

@@ -450,10 +450,11 @@ func RoleImageBuilderOperations() map[string]string {
 // builder и promotion workload.
 func ImageAdmissionOperations() map[string]string {
 	return map[string]string{
-		"platform.role-images.admission.claim":  controlplanev1.RoleImageService_ClaimImageAdmission_FullMethodName,
-		"platform.role-images.admission.record": controlplanev1.RoleImageService_RecordImageAdmission_FullMethodName,
-		"platform.role-images.admission.fail":   controlplanev1.RoleImageService_FailImageAdmission_FullMethodName,
-		"platform.role-images.admission.expire": controlplanev1.RoleImageService_ExpireImageAdmissionClaim_FullMethodName,
+		"platform.role-images.admission.claim":        controlplanev1.RoleImageService_ClaimImageAdmission_FullMethodName,
+		"platform.role-images.admission.record":       controlplanev1.RoleImageService_RecordImageAdmission_FullMethodName,
+		"platform.role-images.admission.fail":         controlplanev1.RoleImageService_FailImageAdmission_FullMethodName,
+		"platform.role-images.admission.expire":       controlplanev1.RoleImageService_ExpireImageAdmissionClaim_FullMethodName,
+		"platform.role-images.admission.terminal.get": controlplanev1.RoleImageService_GetImageAdmissionTerminal_FullMethodName,
 	}
 }
 

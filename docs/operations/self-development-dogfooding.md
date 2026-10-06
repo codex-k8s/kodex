@@ -4228,3 +4228,56 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   В plan-review форме добавить видимый компактный режим поиска; затем native
   Apply и новый actual search. Own PROJECT image/ENV38, четыре smokes,
   шесть сотрудников и Workflow остаются OPEN; весь checklist не завершён.
+
+### 06.10.2026 05:21–05:38 UTC — native live-search Apply и closed recovery read
+
+- PROJECT05 plan `pln_xF-7_dDX7XOEobEwQU1ViNmN` revision1 штатно
+  APPLIED/version3 в05:21:31 UTC. Receipt
+  `rct_3Jss9-CVdC7lbbGeiXO4UV3C`, audit
+  `aud_VPX3YJEvDH28SXTod50p_exL`; operation-001 APPLIED. Fresh owner read200
+  подтвердил config `rconf_gLQ32wIvuGKKJaQb4t2l910v` version2/digest
+  `755e7171964aa3fca0c7abee3ba230e6baaa2065d0c50dd857879b1d32157fe4`
+  и overlay `cov_NQqIw1FLMwCnFnNwJ8fpgzto` version3 PUBLISHED:
+  hosted web_search live, прежние gpt-6.1-sol/medium/FIXED account сохранены.
+  Это подтверждение настройки, НЕ actual hosted search: новый search NOT RUN.
+- На base `36124c71ab50952ad646852afac3d419282236e9` интегрирован явный
+  web-search selector в plan-review: Не менять для отсутствующего optional
+  поля, disabled/cached/indexed/live, локализованное before→after; открытие
+  и изменение модели не добавляют скрытый optional override. ROOT79/79
+  units1.82с PASS, ранее scoped lint/format/forced typecheck PASS на тех же
+  handwritten bytes. Host и staff-control-center Pod form SHA
+  `4a8593bace0d9d082161a2ba067dc4c94db70c623bf9b49e95cd7ef52d5f632a`
+  и i18n SHA `e3ad138e302ce569435ac892dafcd44b96f8741cc7fe3f84424420a7c8984be8`
+  совпали. DOM показывает актуальный поиск, Console error/warn05:21 пустые.
+  Screenshot этой новой формы NOT RUN из-за timeout; DOM не выдан за screenshot.
+- Интегрирован worker-only `GetImageAdmissionTerminal`: transport identity,
+  original tenant/actor claim receipt, все immutable artifact/build/attempt/
+  version/fence/generation/source/risk pins, closed terminal enum и read-only
+  RepeatableRead. Deny/live/unknown не разрешают cleanup. Fail/Expire, native
+  ранний terminal, verdict и история не изменены; ни claim, ни grant не
+  возобновляются. Authority registry forward89→90, не image policyRevision.
+  Frozen29file patch SHA
+  `845c416a1d094edbe171a0526d3088221f3cf077d92b5252861c8b08989d2a35`;
+  после штатного regeneration canonical JCS ROOT29/29 source hashes равны.
+- ROOT canonical disposable PostgreSQL terminal component PASS3.19с:
+  native PROJECT B1→B2 CANCELLED, liveB2 denial,24 negative cases, readonly
+  artifact/attempt/audit/receipt/outbox, replay/rotation и stale callbacks.
+  CP domain/transport/repository units, app повторно после generator,
+  shared client, worker/client/bridge/controller units PASS. Никаких live SQL,
+  migration edits или ручного удаления controller resources.
+- Исторические policy projection/rotation suites использовали moving current
+  policy89 вместо exact77 repair input; frozen публичный Git fixture восстановил
+  точный hash77 без изменения production guard. Current90, synthetic90 и
+  изменённый hash77 закрыто отклоняются; input не меняется. ROOT вместе с
+  contract registry/service-policy tests25/25 PASS4.52с. Fixture SHA
+  `763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504`.
+- Live delivery gap подтверждён read-only: supply-chain/quiesce/reader guards
+  требуют idle; B1 оставил три Complete Job и exact PVC, B2 PENDING. Старый
+  immutable CM назначает прежний bridge и orchestrationRevision, поэтому
+  простая смена controller image не доставит worker fix. Требуется closed
+  controller-only terminal read и bounded code-first reader delivery,
+  сохраняющий old CM/tuple/policy; implementation и live recovery ещё NOT RUN.
+- Chrome MCP list/evaluate работают. Hard reload05:29 привёл на штатный SSO;
+  дальнейший native PROJECT search/visual flow ждёт восстановления входа.
+  Старый plan/run не повторяются. Пункты8–15 и весь full65 остаются OPEN;
+  новый checkpoint локальный, remote последний проверенный f99f85a5.

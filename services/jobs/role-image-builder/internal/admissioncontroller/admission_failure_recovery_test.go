@@ -95,6 +95,24 @@ func TestAdmissionFailedReceiptRecoverySurvivesRestart(t *testing.T) {
 	if len(workspaces.Items) != 0 {
 		t.Fatal("durable owner receipt did not unblock cleanup")
 	}
+	// Следующий owner candidate становится достижим без restart/delete живой claim.
+	restarted.now = func() time.Time { return now.Add(3 * cfg.RetryInterval) }
+	if err := restarted.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := client.BatchV1().Jobs(cfg.Namespace).List(t.Context(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var freshClaim bool
+	for _, candidate := range jobs.Items {
+		if candidate.Labels[phaseLabel] == "claim" && candidate.Annotations[runIDAnnotation] != runID {
+			freshClaim = true
+		}
+	}
+	if !freshClaim {
+		t.Fatal("owner terminal recovery did not make the next build claim reachable")
+	}
 }
 
 func TestRecoveryWorkspaceCELAllowsOnlyClosedCursor(t *testing.T) {

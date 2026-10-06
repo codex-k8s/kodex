@@ -56,7 +56,7 @@ const riskOperations = [
 ];
 
 function checkRiskContract(api, policy) {
-  assert.equal(policy.policy_revision, 89, 'RISK_POLICY_REVISION');
+  assert.equal(policy.policy_revision, 90, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');

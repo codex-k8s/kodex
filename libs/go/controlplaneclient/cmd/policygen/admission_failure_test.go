@@ -6,7 +6,7 @@ import (
 )
 
 func TestAdmissionTechnicalCommandsBindCanonicalExactTuple(t *testing.T) {
-	for _, operation := range []string{"platform.role-images.admission.fail", "platform.role-images.admission.expire"} {
+	for _, operation := range []string{"platform.role-images.admission.fail", "platform.role-images.admission.expire", "platform.role-images.admission.terminal.get"} {
 		method := controlplaneclient.ImageAdmissionOperations()[operation]
 		want := requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 		if method == "" || operationRequestProfile(operation, method) != want {

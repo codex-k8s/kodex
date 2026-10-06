@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, useId } from "vue";
+import { useI18n } from "vue-i18n";
 import { loadRuntimeCatalog } from "@/features/agents/detail/runtime-api";
 import { readyRuntimes } from "@/features/agents/detail/model";
 import { usePlatformStore } from "@/features/platform/store";
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   parameter: [key: string, value: unknown];
 }>();
 const platform = usePlatformStore();
+const { t } = useI18n();
 const id = `assistant-runtime-${useId()}`;
 const runtimes = ref<RuntimeSelection[]>([]);
 const catalogFailed = ref(false);
@@ -94,6 +96,30 @@ const reasoning = computed(() =>
   ),
 );
 const efforts = computed(() => reasoning.value?.efforts ?? []);
+const webSearchModes = ["disabled", "cached", "indexed", "live"] as const;
+const webSearchValid = computed(
+  () =>
+    value("webSearchMode") === undefined ||
+    webSearchModes.some((mode) => mode === value("webSearchMode")),
+);
+function webSearchLabel(mode: unknown): string {
+  if (mode === undefined) return t("assistant.planEditor.webSearchDefault");
+  const known = webSearchModes.find((candidate) => candidate === mode);
+  return known
+    ? t(`assistant.planEditor.webSearchModes.${known}`)
+    : t("assistant.planEditor.webSearchInvalid");
+}
+const webSearchReview = computed(() => {
+  try {
+    const input = operationInputs([props.operation])[0];
+    return {
+      before: webSearchLabel(input?.before.webSearchMode),
+      after: webSearchLabel(input?.after.webSearchMode),
+    };
+  } catch {
+    return undefined;
+  }
+});
 const usageContext = computed(() => ({
   purpose: "CONFIGURE" as const,
   agentRef: text("agentRef"),
@@ -105,6 +131,7 @@ const usageContext = computed(() => ({
 const valid = computed(
   () =>
     ownerValid.value &&
+    webSearchValid.value &&
     Boolean(selectedRuntime.value) &&
     policy.value !== undefined &&
     modelAvailable.value &&
@@ -139,6 +166,11 @@ function update(key: string, input: unknown): void {
 }
 function change(key: string, event: Event): void {
   update(key, (event.target as HTMLSelectElement).value);
+}
+function changeWebSearch(event: Event): void {
+  const candidate = (event.target as HTMLSelectElement).value;
+  if (webSearchModes.some((mode) => mode === candidate))
+    update("webSearchMode", candidate);
 }
 </script>
 
@@ -210,6 +242,34 @@ function change(key: string, event: Event): void {
       @availability-change="modelAvailable = $event"
       @selection-change="modelSelection = $event"
     />
+    <label class="field" :for="`${id}-web-search`">
+      <span>{{ $t("assistant.planEditor.webSearchMode") }}</span>
+      <select
+        :id="`${id}-web-search`"
+        :name="`${id}-web-search`"
+        :value="text('webSearchMode')"
+        :disabled="disabled || !ownerValid"
+        @change="changeWebSearch"
+      >
+        <option v-if="value('webSearchMode') === undefined" value="" disabled>
+          {{ $t("assistant.planEditor.webSearchUnchanged") }}
+        </option>
+        <option
+          v-else-if="!webSearchValid"
+          :value="text('webSearchMode')"
+          disabled
+        >
+          {{ $t("assistant.planEditor.webSearchInvalid") }}
+        </option>
+        <option v-for="mode in webSearchModes" :key="mode" :value="mode">
+          {{ $t(`assistant.planEditor.webSearchModes.${mode}`) }}
+        </option>
+      </select>
+      <small v-if="webSearchReview">
+        {{ $t("assistant.planEditor.webSearchReview", webSearchReview) }}
+      </small>
+      <small>{{ $t("assistant.planEditor.webSearchHelp") }}</small>
+    </label>
     <label class="field" :for="`${id}-effort`">
       <span>{{ $t("runtimeOverlay.effort") }}</span>
       <select

@@ -4326,6 +4326,18 @@ const ru = {
         "Настройки модели применятся только к закреплённому помощнику и следующим ходам. После сохранения и проверки плана отдельно подтвердите применение; текущие ходы сохранят прежнюю конфигурацию.",
       runtimeConfigurationUnavailable:
         "Не удалось подтвердить привязку помощника или каталог. Обновите план; изменения пока недоступны.",
+      webSearchMode: "Поиск в интернете",
+      webSearchUnchanged: "Не менять",
+      webSearchDefault: "Настройка по умолчанию",
+      webSearchInvalid: "Недопустимый режим поиска",
+      webSearchReview: "Сейчас: {before} → После применения: {after}",
+      webSearchHelp: "Поиск провайдера не меняет доступ программ к сети.",
+      webSearchModes: {
+        disabled: "Выключен",
+        cached: "Кэшированный поиск",
+        indexed: "Поиск по индексу",
+        live: "Актуальный поиск",
+      },
       reasoningCatalogDefault: "По умолчанию из каталога",
       reasoningUnsupported: "Модель без степени рассуждения",
       reasoningUnsupportedHelp:
@@ -8844,6 +8856,19 @@ const en = {
         "Model settings apply only to the pinned assistant and future turns. Save and validate the plan, then separately confirm application; current turns keep their existing configuration.",
       runtimeConfigurationUnavailable:
         "The assistant binding or catalog could not be verified. Refresh the plan; changes are unavailable for now.",
+      webSearchMode: "Web search",
+      webSearchUnchanged: "Keep current setting",
+      webSearchDefault: "Default setting",
+      webSearchInvalid: "Invalid search mode",
+      webSearchReview: "Current: {before} → After application: {after}",
+      webSearchHelp:
+        "Provider search does not change network access for programs.",
+      webSearchModes: {
+        disabled: "Disabled",
+        cached: "Cached search",
+        indexed: "Indexed search",
+        live: "Live search",
+      },
       reasoningCatalogDefault: "Catalog default",
       reasoningUnsupported: "Model without reasoning effort",
       reasoningUnsupportedHelp:

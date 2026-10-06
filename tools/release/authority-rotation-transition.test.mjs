@@ -10,6 +10,8 @@ import {fingerprint} from './scoped-release.mjs';
 
 const image='ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:'+'a'.repeat(64);
 const source=fileURLToPath(new URL('../..',import.meta.url)).replace(/\/$/,'');
+// Публичный snapshot a388aa9c сохраняет exact вход исторического перехода 76→77.
+const rotationPolicyFixture=new URL('./fixtures/authority-policy-revision77.json',import.meta.url);
 function template(){return createCanonicalRotationTemplate(source,image);}
 const plan={version:3,intentID:'13900000-0000-4000-8000-000000000002',source:'/srv/kodex-dev/next',revision:'a'.repeat(40),action:'abort',rotation:{intentID:'13900000-0000-4000-8000-000000000003',sourceRevision:2,sourceDigestSHA256:'b'.repeat(64)}};
 
@@ -96,7 +98,7 @@ test('rotation job reuses exact rendered migrator authority and network paths',(
 
 test('rotation CAS changes only registry and publisher pod template',()=>{
  const currentRegistry='version: 1\nsource_revision: 7\ntargets: []\n',nextRegistry='version: 1\nsource_revision: 8\ntargets: []\n';
-	const nextPolicy=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`,'utf8');
+	const nextPolicy=readFileSync(rotationPolicyFixture,'utf8');
 	const previousPolicy=JSON.parse(nextPolicy);previousPolicy.policy_revision=76;previousPolicy.policy.operation_bindings.find(value=>value.operation_id==='platform.command.integration-definitions.create-draft').project_required=true;const currentPolicy=JSON.stringify(previousPolicy);
 	const previousIdentity=deriveRegistryRotationIdentity(currentRegistry),identity=deriveRegistryRotationIdentity(nextRegistry);
 	const rotate={...plan,action:'rotate',ownerOperationID:identity.ownerOperationID,registry:{uid:'13900000-0000-4000-8000-000000000010',resourceVersion:'10',currentDataSHA256:'',desiredData:{'key-delivery-targets.yaml':nextRegistry,'authority-policy.json':nextPolicy},desiredDataSHA256:'',previousSourceRevision:previousIdentity.sourceRevision,previousSourceDigestSHA256:previousIdentity.sourceDigestSHA256,sourceRevision:identity.sourceRevision,sourceDigestSHA256:identity.sourceDigestSHA256,previousPolicyRevision:76,previousPolicySHA256:createHash('sha256').update(currentPolicy).digest('hex'),policySHA256:'763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504'},publisher:{uid:'13900000-0000-4000-8000-000000000011',resourceVersion:'11',specSHA256:'',image,command:['/usr/local/bin/internal-rpc-authority-publisher']}};
@@ -118,8 +120,16 @@ test('rotation CAS changes only registry and publisher pod template',()=>{
 test('canonical registry advances live revision with exactly base web-only targets and policy 77',()=>{
  const canonical=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8'),live=canonical.replace('source_revision: 7','source_revision: 18');
  const next=deriveCanonicalRegistryAdvance(live,canonical);assert.equal(next.identity.sourceRevision,19);assert.equal(canonicalRegistryMatches(next.raw,canonical),true);assert.equal(next.raw.includes('interaction-gateway'),false);
- const policy=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`,'utf8');assert.deepEqual(validateRotationPolicy(policy),{revision:77,sha256:'763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504'});
+ const policy=readFileSync(rotationPolicyFixture,'utf8');assert.deepEqual(validateRotationPolicy(policy),{revision:77,sha256:'763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504'});
  const binding=JSON.parse(policy).policy.operation_bindings.filter(value=>value.operation_id==='platform.command.integration-definitions.create-draft');assert.equal(binding.length,1);assert.equal(binding[0].project_required,false);
+});
+
+test('точный переход отклоняет текущую policy, revision90 и изменённый hash policy77',()=>{
+ const current=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`,'utf8');
+ const frozen=readFileSync(rotationPolicyFixture,'utf8'),next=JSON.parse(frozen);next.policy_revision=90;
+ for(const raw of [current,JSON.stringify(next),`${frozen}\n`]){
+  assert.throws(()=>validateRotationPolicy(raw),/^Error: EXACT_ROTATION_POLICY_REQUIRED$/);
+ }
 });
 
 test('rotation readback is closed and contains no payload',()=>{
