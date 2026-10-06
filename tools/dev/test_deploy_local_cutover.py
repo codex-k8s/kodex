@@ -563,6 +563,102 @@ quiesce_local_supply_chain_workload control-plane
                 if mode == 'readback': self.assertNotIn('scale', result.stdout)
                 if success and mode == 'apply': self.assertIn('--current-replicas=1 --resource-version=42', result.stdout)
 
+    def test_quiesce_final_inventory_accepts_only_proved_terminal_subset(self):
+        deployment_uid = '12345678-1234-1234-1234-123456789abc'
+        replica_uid = '22345678-1234-1234-1234-123456789abc'
+        deployment = {'metadata': {'namespace': 'kodex-system', 'name': 'role-image-builder',
+            'uid': deployment_uid, 'resourceVersion': '42', 'labels': {
+                'app.kubernetes.io/part-of': 'kodex', 'kodex.dev/local-profile': 'hot-reload',
+                'kodex.dev/security-profile': 'trusted-cluster'}},
+            'spec': {'replicas': 0, 'selector': {'matchLabels': {'app': 'role-image-builder'}},
+                'template': {'metadata': {'labels': {'app': 'role-image-builder'}},
+                    'spec': {'containers': [{'name': 'role-image-builder', 'image': 'exact'}]}}},
+            'status': {'replicas': 0, 'availableReplicas': 0}}
+        pod = {'metadata': {'namespace': 'kodex-system', 'name': 'builder-historical',
+            'uid': '32345678-1234-1234-1234-123456789abc', 'labels': {'app': 'role-image-builder'},
+            'ownerReferences': [{'apiVersion': 'apps/v1', 'kind': 'ReplicaSet', 'name': 'builder-old',
+                                 'uid': replica_uid, 'controller': True}]},
+            'spec': {'nodeName': 'k3d-kodex-server-0', 'containers': [{'name': 'role-image-builder'}]},
+            'status': {'phase': 'Failed', 'reason': 'Evicted'}}
+        sets = {'items': [{'metadata': {'namespace': 'kodex-system', 'name': 'builder-old',
+            'uid': replica_uid, 'ownerReferences': [{'apiVersion': 'apps/v1', 'kind': 'Deployment',
+                'name': 'role-image-builder', 'uid': deployment_uid, 'controller': True}]}}]}
+        proof = {'status': 'PASS', 'code': 'EVICTED_POD_PROCESSES_ABSENT', 'nodes': 2, 'pods': 1,
+                 'snapshots': 2, 'targetSandboxes': 0, 'targetContainers': 0, 'targetTasks': 0,
+                 'orphanContainers': 0, 'unresolvedTasks': 0}
+        command = functions('readback_local_quiesced_pods', 'quiesce_local_supply_chain_workload') + PREFIX + '''
+mode=readback; security_profile=trusted-cluster; stage=supply-chain-quiesce; context=k3d-kodex
+temporary_directory=$PRIVATE; script_directory=synthetic
+seq() { printf '180\\n'; }
+kubectl() {
+ case "$*" in
+  *get\\ replicasets*) printf '%s\\n' "$SETS" ;;
+  *get\\ pods*)
+    if [[ -f "$PRIVATE/pods-read" ]]; then printf '%s\\n' "$FINAL_PODS";
+    else touch "$PRIVATE/pods-read"; printf '%s\\n' "$ORIGINAL_PODS"; fi ;;
+  *get\\ deployment*)
+    if [[ -f "$PRIVATE/second-proof" ]]; then printf '%s\\n' "$POST_PROOF_DEPLOYMENT";
+    else printf '%s\\n' "$DEPLOYMENT"; fi ;;
+  *) return 99 ;;
+ esac
+}
+python3() {
+ cat >/dev/null
+ if [[ -f "$PRIVATE/first-proof" ]]; then
+   touch "$PRIVATE/second-proof"; [[ "$SECOND_PROOF_EXIT" == 0 ]] || return 1
+ else touch "$PRIVATE/first-proof"; fi
+ printf '%s\\n' "$PROOF"
+}
+quiesce_local_supply_chain_workload role-image-builder
+'''
+        changed = copy.deepcopy(pod)
+        changed['status']['conditions'] = [{'type': 'Ready', 'status': 'False'}]
+        deleting = copy.deepcopy(changed)
+        deleting['metadata']['deletionTimestamp'] = '2026-10-06T17:56:00Z'
+        cases = [('stable', [pod], deployment, '0', True, True),
+                 ('terminal-status-update', [changed], deployment, '0', True, True),
+                 ('terminal-deletion-marker', [deleting], deployment, '0', True, True),
+                 ('already-proved-terminal-deleted', [], deployment, '0', True, False),
+                 ('native-proof-outage', [changed], deployment, '1', False, True)]
+        for field in ('uid', 'name', 'namespace', 'labels', 'owner', 'spec', 'phase', 'reason'):
+            bad = copy.deepcopy(changed)
+            if field in ('uid', 'name', 'namespace'):
+                bad['metadata'][field] = '42345678-1234-1234-1234-123456789abc' if field == 'uid' else 'foreign'
+            elif field == 'labels': bad['metadata']['labels']['app'] = 'foreign'
+            elif field == 'owner': bad['metadata']['ownerReferences'][0]['uid'] = deployment_uid
+            elif field == 'spec': bad['spec']['nodeName'] = 'k3d-kodex-agent-0'
+            elif field == 'phase': bad['status']['phase'] = 'Running'
+            else: bad['status']['reason'] = 'ContainerStatusUnknown'
+            cases.append((field, [bad], deployment, '0', False, False))
+        cases.extend([('duplicate-uid', [changed, changed], deployment, '0', False, False),
+                      ('added-pod', [pod, dict(changed, metadata=dict(changed['metadata'],
+                        uid='42345678-1234-1234-1234-123456789abc'))], deployment, '0', False, False)])
+        for field in ('replicas', 'uid', 'image'):
+            bad_deployment = copy.deepcopy(deployment)
+            if field == 'replicas': bad_deployment['spec']['replicas'] = 1
+            elif field == 'uid': bad_deployment['metadata']['uid'] = replica_uid
+            else: bad_deployment['spec']['template']['spec']['containers'][0]['image'] = 'foreign'
+            cases.append(('post-proof-' + field, [changed], bad_deployment, '0', False, True))
+        terminal = copy.deepcopy(pod)
+        terminal['status'] = {'phase': 'Failed', 'reason': 'Error', 'containerStatuses': [
+            {'name': 'role-image-builder', 'ready': False, 'started': False, 'state': {
+                'terminated': {'reason': 'Error', 'exitCode': 1, 'finishedAt': '2026-10-06T17:55:00Z'}}}]}
+        terminal_update = copy.deepcopy(terminal)
+        terminal_update['status']['conditions'] = [{'type': 'Ready', 'status': 'False'}]
+        running = copy.deepcopy(terminal_update)
+        running['status']['containerStatuses'][0]['state'] = {'running': {}}
+        cases.extend([('normal-terminal-update', [terminal_update], deployment, '0', True, False),
+                      ('normal-running-container', [running], deployment, '0', False, False)])
+        for name, final, after, proof_exit, success, second_proof in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                result = run(command, PRIVATE=directory, DEPLOYMENT=deployment,
+                    POST_PROOF_DEPLOYMENT=after,
+                    ORIGINAL_PODS={'items': [terminal if name.startswith('normal-') else pod]},
+                    FINAL_PODS={'items': final}, SETS=sets, PROOF=proof,
+                    SECOND_PROOF_EXIT=proof_exit)
+                self.assertEqual(result.returncode == 0, success, result.stderr)
+                self.assertEqual(Path(directory, 'second-proof').exists(), second_proof)
+
     def test_crd_exact_spec_and_only_approved_defaults(self):
         expected = {'group': 'supplychain.kodex.dev', 'scope': 'Namespaced',
                     'versions': [{'schema': {'requiredTools': {'enum': ['validator,tr']}}}]}

@@ -532,11 +532,30 @@ quiesce_local_supply_chain_workload() {
           fail 'supply-chain quiesce final Deployment spec changed'
         final_pods=$(kubectl -n "$namespace" get pods -l "$selector" -o json) ||
           fail 'supply-chain quiesce final Pod inventory is unavailable'
-        [[ "$(jq -cS '[.items[] | {uid:.metadata.uid,name:.metadata.name,namespace:.metadata.namespace,
-          labels:.metadata.labels,owners:.metadata.ownerReferences,spec,status}] | sort_by(.uid)' <<<"$final_pods")" == \
-          "$(jq -cS '[.items[] | {uid:.metadata.uid,name:.metadata.name,namespace:.metadata.namespace,
-          labels:.metadata.labels,owners:.metadata.ownerReferences,spec,status}] | sort_by(.uid)' <<<"$pods")" ]] ||
+        # Kubelet может обновить terminal status или удалить уже доказанный Pod.
+        # Принимается только subset тех же immutable identities/spec, не новый
+        # UID или повторное исполнение. Свежий terminal/CRI proof обязателен.
+        jq -e --slurpfile before <(printf '%s' "$pods") '
+          def pin: {uid:.metadata.uid,name:.metadata.name,namespace:.metadata.namespace,
+            labels:.metadata.labels,owners:.metadata.ownerReferences,spec,
+            phase:.status.phase,reason:.status.reason};
+          (.items | type == "array") and
+          ($before[0].items | map(.metadata.uid) | unique | length) == ($before[0].items | length) and
+          (.items | map(.metadata.uid) | unique | length) == (.items | length) and
+          all(.items[]; pin as $current | any($before[0].items[]; pin == $current))
+        ' <<<"$final_pods" >/dev/null ||
           fail 'supply-chain quiesce final Pod inventory changed'
+        readback_local_quiesced_pods "$uid" "$workload" "$selector" "$final_pods" ||
+          fail 'supply-chain quiesce final Pod process proof failed'
+        # Native CRI proof ограничен своим budget; после него повторно fencing
+        # Deployment исключает возобновление writer во время readback.
+        deployment=$(kubectl -n "$namespace" get "deployment/$workload" -o json) ||
+          fail 'supply-chain quiesce final Deployment readback failed'
+        jq -e --arg uid "$uid" '.metadata.uid == $uid and .metadata.deletionTimestamp == null and
+          .spec.replicas == 0 and (.status.replicas // 0) == 0 and (.status.availableReplicas // 0) == 0' \
+          <<<"$deployment" >/dev/null || fail 'supply-chain quiesce final Deployment identity changed'
+        [[ "$(jq -cS .spec <<<"$deployment")" == "$stopped_spec" ]] ||
+          fail 'supply-chain quiesce final Deployment spec changed'
         return 0
       fi
     fi
