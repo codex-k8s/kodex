@@ -68,6 +68,24 @@ describe("IntegrationsPage layout", () => {
     expect(connectionsSource).toContain("overflow-x: auto;");
   });
 
+  it("переносит полный статус учётных данных внутри своей ячейки без обрезки", () => {
+    const rule = pageSource.match(
+      /\.integration-page :deep\(\.connection-table td:nth-child\(4\) > \.status-badge\)\s*\{([^}]+)\}/,
+    )?.[1];
+    expect(rule).toBeDefined();
+    expect(rule).toContain("box-sizing: border-box;");
+    expect(rule).toContain("max-width: 100%;");
+    expect(rule).toContain("white-space: normal;");
+    expect(rule).toContain("overflow-wrap: anywhere;");
+    expect(rule).not.toContain("overflow: hidden;");
+    expect(rule).not.toContain("text-overflow: ellipsis;");
+    expect(connectionsTemplate).toContain(
+      ':label="credentialLabel(connection)"',
+    );
+    expect(connectionsSource).toContain("connection.credentialsHint ||");
+    expect(connectionsSource).toContain("grant.enabled");
+  });
+
   it("локализует сведения подключения", () => {
     expect(pageSource).toContain("integrations.detailsCredentialsTitle");
     expect(pageSource).toContain("integrations.publicConfiguration");

@@ -1728,6 +1728,17 @@ onBeforeUnmount(() => {
 .integration-page > :deep(.problem-notice) {
   margin-bottom: 14px;
 }
+.integration-page :deep(.connection-table td:nth-child(4) > .status-badge) {
+  box-sizing: border-box;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+.integration-page
+  :deep(.connection-table td:nth-child(4) > .status-badge .status-badge__dot) {
+  flex-shrink: 0;
+}
 .operation-success {
   margin-bottom: 14px;
   padding: 10px 12px;
