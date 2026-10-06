@@ -10,6 +10,39 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 21:47 UTC, source `91ff51b9b115783bc89af7d8b7c65f24520766c1`;
+последний подтверждённый remote/PR `e2fc79c344537741a31c57de3f33487d7508a9d8`.
+Generation4 общего `kodex-selfdev` опубликована штатно21:38:39:
+`imgart_pZcw6O0VWkhXLrI1v7vHStSJ`, manifest
+`sha256:e5e5a118be7a619fda9914a25491d3fd8b269679f33b06cbaa82e7565423ca16`.
+Риск двух fix-available HIGH принят для локального QA штатным решением;
+прежний REJECTED attempt сохранён, новый ACCEPTED и promotion receipts
+проверены. Это не production-допуск.
+
+Helper native plan `pln_aOSoaGuSUFI5iw_BtUfVPIOQ` APPLIED/version3;
+ENV `renv_zycHL70M8UYGvTAU_W6fgvaB` опубликована: setversion6,
+revision7, bindingversion6, tools38/values0/secrets0, прежний hash
+политики/инструментов/metadata сохранён. Actual новый helper Run
+`run_deN8xyHerGU4GE33uezCw6nE` готовит shared review ENV.
+Ранний canonical ACK CAPTURED: same Pod UID, generation4/manifest,
+binary `be793827a019a423bf84efde729889268baf6683c32ea68ab4765b3ea0940447`,
+task/inbox/instructions EQUAL, tools38/grants22. Это runtime proof helper,
+не acceptance шести ordinary ролей или их файлов результата.
+
+Cancellation typed serviceCode integrated91ff51b9: exact234 unit и gateway
+HTTP/WS PASS; host/Pod helper hash совпал. Actual HTTP cancelled events
+seq11–13 имеют закрытые коды и прежний локализованный summary/execution.
+Native transcript repeat пока NOT RUN. Screenshot ENV/editor/publish modal
+PASS: равные controls, внутренний scroll, доступные действия; Console0,
+штатные read/validate/publish requests. Recipe mobile390 без horizontal
+overflow и risk modal desktop проверены. SSO absolute07.10 06:23UTC
+покрывает автономное окно; Chrome5 обслуживается, foreign6 не затрагивается.
+Далее review/write ENV typed plans → шесть actual role/file smoke →
+approval/delegation → bootstrap acceptance/merge → полный Workflow.
+Полное QA, 2/10-session isolation и финальный dogfooding остаются OPEN.
+
+## Предыдущий checkpoint 21:31
+
 06.10.2026 21:31 UTC, source/remote/PR
 `61546c00cc0e40344c5a5a3764049128677ec702`, exact readback PASS21:13.
 Retained promotion Job удалён штатным TTL; canonical supply-chain

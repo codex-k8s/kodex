@@ -158,6 +158,55 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 21:47 UTC — published generation4 и actual helper runtime
+
+Source `91ff51b9b115783bc89af7d8b7c65f24520766c1`, remote/PR последний
+exact readback `e2fc79c344537741a31c57de3f33487d7508a9d8`.
+Generation4 `imgart_pZcw6O0VWkhXLrI1v7vHStSJ` PROMOTED21:38:39,
+manifest `sha256:e5e5a118be7a619fda9914a25491d3fd8b269679f33b06cbaa82e7565423ca16`.
+Официальный complete report READY:2938 unique/4640 matches; прочитаны
+metadata, первая страница и оба blocking findings, не все2938 записей.
+Два fix-available HIGH: undici GHSA-rfgv-xxqx-mfg5 и tar GHSA-r292-9mhp-454m.
+Native ACCEPT_RISK `imgrisk_6tTBN1gAfvvHpJ-mASGx9dl_`21:35:58
+привязан к exact generation/report/digest/policy для local QA;
+старый REJECTED attempt неизменен. Новый admission ACCEPTED receipt
+`66119533aa50bc855c524d018c3722f850804e150be5f6e86f7509fc1ad939fb`,
+promotion receipt `d1c87dff964931ca7a3c7c3377b457d3223526a29c9ad62af36a384b6872accd`.
+Signature/provenance/технические guards не обходились; staging/prod NOT RUN.
+
+Actual helper `run_tDIUzUtA3C5if-zT9jK9JeiB` SUCCEEDED подготовил
+`pln_aOSoaGuSUFI5iw_BtUfVPIOQ`: native Validate/Apply APPLIED/version3,
+draft `renvd_aM5XG4Oca4c_uW81LRU0tZWk` VALID/version2. Native impact/publish
+обновили только own helper consumer, bindingversion5→6;
+ENV setversion5→6/revision6→7, versionRef `renvv_fBXblb9scUzsrjKnUZuSNv0z`.
+Tools38/values0/secrets0 и exact preserved metadata hash
+`5fe5ce34c5f4049801d764296f962d3f5a56bfb7ec2e42622631587a23625b23`
+не изменились. Review5/write1 пока generation3, дальнейшие планы OPEN.
+
+Следующий helper `run_deN8xyHerGU4GE33uezCw6nE`, session
+`ses_8oRpGjG9z9A5Drv61tSXXB_E`, turn `trn_jMeolGiP8dk7E4mlR5Yx_gRM`
+имеет canonical ACK CAPTURED same Pod UID `a81f5ba6-4c78-4ae2-b1b4-67f4255526e5`:
+generation4/точный manifest и binary SHA
+`be793827a019a423bf84efde729889268baf6683c32ea68ab4765b3ea0940447`;
+task SHA `da5b53228597cb039677091ea1cee761d21128f9b758249d448930d0c04ed40e`,
+task/inbox/instructions EQUAL, taskInPrompttrue, tools38/grants22.
+Binary scope SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS. Это не all6 smoke
+или доказательство durable ordinary AGENT artifacts.
+
+Cancellation closed public serviceCode integrated91ff51b9. Exact18 blobs
+совпали frozen implementation: локально234/234 unit PASS2.37s,
+HTTP11.038s/WS1.598s PASS; предыдущие lint/type/build/codegen относятся к
+тем же blobs, не названы повтором. Host/Pod mapper SHA совпал;
+actual owner HTTP run_P22rbQJoK-KI6r7cvHrpcpA7 seq11–13 содержит
+RUN_CANCELLED/RUN_NODE_CANCELLED при неизменных localized summary/execution.
+Native cancellation folding repeat NOT RUN, исходный FAIL сохранён.
+
+UX: recipe390 mobile без overflow, desktop risk modal и ENV draft/editor/
+impact publication screenshot PASS, controls32px/внутренний scroll/действия
+доступны. Console0 после штатной навигации; relevant reads/validate/publish
+200. SSO absolute07.10 06:23UTC покрывает окно; Chrome5 reload/navigation,
+foreign6 не затронута. Full65/bootstrap merge/fullWorkflow OPEN.
+
 ### 06.10.2026 21:32 UTC — восстановление supply-chain и recipe generation4
 
 Source/remote/PR `61546c00cc0e40344c5a5a3764049128677ec702`, exact
