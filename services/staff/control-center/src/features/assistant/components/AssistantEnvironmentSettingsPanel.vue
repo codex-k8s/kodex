@@ -35,6 +35,8 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
+import { environmentDisplayField } from "@/features/runtime/environment-display-field";
 
 const props = defineProps<{
   agentRef: string;
@@ -81,6 +83,21 @@ const input = reactive<RuntimeEnvironmentInput>({
     kubernetesAccess: "NONE",
   },
 });
+const localizeServerMessage = useServerMessage();
+const nameFieldValue = environmentDisplayField(
+  () => input.name,
+  (value) => {
+    input.name = value;
+  },
+  localizeServerMessage,
+);
+const descriptionFieldValue = environmentDisplayField(
+  () => input.description,
+  (value) => {
+    input.description = value;
+  },
+  localizeServerMessage,
+);
 const initial = ref("");
 const environment = computed(() => view.value?.environment);
 const consumerNames = computed<Record<string, string>>(() => {
@@ -214,7 +231,7 @@ onBeforeUnmount(reset);
           <label class="field">
             <span>{{ $t("common.name") }}</span>
             <input
-              v-model="input.name"
+              v-model="nameFieldValue"
               maxlength="120"
               :disabled="busy || !canEdit"
             />
@@ -223,7 +240,7 @@ onBeforeUnmount(reset);
             <span>{{ $t("common.description") }}</span>
             <VoiceTextarea
               class="assistant-environment-description"
-              v-model="input.description"
+              v-model="descriptionFieldValue"
               maxlength="1000"
               :disabled="busy || !canEdit"
             />

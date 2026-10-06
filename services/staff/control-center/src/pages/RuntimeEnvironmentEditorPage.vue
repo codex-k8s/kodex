@@ -3,6 +3,11 @@ import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import EnvironmentImpactDialog from "@/features/runtime/EnvironmentImpactDialog.vue";
 import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
 import RuntimeEnvironmentToolsEditor from "@/features/runtime/RuntimeEnvironmentToolsEditor.vue";
+import { environmentDisplayField } from "@/features/runtime/environment-display-field";
+import {
+  assertPromotedRuntimeImage,
+  restoreRuntimeImageOption,
+} from "@/features/runtime/image-tools-selection";
 import {
   verifiedImageInventoryAvailable,
   verifiedImageTools,
@@ -213,6 +218,20 @@ const input = reactive<RuntimeEnvironmentInput>({
   secretBindings: [],
   policy: defaultRuntimeEnvironmentPolicy(),
 });
+const nameFieldValue = environmentDisplayField(
+  () => input.name,
+  (value) => {
+    input.name = value;
+  },
+  localizeServerMessage,
+);
+const descriptionFieldValue = environmentDisplayField(
+  () => input.description,
+  (value) => {
+    input.description = value;
+  },
+  localizeServerMessage,
+);
 const selectedImage = ref<AsyncEntityOption>();
 const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
@@ -380,6 +399,9 @@ function resetInput(): void {
 }
 
 function applyRestoredInput(value: RuntimeEnvironmentInput): void {
+  const restoreImage =
+    !!value.imageArtifactRef &&
+    imageArtifact.value?.ref !== value.imageArtifactRef;
   input.name = value.name;
   input.description = value.description;
   input.imageArtifactRef = value.imageArtifactRef;
@@ -413,10 +435,11 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
       : undefined;
     imageArtifact.value = undefined;
   }
+  if (restoreImage) void loadImageArtifact(undefined, value.imageArtifactRef);
 }
 
 async function loadImageArtifact(
-  recipeRef: string,
+  recipeRef: string | undefined,
   artifactRef: string,
 ): Promise<void> {
   cancelImageRequest();
@@ -435,18 +458,52 @@ async function loadImageArtifact(
   imageLoading.value = true;
   imageProblem.value = undefined;
   try {
+    const restored = recipeRef
+      ? undefined
+      : await restoreRuntimeImageOption(
+          {
+            loadPage: (_scope, query, cursor, signal, pageSize) =>
+              runtime.searchPromotedRoleImagePage(
+                project,
+                query,
+                cursor,
+                signal,
+                pageSize,
+              ),
+            loadArtifact: (_scope, recipe, artifact, signal) =>
+              runtime.loadPromotedRoleImageArtifact(
+                project,
+                recipe,
+                artifact,
+                signal,
+              ),
+          },
+          { kind: "PROJECT", projectRef: project },
+          artifactRef,
+          controller.signal,
+        );
+    if (!applicable()) return;
+    const recipe = recipeRef ?? restored?.recipeRef;
+    if (!recipe)
+      throw new Error("Restored image recipe identity is unavailable");
     const result = await runtime.loadPromotedRoleImageArtifact(
       project,
-      recipeRef,
+      recipe,
       artifactRef,
       controller.signal,
     );
     if (applicable()) {
+      if (restored)
+        assertPromotedRuntimeImage(result.artifact, {
+          artifactRef,
+          recipeRef: restored.recipeRef,
+          recipeGeneration: restored.generation,
+        });
       imageArtifact.value = result.artifact;
       selectedImage.value = {
         ...selectedImage.value,
         ref: artifactRef,
-        title: result.recipeName,
+        title: localizeServerMessage(result.recipeName),
         description: result.artifact.promotedReference,
       };
     }
@@ -1316,7 +1373,7 @@ onBeforeUnmount(() => {
                 <label class="field">
                   <span>{{ $t("common.name") }}</span>
                   <input
-                    v-model="input.name"
+                    v-model="nameFieldValue"
                     name="runtime-environment-name"
                     required
                     maxlength="120"
@@ -1325,7 +1382,7 @@ onBeforeUnmount(() => {
                 <label class="field">
                   <span>{{ $t("common.description") }}</span>
                   <VoiceTextarea
-                    v-model="input.description"
+                    v-model="descriptionFieldValue"
                     name="runtime-environment-description"
                     :disabled="busy || !draftEditable || !canPublish"
                     maxlength="1000"

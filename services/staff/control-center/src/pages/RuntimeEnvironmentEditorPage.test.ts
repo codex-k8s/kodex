@@ -1,5 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { reactive, type Ref } from "vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createRenderer,
+  defineComponent,
+  h,
+  reactive,
+  ssrContextKey,
+  type Ref,
+  type SetupContext,
+} from "vue";
 import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import {
@@ -9,6 +17,7 @@ import {
 import type {
   RoleImageArtifact,
   RuntimeEnvironmentInput,
+  RuntimeEnvironmentDraft,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const runtime = vi.hoisted(() => ({
@@ -21,10 +30,12 @@ const runtime = vi.hoisted(() => ({
   loadPromotedRoleImageArtifact: vi.fn(),
   loadEnvironment: vi.fn(),
   loadEnvironmentVersions: vi.fn(),
+  searchPromotedRoleImagePage: vi.fn(),
 }));
 const cleanup = vi.hoisted(() => [] as Array<() => void>);
 vi.mock("vue", async (original) => ({
   ...(await original<typeof import("vue")>()),
+  onMounted: vi.fn(),
   onBeforeUnmount: (callback: () => void) => cleanup.push(callback),
 }));
 const route = reactive({
@@ -39,22 +50,66 @@ vi.mock("vue-router", () => ({
 }));
 vi.mock("@/features/runtime/store", () => ({ useRuntimeStore: () => runtime }));
 vi.mock("@/features/session/store", () => ({ useSessionStore: () => ({}) }));
+vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import RuntimeEnvironmentEditorPage from "./RuntimeEnvironmentEditorPage.vue";
+import { i18n } from "@/app/i18n";
+const mountedEditors: Array<() => void> = [];
+afterEach(() => {
+  for (const dispose of mountedEditors.splice(0)) dispose();
+});
 
-async function editor() {
+async function editor(localized = false) {
   return (await captureSetupState(RuntimeEnvironmentEditorPage, (app) =>
-    app.use(createI18n({ legacy: false, locale: "ru" })),
+    app.use(localized ? i18n : createI18n({ legacy: false, locale: "ru" })),
   )) as unknown as {
-    input: { imageArtifactRef: string; name: string };
+    input: RuntimeEnvironmentInput;
+    nameFieldValue: Ref<string>;
+    descriptionFieldValue: Ref<string>;
+    specification: Ref<{ name: string; description: string }>;
     imageArtifact: Ref<RoleImageArtifact | undefined>;
     imageInventoryReady: Ref<boolean>;
     imageLoading: Ref<boolean>;
     imageProblem: Ref<unknown>;
     selectedImage: Ref<{ ref: string; title: string } | undefined>;
     applyRestoredInput(input: RuntimeEnvironmentInput): void;
+    applyServerDraft(draft: RuntimeEnvironmentDraft): void;
     loadImageArtifact(recipe: string, artifact: string): Promise<void>;
     load(): Promise<void>;
   };
+}
+
+function mountedEditor(): Awaited<ReturnType<typeof editor>> {
+  let state!: Awaited<ReturnType<typeof editor>>;
+  const renderer = createRenderer<object, object>({
+    insert() {},
+    remove() {},
+    createElement: () => ({}),
+    createText: () => ({}),
+    createComment: () => ({}),
+    setText() {},
+    setElementText() {},
+    parentNode: () => null,
+    nextSibling: () => null,
+    patchProp() {},
+  });
+  const component = defineComponent({
+    setup(props, context) {
+      state = (
+        RuntimeEnvironmentEditorPage as unknown as {
+          setup(
+            props: object,
+            context: SetupContext,
+          ): Awaited<ReturnType<typeof editor>>;
+        }
+      ).setup(props, context);
+      return () => h("div");
+    },
+  });
+  const app = renderer.createApp(component).use(i18n);
+  app.provide(ssrContextKey, {});
+  app.mount({});
+  mountedEditors.push(() => app.unmount());
+  return state;
 }
 function pending<T>() {
   let resolve!: (value: T) => void;
@@ -66,10 +121,140 @@ function pending<T>() {
   return { promise, resolve, reject };
 }
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   cleanup.length = 0;
   route.params.projectRef = "project_1";
   route.params.environmentRef = "environment_1";
+});
+
+function promotedArtifact(ref: string): RoleImageArtifact {
+  return {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
+    projectRef: "project_1",
+    ref,
+    version: 1,
+    recipeRef: "recipe_own",
+    recipeGeneration: 3,
+    buildRef: "build_own",
+    manifestDigest: `sha256:${"a".repeat(64)}`,
+    provenanceSha256: "b".repeat(64),
+    promotedReference: `registry.example.test/own@sha256:${"a".repeat(64)}`,
+    admissionVerdict: "ACCEPTED",
+    promotionState: "PROMOTED",
+    promotionRequested: true,
+    declaredTools: [],
+    verifiedToolInventory: verifiedInventoryFixture(),
+  };
+}
+const ownImageOption = {
+  ref: "image_own",
+  recipeRef: "recipe_own",
+  artifactRef: "image_own",
+  generation: 3,
+  title: "Свой образ",
+};
+
+describe("восстановление точного образа серверного draft", () => {
+  it("после замены baseline читает exact promoted artifact и сохраняет tools", async () => {
+    const state = await editor(true);
+    state.input.imageArtifactRef = "image_baseline";
+    state.imageArtifact.value = promotedArtifact("image_baseline");
+    const selectedTools = [
+      { name: "Git", command: "git", description: "", usageHint: "" },
+    ];
+    runtime.searchPromotedRoleImagePage.mockResolvedValueOnce({
+      items: [ownImageOption],
+    });
+    runtime.loadPromotedRoleImageArtifact.mockResolvedValueOnce({
+      artifact: promotedArtifact("image_own"),
+      recipeName: "Свой образ",
+    });
+    state.applyServerDraft({
+      environmentRef: "environment_1",
+      specification: {
+        ...state.input,
+        imageArtifactRef: "image_own",
+        tools: selectedTools,
+      },
+    } as RuntimeEnvironmentDraft);
+    expect(state.imageLoading.value).toBe(true);
+    expect(state.imageArtifact.value).toBeUndefined();
+    await vi.waitFor(() => expect(state.imageInventoryReady.value).toBe(true));
+    expect(runtime.searchPromotedRoleImagePage.mock.calls[0]?.[0]).toBe(
+      "project_1",
+    );
+    expect(
+      runtime.loadPromotedRoleImageArtifact.mock.calls[0]?.slice(0, 3),
+    ).toEqual(["project_1", "recipe_own", "image_own"]);
+    expect(state.input.tools).toEqual(selectedTools);
+    expect(state.selectedImage.value?.title).toBe("Свой образ");
+  });
+  it("смена проекта во время exact locator lookup отменяет read и не загружает чужой recipe", async () => {
+    const state = mountedEditor();
+    const page = pending<{ items: (typeof ownImageOption)[] }>();
+    runtime.searchPromotedRoleImagePage.mockReturnValueOnce(page.promise);
+    state.applyRestoredInput({ ...state.input, imageArtifactRef: "image_own" });
+    const signal = runtime.searchPromotedRoleImagePage.mock
+      .calls[0]?.[3] as AbortSignal;
+    route.params.projectRef = "project_2";
+    expect(signal.aborted).toBe(true);
+    page.resolve({ items: [ownImageOption] });
+    await vi.waitFor(() => expect(state.imageLoading.value).toBe(false));
+    expect(runtime.loadPromotedRoleImageArtifact).not.toHaveBeenCalled();
+    expect(state.imageArtifact.value).toBeUndefined();
+    expect(state.imageProblem.value).toBeUndefined();
+  });
+  it("новое чтение отклоняет несовпадающую generation и не ослабляет verified gate", async () => {
+    const state = await editor();
+    runtime.searchPromotedRoleImagePage.mockResolvedValueOnce({
+      items: [ownImageOption],
+    });
+    runtime.loadPromotedRoleImageArtifact.mockResolvedValueOnce({
+      artifact: { ...promotedArtifact("image_own"), recipeGeneration: 2 },
+      recipeName: "Старое поколение",
+    });
+    state.applyRestoredInput({ ...state.input, imageArtifactRef: "image_own" });
+    await vi.waitFor(() =>
+      expect(state.imageProblem.value).toMatchObject({
+        code: "IMAGE_ARTIFACT_NOT_CURRENT",
+      }),
+    );
+    expect(state.imageArtifact.value).toBeUndefined();
+    expect(state.imageInventoryReady.value).toBe(false);
+  });
+});
+
+describe("i18n-поля окружения не изменяют серверную спецификацию", () => {
+  it.each(["ru", "en"] as const)(
+    "отображает локализованные поля, locale=%s",
+    async (locale) => {
+      i18n.global.locale.value = locale;
+      const state = await editor(true);
+      state.input.name = "i18n:DEFAULT_RUNTIME_ENVIRONMENT";
+      state.input.description = "i18n:DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION";
+      expect(state.nameFieldValue.value).toBe(
+        i18n.global.t("serverMessages.DEFAULT_RUNTIME_ENVIRONMENT"),
+      );
+      expect(state.descriptionFieldValue.value).toBe(
+        i18n.global.t("serverMessages.DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION"),
+      );
+      const displayedName = state.nameFieldValue.value;
+      const displayedDescription = state.descriptionFieldValue.value;
+      state.nameFieldValue.value = displayedName;
+      state.descriptionFieldValue.value = displayedDescription;
+      expect(state.specification.value).toMatchObject({
+        name: "i18n:DEFAULT_RUNTIME_ENVIRONMENT",
+        description: "i18n:DEFAULT_RUNTIME_ENVIRONMENT_DESCRIPTION",
+      });
+      state.descriptionFieldValue.value = "Моё описание";
+      expect(state.specification.value).toMatchObject({
+        name: "i18n:DEFAULT_RUNTIME_ENVIRONMENT",
+        description: "Моё описание",
+      });
+      i18n.global.locale.value = "ru";
+    },
+  );
 });
 
 describe("ответы образа принадлежат текущему окружению", () => {

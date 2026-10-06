@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { reactive, type ComputedRef } from "vue";
 import { describe, expect, it, vi } from "vitest";
+import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import type { RuntimeResourceScope } from "@/features/runtime/resource-scope";
 
@@ -45,7 +46,11 @@ describe("Полная форма настройки помощника", () => 
       resourceScope: { kind: "ORGANIZATION", organizationRef: "org_synthetic" },
       imageCatalog: undefined,
     });
-    const state = (await captureSetupState(Panel, undefined, props)) as {
+    const state = (await captureSetupState(
+      Panel,
+      (app) => app.use(createI18n({ legacy: false, locale: "ru" })),
+      props,
+    )) as {
       consumerNames: ComputedRef<Record<string, string>>;
     };
     expect(state.consumerNames.value).toEqual({
