@@ -2080,7 +2080,7 @@ onBeforeUnmount(() => {
                 @retry="store.load(context, projectRef)"
               />
               <div
-                v-else-if="store.loading"
+                v-else-if="store.loading && !store.selectedConversation"
                 class="assistant-empty-state"
                 role="status"
               >

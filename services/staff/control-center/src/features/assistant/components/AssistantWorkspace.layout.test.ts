@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { compileStyle } from "@vue/compiler-sfc";
+import { createSSRApp } from "vue";
+import { renderToString } from "vue/server-renderer";
 
 import { describe, expect, it } from "vitest";
 
@@ -46,6 +48,53 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("сохраняет принятую переписку при обновлении, но не подменяет начальную загрузку и ошибку", async () => {
+    const loadingBranch = template.match(
+      /<div\s+v-else-if="store\.loading[^"]*"[\s\S]*?<\/div>/,
+    )?.[0];
+    expect(loadingBranch).toBeDefined();
+    if (!loadingBranch) throw new Error("Loading branch is missing");
+    expect(template).toContain('v-if="store.problem"');
+
+    const cases = [
+      {
+        loading: true,
+        selectedConversation: { turns: ["USER"] },
+        expected: "transcript",
+      },
+      {
+        loading: false,
+        selectedConversation: { turns: ["USER"] },
+        expected: "transcript",
+      },
+      { loading: true, selectedConversation: undefined, expected: "loading" },
+      {
+        loading: true,
+        selectedConversation: undefined,
+        problem: true,
+        expected: "problem",
+      },
+      {
+        loading: true,
+        selectedConversation: { turns: ["USER"] },
+        problem: true,
+        expected: "problem",
+      },
+    ];
+    for (const state of cases) {
+      const app = createSSRApp({
+        data: () => ({ store: state }),
+        template: `<p v-if="store.problem" data-problem>problem</p>${loadingBranch}<p v-else data-transcript>transcript</p>`,
+      });
+      app.config.globalProperties.$t = () => "loading";
+      const html = await renderToString(app);
+      expect(html).toContain(state.expected);
+      if (state.expected !== "loading") expect(html).not.toContain("spinner");
+      if (state.expected !== "transcript")
+        expect(html).not.toContain("data-transcript");
+    }
+  });
+
   it("не перекрывает отправку в панели запуска и действия в модалках", () => {
     const rule = styles
       .split(
