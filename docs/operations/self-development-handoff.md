@@ -10,6 +10,23 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 21:08 UTC, source `8d4456d966eb434f9b9abed17a11374f44f97d4d`
+плюс журнал. Remote/PR `3b1e88588a505f893ffd6f06fa9b4be4b06abc1b`
+exact readback и компактное тело PR PASS21:06.
+Адресный cancelled transcript fix integrated8d4456d9:
+ROOT230/230 PASS3.14с. Все frontend unit на этом exact source:
+368 suites / 3088 tests PASS47.15с, maxWorkers4; это не live acceptance.
+Native визуальный repeat нового cancellation fold NOT RUN в maintenance.
+Пять supply-chain Deployments по-прежнему paused0; retained Job TTL
+истекает21:17:40UTC. Барьер не обходить. Подготовлены точные own PROJECT
+approval-policy prompts и обычный Manager delegation prompt; fresh grant/
+Workflow inputs остаются NEEDS_GET, не подставлять выдуманные версии.
+Chrome5 reload21:04, maintenance503 показан штатным безопасным error UI;
+чужая6 не затронута. После TTL fresh render/apply/readback, generation4,
+all6/approval/delegation/fullWorkflow. Цель ACTIVE.
+
+## Предыдущий checkpoint 21:04
+
 06.10.2026 21:04 UTC, source `f5bb8064bdca166639b753ce7994b73ec37b6056`.
 Remote/PR последний exact readback `3c0ad175`; новый checkpoint ещё не push.
 QUEUE повтор на `cnv_NB02Oezr4WHyHvxd5KbqrHXB`: три реальных хода FIFO,

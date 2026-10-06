@@ -158,6 +158,27 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 21:08 UTC — закрытая переписка и полный frontend unit
+
+Source `8d4456d966eb434f9b9abed17a11374f44f97d4d`, remote/PR3b1e8858
+exact readback и compact body PASS21:06. Exact CANCELLED node/intermediate
+сведены в одну запись; общий unbound Run остаётся отдельной закрытой
+readonly историей, без догадки о turn/attempt. Пустые шапки закрытых
+служебных этапов убраны; неизвестные события и содержательные сообщения
+сохранены. ROOT230/230 адресных unit PASS3.14с.
+
+Полный frontend unit на8d4456d9: 368 suites / 3088 tests PASS47.15с,
+maxWorkers4. Существующие предупреждения ограниченных i18n fixtures не
+скрывались; реальный общий locale completeness test PASS. Это не браузерный
+или Workflow acceptance. Native cancellation visual repeat ожидает API.
+
+Maintenance503: screenshot безопасного error UI без сырых diagnostics;
+пять supply-chain Deployments paused0, terminal Job сохраняется до штатного
+TTL21:17:40UTC. Следующий этап: fresh source render/apply/readback,
+generation4 native build/admission/promotion, seven bindings и all6.
+Prepared approval/delegation prompts — только подготовка, live versions
+и actual Workflow inputs требуют fresh GET. Новых GitHub effects нет.
+
 ### 06.10.2026 21:04 UTC — реальные Stop/interrupt и новый runner publication
 
 Source `f5bb8064bdca166639b753ce7994b73ec37b6056`; remote/PR последняя
