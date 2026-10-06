@@ -35,6 +35,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import AssistantPlanRecord from "./AssistantPlanRecord.vue";
+import AssistantPlanCard from "./AssistantPlanCard.vue";
 import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
 import AssistantEnvironmentSettingsPanel from "@/features/assistant/components/AssistantEnvironmentSettingsPanel.vue";
 import SystemAssistantIntegrationGrantsPanel from "./SystemAssistantIntegrationGrantsPanel.vue";
@@ -2249,11 +2250,8 @@ onBeforeUnmount(() => {
                           "
                           :content="turn.plan.auditSummary"
                         />
-                        <ol class="assistant-plan-card__operations">
-                          <li
-                            v-for="operation in turn.plan.operations"
-                            :key="operation.ref"
-                          >
+                        <AssistantPlanCard :operations="turn.plan.operations">
+                          <template #operation="{ operation }">
                             <header>
                               <span class="assistant-plan-card__action">
                                 {{
@@ -2273,8 +2271,8 @@ onBeforeUnmount(() => {
                               operationSupportingTitle(operation)
                             }}</span>
                             <p>{{ operation.summary }}</p>
-                          </li>
-                        </ol>
+                          </template>
+                        </AssistantPlanCard>
                         <AssistantRoleImageBuildCard
                           v-for="operation in turn.plan.operations.filter(
                             (item) =>

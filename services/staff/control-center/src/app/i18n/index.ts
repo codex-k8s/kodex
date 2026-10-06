@@ -4185,6 +4185,11 @@ const ru = {
       atomic:
         "Скрытых изменений нет. План применяется одной транзакцией или не применяется вовсе.",
       summary: "Что изменит план",
+      cardSelection: "Выбрано {selected} из {count} операций",
+      cardMore: "Ещё {count} операций",
+      cardProblems: "Требуют проверки: {count}. Откройте полный план.",
+      cardOperationProblem: "Операция требует проверки",
+      cardNotSelected: "Не выбрана",
       editedPlanSummary:
         "План изменён в форме. Проверьте фактические значения операций перед применением.",
       editedOperationSummary:
@@ -8759,6 +8764,11 @@ const en = {
       atomic:
         "There are no hidden changes. The plan is applied in one transaction or not applied at all.",
       summary: "What the plan changes",
+      cardSelection: "{selected} of {count} operations selected",
+      cardMore: "{count} more operations",
+      cardProblems: "{count} operations need review. Open the full plan.",
+      cardOperationProblem: "Operation needs review",
+      cardNotSelected: "Not selected",
       editedPlanSummary:
         "The plan was changed in the form. Review the actual operation values before applying it.",
       editedOperationSummary:
