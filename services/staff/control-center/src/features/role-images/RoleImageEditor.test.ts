@@ -80,7 +80,27 @@ async function summary(
   full = false,
   failure?: RoleImageAdmissionFailure,
   history?: RoleImageBuild[],
+  supporting = false,
 ): Promise<string> {
+  const roles = supporting
+    ? [
+        {
+          ref: recipe.roleDefinitionRef,
+          label: "Помощник Kodex | Dev",
+          agentCount: 1,
+        },
+      ]
+    : [];
+  const environments = supporting
+    ? [
+        {
+          key: recipe.environment.environmentKey,
+          nameMessageKey: "role-environments.standard.name",
+          available: true,
+          recommended: true,
+        },
+      ]
+    : [];
   state.store = {
     recipes: { [recipe.ref]: recipe },
     builds: { [recipe.ref]: history ?? [build] },
@@ -91,9 +111,10 @@ async function summary(
     revisionNextPageToken: {},
     dependencies: {},
     createAllowed: {},
-    environments: [],
-    environmentByKey: new Map(),
-    roleDefinitionByRef: new Map(),
+    environments,
+    environmentByKey: new Map(environments.map((item) => [item.key, item])),
+    roleDefinitions: roles,
+    roleDefinitionByRef: new Map(roles.map((item) => [item.ref, item])),
     loadingDetail: false,
     mutating: false,
   };
@@ -106,8 +127,34 @@ async function summary(
           },
         }
       : { projectRef: recipe.projectRef };
+  const editor = supporting
+    ? {
+        ...RoleImageEditor,
+        setup(props: object, context: SetupContext) {
+          const result = (
+            RoleImageEditor as unknown as {
+              setup: (
+                props: object,
+                context: SetupContext,
+              ) => {
+                roleDefinitionRef: { value: string };
+                environmentKey: { value: string };
+              };
+            }
+          ).setup(props, context);
+          // SSR не вызывает onMounted: задаём те же значения, что syncRecipe.
+          result.roleDefinitionRef.value = recipe.roleDefinitionRef;
+          result.environmentKey.value = recipe.environment.environmentKey;
+          return result;
+        },
+      }
+    : RoleImageEditor;
   const app = createSSRApp({
-    render: () => h(RoleImageEditor, { ...props, recipeRef: recipe.ref }),
+    render: () =>
+      h(editor as unknown as typeof RoleImageEditor, {
+        ...props,
+        recipeRef: recipe.ref,
+      }),
   }).use(i18n);
   app.component(
     "RouterLink",
@@ -160,6 +207,34 @@ beforeEach(() => {
 });
 
 const disposers: Array<() => void> = [];
+
+describe("названия выбранных роли и окружения без метаданных", () => {
+  it.each(["ru", "en"] as const)(
+    "сохраняет метаданные только в native options (%s)",
+    async (locale) => {
+      i18n.global.locale.value = locale;
+      recipe.scopeKind = "PROJECT";
+      recipe.projectRef = "project_synthetic";
+      const html = await summary(undefined, true, undefined, undefined, true);
+      const titles = [
+        ...html.matchAll(
+          /class="select-title-only__title"[^>]*>([^<]*)<\/span>/g,
+        ),
+      ].map((match) => match[1]);
+      expect(titles).toEqual([
+        "Помощник Kodex | Dev",
+        i18n.global.t("role-environments.standard.name"),
+      ]);
+      expect(html).toContain(
+        i18n.global.t("roleImages.agentsCount", { count: 1 }),
+      );
+      expect(html).toContain(i18n.global.t("roleImages.recommended"));
+      expect(html).toMatch(/<select[^>]*name="[^"]*-role"[^>]*disabled/);
+      expect(html).toContain(`value="${recipe.roleDefinitionRef}"`);
+      expect(html).toContain(`value="${recipe.environment.environmentKey}"`);
+    },
+  );
+});
 afterEach(() => {
   resolveConfirmation(false);
   for (const dispose of disposers.splice(0)) dispose();

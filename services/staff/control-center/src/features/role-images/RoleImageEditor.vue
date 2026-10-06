@@ -3,6 +3,7 @@ import {
   Archive,
   Bot,
   Box,
+  ChevronDown,
   Hammer,
   Maximize2,
   Link2,
@@ -848,60 +849,82 @@ onBeforeUnmount(() => {
               </label>
               <label v-if="!organizationScope" class="field">
                 <span>{{ t("roleImages.role") }}</span>
-                <select
-                  v-model="roleDefinitionRef"
-                  :id="`${fieldNamePrefix}-role`"
-                  :name="`${fieldNamePrefix}-role`"
-                  :disabled="!!recipe || !store.roleDefinitions.length"
-                >
-                  <option value="" disabled>
-                    {{ t("roleImages.chooseRole") }}
-                  </option>
-                  <option
-                    v-for="role in store.roleDefinitions"
-                    :key="role.ref"
-                    :value="role.ref"
+                <span class="select-title-only">
+                  <select
+                    v-model="roleDefinitionRef"
+                    :id="`${fieldNamePrefix}-role`"
+                    :name="`${fieldNamePrefix}-role`"
+                    :disabled="!!recipe || !store.roleDefinitions.length"
                   >
-                    {{ role.label }} ·
-                    {{
-                      t("roleImages.agentsCount", { count: role.agentCount })
-                    }}
-                  </option>
-                </select>
+                    <option value="" disabled>
+                      {{ t("roleImages.chooseRole") }}
+                    </option>
+                    <option
+                      v-for="role in store.roleDefinitions"
+                      :key="role.ref"
+                      :value="role.ref"
+                    >
+                      {{ role.label }} ·
+                      {{
+                        t("roleImages.agentsCount", { count: role.agentCount })
+                      }}
+                    </option>
+                  </select>
+                  <span class="select-title-only__title" aria-hidden="true">{{
+                    roleLabel
+                  }}</span>
+                  <ChevronDown
+                    class="select-title-only__arrow"
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                </span>
               </label>
               <label class="field">
                 <span>{{ t("roleImages.environment") }}</span>
-                <select
-                  :id="`${fieldNamePrefix}-environment`"
-                  :name="`${fieldNamePrefix}-environment`"
-                  :value="environmentKey"
-                  :disabled="
-                    !store.environments.length ||
-                    (!!recipe && !recipe.nextActions.includes('UPDATE'))
-                  "
-                  @change="
-                    selectEnvironment(
-                      ($event.currentTarget as HTMLSelectElement).value,
-                    )
-                  "
-                >
-                  <option value="" disabled>
-                    {{ t("roleImages.chooseEnvironment") }}
-                  </option>
-                  <option
-                    v-for="environment in store.environments"
-                    :key="environment.key"
-                    :value="environment.key"
-                    :disabled="!environment.available"
+                <span class="select-title-only">
+                  <select
+                    :id="`${fieldNamePrefix}-environment`"
+                    :name="`${fieldNamePrefix}-environment`"
+                    :value="environmentKey"
+                    :disabled="
+                      !store.environments.length ||
+                      (!!recipe && !recipe.nextActions.includes('UPDATE'))
+                    "
+                    @change="
+                      selectEnvironment(
+                        ($event.currentTarget as HTMLSelectElement).value,
+                      )
+                    "
                   >
-                    {{ t(environment.nameMessageKey) }}
-                    {{
-                      environment.recommended
-                        ? `· ${t("roleImages.recommended")}`
-                        : ""
-                    }}
-                  </option>
-                </select>
+                    <option value="" disabled>
+                      {{ t("roleImages.chooseEnvironment") }}
+                    </option>
+                    <option
+                      v-for="environment in store.environments"
+                      :key="environment.key"
+                      :value="environment.key"
+                      :disabled="!environment.available"
+                    >
+                      {{ t(environment.nameMessageKey) }}
+                      {{
+                        environment.recommended
+                          ? `· ${t("roleImages.recommended")}`
+                          : ""
+                      }}
+                    </option>
+                  </select>
+                  <span class="select-title-only__title" aria-hidden="true">{{
+                    environmentKey
+                      ? environmentLabel
+                      : t("roleImages.chooseEnvironment")
+                  }}</span>
+                  <ChevronDown
+                    class="select-title-only__arrow"
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                </span>
               </label>
             </div>
             <RoleImageDockerfileEditor
@@ -1389,6 +1412,39 @@ onBeforeUnmount(() => {
   display: grid;
   min-height: 420px;
   place-items: center;
+}
+.select-title-only {
+  position: relative;
+  min-width: 0;
+  height: var(--control-height, 32px);
+}
+.select-title-only > select {
+  height: 100%;
+  color: transparent;
+  appearance: none;
+}
+.select-title-only option {
+  color: var(--text);
+}
+.select-title-only__title {
+  position: absolute;
+  inset: 0 30px 0 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: var(--control-height, 32px);
+  pointer-events: none;
+}
+.select-title-only__arrow {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.select-title-only:has(> select:disabled) > .select-title-only__title,
+.select-title-only:has(> select:disabled) > .select-title-only__arrow {
+  opacity: 0.6;
 }
 .image-summary {
   display: grid;
