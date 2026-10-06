@@ -165,13 +165,27 @@ function formatTokenCount(value: number): string {
                 <dt>{{ $t("runs.attempt", { attempt: node.attempt }) }}</dt>
                 <dd>{{ node.attempt }}</dd>
               </div>
-              <div>
+              <div class="session-details__long-field">
                 <dt>{{ $t("agents.role") }}</dt>
-                <dd>{{ roleLabel }}</dd>
+                <dd
+                  class="session-details__long-value"
+                  tabindex="0"
+                  role="region"
+                  :aria-label="$t('agents.role')"
+                >
+                  {{ roleLabel }}
+                </dd>
               </div>
-              <div v-if="parentNode">
+              <div v-if="parentNode" class="session-details__long-field">
                 <dt>{{ $t("common.source") }}</dt>
-                <dd>{{ parentNode.displayName }}</dd>
+                <dd
+                  class="session-details__long-value"
+                  tabindex="0"
+                  role="region"
+                  :aria-label="$t('common.source')"
+                >
+                  {{ parentNode.displayName }}
+                </dd>
               </div>
               <div>
                 <dt>{{ $t("runs.startedAt") }}</dt>
@@ -489,6 +503,14 @@ function formatTokenCount(value: number): string {
 .session-details dl > .session-details__long-field {
   grid-template-columns: minmax(0, 1fr);
   gap: 4px;
+}
+.session-details__long-value {
+  max-height: 150px;
+  overflow: auto;
+}
+.session-details__long-value:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .session-details__input {
   max-height: 150px;

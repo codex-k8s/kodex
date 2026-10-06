@@ -25,13 +25,14 @@ async function renderActivity(
   events: PresentedRunEvent[],
   currentRun: Run = run,
   currentNode: RunNode = node,
+  additionalNodes: RunNode[] = [],
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunSessionDetailsDialog, {
         run: currentRun,
         node: currentNode,
-        nodes: [currentNode, toolNode],
+        nodes: [currentNode, toolNode, ...additionalNodes],
         events,
         artifacts: [],
       }),
@@ -389,6 +390,40 @@ describe("RunSessionDetailsDialog", () => {
       /\.session-details :deep\(\.run-prompt-preview > \.button\) \{[^}]*height: 32px;[^}]*white-space: nowrap;/,
     );
     expect(dialogSource).toContain(":title=\"$t('promptContext.preview')\"");
+  });
+
+  it("показывает полные описание роли и источник в широких доступных прокручиваемых рядах", async () => {
+    const role =
+      "Менеджер отвечает за постановку задач и проверяемый результат. "
+        .repeat(40)
+        .trim();
+    const source =
+      "Проверка полного процесса разработки с подтверждением владельца. "
+        .repeat(20)
+        .trim();
+    const parent: RunNode = {
+      ...node,
+      ref: "nod_parent",
+      type: "ROOT_PROCESS",
+      displayName: source,
+    };
+    const html = await renderActivity(
+      [],
+      run,
+      { ...node, role, parentNodeRef: parent.ref },
+      [parent],
+    );
+
+    expect(html).toContain(role);
+    expect(html).toContain(source);
+    expect(html.match(/class="session-details__long-value"/g)).toHaveLength(2);
+    expect(html).toMatch(
+      /class="session-details__long-value"[^>]*tabindex="0"[^>]*role="region"/,
+    );
+    expect(dialogSource).toMatch(
+      /\.session-details__long-value \{[^}]*max-height: 150px;[^}]*overflow: auto;/,
+    );
+    expect(dialogSource).toContain("session-details__long-value:focus-visible");
   });
 
   it("показывает доступные launch данные и честные runtime/prompt states", async () => {
