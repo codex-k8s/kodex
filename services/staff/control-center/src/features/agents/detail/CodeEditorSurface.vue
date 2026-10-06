@@ -347,10 +347,13 @@ defineExpose({ focus, insertAtCursor });
   >
     <div class="code-editor__bar">
       <FileCode2 :size="16" aria-hidden="true" />
-      <strong>{{ label }}</strong>
-      <code :id="helpId">
-        {{ description || (language === "toml" ? "TOML" : "Markdown") }}
+      <strong :title="label">{{ label }}</strong>
+      <code :title="description || undefined">
+        {{ language === "toml" ? "TOML" : "Markdown" }}
       </code>
+      <span :id="helpId" class="sr-only">
+        {{ description || (language === "toml" ? "TOML" : "Markdown") }}
+      </span>
       <span class="code-editor__spacer" />
       <LockKeyhole v-if="readonly" :size="15" aria-hidden="true" />
     </div>
@@ -382,6 +385,7 @@ defineExpose({ focus, insertAtCursor });
 
 <style scoped>
 .code-editor {
+  min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -401,7 +405,13 @@ defineExpose({ focus, insertAtCursor });
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
+.code-editor__bar > svg,
+.code-editor__bar code {
+  flex-shrink: 0;
+}
 .code-editor__bar strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--text);
 }
 .code-editor__bar code {
@@ -431,6 +441,7 @@ defineExpose({ focus, insertAtCursor });
   background: var(--panel);
 }
 .code-editor__foot {
+  flex-wrap: wrap;
   min-height: 34px;
   border-top: 1px solid var(--border);
   background: var(--surface);

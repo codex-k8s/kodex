@@ -629,8 +629,10 @@ onBeforeUnmount(reset);
               @availability-change="modelAvailable = $event"
               @selection-change="modelSelection = $event"
             />
-            <label class="field" :for="reasoningEffortId">
-              <span>{{ $t("runtimeOverlay.effort") }}</span>
+            <div class="field">
+              <label :for="reasoningEffortId">{{
+                $t("runtimeOverlay.effort")
+              }}</label>
               <select
                 :id="reasoningEffortId"
                 name="agent-runtime-reasoning-effort"
@@ -668,16 +670,21 @@ onBeforeUnmount(reset);
                   {{ effort }}
                 </option>
               </select>
-              <small>{{
-                $t("runtimeOverlay.effortHelp", {
-                  model: view.configuration.model,
-                })
-              }}</small>
               <small>{{ $t("runtimeOverlay.effortCost") }}</small>
+              <details class="runtime-effort-help">
+                <summary>{{ $t("common.details") }}</summary>
+                <p>
+                  {{
+                    $t("runtimeOverlay.effortHelp", {
+                      model: view.configuration.model,
+                    })
+                  }}
+                </p>
+              </details>
               <small v-if="selectedEffort === undefined">{{
                 $t("runtimeOverlay.repairBeforeEffort")
               }}</small>
-            </label>
+            </div>
           </div>
           <label class="field">
             <span>{{ copy.runtime.profile }}</span>
@@ -970,6 +977,15 @@ onBeforeUnmount(reset);
 .runtime-panel__selectors {
   display: grid;
   gap: 12px;
+}
+.runtime-effort-help {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.runtime-effort-help summary {
+  cursor: pointer;
 }
 .runtime-panel__summary {
   display: grid;
