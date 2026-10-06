@@ -4575,3 +4575,45 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   и scan Job14:50:58 active1 подтверждают достижимость scanner path. Signed
   admission/report/promotion, VERIFIED38 и собственный ENV38 ещё OPEN.
   Повторного REQUEST_BUILD, ручной SQL/очистки или обхода policy не было.
+
+### 06.10.2026 14:58–15:12 UTC — B3 опубликован, ENV38 draft проверен
+
+- PASS на source `b80009fbcec48b9d63b88455dbb763c124e38b0d`:
+  native B3 vulnerability report READY/complete. Совпадений4640,
+  уникальных2938, suppressed2315, HIGH без fix459, блокирующих только2:
+  undici6.27.0/GHSA-rfgv-xxqx-mfg5 (fix6.28.1) и
+  tar7.5.19/GHSA-r292-9mhp-454m (fix7.5.21). Все находки сохранены.
+  Штатное одноразовое ACCEPT_RISK с локальным bootstrap обоснованием:
+  `imgrisk_lwcxWsYagQr8Kc-EgZQ8Djjt`, version1; immutable policy SHA
+  `655cf88f0e74f931fec557ce0ed0ec1798ffd9f3ede1763d2316b8cab2e7987e`.
+- PASS: последующий подписанный admission
+  `imgadm_VeLKaod_FbVA8zkjrv10phy7`, attempt2/fence3/version3 ACCEPTED,
+  receipt `0e6acf4666d3234a225b404e51a18c72d90aac93f8b1d72340a4a8d765dbc9d7`.
+  Native promotion POST202 выполнен один раз; fresh GET200 activeArtifact
+  `imgart_L23Bq2MEYAWPUNef41b1C4Aj` version10 ACCEPTED/PROMOTED,
+  recipe version3, promoted15:02:01 UTC, manifest
+  `sha256:1ac223942792e86ba37de4858f975c8981446979980f9c233c456563a0a94f1f`.
+  Signed inventory `b07e3a07cc43c5e1ec71c2d2ef2c747baa2ac6f5959b7db3d645133eaa21a6af`:
+  linux/amd64, observations50, required38/VERIFIED38, optional VERIFIED4,
+  optional MISSING8. Риск не обходил целостность/provenance/ABI/signature.
+- PASS отдельного планирования: PROJECT conversation
+  `cnv_NOxQ08BpWq-ch3z3SuPl_505`, run `run_48Nclwt6jH1O6Yjxv01OlRxp`,
+  session `ses_IOe6uZdFEFsuZrwfdLQfSftW`, turn
+  `trn_T-TaP_cYh240A2s7xqxJbdVO`/attempt1. Реальный helper запросил свежие
+  каталоги, подготовил ровно1 PREPARE_RUNTIME_ENVIRONMENT_REVISION с38 tools.
+  find_platform_resources вернул TOOL_UNAVAILABLE; helper восстановил чтение
+  через существующие каталоги, ошибку не скрыл. Native Validate/Apply один раз
+  создали draft `renvd_IsyKjLINMobdJTWrM_Fm9HY0` version2/VALID,
+  validation `7233e78b79e4833eb363b5fa1ae5fc19265f798b03a42da99b8012f7cec490f3`.
+  Старое опубликованное окружение и binding сохранены, новый draft не Publish.
+- Ранний provider ACK captured ДО terminal cleanup: task/provider/inbox SHA
+  `be82661350b9718924292da500a443b617436533349b85833f98802a40ac6ac5`,
+  instructions/inbox comparisons EQUAL, PROJECT actor/pins точны.
+  Это ход планирования на baseline ENV1, НЕ доказательство нового ENV38.
+  Дальнейшие smoke захватывают новый Pod UID/image/binary отдельно.
+- FAIL найденного frontend path: draft restoration сменяет imageRef,
+  но не загружает его signed inventory; UI38из0/Publish disabled при
+  authoritative VERIFIED42. Ещё FAIL: служебные i18n keys в editable metadata.
+  Адресный frontend fix готовится, server validation/policy не ослаблены.
+  Screenshot просмотрен; после reload Console error/warn0. Предыдущий405 —
+  неверный диагностический GET host, не дефект приложения. Full65 OPEN.

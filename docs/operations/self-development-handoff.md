@@ -10,6 +10,32 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 15:12 UTC: source/remote/PR1798 `b80009fb` подтверждены ранее;
+новый live readback B3 — ACCEPTED/PROMOTED, artifact version10,
+`imgart_L23Bq2MEYAWPUNef41b1C4Aj`, image digest
+`sha256:1ac223942792e86ba37de4858f975c8981446979980f9c233c456563a0a94f1f`.
+Все38 required tools VERIFIED в signed inventory; recipe version3.
+Риск двух точных npm advisories принят через штатную форму, последующий
+подписанный admission и promotion выполнены штатным controller, без
+обхода provenance/ABI/signature. Повторно не build/risk/promote.
+
+PROJECT ENV38 plan штатно VALIDATED/APPLIED: создан только draft
+`renvd_IsyKjLINMobdJTWrM_Fm9HY0`, version2/VALID, validation digest
+`7233e78b79e4833eb363b5fa1ae5fc19265f798b03a42da99b8012f7cec490f3`.
+Текущий published environment всё ещё rev1, binding не изменён. Найден
+frontend blocker: после восстановления draft loader оставляет inventory
+старого baseline, смена imageRef очищает его без повторной гидратации.
+Native UI38из0/Publish disabled, хотя authoritative B3 VERIFIED42/required38.
+Второй дефект: editable name/description показывают служебные i18n keys.
+Адресный isolated frontend fix готовится; security inventory guard не
+ослаблять и вручную пере выбирать образ ради обхода не нужно.
+После fix — native draft Publish/impact/select PROJECT helper, exact binding,
+ранний ACK/binary watcher перед четырьмя собственными ENV38 smoke. Затем6roles.
+Chrome5 connected/authenticated, Console0 после reload15:10; чужие вкладки
+не менялись. Полный QA и PROJECT ownENV38 acceptance ещё OPEN.
+
+## Предыдущие checkpoints и доказательства
+
 06.10.2026 14:51 UTC: source/remote/PR1798 на `6cbd2ef5` подтверждены,
 Draft сохранён. Затем локально интегрирован `1989e91e`: REJECTED без полного
 SBOM/vulnerability evidence показывает нейтральное «Допуск образа закрыт»,
@@ -23,8 +49,6 @@ B3 COMPLETED/version12; штатный claim Job создан14:50:42 и зав�
 scan Job создан14:50:58 и active1. Это ещё не admission/promotion PASS.
 Не повторять build. Далее дождаться signed report/inventory, оценить exact
 risk при необходимости, Promote → PROJECT ENV38 и реальные smoke.
-
-## Предыдущие checkpoints и доказательства
 
 06.10.2026 14:43 UTC: интегрированы `5bac2db1` (чистые selector titles) и
 `39c32661` (owner admission maintenance). ROOT unit платформы/домена/transport,
