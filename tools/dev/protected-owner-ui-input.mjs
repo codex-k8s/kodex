@@ -246,7 +246,7 @@ export function ownerTLSReadArguments(kind, name, directory) {
   ];
 }
 
-async function readIngressTLS() {
+export async function readIngressTLS() {
   const material = await withPrivateKubectlCache(async (cacheDirectory) => {
     const kubectl = async (kind, name) => {
       try {
