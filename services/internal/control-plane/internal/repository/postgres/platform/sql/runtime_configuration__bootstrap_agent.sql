@@ -66,10 +66,7 @@ WITH policy AS (
            @environment_rbac_digest, @environment_digest, @created_by::uuid
     FROM environment
     JOIN current_environment_version ON true
-    WHERE (
-        (@project_id = '' AND (environment.current_version_id IS NULL OR current_environment_version.role_image_artifact_id IS NULL))
-        OR (@project_id <> '' AND current_environment_version.role_image_artifact_id IS DISTINCT FROM NULLIF(@environment_image_artifact_id, '')::uuid)
-      )
+    WHERE environment.current_version_id IS NULL
       AND (@project_id = '' OR NULLIF(@environment_image_artifact_id, '') IS NOT NULL)
     RETURNING id, environment_set_id
 ), binding AS (

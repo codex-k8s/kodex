@@ -87,6 +87,14 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	if updatedAgentID != agentID {
 		return errors.New("bootstrap agent runtime configuration did not update the agent")
 	}
+	// CREATE привязывает новую роль к опубликованной ревизии, но не является
+	// публикацией новой конфигурации существующего общего environment.
+	if currentRuntimeEnvironmentVersionID != "" {
+		if runtimeEnvironmentVersionID != currentRuntimeEnvironmentVersionID {
+			return errors.New("bootstrap agent runtime changed a published environment revision")
+		}
+		return nil
+	}
 	activation, err := tx.Exec(ctx, queryRuntimeConfigurationAdvanceBootstrapEnvironment, pgx.StrictNamedArgs{
 		"environment_id": runtimeEnvironmentID, "current_version_id": currentRuntimeEnvironmentVersionID,
 		"next_version_id": runtimeEnvironmentVersionID,
