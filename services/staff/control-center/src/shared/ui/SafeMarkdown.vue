@@ -25,6 +25,34 @@ function safeText(value: string): string {
   return value.replace(opaqueRefPattern, "—");
 }
 
+function executionLocalPath(raw: string): string | undefined {
+  let path = raw.trim().split(/[?#]/, 1)[0] ?? "";
+  if (path.startsWith("file:")) {
+    try {
+      const url = new URL(path);
+      if (url.hostname) return undefined;
+      path = url.pathname;
+    } catch {
+      return undefined;
+    }
+  }
+  if (path.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(path))
+    return undefined;
+  try {
+    const decoded = decodeURIComponent(path);
+    const normalized = new URL(decoded, "https://execution.invalid/").pathname;
+    if (
+      /^\/?workspace(?:\/|$)/.test(decoded) ||
+      /^\/workspace(?:\/|$)/.test(normalized) ||
+      /^(?:\.\/)*\.kodex\/outbox(?:\/|$)/.test(decoded)
+    )
+      return path;
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 function safeHref(raw: string): string | undefined {
   const href = raw.trim();
   if (
@@ -64,12 +92,21 @@ function parseInline(source: string): InlineToken[] {
         // Images are deliberately reduced to their alternative text.
         tokens.push({ type: "text", text: safeText(match[2]) });
       } else {
-        const href = safeHref(match[3] ?? "");
-        tokens.push(
-          href
-            ? { type: "link", text: safeText(match[2]), href }
-            : { type: "text", text: safeText(match[2]) },
-        );
+        const localPath = executionLocalPath(match[3] ?? "");
+        if (localPath) {
+          // Локальный путь не доказывает привязку к опубликованному artifact.
+          tokens.push(
+            { type: "text", text: safeText(match[2]) + " " },
+            { type: "code", text: safeText(localPath) },
+          );
+        } else {
+          const href = safeHref(match[3] ?? "");
+          tokens.push(
+            href
+              ? { type: "link", text: safeText(match[2]), href }
+              : { type: "text", text: safeText(match[2]) },
+          );
+        }
       }
     } else if (match[4] !== undefined) {
       tokens.push({ type: "code", text: safeText(match[4]) });

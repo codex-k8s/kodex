@@ -33,6 +33,47 @@ async function render(content: string): Promise<string> {
 }
 
 describe("SafeMarkdown", () => {
+  it("не выдаёт локальный отчёт выполнения за маршрут приложения", async () => {
+    const path = "/workspace/.kodex/outbox/qa1797-manager-smoke.md";
+    const html = await render(`[Отчёт](${path})`);
+
+    expect(html).not.toContain("<a");
+    expect(html).toContain("Отчёт");
+    expect(html).toMatch(
+      /<code[^>]*>\/workspace\/\.kodex\/outbox\/qa1797-manager-smoke\.md<\/code>/,
+    );
+  });
+
+  it.each([
+    "/workspace/report.md",
+    "/work%73pace/.kodex/outbox/report.md",
+    "/projects/../workspace/.kodex/outbox/report.md",
+    ".kodex/outbox/report.md",
+    "./.kodex/outbox/report.md",
+    "file:///workspace/.kodex/outbox/report.md",
+  ])(
+    "сохраняет локальный путь %s читаемым без подбора artifact ref",
+    async (path) => {
+      const html = await render(`[Отчёт](${path})`);
+
+      expect(html).not.toContain("<a");
+      expect(html).toContain("Отчёт");
+      expect(html).toContain("report.md</code>");
+      expect(html).not.toContain("/artifacts/");
+    },
+  );
+
+  it("не раскрывает query локальной ссылки и сохраняет внешние ссылки с похожим путём", async () => {
+    const html = await render(
+      "[Отчёт](/workspace/report.md?token=SYNTHETIC_PRIVATE_VALUE#fragment) [документ](https://example.com/workspace/report.md)",
+    );
+
+    expect(html).not.toContain("SYNTHETIC_PRIVATE_VALUE");
+    expect(html).not.toContain("fragment");
+    expect(html).toContain('href="https://example.com/workspace/report.md"');
+    expect(html).not.toContain('href="/workspace');
+  });
+
   it("сохраняет подчёркивания внутри имён переменных и обычное выделение", async () => {
     const html = await render(
       "Добавить ASSISTANT_REVISION_TEST=draft и _проверить_ результат.",
