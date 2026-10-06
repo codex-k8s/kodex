@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  ChevronDown,
   Maximize2,
   Save,
   Trash2,
@@ -83,6 +84,7 @@ import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import DismissiblePopover from "@/shared/ui/DismissiblePopover.vue";
 import { requestConfirmation } from "@/shared/ui/confirmation";
 
 const props = defineProps<{
@@ -106,6 +108,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const runtime = useRuntimeStore();
 const platform = usePlatformStore();
+const footerActionsOpen = ref(false);
 const draftContinuationPlan = computed(() => {
   const receipt = props.receipt ?? props.plan.receipt;
   if (
@@ -408,6 +411,7 @@ type EditorTarget =
 const editorTarget = ref<EditorTarget>();
 
 function resetDraft(): void {
+  footerActionsOpen.value = false;
   grantExpanded.value = {};
   grantReadBundle.value.close();
   grantReadBundle.value = createIntegrationGrantReadBundle();
@@ -851,6 +855,12 @@ const canApply = computed(
     props.plan.nextActions.includes("APPLY_PLAN"),
 );
 const canReject = computed(() => editable.value);
+watch(
+  () => props.busy || props.readonly,
+  (inactive) => {
+    if (inactive) footerActionsOpen.value = false;
+  },
+);
 
 async function requestChanges(): Promise<void> {
   if (!editable.value || !props.canRequestChanges) return;
@@ -2690,60 +2700,137 @@ function validationProblemLabel(problem: string): string {
           })
         }}
       </span>
-      <div>
-        <button
-          v-if="canRequestChanges && editable"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="requestChanges"
+      <div class="assistant-plan-editor__actions">
+        <div class="assistant-plan-editor__secondary-actions">
+          <button
+            v-if="canRequestChanges && editable"
+            class="button"
+            type="button"
+            :disabled="busy"
+            @click="requestChanges"
+          >
+            {{
+              $t(
+                grantSnapshotConflict
+                  ? "assistant.planEditor.grantRefreshPlan"
+                  : "common.requestChanges",
+              )
+            }}
+          </button>
+          <button
+            v-if="canReject"
+            class="button button--danger"
+            type="button"
+            :disabled="busy"
+            @click="emit('reject')"
+          >
+            <Trash2 :size="17" aria-hidden="true" />
+            {{ $t("common.reject") }}
+          </button>
+          <button
+            v-if="canSave"
+            class="button"
+            type="button"
+            :disabled="busy"
+            @click="save"
+          >
+            <Save :size="17" aria-hidden="true" />
+            {{ $t("assistant.planEditor.saveRevision") }}
+          </button>
+        </div>
+        <div
+          v-if="(canRequestChanges && editable) || canReject || canSave"
+          class="assistant-plan-editor__mobile-actions"
         >
-          {{
-            $t(
-              grantSnapshotConflict
-                ? "assistant.planEditor.grantRefreshPlan"
-                : "common.requestChanges",
-            )
-          }}
-        </button>
-        <button
-          v-if="canReject"
-          class="button button--danger"
-          type="button"
-          :disabled="busy"
-          @click="emit('reject')"
-        >
-          <Trash2 :size="17" aria-hidden="true" />
-          {{ $t("common.reject") }}
-        </button>
-        <button
-          v-if="canSave"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="save"
-        >
-          <Save :size="17" aria-hidden="true" />
-          {{ $t("assistant.planEditor.saveRevision") }}
-        </button>
-        <button
-          v-if="canValidate"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="emit('validate')"
-        >
-          {{ $t("assistant.planEditor.validate") }}
-        </button>
-        <button
-          v-if="canApply"
-          class="button button--primary"
-          type="button"
-          :disabled="busy"
-          @click="emit('apply')"
-        >
-          {{ $t("assistant.planEditor.apply") }}
-        </button>
+          <DismissiblePopover
+            v-model:open="footerActionsOpen"
+            :ariaLabel="$t('common.actions')"
+            placement="bottom-end"
+            width="sm"
+            block
+          >
+            <template #trigger="{ toggle, attrs }">
+              <button
+                v-bind="attrs"
+                class="button"
+                type="button"
+                :disabled="busy"
+                @click="toggle"
+              >
+                {{ $t("common.actions") }}
+                <ChevronDown :size="16" aria-hidden="true" />
+              </button>
+            </template>
+            <template #default="{ close }">
+              <div class="assistant-plan-editor__action-menu">
+                <button
+                  v-if="canRequestChanges && editable"
+                  class="button"
+                  type="button"
+                  :disabled="busy"
+                  @click="
+                    close();
+                    requestChanges();
+                  "
+                >
+                  {{
+                    $t(
+                      grantSnapshotConflict
+                        ? "assistant.planEditor.grantRefreshPlan"
+                        : "common.requestChanges",
+                    )
+                  }}
+                </button>
+                <button
+                  v-if="canReject"
+                  class="button button--danger"
+                  type="button"
+                  :disabled="busy"
+                  @click="
+                    close();
+                    emit('reject');
+                  "
+                >
+                  <Trash2 :size="17" aria-hidden="true" />
+                  {{ $t("common.reject") }}
+                </button>
+                <button
+                  v-if="canSave"
+                  class="button"
+                  type="button"
+                  :disabled="busy"
+                  @click="
+                    close();
+                    save();
+                  "
+                >
+                  <Save :size="17" aria-hidden="true" />
+                  {{ $t("assistant.planEditor.saveRevision") }}
+                </button>
+              </div>
+            </template>
+          </DismissiblePopover>
+        </div>
+        <div class="assistant-plan-editor__primary-actions">
+          <button
+            v-if="canValidate"
+            class="button button--primary"
+            type="button"
+            :disabled="busy"
+            @click="emit('validate')"
+          >
+            {{ $t("assistant.planEditor.validate") }}
+          </button>
+          <button
+            v-if="canApply"
+            class="button button--primary"
+            type="button"
+            :disabled="busy"
+            @click="emit('apply')"
+          >
+            {{ $t("assistant.planEditor.apply") }}
+          </button>
+        </div>
       </div>
     </footer>
     <AssistantCodeEditorModal
@@ -3197,15 +3284,57 @@ function validationProblemLabel(problem: string): string {
   border-top: 1px solid var(--border);
   border-bottom: 0;
 }
-@media (max-width: 640px) {
-  .assistant-plan-editor__footer,
-  .assistant-plan-editor__footer > div {
+.assistant-plan-editor__secondary-actions,
+.assistant-plan-editor__primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.assistant-plan-editor__mobile-actions {
+  display: none;
+}
+.assistant-plan-editor__action-menu {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+}
+.assistant-plan-editor__action-menu .button {
+  justify-content: flex-start;
+  min-height: 44px;
+  white-space: normal;
+  text-align: left;
+}
+@media (max-width: 600px) {
+  .assistant-plan-editor__footer {
     align-items: stretch;
     flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px;
   }
-  .assistant-plan-editor__footer .button {
+  .assistant-plan-editor__footer > .assistant-plan-editor__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .assistant-plan-editor__secondary-actions {
+    display: none;
+  }
+  .assistant-plan-editor__mobile-actions {
+    display: block;
+    min-width: 0;
+  }
+  .assistant-plan-editor__primary-actions {
+    display: contents;
+  }
+  .assistant-plan-editor__actions .button {
     width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 6px 10px;
+    white-space: normal;
   }
+}
+@media (max-width: 640px) {
   .assistant-plan-target {
     grid-template-columns: 1fr;
   }

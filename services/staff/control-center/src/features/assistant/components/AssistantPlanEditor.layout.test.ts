@@ -8,6 +8,41 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("mobile оставляет Validate/Apply видимыми, а второстепенные действия раскрывает штатным popover", () => {
+    const footer = source.slice(
+      source.indexOf('<footer class="assistant-plan-editor__footer">'),
+    );
+    expect(footer).toContain(
+      'class="assistant-plan-editor__secondary-actions"',
+    );
+    expect(footer).toContain("<DismissiblePopover");
+    expect(footer).toContain('v-model:open="footerActionsOpen"');
+    expect(footer).toContain(":ariaLabel=\"$t('common.actions')\"");
+    expect(footer).toContain('v-bind="attrs"');
+    expect(footer).toContain('@click="toggle"');
+    expect(footer).toMatch(/close\(\);\s*requestChanges\(\);/);
+    expect(footer).toMatch(/close\(\);\s*emit\('reject'\);/);
+    expect(footer).toMatch(/close\(\);\s*save\(\);/);
+    const primary = footer.slice(
+      footer.indexOf('class="assistant-plan-editor__primary-actions"'),
+    );
+    expect(primary).toContain('v-if="canValidate"');
+    expect(primary).toContain('v-if="canApply"');
+    expect(primary).toContain("@click=\"emit('validate')\"");
+    expect(primary).toContain("@click=\"emit('apply')\"");
+    expect(source).toContain("footerActionsOpen.value = false");
+    expect(source).toMatch(/@media \(max-width: 600px\)/);
+    expect(source).toMatch(
+      /\.assistant-plan-editor__secondary-actions\s*{\s*display: none;/,
+    );
+    expect(source).toMatch(
+      /\.assistant-plan-editor__primary-actions\s*{\s*display: contents;/,
+    );
+    expect(source).toContain(
+      "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)",
+    );
+    expect(source).toContain("min-height: 44px");
+  });
   it("PROJECT batch использует собственный exact-profile bundle, не ordinary/SYSTEM fallback", () => {
     expect(source).toContain(':read-bundle="projectGrantReadBundle"');
     expect(source).toContain(':compact="compactProjectGrantBatch"');
