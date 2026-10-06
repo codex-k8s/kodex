@@ -12,6 +12,30 @@ import {
   tomlCompletionQuery,
 } from "./code-editor";
 describe("Versioned overlay editor", () => {
+  it("оснастка сохраняет canonical web_search и effort editor не удаляет live", () => {
+    expect(schema.fields.map((field) => field.key)).toEqual([
+      "model_reasoning_effort",
+      "web_search",
+      "personality",
+      "allow_login_shell",
+      "history.persistence",
+    ]);
+    expect(
+      schema.fields.find((field) => field.key === "web_search"),
+    ).toMatchObject({
+      allowedValues: ["disabled", "cached", "indexed", "live"],
+      defaultValue: "cached",
+    });
+    expect(
+      parse(changeOverlayEffort('web_search = "live"', schema, "low")),
+    ).toEqual({
+      model_reasoning_effort: "low",
+      web_search: "live",
+    });
+    expect(() =>
+      changeOverlayEffort('web_search = "unknown"', schema, "low"),
+    ).toThrow();
+  });
   it("изменяет effort через TOML parser, сохраняя dotted и quoted поля", () => {
     const content = `"personality" = 'friendly'\n["history"]\npersistence = "none"\n`;
     const changed = changeOverlayEffort(content, schema, "low");
@@ -71,7 +95,7 @@ describe("Versioned overlay editor", () => {
   it("hover возвращает только owner description и hover для точного ключа", () => {
     const content = '["history"]\npersistence = "none"';
     expect(overlayHover(schema, content, 17)?.text).toContain(
-      schema.fields[3].hover,
+      schema.fields.find((field) => field.key === "history.persistence")?.hover,
     );
     expect(overlayHover(schema, 'model = "server"', 2)).toBeUndefined();
   });

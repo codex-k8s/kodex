@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { overlaySchemaFixture } from "../src/test-utils/runtime-catalog-fixture";
 import {
   helperPins,
   helperPolicy,
@@ -210,49 +211,7 @@ const runtimeView: AgentRuntimeConfigurationView = {
   agentVersion: agent.version,
   skillBindings: [],
   memoryBindings: [],
-  overlaySchema: {
-    revision: "fixture",
-    digest,
-    maximumBytes: 65536,
-    fields: [
-      {
-        key: "model_reasoning_effort",
-        valueType: "string",
-        allowedValues: [],
-        defaultValue: "",
-        description: "",
-        completion: "",
-        hover: "",
-      },
-      {
-        key: "personality",
-        valueType: "string",
-        allowedValues: [],
-        defaultValue: "",
-        description: "",
-        completion: "",
-        hover: "",
-      },
-      {
-        key: "allow_login_shell",
-        valueType: "boolean",
-        allowedValues: [],
-        defaultValue: "false",
-        description: "",
-        completion: "",
-        hover: "",
-      },
-      {
-        key: "history.persistence",
-        valueType: "string",
-        allowedValues: [],
-        defaultValue: "none",
-        description: "",
-        completion: "",
-        hover: "",
-      },
-    ],
-  },
+  overlaySchema: overlaySchemaFixture,
 };
 
 for (const width of [1440, 390])
