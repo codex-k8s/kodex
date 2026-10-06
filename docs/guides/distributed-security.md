@@ -443,6 +443,28 @@ revision соединения и свежие exact grants. Историческ
 Общий каталог соединений применяет `integration.view` к каждой строке до
 выдачи; фильтр UI, cursor и idempotency receipt не заменяют эту проверку.
 
+Leased каталог помощника `RECIPIENT_INTEGRATION_GRANTS` перечисляет безопасные
+кандидаты разрешений только выбранного Agent/Workflow. Источник сценария —
+адресная настройка staff-ролей помощником после подтверждения владельца:
+`get_configuration_catalog` → generated adapter существующего
+`RuntimeWorkService.SearchAssistantResources` →
+`ListAssistantConfigurationCatalog` → owner PostgreSQL → typed callback.
+Request содержит собственный `assistant_ref` как locator, но не recipient или
+Project. Сервер разрешает root USER и SYSTEM/PROJECT source из действующей
+lease/fence/generation, затем получателя из сохранённого контекста Run.
+Контекст immutable RuntimeRevision и свежая owner-проекция должны совпадать
+по kind/ref/version и разрешать `CHANGE_INTEGRATION_GRANT`. PROJECT не выходит
+за свой Project; SYSTEM читает только Project выбранного получателя.
+Каждая строка повторяет канонический `GRANT` admission и `integration.view`;
+disabled или ещё не созданный grant не исключает кандидата. Ответ несёт exact
+connection/package/project/recipient pins и текущее состояние grant без
+credentials. Обычная роль, неверный source locator, потеря authority,
+изменённый recipient/context pin, устаревшая generation, expiry/cancel/retry
+старой lease закрыто отклоняются. Read не меняет state, не создаёт receipt
+или event и не выдаёт разрешение; mutation/owner confirmation/OCC остаются
+на существующем специализированном пути. Каталог собственных разрешений
+PROJECT-помощника является отдельным видом и не подменяет получателя.
+
 Повтор запуска и продолжение сессии заново разрешают сохранённую цель и её
 канонический launch permission до receipt и OCC. Право чтения Run и locator
 Session не дают право запуска. Историческое разрешение в receipt не переживает

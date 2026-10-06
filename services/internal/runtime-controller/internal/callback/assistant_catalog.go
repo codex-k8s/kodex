@@ -129,6 +129,9 @@ func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput)
 	if input.AssistantScope == runtimecontract.AssistantScopeProject {
 		kinds = append(kinds, "PROJECT_INTEGRATION_GRANTS")
 	}
+	if assistantRecipientIntegrationCatalogAvailable(input) {
+		kinds = append(kinds, "RECIPIENT_INTEGRATION_GRANTS")
+	}
 	return objectSchema([]string{"kind", "assistant_ref"}, map[string]any{
 		"kind": enumSchema(kinds...), "assistant_ref": assistantRef,
 		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 10000},
@@ -205,6 +208,9 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 	if kind == "PROJECT_INTEGRATION_GRANTS" && (input.AssistantScope != runtimecontract.AssistantScopeProject || request.AccountRef != "" || request.RuntimeProfileRef != "") {
 		return nil, invalid
 	}
+	if kind == "RECIPIENT_INTEGRATION_GRANTS" && (!assistantRecipientIntegrationCatalogAvailable(input) || assistantRef != input.AgentRef) {
+		return nil, invalid
+	}
 	if kind == "MODELS" && request.AccountRef == "" {
 		return nil, invalid
 	}
@@ -217,7 +223,7 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 }
 
 func assistantConfigurationCatalogKindKnown(kind string) bool {
-	if kind == "PROJECT_INTEGRATION_GRANTS" {
+	if kind == "PROJECT_INTEGRATION_GRANTS" || kind == "RECIPIENT_INTEGRATION_GRANTS" {
 		return true
 	}
 	for _, candidate := range assistantConfigurationCatalogKinds {
@@ -254,7 +260,11 @@ func (server *Server) assistantConfigurationCatalog(ctx context.Context, input r
 
 func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant configuration catalog response is invalid")
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS {
+		return castAssistantRecipientIntegrationCatalog(input, request, response)
+	}
 	if response == nil || len(response.ProtoReflect().GetUnknown()) != 0 || response.GetKind() != request.GetKind() ||
+		response.GetRecipientIntegrationGrants() != nil ||
 		response.GetAssistantRef() != request.GetAssistantRef() || response.GetOrganizationRef() != input.OrganizationRef ||
 		!validAssistantCatalogScope(response.GetScopeKind(), response.GetProjectRef(), response.GetAssistantProfileRef()) ||
 		len(response.GetEntries()) > maximumAssistantConfigurationEntries || response.GetNextOffset() < 0 || response.GetNextOffset() > 10000 ||

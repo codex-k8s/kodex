@@ -32,6 +32,18 @@ type AssistantConfigurationCatalogResponse struct {
 	NextOffset                                                                      int32
 	CurrentConfiguration                                                            *AssistantCurrentConfiguration
 	ProjectIntegrationGrants                                                        []ProjectAssistantIntegrationGrantCatalogEntry
+	RecipientIntegrationGrants                                                      *AssistantRecipientIntegrationGrantCatalog
+}
+
+type AssistantRecipientIntegrationGrantCatalog struct {
+	RecipientKind, RecipientRef, RecipientName string
+	RecipientVersion, ProjectVersion           int64
+	Entries                                    []AssistantRecipientIntegrationGrantCatalogEntry
+}
+
+type AssistantRecipientIntegrationGrantCatalogEntry struct {
+	Grant ProjectAssistantIntegrationGrantCatalogEntry
+	Pins  IntegrationCandidatePins
 }
 
 // Свежая read-модель не содержит materialized secret values или transport metadata.

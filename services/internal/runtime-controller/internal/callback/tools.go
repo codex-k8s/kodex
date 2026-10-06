@@ -16,7 +16,7 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover refs/schemas; omit operation_types for index. assistant_configuration_catalog excludes other selectors. MODELS requires account_ref. CURRENT_CONFIGURATION uses your agent_ref: instructions, settings, environment/tools/network, template variables. current_configuration is fresh; execution_snapshot is turn-pinned.",
+		"description": "Discover refs/schemas; omit operation_types for index. Catalog excludes other selectors. MODELS needs account_ref. CURRENT_CONFIGURATION and RECIPIENT_INTEGRATION_GRANTS use own agent_ref; recipient grants require selected AGENT/WORKFLOW. Catalog reads are fresh; execution_snapshot is turn-pinned.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},

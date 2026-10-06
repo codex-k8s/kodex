@@ -1947,6 +1947,7 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_ENVIRONMENTS = 7;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION = 8;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_PROJECT_INTEGRATION_GRANTS = 9;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS = 10;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -2000,6 +2001,22 @@ message AssistantConfigurationCatalogResponse {
   // Только собственный помощник exact lease; свежие настройки, не snapshot хода.
   AssistantCurrentConfiguration current_configuration = 9;
   repeated ProjectAssistantIntegrationGrantCatalogEntry project_integration_grants = 10;
+  // Получатель разрешён из сохранённого контекста exact lease, не из request.
+  AssistantRecipientIntegrationGrantCatalog recipient_integration_grants = 11;
+}
+
+message AssistantRecipientIntegrationGrantCatalog {
+  string recipient_kind = 1;
+  string recipient_ref = 2;
+  string recipient_name = 3;
+  int64 recipient_version = 4;
+  int64 project_version = 5;
+  repeated AssistantRecipientIntegrationGrantCatalogEntry entries = 6;
+}
+
+message AssistantRecipientIntegrationGrantCatalogEntry {
+  ProjectAssistantIntegrationGrantCatalogEntry grant = 1;
+  IntegrationGrantCandidatePins pins = 2;
 }
 
 message ProjectAssistantIntegrationGrantCatalogEntry {

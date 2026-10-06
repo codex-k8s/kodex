@@ -372,6 +372,17 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 			return nil, assistantCatalogTransportError(catalog.GetKind(), err)
 		}
 		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
+		if recipient := result.RecipientIntegrationGrants; recipient != nil {
+			response.RecipientIntegrationGrants = &controlplanev1.AssistantRecipientIntegrationGrantCatalog{RecipientKind: recipient.RecipientKind, RecipientRef: recipient.RecipientRef, RecipientName: recipient.RecipientName, RecipientVersion: recipient.RecipientVersion, ProjectVersion: recipient.ProjectVersion}
+			for _, entry := range recipient.Entries {
+				candidate, err := castAssistantIntegrationGrantCandidate(entry.Grant.Candidate)
+				if err != nil {
+					return nil, transportError(err)
+				}
+				response.RecipientIntegrationGrants.Entries = append(response.RecipientIntegrationGrants.Entries, &controlplanev1.AssistantRecipientIntegrationGrantCatalogEntry{
+					Grant: &controlplanev1.ProjectAssistantIntegrationGrantCatalogEntry{ConnectionRef: entry.Grant.ConnectionRef, ConnectionName: entry.Grant.ConnectionName, ConnectionVersion: entry.Grant.ConnectionVersion, DefinitionVersion: entry.Grant.DefinitionVersion, DefinitionDigest: entry.Grant.DefinitionDigest, Candidate: candidate}, Pins: castIntegrationCandidatePins(entry.Pins)})
+			}
+		}
 		if result.CurrentConfiguration != nil {
 			response.CurrentConfiguration, err = castAssistantCurrentConfiguration(*result.CurrentConfiguration)
 			if err != nil {

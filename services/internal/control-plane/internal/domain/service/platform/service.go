@@ -936,7 +936,7 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 	}
 	validKind := false
 	switch input.Kind {
-	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION", "PROJECT_INTEGRATION_GRANTS":
+	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION", "PROJECT_INTEGRATION_GRANTS", "RECIPIENT_INTEGRATION_GRANTS":
 		validKind = true
 	}
 	if !validKind || len(input.AssistantRef) < 8 || len(input.AssistantRef) > 128 || len([]rune(input.Query)) > 80 || input.Offset < 0 || input.Offset > 10000 ||

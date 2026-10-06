@@ -124,6 +124,9 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	}
 	lease := leases[0]
 	reader := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.resources.search"}, "runtime-controller")
+	if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "RECIPIENT_INTEGRATION_GRANTS", AssistantRef: profile.AgentRef}); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatal("recipient catalog accepted context without selected recipient authority")
+	}
 	catalog, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "PROJECT_INTEGRATION_GRANTS", AssistantRef: profile.AgentRef})
 	if err != nil {
 		t.Fatal(err)
@@ -262,6 +265,12 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	if err != nil || len(afterDisable.Items) != 1 || afterDisable.Items[0].CurrentGrantEnabled {
 		t.Fatal("disable did not close exact grant")
 	}
+	grantRun, err := service.GetRun(ctx, owner, stringMap(lease, "runRef"))
+	if err != nil {
+		t.Fatal("read synthetic own-grant run cleanup")
+	}
+	execute(command.CancelRun, owner, "own-grant-stop", &grantRun.Version, command.RunCommandInput{RunRef: grantRun.Ref, Reason: "Synthetic own-grant scenario complete"})
+	testAssistantRecipientIntegrationCatalog(t, ctx, r, service, owner, worker, project, connection.Ref, foreign.AgentRef)
 	if _, err = pool.Exec(ctx, queryOrganizationImageComponentOwner, current.organizationID, current.actorID, "MEMBER"); err != nil {
 		t.Fatal("revoke synthetic owner")
 	}
