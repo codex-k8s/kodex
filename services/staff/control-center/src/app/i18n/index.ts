@@ -2299,6 +2299,7 @@ const ru = {
       "Событие файла получено, но его безопасное описание недоступно.",
     renderedPromptUnavailable:
       "Полностью отрендеренные инструкции и RuntimeRevision не представлены текущим API. Интерфейс не восстанавливает их из косвенных данных.",
+    promptPreviewSafeHint: "Безопасный состав и версии, не полный ввод модели.",
     usage: {
       title: "Использование токенов",
       total: "Всего",
@@ -6856,6 +6857,7 @@ const en = {
       "A file event was received, but its safe descriptor is unavailable.",
     renderedPromptUnavailable:
       "Fully rendered instructions and RuntimeRevision are not provided by the current API. The UI does not reconstruct them from indirect data.",
+    promptPreviewSafeHint: "Safe sections and revisions, not full model input.",
     usage: {
       title: "Token usage",
       total: "Total",

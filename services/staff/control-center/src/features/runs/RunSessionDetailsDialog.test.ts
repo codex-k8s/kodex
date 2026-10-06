@@ -198,11 +198,12 @@ describe("RunSessionDetailsDialog", () => {
               controlNode: "Контрольный этап",
               runContext: "Контекст запуска",
               artifacts: "Результаты и файлы",
-              renderedPromptUnavailable:
-                "Полностью отрендеренные инструкции недоступны текущему API.",
+              promptPreviewSafeHint:
+                "Безопасный состав и версии, не полный ввод модели.",
               source: { CONTROL_CENTER: "Control Center" },
               nodeTypes: { AGENT_EXECUTION: "ИИ-сотрудник" },
             },
+            promptContext: { preview: "Просмотреть контекст исполнения" },
             states: {
               RUNNING: "Выполняется",
               SUCCEEDED: "Завершено",
@@ -222,8 +223,10 @@ describe("RunSessionDetailsDialog", () => {
     expect(html).toContain("Модель выполнения");
     expect(html).toContain("Инструкции");
     expect(html).toContain(
-      "Полностью отрендеренные инструкции недоступны текущему API.",
+      "Безопасный состав и версии, не полный ввод модели.",
     );
+    expect(html).toContain("Просмотреть контекст исполнения");
+    expect(html).not.toContain('type="checkbox"');
     expect(html).toContain("Собираю подтверждённые факты");
     expect(html).toContain("session-details__workspace");
     expect(html).toContain("session-details__event--agent");

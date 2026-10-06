@@ -17,6 +17,7 @@ import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import RuntimeRevisionDiffPanel from "./RuntimeRevisionDiffPanel.vue";
+import RunPromptPreview from "./RunPromptPreview.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -249,7 +250,7 @@ function eventKind(
 
           <section class="session-details__section">
             <h3>{{ $t("agents.instructions") }}</h3>
-            <dl v-if="agent?.publishedInstructions">
+            <dl v-if="!sessionNode && agent?.publishedInstructions">
               <div>
                 <dt>{{ $t("files.revision") }}</dt>
                 <dd>
@@ -260,7 +261,11 @@ function eventKind(
                 </dd>
               </div>
             </dl>
-            <p class="session-details__unavailable">
+            <RunPromptPreview
+              v-if="sessionNode && node.runRef === run.ref"
+              :run="run"
+            />
+            <p v-else class="session-details__unavailable">
               {{ $t("runs.renderedPromptUnavailable") }}
             </p>
           </section>
