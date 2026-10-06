@@ -158,6 +158,45 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 19:51 UTC. ROOT source `4928f095`: устранён живой realtime
+oversize. До исправления десятый snapshot SYSTEM_ASSISTANT содержал
+42 полных диалога и превышал1MiB; браузер получал9 snapshots и CLOSE1006
+без READY. После producer fix owner page уменьшается50→25→12→6→3→1,
+тексты/версии/attachments и настоящий cursor не обрезаются; singleton
+возвращает typed error. Chrome: all16 snapshots, 920785 байт у проблемного
+kind, PLATFORM_READY/SESSION_READY, live/attempt0, дальнейшие RUN_EVENT и
+heartbeats PASS. ROOT Go websocket PASS1.652с, source/Pod hashes совпали.
+Догрузка/выбранный старый диалог ещё OPEN; этот PASS не означает fullQA.
+
+MCP catalog mismatch ordinary Manager доказан до модели, закрытый отказ
+RUNTIME_MCP_UNAVAILABLE/CATALOG_BINDING сохранён. Source a810 согласовал
+shared expected tool list и callback launch_workflow; public MCP catalog
+check PASS. Новый full runner00f452b6…09be574/binary48160445…79fdc построен
+из a810, canonical import/render/quiesce/apply/readback PASS. Исторический
+common generation2 ещё не заменён: PROJECT UPDATE proposal отправлен один
+раз в conversation cnv_GG-RGeM6ANep_m4p9BSXKw4v/run_NqNGJAMMMOQ5ARCVnMuXsQ4s.
+Admission/promotion/rebind generation3 и actual ordinary launch NOT RUN.
+Первый quiesce без Node PATH завершился до effects с FAIL; исправленный
+префикс и оба точных readback PASS, ручного scale/bypass не было.
+
+Project File manager-plan.md ACTIVE/CLEAN, 2395 байт, digest958c4ae7…2e4
+создан applied plan pln_Xvd1-J6zbYXAcqETLuWzwXzk/v3/receipt
+rct__M0JMvWVka1KZhh1xUWn1n-a. Native Files/attachment picker PASS;
+чтение файла обычной ролью пока NOT RUN. Нативно опубликованы процессы
+SOFTWARE_CHANGE_DELEGATION_SMOKE/v3 и SOFTWARE_CHANGE/v3/33steps/4required
+inputs/единственный финальный human gate. Конфигурация PASS, execution NOT RUN.
+
+Native Workflow editor показал33 одновременно открытых блоков и400/429
+burst. Обе формы переведены на общий disclosure с одним lazy editor;
+ROOT17 units PASS2.24с, настоящие400 не скрыты. Owner cause400 подтверждён:
+catalog/query требует четыре обязательных runtime inputs, которые редактор
+ещё не имеет; prospective preview fix в работе, запуск остаётся strict.
+Desktop/mobile screenshots новой формы OPEN. Mobile environment controls
+390/320 PASS: нет overlap/горизонтального overflow. Proxy auth recovery113
+units и typecheck PASS; actual expiry после фикса NOT RUN. SSO GET200
+подтверждает absolute12h до07.10 10:23 Саратов; Chrome MCP проверяется
+отдельно. Remote/PR checkpoint a810 PASS; bootstrap/Dogfooding merge NOT RUN.
+
 06.10.2026 19:12 UTC. ROOT source `24bb4b04`: write ENV обновлена
 штатным PROJECT plan `pln_iRpm81omLcMXDNJqVXP2w7Oc`, APPLIED/version3,
 receipt `rct_pFK9ogQ_EuPwGX1NxHSz_fWD`. Native публикация выбрала только

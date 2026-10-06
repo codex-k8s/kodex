@@ -10,6 +10,53 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 19:51 UTC, source `4928f095de4c8dffd0be2b43ff82bed1864a7cec`.
+Новое исправление каталога MCP ordinary launch_workflow вошло в compiled
+full runner: base manifest `sha256:00f452b6d2c1424da7ebdf217b553b61f42b4fc1d3bc3b8492a70425a09be574`,
+binary SHA256 `481604458c0e480894163dbb52af20468f6910e3c52dc4b9d0b2dd31edd79fdc`,
+build source `a81010314933e00947f728c4462432757a382e2e`.
+Canonical build/import, fresh render, supply-chain quiesce/readback и
+apply/readback PASS; все пять приостанавливаемых Deployments Ready.
+Runner base не равен пользовательскому promoted image: текущий common
+generation2/6f89 остаётся прежним, его нельзя считать обновлённым.
+PROJECT helper готовит UPDATE того же recipe: conversation
+`cnv_GG-RGeM6ANep_m4p9BSXKw4v`, run `run_NqNGJAMMMOQ5ARCVnMuXsQ4s`,
+session `ses_VNW-p7osf6yWrPckt4ko_Vru`. Send выполнен один раз;
+сначала прочитать результат, не повторять. Далее admission/promotion
+generation3 и новые helper/review/write ENV pins.
+
+WebSocket oversize исправлен: owner page42 превышала 1 MiB, silent1006
+не давал READY и блокировал Launch. Новый producer уменьшает только целую
+owner page, сохраняя полный текст и cursor. Native Chrome получил все16
+kind snapshots, SYSTEM_ASSISTANT 920785 байт, PLATFORM_READY/SESSION_READY,
+platformState=live/attempt0 и последующие RUN_EVENT/heartbeats. Source/Pod
+hashes двух gateway файлов совпали. ROOT websocket tests PASS1.652с.
+Partial-page cache/selected-dialog edge ещё проверяется отдельно.
+
+`manager-plan.md` создан штатным applied PROJECT plan: ACTIVE/CLEAN,
+2395 байт, SHA256 `958c4ae7562f247e4eb4c01429815730ca107f933b18b4f10ef1293ee3e732e4`.
+SOFTWARE_CHANGE_DELEGATION_SMOKE и SOFTWARE_CHANGE опубликованы; второй
+PUBLISHED/v3/revision `wfv_X8F3y-yCPbDOfdZpa02yuyld`, 33 шага, 4 required
+input fields, единственный финальный human gate. Execution обоих NOT RUN.
+Предыдущий ordinary Manager FAIL до модели: RUNTIME_MCP_UNAVAILABLE /
+CATALOG_BINDING; свежая попытка только после доставки нового common image.
+
+Обе формы Workflow теперь компактные, монтируют только выбранный редактор;
+ROOT17/17 units PASS2.24с. Native screenshots обеих форм ещё NOT RUN.
+Workflow-stage catalog/query с отсутствующими required runtime inputs
+возвращает400/INVALID_REQUEST; узкий prospective preview fix в работе,
+runtime launch validation не ослабляется. Mobile environment panel PASS
+390/320, proxy recovery113 unit tests/typecheck PASS; реальный новый proxy
+expiry после исправления NOT RUN. Диагностический неверный dynamic import
+ROOT дал404 в Console; это не ошибка приложения и требует чистого reload.
+SSO owner GET200: absolute07.10 06:23:10UTC/10:23 Саратов.
+Remote/PR1798 checkpoint a810 exact readback PASS, source4928 ещё не push.
+Chrome5 собственная, Chrome6 чужая; последний reload19:47UTC,
+следующий до19:52UTC. Full65 OPEN; bootstrap merge и реальный dogfooding
+не выполнены.
+
+## Предыдущий checkpoint 19:12
+
 06.10.2026 19:12 UTC, source24bb4b04. Write ENV current2/version2
 `renvv_vN6a6YQTyy2JXz-PMRoXh5Th` newcommon6f89d/tools38 опубликована
 только Developer binding3 с GH_TOKEN/project Secret revision1. Review5
