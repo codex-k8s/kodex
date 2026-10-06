@@ -44,7 +44,9 @@ func (repository *Repository) GetPromptPreviewContextSnapshot(ctx context.Contex
 		return entity.PromptMaterializationSnapshot{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	snapshot, err := repository.promptPreviewContextTx(ctx, tx, current, kind, ref, input)
+	// Prospective mode назначается только этому read port, не полем caller.
+	// ScopeOnly declared-template eligibility сохраняет прежнюю семантику.
+	snapshot, err := repository.promptPreviewContextForActorWithModeTx(ctx, tx, current, current, kind, ref, input, true)
 	if err != nil {
 		return entity.PromptMaterializationSnapshot{}, err
 	}
@@ -63,6 +65,12 @@ func (repository *Repository) promptPreviewContextTx(ctx context.Context, tx pgx
 // Viewer сохраняет собственные права чтения; execution назначается только owner.
 func (repository *Repository) promptPreviewContextForActorTx(ctx context.Context, tx pgx.Tx, current, execution scope,
 	kind, ref string, input query.PromptPreviewContext,
+) (entity.PromptMaterializationSnapshot, error) {
+	return repository.promptPreviewContextForActorWithModeTx(ctx, tx, current, execution, kind, ref, input, false)
+}
+
+func (repository *Repository) promptPreviewContextForActorWithModeTx(ctx context.Context, tx pgx.Tx, current, execution scope,
+	kind, ref string, input query.PromptPreviewContext, prospective bool,
 ) (entity.PromptMaterializationSnapshot, error) {
 	if kind == promptservice.TargetSessionContinuation {
 		return repository.promptContinuationPreviewForActorTx(ctx, tx, current, execution, ref, input)
@@ -107,7 +115,7 @@ func (repository *Repository) promptPreviewContextForActorTx(ctx context.Context
 		if selected, ok := promptWorkflowStep(*version, input.WorkflowStageKey); ok {
 			step = &selected
 		}
-		if step == nil || !input.ScopeOnly && !validWorkflowRunInput(version.Inputs, input.Input) {
+		if step == nil || !validPromptWorkflowInput(version.Inputs, input.Input, prospective || input.ScopeOnly) {
 			return entity.PromptMaterializationSnapshot{}, errs.ErrInvalid
 		}
 		agentRef = step.AgentRef
@@ -146,6 +154,9 @@ func (repository *Repository) promptPreviewContextForActorTx(ctx context.Context
 		snapshot.WorkflowStage = step.Name
 	}
 	snapshot.StructuredVariables["input"].(map[string]any)["values"] = input.Input
+	if kind == promptservice.TargetWorkflowStage && prospective {
+		markUnavailablePromptWorkflowInputs(&snapshot, version.Inputs, input.Input)
+	}
 	if input.Task != "" {
 		snapshot.Variables["task"] = input.Task
 	} else {
@@ -169,6 +180,30 @@ func (repository *Repository) promptPreviewContextForActorTx(ctx context.Context
 	digest := sha256.Sum256(raw)
 	snapshot.ContextPin.Digest = hex.EncodeToString(digest[:])
 	return snapshot, nil
+}
+
+func validPromptWorkflowInput(fields []entity.WorkflowInputField, input map[string]any, prospective bool) bool {
+	if !prospective {
+		return validWorkflowRunInput(fields, input)
+	}
+	// Проверяем все предоставленные значения тем же runtime validator.
+	// Только отсутствующие поля не требуются до создания реального Run.
+	provided := make([]entity.WorkflowInputField, 0, len(input))
+	for _, field := range fields {
+		if _, exists := input[field.Key]; exists {
+			provided = append(provided, field)
+		}
+	}
+	return validWorkflowRunInput(provided, input)
+}
+
+func markUnavailablePromptWorkflowInputs(snapshot *entity.PromptMaterializationSnapshot, fields []entity.WorkflowInputField, input map[string]any) {
+	for _, field := range fields {
+		if _, exists := input[field.Key]; !exists {
+			snapshot.UnavailableVariables["input.values"] = "RUNTIME_CONTEXT_REQUIRED"
+			snapshot.UnavailableVariables["input.values."+field.Key] = "RUNTIME_CONTEXT_REQUIRED"
+		}
+	}
 }
 
 func (repository *Repository) promptPreviewAttachmentsTx(ctx context.Context, tx pgx.Tx, current scope, projectID string,
