@@ -10,6 +10,39 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 04:08 UTC: checkpoint `c3a21659b825d114e05f3e05b204c889de4fba0b`
+запушен, exact remote/PR1798 head совпал. SYSTEM generation10 штатно собран,
+допущен после отдельного решения администратора по точному новому отчёту
+и опубликован. Artifact `imgart_uIvnAwYYUfGEJstnJ4UWUNfD`, manifest
+`sha256:04d4263b323137ca103eb73bb2dcce9a7edb11742e7fad21460e834c65d3df5e`.
+Recipe version16/generation10 ACTIVE/promotedImageReady=true.
+
+SYSTEM59 plan `pln_IyeA6MXRRZ6D-7lP3CAgh0gF` однократно APPLIED; draft
+`renvd_q9dTF0hvWioj5dugiugfqTZ2` VALID → PUBLISHED через UI и impact.
+Собственный ENV25 ready=true, versionRef `renvv_5c9eThQqqjen0u0fCRkRDi34`,
+binding version5. Все38 VERIFIED tools выбраны. Сеть, ресурсы, LANG/LC_ALL,
+отсутствие shell-secret bindings и отдельные managed Context7 grants сохранены.
+Apply/Publish повторять не нужно.
+
+04:00–04:06 UTC: четыре живых SYSTEM диалога Context7/GitHub/native web/context
+запущены параллельно; четыре отдельных provider Pods наблюдались одновременно.
+Все четыре run SUCCEEDED, exact RUN preview complete/diagnostics[] и оба
+дайджеста совпали с actual provider ACK. Каждый использует ENV25/gen10/38tools,
+instructions/input EQUAL. Actual provider binary SHA256 совпал с новой сборкой
+`f8a44936452d36642806982db4d6b1939f7c064d74ffe48e89fbad3a513c095f`.
+Функциональные результаты и refs записаны в основном журнале.
+Web search действительно вызван и завершён, а не заменён ответом по памяти.
+
+На tree поверх c3a применён двухфайловый UX fix: loading inventory не показывает
+ложный красный alert. ROOT31/31 unit, lint/format/forced typecheck PASS;
+Host/Pod component SHA совпал. Native applied plan открыли: во время loading
+alert отсутствует; затем42 строки/38 checked, без горизонтального overflow.
+Screenshot и Console/Network проверены. Эти два файла ещё требуют checkpoint.
+Model catalog пока возвращает техническое SYSTEM name; отдельный исполнитель
+готовит узкую display projection без изменения authority/persistence.
+Далее SYSTEM создаёт Kodex | Dev штатным typed plan, затем PROJECT helper.
+PROJECT/шесть ролей/full dogfooding остаются OPEN, цель не завершена.
+
 06.10.2026 03:46 UTC: на clean source `ad4005741ade78ba21b408465244f2f54bbc8e4e`
 полный runner и четыре supply-chain image собраны; fresh render, штатный
 supply-chain apply и отдельный exact readback — PASS. Завершённый promotion

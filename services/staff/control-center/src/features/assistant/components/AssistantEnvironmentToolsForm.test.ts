@@ -1,4 +1,5 @@
 import {
+  createSSRApp,
   createRenderer,
   defineComponent,
   nextTick,
@@ -7,7 +8,9 @@ import {
   type Ref,
   type SetupContext,
 } from "vue";
+import { renderToString } from "@vue/server-renderer";
 import { describe, expect, it, vi } from "vitest";
+import { i18n } from "@/app/i18n";
 import type { EditablePlanOperation } from "@/features/assistant/model";
 import type {
   RuntimeImageCatalog,
@@ -18,7 +21,17 @@ import { verifiedImageTools } from "@/shared/lib/verified-image-tools";
 import { verifiedInventoryFixture } from "@/test-utils/image-inventory-fixture";
 
 vi.mock("@/features/runtime/store", () => ({ useRuntimeStore: () => ({}) }));
+vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import Component from "./AssistantEnvironmentToolsForm.vue";
+
+const selectedTools = [
+  {
+    name: "Git",
+    command: "git",
+    description: "Проверка дерева",
+    usageHint: "status",
+  },
+];
 
 const scope = {
   kind: "ORGANIZATION",
@@ -59,12 +72,15 @@ function catalog() {
       .mockResolvedValue({ artifact, recipeName: "Собственный образ" }),
   };
 }
-function mount(imageCatalog?: RuntimeImageCatalog) {
+function mount(
+  imageCatalog?: RuntimeImageCatalog,
+  tools = selectedTools.slice(0, 0),
+) {
   const props = reactive({
     operation: {
       parametersText: JSON.stringify({
         imageArtifactRef: artifact.ref,
-        tools: [],
+        tools,
       }),
       value: { before: {} },
     } as EditablePlanOperation,
@@ -79,6 +95,8 @@ function mount(imageCatalog?: RuntimeImageCatalog) {
     artifact: Ref<RoleImageArtifact | undefined>;
     loadFailed: Ref<boolean>;
     loading: Ref<boolean>;
+    problems: Ref<string[]>;
+    visibleProblems: Ref<string[]>;
   };
   const renderer = createRenderer<object, object>({
     insert() {},
@@ -114,6 +132,162 @@ function mount(imageCatalog?: RuntimeImageCatalog) {
 }
 
 describe("Нативный образ плана окружения", () => {
+  it("держит valid=false при загрузке exact artifact, затем разрешает проверенный inventory без изменения tools", async () => {
+    const reader = catalog();
+    let resolveArtifact:
+      | ((
+          value: Awaited<ReturnType<RuntimeImageCatalog["loadArtifact"]>>,
+        ) => void)
+      | undefined;
+    reader.loadArtifact.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveArtifact = resolve;
+        }),
+    );
+    const before = structuredClone(selectedTools);
+    const view = mount(reader, selectedTools);
+    try {
+      await vi.waitFor(() =>
+        expect(reader.loadArtifact).toHaveBeenCalledOnce(),
+      );
+      expect(reader.loadArtifact).toHaveBeenCalledWith(
+        scope,
+        artifact.recipeRef,
+        artifact.ref,
+        expect.any(AbortSignal),
+      );
+      expect(view.state.loading.value).toBe(true);
+      expect(view.state.loadFailed.value).toBe(false);
+      expect(view.state.problems.value).toContain(
+        "assistant.planEditor.environmentToolsUnverified",
+      );
+      expect(view.state.visibleProblems.value).toEqual([]);
+      expect(view.events.filter(([name]) => name === "valid").at(-1)).toEqual([
+        "valid",
+        false,
+      ]);
+      resolveArtifact?.({ artifact, recipeName: "Собственный образ" });
+      await vi.waitFor(() => expect(view.state.loading.value).toBe(false));
+      expect(view.state.visibleProblems.value).toEqual([]);
+      expect(view.state.problems.value).toEqual([]);
+      expect(view.events.filter(([name]) => name === "valid").at(-1)).toEqual([
+        "valid",
+        true,
+      ]);
+      expect(
+        view.events.some(([name]) => name === "parameter" || name === "dirty"),
+      ).toBe(false);
+      expect(selectedTools).toEqual(before);
+    } finally {
+      view.dispose();
+    }
+  });
+
+  it("сохраняет настоящий отказ scoped inventory после завершения запроса", async () => {
+    const reader = catalog();
+    reader.loadArtifact.mockRejectedValue(
+      new Error("Synthetic scoped image read failed"),
+    );
+    const view = mount(reader, selectedTools);
+    try {
+      await vi.waitFor(() => expect(view.state.loading.value).toBe(false));
+      expect(view.state.loadFailed.value).toBe(true);
+      expect(view.state.artifact.value).toBeUndefined();
+      expect(view.state.visibleProblems.value).toContain(
+        "assistant.planEditor.environmentToolsUnverified",
+      );
+      expect(view.events.filter(([name]) => name === "valid").at(-1)).toEqual([
+        "valid",
+        false,
+      ]);
+    } finally {
+      view.dispose();
+    }
+  });
+
+  it("не скрывает неподтверждённый инструмент даже после успешного HTTP readback", async () => {
+    const view = mount(catalog(), [
+      { ...selectedTools[0], name: "npm", command: "npm" },
+    ] as typeof selectedTools);
+    try {
+      await vi.waitFor(() => expect(view.state.loading.value).toBe(false));
+      expect(view.state.loadFailed.value).toBe(false);
+      expect(view.state.visibleProblems.value).toContain(
+        "assistant.planEditor.environmentToolsUnverified",
+      );
+      expect(view.events.filter(([name]) => name === "valid").at(-1)).toEqual([
+        "valid",
+        false,
+      ]);
+    } finally {
+      view.dispose();
+    }
+  });
+
+  it("не маскирует ошибку полей инструмента состоянием загрузки", () => {
+    const reader = catalog();
+    reader.loadPage.mockImplementationOnce(() => new Promise(() => {}));
+    const view = mount(reader, [
+      { name: "Git", command: "bad command", description: "", usageHint: "" },
+    ]);
+    try {
+      expect(view.state.loading.value).toBe(true);
+      expect(view.state.visibleProblems.value.length).toBeGreaterThan(0);
+      expect(view.state.visibleProblems.value).not.toContain(
+        "assistant.planEditor.environmentToolsUnverified",
+      );
+      expect(view.events.filter(([name]) => name === "valid").at(-1)).toEqual([
+        "valid",
+        false,
+      ]);
+    } finally {
+      view.dispose();
+    }
+  });
+  it("не показывает ложный красный alert до завершения загрузки inventory выбранного образа", async () => {
+    const reader = catalog();
+    let resolvePage:
+      | ((value: Awaited<ReturnType<RuntimeImageCatalog["loadPage"]>>) => void)
+      | undefined;
+    reader.loadPage.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePage = resolve;
+        }),
+    );
+    const operation = {
+      parametersText: JSON.stringify({
+        imageArtifactRef: artifact.ref,
+        tools: selectedTools,
+      }),
+      value: { before: {} },
+    } as EditablePlanOperation;
+    const app = createSSRApp(Component, {
+      operation,
+      projectRef: "",
+      resourceScope: scope,
+      selectedImage: { ref: artifact.ref, title: artifact.ref },
+      disabled: false,
+      imageCatalog: reader,
+    });
+    app.use(i18n);
+    try {
+      const html = await renderToString(app);
+      expect(reader.loadPage).toHaveBeenCalledOnce();
+      expect(html).toContain('role="status"');
+      expect(html).toContain(i18n.global.t("common.loading"));
+      expect(html).not.toContain('role="alert"');
+      expect(html).not.toContain(
+        i18n.global.t("assistant.planEditor.environmentToolsUnverified"),
+      );
+      expect(html).not.toContain(
+        i18n.global.t("assistant.planEditor.environmentToolsPending"),
+      );
+    } finally {
+      resolvePage?.({ items: [] });
+    }
+  });
   it("новый объект той же области не запускает цикл metadata reload", async () => {
     const reader = catalog();
     const view = mount(reader);

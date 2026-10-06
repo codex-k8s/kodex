@@ -146,6 +146,13 @@ const problems = computed(() => {
     result.push("assistant.planEditor.environmentToolsUnverified");
   return [...new Set(result)];
 });
+const visibleProblems = computed(() =>
+  problems.value.filter(
+    (problem) =>
+      !loading.value ||
+      problem !== "assistant.planEditor.environmentToolsUnverified",
+  ),
+);
 watch(
   () => problems.value.length === 0,
   (valid) => emit("valid", valid),
@@ -257,7 +264,7 @@ function update(next: RuntimeEnvironmentTool[]): void {
       :disabled="disabled || !tools || !artifact"
       @update:tools="update"
     />
-    <p v-if="!artifact && tools?.length" class="secondary-text">
+    <p v-if="!loading && !artifact && tools?.length" class="secondary-text">
       {{ $t("assistant.planEditor.environmentToolsPending") }}
       <code v-for="tool in tools" :key="tool.command">{{ tool.command }}</code>
     </p>
@@ -265,7 +272,7 @@ function update(next: RuntimeEnvironmentTool[]): void {
       {{ $t("assistant.planEditor.environmentToolsUnverified") }}
     </p>
     <p
-      v-for="problem in problems"
+      v-for="problem in visibleProblems"
       :key="problem"
       class="field-error"
       role="alert"

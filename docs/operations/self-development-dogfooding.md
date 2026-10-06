@@ -3900,3 +3900,62 @@ ROOT forced vue-tsc/Prettier PASS; Console error/warn нет. Все резул�
   build `imgbld_RAoT4N67RLCeVHbjz_QRlBjT` выполняется. Admission/promotion,
   ENV25 и новые native web/Context7/GitHub/context smokes — NOT RUN.
   PROJECT/шесть ролей/full QA остаются OPEN; checkbox не закрывались.
+
+### 06.10.2026 03:46–04:08 UTC — SYSTEM gen10/ENV25 и четыре живых проверки
+
+- PASS: checkpoint `c3a21659b825d114e05f3e05b204c889de4fba0b` запушен;
+  независимый exact readback local/remote/PR1798 head совпал, tree чистый.
+  Immutable supply-chain deploy по-прежнему относится к source ad400574;
+  этот checkpoint добавляет только ранее проверенные UX и журнал.
+- PASS: gen10 build `imgbld_RAoT4N67RLCeVHbjz_QRlBjT` COMPLETED;
+  artifact `imgart_uIvnAwYYUfGEJstnJ4UWUNfD`, manifest
+  `sha256:04d4263b323137ca103eb73bb2dcce9a7edb11742e7fad21460e834c65d3df5e`.
+  Inventory50 observations/38 required VERIFIED, missingRequired[].
+  Первый admission REJECTED: два blocking HIGH — undici GHSA-rfgv-xxqx-mfg5
+  и tar GHSA-r292-9mhp-454m; остальные2938 unique advisories доступны админу
+  как информация, не названы2938 блокирующими дефектами. Новое отдельное
+  native risk decision относится только к этому artifact/отчёту/local QA.
+  Повторный подписанный admission ACCEPTED; technical evidence/scan/signature
+  guards не обходились. Promotion03:54 завершена штатно; recipe v16/gen10
+  ACTIVE/promotedImageReady=true. Причина двух прежних builder exits UNKNOWN;
+  restartCount2 стабилен, новая реальная сборка COMPLETED.
+- PASS: SYSTEM59 plan `pln_IyeA6MXRRZ6D-7lP3CAgh0gF` содержит один
+  PREPARE_RUNTIME_ENVIRONMENT_REVISION, APPLIEDv3 штатно03:57. Draft
+  `renvd_q9dTF0hvWioj5dugiugfqTZ2` VALIDv2 → PUBLISHEDv3 через exact impact
+  и UI03:59:40. ENV `renv_aSMtfZ2vp9GgOHqTOZnGhWE4` revision25/ready=true,
+  versionRef `renvv_5c9eThQqqjen0u0fCRkRDi34`, digest
+  `81d89ef362085e7282acdd6b48d92a6341179c4b3b59290b8acd56cd8461cc73`.
+  Binding `aenv_ooM08gNXkIDvyuBqJfnv87DD` version5. Readback подтвердил
+  сохранение38tools/resources/web exact allowlist/volumes/LANG/LC_ALL и
+  отсутствие shell secrets. Managed Context7 credential не выдаётся shell.
+- PASS: четыре native SYSTEM сообщения отправлены04:00:20–04:00:38;
+  одновременно наблюдались четыре отдельных provider Pods. Не singleton warm
+  и не четыре последовательно выполненных обращения. Все runs SUCCEEDED;
+  actual ACK каждого ENV25/gen10/38tools, instructions/input EQUAL.
+  Protected RUN previews200/complete/diagnostics[]; template digest f4926f1b
+  и каждый materialization digest точно совпали с ACK, полный prompt не выдавался.
+
+| Реальная проверка | Run | Фактический результат |
+| --- | --- | --- |
+| Context7 SYSTEM60 | `run_dnwra2vNmSPM6m6StO91mWL9` | Два native MCP вызова resolve/query, Vue docs `/vuejs/docs`, подтверждён watch cleanup до await |
+| GitHub SYSTEM61 | `run_Jw0ki--CKwXP3pQ-X784eLxP` | Git2.39.5/ls-remote exit0, main d43bd605; настоящий README прочитан curl/sed exit0 без записи |
+| Native web SYSTEM62 | `run_Fk0qvdxlrwvCFC8mVFqEneln` | Native SEARCH queryCount1 SUCCEEDED, затем чтение официальной документации; подтверждён item lifecycle |
+| Контекст SYSTEM63 | `run_aE31RuLrjn_hrb2jRuSJlPEI` | SYSTEM/ORGANIZATION, проект отсутствует, gpt-6.1-sol medium, gen10/ENV25/38tools и Context7 grants |
+
+- PASS: внутри actual provider Pod SHA256 runner равен
+  `f8a44936452d36642806982db4d6b1939f7c064d74ffe48e89fbad3a513c095f`.
+  После reload04:04 рабочая вкладка восстановила выбранный диалог, историю и
+  compact tool transcript. Screenshot web READ action, Console без error/warn,
+  relevant reads и previews200. Чужая вкладка не изменялась.
+- PASS на tree поверх c3a: AssistantEnvironmentToolsForm скрывает только
+  временный environmentToolsUnverified во время loading, но сохраняет
+  valid=false и все настоящие ошибки после загрузки. ROOT31/31 unit3suites,
+  ESLint/Prettier/forced vue-tsc/diff check PASS. Native reopening применённого
+  SYSTEM59 plan: loading без alert →42rows/38checked/0alerts, width1086 без
+  x-overflow. Host/Pod component SHA256
+  `6a650c8103af80a7bdb0e864f24c5b5d0cc3c52628d75e30ec4050a36041f9d1`
+  совпал; HMR screenshot проверен. Checkpoint этого двухфайлового fix впереди.
+- OPEN: модельный каталог ещё возвращает SYSTEM name как i18n marker;
+  готовится узкая human-readable display projection без изменения authority.
+  PROJECT/шесть сотрудников/full dogfooding пока NOT RUN; общий checklist
+  не закрывается по одному только SYSTEM gate.
