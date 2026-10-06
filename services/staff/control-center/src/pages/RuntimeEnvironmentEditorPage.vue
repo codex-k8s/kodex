@@ -41,6 +41,7 @@ import {
   Send,
   Link2,
   Ellipsis,
+  RotateCcw,
 } from "@lucide/vue";
 import {
   computed,
@@ -1870,40 +1871,48 @@ onBeforeUnmount(() => {
               "
             >
               <article v-for="version in versions" :key="version.ref">
-                <div>
-                  <strong>rev {{ version.revision }}</strong>
-                  <small>{{
-                    new Date(version.createdAt).toLocaleString()
-                  }}</small>
-                  <code>{{ compactIdentifier(version.digest) }}</code>
+                <div class="revision-meta">
+                  <div class="revision-summary">
+                    <strong>rev {{ version.revision }}</strong>
+                    <small>{{
+                      new Date(version.createdAt).toLocaleString()
+                    }}</small>
+                  </div>
+                  <code :title="version.digest">{{
+                    compactIdentifier(version.digest)
+                  }}</code>
                 </div>
-                <button
-                  v-if="
-                    version.ref !== current?.currentVersion.ref &&
-                    current &&
-                    hasEnvironmentAction(current, 'ROLLBACK')
-                  "
-                  class="button"
-                  type="button"
-                  :disabled="busy || localChanges"
-                  @click="rollback(version.ref)"
-                >
-                  {{ $t("runtime.rollback") }}
-                </button>
-                <StatusBadge
-                  v-else-if="version.ref === current?.currentVersion.ref"
-                  state="ACTIVE"
-                />
-                <button
-                  class="icon-button"
-                  type="button"
-                  :disabled="busy"
-                  :title="$t('impact.inspect')"
-                  :aria-label="$t('impact.inspect')"
-                  @click="impactVersionRef = version.ref"
-                >
-                  <Link2 :size="18" />
-                </button>
+                <div class="revision-actions">
+                  <button
+                    v-if="
+                      version.ref !== current?.currentVersion.ref &&
+                      current &&
+                      hasEnvironmentAction(current, 'ROLLBACK')
+                    "
+                    class="icon-button"
+                    type="button"
+                    :disabled="busy || localChanges"
+                    :title="$t('runtime.rollback')"
+                    :aria-label="$t('runtime.rollback')"
+                    @click="rollback(version.ref)"
+                  >
+                    <RotateCcw :size="18" aria-hidden="true" />
+                  </button>
+                  <StatusBadge
+                    v-else-if="version.ref === current?.currentVersion.ref"
+                    state="ACTIVE"
+                  />
+                  <button
+                    class="icon-button"
+                    type="button"
+                    :disabled="busy"
+                    :title="$t('impact.inspect')"
+                    :aria-label="$t('impact.inspect')"
+                    @click="impactVersionRef = version.ref"
+                  >
+                    <Link2 :size="18" aria-hidden="true" />
+                  </button>
+                </div>
               </article>
               <div
                 v-if="
@@ -2456,24 +2465,45 @@ code {
 }
 .revision-scroll > article {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 12px 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--hairline);
+}
+.revision-meta {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.revision-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+}
+.revision-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.revision-actions > .icon-button {
+  flex-shrink: 0;
 }
 .revision-loading {
   padding: 10px 0;
   text-align: center;
 }
-.revision-panel article > div,
 .revision-panel small,
 .revision-panel code {
   display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .revision-panel small,
 .revision-panel code {
-  margin-top: 3px;
+  margin: 0;
   color: var(--text-secondary);
 }
 .icon-button--danger {

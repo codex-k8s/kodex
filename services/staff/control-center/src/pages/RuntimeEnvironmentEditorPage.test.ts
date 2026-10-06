@@ -486,6 +486,49 @@ describe("компактная шапка редактора окружения"
     );
     expect(source).toContain("min-height: var(--control-height, 32px)");
   });
+  it("история не сжимает дату кнопкой восстановления и сохраняет gates/дозагрузку", () => {
+    const source = readFileSync(
+      new URL("./RuntimeEnvironmentEditorPage.vue", import.meta.url),
+      "utf8",
+    );
+    const history = source.slice(
+      source.indexOf('<aside class="panel revision-panel">'),
+      source.indexOf(
+        "</aside>",
+        source.indexOf('<aside class="panel revision-panel">'),
+      ),
+    );
+    expect(history.includes('class="revision-meta"')).toBe(true);
+    expect(history.includes('class="revision-actions"')).toBe(true);
+    expect(history.includes('class="icon-button"')).toBe(true);
+    expect(history.includes(":title=\"$t('runtime.rollback')\"")).toBe(true);
+    expect(history.includes(":aria-label=\"$t('runtime.rollback')\"")).toBe(
+      true,
+    );
+    expect(
+      history.includes("version.ref !== current?.currentVersion.ref"),
+    ).toBe(true);
+    expect(history.includes("hasEnvironmentAction(current, 'ROLLBACK')")).toBe(
+      true,
+    );
+    expect(history.includes(':disabled="busy || localChanges"')).toBe(true);
+    expect(history.includes('@click="rollback(version.ref)"')).toBe(true);
+    expect(history.includes('ref="versionSentinel"')).toBe(true);
+    expect(
+      history.includes("runtime.environmentVersionCursors[environmentRef]"),
+    ).toBe(true);
+    expect(
+      /\.revision-scroll > article\s*{[^}]*grid-template-columns: minmax\(0, 1fr\);/.test(
+        source,
+      ),
+    ).toBe(true);
+    expect(/\.revision-summary\s*{[^}]*flex-wrap: wrap;/.test(source)).toBe(
+      true,
+    );
+    expect(source.includes("max-height: min(560px, calc(100vh - 270px))")).toBe(
+      true,
+    );
+  });
 });
 
 function promotedArtifact(ref: string): RoleImageArtifact {
