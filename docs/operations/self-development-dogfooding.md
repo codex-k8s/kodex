@@ -3723,3 +3723,68 @@ audit `aud_Q-Xp_SJ-hwjg99YYAZ1_2NqK`, новый draft
 38 tools/gen9,2CPU/4096MiB, volumes[],0 secretBindings,LANG/LC_ALL и прежние10
 readonly HTTPS rules. Проверка draft потребовала fresh OIDC; штатный вход
 выполнен02:37, после него validation/publication ещё ожидаются.
+
+Checkpoint `1dbeaa33898244006f33fbd6add69c06863a437c` запушен;
+remote branch и PR1798 head readback совпали. Native SYSTEM49 validation,
+impact с единственным SYSTEM consumer и publication200 PASS02:37–02:38.
+Draft version3/PUBLISHED; ENV revision24/currentVersion
+`renvv_gQVnHvv8EIH-rP8p_puyntPk`, digest
+`89a74462e18db08dbad0390a15b4eea85941c964fb182d163612e2d60733af04`.
+Binding version4/digest `43b50ef222543145e1b3941c74736fcd0f60a2dfdfe3da0c41003d9c056aee57`.
+Warm UID `aa7f7751-722c-455e-8dab-a3b844a1940b` создан02:38:06,
+provider/role используют gen9 manifest7af3; relay base6a3a,3/3 Ready/restart0.
+
+Новые native READ smokes на ENV24/gen9:
+
+- SYSTEM50, conversation `cnv_z7_cflqoxYJ7oekQpHTx6qBO`, run
+  `run_mPNr5d2U9gcHz3aG1fDkW7HB`, session `ses_q7W0pkoU82URvglzexN9eh8v`:
+  terminal инструмент/git --version PASS; GitHub ls-remote FAIL exit128
+  Proxy CONNECT aborted. Terminal run SUCCEEDED означает, что помощник
+  корректно ответил об отказе, а не успешное чтение репозитория.
+- SYSTEM51, run `run_LFKzMyL__lqTVQYEZbR0wFMl`, session
+  `ses_9407Nd7E8rg-tLUylyqOCkca`: hosted web FAIL/RUNTIME_PROVIDER_UNAVAILABLE.
+- SYSTEM52, run `run_tDLmdn4gyv40Wd4ZwrVmlum3`, session
+  `ses_76zqkXuB86DJbd7FipEWTplE`, runtime revision
+  `rrev_V1tBkQnhN_1hyKJaXt7amKpe`: Context7 resolve→query PASS.
+  Actual provider ACK ENV24/gen9/38tools/grants2/input EQUAL; protected RUN
+  preview200/complete/diagnostics[] совпал template f4926f1b и materialization
+  `2d6d2e0d44143209c3f839b2aad8968a421e609cb7a1646c60a0424acef0dbd3`.
+- SYSTEM53, run `run_urp4z-sXH5RY8t0hRP8Au4jO`, session
+  `ses_TwS_Xto6SJR4bCiAt7_w0Hb2`, runtime revision
+  `rrev_c6s4yOdSigTseX70S5itnuHm`: SYSTEM/no-project/current context PASS,
+  input marker виден. Actual ACK/input/instructions EQUAL, protected RUN
+  preview complete и materialization
+  `ded8382a54de9fca8573a38093e21ca1443350f82323c0cc9378365196ed98b3` совпали.
+- SYSTEM54, run `run_vOMyk7ipbvjgLksvsHHshP2z`, session
+  `ses_791FHWhW79pZxECD-qfxUr2m`: GitHub repeat с единственным
+  http.proxyAuthMethod=basic PASS exit0 HEAD/main d43bd605. ENV/policy/grants
+  не менялись; это causal auth handshake proof, не готовность default Git.
+  Actual ACK и protected RUN preview совпали, materialization
+  `08cf526687a4e76bf7f3f501fd42edcb0c42954365db1eed305d05809720da32`.
+- SYSTEM55, run `run_mmy3aiU0ywEInZniG_4_TfhV`, session
+  `ses_2eG1fRuv2qzBCvSUgFY2VRV_`: hosted search FAIL02:47:22; закрытый
+  diagnostic TERMINAL_WAIT/NOTIFICATION_INVALID/item/started/UNKNOWN.
+  Actual ACK/input EQUAL и complete protected RUN preview подтвердили новый
+  gen9; materialization `6db57c066c5b216a937695adcf6489eb88fd95d2d6d57533bec35ed495da3f79`.
+  Полный prompt не выдавался. Parser fix и default proxy407 готовятся отдельно.
+
+02:49 ROOT интегрировал2 UX patches только4 frontend files. Регрессия
+realtime/create ACK доказана до fix: новый диалог выпадал из sparse cache и
+возвращался прежний selectedRef. После fix сохраняется только подтверждённый
+create до realtime version readback, scope/reset и последующее удаление
+сохраняют authority. Native QA56 `cnv_WxkOiOPKNonOeoFmC-R97uQy` с unsent draft
+пережил terminal SYSTEM55, переключение туда/обратно восстановило только его
+draft, в старом чате message пустой. Draft после proof очищен, не отправлен.
+Общий tools editor ограничен360px,42 catalog rows/38 checked/0 expanded;
+metadata раскрывается отдельно. Screenshot/no-overflow и Console PASS.
+ROOT74/74unit PASS2.72с, scoped ESLint/Prettier/forced typecheck/diff PASS.
+Host/Pod storeSHA `557d842f2e0c6ff4cdd318e73eba484f389f75981621cfee4dd6ab86bd0d2f5f`,
+tools editorSHA `d9963b1de420b383fbf25b0b13c72b4198849821206a4a95af71c16cc7521eb3` совпали.
+
+Builder budget delivery: cached all build на1dbe PASS, новый immutable builder
+`sha256:a26d40767dcb535e626715b955c4e37405096d3b7eb7ebea3c322cc572763ded`.
+Fresh render/source1dbe PASS/probe225×2/startup30s/readiness180s/base6a3a.
+Apply NOT RUN: существующий repo-owned guard требует пустого admission Job/PVC
+inventory, а completed promotion Job имеет штатный TTL3600с от02:32:26.
+Guard не ослаблялся, Jobs/PVC вручную не удалялись. Render не применён;
+после следующих patches/checkpoint требуется fresh source-consistent render.

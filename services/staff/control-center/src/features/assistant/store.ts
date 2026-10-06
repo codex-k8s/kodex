@@ -63,6 +63,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       : assistant.value?.ref,
   );
   const conversations = ref<AssistantConversation[]>([]);
+  const pendingCreatedConversationVersions = new Map<string, number>();
   const selectedRef = ref<string>();
   const context = ref<AssistantContextDescriptor>();
   const projectRef = ref<string>();
@@ -201,6 +202,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       projectRef.value !== nextProjectRef ||
       assistantScope.value !== nextAssistantScope
     ) {
+      pendingCreatedConversationVersions.clear();
       conversations.value = [];
       selectedRef.value = undefined;
       projectAssistant.value = undefined;
@@ -338,6 +340,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     cancelReads();
     historyQuery.value = query;
     historyState.value = state;
+    pendingCreatedConversationVersions.clear();
     conversations.value = [];
     selectedRef.value = undefined;
     nextPageToken.value = undefined;
@@ -472,6 +475,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       assistantScope.value = "SYSTEM";
     if (projectChanged) {
       cancelReads();
+      pendingCreatedConversationVersions.clear();
       conversations.value = [];
       nextPageToken.value = undefined;
       historyCursors.clear();
@@ -547,6 +551,22 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       Object.assign(previous, merged);
       return previous;
     });
+    // ACK создания опережает общий realtime-кэш. Отсутствие нового диалога
+    // в этом кэше ещё не означает удаление и не отменяет выбор пользователя.
+    const visibleByRef = new Map(visible.map((value) => [value.ref, value]));
+    for (const [ref, version] of pendingCreatedConversationVersions) {
+      const previous = previousByRef.get(ref);
+      const incoming = visibleByRef.get(ref);
+      if (
+        !previous ||
+        !matchesAssistantPin(previous) ||
+        (incoming && incoming.version >= version)
+      ) {
+        pendingCreatedConversationVersions.delete(ref);
+        continue;
+      }
+      if (!incoming) reconciled.push(previous);
+    }
     conversations.value.splice(0, conversations.value.length, ...reconciled);
     // Курсор общего cache-снимка не относится к отдельно фильтрованной
     // истории помощника. PROJECT продолжает собственный авторитетный cursor.
@@ -601,12 +621,14 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       )
         throw new Error("Created assistant conversation scope mismatch");
       if (historyQuery.value || historyState.value !== "ACTIVE") {
+        pendingCreatedConversationVersions.clear();
         conversations.value = [];
         nextPageToken.value = undefined;
       }
       historyQuery.value = "";
       historyState.value = "ACTIVE";
       upsertConversation(value);
+      pendingCreatedConversationVersions.set(value.ref, value.version);
       return value;
     });
   }
@@ -646,6 +668,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           assistantScope.value,
         );
         upsertConversation(conversation);
+        pendingCreatedConversationVersions.set(
+          conversation.ref,
+          conversation.version,
+        );
       }
       if (!context.value) throw new Error("Assistant context is unavailable");
       const appended = attachmentSetRef

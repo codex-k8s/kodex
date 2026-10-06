@@ -10,6 +10,33 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 02:49 UTC: checkpoint `1dbeaa33898244006f33fbd6add69c06863a437c`
+запушен, exact GitHub PR1798 head совпал. SYSTEM49 draft опубликован,
+ENV revision24/currentVersion `renvv_gQVnHvv8EIH-rP8p_puyntPk`, digest
+`89a74462e18db08dbad0390a15b4eea85941c964fb182d163612e2d60733af04`.
+Actual SYSTEM52 Context7 и SYSTEM53 контекст PASS: gen9/provider ACK,
+38 tools, instructions/input EQUAL и exact RUN preview digests совпали.
+SYSTEM50 GitHub FAIL CONNECT; SYSTEM54 с единственным basic auth handshake
+параметром PASS/d43bd605. Штатный default Git ещё требует proxy407 fix.
+SYSTEM55 hosted web FAIL: safe TERMINAL_WAIT/NOTIFICATION_INVALID,
+item/started/UNKNOWN; готовится exact pinned parser fix. Не считать SYSTEM
+полностью проверенным; PROJECT/шесть ролей/full dogfooding пока OPEN.
+
+В рабочий tree поверх1dbe интегрированы два UX fixes: новый выбранный диалог
+не пропадает до подтверждённого realtime readback; общий tools editor имеет
+bounded scroll360px и индивидуальное раскрытие metadata. ROOT74 unit,
+scoped lint/format, forced typecheck PASS. Native новая conversation/draft
+пережили чужой terminal и переключение туда/обратно; screenshot tools PASS,
+42 catalog rows/38 checked/0 expanded/no page overflow. Source/Pod hashes
+совпали. Эти4 frontend файла ещё не являются новым чистым SHA.
+
+Cached supply-chain build и fresh render на1dbe PASS: builder digest a26d4076,
+probe225×2, startup30s/readiness180s, base6a3a не изменён. Render НЕ применён:
+штатный supply-chain guard требует исчезновения завершённого promotion Job
+с TTL3600с (completion02:32:26) и workspace. Не удалять их вручную, не обходить
+guard. После новых patches/checkpoint нужен свежий exact render/source readback.
+Chrome рабочая2 reload02:48, чужая1 не изменялась; QA56 draft очищен после proof.
+
 06.10.2026 02:34 UTC: Chrome MCP доступен, рабочая вкладка2; чужая1 не
 изменяется. Gen9 прошёл повторный exact admission ACCEPTED, attempt2
 `imgadm_YuXhic6umcMP_9Iwyowjp4rO`, version3/fence3. Native promotion

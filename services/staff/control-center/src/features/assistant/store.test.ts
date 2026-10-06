@@ -983,6 +983,114 @@ describe("assistant workspace store", () => {
     );
   });
 
+  it.each(["SYSTEM", "PROJECT"] as const)(
+    "%s сохраняет новый выбранный диалог, пока realtime обновляет прежний ход",
+    async (scope) => {
+      const base = scope === "PROJECT" ? projectConversation() : conversation();
+      const running = { ...base, turns: [userTurn("RUNNING")] };
+      const created = {
+        ...base,
+        ref: "cnv_created",
+        title: "Новый диалог",
+        turns: [],
+      };
+      const store = useAssistantStore();
+      store.setContext(context, "prj_sales");
+      store.assistant = systemAssistant();
+      store.assistantScope = scope;
+      if (scope === "PROJECT") store.projectAssistant = profile;
+      store.conversations = [running];
+      store.selectedRef = running.ref;
+      createConversationMock.mockResolvedValue(created);
+
+      await store.startConversation();
+      expect(store.selectedRef).toBe(created.ref);
+      const updated = { ...running, version: running.version + 1 };
+      store.applyRealtimeSnapshot(systemAssistant(), [updated], "prj_sales");
+
+      expect(store.selectedRef).toBe(created.ref);
+      expect(store.selectedConversation?.turns).toEqual([]);
+      expect(
+        store.conversations.find((item) => item.ref === running.ref)?.version,
+      ).toBe(updated.version);
+      store.selectedRef = running.ref;
+      store.applyRealtimeSnapshot(systemAssistant(), [updated], "prj_sales");
+      expect(store.selectedRef).toBe(running.ref);
+      expect(store.conversations.some((item) => item.ref === created.ref)).toBe(
+        true,
+      );
+
+      store.selectedRef = created.ref;
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [updated, { ...created, version: created.version - 1 }],
+        "prj_sales",
+      );
+      store.applyRealtimeSnapshot(systemAssistant(), [updated], "prj_sales");
+      expect(store.selectedRef).toBe(created.ref);
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [updated, created],
+        "prj_sales",
+      );
+      store.applyRealtimeSnapshot(systemAssistant(), [updated], "prj_sales");
+      expect(store.selectedRef).toBe(running.ref);
+      expect(store.conversations.some((item) => item.ref === created.ref)).toBe(
+        false,
+      );
+    },
+  );
+
+  it("сохраняет диалог, автоматически созданный при отправке, до realtime readback", async () => {
+    const created = { ...conversation(), ref: "cnv_created", turns: [] };
+    const appended = {
+      ...created,
+      version: created.version + 1,
+      turns: [userTurn("RUNNING")],
+    };
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [conversation()];
+    store.selectedRef = undefined;
+    createConversationMock.mockResolvedValue(created);
+    appendTurnMock.mockResolvedValue(appended);
+
+    await store.send("Новый запрос");
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+    );
+
+    expect(store.selectedRef).toBe(created.ref);
+    expect(store.selectedConversation?.version).toBe(appended.version);
+    expect(store.selectedConversation?.turns).toEqual(appended.turns);
+  });
+
+  it("не переносит ещё не доставленный в realtime новый диалог в другой проект", async () => {
+    const created = { ...conversation(), ref: "cnv_created", turns: [] };
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    createConversationMock.mockResolvedValue(created);
+    await store.startConversation();
+
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    const other = {
+      ...conversation(),
+      ref: "cnv_other",
+      projectRef: "prj_other",
+    };
+    store.applyRealtimeSnapshot(systemAssistant(), [other], "prj_other");
+    expect(store.selectedRef).toBe(other.ref);
+    expect(store.conversations.map((item) => item.ref)).toEqual([other.ref]);
+    store.setContext(context, "prj_sales");
+    store.applyRealtimeSnapshot(systemAssistant(), [], "prj_sales");
+    expect(store.conversations).toEqual([]);
+    expect(store.selectedRef).toBeUndefined();
+  });
+
   it("не сбрасывает вручную выбранный диалог при realtime из другого контекста проекта", () => {
     const selected = conversation();
     const environmentContext: AssistantContextDescriptor = {
