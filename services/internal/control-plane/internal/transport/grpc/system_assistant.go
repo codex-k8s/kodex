@@ -166,7 +166,15 @@ func (server *Server) AddAssistantTurn(ctx context.Context, request *controlplan
 	if err != nil {
 		return nil, err
 	}
-	return &controlplanev1.AddAssistantTurnResponse{Conversation: castConversation(*result.Conversation), Assistant: castAssistant(*result.Assistant)}, nil
+	return castAssistantTurnResult(result), nil
+}
+
+func castAssistantTurnResult(result command.Result) *controlplanev1.AddAssistantTurnResponse {
+	response := &controlplanev1.AddAssistantTurnResponse{Conversation: castConversation(*result.Conversation)}
+	if result.Assistant != nil {
+		response.Assistant = castAssistant(*result.Assistant)
+	}
+	return response
 }
 
 func (server *Server) CancelAssistantTurn(ctx context.Context, request *controlplanev1.CancelAssistantTurnRequest) (*controlplanev1.CancelAssistantTurnResponse, error) {

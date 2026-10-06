@@ -542,6 +542,16 @@ Maintenance503 устранён штатной активацией после �
 принятого кода. Их не удалять при обслуживании до сверки с историей ветки;
 промежуточные варианты не применять поверх текущего checkpoint автоматически.
 
+06.10.2026 04:30 UTC: source checkpoint `546cb581` запушен и PR1798 остаётся
+Draft. PROJECT01 `run_lOmIGuo3Wnc7mihfXI0DjAQV` завершён SUCCEEDED, но
+возвращённый клиенту500 выявил post-commit nil Assistant в transport.
+Фактический ответ помощника BLOCKED: configuration/search tools отклонены
+в RUNNING projection до чтения каталога, поскольку matcher признаёт только
+SYSTEM. Не повторять create profile/project и не считать этот run выполнением
+PROJECT setup. Готовятся два изолированных regression fix; затем native repeat
+с ранним provider ACK. Подробные доказательства и границы — в текущем журнале
+`self-development-dogfooding.md`, раздел04:23–04:30. Чужие вкладки не трогать.
+
 05.10.2026 17:12 UTC: поверх pushed `d29e4f63` интегрированы адресные frontend
 исправления каталога и восстановленного имени образа, а также non-root npm fix.
 Native40 UI теперь показывает собственный образ и 41 VERIFIED программу без

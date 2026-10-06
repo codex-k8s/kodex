@@ -4040,3 +4040,43 @@ ROOT forced vue-tsc/Prettier PASS; Console error/warn нет. Все резул�
   managed Context7, actual instructions preview/materialization и четыре PROJECT
   smoke; затем шесть ролей, common image/Secret/Files/grants и SOFTWARE_CHANGE.
   П.8 не закрыт лишь по базовому созданию профиля; полный QA не завершён.
+
+### 06.10.2026 04:23–04:30 UTC — первый PROJECT ход выявил два независимых дефекта
+
+- FAIL на source `546cb581c323b627a5ee28618d53df8232b69b03`: native PROJECT
+  conversation `cnv_l0xK2yyTOtfih5sTTydyk7Sf`, run
+  `run_lOmIGuo3Wnc7mihfXI0DjAQV` сохранён и завершён SUCCEEDED, но ответ
+  AddAssistantTurn клиенту — HTTP500/gRPC Internal. Репозиторий правильно
+  возвращает Assistant только для SYSTEM; transport безусловно разыменовывает
+  отсутствующий Assistant в PROJECT result уже после commit. Новый ход нельзя
+  повторять автоматически как якобы не принятый: эффект уже существует.
+- FAIL отдельно: actual PROJECT final сообщает BLOCKED / Tool authorization
+  unavailable; план собственного образа не создан. Runtime-controller
+  зафиксировал InvalidArgument для get_configuration_catalog и
+  find_platform_resources. Причина в обязательной записи RUNNING tool phase:
+  matcher принимает configuration tools только при SYSTEM-признаке из SQL,
+  хотя отдельный PROJECT профиль уже имеет штатный scoped путь этих tools.
+  Проверка не дошла до самого каталога; отсутствие ENV tools не является
+  причиной этого отказа. Исправление должно разрешать только server-owned
+  PROJECT profile и сохранить отдельную SYSTEM классификацию автора события.
+- PASS диагностики: Chrome MCP доступен; после reload и штатного выбора
+  PROJECT сохранённые user/commentary/final снова отображаются с правильным
+  автором, справа/слева и компактными tool details. Screenshot проверен.
+  Это доказательство сохранённой истории, не успешной самонастройки.
+- NOT RUN: ранний provider ACK PROJECT01 не сохранён до cleanup terminal Pod;
+  exact prompt/provider pins этого хода не объявляются PASS. Следующий ход
+  выполняется только после адресных regression checks и hot-reload readback.
+- NEXT: два минимальных исправления с раздельным владением файлов, затем
+  повторная PROJECT проверка, own image/admission/promotion, environment/MCP
+  и четыре функциональных smoke. П.8 и полный Workflow остаются OPEN.
+
+04:32 UTC: transport fix интегрирован на tree поверх `546cb581`. PROJECT
+ответ сохраняет отсутствующий SYSTEM Assistant, не создаёт подставной профиль;
+SYSTEM ответ не изменён. ROOT полный transport/grpc unit0.655с, vet и
+diff check PASS; PROJECT/SYSTEM protobuf roundtrip сохраняет scope/turn/presence.
+Исходный nil panic воспроизведён адресным RED до исправления. Host/Pod hashes
+system_assistant.go `2cad51085a9424e1b863faa2fc77ade4fd62c78be63505d20816ef40b7eafcc9`
+и нового test `8cdc5fa3d8655639dc28bfed53984a0e5fd36026e32e961da1dfd5046b32bd73`
+совпали; hot reload04:31:41 восстановил CP readiness. Context7 protobuf-go
+Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT RUN: сначала
+исправляется отдельная configuration-tool projection boundary.
