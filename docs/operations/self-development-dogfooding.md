@@ -4558,3 +4558,20 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   B3 `imgbld_7pbc1JCasxAgOXbVvEgLb2lI`, created14:42:36.819789 UTC,
   recipe version2/generation1/attempt1, initialQUEUED. B3 admission/report/
   promotion и ENV38 пока NOT RUN; не повторять эффект по transient read.
+
+### 06.10.2026 14:48–14:51 UTC — точные статусы допуска и адаптивная форма
+
+- Source `1989e91e59c1dfcda3f976f1cdb7b5207cd4c0fb`: без полного scanner
+  evidence закрытый REJECTED сообщает о закрытом допуске и новой проверке.
+  Настоящее security rejection и техническая ошибка сохраняют свои сообщения;
+  report workspace и decision guards не менялись. Изолированный patch65/65,
+  lint/format/forced typecheck PASS; ROOT Editor+model62/62 и scoped lint PASS.
+- Native Chrome desktop screenshot и узкий viewport500×844 просмотрены:
+  selector32px, только читаемый title, metadata остаётся в options,
+  горизонтального переполнения нет. Chrome фактически ограничил ширину500px,
+  поэтому проверка390px NOT RUN. Console error/warn0; reload с сохранённым
+  серверным рецептом, чужая вкладка6 не менялась.
+- B3 build COMPLETED/version12. Штатные managed claim Job14:50:42 SUCCEEDED1
+  и scan Job14:50:58 active1 подтверждают достижимость scanner path. Signed
+  admission/report/promotion, VERIFIED38 и собственный ENV38 ещё OPEN.
+  Повторного REQUEST_BUILD, ручной SQL/очистки или обхода policy не было.

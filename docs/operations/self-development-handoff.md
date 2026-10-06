@@ -10,6 +10,22 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 14:51 UTC: source/remote/PR1798 на `6cbd2ef5` подтверждены,
+Draft сохранён. Затем локально интегрирован `1989e91e`: REJECTED без полного
+SBOM/vulnerability evidence показывает нейтральное «Допуск образа закрыт»,
+а не ложный вывод о security scan. ROOT Editor+model62/62 и lint — PASS;
+изолированный исходный patch65/65, lint/format/typecheck — PASS.
+Chrome5 авторизован, reload выполнен; desktop и узкий viewport500px
+просмотрены, горизонтального переполнения нет, два selector32px показывают
+только название. Реальное окно Chrome не уменьшилось до запрошенных390px;
+390px acceptance не заявляется. Console error/warn0.
+B3 COMPLETED/version12; штатный claim Job создан14:50:42 и завершён,
+scan Job создан14:50:58 и active1. Это ещё не admission/promotion PASS.
+Не повторять build. Далее дождаться signed report/inventory, оценить exact
+risk при необходимости, Promote → PROJECT ENV38 и реальные smoke.
+
+## Предыдущие checkpoints и доказательства
+
 06.10.2026 14:43 UTC: интегрированы `5bac2db1` (чистые selector titles) и
 `39c32661` (owner admission maintenance). ROOT unit платформы/домена/transport,
 frontend51/51 и canonical disposable PostgreSQL maintenance+terminal6.548с —
@@ -32,8 +48,6 @@ recipe version2/generation1, attempt1, QUEUED. Не повторять кноп�
 диалог PROJECT06 восстановился после reload; чужая6 не затрагивалась.
 Live screenshot selector fix просмотрен; требуется честная UX-интерпретация
 stale REJECTED без сообщения о якобы проваленном security scan. Full65 OPEN.
-
-## Предыдущие checkpoints и доказательства
 
 06.10.2026 14:30 UTC: Chrome MCP восстановлен, рабочая вкладка5
 авторизована; чужая вкладка6 не затрагивалась. Source/remote/PR1798 совпадают
