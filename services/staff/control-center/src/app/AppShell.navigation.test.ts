@@ -25,6 +25,13 @@ describe("AppShell navigation", () => {
 
   it("сливает realtime-снимок помощника без повторной загрузки открытого чата", () => {
     expect(source).toContain("assistantStore.applyRealtimeSnapshot(");
+    expect(source).toContain(
+      'platform.realtimeSnapshot("SYSTEM_ASSISTANT", assistantStore.projectRef)',
+    );
+    expect(source).toContain(
+      'platform.assistantRealtimeScopeKey !== (assistantStore.projectRef ?? "")',
+    );
+    expect(source).toContain("assistantStore.clearRealtimeState()");
     expect(source).not.toContain(
       ':refresh-revision="assistantRefreshRevision"',
     );

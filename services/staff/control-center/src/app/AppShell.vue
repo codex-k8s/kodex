@@ -272,27 +272,30 @@ const assistantRunEvents = computed(() => {
     (a, b) => a.sequence - b.sequence,
   );
 });
-const assistantRefreshRevision = computed(() =>
+watch(
   [
-    platform.assistant?.version ?? 0,
-    ...Object.values(platform.conversations)
-      .sort((a, b) => a.ref.localeCompare(b.ref))
-      .map(
-        (item) =>
-          `${item.ref}:${String(item.version)}:${String(item.turns.length)}`,
-      ),
-  ].join("|"),
+    () =>
+      platform.realtimeSnapshot("SYSTEM_ASSISTANT", assistantStore.projectRef),
+    () => platform.assistant,
+  ],
+  () => {
+    if (!platform.assistant) {
+      assistantStore.clearRealtimeState();
+      return;
+    }
+    if (
+      !assistantStore.context ||
+      platform.assistantRealtimeScopeKey !== (assistantStore.projectRef ?? "")
+    )
+      return;
+    assistantStore.applyRealtimeSnapshot(
+      platform.assistant,
+      Object.values(platform.conversations),
+      assistantStore.projectRef,
+      platform.assistantConversationNextPageToken,
+    );
+  },
 );
-
-watch(assistantRefreshRevision, (value, previous) => {
-  if (!assistantStore.context || value === previous) return;
-  assistantStore.applyRealtimeSnapshot(
-    platform.assistant,
-    Object.values(platform.conversations),
-    assistantStore.projectRef,
-    platform.assistantConversationNextPageToken,
-  );
-});
 
 const globalLinks = computed(() => [
   { name: "home", label: t("nav.home"), path: "/", icon: Home },

@@ -20,6 +20,10 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 import { resetOwnerRequests } from "@/shared/api/owner-lifetime";
+import type {
+  AssistantConversation,
+  SystemAssistant,
+} from "@/shared/api/generated/openapi/types.gen";
 
 const listProjectsMock = vi.hoisted(() => vi.fn());
 const getOverviewMock = vi.hoisted(() => vi.fn());
@@ -362,6 +366,23 @@ function auditEvent(ref: string, occurredAt: string): AuditEvent {
 }
 
 describe("platform store", () => {
+  it("unavailable помощника очищает page cache и rejoin scope", () => {
+    const store = usePlatformStore();
+    selectProjectRef(undefined);
+    store.assistant = { ref: "ast_fixture" } as SystemAssistant;
+    store.conversations.cnv_fixture = {
+      ref: "cnv_fixture",
+    } as AssistantConversation;
+    store.assistantConversationNextPageToken = "ws-next";
+    store.assistantRealtimeScopeKey = "";
+    store.markRealtimeSnapshot("SYSTEM_ASSISTANT", undefined);
+    store.applyRealtimeAvailability([], undefined);
+    expect(store.assistant).toBeUndefined();
+    expect(store.conversations).toEqual({});
+    expect(store.assistantConversationNextPageToken).toBeUndefined();
+    expect(store.assistantRealtimeScopeKey).toBeUndefined();
+    expect(store.realtimeSnapshot("SYSTEM_ASSISTANT")).toBeUndefined();
+  });
   it("не принимает чужой assistant pin через RUN или overview realtime cache", async () => {
     const store = usePlatformStore();
     const invalid: Run = {

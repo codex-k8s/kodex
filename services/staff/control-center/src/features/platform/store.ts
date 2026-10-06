@@ -2693,6 +2693,12 @@ export const usePlatformStore = defineStore("platform", () => {
         if (!scopeProjectRef || value.projectRef === scopeProjectRef)
           Reflect.deleteProperty(target, ref);
     };
+    if (!available.has("SYSTEM_ASSISTANT")) {
+      replace(conversations, []);
+      assistant.value = undefined;
+      assistantConversationNextPageToken.value = undefined;
+      assistantRealtimeScopeKey.value = undefined;
+    }
     if (!available.has("AGENT") && !available.has("INSTRUCTIONS"))
       clearScoped(agents);
     if (!available.has("WORKFLOW")) clearScoped(workflows);
