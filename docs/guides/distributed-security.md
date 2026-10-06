@@ -517,7 +517,12 @@ grant и не продлевает срок при чтении.
 новую generation и токены одной записью, полностью проверяет новый bearer и
 сохраняет issuer/sub/organization/sid/session_revision/auth_time. Свежий
 application proof строится из нового bearer. Absolute SSO ceiling не растёт;
-Keycloak refresh rotation включена с нулевым reuse, idle/max SSO не изменены.
+Keycloak refresh rotation включена с нулевым reuse. Обычные и Remember Me SSO
+idle/max задаются отдельно узким repo-owned stage `tools/deploy/keycloak-session-policy.py`:
+по утверждённой политике все четыре лимита равны 12 часам. Применение новой
+политики не расширяет существующую immutable browser family; новое полное
+окно требует повторного входа. Прикладной idle TTL и protected fresh-auth gate
+не меняются этим stage.
 
 Family/tombstone retention превышает абсолютный SSO срок. Runtime не имеет
 delete/purge/create/update stream authority; bootstrap и readiness проверяют

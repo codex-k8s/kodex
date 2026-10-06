@@ -493,7 +493,8 @@ if [[ "$mode" == apply ]]; then
     -s enabled=true -s sslRequired=external -s registrationAllowed=false \
     -s resetPasswordAllowed=true -s rememberMe=true -s loginWithEmailAllowed=true \
     -s duplicateEmailsAllowed=false -s verifyEmail=false -s accessTokenLifespan=300 \
-    -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200 \
+    -s ssoSessionIdleTimeout=43200 -s ssoSessionMaxLifespan=43200 \
+    -s ssoSessionIdleTimeoutRememberMe=43200 -s ssoSessionMaxLifespanRememberMe=43200 \
     -s revokeRefreshToken=true -s refreshTokenMaxReuse=0 >/dev/null
   if [[ -n "$smtp_realm_file" ]]; then
     keycloak_update_realm_file "realms/$realm" "$smtp_realm_file" >/dev/null
@@ -624,7 +625,8 @@ fi
 
 realm_json=$(keycloak_request get "realms/$realm")
 jq -e '.enabled == true and .registrationAllowed == false and .accessTokenLifespan == 300 and
-  .ssoSessionIdleTimeout == 28800 and .ssoSessionMaxLifespan == 43200 and
+  .ssoSessionIdleTimeout == 43200 and .ssoSessionMaxLifespan == 43200 and
+  .ssoSessionIdleTimeoutRememberMe == 43200 and .ssoSessionMaxLifespanRememberMe == 43200 and .rememberMe == true and
   .revokeRefreshToken == true and .refreshTokenMaxReuse == 0' \
   <<<"$realm_json" >/dev/null || fail 'realm readback failed'
 if [[ -n "$smtp_realm_file" ]]; then
