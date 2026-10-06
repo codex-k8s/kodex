@@ -18,6 +18,17 @@ import (
 
 const platformSnapshotPageSize = 50
 
+const (
+	platformSnapshotReadFailure       = "platform bootstrap snapshot read failed"
+	platformSnapshotValidationFailure = "platform bootstrap snapshot validation failed"
+	platformSnapshotSizeFailure       = "platform snapshot frame size exceeded"
+)
+
+var (
+	errPlatformSnapshotInvalid = errors.New("platform snapshot projection is invalid")
+	errPlatformSnapshotSize    = errors.New("platform snapshot frame exceeds maximum size")
+)
+
 func typedPlatformSnapshot(kind string, value map[string]any) (generated.PlatformSnapshotPayload, error) {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -135,6 +146,10 @@ func scopedProjectContext(ctx context.Context, projectRef string) (context.Conte
 }
 
 func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, projectRef string, localize func(string) string) (map[string]any, error) {
+	return server.projectPlatformSnapshotPage(ctx, kind, projectRef, localize, platformSnapshotPageSize)
+}
+
+func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, projectRef string, localize func(string) string, assistantPageSize int32) (map[string]any, error) {
 	scoped, err := scopedProjectContext(ctx, projectRef)
 	if err != nil {
 		return nil, err
@@ -345,7 +360,7 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 		if readErr != nil {
 			return nil, readErr
 		}
-		conversations, readErr := server.assistant.ListAssistantConversations(scoped, &controlplanev1.ListAssistantConversationsRequest{ProjectRef: projectRef, Page: platformPage()})
+		conversations, readErr := server.assistant.ListAssistantConversations(scoped, &controlplanev1.ListAssistantConversationsRequest{ProjectRef: projectRef, Page: &controlplanev1.PageRequest{PageSize: assistantPageSize}})
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -535,32 +550,56 @@ func (server *Server) projectPlatformSnapshot(ctx context.Context, kind, project
 	}
 }
 
+// boundedPlatformSnapshot уменьшает только целую авторитетную страницу.
+// Содержимое разговоров и cursor не переписываются; размер включает envelope.
+func (multiplexer *sessionMultiplexer) boundedPlatformSnapshot(envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
+	for pageSize := int32(platformSnapshotPageSize); ; pageSize = max(1, pageSize/2) {
+		rawSnapshot, err := multiplexer.server.projectPlatformSnapshotPage(multiplexer.ctx, string(envelope.Kind), multiplexer.projectRef, multiplexer.localize, pageSize)
+		if err != nil {
+			if status.Code(err) != codes.PermissionDenied {
+				slog.Error(platformSnapshotReadFailure, "kind", envelope.Kind, "error_class", "dependency")
+			}
+			return generated.PlatformSnapshotEnvelope{}, err
+		}
+		snapshot, err := typedPlatformSnapshot(string(envelope.Kind), rawSnapshot)
+		if err != nil {
+			slog.Error(platformSnapshotValidationFailure, "kind", envelope.Kind, "error_class", "contract")
+			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotInvalid
+		}
+		envelope.Snapshot = snapshot
+		encoded, err := json.Marshal(envelope)
+		if err != nil {
+			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotInvalid
+		}
+		if len(encoded) <= maximumFrameBytes {
+			return envelope, nil
+		}
+		if envelope.Kind != generated.PlatformResourceKindSystemAssistant || pageSize == 1 {
+			slog.Error(platformSnapshotSizeFailure, "kind", envelope.Kind, "error_class", "frame_size", "frame_bytes", len(encoded))
+			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotSize
+		}
+	}
+}
+
 func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.PlatformResourceKind, error) {
 	available := make([]generated.PlatformResourceKind, 0, len(platformBootstrapKinds))
 	for _, kind := range platformBootstrapKinds {
-		rawSnapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, kind, multiplexer.projectRef, multiplexer.localize)
-		if err != nil {
-			if status.Code(err) == codes.PermissionDenied {
-				continue
-			}
-			slog.Error("platform bootstrap snapshot read failed", "kind", kind, "error_class", "dependency", "error", err)
-			multiplexer.platformAvailable = false
-			return nil, errors.New("platform bootstrap snapshot is unavailable")
-		}
-		snapshot, err := typedPlatformSnapshot(kind, rawSnapshot)
-		if err != nil {
-			slog.Error("platform bootstrap snapshot validation failed", "kind", kind, "error_class", "contract", "error", err)
-			multiplexer.platformAvailable = false
-			return nil, errors.New("platform bootstrap snapshot is invalid")
-		}
 		envelope := generated.PlatformSnapshotEnvelope{
 			Type: "PLATFORM_SNAPSHOT", RequestRef: multiplexer.platformRequestRef,
 			StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: multiplexer.platformCursor,
 			Mode: generated.PlatformSnapshotModeBootstrap,
-			Kind: generated.PlatformResourceKind(kind), Snapshot: snapshot,
+			Kind: generated.PlatformResourceKind(kind),
 		}
 		if multiplexer.projectRef != "" {
 			envelope.ProjectRef = &multiplexer.projectRef
+		}
+		envelope, err := multiplexer.boundedPlatformSnapshot(envelope)
+		if err != nil {
+			if status.Code(err) == codes.PermissionDenied {
+				continue
+			}
+			multiplexer.platformAvailable = false
+			return nil, err
 		}
 		if !multiplexer.send(envelope) {
 			return nil, errOutboundOverflow
