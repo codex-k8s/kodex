@@ -10,6 +10,26 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 06:57 UTC — runtime delivery source
+`4449303eef362e0c12c8844aa06846c59cb81136`: fresh canonical supply-chain
+apply и readback exit0. Actual pause=false, replicas/Ready1, прежний UID
+controller сохранён; pause теперь owned только `kodex-local-dev`
+(Apply/Update), прежнего `kubectl-patch` нет. Actual Pod imageID c17d3c,
+compiled source50545, restarts0; CP/gateway/BuildKit/builder/runtime-controller
+Ready1 на source4449303e. Managed Jobs/PVC0; source/Pod hashes CP и PWA равны.
+Никакой повторной OCI сборки, ручного resume или broad force не было.
+
+Следующий пользовательский этап: native PROJECT recipe B2 readback →
+автоматический admission при current pins → exact risk decision при наличии
+eligible vulnerability report → promotion → ENV38. Не запускать третью build
+без доказанного image-policy/runtime drift или terminal FAILED. После ENV38
+продолжить PROJECT smoke, шесть сотрудников, две среды, grants, Workflow и
+полный dogfooding; пункты основного checklist остаются открытыми.
+Chrome MCP connected, рабочая вкладка пока SSO: native UI/Network acceptance
+NOT RUN. Изменения `4449303e` зафиксированы локально; push не подтверждён.
+
+## Предыдущие checkpoints и доказательства
+
 06.10.2026 06:05–06:08 UTC — clean HEAD
 `80b7d26280411ec3acdaa6b921f660050a572809`; image-admission OCI собран и
 штатно импортирован/readback на узлах, manifest

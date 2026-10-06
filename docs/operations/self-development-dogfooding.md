@@ -4456,3 +4456,26 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
 - Live handover/resume пока NOT RUN. OCI COPY-входы неизменны, применяется
   c17d3c с compiled source50545; новый deploy checkpoint — отдельная ревизия.
   Native PROJECT/Full65 ещё OPEN; Chrome подключён, но открыт вход SSO.
+
+### 06.10.2026 06:57 UTC — live SSA handover и resume PASS
+
+- Clean delivery source `4449303eef362e0c12c8844aa06846c59cb81136`;
+  fresh render fingerprint
+  `8dae5ea378fd44c05c5b7f63e3480c1f46e4ffa1ca7bca9cb9fc022dd4bb145d`.
+  Canonical supply-chain apply и readback завершены exit0. Ранее наблюдавшийся
+  SSA conflict устранён штатным repo-owned single-field handover, без force.
+- Actual controller UID `b0d061c8-a12f-4366-9413-cee2a8e774dd` сохранён,
+  RV553591; pause ровно один literalfalse, replicas/Ready1. ManagedFields
+  pause принадлежит только `kodex-local-dev` (Apply/Update); прежнего manager
+  нет. Pod `image-admission-controller-5bfbb8f45b-bcndn` Ready, restarts0;
+  imageID точно `sha256:c17d3c048de86a865864f138887f159feacb497107a99eb7e7ae7273e90ca8b2`.
+  OCI compiled source50545 не подменяется новым deploy SHA.
+- CP/gateway/BuildKit/builder/runtime-controller desired/updated/Ready/available1
+  на source4449303e. Canonical managed Jobs/PVC0. CP identity-policy/RPC и
+  frontend editor host/Pod hashes совпали. Это infrastructure/source proof,
+  не PROJECT/full acceptance.
+- Native B2 admission/risk/promotion и ENV38 ещё NOT RUN: Chrome подключён,
+  рабочая вкладка остаётся SSO. На текущем коде B2 при current immutable pins
+  подхватывается автоматически; отдельного REQUEST_ADMISSION нет. Нельзя
+  создавать третью сборку без actual drift/terminal proof. Full65 OPEN.
+- Новый checkpoint локальный; remote push и PR head не подтверждены.
