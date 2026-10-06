@@ -294,6 +294,38 @@ const environmentLabel = computed(() => {
 let disposed = false;
 let loadGeneration = 0;
 
+const supportingCatalogVersion = computed(() =>
+  props.organizationScope
+    ? undefined
+    : JSON.stringify([
+        props.projectRef,
+        Object.values(platform.agents)
+          .filter((agent) => agent.projectRef === props.projectRef)
+          .map((agent) => [
+            agent.ref,
+            agent.version,
+            agent.roleDefinitionRef,
+            agent.roleDefinitionName,
+            agent.roleDescription,
+            agent.name,
+          ]),
+        Object.values(platform.roleEnvironments).map((environment) => [
+          environment.key,
+          environment.nameMessageKey,
+          environment.available,
+        ]),
+      ]),
+);
+watch(supportingCatalogVersion, () => {
+  if (disposed || props.organizationScope) return;
+  store.applySupportingCatalogSnapshot(
+    Object.values(platform.agents).filter(
+      (agent) => agent.projectRef === props.projectRef,
+    ),
+    Object.values(platform.roleEnvironments),
+  );
+});
+
 function sync(): void {
   if (!recipe.value) return;
   name.value = recipe.value.name;

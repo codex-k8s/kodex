@@ -4130,3 +4130,58 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
 - NEXT: через штатный экран build/report, новое точное решение о риске при
   необходимости и promotion. Далее PROJECT own ENV38/network/Context7 и
   четыре фактических smoke; п.8, шесть ролей и Workflow всё ещё OPEN.
+
+### 06.10.2026 04:54–05:00 UTC — собственные PROJECT Context7 grants и actual MCP
+
+- Локальный checkpoint `2faf11160b19226f05f2fd1254bcacc41978c09e` содержит
+  предыдущие18 файлов. Remote/PR1798 пока `f99f85a5`; этот local checkpoint
+  ещё не объявляется опубликованным либо immutable release.
+- Fresh native owner Grant candidates: existing Context7 connection
+  `int_6MwzPPp5wTDXqB3bh-aPKu7b` CONNECTED/version12, текущий проект и backing
+  helper grantable; обе READ capabilities доступны, allowed policy только NONE.
+  PROJECT03 `run_bxw3Ol3IT246LNOE1i6TCPCQ` подготовил один план двух
+  CHANGE_INTEGRATION_GRANT на собственном AGENT context, не SYSTEM operation.
+- PASS native `pln_DeQMbeyX-EaD0cSK3eZt4qKW` revision1 VALIDv2 → APPLIEDv3
+  однократно04:56:38.345466; receipt `rct_5brbzUwEU31fUlseYKPwQOs0`.
+  Созданы ровно `grt_9NQnkHdXSAwboicf1BoiA_Jm` и
+  `grt_Jr0cONxSF2lOZYlyJTmBYHog`, оба version1, own AGENT, READ/NONE.
+  GET connection200/version14 подтверждает4 grants: прежние SYSTEM2 и новые
+  PROJECT2 разделены; новый connection/credential не создавался.
+- PASS ранний PROJECT03 ACK: PROJECT RuntimeRevision
+  `rrev_Fhbtt8TUopmztt52r1gh5sMi`, собственный ENVrevision1 без grants до apply;
+  protected preview200 complete=true diagnostics=[] совпал по template
+  `5cc52a4fed5bcb5e14af55381a4abab2220ae073d2b9dd963feeb8670747a054`
+  и materialization
+  `ee89c71ec51386bdb4bf6897006f59aa188a81be00c59576084064d0feaddf4f`.
+  Actual Pod binary SHA256
+  `f8a44936452d36642806982db4d6b1939f7c064d74ffe48e89fbad3a513c095f`.
+- PASS PROJECT04 actual managed MCP, run
+  `run_dbJt7KnE_tM6IS87r7tFoSDL`: context7_resolve_library_id и
+  context7_query_docs RUNNING→SUCCEEDED с собственными exact grant refs;
+  автор AGENT. Ранний ACK immutable RuntimeRevision
+  `rrev_F2H9JFCELQ2pdckircPZ3dPc` содержит именно PROJECT2 grants v1 и
+  connectionVersion14, не SYSTEM grants. Protected preview200 complete=true,
+  diagnostics=[] и materialization
+  `13ba10a868266485cb09d10c29c6981710268bbda463cdda52ba0983ef744d50`
+  совпал с provider input; template тот же, instructions/inbox EQUAL.
+  Actual binary f8a44936 тоже снят до cleanup. ENVrevision1/tools0 базовые:
+  этот MCP smoke НЕ заменяет будущие четыре smokes на own image/ENV38.
+- Исправлен найденный live UX-дефект: поздний authoritative agents snapshot
+  больше не оставляет «Название роли недоступно» в PROJECT image editor.
+  Узкий supporting watcher использует только текущий project snapshot;
+  никаких HTTP refetch/polling, новых прав или подставных ref labels.
+  ROOT64/64 units3.12с, ESLint/Prettier/forced vue-tsc/diff check PASS.
+  Host/Pod RoleImageEditor.vue SHA256
+  `5bbecf09d695fb1f7af8d161c4026bfee18417aacacbcc63e3425696e79f9991`
+  совпали; hard navigation показывает имя helper и заполненный role selector.
+  Desktop1253×1302 и mobile390×844 скриншоты просмотрены, горизонтального
+  overflow нет; Console error/warn отсутствуют. Первый снимок до загрузки
+  mobile был пустым и не считается доказательством; повторён после wait_for.
+- Наблюдение admission: recipe create автоматически запустил первую сборку
+  `imgbld_ek94MCNAjDevkVrECTjN0Gg3` COMPLETED. Дополнительный native REQUEST_BUILD
+  создал `imgbld_iRwqjIa2JPvXyR0Hiu5fnyqa` COMPLETED, generation остаётся1.
+  Прежний admission scan/sign завершены, но callback старой сборки теперь
+  PermissionDenied по latest-build fence. Предусмотрен Expire claim после
+  TTL30m (~05:18–05:19 UTC); actual expiry→cleanup→новый claim ещё NOT RUN.
+  Вечная блокировка не объявляется доказанной. Третью сборку не запрашивать,
+  старый admission не принимать и Job/claim вручную не очищать.

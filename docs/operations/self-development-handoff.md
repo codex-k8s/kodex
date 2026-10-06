@@ -10,6 +10,19 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 05:00 UTC — более свежая точка: local HEAD `2faf1116`, remote ещё
+`f99f85a5`; поверх HEAD проверен двухфайловый image-role supporting fix.
+PROJECT03 typed plan `pln_DeQMbeyX-EaD0cSK3eZt4qKW` уже APPLIEDv3, две
+собственные Context7 READ/NONE grants активны, connection version14.
+PROJECT04 `run_dbJt7KnE_tM6IS87r7tFoSDL` actual resolve/query MCP SUCCEEDED;
+ранний exact ACK/preview/binary proof сохранён, но ещё baseline ENV1/tools0.
+Own recipe имеет две COMPLETED сборки одного gen1; первоначальный admission
+теперь stale из-за второго REQUEST_BUILD. Наблюдать штатный expiry TTL30m
+около05:18–05:19 UTC и новый claim; не принимать старый report, не повторять
+build/create/grants, не чистить Jobs/claims вручную. Далее own-image report/
+exact risk при необходимости/promotion, typed ENV38/network и четыре smoke,
+затем шесть ролей/full Workflow. П.8 и full65 всё ещё OPEN.
+
 06.10.2026 04:49 UTC — актуальная точка продолжения поверх `f99f85a5`:
 PROJECT02 `run_doreHYImEt8ia1i36EGaZ8j7` SUCCEEDED; конфигурационные tools
 больше не отклоняются в RUNNING projection, автор остаётся AGENT. Ранний
