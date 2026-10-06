@@ -150,6 +150,18 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 15:45 UTC, source `49b4586a`: safe RUN-preview UI добавлен;
+ROOT29/29 units2.02с и forced typecheck — PASS. Native preview POST200
+на exact saved RUN, но UI — FAIL: optional contextPin ошибочно обязательный.
+Исправление adapter/test готовится; отсутствие pin не подменяется synthetic.
+PROJECT network typed plan применён один раз и создал draft version1/DRAFT
+с точными HTTPS443 GitHub/raw read rules. Native Validate403 требует свежий
+SSO; существующий editor не запускает этот путь при Validate. Адресный fix
+готовится, Publish и повтор Git пока NOT RUN; published ENV2 policy NONE.
+Render/source DNS/proxy согласованы, actual DNS прежнего очищенного Pod UNKNOWN.
+Chrome connected/authenticated, Console0. Это частичные debug evidence,
+не завершённый полный QA и не immutable release acceptance.
+
 04.10.2026: задания прочитаны, уточнения владельца внесены; код ещё не изменён,
 новый живой QA не запускался. Рабочая вкладка Chrome MCP доступна.
 

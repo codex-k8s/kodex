@@ -10,6 +10,32 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 15:45 UTC: source `49b4586a`; source/remote/PR1798 на предыдущем
+checkpoint `4b365489` подтверждены, Draft сохранён. Собственный ENV38
+опубликован: rev2/version2/READY и binding version2. Реальные Context7,
+hosted web и identity/search/workspace checks — PASS; public Git — FAIL128
+при webAccess NONE. Образ и executable каждого хода подтверждены ранним
+ACK; сравнение input/inbox/instructions hashes сохранено в журнале.
+
+Typed policy-only plan применён один раз, создал draft
+`renvd_mxzhnTkWXNtaIrwEcPY_5Rwo`, version1/DRAFT, base revision2.
+Разрешает только github.com HTTPS443 GET/HEAD/POST и raw.githubusercontent.com
+HTTPS443 GET/HEAD. Native Validate вернул403 FRESH_AUTHENTICATION_REQUIRED;
+штатная форма пока не предлагает свежий SSO. Адресный frontend fix готовится,
+Publish ещё НЕ выполнен, published policy остаётся NONE. DNS source/render
+согласованы; actual DNS после очистки прежнего Pod — UNKNOWN, не доказанный
+кластерный дефект. После fix: fresh SSO → explicit Validate/Publish только
+PROJECT helper → exact binding/readiness → один public Git повтор с ранним ACK.
+
+RUN safe-preview UI интегрирован (`49b4586a`):29/29 units и forced typecheck
+PASS. Native чтение HTTP200, но UI FAIL из-за ошибочно обязательного optional
+contextPin; исправляется adapter/test без изменения authority/fulltext.
+Chrome5 connected/authenticated; чужая6 не менялась. Full65 OPEN; следующие
+этапы —6 сотрудников, общая toolchain/write-review среды/grants/Workflow,
+bootstrap merge и реальная dogfooding задача.
+
+## Предыдущий checkpoint ENV38
+
 06.10.2026 15:26 UTC: source `ffb9222f`, frontend fix `d4ec7b82`
 интегрирован. Native ENV38 Publish выполнен один раз с единственным
 потребителем «Помощник Kodex | Dev». Draft version3/PUBLISHED;
