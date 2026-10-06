@@ -416,6 +416,7 @@ describe("понятный закрытый REJECTED допуск, отдель�
       i18n.global.locale.value = locale;
       const value = artifact({
         admissionVerdict: "REJECTED",
+        sbomSha256: "d".repeat(64),
         vulnerabilityEvidenceSha256: "c".repeat(64),
       });
       const html = await summary(value, true);
@@ -442,6 +443,50 @@ describe("понятный закрытый REJECTED допуск, отдель�
       expect(sidebar).not.toContain(i18n.global.t("roleImages.notPromoted"));
     },
   );
+  it.each(["ru", "en"] as const)(
+    "без полного scanner evidence показывает нейтральный закрытый допуск, locale=%s",
+    async (locale) => {
+      i18n.global.locale.value = locale;
+      for (const evidence of [
+        {},
+        { sbomSha256: "d".repeat(64) },
+        { vulnerabilityEvidenceSha256: "c".repeat(64) },
+        {
+          sbomSha256: "d".repeat(64),
+          vulnerabilityEvidenceSha256: "",
+        },
+        {
+          sbomSha256: "d".repeat(64),
+          vulnerabilityEvidenceSha256: "not-a-digest",
+        },
+      ]) {
+        const value = artifact({ admissionVerdict: "REJECTED", ...evidence });
+        const html = await summary(value, true);
+        expect(html).toContain('class="admission-closed" role="alert"');
+        expect(html).toContain(
+          i18n.global.t("roleImages.admissionClosedTitle"),
+        );
+        expect(html).toContain(i18n.global.t("roleImages.admissionClosedHelp"));
+        expect(html).not.toContain('class="admission-rejection"');
+        expect(html).not.toContain(
+          i18n.global.t("roleImages.admissionRejectedHelp"),
+        );
+        expect(html).toContain("data-report-boundary");
+        expect(html).not.toContain("POLICY_CHANGED");
+      }
+    },
+  );
+  it("технический отказ сохраняет приоритет над закрытым допуском", async () => {
+    const value = artifact({ admissionVerdict: "REJECTED" });
+    const html = await summary(
+      value,
+      true,
+      imageAdmissionFailureFixture(recipe, build),
+    );
+    expect(html).toContain('class="admission-failure"');
+    expect(html).not.toContain('class="admission-closed"');
+    expect(html).not.toContain('class="admission-rejection"');
+  });
   it("не объявляет vulnerability для accepted artifact с отказом публикации", async () => {
     const value = artifact({
       admissionVerdict: "ACCEPTED",
@@ -469,6 +514,9 @@ describe("понятный закрытый REJECTED допуск, отдель�
       );
       expect(await summary(value, true)).not.toContain(
         'class="admission-rejection"',
+      );
+      expect(await summary(value, true)).not.toContain(
+        'class="admission-closed"',
       );
     },
   );

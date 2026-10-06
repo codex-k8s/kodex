@@ -1905,6 +1905,9 @@ const ru = {
     admissionRejectedTitle: "Образ не прошёл проверку безопасности",
     admissionRejectedHelp:
       "Обновите базовый образ или зависимости и повторите сборку. Публикация недоступна, пока образ не пройдёт проверку допуска.",
+    admissionClosedTitle: "Допуск образа закрыт",
+    admissionClosedHelp:
+      "Выполните новую сборку для проверки по актуальным параметрам платформы.",
     admissionFailed: "Проверка допуска завершилась с ошибкой",
     promotionBlockedByFailure: "Публикация недоступна: ошибка проверки",
     admissionFailureHelp:
@@ -5569,6 +5572,9 @@ const en = {
     admissionRejectedTitle: "The image did not pass the security check",
     admissionRejectedHelp:
       "Update the base image or dependencies and rebuild. Publication is unavailable until the image passes admission.",
+    admissionClosedTitle: "Image admission is closed",
+    admissionClosedHelp:
+      "Rebuild the image to check it against the platform’s current settings.",
     admissionFailed: "Image admission check failed",
     promotionBlockedByFailure: "Publication unavailable: check failed",
     admissionFailureHelp:

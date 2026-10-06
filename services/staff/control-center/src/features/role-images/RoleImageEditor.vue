@@ -187,6 +187,16 @@ const admissionRejected = computed(
       artifact.value,
     ),
 );
+const rejectedWithScannerEvidence = computed(
+  () =>
+    admissionRejected.value &&
+    [
+      currentArtifact.value?.sbomSha256,
+      currentArtifact.value?.vulnerabilityEvidenceSha256,
+    ].every(
+      (digest) => typeof digest === "string" && /^[a-f0-9]{64}$/.test(digest),
+    ),
+);
 const revisions = computed(() =>
   props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
 );
@@ -797,7 +807,17 @@ onBeforeUnmount(() => {
         v-if="admissionFailure"
         :failure="admissionFailure"
       />
-      <RoleImageAdmissionRejectionNotice v-else-if="admissionRejected" />
+      <RoleImageAdmissionRejectionNotice
+        v-else-if="rejectedWithScannerEvidence"
+      />
+      <section
+        v-else-if="admissionRejected"
+        class="admission-closed"
+        role="alert"
+      >
+        <strong>{{ t("roleImages.admissionClosedTitle") }}</strong>
+        <p>{{ t("roleImages.admissionClosedHelp") }}</p>
+      </section>
       <div
         id="vulnerability-report"
         ref="vulnerabilityReportRoot"
@@ -1390,6 +1410,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.admission-closed {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.admission-closed p {
+  margin: 4px 0 0;
+}
 .role-image-editor,
 .editor-main,
 .editor-aside,
