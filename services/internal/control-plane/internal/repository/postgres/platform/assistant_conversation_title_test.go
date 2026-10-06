@@ -61,9 +61,9 @@ func TestAssistantUserMessageTitleUsesSafePrefixBeforeLateURL(t *testing.T) {
 	t.Parallel()
 	const system57 = "QA_SYSTEM_GITHUB_57. Маркер KODEX1797_GEN9_GITHUB_407_A2. Только READ smoke Issue1797. Через фактический native exec выполни отдельно git --version и env GIT_TERMINAL_PROMPT=0 git -c protocol.version=0 -c credential.helper= -c credential.interactive=false ls-remote -- https://github.com/codex-k8s/kodex.git HEAD refs/heads/main. protocol.version=0 нужен для GET-only правил текущего окружения, не меняй policy. Без clone/fetch, записей, credentials и изменений GitHub. Верни exit codes и полученные refs/SHA. При отказе сообщи фактическую ошибку; не заменяй вызов памятью/web."
 	const russian = "Проверь настройку помощника и доступность опубликованного репозитория организации перед следующим этапом разработки. Ссылка: https://fixture.invalid/repository"
-	const russianTitle = "Проверь настройку помощника и доступность опубликованного репозитория организаци"
+	const russianTitle = "Проверь настройку помощника и доступность опубликованного репозитория"
 	for _, test := range []struct{ name, input, want string }{
-		{"system57", system57, "QA_SYSTEM_GITHUB_57. Маркер KODEX1797_GEN9_GITHUB_407_A2. Только READ smoke Issu"},
+		{"system57", system57, "QA_SYSTEM_GITHUB_57. Маркер KODEX1797_GEN9_GITHUB_407_A2. Только READ smoke"},
 		{"russian", russian, russianTitle},
 		{"uppercase and multiple urls", russian + " HTTP://fixture.invalid/second", russianTitle},
 		{"whitespace", "  ## " + strings.ReplaceAll(russian, " ", "\n\t"), russianTitle},
@@ -149,6 +149,71 @@ func TestAssistantConversationTitleRejectsGenericTerminalSummary(t *testing.T) {
 	for _, title := range []string{"Настройка Context7", "MCP", "Образ для разработки Kodex"} {
 		if genericAssistantConversationTitle(title) || assistantPublicTitleText(title) == "" {
 			t.Fatal("normal agent-proposed title was rejected")
+		}
+	}
+}
+
+func TestAssistantConversationTitleRejectsTechnicalAndProgressResults(t *testing.T) {
+	t.Parallel()
+	for _, summary := range []string{
+		"Создан ровно один подтверждаемый typed plan по вашему JSON: `pln_0123456789abcdefghijklmn`, версия 1. Подтвердите изменения.",
+		"Подготовлен подробный план настройки проекта. Проверьте изменения.",
+		"Создан план настройки сети помощника. Следующий шаг — подтверждение.",
+		"Created a configuration plan for the project. Confirm the proposed changes.",
+		"Настройка окружения renv_0123456789abcdefghijklmn",
+		"Настройка образа sha256:" + strings.Repeat("a", 64),
+		`Настройка окружения ["renv_0123456789abcdefghijklmn"]`,
+	} {
+		if title := assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: summary}); title != "" {
+			t.Fatalf("technical or progress result became title: %q", title)
+		}
+	}
+}
+
+func TestAssistantAutomaticTitlePreservesTopicsAndRejectsReports(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct{ input, want string }{
+		{"  ## Настройка   Context7  ", "Настройка Context7"},
+		{"MCP", "MCP"},
+		{"Создание образа для разработки Kodex", "Создание образа для разработки Kodex"},
+		{"Проверка доступности GitHub", "Проверка доступности GitHub"},
+		{"Настройка Context7 и окружения проекта " + strings.Repeat("дополнения ", 15), "Настройка Context7 и окружения проекта дополнения дополнения дополнения"},
+		{"Созданы новые сотрудники проекта", ""},
+		{"UPDATED project configuration", ""},
+		{"Настройка окружения agt_0123456789abcdefghijklmn", ""},
+		{"Настройка диалога cnv_0123456789abcdefghijklmn", ""},
+		{"Настройка образа " + strings.Repeat("a", 64), ""},
+		{"Проверка `gh --version`", ""},
+		{"Настройка api_key=SYNTHETIC_PRIVATE_VALUE", ""},
+		{"Настройка\u202eпроекта", ""},
+	} {
+		if got := assistantAutomaticTitleText(test.input); got != test.want {
+			t.Fatalf("automatic title = %q, want %q", got, test.want)
+		}
+	}
+	if got := assistantAutomaticTitleText(strings.Repeat("я", 100)); got != strings.Repeat("я", assistantConversationTitleMaximumRunes) {
+		t.Fatal("single-word title did not preserve a bounded UTF-8 value")
+	}
+	const exactBoundary = "Настройка окружения помощника"
+	if got := boundedAssistantConversationTitle(exactBoundary+" и образа", len([]rune(exactBoundary))); got != exactBoundary {
+		t.Fatal("whole final word was lost at the exact title boundary")
+	}
+}
+
+func TestAssistantUserMessageTitleUsesOnlyHumanPrefixBeforeJSON(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct{ input, want string }{
+		{`Настрой окружение помощника: {"imageArtifactRef":"imgart_0123456789abcdefghijklmn"}`, "Настрой окружение помощника"},
+		{`Настрой окружение помощника: [{"imageArtifactRef":"imgart_0123456789abcdefghijklmn"}]`, "Настрой окружение помощника"},
+		{`{"name":"Настройка окружения","imageArtifactRef":"imgart_0123456789abcdefghijklmn"}`, ""},
+		{`Настрой окружение помощника: {"token":"SYNTHETIC_PRIVATE_VALUE"}`, ""},
+		{`Настрой окружение помощника: {"credential":"SYNTHETIC_PRIVATE_VALUE"}`, ""},
+		{`Настрой окружение помощника: {"image":"https://fixture.invalid/private"}`, ""},
+		{`[{"name":"Настройка окружения"}]`, ""},
+		{"Настрой окружение помощника: {\"image\":\"value\"}\u202e", ""},
+	} {
+		if got := assistantUserMessageTitle(test.input); got != test.want {
+			t.Fatalf("structured input title = %q, want %q", got, test.want)
 		}
 	}
 }

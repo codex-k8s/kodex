@@ -131,8 +131,8 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 
 func (repository *Repository) proposeAssistantMetadata(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ProposeAssistantMetadataInput)
-	title := strings.TrimSpace(payload.Title)
-	if !ok || title == "" || len([]rune(title)) > 160 || genericAssistantConversationTitle(title) || assistantPublicTitleText(title) == "" {
+	title := assistantAutomaticTitleText(payload.Title)
+	if !ok || title == "" || len([]rune(strings.TrimSpace(payload.Title))) > 160 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	lease, err := repository.lease(ctx, tx, machineScope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
@@ -1931,23 +1931,18 @@ func assistantConversationTitle(payload command.CompleteExecutionInput) string {
 	if !payload.Success {
 		return ""
 	}
-	text := assistantPublicTitleText(payload.ResultSummary)
-	if genericAssistantConversationTitle(text) || len([]rune(text)) < 24 {
+	text := assistantAutomaticTitleText(payload.ResultSummary)
+	if len([]rune(text)) < 24 {
 		return ""
 	}
-	const maximumRunes = 96
 	runes := []rune(text)
-	limit := min(len(runes), maximumRunes)
-	for index := 23; index < limit; index++ {
+	for index := 23; index < len(runes); index++ {
 		switch runes[index] {
 		case '.', '!', '?':
 			return strings.TrimSpace(string(runes[:index+1]))
 		}
 	}
-	if len(runes) <= maximumRunes {
-		return text
-	}
-	return strings.TrimSpace(string(runes[:maximumRunes]))
+	return text
 }
 
 func runtimeSafeErrorCode(code string) bool {
