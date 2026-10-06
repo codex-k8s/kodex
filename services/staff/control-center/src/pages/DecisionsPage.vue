@@ -22,6 +22,7 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { integrationEffectPreview } from "@/features/workboard/integration-effect-preview";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
 import { useGateProjects } from "@/features/workboard/gate-projects";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
@@ -300,14 +301,6 @@ type ApprovalScopePreview = {
   selected: Array<{ path: string; type: string; value: unknown }>;
   mutablePaths: string[];
 };
-type IntegrationEffectField = ApprovalScopePreview["selected"][number];
-const integrationTechnicalPreviewKeys = new Set([
-  "approvalPolicy",
-  "contentComplete",
-  "fields",
-  "inputBytes",
-  "inputDigest",
-]);
 function isApprovalScopeField(
   value: unknown,
 ): value is ApprovalScopePreview["selected"][number] {
@@ -334,40 +327,11 @@ const selectedApprovalScope = computed<ApprovalScopePreview | undefined>(() => {
     return undefined;
   return scope as ApprovalScopePreview;
 });
-const selectedEffectFields = computed<IntegrationEffectField[]>(() => {
-  const fields = selected.value?.gate.integrationIntent?.effectPreview.fields;
-  return Array.isArray(fields) && fields.every(isApprovalScopeField)
-    ? fields
-    : [];
-});
-const selectedEffectPreview = computed(() => {
-  const preview = selected.value?.gate.integrationIntent?.effectPreview;
-  return preview
-    ? Object.fromEntries(
-        Object.entries(preview).filter(
-          ([key]) =>
-            key !== "approvalScope" &&
-            key !== "risk" &&
-            !integrationTechnicalPreviewKeys.has(key),
-        ),
-      )
-    : undefined;
-});
-const selectedTechnicalPreview = computed(() => {
-  const preview = selected.value?.gate.integrationIntent?.effectPreview;
-  return preview
-    ? Object.fromEntries(
-        Object.entries(preview).filter(([key]) =>
-          integrationTechnicalPreviewKeys.has(key),
-        ),
-      )
-    : undefined;
-});
-const selectedHasEffectPreview = computed(
-  () => Object.keys(selectedEffectPreview.value ?? {}).length > 0,
+const selectedEffect = computed(() =>
+  integrationEffectPreview(selected.value?.gate.integrationIntent),
 );
 const selectedHasTechnicalPreview = computed(
-  () => Object.keys(selectedTechnicalPreview.value ?? {}).length > 0,
+  () => Object.keys(selectedEffect.value.technical).length > 0,
 );
 const selectedActions = computed(() =>
   selected.value
@@ -526,6 +490,17 @@ function approvalPathLabel(path: string): string {
     .filter(Boolean)
     .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
     .join(".");
+}
+function effectFieldLabel(key: string): string {
+  if (key === "body" && selectedEffect.value.commentIssue)
+    return t("decisions.integrationCommentBody");
+  const translation = `decisions.integrationFieldLabels.${key}`;
+  return Object.hasOwn(
+    { issue_number: true, body: true, title: true, comment: true, text: true },
+    key,
+  )
+    ? t(translation)
+    : key;
 }
 
 function projectPath(item: DecisionInboxItem): string | undefined {
@@ -1072,8 +1047,20 @@ const serverMessage = useServerMessage();
             v-if="selected.gate.integrationIntent"
             class="decision-integration-intent"
           >
-            <h3>{{ $t("nav.integrations") }}</h3>
+            <h3>
+              {{
+                selectedEffect.commentIssue
+                  ? $t("decisions.integrationIssueComment", {
+                      issue: selectedEffect.commentIssue,
+                    })
+                  : $t("integrationsRedesign.effectPreview")
+              }}
+            </h3>
             <dl>
+              <div v-if="selectedEffect.repositoryName">
+                <dt>{{ $t("decisions.integrationRepository") }}</dt>
+                <dd>{{ selectedEffect.repositoryName }}</dd>
+              </div>
               <div>
                 <dt>{{ $t("integrations.connections") }}</dt>
                 <dd>{{ selected.gate.integrationIntent.connectionName }}</dd>
@@ -1089,22 +1076,37 @@ const serverMessage = useServerMessage();
                 </dd>
               </div>
             </dl>
-            <SafeStructuredData
-              v-if="selectedHasEffectPreview"
-              :value="selectedEffectPreview"
-              literal
-            />
+            <p
+              v-if="!selectedEffect.complete"
+              class="decision-preview-warning"
+              role="status"
+            >
+              {{ $t("decisions.integrationPreviewIncomplete") }}
+            </p>
             <section
-              v-if="selectedEffectFields.length"
+              v-if="selectedEffect.fields.length"
               class="decision-effect-fields"
             >
               <h4>{{ $t("decisions.integrationParameters") }}</h4>
               <dl>
-                <div v-for="field in selectedEffectFields" :key="field.path">
-                  <dt>
-                    <code>{{ approvalPathLabel(field.path) }}</code>
-                  </dt>
-                  <dd><SafeStructuredData :value="field.value" literal /></dd>
+                <div v-for="field in selectedEffect.fields" :key="field.key">
+                  <dt>{{ effectFieldLabel(field.key) }}</dt>
+                  <dd>
+                    <span v-if="field.hidden">{{
+                      $t("decisions.integrationValueHidden")
+                    }}</span>
+                    <SafeStructuredData
+                      v-else
+                      :value="field.value"
+                      class="decision-effect-value"
+                      literal
+                    />
+                    <small
+                      v-if="field.truncated"
+                      class="decision-preview-warning"
+                      >{{ $t("decisions.integrationValueTruncated") }}</small
+                    >
+                  </dd>
                 </div>
               </dl>
             </section>
@@ -1165,7 +1167,7 @@ const serverMessage = useServerMessage();
               />
               <SafeStructuredData
                 v-if="selectedHasTechnicalPreview"
-                :value="selectedTechnicalPreview"
+                :value="selectedEffect.technical"
                 literal
               />
             </details>
@@ -1585,6 +1587,18 @@ const serverMessage = useServerMessage();
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+}
+.decision-preview-warning {
+  color: var(--warning);
+}
+.decision-effect-value {
+  display: block;
+  max-height: 16rem;
+  overflow: auto;
+}
+small.decision-preview-warning {
+  display: block;
+  margin-top: 4px;
 }
 .decision-meta {
   display: grid;
