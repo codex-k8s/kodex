@@ -40,6 +40,7 @@ import {
   Save,
   Send,
   Link2,
+  Ellipsis,
 } from "@lucide/vue";
 import {
   computed,
@@ -121,7 +122,7 @@ type EditorSection =
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const localizeServerMessage = useServerMessage();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
@@ -159,6 +160,16 @@ watch(environmentRef, () => {
 });
 const discardDraftOpen = ref(false);
 const serverDraft = ref<RuntimeEnvironmentDraft>();
+const draftSavedAtDisplay = computed(() => {
+  const savedAt = serverDraft.value?.savedAt;
+  const date = savedAt ? new Date(savedAt) : undefined;
+  return date && Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat(locale.value, {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(date)
+    : t("runtimeOverlay.environmentSavedUnknown");
+});
 const publicationPlan = ref<RevisionImpactPlan>();
 const publicationUnknown = ref(false);
 const publicationAttempt = ref<PublicationAttempt>();
@@ -1115,84 +1126,108 @@ onBeforeUnmount(() => {
   <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
     <PageFrame :title="current?.name ?? $t('runtime.newEnvironment')">
       <template #actions>
-        <button
-          v-if="current && hasEnvironmentAction(current, 'DISABLE')"
-          class="button"
-          type="button"
-          :disabled="busy || localChanges"
-          @click="setEnabled(false)"
-        >
-          <PowerOff :size="16" aria-hidden="true" />
-          {{ $t("common.disable") }}
-        </button>
-        <button
-          v-if="current && hasEnvironmentAction(current, 'ENABLE')"
-          class="button"
-          type="button"
-          :disabled="busy || localChanges"
-          @click="setEnabled(true)"
-        >
-          <Power :size="16" aria-hidden="true" />
-          {{ $t("common.enable") }}
-        </button>
-        <button
-          v-if="current && hasEnvironmentAction(current, 'DELETE')"
-          class="button button--danger"
-          type="button"
-          :disabled="busy"
-          @click="deleteOpen = true"
-        >
-          <Trash2 :size="16" aria-hidden="true" />
-          {{ $t("common.delete") }}
-        </button>
-        <RouterLink
-          class="button"
-          :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
-        >
-          {{ $t("common.cancel") }}
-        </RouterLink>
-        <button
-          class="button button--primary"
-          type="button"
-          :disabled="busy || !canPublish || !draftEditable || !draftDirty"
-          @click="save"
-        >
-          <Save :size="16" />{{ $t("managed.saveDraft") }}
-        </button>
-        <button
-          class="button"
-          type="button"
-          :disabled="busy || !serverDraft || !draftEditable || draftDirty"
-          @click="validateDraft"
-        >
-          <CheckCircle2 :size="16" />{{ $t("managed.validate") }}
-        </button>
-        <button
-          class="button button--primary"
-          type="button"
-          :disabled="
-            busy ||
-            !canPublish ||
-            !imageInventoryReady ||
-            serverDraft?.state !== 'VALID' ||
-            !serverDraft?.validationDigest ||
-            draftDirty
-          "
-          @click="preparePublication"
-        >
-          <Send :size="16" />{{ $t("managed.publish") }}
-        </button>
-        <button
-          v-if="serverDraft && draftEditable"
-          class="icon-button"
-          type="button"
-          :disabled="busy"
-          :aria-label="$t('runtime.discardDraft')"
-          :title="$t('runtime.discardDraft')"
-          @click="discardDraftOpen = true"
-        >
-          <Trash2 :size="16" />
-        </button>
+        <div class="environment-editor-actions">
+          <button
+            class="button button--primary"
+            type="button"
+            :aria-label="$t('managed.saveDraft')"
+            :disabled="busy || !canPublish || !draftEditable || !draftDirty"
+            @click="save"
+          >
+            <Save :size="16" aria-hidden="true" />{{ $t("common.save") }}
+          </button>
+          <button
+            class="button"
+            type="button"
+            :disabled="busy || !serverDraft || !draftEditable || draftDirty"
+            @click="validateDraft"
+          >
+            <CheckCircle2 :size="16" aria-hidden="true" />{{
+              $t("managed.validate")
+            }}
+          </button>
+          <button
+            class="button button--primary"
+            type="button"
+            :disabled="
+              busy ||
+              !canPublish ||
+              !imageInventoryReady ||
+              serverDraft?.state !== 'VALID' ||
+              !serverDraft?.validationDigest ||
+              draftDirty
+            "
+            @click="preparePublication"
+          >
+            <Send :size="16" aria-hidden="true" />{{ $t("managed.publish") }}
+          </button>
+          <details class="environment-secondary-actions">
+            <summary class="button">
+              <Ellipsis :size="16" aria-hidden="true" />{{
+                $t("common.actions")
+              }}
+            </summary>
+            <div class="environment-secondary-actions__menu">
+              <RouterLink
+                class="button"
+                :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
+              >
+                {{ $t("common.cancel") }}
+              </RouterLink>
+              <button
+                v-if="serverDraft && !draftDirty"
+                class="button"
+                type="button"
+                :disabled="busy"
+                @click="preparePublication"
+              >
+                {{ $t("publicationImpact.restore") }}
+              </button>
+              <button
+                v-if="current && hasEnvironmentAction(current, 'DISABLE')"
+                class="button"
+                type="button"
+                :disabled="busy || localChanges"
+                @click="setEnabled(false)"
+              >
+                <PowerOff :size="16" aria-hidden="true" />{{
+                  $t("common.disable")
+                }}
+              </button>
+              <button
+                v-if="current && hasEnvironmentAction(current, 'ENABLE')"
+                class="button"
+                type="button"
+                :disabled="busy || localChanges"
+                @click="setEnabled(true)"
+              >
+                <Power :size="16" aria-hidden="true" />{{ $t("common.enable") }}
+              </button>
+              <button
+                v-if="serverDraft && draftEditable"
+                class="button button--danger"
+                type="button"
+                :disabled="busy"
+                @click="discardDraftOpen = true"
+              >
+                <Trash2 :size="16" aria-hidden="true" />{{
+                  $t("runtime.discardDraft")
+                }}
+              </button>
+              <button
+                v-if="current && hasEnvironmentAction(current, 'DELETE')"
+                class="button button--danger"
+                type="button"
+                :disabled="busy"
+                @click="deleteOpen = true"
+              >
+                <Trash2 :size="16" aria-hidden="true" />{{
+                  $t("common.delete")
+                }}
+              </button>
+            </div>
+          </details>
+        </div>
       </template>
 
       <section class="environment-draft-state" role="status">
@@ -1203,32 +1238,58 @@ onBeforeUnmount(() => {
         <span v-if="serverDraft">{{
           $t("managed.revision", { revision: serverDraft.version })
         }}</span>
-        <p v-if="serverDraft">
-          {{ $t("runtimeOverlay.environmentBase") }}:
-          <template
-            v-if="serverDraft.baseVersionRef && serverDraft.baseRevision"
-          >
-            {{ serverDraft.baseRevision }} ·
-            <code>{{ serverDraft.baseVersionRef }}</code>
-          </template>
-          <template v-else>{{
-            $t(
-              serverDraft.environmentRef
-                ? "runtimeOverlay.environmentBaseUnknown"
-                : "runtimeOverlay.environmentNew",
-            )
-          }}</template>
-        </p>
-        <p v-if="serverDraft">
-          {{ $t("runtimeOverlay.environmentSavedAt") }}:
+        <span v-if="serverDraft?.baseVersionRef && serverDraft.baseRevision">
+          {{ $t("runtimeOverlay.environmentShortBase") }}:
+          {{ serverDraft.baseRevision }}
+        </span>
+        <span v-if="serverDraft" class="environment-draft-state__saved">
+          {{ $t("runtimeOverlay.environmentShortSavedAt") }}:
           <time v-if="serverDraft.savedAt" :datetime="serverDraft.savedAt">{{
-            serverDraft.savedAt
+            draftSavedAtDisplay
           }}</time>
-          <span v-else>{{ $t("runtimeOverlay.environmentSavedUnknown") }}</span>
-        </p>
-        <code v-if="serverDraft?.validationDigest">{{
-          serverDraft.validationDigest
-        }}</code>
+          <span v-else>{{ draftSavedAtDisplay }}</span>
+        </span>
+        <details v-if="serverDraft" class="environment-draft-state__details">
+          <summary>
+            {{ $t("common.details") }}
+            <code v-if="serverDraft.validationDigest">{{
+              compactIdentifier(serverDraft.validationDigest)
+            }}</code>
+          </summary>
+          <dl>
+            <div>
+              <dt>{{ $t("runtimeOverlay.environmentBase") }}</dt>
+              <dd v-if="serverDraft.baseVersionRef && serverDraft.baseRevision">
+                {{ serverDraft.baseRevision }} ·
+                <code>{{ serverDraft.baseVersionRef }}</code>
+              </dd>
+              <dd v-else>
+                {{
+                  $t(
+                    serverDraft.environmentRef
+                      ? "runtimeOverlay.environmentBaseUnknown"
+                      : "runtimeOverlay.environmentNew",
+                  )
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ $t("runtimeOverlay.environmentSavedAt") }}</dt>
+              <dd>
+                <code>{{
+                  serverDraft.savedAt ??
+                  $t("runtimeOverlay.environmentSavedUnknown")
+                }}</code>
+              </dd>
+            </div>
+            <div v-if="serverDraft.validationDigest">
+              <dt>{{ $t("runtimeOverlay.environmentValidationDigest") }}</dt>
+              <dd>
+                <code>{{ serverDraft.validationDigest }}</code>
+              </dd>
+            </div>
+          </dl>
+        </details>
         <p
           v-for="diagnostic in serverDraft?.diagnostics"
           :key="diagnostic"
@@ -1245,15 +1306,6 @@ onBeforeUnmount(() => {
           :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(serverDraft.publishedEnvironmentRef)}`"
           >{{ $t("common.open") }}</RouterLink
         >
-        <button
-          v-if="serverDraft && !draftDirty"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="preparePublication"
-        >
-          {{ $t("publicationImpact.restore") }}
-        </button>
       </section>
       <ModalDialog
         v-if="leaveOpen"
@@ -1932,10 +1984,90 @@ onBeforeUnmount(() => {
 }
 .environment-draft-state {
   display: flex;
-  gap: 12px;
+  gap: 8px 12px;
   align-items: center;
   flex-wrap: wrap;
   min-width: 0;
+}
+.environment-editor-actions {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.environment-editor-actions > .button,
+.environment-secondary-actions > summary.button {
+  min-height: var(--control-height, 32px);
+  height: var(--control-height, 32px);
+  flex: 0 0 auto;
+}
+.environment-secondary-actions {
+  position: relative;
+  min-width: 0;
+}
+.environment-secondary-actions > summary {
+  list-style: none;
+}
+.environment-secondary-actions > summary::-webkit-details-marker {
+  display: none;
+}
+.environment-secondary-actions__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: min(280px, calc(100vw - 32px));
+  max-height: 320px;
+  overflow-y: auto;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow, 0 8px 20px #0002);
+}
+.environment-secondary-actions__menu .button {
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: var(--control-height, 32px);
+  white-space: normal;
+  text-align: left;
+}
+.environment-draft-state__saved {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.environment-draft-state__details {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.environment-draft-state__details summary {
+  cursor: pointer;
+}
+.environment-draft-state__details[open] {
+  flex-basis: 100%;
+}
+.environment-draft-state__details dl {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+.environment-draft-state__details dl > div {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.5fr) minmax(0, 1fr);
+  gap: 4px 12px;
+}
+.environment-draft-state__details dd {
+  min-width: 0;
+  margin: 0;
+}
+.environment-draft-state > p[role="alert"] {
+  flex-basis: 100%;
+  margin: 0;
 }
 .environment-draft-state code {
   overflow-wrap: anywhere;
@@ -2323,6 +2455,22 @@ code {
   }
 }
 @media (max-width: 700px) {
+  .environment-editor-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .environment-editor-actions > .button,
+  .environment-secondary-actions > summary.button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+    justify-content: center;
+  }
+  .environment-draft-state__details dl > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .environment-field-row,
   .secret-binding-fields,
   .safe-summary,

@@ -48,6 +48,9 @@ const ru = {
     },
   },
   runtimeOverlay: {
+    environmentShortBase: "База",
+    environmentShortSavedAt: "Сохранено",
+    environmentValidationDigest: "Дайджест проверки",
     environmentBase: "Базовая опубликованная ревизия",
     environmentBaseUnknown:
       "База неизвестна: исторический черновик не содержит точной ссылки",
@@ -4600,6 +4603,9 @@ const en = {
     },
   },
   runtimeOverlay: {
+    environmentShortBase: "Base",
+    environmentShortSavedAt: "Saved",
+    environmentValidationDigest: "Validation digest",
     environmentBase: "Base published revision",
     environmentBaseUnknown:
       "Unknown base: the historical draft has no exact reference",

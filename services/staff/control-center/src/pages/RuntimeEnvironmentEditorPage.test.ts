@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   createRenderer,
   defineComponent,
@@ -65,6 +66,8 @@ async function editor(localized = false) {
     input: RuntimeEnvironmentInput;
     nameFieldValue: Ref<string>;
     descriptionFieldValue: Ref<string>;
+    serverDraft: Ref<RuntimeEnvironmentDraft | undefined>;
+    draftSavedAtDisplay: Ref<string>;
     specification: Ref<{ name: string; description: string }>;
     imageArtifact: Ref<RoleImageArtifact | undefined>;
     imageInventoryReady: Ref<boolean>;
@@ -125,6 +128,81 @@ beforeEach(() => {
   cleanup.length = 0;
   route.params.projectRef = "project_1";
   route.params.environmentRef = "environment_1";
+});
+
+describe("компактная шапка редактора окружения", () => {
+  it.each(["ru", "en"] as const)(
+    "дата сохранения учитывает locale=%s без изменения server metadata",
+    async (locale) => {
+      i18n.global.locale.value = locale;
+      const state = await editor(true);
+      const savedAt = "2026-10-06T11:17:00Z";
+      const draft = {
+        savedAt,
+        version: 3,
+        validationDigest: "a".repeat(64),
+      } as RuntimeEnvironmentDraft;
+      state.serverDraft.value = draft;
+      expect(state.draftSavedAtDisplay.value).toBe(
+        new Intl.DateTimeFormat(locale, {
+          dateStyle: "short",
+          timeStyle: "short",
+        }).format(new Date(savedAt)),
+      );
+      expect(state.draftSavedAtDisplay.value).not.toBe(savedAt);
+      expect(state.serverDraft.value).toEqual(draft);
+      expect(runtime.loadEnvironment).not.toHaveBeenCalled();
+      i18n.global.locale.value = "ru";
+    },
+  );
+  it("отсутствующая/некорректная дата не становится сырой строкой", async () => {
+    const state = await editor(true);
+    for (const savedAt of [undefined, "invalid-date"]) {
+      state.serverDraft.value = { savedAt } as RuntimeEnvironmentDraft;
+      expect(state.draftSavedAtDisplay.value).toBe(
+        i18n.global.t("runtimeOverlay.environmentSavedUnknown"),
+      );
+    }
+  });
+  it("оставляет три primary controls, убирает второстепенные и полный digest под native details", () => {
+    const source = readFileSync(
+      new URL("./RuntimeEnvironmentEditorPage.vue", import.meta.url),
+      "utf8",
+    );
+    const actions = source.slice(
+      source.indexOf("<template #actions>"),
+      source.indexOf("</template>", source.indexOf("<template #actions>")),
+    );
+    const primary = actions.slice(
+      0,
+      actions.indexOf('<details class="environment-secondary-actions">'),
+    );
+    expect(
+      primary.match(/@click="(?:save|validateDraft|preparePublication)"/g),
+    ).toHaveLength(3);
+    expect(primary).not.toContain('@click="setEnabled');
+    expect(actions).toContain('@click="discardDraftOpen = true"');
+    expect(actions).toContain(
+      "v-if=\"current && hasEnvironmentAction(current, 'DELETE')\"",
+    );
+    expect(actions).toContain(':disabled="busy || localChanges"');
+    const details = source.slice(
+      source.indexOf('<details v-if="serverDraft"'),
+      source.indexOf(
+        "</details>",
+        source.indexOf('<details v-if="serverDraft"'),
+      ),
+    );
+    expect(details).not.toMatch(/\sopen(?:[\s=>])/);
+    expect(details).toContain(
+      "compactIdentifier(serverDraft.validationDigest)",
+    );
+    expect(details).toContain("{{ serverDraft.validationDigest }}");
+    expect(source).toContain(
+      "grid-template-columns: repeat(2, minmax(0, 1fr))",
+    );
+    expect(source).toContain("min-height: var(--control-height, 32px)");
+  });
 });
 
 function promotedArtifact(ref: string): RoleImageArtifact {
