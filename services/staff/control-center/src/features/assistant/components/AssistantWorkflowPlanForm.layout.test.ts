@@ -9,8 +9,27 @@ const editor = readFileSync(
   new URL("./AssistantPlanEditor.vue", import.meta.url),
   "utf8",
 );
+const disclosure = readFileSync(
+  new URL("../../workflows/WorkflowStepDisclosure.vue", import.meta.url),
+  "utf8",
+);
+const workflowPage = readFileSync(
+  new URL("../../../pages/WorkflowDetailPage.vue", import.meta.url),
+  "utf8",
+);
 
 describe("форма процесса в плане помощника", () => {
+  it("обе формы используют lazy шаги с видимыми ошибками и ограниченным списком", () => {
+    expect(source).toContain("<WorkflowStepDisclosure");
+    expect(workflowPage).toContain("<WorkflowStepDisclosure");
+    expect(disclosure).toContain('v-if="open"');
+    expect(disclosure).toContain('v-if="needsAttention"');
+    expect(disclosure).toContain('role="status"');
+    expect(source).toContain("max-height: min(68vh, 720px)");
+    expect(workflowPage).toContain("max-height: min(68vh, 720px)");
+    expect(disclosure).toContain("minmax(0, 1fr)");
+    expect(disclosure).toContain("overflow-wrap: anywhere");
+  });
   it("редактирует этапы и входные поля без изменения prop", () => {
     expect(source).toContain("loadAgentCatalogPage");
     expect(source).toContain("getAgent");

@@ -5,6 +5,7 @@ import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
 import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
 import TemplateSourceField from "@/features/agents/detail/TemplateSourceField.vue";
 import WorkflowOverviewFields from "@/features/workflows/WorkflowOverviewFields.vue";
+import WorkflowStepDisclosure from "@/features/workflows/WorkflowStepDisclosure.vue";
 import {
   operationParameter,
   type EditablePlanOperation,
@@ -73,6 +74,7 @@ const stepKeys = new Set([
 ]);
 const agentReadback = ref<Record<string, Agent | null>>({});
 const selectableAgents = new Map<string, Agent>();
+const openStepIndex = ref<number | undefined>(0);
 const isUpdate = computed(
   () => props.operation.value.type === "UPDATE_WORKFLOW",
 );
@@ -271,6 +273,7 @@ function toggleCapability(index: number, key: string, enabled: boolean): void {
 }
 function addStep(): void {
   if (!steps.value || steps.value.length >= 200) return;
+  openStepIndex.value = steps.value.length;
   change("steps", [
     ...steps.value,
     {
@@ -286,6 +289,21 @@ function addStep(): void {
       requiredCapabilityKeys: [],
     },
   ]);
+}
+function toggleStep(index: number, event: Event): void {
+  if ((event.currentTarget as HTMLDetailsElement).open)
+    openStepIndex.value = index;
+  else if (openStepIndex.value === index) openStepIndex.value = undefined;
+}
+function removeStep(index: number): void {
+  if (props.disabled || !steps.value || steps.value.length <= 1) return;
+  const current = openStepIndex.value;
+  const remaining = steps.value.filter((_, position) => position !== index);
+  change("steps", remaining);
+  if (current === index)
+    openStepIndex.value = Math.min(index, remaining.length - 1);
+  else if (current !== undefined && current > index)
+    openStepIndex.value = current - 1;
 }
 function toggleDecision(index: number, decision: string): void {
   const values = Array.isArray(steps.value?.[index]?.gateDecisions)
@@ -336,7 +354,7 @@ function validField(field: Item): boolean {
     (field.valueType === "SELECT" ? options.length > 0 : options.length === 0)
   );
 }
-function validStep(step: Item): boolean {
+function validStep(step: Item, allowPendingAgent = false): boolean {
   const group = step.parallelGroup;
   const decisions = step.gateDecisions;
   const capabilities = step.requiredCapabilityKeys;
@@ -352,7 +370,10 @@ function validStep(step: Item): boolean {
     text(step.name).length <= 160 &&
     text(step.purpose).trim().length > 0 &&
     text(step.purpose).length <= 1000 &&
-    !!agentReadback.value[text(step.agentRef)] &&
+    (!!agentReadback.value[text(step.agentRef)] ||
+      (allowPendingAgent &&
+        !!text(step.agentRef) &&
+        agentReadback.value[text(step.agentRef)] === undefined)) &&
     typeof step.parallel === "boolean" &&
     (typeof group === "string"
       ? group.trim().length > 0 && group.length <= 80
@@ -416,7 +437,7 @@ const valid = computed(() =>
     steps.value &&
     steps.value.length > 0 &&
     steps.value.length <= 200 &&
-    steps.value.every(validStep) &&
+    steps.value.every((step) => validStep(step)) &&
     new TextEncoder().encode(
       text(parameter("completionCriteria")) +
         steps.value
@@ -430,6 +451,12 @@ const valid = computed(() =>
   ),
 );
 watch(valid, (value) => emit("valid", value), { immediate: true });
+watch(
+  () => [props.projectRef, props.operation.value.ref],
+  () => {
+    openStepIndex.value = 0;
+  },
+);
 </script>
 
 <template>
@@ -601,181 +628,206 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
           {{ $t("common.create") }}
         </button>
       </header>
-      <article
-        v-for="(step, index) in steps ?? []"
-        :key="text(step.key) || index"
-        class="assistant-workflow-form__item"
-      >
-        <strong>{{ index + 1 }}</strong>
-        <label class="field"
-          ><span>{{ $t("workflows.stepName") }}</span
-          ><input
-            :value="text(step.name)"
-            :id="stepName(index, 'name')"
-            :name="stepName(index, 'name')"
-            maxlength="160"
-            :disabled="disabled"
-            @input="
-              changeStep(
-                index,
-                'name',
-                ($event.target as HTMLInputElement).value,
-              )
-            "
-        /></label>
-        <div class="field">
-          <span>{{ $t("workflows.stepAgent") }}</span
-          ><AsyncEntityPicker
-            :model-value="text(step.agentRef)"
-            :selected="agentOption(step.agentRef)"
-            :load-page="loadAgents"
-            :context-key="projectRef"
-            :disabled="disabled || !projectRef"
-            :trigger-label="$t('workflows.stepAgent')"
-            @select="chooseAgent($event, index)"
-            @update:model-value="$event === null && clearAgent(index)"
-          />
-        </div>
-        <div class="field">
-          <span>{{ $t("common.purpose") }}</span>
-          <TemplateSourceField
-            :model-value="text(step.purpose)"
-            :label="$t('common.purpose')"
-            :disabled="disabled"
-            @update:model-value="changeStep(index, 'purpose', $event)"
-          />
-        </div>
-        <div class="assistant-workflow-form__advanced">
-          <label class="check-field"
-            ><input
-              :checked="step.parallel === true"
-              :id="stepName(index, 'parallel')"
-              :name="stepName(index, 'parallel')"
-              type="checkbox"
-              :disabled="disabled"
-              @change="
-                changeStep(
-                  index,
-                  'parallel',
-                  ($event.target as HTMLInputElement).checked,
-                )
-              "
-            />{{ $t("workflows.parallel") }}</label
-          ><label class="check-field"
-            ><input
-              :checked="step.humanGate === true"
-              :id="stepName(index, 'human-gate')"
-              :name="stepName(index, 'human-gate')"
-              type="checkbox"
-              :disabled="disabled"
-              @change="
-                changeStep(
-                  index,
-                  'humanGate',
-                  ($event.target as HTMLInputElement).checked,
-                )
-              "
-            />{{ $t("workflows.humanGate") }}</label
-          >
-        </div>
-        <details>
-          <summary>{{ $t("common.advanced") }}</summary>
-          <div class="assistant-workflow-form__advanced">
+      <div class="assistant-workflow-form__steps">
+        <WorkflowStepDisclosure
+          v-for="(step, index) in steps ?? []"
+          :key="text(step.key) || index"
+          :number="index + 1"
+          :name="text(step.name)"
+          :agent-title="
+            agentOption(step.agentRef)?.title ||
+            $t(
+              agentReadback[text(step.agentRef)] === undefined &&
+                text(step.agentRef)
+                ? 'common.loading'
+                : 'workflows.assignedAgentUnavailable',
+            )
+          "
+          :parallel="step.parallel === true"
+          :parallel-group="
+            typeof step.parallelGroup === 'string' ||
+            typeof step.parallelGroup === 'number'
+              ? step.parallelGroup
+              : undefined
+          "
+          :human-gate="step.humanGate === true"
+          :needs-attention="!validStep(step, true)"
+          :open="openStepIndex === index"
+          @toggle="toggleStep(index, $event)"
+        >
+          <div class="assistant-workflow-form__step-body">
             <label class="field"
-              ><span>{{ $t("workflows.parallelGroup") }}</span
+              ><span>{{ $t("workflows.stepName") }}</span
               ><input
-                :value="step.parallelGroup ?? 0"
-                :id="stepName(index, 'parallel-group')"
-                :name="stepName(index, 'parallel-group')"
-                :disabled="disabled || step.parallel !== true"
+                :value="text(step.name)"
+                :id="stepName(index, 'name')"
+                :name="stepName(index, 'name')"
+                maxlength="160"
+                :disabled="disabled"
                 @input="
                   changeStep(
                     index,
-                    'parallelGroup',
+                    'name',
                     ($event.target as HTMLInputElement).value,
                   )
                 "
             /></label>
-            <label class="field"
-              ><span>{{ $t("workflows.stepTimeout") }}</span
-              ><input
-                :value="step.timeoutSeconds ?? 1800"
-                :id="stepName(index, 'timeout-seconds')"
-                :name="stepName(index, 'timeout-seconds')"
-                type="number"
-                min="1"
-                max="86400"
+            <div class="field">
+              <span>{{ $t("workflows.stepAgent") }}</span
+              ><AsyncEntityPicker
+                :model-value="text(step.agentRef)"
+                :selected="agentOption(step.agentRef)"
+                :load-page="loadAgents"
+                :context-key="projectRef"
+                :disabled="disabled || !projectRef"
+                :trigger-label="$t('workflows.stepAgent')"
+                @select="chooseAgent($event, index)"
+                @update:model-value="$event === null && clearAgent(index)"
+              />
+            </div>
+            <div class="field">
+              <span>{{ $t("common.purpose") }}</span>
+              <TemplateSourceField
+                :model-value="text(step.purpose)"
+                :label="$t('common.purpose')"
                 :disabled="disabled"
-                @input="
-                  changeStep(
-                    index,
-                    'timeoutSeconds',
-                    Number(($event.target as HTMLInputElement).value),
-                  )
-                "
-            /></label>
-          </div>
-          <div class="field">
-            <span>{{ $t("workflows.expectedResult") }}</span>
-            <TemplateSourceField
-              :model-value="text(step.expectedResult)"
-              :label="$t('workflows.expectedResult')"
-              :disabled="disabled"
-              @update:model-value="changeStep(index, 'expectedResult', $event)"
-            />
-            <span>{{ text(step.expectedResult).length }} / 1000</span>
-          </div>
-          <fieldset v-if="step.humanGate === true">
-            <legend>{{ $t("workflows.gateDecisions") }}</legend>
-            <label
-              v-for="decision in allowedDecisions"
-              :key="decision"
-              class="check-field"
-              ><input
-                :checked="
-                  Array.isArray(step.gateDecisions) &&
-                  step.gateDecisions.includes(decision)
-                "
-                :id="stepName(index, `gate-${decision}`)"
-                :name="stepName(index, `gate-${decision}`)"
-                type="checkbox"
-                :disabled="disabled"
-                @change="toggleDecision(index, decision)"
-              />{{ $t(`workflows.gateDecision.${decision}`) }}</label
+                @update:model-value="changeStep(index, 'purpose', $event)"
+              />
+            </div>
+            <div class="assistant-workflow-form__advanced">
+              <label class="check-field"
+                ><input
+                  :checked="step.parallel === true"
+                  :id="stepName(index, 'parallel')"
+                  :name="stepName(index, 'parallel')"
+                  type="checkbox"
+                  :disabled="disabled"
+                  @change="
+                    changeStep(
+                      index,
+                      'parallel',
+                      ($event.target as HTMLInputElement).checked,
+                    )
+                  "
+                />{{ $t("workflows.parallel") }}</label
+              ><label class="check-field"
+                ><input
+                  :checked="step.humanGate === true"
+                  :id="stepName(index, 'human-gate')"
+                  :name="stepName(index, 'human-gate')"
+                  type="checkbox"
+                  :disabled="disabled"
+                  @change="
+                    changeStep(
+                      index,
+                      'humanGate',
+                      ($event.target as HTMLInputElement).checked,
+                    )
+                  "
+                />{{ $t("workflows.humanGate") }}</label
+              >
+            </div>
+            <details>
+              <summary>{{ $t("common.advanced") }}</summary>
+              <div class="assistant-workflow-form__advanced">
+                <label class="field"
+                  ><span>{{ $t("workflows.parallelGroup") }}</span
+                  ><input
+                    :value="step.parallelGroup ?? 0"
+                    :id="stepName(index, 'parallel-group')"
+                    :name="stepName(index, 'parallel-group')"
+                    :disabled="disabled || step.parallel !== true"
+                    @input="
+                      changeStep(
+                        index,
+                        'parallelGroup',
+                        ($event.target as HTMLInputElement).value,
+                      )
+                    "
+                /></label>
+                <label class="field"
+                  ><span>{{ $t("workflows.stepTimeout") }}</span
+                  ><input
+                    :value="step.timeoutSeconds ?? 1800"
+                    :id="stepName(index, 'timeout-seconds')"
+                    :name="stepName(index, 'timeout-seconds')"
+                    type="number"
+                    min="1"
+                    max="86400"
+                    :disabled="disabled"
+                    @input="
+                      changeStep(
+                        index,
+                        'timeoutSeconds',
+                        Number(($event.target as HTMLInputElement).value),
+                      )
+                    "
+                /></label>
+              </div>
+              <div class="field">
+                <span>{{ $t("workflows.expectedResult") }}</span>
+                <TemplateSourceField
+                  :model-value="text(step.expectedResult)"
+                  :label="$t('workflows.expectedResult')"
+                  :disabled="disabled"
+                  @update:model-value="
+                    changeStep(index, 'expectedResult', $event)
+                  "
+                />
+                <span>{{ text(step.expectedResult).length }} / 1000</span>
+              </div>
+              <fieldset v-if="step.humanGate === true">
+                <legend>{{ $t("workflows.gateDecisions") }}</legend>
+                <label
+                  v-for="decision in allowedDecisions"
+                  :key="decision"
+                  class="check-field"
+                  ><input
+                    :checked="
+                      Array.isArray(step.gateDecisions) &&
+                      step.gateDecisions.includes(decision)
+                    "
+                    :id="stepName(index, `gate-${decision}`)"
+                    :name="stepName(index, `gate-${decision}`)"
+                    type="checkbox"
+                    :disabled="disabled"
+                    @change="toggleDecision(index, decision)"
+                  />{{ $t(`workflows.gateDecision.${decision}`) }}</label
+                >
+              </fieldset>
+              <fieldset class="field">
+                <legend>{{ $t("workflows.requiredCapabilities") }}</legend>
+                <EffectiveCapabilityCatalog
+                  v-if="
+                    text(step.agentRef) && agentReadback[text(step.agentRef)]
+                  "
+                  :agent-ref="text(step.agentRef)"
+                  :project-ref="projectRef"
+                  mode="REQUIREMENTS"
+                  :selected-keys="
+                    Array.isArray(step.requiredCapabilityKeys)
+                      ? (step.requiredCapabilityKeys as string[])
+                      : []
+                  "
+                  :can-manage="!disabled"
+                  :busy="disabled"
+                  @toggle="
+                    (key, enabled) => toggleCapability(index, key, enabled)
+                  "
+                />
+              </fieldset>
+            </details>
+            <button
+              class="button button--danger"
+              type="button"
+              :disabled="disabled || steps!.length <= 1"
+              @click="removeStep(index)"
             >
-          </fieldset>
-          <fieldset class="field">
-            <legend>{{ $t("workflows.requiredCapabilities") }}</legend>
-            <EffectiveCapabilityCatalog
-              v-if="text(step.agentRef) && agentReadback[text(step.agentRef)]"
-              :agent-ref="text(step.agentRef)"
-              :project-ref="projectRef"
-              mode="REQUIREMENTS"
-              :selected-keys="
-                Array.isArray(step.requiredCapabilityKeys)
-                  ? (step.requiredCapabilityKeys as string[])
-                  : []
-              "
-              :can-manage="!disabled"
-              :busy="disabled"
-              @toggle="(key, enabled) => toggleCapability(index, key, enabled)"
-            />
-          </fieldset>
-        </details>
-        <button
-          class="button button--danger"
-          type="button"
-          :disabled="disabled || steps!.length <= 1"
-          @click="
-            change(
-              'steps',
-              steps!.filter((_, position) => position !== index),
-            )
-          "
-        >
-          {{ $t("common.delete") }}
-        </button>
-      </article>
+              {{ $t("common.delete") }}
+            </button>
+          </div>
+        </WorkflowStepDisclosure>
+      </div>
     </section>
     <p v-if="!valid" class="field-error" role="status">
       {{ $t("assistant.planEditor.workflowNotReady") }}
@@ -821,6 +873,20 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
+}
+.assistant-workflow-form__steps {
+  display: grid;
+  gap: 8px;
+  max-height: min(68vh, 720px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  min-width: 0;
+}
+.assistant-workflow-form__step-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
 }
 .assistant-workflow-form .field,
 .assistant-workflow-form details {
