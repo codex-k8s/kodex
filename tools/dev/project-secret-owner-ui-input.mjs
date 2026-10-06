@@ -228,7 +228,7 @@ export async function readOwnerPins(page, profile) {
         new TextDecoder("utf-8", { fatal: true }).decode(bytes),
       );
     }
-    const [bootstrap, environment, runtime, impact, secrets] =
+    const [bootstrap, environment, runtime, impact, secrets, agents] =
       await Promise.all([
         get("/api/v1/bootstrap"),
         get(`/api/v1/runtime-environments/${pins.environmentRef}`),
@@ -238,6 +238,9 @@ export async function readOwnerPins(page, profile) {
         ),
         get(
           `/api/v1/projects/${pins.projectRef}/runtime-secrets?pageSize=100&query=GH_TOKEN`,
+        ),
+        get(
+          `/api/v1/runtime-environments/${pins.environmentRef}/agents?pageSize=100`,
         ),
       ]);
     return {
@@ -257,6 +260,17 @@ export async function readOwnerPins(page, profile) {
         digest: environment.currentVersion?.digest,
       },
       agentVersion: runtime.agentVersion,
+      assignedAgents: {
+        items: Array.isArray(agents.items)
+          ? agents.items.map((item) => ({
+              ref: item.ref,
+              version: item.version,
+              projectRef: item.projectRef,
+              system: item.system,
+            }))
+          : null,
+        nextPageToken: agents.nextPageToken,
+      },
       binding: runtime.environmentBinding && {
         ref: runtime.environmentBinding.ref,
         version: runtime.environmentBinding.version,
@@ -334,21 +348,23 @@ export function assertOwnerPins(value, profile) {
       impact.environmentVersion === profile.environmentVersion &&
       impact.targetVersionRef === profile.versionRef &&
       impact.targetDigest === profile.environmentDigest &&
-      impact.total === 1 &&
-      !impact.nextPageToken &&
+      impact.total === 0 &&
+      impact.nextPageToken === "" &&
       Array.isArray(impact.consumers) &&
-      impact.consumers.length === 1,
+      impact.consumers.length === 0,
   );
-  const consumer = impact.consumers[0];
+  // Impact перечисляет только обновляемые binding; already-current туда не входит.
+  // Полный unfiltered assigned list доказывает sole Developer независимо от target.
+  const assigned = value.assignedAgents;
   requireInput(
-    consumer.agentRef === profile.agentRef &&
-      consumer.agentVersion === profile.agentVersion &&
-      consumer.bindingRef === profile.bindingRef &&
-      consumer.bindingVersion === profile.bindingVersion &&
-      consumer.versionRef === profile.versionRef &&
-      consumer.scopeKind === "PROJECT" &&
-      consumer.organizationRef === profile.organizationRef &&
-      consumer.projectRef === profile.projectRef &&
+    assigned &&
+      (assigned.nextPageToken === undefined || assigned.nextPageToken === "") &&
+      Array.isArray(assigned.items) &&
+      assigned.items.length === 1 &&
+      assigned.items[0]?.ref === profile.agentRef &&
+      assigned.items[0].version === profile.agentVersion &&
+      assigned.items[0].projectRef === profile.projectRef &&
+      assigned.items[0].system === false &&
       value.secretAbsent === true,
   );
 }

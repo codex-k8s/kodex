@@ -68,25 +68,25 @@ function proof() {
       versionRef: profile.versionRef,
       digest: profile.bindingDigest,
     },
+    assignedAgents: {
+      items: [
+        {
+          ref: profile.agentRef,
+          version: profile.agentVersion,
+          projectRef: profile.projectRef,
+          system: false,
+        },
+      ],
+      nextPageToken: "",
+    },
     impact: {
       environmentRef: profile.environmentRef,
       environmentVersion: profile.environmentVersion,
       targetVersionRef: profile.versionRef,
       targetDigest: profile.environmentDigest,
-      total: 1,
+      total: 0,
       nextPageToken: "",
-      consumers: [
-        {
-          agentRef: profile.agentRef,
-          agentVersion: profile.agentVersion,
-          bindingRef: profile.bindingRef,
-          bindingVersion: profile.bindingVersion,
-          versionRef: profile.versionRef,
-          projectRef: profile.projectRef,
-          scopeKind: "PROJECT",
-          organizationRef: profile.organizationRef,
-        },
-      ],
+      consumers: [],
     },
     secretAbsent: true,
   };
@@ -241,14 +241,28 @@ test("Каждый owner/scope/OCC/sole-consumer pin проверяется до
     (v) => (v.binding.ref = "aenv_foreign"),
     (v) => v.binding.version++,
     (v) => (v.binding.agentRef = "agt_foreign"),
+    (v) => (v.binding.environmentRef = "renv_foreign"),
     (v) => (v.binding.versionRef = "renvv_foreign"),
     (v) => (v.binding.digest = "c".repeat(64)),
     (v) => (v.impact.total = 2),
     (v) => (v.impact.nextPageToken = "next"),
-    (v) => v.impact.consumers.push(v.impact.consumers[0]),
-    (v) => (v.impact.consumers[0].agentRef = "agt_foreign"),
-    (v) => (v.impact.consumers[0].organizationRef = "org_foreign"),
-    (v) => (v.impact.consumers[0].versionRef = "renvv_foreign"),
+    (v) => (v.impact.environmentRef = "renv_foreign"),
+    (v) => v.impact.environmentVersion++,
+    (v) => (v.impact.targetVersionRef = "renvv_foreign"),
+    (v) => (v.impact.targetDigest = "c".repeat(64)),
+    (v) => v.impact.consumers.push({ agentRef: profile.agentRef }),
+    (v) => (v.assignedAgents.items = []),
+    (v) => v.assignedAgents.items.push(v.assignedAgents.items[0]),
+    (v) => v.assignedAgents.items.push({ ref: "agt_foreign" }),
+    (v) => (v.assignedAgents.items[0].ref = "agt_foreign"),
+    (v) => v.assignedAgents.items[0].version++,
+    (v) => (v.assignedAgents.items[0].projectRef = "prj_foreign"),
+    (v) => (v.assignedAgents.items[0].system = true),
+    (v) => (v.assignedAgents.nextPageToken = "agt_other_page"),
+    (v) => (v.assignedAgents.nextPageToken = null),
+    (v) => (v.assignedAgents.nextPageToken = 0),
+    (v) => (v.assignedAgents.items = null),
+    (v) => (v.assignedAgents = null),
     (v) => (v.secretAbsent = false),
   ];
   for (const change of changes) {
@@ -263,6 +277,34 @@ test("Каждый owner/scope/OCC/sole-consumer pin проверяется до
     assert(!f.calls.includes("secret"));
     assert(!f.calls.includes("fill"));
   }
+});
+
+test("Already-current Developer допускается с empty impact, old binding не подменяет assigned proof", async () => {
+  const current = proof();
+  assert.equal(current.impact.total, 0);
+  assert.deepEqual(current.impact.consumers, []);
+  assert.doesNotThrow(() => assertOwnerPins(current, profile));
+  const old = proof();
+  old.binding.versionRef = "renvv_predecessor";
+  old.impact.total = 1;
+  old.impact.consumers = [
+    {
+      agentRef: profile.agentRef,
+      agentVersion: profile.agentVersion,
+      bindingRef: profile.bindingRef,
+      bindingVersion: profile.bindingVersion,
+      versionRef: old.binding.versionRef,
+      projectRef: profile.projectRef,
+      scopeKind: "PROJECT",
+      organizationRef: profile.organizationRef,
+    },
+  ];
+  const f = fixture({ readPins: () => old });
+  assert.equal(
+    (await fillProjectSecret(profile, f.dependencies)).code,
+    "PROJECT_SECRET_INPUT_REJECTED",
+  );
+  assert(!f.calls.includes("secret"));
 });
 
 test("Fill только после двух owner proof: без submit/reveal/navigation или закрытия Chrome", async () => {
@@ -297,6 +339,13 @@ test("Чужая/duplicate page, немаскированная форма, drif
       readPins: (index) => {
         const v = proof();
         if (index) v.environment.version++;
+        return v;
+      },
+    },
+    {
+      readPins: (index) => {
+        const v = proof();
+        if (index) v.assignedAgents.items = [];
         return v;
       },
     },
@@ -413,6 +462,13 @@ test("Production GET projection отбрасывает private body, без muta
       })),
     },
     { items: [], nextPageToken: "", unknown: sentinel },
+    {
+      ...v.assignedAgents,
+      items: v.assignedAgents.items.map((item) => ({
+        ...item,
+        unknown: sentinel,
+      })),
+    },
   ];
   const context = {
     location: new URL(profile.pageURL),
@@ -451,7 +507,11 @@ test("Production GET projection отбрасывает private body, без muta
   const result = await readOwnerPins(page, profile);
   assertOwnerPins(result, profile);
   assert(!JSON.stringify(result).includes(sentinel));
-  assert.equal(paths.length, 5);
+  assert.equal(paths.length, 6);
+  assert.equal(
+    paths[5],
+    `/api/v1/runtime-environments/${profile.environmentRef}/agents?pageSize=100`,
+  );
   assert(paths.every((path) => !path.includes("reveal")));
 });
 
