@@ -67,6 +67,12 @@ describe("AssistantWorkspace layout", () => {
     expect(compiled.code).not.toContain(
       'body:has([aria-modal="true"], .run-activity-overlay) {',
     );
+    const formSlot = template
+      .split('class="assistant-form-slot"')[1]
+      ?.split(">\n")[0];
+    expect(formSlot).toContain(
+      ':aria-modal="open && assistantFormActive ? true : undefined"',
+    );
   });
   it("называет главную страницу понятно и не дублирует маршрут в компактном контексте", () => {
     expect(source).toContain('route.name === "home"');

@@ -10,6 +10,31 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 22:41 UTC: source `1310e8e75f02066cf04292971ef46cf2328a33da`,
+последний remote/PR99d34e6. ListRuns ADD_TURN исправлен f6db1475:
+canonical disposable PG4 PASS, native composer сохраняется. Плавающая
+кнопка реально перекрывала Send; CSS исправлен с проверкой compiled selector,
+native hit-test теперь Send, экран видим, отправка201. Скрытая form-slot
+не должна объявляться активной модалкой; адресный повтор идёт.
+
+Guarded SCOPED preview1310e8e7: owner issue/body видны, VIEW/event/outbox
+по-прежнему redacted, unit4+PG PASS; host/Pod hash совпал.
+Gate gat_lcDIUUIWJkUWuhwqxzUoMLeZ APPROVED/v2. В одном scoped root
+run_4ypXbFF2xiEckl8pytnHEiAi два invoke SUCCEEDED, только один Gate;
+remote6026752239/6026757279: exact строки по1, canonical marker-only,
+author bot, полный read20022:40:45. Далее fresh-root REJECT и restore NONE.
+
+Manager continuation run_tu60J1CYNyYNMLbV5iHZbdHF действительно принята201,
+same session ses_0j69hUySdKDhdtQkqR24YeHN; ранний ACK same UID/image,
+task SHA d4a949aeac51644e80683b4033223fcb5b090e59a1d10ec5089f10b9271e8b69
+3559B совпал с owner input. Один launch_workflow принят:
+child run_9azvaRjxdeytuWBFMxfuPUYD, но FAILED до исполнителей по dependency
+fence; callback доставлен в Manager, повторного launch нет. Причина
+исследуется отдельно, delegation acceptance НЕ PASS. Typed callback origin
+и Draft PR create в изолированных WT; финальный Workflow не запущен.
+
+## Предыдущий checkpoint22:30
+
 06.10.2026 22:30 UTC: source `3ff2ada5c24e2f365b108f6bd74f05cfe250b4d2`,
 последний exact remote/PR `99d34e6ab4549ec5f725067aa89b48d4aadd146c`.
 NONE1/EACH APPROVE1 remote comments подтверждены, EACH REJECT remote0.

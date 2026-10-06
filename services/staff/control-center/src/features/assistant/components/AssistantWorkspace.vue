@@ -2788,7 +2788,7 @@ onBeforeUnmount(() => {
     ref="formSlot"
     class="assistant-form-slot"
     role="dialog"
-    aria-modal="true"
+    :aria-modal="open && assistantFormActive ? true : undefined"
     :aria-label="$t('assistant.planEditor.parametersTitle')"
     :inert="
       integrationImportOpen ||

@@ -158,6 +158,34 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 22:41 UTC — composer, безопасное согласование и реальный отказ Workflow
+
+Source1310e8e7; последний remote/PR99d34e6. Обязательный ListRuns
+eligibility fix f6db1475 проверен canonical disposable PG4 и live GET/list.
+FAB перекрывал Send: native click открывал helper, POST отсутствовал.
+После CSS fix compiled selector ограничен FAB, body visible, hit-test Send,
+native201 создал Manager continuation. Первый CSS вариант ошибочно скрывал
+body; дефект замечен скриншотом и исправлен, исходный результат FAIL.
+39 layout unit PASS; скрытая form-slot accessibility исправляется повтором.
+
+SCOPED owner preview1310e8e7: bounded issue/body реально видны до native
+APPROVE. Viewer, actorScoped=false, persisted safe_delta/outbox сохраняют
+redaction; unit4/disposable PG PASS, host/Pod hash равен.
+В одном root run_4ypXbFF2xiEckl8pytnHEiAi два effects SUCCEEDED с одним
+Gate, второй без нового решения. Remote comments6026752239/6026757279
+read200 complete22:40:45: по одной exact requested line и canonical marker,
+bot author. Fresh-root REJECT и restore NONE ещё NOT RUN.
+
+Manager continuation run_tu60J1CYNyYNMLbV5iHZbdHF / initial turn
+trn_g_22byN6EHLHPPncIlIQX03T: early ACK same Pod UID/image/file binary,
+task3559B/SHA d4a949aeac51644e80683b4033223fcb5b090e59a1d10ec5089f10b9271e8b69
+совпадает с owner input; inbox/instructions EQUAL. Native launch_workflow
+accepted один, childrun_9azvaRjxdeytuWBFMxfuPUYD FAILED по dependency fence
+до Pod. Parent callback доставлен, но этот исход НЕ delegation PASS.
+Причина исследуется; accepted effect не повторяется вслепую. Native
+Decisions preview и Run composer screenshots/Console0/read200 проверены;
+полное QA, bootstrap merge и реальный внутренний Workflow остаются OPEN.
+
 ### 06.10.2026 22:30 UTC — реальные решения, компактные файлы и найденные UX-дефекты
 
 Source `3ff2ada5c24e2f365b108f6bd74f05cfe250b4d2`; последний exact
