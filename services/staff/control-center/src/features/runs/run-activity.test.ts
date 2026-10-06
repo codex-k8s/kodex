@@ -351,6 +351,115 @@ describe("компактное представление exact хода", () =>
     });
   });
 
+  it("сводит exact отмену узла и машинный intermediate результат в одну запись", () => {
+    const cancel = item("node-cancel", {
+      eventType: "NODE_STATE_CHANGED",
+      messageKind: "STATE",
+      state: "CANCELLED",
+      summary: "i18n:RUN_NODE_CANCELLED",
+    });
+    const progress = item("cancel-progress", {
+      eventType: "TURN_PROGRESS",
+      messageKind: "INTERMEDIATE_MESSAGE",
+      state: "CANCELLED",
+      summary: "i18n:RUN_CANCELLED",
+    });
+    const entries = [item("start"), cancel, progress];
+    const before = structuredClone(entries);
+    const result = presentRunTranscriptItems(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      state: "CANCELLED",
+      summary: progress.summary,
+      working: false,
+      serviceHistory: entries,
+    });
+    expect(entries).toEqual(before);
+    for (const [key, value] of [
+      ["runRef", "run_foreign"],
+      ["nodeRef", "nod_foreign"],
+      ["sessionRef", "ses_foreign"],
+      ["turnRef", "trn_foreign"],
+      ["turnNumber", 2],
+      ["attempt", 2],
+    ] as const)
+      expect(
+        presentRunTranscriptItems([
+          cancel,
+          { ...progress, execution: { ...execution, [key]: value } },
+        ]),
+      ).toHaveLength(2);
+    for (const changed of [
+      { summary: "Доставка отменена, внешний результат пока неизвестен" },
+      { summary: "i18n:FUTURE_CANCELLATION" },
+      { progress: "Есть дополнительный результат" },
+      { integrationInvocationRef: "inv_exact" },
+      { phase: "COMMENTARY" as const, kind: "agent" as const },
+      { execution: { ...execution, attempt: 2 } },
+      { historical: true, execution: undefined },
+    ])
+      expect(
+        presentRunTranscriptItems([cancel, { ...progress, ...changed }]),
+      ).toHaveLength(2);
+  });
+
+  it("сохраняет классификацию exact отмены из raw event при локализованной summary", () => {
+    const base = required(events[0]);
+    const cancelledEvents: PresentedRunEvent[] = [
+      {
+        ...base,
+        message: undefined,
+        type: "NODE_STATE_CHANGED",
+        messageKind: "STATE",
+        nodeState: "CANCELLED",
+        summary: "i18n:RUN_NODE_CANCELLED",
+        displaySummary: "Этап запуска отменён",
+      },
+      {
+        ...base,
+        ref: "evt_cancel_progress",
+        sequence: 3,
+        message: undefined,
+        type: "TURN_PROGRESS",
+        messageKind: "INTERMEDIATE_MESSAGE",
+        nodeState: "CANCELLED",
+        summary: "i18n:RUN_CANCELLED",
+        displaySummary: "Запуск отменён",
+      },
+    ];
+    const entries = buildRunTranscriptItems(cancelledEvents);
+    expect(presentRunTranscriptItems(entries)).toHaveLength(1);
+    expect(presentRunTranscriptItems(entries)[0]?.serviceHistory).toEqual(
+      entries,
+    );
+  });
+
+  it("unbound отмена остаётся отдельной readonly историей без догадки о turn/attempt", () => {
+    const entry = item("unbound-cancel", {
+      historical: true,
+      execution: undefined,
+      eventType: "RUN_STATE_CHANGED",
+      messageKind: "STATE",
+      state: "CANCELLED",
+      summary: "i18n:RUN_CANCELLED",
+    });
+    expect(presentRunTranscriptItems([entry])[0]).toMatchObject({
+      historical: true,
+      execution: undefined,
+      serviceHistory: [entry],
+    });
+    for (const changed of [
+      { summary: "Отменён запуск, внешняя доставка пока неизвестна" },
+      { progress: "Есть результат" },
+      { state: "FAILED" as const },
+      { eventType: "NODE_STATE_CHANGED" as const },
+    ])
+      expect(
+        presentRunTranscriptItems([{ ...entry, ...changed }])[0]
+          ?.serviceHistory,
+      ).toBeUndefined();
+  });
+
   it.each([
     ["runRef", "run_foreign"],
     ["nodeRef", "nod_foreign"],

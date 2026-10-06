@@ -34,6 +34,10 @@ export interface RunActivityItem {
   historical: boolean;
   eventType?: RunEvent["type"];
   serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
+  serviceCancellationCode?:
+    | "RUN_CANCELLED"
+    | "RUN_NODE_CANCELLED"
+    | "ASSISTANT_TURN_CANCELLED";
   integrationInvocationRef?: string;
 }
 
@@ -245,6 +249,7 @@ export function buildRunTranscriptItems(
       serviceProgressCode:
         transcriptServiceProgressCode(event.summary) ??
         transcriptServiceProgressCode(event.progress),
+      serviceCancellationCode: transcriptServiceCancellationCode(event.summary),
       integrationInvocationRef: integrationBound
         ? tool
           ? successfulIntegrationInvocationRef(tool)
@@ -339,6 +344,17 @@ function transcriptServiceProgressCode(
     : undefined;
 }
 
+function transcriptServiceCancellationCode(
+  value: string | undefined,
+): RunActivityItem["serviceCancellationCode"] {
+  const code = value?.trim().replace(/^i18n:/, "");
+  return code === "RUN_CANCELLED" ||
+    code === "RUN_NODE_CANCELLED" ||
+    code === "ASSISTANT_TURN_CANCELLED"
+    ? code
+    : undefined;
+}
+
 export interface PresentedTranscriptItem extends RunActivityItem {
   working: boolean;
   serviceHistory?: readonly RunActivityItem[];
@@ -346,6 +362,15 @@ export interface PresentedTranscriptItem extends RunActivityItem {
 }
 
 function isTranscriptService(item: RunActivityItem): boolean {
+  const cancelledProgress = Boolean(
+    item.eventType === "TURN_PROGRESS" &&
+    item.messageKind === "INTERMEDIATE_MESSAGE" &&
+    item.state === "CANCELLED" &&
+    !item.progress?.trim() &&
+    !item.integrationInvocationRef &&
+    (item.serviceCancellationCode ??
+      transcriptServiceCancellationCode(item.summary)),
+  );
   return Boolean(
     !item.historical &&
     executionKey(item.execution) &&
@@ -356,6 +381,7 @@ function isTranscriptService(item: RunActivityItem): boolean {
     !item.artifactRef &&
     (!item.messageKind ||
       ["STATE", "FINAL_MESSAGE"].includes(item.messageKind) ||
+      cancelledProgress ||
       (item.eventType === "TURN_PROGRESS" &&
         item.messageKind === "INTERMEDIATE_MESSAGE" &&
         Boolean(
@@ -363,6 +389,7 @@ function isTranscriptService(item: RunActivityItem): boolean {
           transcriptServiceProgressCode(item.summary),
         ))) &&
     (serviceStartEvents.has(item.eventType ?? "") ||
+      cancelledProgress ||
       (serviceProgressEvents.has(item.eventType ?? "") &&
         activeTranscriptStates.has(item.state ?? "")) ||
       serviceProgressCodes.has(
@@ -626,6 +653,18 @@ export function presentRunTranscriptItems(
     services.set(key, group);
   });
   const presented: PresentedTranscriptItem[] = items.flatMap((item, index) => {
+    // Общая отмена Run не доказывает turn/attempt: сохраняем отдельно в details.
+    if (isUnboundRunCancellation(item))
+      return [
+        {
+          ...item,
+          serviceCancellationCode:
+            item.serviceCancellationCode ??
+            transcriptServiceCancellationCode(item.summary),
+          working: false,
+          serviceHistory: [item],
+        },
+      ];
     if (!isTranscriptService(item))
       return [{ ...item, working: item.id === activeItemId }];
     const key = executionKey(item.execution);
@@ -727,6 +766,25 @@ export function presentRunTranscriptItems(
         ? { ...item, completedServiceHistory }
         : item;
     });
+}
+
+export function isUnboundRunCancellation(item: RunActivityItem): boolean {
+  return Boolean(
+    item.historical &&
+    !item.execution &&
+    item.kind === "system" &&
+    item.eventType === "RUN_STATE_CHANGED" &&
+    item.messageKind === "STATE" &&
+    item.state === "CANCELLED" &&
+    !item.phase &&
+    !item.toolCall &&
+    !item.artifact &&
+    !item.artifactRef &&
+    !item.progress?.trim() &&
+    !item.integrationInvocationRef &&
+    (item.serviceCancellationCode ??
+      transcriptServiceCancellationCode(item.summary)),
+  );
 }
 
 export function assistantTurnIsEmptyTerminalReceipt(

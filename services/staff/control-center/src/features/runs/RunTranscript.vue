@@ -22,6 +22,7 @@ import {
   isAssistantPlanToolReceipt,
   isSuccessfulIntegrationToolReceipt,
   isTranscriptNearBottom,
+  isUnboundRunCancellation,
   presentRunTranscriptItems,
   type RunActivityItem,
 } from "@/features/runs/run-activity";
@@ -272,20 +273,22 @@ function toolPreview(
 }
 
 function compactServiceRow(item: (typeof displayItems.value)[number]): boolean {
+  if (isUnboundRunCancellation(item)) return Boolean(item.serviceHistory);
   const scope = executionKey(item.execution);
   return Boolean(
     scope &&
     item.serviceHistory &&
     !item.working &&
     !["FAILED", "CANCELLED"].includes(item.state ?? "") &&
-    displayItems.value.some(
-      (entry) =>
-        !entry.historical &&
-        executionKey(entry.execution) === scope &&
-        (Boolean(entry.toolCall) ||
-          ((entry.phase === "COMMENTARY" || entry.phase === "FINAL") &&
-            Boolean(entry.summary?.trim()))),
-    ),
+    (props.closedExecutionKeys.includes(scope) ||
+      displayItems.value.some(
+        (entry) =>
+          !entry.historical &&
+          executionKey(entry.execution) === scope &&
+          (Boolean(entry.toolCall) ||
+            ((entry.phase === "COMMENTARY" || entry.phase === "FINAL") &&
+              Boolean(entry.summary?.trim()))),
+      )),
   );
 }
 
@@ -715,6 +718,7 @@ function bytes(value: number): string {
                     <SafeMarkdown
                       v-if="
                         item.summary &&
+                        !compactServiceRow(item) &&
                         (!item.serviceHistory ||
                           ['FAILED', 'CANCELLED'].includes(item.state ?? ''))
                       "

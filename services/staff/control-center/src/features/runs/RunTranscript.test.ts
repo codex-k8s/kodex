@@ -1062,6 +1062,58 @@ describe("RunTranscript: компактная работа", () => {
     expect(html).not.toMatch(/<details[^>]*\bopen\b/);
     expect(html).not.toContain('role="status"');
   });
+
+  it("закрытые служебные этапы без semantic сообщения не получают пустую author/time шапку", async () => {
+    const scope = executionKey(execution);
+    if (!scope) throw new Error("Synthetic execution scope is missing");
+    const html = await transcript(
+      [progress("start"), progress("model")],
+      [scope],
+    );
+    expect(html).not.toMatch(/<header\b|run-activity-item__icon/);
+    expect(html).toContain("Этапы выполнения: 2");
+    expect(html).not.toContain('role="status"');
+  });
+
+  it("показывает одну primary отмену exact node/intermediate, сохраняя commentary и unbound историю", async () => {
+    const html = await transcript([
+      progress("start"),
+      progress("comment", {
+        kind: "agent",
+        phase: "COMMENTARY",
+        summary: "Проверяю настройки",
+      }),
+      progress("cancel-node", {
+        eventType: "NODE_STATE_CHANGED",
+        messageKind: "STATE",
+        state: "CANCELLED",
+        summary: "i18n:RUN_NODE_CANCELLED",
+      }),
+      progress("cancel-intermediate", {
+        eventType: "TURN_PROGRESS",
+        messageKind: "INTERMEDIATE_MESSAGE",
+        state: "CANCELLED",
+        summary: "i18n:RUN_CANCELLED",
+      }),
+      progress("unbound-run-cancel", {
+        historical: true,
+        execution: undefined,
+        eventType: "RUN_STATE_CHANGED",
+        messageKind: "STATE",
+        state: "CANCELLED",
+        summary: "i18n:RUN_CANCELLED",
+      }),
+    ]);
+    const primary = html.replace(/<details\b[^]*?<\/details>/g, "");
+    expect(primary.match(/Запуск отменён/g)).toHaveLength(1);
+    expect(primary).not.toContain("Этап запуска отменён");
+    expect(primary).toContain("Проверяю настройки");
+    expect(html).toContain("Этап запуска отменён");
+    expect(html).toContain("Этапы выполнения: 3");
+    expect(html).toContain("Этапы выполнения: 1");
+    expect(html.match(/Запуск отменён/g)).toHaveLength(3);
+    expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+  });
   it.each(["ru", "en"] as const)(
     "actual no-message SYSTEM TURN_COMPLETED failed summary локализуется в %s",
     async (locale) => {
