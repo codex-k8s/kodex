@@ -35,6 +35,63 @@ const metadata = (name, n, scoped = true) => ({
   labels: { "kodex.dev/local-profile": "hot-reload" },
 });
 
+test("canonical manifest явно снимает reader pause по тому же env.name", () => {
+  const path = fileURLToPath(
+    new URL(
+      "../../deploy/k8s/base/image-supply-chain/image-admission-controller.yaml",
+      import.meta.url,
+    ),
+  );
+  const deployment = JSON.parse(
+    execFileSync(
+      "yq",
+      [
+        "-o=json",
+        "-I=0",
+        'select(.kind == "Deployment" and .metadata.name == "image-admission-controller")',
+        path,
+      ],
+      { encoding: "utf8", timeout: 5000 },
+    ),
+  );
+  const key = "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS",
+    desired = deployment.spec.template.spec.containers[0].env;
+  assert.deepEqual(
+    desired.filter((e) => e.name === key),
+    [{ name: key, value: "false" }],
+  );
+  const state = snapshot();
+  state.controller.spec.template.spec.containers[0].env.push({
+    name: key,
+    value: "false",
+  });
+  const plan = buildRecoveryReaderPlan(state, {
+    phase: "reader",
+    readerImage,
+    source: "/fixture/source",
+    revision,
+    now,
+  });
+  const paused = plan.after.template.spec.containers[0].env;
+  assert.deepEqual(
+    paused.filter((e) => e.name === key),
+    [{ name: key, value: "true" }],
+  );
+  // Canonical apply объявляет прежний patch-owned ключ явно, а не удалением.
+  const resumed = new Map([...paused, ...desired].map((e) => [e.name, e]));
+  assert.deepEqual(resumed.get(key), { name: key, value: "false" });
+  assert.deepEqual(
+    plan.policy,
+    buildRecoveryReaderPlan(snapshot(), {
+      phase: "reader",
+      readerImage,
+      source: "/fixture/source",
+      revision,
+      now,
+    }).policy,
+  );
+});
+
 test("paused reader принимает exact clean existing Git source с ignored private env, но не cutover", (t) => {
   const root = mkdtempSync(join(tmpdir(), "kodex-reader-real-git-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

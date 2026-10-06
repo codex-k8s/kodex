@@ -1725,6 +1725,23 @@ readback_local_control_plane_image_policy() {
     fail 'control-plane image policy process readback mismatch'
 }
 
+readback_local_image_admission_controller_resume() {
+  # Отсутствующий env не снимает reader-owned pause при strategic merge apply.
+  yq -o=json -I=0 '
+    select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "image-admission-controller") |
+    .spec.template.spec.containers[] | select(.name == "image-admission-controller") |
+    .env[]? | select(.name == "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS")
+  ' "$render" | jq -se '
+    length == 1 and .[0] == {name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", value: "false"}
+  ' >/dev/null || fail 'image admission controller resume render is invalid'
+  kubectl -n "$namespace" get deployment/image-admission-controller -o json | jq -e '
+    [.spec.template.spec.containers[] | select(.name == "image-admission-controller") |
+      .env[]? | select(.name == "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS")] |
+    length == 1 and .[0] == {name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", value: "false"}
+  ' >/dev/null || fail 'image admission controller resume readback mismatch'
+}
+
 readback_local_image_supply_chain() {
   local expected_policy actual_policy policy_resource controller workloads expected_deployments
   local expected_digest actual_digest catalog_expected_digest catalog_actual_digest
@@ -1732,6 +1749,7 @@ readback_local_image_supply_chain() {
   local target_registry promoted_pull_host resource name
   readback_local_image_admission_policies
   readback_local_image_admission_controller_rbac
+  readback_local_image_admission_controller_resume
   if [[ "$security_profile" == trusted-cluster ]]; then
     readback_local_control_plane_image_policy
   fi

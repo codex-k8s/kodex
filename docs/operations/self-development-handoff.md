@@ -686,3 +686,18 @@ fenced plan/apply нового reader, exact terminal cleanup, затем fresh 
 supply-chain apply/readback. Не удалять workspace/Jobs вручную, не возобновлять
 pending работу старым bridge. Chrome connected, но Kodex SSO; живые UI-проверки
 пока NOT RUN. Все незавершённые пользовательские этапы остаются открытыми.
+
+06.10.2026 06:30 UTC: reader доставлен на50545/c17d3c; old exact PVC штатно
+очищен. Fresh supply-chain apply/readback exit0, пять Deployment Ready и
+source50545, host/Pod source hashes совпали. Однако LIVE FAIL: canonical
+Deployment не объявляет pause=false, поэтому recovery pause=true остался
+после merge apply. Не считать resume выполненным. Следующий узкий fix:
+explicit canonical false и проверка ровно одного literal false в render/live,
+после clean checkpoint fresh canonical apply/readback. Нет ручного resume.
+Нативные UI/PROJECT acceptance ещё NOT RUN, вкладка Chrome остаётся SSO.
+
+06.10.2026 06:33 UTC: внесён canonical resume fix4 файла + общий invariant.
+ROOT reader9/9 и deploy selection27/27 PASS. Следующий clean deploy checkpoint
+должен явно содержать pause=false и пройти fresh supply-chain apply/readback.
+Бинарные OCI COPY-входы неизменны: c17d3c остаётся compiled source50545;
+не приписывать ему новый deploy SHA. Полный live resume пока NOT RUN.

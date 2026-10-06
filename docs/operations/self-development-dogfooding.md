@@ -4383,3 +4383,42 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   plan/apply, точный cleanup readback и fresh supply-chain apply/readback.
 - Browser MCP connected; Kodex остаётся на SSO. Native visual/search NOT RUN.
   Full65 OPEN, user acceptance и дальнейший PROJECT bootstrap не завершены.
+
+### 06.10.2026 06:20–06:30 UTC — live reader cleanup и canonical delivery
+
+- PASS на clean source `50545c84e41d1445e67dbfdfcb187fe2c607ed51`:
+  canonical image-admission build/import завершён exit0, digest
+  `sha256:c17d3c048de86a865864f138887f159feacb497107a99eb7e7ae7273e90ca8b2`.
+  Docker/Moby context rules применены фактической сборкой. Дополнительный
+  frozen-source Python builder14/14 PASS49.01с; syntax/format PASS.
+- PASS: reader plan/apply; точный Deployment UID прежний, новый Pod Ready
+  на c17d3c, pause=true. Старые CM UID/RV/data hash сохранены reader delivery.
+  Exact old PVC `mc-admit-8a027fc67b0b2581bd44f7f3857a5eae` удалён штатным
+  контроллером; canonical managed Jobs/PVC0 и named NotFound проверены.
+  Ручных delete/SQL/resume не выполнялось.
+- PASS: fresh render fingerprint
+  `3890997acc30617d61abd96278b9ced273f4583c0f9c8f8cbe218ebf23ef9c95`,
+  обычный supply-chain apply и существующий script readback exit0.
+  Пять Deployment desired/ready/updated/available1, source annotation50545.
+  CP policy/RPC и frontend editor host/Pod hashes совпали. Это source/infra
+  evidence, не полный application acceptance.
+- FAIL: после canonical apply reader-added pause=true сохранился. Поле
+  отсутствует в исходном Deployment, strategic merge не удаляет добавленный
+  recovery PATCH env. Existing script readback не обнаружил эту паузу;
+  exit0 не является доказательством resume. Готовится explicit canonical
+  pause=false + readonly exact resume readback и regression negatives.
+- Native PROJECT search/ENV38/новый admission и остальные Full65 этапы NOT RUN.
+  Chrome MCP connected, вкладка остаётся SSO; full goal не завершён.
+
+### 06.10.2026 06:33 UTC — canonical resume regression fix
+
+- Поверх50545 внесены4 frozen файла; manifest4/4 совпал. Explicit base
+  pause=false; общий supply-chain/full readback проверяет ровно один literal
+  false в render/live. Прежний recovery helper остаётся pause=true.
+- ROOT проверки изменённого дерева: reader9/9 PASS, deploy selection27/27
+  PASS; включены canonical false→reader true→canonical false и12 отрицательных
+  render/live значений. Bash syntax/diff-check PASS. Общий invariant закреплён
+  в GUIDE-DOC-003. Context7 Docker/Kubernetes semantics проверены.
+- COPY-входы OCI не изменились; повторная сборка не нужна. Bundle c17d3c
+  остаётся compiled source50545, отдельно от следующего deploy/source SHA.
+  Live resume после нового fresh render/apply/readback пока NOT RUN.

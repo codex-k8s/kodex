@@ -77,6 +77,7 @@ spec:
             - {name: IMAGE_ADMISSION_CONTROLLER_INFRASTRUCTURE_CHECK_INTERVAL, value: 10s}
             - {name: IMAGE_ADMISSION_CONTROLLER_REQUEST_TIMEOUT, value: 5s}
             - {name: IMAGE_ADMISSION_CONTROLLER_SHUTDOWN_TIMEOUT, value: 20s}
+            - {name: IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS, value: "false"}
             - {name: IMAGE_ADMISSION_CONTROLLER_HOLD_PROOF_JOBS, value: "false"}
             - {name: IMAGE_ADMISSION_CONTROLLER_PROOF_HOLD_UNTIL, value: "1970-01-01T00:00:00Z"}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}

@@ -736,6 +736,35 @@ readback_local_supply_chain_deployment_inputs image-admission-controller
         full_selection = full_selection[:full_selection.index("      '")]
         self.assertIn("integration-synthetic", full_selection)
 
+    def test_image_admission_resume_readback_requires_exact_false(self):
+        source = SCRIPT.read_text()
+        function = re.search(r'(?ms)^readback_local_image_admission_controller_resume\(\) \{.*?^\}', source)
+        self.assertIsNotNone(function, 'canonical resume readback is absent')
+        key = 'IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS'
+        valid = [{'name': key, 'value': 'false'}]
+        command = function.group(0) + '''
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+yq() { printf '%s\\n' "$EXPECTED_ENV"; }
+kubectl() { printf '%s\\n' "$ACTUAL_DEPLOYMENT"; }
+namespace=kodex-system
+render=synthetic
+readback_local_image_admission_controller_resume
+'''
+        bad = [[], [{'name': key, 'value': 'true'}], [{'name': key, 'value': False}],
+               [{'name': key, 'valueFrom': {'configMapKeyRef': {'name': 'foreign', 'key': 'pause'}}}],
+               valid * 2, [{'name': key, 'value': 'false', 'valueFrom': {}}]]
+        cases = [(valid, valid, True)] + [(valid, value, False) for value in bad] + [(value, valid, False) for value in bad]
+        for expected, actual, success in cases:
+            with self.subTest(expected=expected, actual=actual):
+                deployment = {'spec': {'template': {'spec': {'containers': [{'name': 'image-admission-controller', 'env': actual}]}}}}
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                    env=dict(os.environ, EXPECTED_ENV='\n'.join(json.dumps(e) for e in expected), ACTUAL_DEPLOYMENT=json.dumps(deployment)),
+                    text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode == 0, success, result.stderr)
+                if not success: self.assertIn('resume', result.stderr)
+        readback = re.search(r'(?ms)^readback_local_image_supply_chain\(\) \{.*?^\}', source).group(0)
+        self.assertIn('readback_local_image_admission_controller_resume', readback)
+
 
 if __name__ == "__main__":
     unittest.main()
