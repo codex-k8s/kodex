@@ -10,6 +10,35 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 20:05 UTC, source `9931f8700616fde2f6424bf49e2e7e7799b937cb`.
+PROJECT helper обновил существующий common recipe штатным sparse UPDATE:
+run `run_GUxxNxc2vlc-sUPtxGBf116x`, plan
+`pln_OKEW9PMj5XYiV4-xAROCAGO9` APPLIED/version3, receipt
+`rct_Ef6Pg_7m_9QyikGe2qtE5hal`. Native Validate/Apply; server-owned
+expectedVersion4 и Before/After закрепили новый base00f4. Fresh GET200:
+recipe version5/generation3, сборка идёт. Не повторять Apply/REQUEST_BUILD.
+Далее admission/promotion и три ENV revisions/семь адресных bindings.
+Предыдущий run_NqNG не создавал plan из-за ошибочного action=CREATE в
+descriptor; callback232bab исправлен, ROOT suite PASS1.167с, source/Pod hash
+совпал. Run_m3dj не создавал plan из-за Workflow screen context: запрещённая
+catalog selection неверно показывалась как TOOL_UNAVAILABLE; узкий diagnostic
+fix готовится без ослабления экранной authority.
+
+Cache9931: partial WS page не считается tombstone, bounded event-driven
+owner-read сохраняет selected/history, максимум10 страниц/один inflight,
+без polling. ROOT142/142 frontend tests PASS2.40с; native rejoin и selected
+вне первой страницы ещё проверяются. Workflow prospective9ba native
+catalog/query200 и preview modal PASS/Console0; missing runtime inputs
+не мешают редактору, actual launch остаётся strict. ROOT prospective unit
+PASS0.056с, canonical disposable PG PASS6.982с. Обычная форма33steps default
+closed и lazy выбранный editor: desktop/390/320 screenshots PASS,
+17units/typecheck PASS; typed proposal native mobile ещё NOT RUN.
+Remote/PR checkpoint `ced22e83` подтверждён; current9931 ещё не push.
+Chrome5 собственная,6 чужая; navigation20:03UTC, следующий reload до20:08.
+SSO12h absolute07.10 10:23 Саратов; full65/bootstrap merge/dogfooding OPEN.
+
+## Предыдущий checkpoint 19:51
+
 06.10.2026 19:51 UTC, source `4928f095de4c8dffd0be2b43ff82bed1864a7cec`.
 Новое исправление каталога MCP ordinary launch_workflow вошло в compiled
 full runner: base manifest `sha256:00f452b6d2c1424da7ebdf217b553b61f42b4fc1d3bc3b8492a70425a09be574`,

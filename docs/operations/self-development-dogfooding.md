@@ -158,6 +158,29 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 20:05 UTC, source `9931f8700616fde2f6424bf49e2e7e7799b937cb`.
+Callback descriptor UPDATE_ROLE_IMAGE_RECIPE использовал CREATE; закрытый
+server action registry теперь единственный источник действия. ROOT callback
+suite PASS1.167с; exact source/Pod hash совпал. Новый PROJECT turn на правильном
+экране recipe создал sparse proposal, owner hydration закрепила current v4 и
+новый base00f4 вместо5796. Native Validate/Apply PASS: plan
+`pln_OKEW9PMj5XYiV4-xAROCAGO9` APPLIED/v3, receipt
+`rct_Ef6Pg_7m_9QyikGe2qtE5hal`, recipe v5/generation3. Сборка идёт;
+admission/promotion/rebind и ordinary launch NOT RUN. Предыдущий запрос с
+Workflow screen context закрыто отклонился до owner RPC; его TOOL_UNAVAILABLE
+не означает сетевой отказ. Diagnostic UX исправляется отдельно.
+
+Cache9931 восстанавливает загруженные owner pages при частичном WS snapshot,
+сохраняя exact scope/owner/version и выбранный диалог readonly до readback.
+Максимум10 страниц/один inflight, только релевантные события, без polling и
+вечного merged cache. ROOT142/142 units PASS2.40с, live selected-outside-page
+ещё OPEN. Workflow9ba prospective unit PASS0.056с, canonical disposable PG
+PASS6.982с. Native chosen stage catalog/query200, preview modal/screenshot
+PASS, Console0; actual runtime input validation не ослаблена. Обе формы
+default closed33steps/lazy выбранный editor, ROOT17units/typecheck PASS;
+обычная native desktop/390/320 без overflow/overlap PASS. Typed proposal
+mobile ещё NOT RUN. Partial tests и UI не заменяют полный65 QA.
+
 06.10.2026 19:51 UTC. ROOT source `4928f095`: устранён живой realtime
 oversize. До исправления десятый snapshot SYSTEM_ASSISTANT содержал
 42 полных диалога и превышал1MiB; браузер получал9 snapshots и CLOSE1006
