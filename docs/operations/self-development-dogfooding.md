@@ -4281,3 +4281,31 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   дальнейший native PROJECT search/visual flow ждёт восстановления входа.
   Старый plan/run не повторяются. Пункты8–15 и весь full65 остаются OPEN;
   новый checkpoint локальный, remote последний проверенный f99f85a5.
+
+### 06.10.2026 05:53–05:56 UTC — явная пересборка и повторная проверка source
+
+- На exact base `4a76c24ab0b1da1d3bedf084bd6725cca466c0ab` применён
+  frozen frontend patch SHA256
+  `d21f910e1dece917a957b9a76d0d47a59364de4e87727b003bd223482dc3c1fe`:
+  только RoleImageEditor, его тест и локализация. Active build блокирует
+  кнопку и handler; первая сборка не требует нового подтверждения;
+  terminal build называется «Пересобрать». Штатный styled confirmation
+  не создаёт command до согласия; после ожидания заново сверяются scope,
+  recipe ref/version/generation, build ref/version, permissions, mutating,
+  local changes и component lifetime. Отмена/drift не запускают сборку.
+  Модель active/terminal и серверный REQUEST_BUILD не изменены.
+- ROOT PASS: Editor/model/confirmation60/60 units3.07с и supporting3/3
+  units3.37с; scoped ESLint0warnings, Prettier, forced полный vue-tsc,
+  production Vite build9.31с и diff check. Осталось обычное предупреждение
+  Vite о существующих chunks >500kB; оно не скрыто и не выдано за ошибку.
+  Context7 `/websites/vuejs`: computed/ref и native event binding проверены.
+- Source/Pod PASS: staff-control-center-6b75df7bcc-kmgsz обслуживает те же
+  component bytes `0240ec15fd0594a7cb1f4d71ab10e53007843b6e5fd2d550757e1d9c67c680c7`
+  и i18n bytes `ddaa7eec794786de0bd47a58e4e89be605808e6d100699ba617a7da341fbe78b`.
+  Browser visual/confirmation/Console/Network нового экрана NOT RUN:
+  MCP list/evaluate доступны, рабочая вкладка пока на SSO.
+- ROOT exact live B1 prefix05:55: Jobs0, прежний workspace PVC Bound,
+  UID `7ffab9f2-fdcf-499a-abb1-a545a67018b7`. Удаление Jobs обычным TTL
+  не доказывает owner terminal cleanup; PVC вручную не удалялся.
+  Новый reader остаётся paused до штатного fresh supply-chain apply.
+  Runtime recovery/B2 admission/promotion и весь full65 ещё OPEN.

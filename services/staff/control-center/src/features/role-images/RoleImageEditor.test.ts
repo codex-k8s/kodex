@@ -1,6 +1,15 @@
 import { renderToString } from "@vue/server-renderer";
-import { createSSRApp, defineComponent, h } from "vue";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createRenderer,
+  createSSRApp,
+  defineComponent,
+  h,
+  nextTick,
+  reactive,
+  ssrContextKey,
+  type SetupContext,
+} from "vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   RoleImageArtifact,
   RoleImageAdmissionFailure,
@@ -37,6 +46,10 @@ vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import RoleImageEditor from "./RoleImageEditor.vue";
 import { currentRoleImageAdmissionRejected } from "./admission-rejection";
 import { i18n } from "@/app/i18n";
+import {
+  confirmationState,
+  resolveConfirmation,
+} from "@/shared/ui/confirmation";
 
 let recipe: RoleImageRecipe;
 let build: RoleImageBuild;
@@ -145,6 +158,160 @@ beforeEach(() => {
     updatedAt: recipe.updatedAt,
   };
 });
+
+const disposers: Array<() => void> = [];
+afterEach(() => {
+  resolveConfirmation(false);
+  for (const dispose of disposers.splice(0)) dispose();
+});
+
+async function mountBuildCommands() {
+  await summary();
+  const store = reactive({
+    ...state.store,
+    recipes: { [recipe.ref]: recipe },
+    builds: { [recipe.ref]: [build] as RoleImageBuild[] },
+    command: vi.fn().mockResolvedValue(undefined),
+    loadSupportingCatalogs: vi.fn().mockResolvedValue(undefined),
+    loadDetail: vi.fn().mockResolvedValue(undefined),
+    dispose: vi.fn(),
+  });
+  state.store = store;
+  const props = reactive({
+    organizationScope: {
+      kind: "ORGANIZATION",
+      organizationRef: recipe.organizationRef,
+    },
+    recipeRef: recipe.ref,
+  });
+  let setup!: { requestBuild: () => Promise<void> };
+  const renderer = createRenderer<object, object>({
+    insert() {},
+    remove() {},
+    patchProp() {},
+    createElement: () => ({}),
+    createText: () => ({}),
+    createComment: () => ({}),
+    setText() {},
+    setElementText() {},
+    parentNode: () => null,
+    nextSibling: () => null,
+  });
+  const app = renderer
+    .createApp(
+      defineComponent({
+        setup(_, context) {
+          setup = (
+            RoleImageEditor as unknown as {
+              setup: (props: object, context: SetupContext) => typeof setup;
+            }
+          ).setup(props, context);
+          return () => null;
+        },
+      }),
+    )
+    .use(i18n);
+  app.provide(ssrContextKey, {});
+  app.mount({});
+  disposers.push(() => app.unmount());
+  await nextTick();
+  return { store, props, setup };
+}
+
+describe("явная пересборка образа", () => {
+  it.each(["QUEUED", "SOLVING", "PROVENANCE", "FAILED", "EXPIRED"] as const)(
+    "блокирует повторный запрос при активной попытке %s",
+    async (stage) => {
+      recipe.nextActions = ["REQUEST_BUILD"];
+      build.stage = stage;
+      const html = await summary();
+      expect(html).toMatch(
+        /<button[^>]*button--primary[^>]*disabled[^>]*>[\s\S]*?Пересобрать[\s\S]*?<\/button>/,
+      );
+    },
+  );
+  it.each(["ru", "en"] as const)(
+    "после завершения называет действие пересборкой (%s)",
+    async (locale) => {
+      i18n.global.locale.value = locale;
+      recipe.nextActions = ["REQUEST_BUILD"];
+      const html = await summary();
+      expect(html).toContain(i18n.global.t("roleImages.rebuild"));
+      expect(html).not.toMatch(/<button[^>]*button--primary[^>]*disabled/);
+    },
+  );
+  it("без прежней попытки предлагает первую сборку", async () => {
+    recipe.nextActions = ["REQUEST_BUILD"];
+    const html = await summary(undefined, false, undefined, []);
+    expect(html).toContain(i18n.global.t("roleImages.requestBuild"));
+    expect(html).not.toContain(i18n.global.t("roleImages.rebuild"));
+  });
+  it("пересборка требует один styled confirmation; отмена не вызывает command", async () => {
+    recipe.nextActions = ["REQUEST_BUILD"];
+    const { store, setup } = await mountBuildCommands();
+    const pending = setup.requestBuild();
+    expect(confirmationState.open).toBe(true);
+    expect(confirmationState.message).toBe(
+      i18n.global.t("roleImages.rebuildConfirm"),
+    );
+    expect(store.command).not.toHaveBeenCalled();
+    await setup.requestBuild();
+    resolveConfirmation(false);
+    await pending;
+    expect(store.command).not.toHaveBeenCalled();
+    const confirmed = setup.requestBuild();
+    resolveConfirmation(true);
+    await confirmed;
+    expect(store.command).toHaveBeenCalledExactlyOnceWith(
+      propsScope(),
+      recipe,
+      "REQUEST_BUILD",
+    );
+  });
+  it("первая сборка не требует подтверждения", async () => {
+    recipe.nextActions = ["REQUEST_BUILD"];
+    const { store, setup } = await mountBuildCommands();
+    store.builds[recipe.ref] = [];
+    await setup.requestBuild();
+    expect(confirmationState.open).toBe(false);
+    expect(store.command).toHaveBeenCalledTimes(1);
+  });
+  it("активная попытка или отсутствие nextAction не открывает confirmation и не вызывает command", async () => {
+    const { store, setup } = await mountBuildCommands();
+    await setup.requestBuild();
+    recipe.nextActions = ["REQUEST_BUILD"];
+    store.builds[recipe.ref] = [{ ...build, stage: "SOLVING" }];
+    await setup.requestBuild();
+    expect(confirmationState.open).toBe(false);
+    expect(store.command).not.toHaveBeenCalled();
+  });
+  it.each(["recipe", "build", "scope", "active", "permission"] as const)(
+    "изменение %s во время confirmation не подтверждает другой запрос",
+    async (change) => {
+      recipe.nextActions = ["REQUEST_BUILD"];
+      const { store, props, setup } = await mountBuildCommands();
+      const pending = setup.requestBuild();
+      expect(confirmationState.open).toBe(true);
+      const currentRecipe = store.recipes[recipe.ref];
+      const currentBuild = store.builds[recipe.ref]?.[0];
+      if (!currentRecipe || !currentBuild)
+        throw new Error("Synthetic build identity is unavailable");
+      if (change === "recipe") currentRecipe.version += 1;
+      if (change === "build") currentBuild.version += 1;
+      if (change === "scope")
+        props.organizationScope.organizationRef = "org_foreign";
+      if (change === "active") currentBuild.stage = "SOLVING";
+      if (change === "permission") currentRecipe.nextActions = [];
+      resolveConfirmation(true);
+      await pending;
+      expect(store.command).not.toHaveBeenCalled();
+    },
+  );
+});
+
+function propsScope() {
+  return { kind: "ORGANIZATION", organizationRef: recipe.organizationRef };
+}
 
 describe("компактная история сборок", () => {
   it("сохраняет все двенадцать попыток, отказ и действие диагностики в scroll region", async () => {

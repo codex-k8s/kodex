@@ -1965,7 +1965,10 @@ const ru = {
     immutableRevisionHelp:
       "Сохранение создаёт новое поколение; уже собранные поколения и их хеши не изменяются.",
     createRevision: "Создать ревизию",
-    requestBuild: "Запросить сборку",
+    requestBuild: "Собрать",
+    rebuild: "Пересобрать",
+    rebuildConfirm:
+      "Новая сборка заменит прежний результат. Незавершённая проверка прежнего образа будет отменена. Пересобрать образ?",
     cancelBuild: "Остановить сборку",
     cancelBuildConfirm:
       "Остановить эту сборку? Рецепт образа останется доступен для повторной сборки.",
@@ -5626,7 +5629,10 @@ const en = {
     immutableRevisionHelp:
       "Saving creates a new generation; previously built generations and digests remain immutable.",
     createRevision: "Create revision",
-    requestBuild: "Request build",
+    requestBuild: "Build",
+    rebuild: "Rebuild",
+    rebuildConfirm:
+      "The new build will replace the previous result. Any unfinished admission check for the previous image will be cancelled. Rebuild the image?",
     cancelBuild: "Stop build",
     cancelBuildConfirm:
       "Stop this build? The image recipe will remain available for another build.",

@@ -102,6 +102,7 @@ function toggleBuildSource(ref: string, event: Event): void {
   else openedBuildSources.value.delete(ref);
 }
 const confirmationAction = ref<"ARCHIVE" | "RESTORE">();
+const buildConfirmationPending = ref(false);
 const copyOpen = ref(false);
 const copySource = computed(() =>
   recipe.value && !props.organizationScope
@@ -268,6 +269,13 @@ const hasLocalChanges = computed(() =>
       dockerfile.value !== recipe.value.environment.dockerfile),
   ),
 );
+const requestBuildBlocked = computed(
+  () =>
+    store.mutating ||
+    hasLocalChanges.value ||
+    buildConfirmationPending.value ||
+    Boolean(currentBuild.value && buildIsActive(currentBuild.value)),
+);
 const canSave = computed(
   () =>
     sourceVisible.value &&
@@ -431,6 +439,57 @@ async function runCommand(
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
+}
+
+function buildRequestRecipe() {
+  const current = recipe.value;
+  return !disposed &&
+    current &&
+    canRequestBuild(current) &&
+    !requestBuildBlocked.value
+    ? current
+    : undefined;
+}
+
+async function requestBuild(): Promise<void> {
+  const current = buildRequestRecipe();
+  if (!current) return;
+  const previous = currentBuild.value;
+  const expected = {
+    scopeKey: scopeKey.value,
+    recipeRef: current.ref,
+    recipeVersion: current.version,
+    generation: current.generation,
+    buildRef: previous?.ref,
+    buildVersion: previous?.version,
+  };
+  if (previous) {
+    buildConfirmationPending.value = true;
+    let confirmed = false;
+    try {
+      confirmed = await requestConfirmation({
+        title: t("roleImages.rebuild"),
+        message: t("roleImages.rebuildConfirm"),
+        confirmLabel: t("roleImages.rebuild"),
+        tone: "primary",
+      });
+    } finally {
+      buildConfirmationPending.value = false;
+    }
+    if (!confirmed) return;
+  }
+  const fresh = buildRequestRecipe();
+  if (
+    !fresh ||
+    scopeKey.value !== expected.scopeKey ||
+    fresh.ref !== expected.recipeRef ||
+    fresh.version !== expected.recipeVersion ||
+    fresh.generation !== expected.generation ||
+    currentBuild.value?.ref !== expected.buildRef ||
+    currentBuild.value?.version !== expected.buildVersion
+  )
+    return;
+  await runCommand("REQUEST_BUILD");
 }
 
 async function cancelCurrentBuild(): Promise<void> {
@@ -602,11 +661,13 @@ onBeforeUnmount(() => {
             v-if="canRequestBuild(recipe)"
             class="button button--primary"
             type="button"
-            :disabled="store.mutating || hasLocalChanges"
-            @click="runCommand('REQUEST_BUILD')"
+            :disabled="requestBuildBlocked"
+            @click="requestBuild"
           >
             <Hammer :size="16" aria-hidden="true" />
-            {{ t("roleImages.requestBuild") }}
+            {{
+              t(currentBuild ? "roleImages.rebuild" : "roleImages.requestBuild")
+            }}
           </button>
           <button
             v-if="

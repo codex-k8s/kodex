@@ -10,6 +10,20 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 05:56 UTC — на checkpoint `4a76c24a` дополнительно внесена
+защита пересборки: active build отключает кнопку и handler; terminal build
+показывает «Пересобрать» и штатное подтверждение с повторной проверкой scope,
+recipe/build versions и permission после ожидания. ROOT63/63 адресных units,
+scoped lint/format, forced typecheck и production frontend build PASS.
+Host/Pod component и i18n hashes совпали. Browser visual NOT RUN: Chrome MCP
+доступен, вкладка остаётся на SSO. Новых build/plan Apply не выполнялось.
+Exact B1 prefix05:55: Jobs0 после обычного TTL, но PVC
+`mc-admit-8a027fc67b0b2581bd44f7f3857a5eae` Bound, UID
+`7ffab9f2-fdcf-499a-abb1-a545a67018b7`. Это не terminal cleanup proof.
+Controller-only recovery и bounded paused-reader delivery ещё готовятся;
+после owner-proof cleanup нужен штатный свежий supply-chain apply, а не
+resume старого bridge. Новый frontend checkpoint локальный; full65 OPEN.
+
 06.10.2026 05:21–05:38 UTC — native PROJECT05 plan
 `pln_xF-7_dDX7XOEobEwQU1ViNmN` уже APPLIED/version3;
 receipt `rct_3Jss9-CVdC7lbbGeiXO4UV3C`, audit
