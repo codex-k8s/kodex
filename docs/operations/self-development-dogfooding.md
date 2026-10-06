@@ -158,6 +158,57 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 22:11 UTC — семь bindings generation4, шесть файлов и быстрые component проверки
+
+Source `473b306bea3315c44bbec54b503c1943bc3553a5`, последний подтверждённый
+remote/PR `cb4acfbafa253188a731254a710fbab18451b3e6`. Native typed plans,
+Validate/Apply и impact/publish перевели review ENV (пять сотрудников) и
+write ENV (Developer) на тот же generation4 manifest `e5e5a118…ca16`.
+Review setversion4/revision4, write setversion4/revision4; прежние tools38,
+политики и metadata сохранены; значения и состав Secrets не менялись.
+Все семь consumers используют опубликованный image, не pending draft.
+
+Шесть отдельных native обычных AGENT запусков завершились SUCCEEDED:
+Manager `run_u47JB34cT8UFvVIGjpu4eqmk`, Architect
+`run_jfLblxdPvz3GC5sTjTPK16bw`, Developer `run_JPRx6674IUpbSjPJf0lR9Bag`,
+Documentation `run_9gwp6CaGYya1m_QwJJjb8wcV`, Security
+`run_YZFs3eGGiHaGo1cjQOig4nAj`, Lexical `run_Bmp9ZHpQJNVtT5k_5VUhLOh6`.
+Для каждого ранний canonical ACK CAPTURED_CHECKS_EQUAL: same Pod UID,
+generation4/manifest, binary `be793827…447`, task/inbox/instructions EQUAL.
+Каждый прочитал один действительный manager-plan input и опубликовал свой
+отдельный outbox markdown. Шесть файлов ACTIVE/CLEAN: размер и полный SHA256
+сверены через owner content read с ARTIFACT_AVAILABLE/Run artifactRefs.
+Это доказательство файлового пути, не полная приёмка каждой tool операции:
+native hosted-web возвращает OTHER, поэтому независимое OPEN_PAGE пока
+NOT PROVEN; shell action UNKNOWN не подменяется предположением.
+
+Один Manager preview GET при параллельном чтении вернул503; последующий
+ограниченный fresh GET вернул200 с тем же размером3556 и SHA256.
+Сбой сохранён отдельно от успешного artifact proof. Header PLATFORM на
+экране Project live; прежний recovering на terminal Run остаётся UNKNOWN,
+не скрывается по terminal status. Screenshot New Run/input picker,
+ENV draft/impact/publish и Run graph проверены; controls32px, доступный
+scroll, нет пересечений. Выявленные громоздкие artifact карточки заменены
+общей компактной строкой в473b306b; её native повтор ещё NOT RUN.
+234 scoped frontend unit, lint/format/typecheck — PASS на473b306b.
+
+На non-doc closure cb4/91ff canonical disposable PostgreSQL filters:
+15 top-level suites PASS, FAIL0/SKIP0, fresh migration/template и cleanup PASS.
+Покрыты PROJECT grants, preserved ENV, admission/risk/terminal/maintenance,
+ApprovalPolicy/scoped, workflow launch/cancel-parent, runtime messages/tools,
+turn bounds и shipped Context7 egress. Это component, не live GitHub gates
+или делегирование. Parser/callback closed-projection scoped units наcb4 PASS;
+OPEN_PAGE причина upstream остаётся UNKNOWN, неподтверждённого fix нет.
+
+Fresh own helper comment grant ранее отсутствовал. Native typed plan
+`pln_YJN9G1ZTnHVIc91yzANxYJhz` APPLIED/version3 в22:09:01;
+receipt `rct_l5PSaVrXHeOcPlJEI0Lr7Bnw`, новый
+`grt_q30LpmAiHIgptZePhQqxC24L` version1, NONE/[], existing connection121.
+Прочие grants сохранены. Первый согласованный NONE effect запущен отдельно;
+его результат, EACH/SCOPED gates, Manager delegation, bootstrap merge и
+полный внутренний Workflow пока OPEN. SSO absolute07.10 06:23UTC покрывает
+окно до08:30Саратов; reload Chrome5 выполнен, чужая6 не затрагивается.
+
 ### 06.10.2026 21:47 UTC — published generation4 и actual helper runtime
 
 Source `91ff51b9b115783bc89af7d8b7c65f24520766c1`, remote/PR последний

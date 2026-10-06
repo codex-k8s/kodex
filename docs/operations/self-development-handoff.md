@@ -10,6 +10,30 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 22:11 UTC: source `473b306bea3315c44bbec54b503c1943bc3553a5`,
+последний exact remote/PR `cb4acfbafa253188a731254a710fbab18451b3e6`.
+Generation4 опубликована во всех семи bindings. Шесть ordinary AGENT smoke
+SUCCEEDED, шесть ранних ACK same UID/image/task/inbox/instructions EQUAL,
+шесть собственных файлов ACTIVE/CLEAN с полными size/SHA/content read.
+Один transient Manager preview503 после bounded readback200 отмечен.
+Native web OTHER не доказывает OPEN_PAGE; shell UNKNOWN не переименован.
+15 дополнительных disposable PostgreSQL suites PASS, не live acceptance.
+473b306b делает file transcript компактным;234 scoped tests/lint/format/type
+PASS, native screenshot повтор ещё NOT RUN. PLATFORM на Project live;
+причина прежнего terminal recovering UNKNOWN, скрывающий workaround не сделан.
+
+Native own PROJECT comment grant создан typed plan
+`pln_YJN9G1ZTnHVIc91yzANxYJhz` APPLIED/version3:
+grant `grt_q30LpmAiHIgptZePhQqxC24L` version1/NONE/[], connection121.
+Первый отдельный NONE comment effect запущен, результат NEEDS_READBACK.
+Далее EACH APPROVE/REJECT, SCOPED same-root pair/fresh-root REJECT,
+restore NONE (всего максимум4comments/4gates), ordinary Manager actual
+launch_workflow/callback/files, bootstrap checks/merge, затем полный
+внутренний Workflow. 2/10-session isolation и полный QA остаются OPEN.
+Рабочая Chrome5 обслуживается, чужая6 не трогается; SSOabsolute06:23UTC.
+
+## Предыдущий checkpoint 21:47
+
 06.10.2026 21:47 UTC, source `91ff51b9b115783bc89af7d8b7c65f24520766c1`;
 последний подтверждённый remote/PR `e2fc79c344537741a31c57de3f33487d7508a9d8`.
 Generation4 общего `kodex-selfdev` опубликована штатно21:38:39:
