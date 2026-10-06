@@ -3788,3 +3788,71 @@ Apply NOT RUN: существующий repo-owned guard требует пуст
 inventory, а completed promotion Job имеет штатный TTL3600с от02:32:26.
 Guard не ослаблялся, Jobs/PVC вручную не удалялись. Render не применён;
 после следующих patches/checkpoint требуется fresh source-consistent render.
+
+### 06.10.2026 02:54–02:57 UTC — default Git исправлен и проверен реально
+
+Frontend checkpoint `1385361b0fb752fd5d8efdfa5f4e07b8dbc00dcf` запушен,
+remote branch exact совпал. Chrome MCP доступен, рабочая2 reload02:54;
+чужая1 не изменялась. В рабочий tree применён frozen5-file proxy407 patch:
+правильный bodyless CONNECT без proxy-auth получает bounded407 Basic,
+но не grant, DNS/dial или authority. Malformed/duplicate/invalid credentials,
+старый signer и запрещённый destination закрыто отклоняются; metrics
+credentials сохраняют прежнюю кардинальность. Изолированный исполнитель
+доказал defaultGit loopback RED→GREEN; unit/vet/race/build PASS. ROOT полный
+egress module unit/vet и diff check PASS. Host/Pod server.go SHA
+`c767481d347065cdc3f016b85e32110febb37c2f10d3aea33b38b9f9ce5378cb`,
+request.go SHA `1ddab2131ada5327b0b2cace2d417759fbd7f006a109e5b0887bd7ad154c8c5c`
+совпали; live deployment generation13 имеет1/1 Ready.
+
+Native SYSTEM57 использовал прежнюю пустую QA56 conversation
+`cnv_WxkOiOPKNonOeoFmC-R97uQy` после очищения тестового draft:
+turn `trn_8ke8uVOVlLoLikPrSbjJXsVc`, run `run_3iAvYAPvEZSLC5fwz4PBfJj1`,
+session `ses_HdHoAseQ18lwBn2V1KP-OMXa`, node `nod_Ev0D4RSbZFgaJ1ZVYVf6sgs_`.
+02:56:16→02:56:43 SUCCEEDED: git2.39.5 и default Git ls-remote exit0,
+HEAD/main `d43bd605ec7b41335ec038a84a896b1ab5b0d189`, без basic override,
+clone/fetch/write и изменений policy/grants. Actual provider ACK ENV24,
+binding4/gen9/38tools, instructions/input EQUAL. Runtime revision
+`rrev_5zlAnVDJHVcqQHFmlXN7RDOV`, digest
+`8d46dc0ae4c3502732a7f9e1f934fe4b8ac5f35d09dd932e02481988a4c0d2cc`.
+RUN preview200/complete/diagnostics[] совпал template f4926f1b и materialization
+`05fe08def600a60d448efeb5d35771f3b553aa2a2d541819f94d05ee2e087572`;
+полный prompt не возвращался. Screenshot компактного transcript PASS,
+Console error/warn нет, relevant reads200.
+
+Второй frozen patch исправляет только parser.go/parser_test.go: upstream
+rust-v0.160.0 начинает webSearch с обязательной строкой query="", action=null,
+results=null. Теперь это RUNNING/UNSPECIFIED/query_count0 без выдуманного
+результата; UTF8/64KiB/closed enum/foreign session+turn deny сохранены.
+Exact5 fixtures RED до fix, оба module unit/vet/build PASS у исполнителя,
+ROOT runner module unit/vet PASS. Новый runner/provider и native web repeat
+пока NOT RUN. Read-only проверка обнаружила ещё один точный разрыв:
+default ChatGPT POST /backend-api/codex/alpha/search и APIkey
+POST /v1/alpha/search отсутствуют в provider closed registry; отдельный
+minimal runtimecontract patch готовится. Это не wildcard egress и не причина
+повторять уже доказанную публикацию ENV24 до новой платформенной базы.
+
+02:59 UTC exact standalone provider route patch применён: только POST
+chatgpt.com/backend-api/codex/alpha/search и api.openai.com/v1/alpha/search.
+WebAccess NONE, HTTPS443/SNI/CA и signed ProviderAccess gates не меняются.
+Literal query/fragment, encoded/dot/child paths, другие hosts/methods и
+WebSocket search не разрешаются. Изолированный module unit/vet PASS,
+REDbefore подтвердил отсутствие обоих маршрутов. ROOT адресные race connect/
+gateway PASS; scoped route unit и новый runner build выполняются следующим
+этапом. Live web по новому parser ещё NOT RUN.
+
+ROOT после всех трёх patches: runtimecontract unit PASS0.206с;
+agent-runner/internal/codex race PASS18.941с. Egress connect/gateway race PASS,
+оба полных service module unit/vet PASS, diff check PASS. Новый clean SHA
+нужен перед канонической immutable сборкой; текущие actual SYSTEM57 proofs
+относятся к tree поверх1385361b и опубликованным ENV24/gen9, не новому runner.
+
+03:00 UTC дополнительный compact native transcript fix интегрирован только
+RunTranscript.vue/test.ts: COMPLETED не повторяется под SUCCEEDED badge,
+RUNNING скрывается только при видимом рабочем индикаторе. Содержательные
+результаты и ошибки сохранены в прежних закрытых details, authority/read
+path не меняется. ROOT86/86 адресных unit PASS1.94с, scoped ESLint PASS;
+HMR screenshot повторил SYSTEM57: обе terminal строки компактны, нет
+дублирующего COMPLETED. Host/Pod RunTranscript.vue SHA
+`5568b7747cdd134eddc7b90b4aef54f82f92ce24f193c3201e840364ff7c4882` совпал.
+ROOT forced vue-tsc/Prettier PASS; Console error/warn нет. Все результаты
+зафиксированы до checkpoint; immutable runner delivery и web smoke NOT RUN.

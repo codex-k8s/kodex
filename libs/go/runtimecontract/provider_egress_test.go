@@ -69,6 +69,64 @@ func TestRuntimeProviderAccountsCheckIsExactHTTPOnly(t *testing.T) {
 	}
 }
 
+func TestRuntimeProviderStandaloneSearchIsExactHTTPOnly(t *testing.T) {
+	// SearchClient rust-v0.160.0 выполняет POST alpha/search относительно
+	// default base URL, назначенного типом credential у ModelProviderInfo.
+	for _, route := range []struct{ host, path string }{
+		{"chatgpt.com", "/backend-api/codex/alpha/search"},
+		{"api.openai.com", "/v1/alpha/search"},
+	} {
+		t.Run(route.host, func(t *testing.T) {
+			for _, row := range []struct {
+				name, host, path, method string
+				allowed                  bool
+			}{
+				{"exact", route.host, route.path, "POST", true},
+				{"get", route.host, route.path, "GET", false},
+				{"head", route.host, route.path, "HEAD", false},
+				{"put", route.host, route.path, "PUT", false},
+				{"patch", route.host, route.path, "PATCH", false},
+				{"delete", route.host, route.path, "DELETE", false},
+				{"options", route.host, route.path, "OPTIONS", false},
+				{"lowercase method", route.host, route.path, "post", false},
+				{"whitespace method", route.host, route.path, " POST ", false},
+				{"other host", "github.com", route.path, "POST", false},
+				{"auth host", "auth.openai.com", route.path, "POST", false},
+				{"subdomain", "other." + route.host, route.path, "POST", false},
+				{"port in host", route.host + ":443", route.path, "POST", false},
+				{"trailing slash", route.host, route.path + "/", "POST", false},
+				{"child path", route.host, route.path + "/other", "POST", false},
+				{"path prefix", route.host, "/other" + route.path, "POST", false},
+				{"dot segments", route.host, route.path + "/../search", "POST", false},
+				{"encoded path", route.host, route.path[:len(route.path)-6] + "%73earch", "POST", false},
+				{"query in path", route.host, route.path + "?route=/v1/responses", "POST", false},
+				{"fragment in path", route.host, route.path + "#/v1/responses", "POST", false},
+				{"mock override path", route.host, "/api/codex/alpha/search", "POST", false},
+			} {
+				t.Run(row.name, func(t *testing.T) {
+					if got := RuntimeProviderAllowsRequest(row.host, row.path, row.method); got != row.allowed {
+						t.Fatalf("standalone search HTTP route allowed = %t, want %t", got, row.allowed)
+					}
+					if RuntimeProviderAllowsWebSocket(row.host, row.path, row.method) {
+						t.Fatal("standalone search acquired WebSocket authority")
+					}
+				})
+			}
+			otherHost := "api.openai.com"
+			if route.host == otherHost {
+				otherHost = "chatgpt.com"
+			}
+			if RuntimeProviderAllowsRequest(otherHost, route.path, "POST") {
+				t.Fatal("standalone search path was accepted on the other provider host")
+			}
+			access := RuntimeWebAccess{Mode: RuntimeWebAccessNone}
+			if RuntimeWebAccessAllowsHost(access, route.host) || RuntimeWebAccessAllowsRequest(access, route.host, "POST") {
+				t.Fatal("provider standalone search granted user web access")
+			}
+		})
+	}
+}
+
 func TestRuntimeEnvironmentRejectsTrustAndVerificationOverrides(t *testing.T) {
 	for _, name := range []string{"CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "GIT_SSL_CAINFO",
 		"NODE_TLS_REJECT_UNAUTHORIZED", "GIT_SSL_NO_VERIFY", "PYTHONHTTPSVERIFY", "CURL_SSL_BACKEND", "ALL_PROXY"} {

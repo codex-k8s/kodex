@@ -21,13 +21,14 @@ const maximumCredentialBytes = 24 << 10
 type Reason string
 
 const (
-	ReasonMalformed   Reason = "malformed"
-	ReasonMethod      Reason = "method"
-	ReasonAuthority   Reason = "authority"
-	ReasonBody        Reason = "body"
-	ReasonCredentials Reason = "credentials"
-	ReasonOversized   Reason = "oversized"
-	ReasonPolicy      Reason = "policy"
+	ReasonMalformed              Reason = "malformed"
+	ReasonMethod                 Reason = "method"
+	ReasonAuthority              Reason = "authority"
+	ReasonBody                   Reason = "body"
+	ReasonCredentials            Reason = "credentials"
+	ReasonAuthenticationRequired Reason = "authentication_required"
+	ReasonOversized              Reason = "oversized"
+	ReasonPolicy                 Reason = "policy"
 )
 
 // Error не содержит недоверенные request values.
@@ -163,6 +164,9 @@ func parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows 
 		return Request{}, nil, &Error{Reason: ReasonBody}
 	}
 	if request.Kind == KindConnect {
+		if allowsAuthenticated != nil && credentialCount == 0 {
+			return Request{}, nil, &Error{Reason: ReasonAuthenticationRequired}
+		}
 		if allows != nil && !allows(request.Target.Hostname, request.Target.Port) ||
 			allowsAuthenticated != nil && (credentialCount != 1 || !allowsAuthenticated(request.Target.Hostname, request.Target.Port, credential)) {
 			return Request{}, nil, &Error{Reason: ReasonPolicy}

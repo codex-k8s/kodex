@@ -24,6 +24,8 @@ import (
 
 const connectEstablished = "HTTP/1.1 200 Connection Established\r\n\r\n"
 
+const proxyAuthenticationRequired = "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"kodex-runtime\"\r\nContent-Length: 0\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n"
+
 const (
 	readinessReady    = "HTTP/1.1 204 No Content\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n"
 	readinessNotReady = "HTTP/1.1 503 Service Unavailable\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n"
@@ -260,6 +262,12 @@ func (server *Server) handle(client net.Conn) {
 	}
 	if err != nil {
 		server.metrics.Connection("rejected", "connect", connectReason(err))
+		var rejected *connect.Error
+		if server.authenticated && errors.As(err, &rejected) && rejected.Reason == connect.ReasonAuthenticationRequired {
+			// Git/libcurl сначала узнаёт способ proxy authentication без grant.
+			// Challenge не разрешает CONNECT: новый запрос проходит все проверки.
+			server.writeResponse(client, proxyAuthenticationRequired, duration(limits.WriteTimeoutMilliseconds))
+		}
 		return
 	}
 	if request.Kind == connect.KindReadiness {
@@ -594,6 +602,9 @@ func duration(milliseconds int) time.Duration { return time.Duration(millisecond
 func connectReason(err error) string {
 	var value *connect.Error
 	if errors.As(err, &value) {
+		if value.Reason == connect.ReasonAuthenticationRequired {
+			return string(connect.ReasonCredentials)
+		}
 		return string(value.Reason)
 	}
 	return "malformed"

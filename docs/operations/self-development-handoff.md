@@ -10,6 +10,29 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 02:57 UTC: checkpoint `1385361b0fb752fd5d8efdfa5f4e07b8dbc00dcf`
+запушен; remote branch совпал. Выбор нового чата и компактный tools editor
+зафиксированы вместе с браузерными доказательствами. Chrome MCP работает,
+вкладка2 reload02:54, чужая1 не изменялась. В рабочем tree применены два
+адресных исправления: штатный proxy407 challenge для Git и обработка пустой
+query начального webSearch закреплённого CLI0.160. ROOT оба module unit и vet
+PASS. Egress hot reload и Host/Pod source hashes совпали.
+
+SYSTEM57 default Git реально PASS02:56:43 без proxyAuthMethod override:
+run `run_3iAvYAPvEZSLC5fwz4PBfJj1`, session `ses_HdHoAseQ18lwBn2V1KP-OMXa`,
+git2.39.5/exit0, HEAD/main d43bd605. Provider ACK ENV24/gen9/input EQUAL,
+protected RUN preview complete/diagnostics[]/pinsMatch=true. Screenshot,
+Console error/warn и relevant GET200 проверены. Web parser delivery и native
+web repeat NOT RUN; дополнительно найден отсутствующий exact standalone
+search route, готовится отдельный двухфайловый runtimecontract patch.
+После интеграции и clean checkpoint — новый full runner/supply-chain build,
+fresh exact render и штатный apply/readback без обхода admission guard.
+03:00 UTC exact standalone routes и compact native transcript интегрированы.
+ROOT runtimecontract unit, connect/gateway и parser race, frontend86 unit,
+forced typecheck/lint/format PASS. HMR screenshot скрывает только дублирующий
+COMPLETED; содержательные результаты/закрытые details сохранены. Теперь
+подготовлен единый clean checkpoint для full runner и supply-chain сборки.
+
 06.10.2026 02:49 UTC: checkpoint `1dbeaa33898244006f33fbd6add69c06863a437c`
 запушен, exact GitHub PR1798 head совпал. SYSTEM49 draft опубликован,
 ENV revision24/currentVersion `renvv_gQVnHvv8EIH-rP8p_puyntPk`, digest

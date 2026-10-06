@@ -174,7 +174,16 @@ const configurationCatalogKinds = new Set([
 ]);
 function toolPreview(
   toolCall: NonNullable<RunActivityItem["toolCall"]>,
+  working: boolean,
 ): string | undefined {
+  if (
+    nativeTools.has(toolCall.tool) &&
+    ((toolCall.state === "SUCCEEDED" && toolCall.safeResult === "COMPLETED") ||
+      (toolCall.state === "RUNNING" &&
+        working &&
+        toolCall.safeResult === "RUNNING"))
+  )
+    return undefined;
   if (
     toolCall.state === "FAILED" &&
     /^[A-Z][A-Z0-9_]{0,127}$/.test(
@@ -566,8 +575,8 @@ function bytes(value: number): string {
                   </section>
                   <template v-if="item.toolCall">
                     <SafeMarkdown
-                      v-if="toolPreview(item.toolCall)"
-                      :content="toolPreview(item.toolCall) ?? ''"
+                      v-if="toolPreview(item.toolCall, item.working)"
+                      :content="toolPreview(item.toolCall, item.working) ?? ''"
                       class="run-transcript__preview"
                     />
                   </template>

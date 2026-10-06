@@ -1214,14 +1214,19 @@ func (state *protocolState) safeFileChanges(raw json.RawMessage) (safeFileChange
 }
 
 func safeWebSearch(fields map[string]json.RawMessage) (string, int, error) {
-	query, err := decodeBoundedString(fields["query"], 64<<10)
-	if err != nil {
+	// rust-v0.160.0 начинает webSearch с пустой отображаемой query; Other
+	// также может завершиться без неё. Эти данные не назначают полномочия.
+	if !validThreadMetadataString(fields["query"], 64<<10) {
 		return "", 0, errors.New("Codex app-server web search query is invalid")
 	}
-	action, count := "UNSPECIFIED", 1
+	var query string
+	_ = strictDecode(fields["query"], &query)
+	action, count := "UNSPECIFIED", 0
+	if query != "" {
+		count = 1
+	}
 	rawAction, present := fields["action"]
 	if !present || bytes.Equal(rawAction, []byte("null")) {
-		_ = query
 		return action, count, nil
 	}
 	actionFields, err := decodeObject(rawAction, schema([]string{"type"}, "pattern", "queries", "query", "type", "url"))

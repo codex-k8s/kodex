@@ -18,6 +18,7 @@ async function render(
   locale: "ru" | "en" = "ru",
   safeResult = "",
   state: NonNullable<RunActivityItem["toolCall"]>["state"] = "SUCCEEDED",
+  working = false,
 ): Promise<string> {
   const item: RunActivityItem = {
     id: "tool-example",
@@ -47,7 +48,12 @@ async function render(
   i18n.global.locale.value = locale;
   try {
     const app = createSSRApp({
-      render: () => h(RunTranscript, { items: [item], embedded: true }),
+      render: () =>
+        h(RunTranscript, {
+          items: [item],
+          embedded: true,
+          activeItemId: working ? item.id : undefined,
+        }),
     });
     app.use(i18n);
     return await renderToString(app);
@@ -65,6 +71,67 @@ function title(html: string): string {
 }
 
 describe("RunTranscript: названия native инструментов", () => {
+  it.each(["ru", "en"] as const)(
+    "не дублирует native COMPLETED под локализованным статусом (%s)",
+    async (locale) => {
+      const html = await render("CODEX_SHELL", {}, locale, "COMPLETED");
+      expect(title(html)).toBe(
+        locale === "ru" ? "Работа в терминале" : "Terminal action",
+      );
+      expect(html).toContain('data-state="SUCCEEDED"');
+      expect(html).toContain(locale === "ru" ? "Завершён" : "Succeeded");
+      expect(html).not.toContain("run-transcript__preview");
+      expect(html).toMatch(/<details[^>]*>[^]*?COMPLETED[^]*?<\/details>/);
+      expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+      expect(html.replace(/<details[^>]*>[^]*?<\/details>/g, "")).not.toContain(
+        "COMPLETED",
+      );
+      expect(html).not.toMatch(
+        /RAW_COMMAND_SENTINEL|RAW_OUTPUT_SENTINEL|HIDDEN_REASONING_SENTINEL/,
+      );
+    },
+  );
+
+  it.each(["ru", "en"] as const)(
+    "не повторяет native RUNNING только при видимом индикаторе работы (%s)",
+    async (locale) => {
+      const active = await render(
+        "CODEX_SHELL",
+        {},
+        locale,
+        "RUNNING",
+        "RUNNING",
+        true,
+      );
+      expect(active).toContain("run-transcript__work");
+      expect(active).not.toContain("run-transcript__preview");
+      expect(active).toMatch(/<details[^>]*>[^]*?RUNNING[^]*?<\/details>/);
+      const inactive = await render(
+        "CODEX_SHELL",
+        {},
+        locale,
+        "RUNNING",
+        "RUNNING",
+      );
+      expect(inactive).toContain("run-transcript__preview");
+    },
+  );
+
+  it.each([
+    ["CODEX_SHELL", "COMPLETED", "RUNNING"],
+    ["CODEX_SHELL", "RUNNING", "SUCCEEDED"],
+    ["CODEX_SHELL", "COMPLETED: найдено 4 файла", "SUCCEEDED"],
+    ["CODEX_SHELL", "Изменений нет", "SUCCEEDED"],
+    ["project_files.search", "COMPLETED", "SUCCEEDED"],
+  ] as const)(
+    "сохраняет содержательный/несовпадающий/не-native результат %s: %s",
+    async (tool, result, state) => {
+      const html = await render(tool, {}, "ru", result, state);
+      expect(html).toContain("run-transcript__preview");
+      expect(html).toContain(result);
+    },
+  );
+
   it.each([
     ["CODEX_SHELL", "Работа в терминале", "Terminal action"],
     ["CODEX_FILE_CHANGE", "Изменение файлов", "File changes"],

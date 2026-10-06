@@ -194,6 +194,106 @@ func TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID(t *testing.T) {
 	}
 }
 
+func TestCodex160WebSearchLifecycleAcceptsEmptyStartedQuery(t *testing.T) {
+	// rust-v0.160.0/ext/web-search/src/tool.rs сначала публикует query="",
+	// action=null и results=null; итоговые сведения появляются при completed.
+	for _, test := range []struct {
+		name, query, action, expectedAction string
+		expectedCount                       int
+	}{
+		{"search", "SECRET_QUERY", `{"type":"search","query":"SECRET_QUERY","queries":null}`, "SEARCH", 1},
+		{"queries", "SECRET_QUERY", `{"type":"search","query":null,"queries":["SECRET_QUERY","SECRET_QUERY_2"]}`, "SEARCH", 2},
+		{"open", "https://example.com/SECRET_URL", `{"type":"openPage","url":"https://example.com/SECRET_URL"}`, "OPEN_PAGE", 1},
+		{"find", "SECRET_PATTERN", `{"type":"findInPage","url":null,"pattern":"SECRET_PATTERN"}`, "FIND_IN_PAGE", 1},
+		{"other", "", `{"type":"other"}`, "OTHER", 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state := newProtocolState(testThreadID)
+			state.threadID, state.turnID = testThreadID, testTurnID
+			state.result.SessionID = testThreadID
+			var activities []runtimecontract.RuntimeActivity
+			state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
+				activities = append(activities, activity)
+				return nil
+			}
+			if err := state.notification("turn/started", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[],"status":"inProgress"}}`)); err != nil {
+				t.Fatal(err)
+			}
+			started := `{"id":"web-run-1","type":"webSearch","query":"","action":null,"results":null}`
+			if err := state.notification("item/started", raw(`{"threadId":"`+testThreadID+`","turnId":"`+testTurnID+`","startedAtMs":100,"item":`+started+`}`)); err != nil {
+				t.Fatalf("pinned web search start rejected: %v", err)
+			}
+			if len(activities) != 1 || activities[0].ToolCall == nil {
+				t.Fatal("web search start did not produce one activity")
+			}
+			initial := activities[0].ToolCall
+			if initial.State != runtimecontract.NativeToolStateRunning || initial.SafeResult != "" || initial.SafeParameters["action"] != "UNSPECIFIED" || initial.SafeParameters["query_count"] != 0 {
+				t.Fatalf("empty start invented completed search metadata: %#v", initial)
+			}
+			completed := `{"id":"web-run-1","type":"webSearch","query":` + strconv.Quote(test.query) + `,"action":` + test.action + `,"results":[{"type":"text_result","snippet":"SECRET_RESULT","future_field":{"preserved":true}}]}`
+			if err := state.notification("item/completed", raw(`{"threadId":"`+testThreadID+`","turnId":"`+testTurnID+`","completedAtMs":140,"item":`+completed+`}`)); err != nil {
+				t.Fatalf("pinned web search completion rejected: %v", err)
+			}
+			message := `{"id":"message-1","text":"готово","phase":"final_answer","type":"agentMessage"}`
+			if err := state.notification("turn/completed", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[`+completed+`,`+message+`],"status":"completed"}}`)); err != nil {
+				t.Fatalf("pinned web search terminal rejected: %v", err)
+			}
+			if state.result.Outcome != "SUCCEEDED" || len(state.toolCalls) != 1 || len(state.toolCallOrder) != 1 || len(activities) != 3 {
+				t.Fatal("web search completion was lost or duplicated on authoritative rejoin")
+			}
+			call := state.toolCalls["web-run-1"]
+			if call.Kind != runtimecontract.NativeToolKindWebSearch || call.State != runtimecontract.NativeToolStateSucceeded || call.DurationMS != 40 || call.SafeParameters["action"] != test.expectedAction || call.SafeParameters["query_count"] != test.expectedCount {
+				t.Fatalf("unexpected completed web search projection: %#v", call)
+			}
+			if bytes.Contains(marshalProtocolFixture(t, activities), []byte("SECRET_")) || bytes.Contains(marshalProtocolFixture(t, state.result), []byte("SECRET_")) {
+				t.Fatal("discarded web search content escaped safe projection")
+			}
+		})
+	}
+}
+
+func TestCodex160WebSearchRejectsInvalidMetadataAndTuple(t *testing.T) {
+	valid := map[string]any{"id": "web-run-1", "type": "webSearch", "query": "", "action": nil, "results": nil}
+	for _, test := range []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"missing_query", func(item map[string]any) { delete(item, "query") }},
+		{"null_query", func(item map[string]any) { item["query"] = nil }},
+		{"non_string_query", func(item map[string]any) { item["query"] = 1 }},
+		{"oversized_query", func(item map[string]any) { item["query"] = strings.Repeat("x", (64<<10)+1) }},
+		{"unknown_item_field", func(item map[string]any) { item["authority"] = "owner" }},
+		{"unknown_action", func(item map[string]any) { item["action"] = map[string]any{"type": "future"} }},
+		{"responses_action", func(item map[string]any) { item["action"] = map[string]any{"type": "open_page", "url": nil} }},
+		{"unknown_action_field", func(item map[string]any) { item["action"] = map[string]any{"type": "search", "authority": "owner"} }},
+		{"invalid_action_query", func(item map[string]any) { item["action"] = map[string]any{"type": "search", "query": 1} }},
+		{"invalid_action_queries", func(item map[string]any) { item["action"] = map[string]any{"type": "search", "queries": []any{1}} }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			item := make(map[string]any, len(valid))
+			for key, value := range valid {
+				item[key] = value
+			}
+			test.mutate(item)
+			state := newProtocolState(testThreadID)
+			state.threadID, state.turnID = testThreadID, testTurnID
+			payload := map[string]any{"threadId": testThreadID, "turnId": testTurnID, "startedAtMs": 100, "item": item}
+			if err := state.notification("item/started", marshalProtocolFixture(t, payload)); err == nil {
+				t.Fatal("invalid web search metadata accepted")
+			}
+		})
+	}
+	for _, field := range []string{"threadId", "turnId"} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		payload := map[string]any{"threadId": testThreadID, "turnId": testTurnID, "startedAtMs": 100, "item": valid}
+		payload[field] = "01980000-0000-7000-8000-000000000099"
+		if err := state.notification("item/started", marshalProtocolFixture(t, payload)); err == nil {
+			t.Fatal("foreign web search tuple accepted")
+		}
+	}
+}
+
 func reflectStringSlice(value any, expected []string) bool {
 	items, ok := value.([]string)
 	if !ok || len(items) != len(expected) {

@@ -1,6 +1,7 @@
 package connect
 
 import (
+	"encoding/base64"
 	"errors"
 	"net"
 	"strings"
@@ -70,6 +71,47 @@ func TestParseRejectsOversizedHeaders(t *testing.T) {
 	var parseErr *Error
 	if !errors.As(err, &parseErr) || parseErr.Reason != ReasonOversized {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAuthenticatedConnectChallengesOnlyAbsentCredentials(t *testing.T) {
+	const envelope = "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n"
+	valid := "Proxy-Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("kodex:fixture")) + "\r\n"
+	for _, test := range []struct {
+		name, request string
+		reason        Reason
+		calls         int
+	}{
+		{name: "absent", request: envelope + "\r\n", reason: ReasonAuthenticationRequired},
+		{name: "malformed", request: envelope + "Proxy-Authorization: malformed\r\n\r\n", reason: ReasonCredentials},
+		{name: "duplicate", request: envelope + valid + valid + "\r\n", reason: ReasonCredentials},
+		{name: "invalid_grant", request: envelope + valid + "\r\n", reason: ReasonPolicy, calls: 1},
+		{name: "body", request: envelope + "Content-Length: 0\r\n\r\n", reason: ReasonBody},
+		{name: "pipelined_body", request: envelope + "\r\nbody", reason: ReasonBody},
+		{name: "authority", request: "CONNECT example.com:443 HTTP/1.1\r\nHost: other.example:443\r\n\r\n", reason: ReasonAuthority},
+		{name: "foreign_credentials", request: envelope + "Authorization: Bearer synthetic\r\n\r\n", reason: ReasonCredentials},
+		{name: "cookie", request: envelope + "Cookie: synthetic=value\r\n\r\n", reason: ReasonCredentials},
+		{name: "oversized", request: envelope + "X-Fill: " + strings.Repeat("a", 4096) + "\r\n\r\n", reason: ReasonOversized},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server, client := net.Pipe()
+			defer server.Close()
+			defer client.Close()
+			written := make(chan struct{})
+			go func() { defer close(written); _, _ = client.Write([]byte(test.request)) }()
+			calls := 0
+			_, _, err := ParseAuthenticated(server, 4096, time.Second, func(string, int, string) bool { calls++; return false })
+			var parseErr *Error
+			if !errors.As(err, &parseErr) || parseErr.Reason != test.reason || calls != test.calls {
+				t.Fatalf("authenticated parse reason=%v calls=%d", err, calls)
+			}
+			_ = server.Close()
+			select {
+			case <-written:
+			case <-time.After(time.Second):
+				t.Fatal("request writer did not join")
+			}
+		})
 	}
 }
 

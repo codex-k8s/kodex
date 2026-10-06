@@ -610,8 +610,29 @@ arbitrary TOML от клиента не принимаются. При обно�
 реальные shell/web/MCP ходы с новым admitted image и immutable runtime pins.
 Наличие executable в inventory или успешный Go test этого не заменяет.
 
+Authenticated runtime CONNECT поддерживает стандартную proxy authentication
+negotiation Git/libcurl: полный корректный bodyless CONNECT без
+`Proxy-Authorization` получает ограниченный `407 Basic` challenge и закрытие
+соединения, без проверки grant, DNS или upstream dial. Challenge не выдаёт
+authority: новый CONNECT заново проходит signed grant, exact destination,
+TLS/SNI/CA и HTTP method policy. Присутствующие malformed/duplicate credentials,
+invalid signature, прежний signer и запрещённый destination закрыто отклоняются
+без challenge; неизвестный метод, неверный envelope или содержащий body запрос
+не получают исключения.
+Ответ не отражает credential/request values, не имеет body и использует прежний
+write deadline и cancel/join. Static и другие listeners не получают anonymous
+fallback; header/body/credential bytes не записываются в диагностику.
+
 Закрытый реестр provider transport проверяется по закреплённой версии SDK:
-в него входят точные обязательные bootstrap/account-discovery маршруты,
+штатный standalone search Codex0.160 использует только POST
+`chatgpt.com/backend-api/codex/alpha/search` либо `api.openai.com/v1/alpha/search`
+в зависимости от provider credential. Он проходит прежний verified
+ProviderAccess grant и exact HTTPS443/SNI/CA, не выдавая пользовательский
+WebAccess или новые hosts. Mock override path не становится production route.
+Начальное событие app-server webSearch может содержать query="", action=null:
+безопасная проекция сообщает RUNNING и отсутствие query, не выдуманный result;
+проверки типа, размера и привязки thread/turn сохраняются.
+В него входят точные обязательные bootstrap/account-discovery маршруты,
 а не только inference endpoint. Read-only discovery не расширяет shell/WebAccess
 агента, не разрешает соседние paths, HTTP writes или WebSocket upgrade.
 Добавление маршрута требует доказательства host/path/method из первичного
