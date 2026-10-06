@@ -93,6 +93,9 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 			return errs.ErrInvalid
 		}
 		return repository.authorizeIntegrationGrant(ctx, tx, current, payload)
+	case command.ChangeProjectAssistantIntegrationGrant:
+		_, _, err := repository.projectAssistantIntegrationGrantInput(ctx, tx, current, input.Payload)
+		return err
 	case command.ChangeSystemAssistantIntegrationGrant:
 		_, _, err := repository.systemAssistantIntegrationGrantInput(ctx, tx, current, input.Payload)
 		return err

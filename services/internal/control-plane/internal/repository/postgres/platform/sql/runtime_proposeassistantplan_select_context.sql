@@ -11,6 +11,8 @@ SELECT conversation.id::text,
        || control_plane.assistant_system_integration_grant_operations(run.organization_id,
            run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,NULL::uuid)
        || control_plane.assistant_project_connection_operations(run.organization_id,
+           run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,run.project_id)
+       || control_plane.assistant_project_integration_grant_operations(run.organization_id,
            run.initiated_by,conversation.assistant_agent_id,conversation.assistant_scope,run.project_id),
        run.assistant_context_entity_kind,
        run.assistant_context_entity_ref,

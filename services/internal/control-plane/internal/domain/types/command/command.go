@@ -24,6 +24,13 @@ type ManagedConfigurationGitSourceInput struct {
 }
 
 const CreateProjectAssistantIntegrationConnection Kind = "CREATE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
+const ChangeProjectAssistantIntegrationGrant Kind = "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT"
+
+// Получатель разрешается по сохранённому проектному профилю, не выбирается grant payload.
+type ProjectAssistantIntegrationGrantInput struct {
+	AssistantRef string
+	Grant        SystemAssistantIntegrationGrantInput
+}
 
 const (
 	CreateEmailMailboxDraft                   Kind = "CREATE_EMAIL_MAILBOX_DRAFT"

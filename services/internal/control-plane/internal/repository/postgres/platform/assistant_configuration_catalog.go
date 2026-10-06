@@ -77,6 +77,11 @@ func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.
 	base := entity.AssistantConfigurationCatalogEntry{ScopeKind: target.scopeKind, OrganizationRef: current.organizationRef, ProjectRef: target.projectRef, AssistantProfileRef: target.profileRef}
 	var rows pgx.Rows
 	switch input.Kind {
+	case "PROJECT_INTEGRATION_GRANTS":
+		if sourceScope != "PROJECT" || input.AssistantRef != sourceRef || target.scopeKind != "PROJECT" {
+			return result, errs.ErrForbidden
+		}
+		result.ProjectIntegrationGrants, result.NextOffset, err = repository.projectAssistantIntegrationCatalogTx(ctx, tx, current, input)
 	case "CURRENT_CONFIGURATION":
 		configuration, readErr := repository.assistantCurrentConfigurationTx(ctx, tx, current, input.AssistantRef, sourceScope)
 		if readErr != nil {

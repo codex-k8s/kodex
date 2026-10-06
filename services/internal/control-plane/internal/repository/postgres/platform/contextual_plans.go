@@ -103,7 +103,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			continue
 		}
 		switch operation.Type {
-		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", prepareProjectAssistantConnection:
+		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, prepareProjectAssistantConnection:
 			updated, err := repository.rehydrateEditedAssistantConfiguration(ctx, tx, scope, original, operation, state == "STALE")
 			if err != nil {
 				return commandOutcome{}, err
@@ -342,6 +342,9 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		}
 		if connectionRef := assistantGrantConnection(operation); connectionRef != "" {
 			ownerRef := assistantString(operation.Parameters, "agentRef")
+			if operation.Type == changeProjectAssistantIntegrationGrant {
+				ownerRef = assistantString(operation.Parameters, "projectAssistantRef")
+			}
 			if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 				ownerRef = assistantString(operation.Parameters, "systemAssistantRef")
 			}
@@ -450,6 +453,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		}
 		if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 			matching, snapshotErr := repository.systemAssistantImageSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == changeProjectAssistantIntegrationGrant {
+			matching, snapshotErr := repository.projectAssistantIntegrationGrantSnapshotMatches(ctx, tx, scope, operation)
 			if snapshotErr != nil || !matching {
 				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
 				continue

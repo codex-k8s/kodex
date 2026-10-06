@@ -83,6 +83,7 @@ service PlatformQueryService {
   rpc ListIntegrationGrantCapabilityCandidates(ListIntegrationGrantCapabilityCandidatesRequest) returns (ListIntegrationGrantCapabilityCandidatesResponse);
   // Кандидаты exact общесистемного помощника; owner и assistant назначаются сервером.
   rpc GetSystemAssistantIntegrationGrantCandidates(GetSystemAssistantIntegrationGrantCandidatesRequest) returns (GetSystemAssistantIntegrationGrantCandidatesResponse);
+  rpc GetProjectAssistantIntegrationGrantCandidates(GetProjectAssistantIntegrationGrantCandidatesRequest) returns (GetProjectAssistantIntegrationGrantCandidatesResponse);
   rpc GetIntegrationConnection(GetIntegrationConnectionRequest) returns (GetIntegrationConnectionResponse);
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
@@ -1598,6 +1599,8 @@ message AssistantPlanOperation {
     TYPE_CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT = 30;
     // Подготовить организационное подключение для exact PROJECT помощника, без выдачи grants.
     TYPE_PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION = 31;
+    // Подготовить grant собственного PROJECT помощника для human confirmation.
+    TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT = 32;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -1927,6 +1930,7 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS = 6;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_ENVIRONMENTS = 7;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION = 8;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_PROJECT_INTEGRATION_GRANTS = 9;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -1977,6 +1981,16 @@ message AssistantConfigurationCatalogResponse {
   int32 next_offset = 8;
   // Только собственный помощник exact lease; свежие настройки, не snapshot хода.
   AssistantCurrentConfiguration current_configuration = 9;
+  repeated ProjectAssistantIntegrationGrantCatalogEntry project_integration_grants = 10;
+}
+
+message ProjectAssistantIntegrationGrantCatalogEntry {
+  string connection_ref = 1;
+  string connection_name = 2;
+  int64 connection_version = 3;
+  string definition_version = 4;
+  string definition_digest = 5;
+  SystemAssistantIntegrationGrantCandidate candidate = 6;
 }
 
 // Закрытая безопасная модель: секреты представлены только логическими bindings.
@@ -3036,6 +3050,29 @@ message GetSystemAssistantIntegrationGrantCandidatesRequest {
   string connection_ref = 1;
   string query = 2;
   PageRequest page = 3;
+}
+message GetProjectAssistantIntegrationGrantCandidatesRequest {
+  string project_ref = 1;
+  string connection_ref = 2;
+  string query = 3;
+  PageRequest page = 4;
+}
+message GetProjectAssistantIntegrationGrantCandidatesResponse {
+  // Область connection, не область профиля получателя.
+  RuntimeResourceScopeKind scope_kind = 1;
+  string organization_ref = 2;
+  string project_ref = 3;
+  string assistant_profile_ref = 4;
+  int64 profile_version = 5;
+  string assistant_ref = 6;
+  int64 assistant_version = 7;
+  string connection_ref = 8;
+  int64 connection_version = 9;
+  string definition_version = 10;
+  string definition_digest = 11;
+  repeated SystemAssistantIntegrationGrantCandidate items = 12;
+  int64 total = 13;
+  PageInfo page = 14;
 }
 message SystemAssistantIntegrationGrantCandidate {
   IntegrationCapability capability = 1;

@@ -125,8 +125,12 @@ func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput)
 	if input.AssistantScope == runtimecontract.AssistantScopeProject {
 		assistantRef = enumSchema(input.AgentRef)
 	}
+	kinds := append([]string{}, assistantConfigurationCatalogKinds...)
+	if input.AssistantScope == runtimecontract.AssistantScopeProject {
+		kinds = append(kinds, "PROJECT_INTEGRATION_GRANTS")
+	}
 	return objectSchema([]string{"kind", "assistant_ref"}, map[string]any{
-		"kind": enumSchema(assistantConfigurationCatalogKinds...), "assistant_ref": assistantRef,
+		"kind": enumSchema(kinds...), "assistant_ref": assistantRef,
 		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 10000},
 		"account_ref": opaqueRefSchema(), "runtime_profile_ref": assistantRuntimeProfileKeySchema(),
 	})
@@ -198,6 +202,9 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 			}
 		}
 	}
+	if kind == "PROJECT_INTEGRATION_GRANTS" && (input.AssistantScope != runtimecontract.AssistantScopeProject || request.AccountRef != "" || request.RuntimeProfileRef != "") {
+		return nil, invalid
+	}
 	if kind == "MODELS" && request.AccountRef == "" {
 		return nil, invalid
 	}
@@ -210,6 +217,9 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 }
 
 func assistantConfigurationCatalogKindKnown(kind string) bool {
+	if kind == "PROJECT_INTEGRATION_GRANTS" {
+		return true
+	}
 	for _, candidate := range assistantConfigurationCatalogKinds {
 		if candidate == kind {
 			return true
@@ -257,6 +267,12 @@ func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, reques
 	}
 	if input.IsSystemAssistant() && ((request.GetAssistantRef() == input.AgentRef && response.GetScopeKind() != "ORGANIZATION") ||
 		(request.GetAssistantRef() != input.AgentRef && response.GetScopeKind() != "PROJECT")) {
+		return nil, invalid
+	}
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_PROJECT_INTEGRATION_GRANTS {
+		return castProjectAssistantIntegrationCatalog(input, request, response)
+	}
+	if len(response.GetProjectIntegrationGrants()) != 0 {
 		return nil, invalid
 	}
 	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION {

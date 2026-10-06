@@ -59,6 +59,9 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	seen := make(map[string]struct{}, len(payload.Operations))
 	normalizedOperations := make([]entity.AssistantPlanOperation, 0, len(payload.Operations))
 	for index, operation := range payload.Operations {
+		if operation.Type == changeProjectAssistantIntegrationGrant && (assistant.Scope != "PROJECT" || assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref) {
+			return commandOutcome{}, errs.ErrForbidden
+		}
 		if operation.Type == prepareProjectAssistantConnection && (len(payload.Operations) != 1 || assistant.Scope != "PROJECT" || assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
@@ -184,7 +187,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 
 func projectAssistantOperation(operationType string) bool {
 	switch operationType {
-	case prepareProjectAssistantConnection:
+	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
 		return true
 	case "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT",
 		"CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE",
@@ -197,6 +200,9 @@ func projectAssistantOperation(operationType string) bool {
 }
 
 func assistantSelfConfigurationOperation(assistantRef, assistantScope string, operation entity.AssistantPlanOperation) bool {
+	if operation.Type == changeProjectAssistantIntegrationGrant {
+		return assistantScope == "PROJECT" && assistantRef != "" && assistantString(operation.Parameters, "projectAssistantRef") == assistantRef
+	}
 	if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		return assistantScope == "SYSTEM" && assistantRef != ""
 	}
@@ -222,7 +228,7 @@ func assistantPlanDigest(summary string, rawOperations []byte) string {
 
 func assistantOperationType(value string) bool {
 	switch value {
-	case prepareProjectAssistantConnection:
+	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
 		return true
 	case "CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
@@ -236,7 +242,7 @@ func assistantOperationType(value string) bool {
 
 func assistantOperationMatchesContext(contextKind, contextRef string, operation entity.AssistantPlanOperation) bool {
 	switch operation.Type {
-	case prepareProjectAssistantConnection:
+	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
 		return true
 	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
 		return true
@@ -286,6 +292,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == prepareProjectAssistantConnection {
 		return repository.hydrateProjectAssistantConnection(ctx, tx, actorScope, operation)
+	}
+	if operation.Type == changeProjectAssistantIntegrationGrant {
+		return repository.hydrateProjectAssistantIntegrationGrant(ctx, tx, actorScope, operation)
 	}
 	if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		return repository.hydrateSystemAssistantIntegrationGrant(ctx, tx, actorScope, operation)
@@ -951,7 +960,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -1038,7 +1047,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
-	case "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "TEST_INTEGRATION_CONNECTION":
+	case "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, "TEST_INTEGRATION_CONNECTION":
 		expectedTargetKind = "INTEGRATION_CONNECTION"
 		expectedTargetRef = assistantString(operation.Parameters, "connectionRef")
 	case "ARCHIVE_WORKFLOW":
@@ -1106,6 +1115,9 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 func assistantOperationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	if operation.Type == prepareProjectAssistantConnection {
 		return projectAssistantConnectionCommand(operation)
+	}
+	if operation.Type == changeProjectAssistantIntegrationGrant {
+		return projectAssistantIntegrationGrantCommand(operation)
 	}
 	if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		return systemAssistantIntegrationGrantCommand(operation)

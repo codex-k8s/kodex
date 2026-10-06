@@ -5125,6 +5125,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidates" }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/projects/{projectRef}/assistant/integration-grant-candidates:
+    get:
+      tags: [Assistant]
+      operationId: getProjectAssistantIntegrationGrantCandidates
+      description: Собственный PROJECT помощник и origin подключения разрешаются сервером; каталог не требует существующего grant.
+      parameters:
+        - { $ref: "#/components/parameters/ProjectRef" }
+        - { name: connectionRef, in: query, required: true, schema: { $ref: "#/components/schemas/OpaqueRef" } }
+        - { $ref: "#/components/parameters/Query" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - { $ref: "#/components/parameters/PageToken" }
+      responses:
+        "200":
+          description: Exact профиль, подключение и capability policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectAssistantIntegrationGrantCandidates" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/system-assistant/integration-grants:
     put:
       tags: [Assistant]
@@ -15797,6 +15815,25 @@ components:
         items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate" } }
         total: { type: integer, format: int64, minimum: 0 }
         nextPageToken: { type: string, maxLength: 512 }
+    ProjectAssistantIntegrationGrantCandidates:
+      type: object
+      additionalProperties: false
+      required: [scopeKind, organizationRef, projectRef, assistantProfileRef, profileVersion, assistantRef, assistantVersion, connectionRef, connectionVersion, definitionVersion, definitionDigest, items, total]
+      properties:
+        scopeKind: { type: string, enum: [ORGANIZATION] }
+        organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantProfileRef: { $ref: "#/components/schemas/OpaqueRef" }
+        profileVersion: { type: integer, format: int64, minimum: 1 }
+        assistantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        assistantVersion: { type: integer, format: int64, minimum: 1 }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        definitionVersion: { type: string, minLength: 1, maxLength: 100 }
+        definitionDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate" } }
+        total: { type: integer, format: int64, minimum: 0 }
+        nextPageToken: { type: string, maxLength: 512 }
     OwnerGate:
       type: object
       additionalProperties: false
@@ -18056,6 +18093,7 @@ components:
                 CHANGE_CAPABILITY,
                 CHANGE_INTEGRATION_GRANT,
                 CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT,
+                CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT,
                 PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION,
                 CREATE_SCHEDULE,
                 UPDATE_SCHEDULE,
@@ -18257,6 +18295,7 @@ components:
                   CHANGE_CAPABILITY,
                   CHANGE_INTEGRATION_GRANT,
                   CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT,
+                  CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT,
                   PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION,
                   CREATE_SCHEDULE,
                   UPDATE_SCHEDULE,

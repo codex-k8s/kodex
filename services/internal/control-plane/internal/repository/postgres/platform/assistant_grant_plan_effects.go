@@ -8,7 +8,7 @@ import (
 )
 
 func assistantGrantConnection(operation entity.AssistantPlanOperation) string {
-	if operation.Type != "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" && operation.Type != "CHANGE_INTEGRATION_GRANT" {
+	if operation.Type != "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" && operation.Type != "CHANGE_INTEGRATION_GRANT" && operation.Type != changeProjectAssistantIntegrationGrant {
 		return ""
 	}
 	if operation.Target.Kind != "INTEGRATION_CONNECTION" || operation.Target.Ref != assistantString(operation.Parameters, "connectionRef") {
@@ -43,7 +43,9 @@ func (repository *Repository) preflightAssistantGrantPlan(ctx context.Context, t
 			return nil, err
 		}
 		var matching bool
-		if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+		if operation.Type == changeProjectAssistantIntegrationGrant {
+			matching, err = repository.projectAssistantIntegrationGrantSnapshotMatches(ctx, tx, current, operation)
+		} else if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 			matching, err = repository.systemAssistantIntegrationGrantSnapshotMatches(ctx, tx, current, operation)
 		} else {
 			matching, err = repository.assistantIntegrationGrantSnapshotMatches(ctx, tx, current, projectRef, operation)

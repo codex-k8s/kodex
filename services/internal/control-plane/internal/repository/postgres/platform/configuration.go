@@ -392,7 +392,7 @@ func attachScheduleDisplay(item *entity.Schedule) error {
 }
 
 func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
-	if input.Kind == command.ChangeIntegrationGrant || input.Kind == command.ChangeSystemAssistantIntegrationGrant {
+	if input.Kind == command.ChangeIntegrationGrant || input.Kind == command.ChangeSystemAssistantIntegrationGrant || input.Kind == command.ChangeProjectAssistantIntegrationGrant {
 		return repository.changeIntegrationGrant(ctx, tx, scope, input)
 	}
 	payload, ok := input.Payload.(command.ConnectionInput)
@@ -709,6 +709,14 @@ func (repository *Repository) deleteIntegrationConnection(
 func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.IntegrationGrantInput)
 	var systemTarget systemAssistantIntegrationGrantTarget
+	if input.Kind == command.ChangeProjectAssistantIntegrationGrant {
+		var err error
+		payload, _, err = repository.projectAssistantIntegrationGrantInput(ctx, tx, scope, input.Payload)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		ok = true
+	}
 	if input.Kind == command.ChangeSystemAssistantIntegrationGrant {
 		var err error
 		payload, systemTarget, err = repository.systemAssistantIntegrationGrantInput(ctx, tx, scope, input.Payload)
@@ -737,7 +745,11 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	// Повтор после ожидания connection lock предшествует OCC и новому effect.
-	if input.Kind == command.ChangeSystemAssistantIntegrationGrant {
+	if input.Kind == command.ChangeProjectAssistantIntegrationGrant {
+		if _, _, err := repository.projectAssistantIntegrationGrantInput(ctx, tx, scope, input.Payload); err != nil {
+			return commandOutcome{}, err
+		}
+	} else if input.Kind == command.ChangeSystemAssistantIntegrationGrant {
 		if _, _, err := repository.systemAssistantIntegrationGrantInput(ctx, tx, scope, input.Payload); err != nil {
 			return commandOutcome{}, err
 		}
@@ -1363,6 +1375,12 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		}
 		if operation.Type == "CHANGE_INTEGRATION_GRANT" {
 			matching, matchErr := repository.assistantIntegrationGrantSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == changeProjectAssistantIntegrationGrant {
+			matching, matchErr := repository.projectAssistantIntegrationGrantSnapshotMatches(ctx, operationEffectsTx, scope, operation)
 			if matchErr != nil || !matching {
 				err = errs.ErrConflict
 			}

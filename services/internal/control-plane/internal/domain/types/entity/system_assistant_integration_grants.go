@@ -5,8 +5,8 @@ type SystemAssistantIntegrationGrantCandidate struct {
 	Grantable                                      bool
 	Reason, CurrentGrantRef, CurrentApprovalPolicy string
 	CurrentGrantVersion                            int64
-	CurrentApprovalScopePaths                       []string
-	CurrentGrantEnabled                             bool
+	CurrentApprovalScopePaths                      []string
+	CurrentGrantEnabled                            bool
 }
 
 type SystemAssistantIntegrationGrantCandidates struct {
@@ -16,4 +16,16 @@ type SystemAssistantIntegrationGrantCandidates struct {
 	Items                                                   []SystemAssistantIntegrationGrantCandidate
 	Total                                                   int64
 	NextPageToken                                           string
+}
+
+type ProjectAssistantIntegrationGrantCandidates struct {
+	SystemAssistantIntegrationGrantCandidates
+	ProjectRef, ProfileRef string
+	ProfileVersion         int64
+}
+
+type ProjectAssistantIntegrationGrantCatalogEntry struct {
+	ConnectionRef, ConnectionName, DefinitionVersion, DefinitionDigest string
+	ConnectionVersion                                                  int64
+	Candidate                                                          SystemAssistantIntegrationGrantCandidate
 }

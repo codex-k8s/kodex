@@ -3831,6 +3831,8 @@ const ru = {
       CHANGE_INTEGRATION_GRANT: "Изменить доступ к подключению",
       CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT:
         "Изменить доступ общесистемного помощника",
+      CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT:
+        "Изменить доступ помощника Проекта",
       CREATE_SCHEDULE: "Создать Автоматизацию",
       LAUNCH_RUN: "Запустить Run",
       CREATE_INTEGRATION_CONNECTION: "Создать подключение",
@@ -4270,6 +4272,8 @@ const ru = {
       grantNothingToRevoke: "Активного разрешения для отзыва не найдено.",
       systemGrantFixedTarget:
         "Подключение и возможность зафиксированы в этой ревизии плана. Получатель — общесистемный помощник организации. Для другого подключения или возможности подготовьте новый план; здесь меняются только включение и порядок подтверждения.",
+      projectGrantFixedTarget:
+        "Получатель — помощник Проекта. Подключение и возможность закреплены в плане; здесь меняются только включение и порядок подтверждения.",
       systemGrantApplied:
         "Сохранённое разрешение проверено по точной квитанции",
       grantFixedTarget:
@@ -8376,6 +8380,8 @@ const en = {
       CHANGE_INTEGRATION_GRANT: "Change connection access",
       CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT:
         "Change system assistant access",
+      CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT:
+        "Change project assistant access",
       CREATE_SCHEDULE: "Create Automation",
       LAUNCH_RUN: "Launch Run",
       CREATE_INTEGRATION_CONNECTION: "Create connection",
@@ -8810,6 +8816,8 @@ const en = {
       grantNothingToRevoke: "No active grant was found to revoke.",
       systemGrantFixedTarget:
         "The connection and capability are pinned to this plan revision. The recipient is the organization's system assistant. Prepare a new plan for another connection or capability; only enablement and approval policy can be edited here.",
+      projectGrantFixedTarget:
+        "The recipient is the project assistant. The connection and capability are pinned to this plan; only enablement and approval policy can be edited here.",
       systemGrantApplied:
         "The saved grant was verified against its exact receipt",
       grantFixedTarget:

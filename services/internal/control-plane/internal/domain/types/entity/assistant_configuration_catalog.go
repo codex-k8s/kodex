@@ -30,6 +30,7 @@ type AssistantConfigurationCatalogResponse struct {
 	Entries                                                                         []AssistantConfigurationCatalogEntry
 	NextOffset                                                                      int32
 	CurrentConfiguration                                                            *AssistantCurrentConfiguration
+	ProjectIntegrationGrants                                                        []ProjectAssistantIntegrationGrantCatalogEntry
 }
 
 // Свежая read-модель не содержит materialized secret values или transport metadata.

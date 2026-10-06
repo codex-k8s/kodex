@@ -3,18 +3,22 @@ package platform
 import (
 	"context"
 	"fmt"
+
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
 
 func assistantConfigurationOperationType(kind string) bool {
-	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == prepareProjectAssistantConnection
+	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == prepareProjectAssistantConnection || kind == changeProjectAssistantIntegrationGrant
 }
 
 func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.Context, tx pgx.Tx, current scope, original, edited entity.AssistantPlanOperation, refreshStale bool) (entity.AssistantPlanOperation, error) {
 	if original.Type != edited.Type || original.Key != edited.Key || edited.Parameters == nil {
 		return edited, errs.ErrForbidden
+	}
+	if original.Type == changeProjectAssistantIntegrationGrant {
+		return repository.rehydrateEditedProjectAssistantGrant(ctx, tx, current, original, edited, refreshStale)
 	}
 	if original.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 		return repository.rehydrateEditedSystemAssistantGrant(ctx, tx, current, original, edited, refreshStale)

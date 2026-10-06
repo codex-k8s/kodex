@@ -41,6 +41,9 @@ func (repository *Repository) authorizeSystemAssistantIntegrationGrantPlan(ctx c
 	if json.Unmarshal(raw, &operations) != nil || len(operations) > maximumAssistantPlanOperations {
 		return errs.ErrUnavailable
 	}
+	if err := repository.authorizeProjectAssistantIntegrationGrantPlan(ctx, tx, current, operations); err != nil {
+		return err
+	}
 	for _, operation := range operations {
 		if operation.Type != "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
 			continue

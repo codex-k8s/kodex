@@ -351,7 +351,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	case command.CreateProjectAssistantIntegrationConnection:
 		return repository.createProjectAssistantConnection(ctx, tx, scope, input)
 	case command.CreateConnection, command.UpdateConnection, command.DeleteConnection, command.ConfigureConnectionCredential,
-		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant, command.ChangeSystemAssistantIntegrationGrant:
+		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant, command.ChangeSystemAssistantIntegrationGrant, command.ChangeProjectAssistantIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.ConfigureEmailCredential:
 		return repository.configureEmailCredential(ctx, tx, scope, input)

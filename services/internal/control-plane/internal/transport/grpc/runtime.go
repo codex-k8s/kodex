@@ -386,6 +386,15 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 			}
 			response.Entries = append(response.Entries, item)
 		}
+		for _, entry := range result.ProjectIntegrationGrants {
+			candidate, err := castAssistantIntegrationGrantCandidate(entry.Candidate)
+			if err != nil {
+				return nil, transportError(err)
+			}
+			response.ProjectIntegrationGrants = append(response.ProjectIntegrationGrants, &controlplanev1.ProjectAssistantIntegrationGrantCatalogEntry{
+				ConnectionRef: entry.ConnectionRef, ConnectionName: entry.ConnectionName, ConnectionVersion: entry.ConnectionVersion,
+				DefinitionVersion: entry.DefinitionVersion, DefinitionDigest: entry.DefinitionDigest, Candidate: candidate})
+		}
 		return &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}, nil
 	}
 	if request.GetIntegrationDefinitionCatalog() {
