@@ -150,6 +150,40 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+06.10.2026 16:14 UTC, source `420d5993`: новый компактный transcript
+диалога RUN интегрирован. ROOT96/96 адресных unit2.67с и forced typecheck
+PASS; изолированная проверка изменения242/242 unit, lint/format/typecheck
+PASS. Native «Подробнее» combined RUN визуально проверен: USER справа,
+COMMENTARY/FINAL слева, восемь инструментов в одной раскрываемой группе,
+служебные этапы свернуты, одинаковый итог не дублируется. Desktop1080px
+dialog overflow0. Mobile этой ревизии NOT RUN; неверный аргумент инструмента
+эмуляции не выдаётся за mobile PASS.
+
+Combined ENV3 run `run_4tbeE9hm_jcbu9sQhJ-2YpDT` — SUCCEEDED.
+Authoritative events GET200/complete=true/sequence25 после reload:
+USER/COMMENTARY/FINAL и восемь exact tool calls revision2/SUCCEEDED
+(native shell, Context7 resolve/query, hosted search/open, два чтения
+конфигурации и поиск). Ранний ACK ENV3/binding3/tools38/image/input сохранён;
+это реальное выполнение, не только текст итогового ответа.
+
+PROJECT helper создал один общий рецепт `kodex-selfdev` через собственный
+typed plan `pln_d2hNtiiQIwZw3VE4jkTlZWgc`, revision1, native Validate/Apply.
+Receipt `rct_ROs6D1uO0k99fWYFO7m9RGGD` APPLIED; recipe
+`imgrec_zS2F5VUJeRIu_zOXWuF6lXdw` generation1/version1, build
+`imgbld_9HJWHuUxGWCEJG0WvrYTePVY` COMPLETED/version12. Dockerfile source
+SHA `5b44b786845c2964011807a2be280cb1b9fbad0183fcf7f9a419efaa724110c5`
+скопирован из fresh B3 detail200/sourceAvailable=true; старый рецепт не
+переименован, admission/risk receipts не перенесены. Новый admission и
+promotion ещё OPEN; completed build не считается готовым образом.
+
+При отправке большого six-role prompt native POST вернул503; current
+conversation version1/turns[] подтверждены readonly. Слепой новый effect
+не выполнялся; причина диагностируется. Короткий GitHub connection proposal
+успешно подготовлен, но credentials/grants ещё NOT RUN. Отдельный поиск
+в common-image turn FAILED: safe failure class assistant_search_query_invalid
+до owner RPC; это не доказательство отказа сети или полномочий.
+Full65/checklist остаются OPEN до оставшихся реальных сценариев.
+
 06.10.2026 16:00 UTC, source `41979459`: fresh SSO fix и optional RUN pin
 fix интегрированы. ROOT55/55 units3.66с, forced typecheck, scoped lint PASS;
 native RUN preview AVAILABLE/HTTP200, safe-only, header clamp3 и screenshot

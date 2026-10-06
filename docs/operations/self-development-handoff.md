@@ -10,6 +10,24 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 16:14 UTC, source `420d5993`: compact RUN details transcript
+интегрирован; ROOT96/96 units и forced typecheck PASS, native desktop
+«Подробнее» USER справа/COMMENTARY/FINAL слева/tools8 grouped/overflow0
+визуально PASS. Combined ENV3 SUCCEEDED и authoritative events25/complete:
+восемь actual tool calls revision2/SUCCEEDED, USER/COMMENTARY/FINAL после
+reload. Новый common recipe `imgrec_zS2F5VUJeRIu_zOXWuF6lXdw`, name
+kodex-selfdev, создан own PROJECT helper native Validate/Apply один раз;
+build `imgbld_9HJWHuUxGWCEJG0WvrYTePVY` COMPLETED/version12, новый
+admission/promotion ещё OPEN. Six-role большой prompt POST503/turns[]:
+не повторять effects до диагностики. GitHub специализированный plan
+`pln_bFdzMGkqFOR65w3KfdeQRp5k` DRAFT, metadata-only; secrets/grants
+пока не настроены. Последний опубликованный remote/PR checkpoint431e86c1,
+новые commits пока локальны. Full65 OPEN; продолжить connection native
+Validate/Apply/protected credential/TEST, common admission/promotion,
+six roles, environments/grants/Workflow и real dogfooding.
+
+## Предыдущий checkpoint ENV3
+
 06.10.2026 16:00 UTC: source `41979459`, затем небольшое уточнение текста
 SSO в рабочем дереве. Последний remote/PR1798 checkpoint `431e86c1`
 подтверждён, Draft сохранён. Fresh SSO Validate path исправлен: возвращается
