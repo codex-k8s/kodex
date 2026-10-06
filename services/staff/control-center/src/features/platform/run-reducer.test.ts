@@ -169,6 +169,29 @@ describe("reduceRunEvent", () => {
     expect(state.graphs[rootRunRef]?.edges).toHaveLength(1);
   });
 
+  it.each(["FUTURE_CANCEL", "", null, "i18n:RUN_CANCELLED"])(
+    "закрыто отклоняет неизвестный serviceCode %s без изменения snapshot",
+    (serviceCode) => {
+      const state = projection();
+      const before = structuredClone(state);
+      const event = { ...delegationEvent(), serviceCode } as RunEvent;
+      expect(reduceRunEvent(state, event)).toBe("invalid");
+      expect(state).toEqual(before);
+    },
+  );
+
+  it("сохраняет typed serviceCode и локализованный summary при realtime delta", () => {
+    const state = projection();
+    const event = {
+      ...delegationEvent(),
+      serviceCode: "RUN_CANCELLED" as const,
+      summary: "Запуск отменён",
+    };
+    expect(reduceRunEvent(state, event)).toBe("applied");
+    expect(state.events[rootRunRef]?.[2]?.serviceCode).toBe("RUN_CANCELLED");
+    expect(state.events[rootRunRef]?.[2]?.summary).toBe("Запуск отменён");
+  });
+
   it("обнаруживает sequence gap без создания phantom node", () => {
     const state = projection();
     const event = delegationEvent();

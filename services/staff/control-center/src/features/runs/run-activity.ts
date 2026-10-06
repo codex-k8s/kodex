@@ -34,10 +34,7 @@ export interface RunActivityItem {
   historical: boolean;
   eventType?: RunEvent["type"];
   serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
-  serviceCancellationCode?:
-    | "RUN_CANCELLED"
-    | "RUN_NODE_CANCELLED"
-    | "ASSISTANT_TURN_CANCELLED";
+  serviceCancellationCode?: RunEvent["serviceCode"];
   integrationInvocationRef?: string;
 }
 
@@ -249,7 +246,9 @@ export function buildRunTranscriptItems(
       serviceProgressCode:
         transcriptServiceProgressCode(event.summary) ??
         transcriptServiceProgressCode(event.progress),
-      serviceCancellationCode: transcriptServiceCancellationCode(event.summary),
+      serviceCancellationCode: transcriptServiceCancellationCode(
+        event.serviceCode,
+      ),
       integrationInvocationRef: integrationBound
         ? tool
           ? successfulIntegrationInvocationRef(tool)
@@ -347,11 +346,10 @@ function transcriptServiceProgressCode(
 function transcriptServiceCancellationCode(
   value: string | undefined,
 ): RunActivityItem["serviceCancellationCode"] {
-  const code = value?.trim().replace(/^i18n:/, "");
-  return code === "RUN_CANCELLED" ||
-    code === "RUN_NODE_CANCELLED" ||
-    code === "ASSISTANT_TURN_CANCELLED"
-    ? code
+  return value === "RUN_CANCELLED" ||
+    value === "RUN_NODE_CANCELLED" ||
+    value === "ASSISTANT_TURN_CANCELLED"
+    ? value
     : undefined;
 }
 
@@ -368,8 +366,7 @@ function isTranscriptService(item: RunActivityItem): boolean {
     item.state === "CANCELLED" &&
     !item.progress?.trim() &&
     !item.integrationInvocationRef &&
-    (item.serviceCancellationCode ??
-      transcriptServiceCancellationCode(item.summary)),
+    transcriptServiceCancellationCode(item.serviceCancellationCode),
   );
   return Boolean(
     !item.historical &&
@@ -658,9 +655,6 @@ export function presentRunTranscriptItems(
       return [
         {
           ...item,
-          serviceCancellationCode:
-            item.serviceCancellationCode ??
-            transcriptServiceCancellationCode(item.summary),
           working: false,
           serviceHistory: [item],
         },
@@ -782,8 +776,7 @@ export function isUnboundRunCancellation(item: RunActivityItem): boolean {
     !item.artifactRef &&
     !item.progress?.trim() &&
     !item.integrationInvocationRef &&
-    (item.serviceCancellationCode ??
-      transcriptServiceCancellationCode(item.summary)),
+    transcriptServiceCancellationCode(item.serviceCancellationCode),
   );
 }
 

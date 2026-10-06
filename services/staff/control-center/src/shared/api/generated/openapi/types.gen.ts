@@ -3191,6 +3191,11 @@ export type RunDelta = {
     nextActions: Array<NextAction>;
 };
 
+/**
+ * Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+ */
+export type RunEventServiceCode = 'RUN_CANCELLED' | 'RUN_NODE_CANCELLED' | 'ASSISTANT_TURN_CANCELLED';
+
 export type RunEvent = {
     ref: OpaqueRef;
     runRef: OpaqueRef;
@@ -3201,6 +3206,7 @@ export type RunEvent = {
     gateRef?: OpaqueRef;
     artifactRef?: OpaqueRef;
     summary: string;
+    serviceCode?: RunEventServiceCode;
     progress?: string;
     runState?: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
     nodeState?: 'PLANNED' | 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';

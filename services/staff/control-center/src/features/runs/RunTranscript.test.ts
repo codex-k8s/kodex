@@ -1087,13 +1087,15 @@ describe("RunTranscript: компактная работа", () => {
         eventType: "NODE_STATE_CHANGED",
         messageKind: "STATE",
         state: "CANCELLED",
-        summary: "i18n:RUN_NODE_CANCELLED",
+        summary: "Шаг выполнения отменён",
+        serviceCancellationCode: "RUN_NODE_CANCELLED",
       }),
       progress("cancel-intermediate", {
         eventType: "TURN_PROGRESS",
         messageKind: "INTERMEDIATE_MESSAGE",
         state: "CANCELLED",
-        summary: "i18n:RUN_CANCELLED",
+        summary: "Запуск отменён",
+        serviceCancellationCode: "RUN_CANCELLED",
       }),
       progress("unbound-run-cancel", {
         historical: true,
@@ -1101,14 +1103,15 @@ describe("RunTranscript: компактная работа", () => {
         eventType: "RUN_STATE_CHANGED",
         messageKind: "STATE",
         state: "CANCELLED",
-        summary: "i18n:RUN_CANCELLED",
+        summary: "Запуск отменён",
+        serviceCancellationCode: "RUN_CANCELLED",
       }),
     ]);
     const primary = html.replace(/<details\b[^]*?<\/details>/g, "");
     expect(primary.match(/Запуск отменён/g)).toHaveLength(1);
-    expect(primary).not.toContain("Этап запуска отменён");
+    expect(primary).not.toContain("Шаг выполнения отменён");
     expect(primary).toContain("Проверяю настройки");
-    expect(html).toContain("Этап запуска отменён");
+    expect(html).toContain("Шаг выполнения отменён");
     expect(html).toContain("Этапы выполнения: 3");
     expect(html).toContain("Этапы выполнения: 1");
     expect(html.match(/Запуск отменён/g)).toHaveLength(3);

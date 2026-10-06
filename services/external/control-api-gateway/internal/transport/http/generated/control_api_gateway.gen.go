@@ -5896,6 +5896,27 @@ func (e RunEventActorKind) Valid() bool {
 	}
 }
 
+// Defines values for RunEventServiceCode.
+const (
+	ASSISTANTTURNCANCELLED RunEventServiceCode = "ASSISTANT_TURN_CANCELLED"
+	RUNCANCELLED           RunEventServiceCode = "RUN_CANCELLED"
+	RUNNODECANCELLED       RunEventServiceCode = "RUN_NODE_CANCELLED"
+)
+
+// Valid indicates whether the value is a known member of the RunEventServiceCode enum.
+func (e RunEventServiceCode) Valid() bool {
+	switch e {
+	case ASSISTANTTURNCANCELLED:
+		return true
+	case RUNCANCELLED:
+		return true
+	case RUNNODECANCELLED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunInputTargetType.
 const (
 	RunInputTargetTypeAGENT    RunInputTargetType = "AGENT"
@@ -13449,9 +13470,12 @@ type RunEvent struct {
 	RunRef                   OpaqueRef            `json:"runRef"`
 	RunState                 *RunEventRunState    `json:"runState,omitempty"`
 	Sequence                 int64                `json:"sequence"`
-	Summary                  string               `json:"summary"`
-	ToolCall                 *RunToolCall         `json:"toolCall,omitempty"`
-	Type                     RunEventType         `json:"type"`
+
+	// ServiceCode Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+	ServiceCode *RunEventServiceCode `json:"serviceCode,omitempty"`
+	Summary     string               `json:"summary"`
+	ToolCall    *RunToolCall         `json:"toolCall,omitempty"`
+	Type        RunEventType         `json:"type"`
 }
 
 // RunEventMessageKind defines model for RunEvent.MessageKind.
@@ -13492,6 +13516,9 @@ type RunEventPage struct {
 	CurrentSequence int64      `json:"currentSequence"`
 	Items           []RunEvent `json:"items"`
 }
+
+// RunEventServiceCode Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+type RunEventServiceCode string
 
 // RunGraph defines model for RunGraph.
 type RunGraph struct {

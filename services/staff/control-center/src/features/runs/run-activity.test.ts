@@ -351,18 +351,50 @@ describe("компактное представление exact хода", () =>
     });
   });
 
+  it("сводит локализованные HTTP/WS события exact отмены по typed serviceCode", () => {
+    const base = required(events[0]);
+    const entries = buildRunTranscriptItems([
+      {
+        ...base,
+        message: undefined,
+        type: "NODE_STATE_CHANGED",
+        messageKind: "STATE",
+        nodeState: "CANCELLED",
+        summary: "Шаг выполнения отменён",
+        serviceCode: "RUN_NODE_CANCELLED",
+      },
+      {
+        ...base,
+        ref: "evt_cancel_progress",
+        sequence: 3,
+        message: undefined,
+        type: "TURN_PROGRESS",
+        messageKind: "INTERMEDIATE_MESSAGE",
+        nodeState: "CANCELLED",
+        summary: "Запуск отменён",
+        serviceCode: "RUN_CANCELLED",
+      },
+    ]);
+    expect(presentRunTranscriptItems(entries)).toHaveLength(1);
+    expect(presentRunTranscriptItems(entries)[0]?.serviceHistory).toEqual(
+      entries,
+    );
+  });
+
   it("сводит exact отмену узла и машинный intermediate результат в одну запись", () => {
     const cancel = item("node-cancel", {
       eventType: "NODE_STATE_CHANGED",
       messageKind: "STATE",
       state: "CANCELLED",
       summary: "i18n:RUN_NODE_CANCELLED",
+      serviceCancellationCode: "RUN_NODE_CANCELLED",
     });
     const progress = item("cancel-progress", {
       eventType: "TURN_PROGRESS",
       messageKind: "INTERMEDIATE_MESSAGE",
       state: "CANCELLED",
       summary: "i18n:RUN_CANCELLED",
+      serviceCancellationCode: "RUN_CANCELLED",
     });
     const entries = [item("start"), cancel, progress];
     const before = structuredClone(entries);
@@ -390,8 +422,15 @@ describe("компактное представление exact хода", () =>
         ]),
       ).toHaveLength(2);
     for (const changed of [
-      { summary: "Доставка отменена, внешний результат пока неизвестен" },
-      { summary: "i18n:FUTURE_CANCELLATION" },
+      {
+        summary: "Доставка отменена, внешний результат пока неизвестен",
+        serviceCancellationCode: undefined,
+      },
+      {
+        summary: "i18n:FUTURE_CANCELLATION",
+        serviceCancellationCode: undefined,
+      },
+      { summary: "i18n:RUN_CANCELLED", serviceCancellationCode: undefined },
       { progress: "Есть дополнительный результат" },
       { integrationInvocationRef: "inv_exact" },
       { phase: "COMMENTARY" as const, kind: "agent" as const },
@@ -403,7 +442,7 @@ describe("компактное представление exact хода", () =>
       ).toHaveLength(2);
   });
 
-  it("сохраняет классификацию exact отмены из raw event при локализованной summary", () => {
+  it("сохраняет typed классификацию exact отмены при пользовательском displaySummary", () => {
     const base = required(events[0]);
     const cancelledEvents: PresentedRunEvent[] = [
       {
@@ -413,6 +452,7 @@ describe("компактное представление exact хода", () =>
         messageKind: "STATE",
         nodeState: "CANCELLED",
         summary: "i18n:RUN_NODE_CANCELLED",
+        serviceCode: "RUN_NODE_CANCELLED",
         displaySummary: "Этап запуска отменён",
       },
       {
@@ -424,6 +464,7 @@ describe("компактное представление exact хода", () =>
         messageKind: "INTERMEDIATE_MESSAGE",
         nodeState: "CANCELLED",
         summary: "i18n:RUN_CANCELLED",
+        serviceCode: "RUN_CANCELLED",
         displaySummary: "Запуск отменён",
       },
     ];
@@ -442,6 +483,7 @@ describe("компактное представление exact хода", () =>
       messageKind: "STATE",
       state: "CANCELLED",
       summary: "i18n:RUN_CANCELLED",
+      serviceCancellationCode: "RUN_CANCELLED",
     });
     expect(presentRunTranscriptItems([entry])[0]).toMatchObject({
       historical: true,
@@ -449,7 +491,11 @@ describe("компактное представление exact хода", () =>
       serviceHistory: [entry],
     });
     for (const changed of [
-      { summary: "Отменён запуск, внешняя доставка пока неизвестна" },
+      {
+        summary: "Отменён запуск, внешняя доставка пока неизвестна",
+        serviceCancellationCode: undefined,
+      },
+      { summary: "i18n:RUN_CANCELLED", serviceCancellationCode: undefined },
       { progress: "Есть результат" },
       { state: "FAILED" as const },
       { eventType: "NODE_STATE_CHANGED" as const },

@@ -1091,6 +1091,7 @@ components:
         gateRef: { $ref: "#/components/schemas/OpaqueRef" }
         artifactRef: { $ref: "#/components/schemas/OpaqueRef" }
         summary: { type: string, maxLength: 2000 }
+        serviceCode: { $ref: "#/components/schemas/RunEventServiceCode" }
         progress: { type: string, maxLength: 2000 }
         runState: { $ref: "#/components/schemas/RunState" }
         nodeState: { $ref: "#/components/schemas/RunNodeState" }
@@ -1113,6 +1114,10 @@ components:
           pattern: '^inv_[A-Za-z0-9_-]+$'
         execution: { $ref: "#/components/schemas/RunEventExecution" }
         message: { $ref: "#/components/schemas/RunMessage" }
+    RunEventServiceCode:
+      description: Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+      type: string
+      enum: [RUN_CANCELLED, RUN_NODE_CANCELLED, ASSISTANT_TURN_CANCELLED]
     RunEventExecution:
       type: object
       additionalProperties: false

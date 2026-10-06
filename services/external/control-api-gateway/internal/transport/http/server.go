@@ -479,6 +479,9 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 	if err := validateRunIntegrationBinding(value, descriptor); err != nil {
 		return err
 	}
+	if descriptor.FullName() == "controlplane.v1.RunEvent" {
+		projectRunEventServiceCode(value)
+	}
 	return normalizeIntegrationShape(value, descriptor)
 }
 
