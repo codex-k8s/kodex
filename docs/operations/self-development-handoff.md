@@ -10,6 +10,30 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 22:30 UTC: source `3ff2ada5c24e2f365b108f6bd74f05cfe250b4d2`,
+последний exact remote/PR `99d34e6ab4549ec5f725067aa89b48d4aadd146c`.
+NONE1/EACH APPROVE1 remote comments подтверждены, EACH REJECT remote0.
+Own grant typed plan APPLIED/v3 перевёл его в HUMAN_SCOPED/version3,
+connection123;20 READ grants сохранены. Первый scoped root
+`run_4ypXbFF2xiEckl8pytnHEiAi` WAITING_HUMAN,
+Gate `gat_lcDIUUIWJkUWuhwqxzUoMLeZ` OPEN/v1: НЕ approve до устранения
+owner preview fields=[] при наличии gate.resolve. Затем same-root second
+effect, fresh-root REJECT, restore NONE; всего максимум4comments/4gates.
+
+Decisions typed key preview source3ff2ada5: ROOT47unit PASS, existing
+APPROVED history desktop/390px screenshot/overflow0/Console0/read200 PASS,
+host/Pod hashes совпали. Compact files native desktop75px/detailsclosed PASS.
+Исправляются callback raw-prompt/duplicates и ListRuns ADD_TURN eligibility
+overwrite. Обычный Manager `run_a7ciVkUDumEjIPJDwdDS6gv1` ещё НЕ делегировал:
+initial host task избыточно требовал helper-only catalog. Ранний ACK доказан;
+clarification подготовлен, не отправлен до восстановления composer.
+Нет accepted launch, неизвестный effect не повторяется. После fixes native
+delegation/callback/files, Developer push/PR/reviewer/response, bootstrap
+acceptance/merge и полный внутренний Workflow. SSOabsolute06:23UTC;
+Chrome5 обслуживается, чужая6 не затронута. Full65/2–10 isolation OPEN.
+
+## Предыдущий checkpoint22:11
+
 06.10.2026 22:11 UTC: source `473b306bea3315c44bbec54b503c1943bc3553a5`,
 последний exact remote/PR `cb4acfbafa253188a731254a710fbab18451b3e6`.
 Generation4 опубликована во всех семи bindings. Шесть ordinary AGENT smoke

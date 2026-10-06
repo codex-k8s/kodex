@@ -158,6 +158,62 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 22:30 UTC — реальные решения, компактные файлы и найденные UX-дефекты
+
+Source `3ff2ada5c24e2f365b108f6bd74f05cfe250b4d2`; последний exact
+remote/PR `99d34e6ab4549ec5f725067aa89b48d4aadd146c` подтверждён readback,
+компактное тело Draft PR обновлено. Новый frontend preview пока не push.
+
+- PASS: native desktop Run transcript после473b306b показывает три файла
+  отдельными строками75px, details закрыты, имя/размер/CLEAN и download
+  доступны; горизонтального переполнения нет. Host/Pod SHA RunTranscript
+  совпал. Actual download и новая mobile file строка пока NOT RUN.
+- PASS: NONE invocation `inv_iX4JvdaboULVnQfb9ZWHj8ly` создала ровно один
+  comment6026376798 без Gate. HUMAN_EACH_EFFECT APPROVE:
+  `gat_goBtPRIClAh9gl6hTKcw-z2G` version2/APPROVED,
+  `inv_vHSFJlzDWxzLGKk9YEm4eowW` SUCCEEDED, comment6026440416 один.
+  Оба remote readbacks проверили exact requested line и canonical effect
+  marker; marker не является неожиданным изменением пользовательского текста.
+- PASS: отдельный EACH REJECT gate `gat_8ylCCczfkoTQTcwQ3nFyt0Ib`
+  version2/REJECTED, invocation `inv_5FnRgFGu4hO0flftqbSWYppK`
+  REJECTED/INTEGRATION_REJECTED_BY_OWNER. Native callback завершил root
+  `run_DVoxSQNlg8GoaFx3tpOIl_Lv`; свежий полный GitHub read22:22:54 UTC
+  подтвердил requestedLineCount0. Отказ не выдал дополнительный comment.
+- PASS: один typed plan `pln_kw6wRmKv0t_QHilmb7Dvdxeg` native Validate/Apply
+  APPLIED/version3 в22:27:19 UTC, receipt `rct_YDtsVzEUzwOA0i-vnbQDQkmV`.
+  Own comment grant version3/HUMAN_SCOPED/[`/issue_number`], connection123;
+  остальные20 READ grants неизменны. Никакого raw host PATCH.
+- RUNNING: один новый root `run_4ypXbFF2xiEckl8pytnHEiAi`, session
+  `ses_v9FP82fZSyEjEnUZzN-Qk7m0`, запросил первый scoped invoke
+  `inv_IoywIlFJISlauQxIYigM_yQu`. Gate `gat_lcDIUUIWJkUWuhwqxzUoMLeZ`
+  OPEN/version1, root WAITING_HUMAN. Не подтверждён: actual owner preview
+  ошибочно скрывает все поля даже при gate.resolve. Same-root второй effect,
+  fresh-root REJECT и restore NONE пока NOT RUN; счётчик effects не увеличен.
+- FAIL→source fix: Decisions использовал JSON-pointer shape вместо actual
+  typed key fields. В3ff2ada5 primary показывает repo/Issue/body до решения,
+  opaque/private/header не попадают даже в details; unknown/truncated
+  сохраняют warning. ROOT47/47 unit PASS3.20с. Native existing APPROVED
+  history desktop и390px screenshot PASS: exact body доступен, details
+  закрыты, overflow0; Console0, relevant reads200. Host/Pod SHA двух
+  изменённых файлов совпал. Это не подтверждение pending scoped Gate.
+- FAIL: callback prompt показывается как пользовательский текст и дублируется.
+  Исправляется server-assigned typed origin и exact execution dedup,
+  без классификации текста и без изменения provider input. NOT RUN после fix.
+- FAIL: detailed Run и Graph возвращают ADD_TURN, ListRuns snapshot того же
+  version теряет действие и удаляет composer. Actual GET/Graph200/v3/
+  [OPEN,ADD_TURN]22:26 UTC, cache после catalog толькоOPEN. Исправляется
+  общий authoritative eligibility producer, не frontend union прав.
+- Manager `run_a7ciVkUDumEjIPJDwdDS6gv1` SUCCEEDED, ранний ACK CAPTURED,
+  same Pod UID/image/binary/task/inbox/instructions EQUAL. Он не принял
+  launch_workflow: host task лишне требовал workflow catalog, которого нет
+  у ordinary роли. Это не proof delegation. Уточнённый разрешённый task
+  подготовлен, но пока НЕ отправлен из-за composer дефекта. Accepted launch0;
+  никакого повторения неизвестного внешнего эффекта нет.
+
+SSO GET200: absolute07.10 06:23:10UTC (10:23Саратов) покрывает08:30;
+rolling renew работает. Chrome5 периодически обновляется, foreign6 сохранена.
+Full65, bootstrap merge и внутренний полный Workflow остаются OPEN.
+
 ### 06.10.2026 22:11 UTC — семь bindings generation4, шесть файлов и быстрые component проверки
 
 Source `473b306bea3315c44bbec54b503c1943bc3553a5`, последний подтверждённый
