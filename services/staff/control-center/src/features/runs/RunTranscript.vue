@@ -495,8 +495,10 @@ function bytes(value: number): string {
                   {
                     'run-activity-item--compact':
                       item.phase === 'COMMENTARY' ||
+                      Boolean(item.artifact) ||
                       Boolean(item.toolCall) ||
                       Boolean(item.serviceHistory),
+                    'run-activity-item--file': Boolean(item.artifact),
                     'run-activity-item--service': Boolean(item.serviceHistory),
                   },
                 ]"
@@ -506,7 +508,7 @@ function bytes(value: number): string {
                 :data-attempt="item.execution?.attempt"
               >
                 <span
-                  v-if="!compactServiceRow(item)"
+                  v-if="!item.artifact && !compactServiceRow(item)"
                   class="run-activity-item__icon"
                   aria-hidden="true"
                 >
@@ -525,7 +527,7 @@ function bytes(value: number): string {
                   <CircleDot v-else :size="16" />
                 </span>
                 <article class="run-activity-item__content">
-                  <header v-if="!compactServiceRow(item)">
+                  <header v-if="!item.artifact && !compactServiceRow(item)">
                     <strong>{{
                       item.toolCall
                         ? toolLabel(item.toolCall)
@@ -677,6 +679,7 @@ function bytes(value: number): string {
                   <small
                     v-if="
                       item.execution &&
+                      !item.artifact &&
                       !item.phase &&
                       !item.toolCall &&
                       !item.serviceHistory
@@ -690,23 +693,51 @@ function bytes(value: number): string {
                     }}</small
                   >
                   <section v-if="item.artifact" class="run-file-event">
-                    <strong>{{ item.artifact.fileName }}</strong>
-                    <small
-                      >{{ bytes(item.artifact.sizeBytes) }} ·
-                      {{ item.artifact.mediaType }} · v{{
-                        item.artifact.revision
-                      }}</small
-                    >
-                    <StatusBadge :state="item.artifact.scanState" />
+                    <FileText
+                      class="run-file-event__icon"
+                      :size="20"
+                      aria-hidden="true"
+                    />
+                    <div class="run-file-event__body">
+                      <strong
+                        class="run-file-event__name"
+                        :title="item.artifact.fileName"
+                        >{{ item.artifact.fileName }}</strong
+                      >
+                      <div class="run-file-event__metadata">
+                        <small>{{ bytes(item.artifact.sizeBytes) }}</small>
+                        <StatusBadge :state="item.artifact.scanState" />
+                      </div>
+                    </div>
                     <button
                       v-if="item.artifact.nextActions.includes('DOWNLOAD')"
                       type="button"
-                      class="button button--ghost"
+                      class="button button--ghost run-file-event__download"
+                      :aria-label="`${$t('common.download')}: ${item.artifact.fileName}`"
+                      :title="$t('common.download')"
                       @click="emit('download', item.artifact)"
                     >
-                      <Download :size="16" />{{ $t("common.download") }}
+                      <Download :size="18" aria-hidden="true" />
                     </button>
                   </section>
+                  <details v-if="item.artifact" class="run-file-event__details">
+                    <summary>{{ $t("runs.toolDetails") }}</summary>
+                    <p>
+                      {{ item.actor || $t("runs.platformActor") }} ·
+                      <time :datetime="item.occurredAt">{{
+                        time(item.occurredAt)
+                      }}</time>
+                      · {{ item.artifact.mediaType }} · v{{
+                        item.artifact.revision
+                      }}
+                    </p>
+                    <small v-if="item.execution">{{
+                      $t("runs.transcriptTurn", {
+                        turn: item.execution.turnNumber,
+                        attempt: item.execution.attempt,
+                      })
+                    }}</small>
+                  </details>
                   <template v-if="item.toolCall">
                     <SafeMarkdown
                       v-if="toolPreview(item.toolCall, item.working)"
@@ -718,6 +749,7 @@ function bytes(value: number): string {
                     <SafeMarkdown
                       v-if="
                         item.summary &&
+                        !item.artifact &&
                         !compactServiceRow(item) &&
                         (!item.serviceHistory ||
                           ['FAILED', 'CANCELLED'].includes(item.state ?? ''))
@@ -734,7 +766,11 @@ function bytes(value: number): string {
                       }"
                     />
                     <button
-                      v-if="expandableMessage(item) && !item.serviceHistory"
+                      v-if="
+                        !item.artifact &&
+                        expandableMessage(item) &&
+                        !item.serviceHistory
+                      "
                       type="button"
                       class="run-activity-item__expand"
                       :aria-expanded="Boolean(expanded[item.id])"
@@ -749,7 +785,9 @@ function bytes(value: number): string {
                       }}
                     </button>
                     <SafeMarkdown
-                      v-if="item.progress && !item.serviceHistory"
+                      v-if="
+                        item.progress && !item.artifact && !item.serviceHistory
+                      "
                       :content="item.progress"
                     />
                     <details
@@ -887,6 +925,9 @@ function bytes(value: number): string {
   padding: 6px 10px;
   font-size: 0.85rem;
 }
+.run-activity-item--file {
+  grid-template-columns: minmax(0, 1fr);
+}
 .run-activity-item--service > article {
   grid-column: 2;
   border: 0;
@@ -976,8 +1017,44 @@ small {
 }
 .run-file-event {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.run-file-event__icon {
+  color: var(--muted);
+}
+.run-file-event__body {
+  min-width: 0;
+}
+.run-file-event__name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-file-event__metadata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 2px;
+}
+.run-file-event__download {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  justify-self: end;
+}
+.run-file-event__details {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.run-file-event__details > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .run-transcript__tool-group {
   padding: 4px 8px;

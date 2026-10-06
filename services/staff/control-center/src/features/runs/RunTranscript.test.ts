@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { i18n } from "@/app/i18n";
 import RunTranscript from "@/features/runs/RunTranscript.vue";
+import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 import {
   executionKey,
   type RunActivityItem,
@@ -69,6 +70,150 @@ function title(html: string): string {
     )?.[1] ?? ""
   );
 }
+
+describe("RunTranscript: компактные файлы результата", () => {
+  const artifact: Artifact = {
+    ref: "art_fixture_result",
+    version: 2,
+    revision: 3,
+    projectRef: "prj_fixture",
+    runRef: "run_fixture",
+    sessionRef: "ses_fixture",
+    fileName: "result-fixture.md",
+    mediaType: "text/markdown",
+    sizeBytes: 1234,
+    digest: `sha256:${"a".repeat(64)}`,
+    scanState: "CLEAN",
+    lifecycleState: "ACTIVE",
+    source: "AGENT_RESULT",
+    agentBindings: [],
+    previewAvailable: true,
+    createdAt: "2026-10-04T10:00:00Z",
+    nextActions: ["DOWNLOAD"],
+  };
+  const execution = {
+    runRef: "run_fixture",
+    nodeRef: "node_fixture",
+    sessionRef: "ses_fixture",
+    turnRef: "turn_fixture",
+    turnNumber: 2,
+    attempt: 1,
+  };
+  async function fileHtml(
+    nextArtifact: Artifact | undefined,
+    locale: "ru" | "en" = "ru",
+    embedded = true,
+    historical = false,
+  ): Promise<string> {
+    const item: RunActivityItem = {
+      id: "artifact-fixture",
+      kind: "system",
+      historical,
+      actor: "Платформа",
+      state: "SUCCEEDED",
+      summary: "i18n:FILE_RESULT_AVAILABLE",
+      progress: "DUPLICATE_ARTIFACT_PROGRESS",
+      messageKind: "ARTIFACT",
+      occurredAt: artifact.createdAt,
+      artifact: nextArtifact,
+      execution,
+    };
+    const previous = i18n.global.locale.value;
+    i18n.global.locale.value = locale;
+    try {
+      const app = createSSRApp({
+        render: () => h(RunTranscript, { items: [item], embedded }),
+      });
+      app.use(i18n);
+      return await renderToString(app);
+    } finally {
+      i18n.global.locale.value = previous;
+    }
+  }
+
+  it.each(["ru", "en"] as const)(
+    "показывает имя, размер, scan status и доступное скачивание без повторов (%s)",
+    async (locale) => {
+      const before = structuredClone(artifact);
+      const html = await fileHtml(artifact, locale);
+      const details =
+        /<details\b[^>]*class="run-file-event__details"[^>]*>([^]*?)<\/details>/.exec(
+          html,
+        );
+      expect(details).not.toBeNull();
+      const visible = html.replace(details?.[0] ?? "", "");
+      expect(visible).toContain("result-fixture.md");
+      expect(visible).toContain('class="run-file-event__metadata"');
+      expect(visible).toContain(locale === "ru" ? "Проверен" : "Clean");
+      expect(visible).toMatch(/1[,.]2/);
+      expect(visible).toContain(
+        `aria-label="${locale === "ru" ? "Скачать" : "Download"}: result-fixture.md"`,
+      );
+      expect(visible).not.toMatch(
+        /<header|data-state="SUCCEEDED"|run-activity-item__icon|run-activity-item__message/,
+      );
+      expect(html).not.toMatch(
+        /Файл результата доступен|FILE_RESULT_AVAILABLE|DUPLICATE_ARTIFACT_PROGRESS/,
+      );
+      expect(details?.[1]).toContain("text/markdown");
+      expect(details?.[1]).toContain("v3");
+      expect(details?.[1]).toContain(
+        locale === "ru" ? "Ход 2 · попытка 1" : "Turn 2 · attempt 1",
+      );
+      expect(details?.[0]).not.toMatch(/<details[^>]*\bopen\b/);
+      expect(html.match(/data-state="CLEAN"/g)).toHaveLength(1);
+      expect(artifact).toEqual(before);
+    },
+  );
+
+  it.each([
+    [true, false],
+    [false, false],
+    [true, true],
+    [false, true],
+  ])(
+    "применяет общую строку в embedded=%s, historical=%s без потери execution tuple",
+    async (embedded, historical) => {
+      const html = await fileHtml(artifact, "ru", embedded, historical);
+      expect(html).toContain("run-activity-item--file");
+      expect(html).toContain('data-turn-ref="turn_fixture"');
+      expect(html).toContain('data-attempt="1"');
+      expect(html).toContain(
+        'class="button button--ghost run-file-event__download',
+      );
+      expect(html).not.toContain("Файл результата доступен");
+    },
+  );
+
+  it.each(["PENDING", "QUARANTINED", "FAILED"] as const)(
+    "сохраняет серверный scan state %s и не выдаёт download без nextAction",
+    async (scanState) => {
+      const html = await fileHtml({ ...artifact, scanState, nextActions: [] });
+      expect(html).toContain(`data-state="${scanState}"`);
+      expect(html).not.toContain('data-state="CLEAN"');
+      expect(html).not.toContain(
+        'class="button button--ghost run-file-event__download',
+      );
+    },
+  );
+
+  it("сохраняет unavailable fallback без выдуманной file metadata", async () => {
+    const html = await fileHtml(undefined);
+    expect(html).toContain(i18n.global.t("runs.artifactUnavailable"));
+    expect(html).not.toContain('class="run-file-event"');
+    expect(html).not.toContain("result-fixture.md");
+  });
+
+  it("оставляет недоверенное имя текстом, а не active HTML", async () => {
+    const html = await fileHtml({
+      ...artifact,
+      fileName: '<img src=x onerror="unexpected()">.md',
+    });
+    expect(html).toContain("&lt;img");
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain('class="run-file-event__name"');
+  });
+});
 
 describe("RunTranscript: названия native инструментов", () => {
   it.each(["ru", "en"] as const)(
