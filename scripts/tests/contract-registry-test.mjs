@@ -56,7 +56,8 @@ const riskOperations = [
 ];
 
 function checkRiskContract(api, policy) {
-  assert.equal(policy.policy_revision, 91, 'RISK_POLICY_REVISION');
+  // Canonical policygen revision включает PROJECT self-grant и required Workflow launch.
+  assert.equal(policy.policy_revision, 92, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');
@@ -112,6 +113,8 @@ test('image risk contract has exact human-only methods and full safe report page
 
 test('image risk contract rejects delegated caller, project authority, missing pins and hidden severity', () => {
   for (const mutate of [
+    (api, policy) => { policy.policy_revision = 91; },
+    (api, policy) => { policy.policy_revision = 93; },
     (api, policy) => { policy.policy.operation_bindings.find(value => value.operation_id === riskOperations[0][0]).caller_workload_id = 'agent-runner'; },
     (api, policy) => { policy.policy.operation_bindings.find(value => value.operation_id === riskOperations[2][0]).project_required = true; },
     (api) => { api.components.schemas.ImageVulnerabilitySeverity.enum.pop(); },
