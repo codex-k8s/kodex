@@ -278,7 +278,7 @@ function managedFixture(change = {}) {
     inputSchemaSha256: hash(schema),
   };
   const raw =
-    '{"apiVersion":"integrations.kodex.io/v1","kind":"IntegrationPackage","metadata":{"key":"github","version":"2.3.1","origin":"UI"},"spec":{"credential":{"secretKey":"token","kind":"TOKEN"}}}';
+    '{"apiVersion":"integrations.kodex.io/v1","kind":"IntegrationPackage","metadata":{"key":"github","version":"2.4.0","origin":"UI"},"spec":{"credential":{"secretKey":"token","kind":"TOKEN"}}}';
   const content = change.content ?? raw;
   const digest = hash(content);
   const shippedDigest = hash(
@@ -311,7 +311,7 @@ function managedFixture(change = {}) {
     copyProvenance: {
       origin: "SHIPPED",
       sourceRef: "github",
-      sourceRevision: "2.3.1",
+      sourceRevision: "2.4.0",
       sourceVersion: 300,
       sourceDigest: shippedDigest,
     },
@@ -334,12 +334,18 @@ function managedFixture(change = {}) {
     {
       ...change,
       connection: {
+        definitionVersion: "2.4.0",
         definitionDigest: digest,
         capabilities: [capability],
         ...change.connection,
       },
-      readback: { definitionDigest: digest, ...change.readback },
+      readback: {
+        definitionVersion: "2.4.0",
+        definitionDigest: digest,
+        ...change.readback,
+      },
       definition: {
+        definitionVersion: "2.4.0",
         version: 300,
         digest: shippedDigest,
         capabilities: [capability],
@@ -366,7 +372,11 @@ function managedFixture(change = {}) {
       !change.effect
     ) {
       const value = await response.json();
-      return json({ ...value, definitionDigest: digest });
+      return json({
+        ...value,
+        definitionVersion: "2.4.0",
+        definitionDigest: digest,
+      });
     }
     return response;
   };
@@ -391,6 +401,76 @@ test("exact SHIPPED UI-copy: owner history/current/content/schema + actual impac
     2,
   );
   assert.equal(f.reads.length, 2);
+});
+
+test("copy generation300/current catalog301 допускаются только при прежнем exact immutable package2.4", async () => {
+  const f = managedFixture({ definition: { version: 301 } });
+  assert.equal(f.config.copyProvenance.sourceVersion, 300);
+  assert.equal(f.config.copyProvenance.sourceRevision, "2.4.0");
+  assert.equal(
+    (await configureExactIntegrationCredential(f.selected, f.deps)).status,
+    "PASS",
+  );
+  assert.equal(f.reads.length, 2);
+  assert.equal(f.calls.filter((call) => call.method === "PUT").length, 1);
+});
+
+test("catalog generation не подменяет immutable pins: future/unsafe/changed package закрыты до key и PUT", async () => {
+  const baseline = managedFixture();
+  const cases = [
+    ...[0, -1, 300.5, "301", Number.MAX_SAFE_INTEGER + 1].map((version) => ({
+      definition: { version },
+    })),
+    ...[0, -1, 300.5, "300", Number.MAX_SAFE_INTEGER + 1, 302].map(
+      (sourceVersion) => ({
+        definition: { version: 301 },
+        config: {
+          copyProvenance: { ...baseline.config.copyProvenance, sourceVersion },
+        },
+      }),
+    ),
+    { definition: { version: 301, definitionVersion: "2.5.0" } },
+    { definition: { version: 301, digest: "b".repeat(64) } },
+    {
+      definition: { version: 301 },
+      config: {
+        copyProvenance: {
+          ...baseline.config.copyProvenance,
+          sourceRef: "foreign",
+        },
+      },
+    },
+    {
+      definition: { version: 301 },
+      content: baseline.revision.content.replace(
+        '"secretKey":"token"',
+        '"secretKey":"foreign"',
+      ),
+    },
+    {
+      definition: { version: 301 },
+      connection: { definitionVersion: "2.3.1" },
+    },
+    {
+      definition: { version: 301 },
+      connection: { definitionDigest: "b".repeat(64) },
+    },
+    {
+      definition: { version: 301 },
+      connection: {
+        capabilities: [{ ...baseline.capability, inputSchema: "{}" }],
+      },
+    },
+  ];
+  for (const change of cases) {
+    const f = managedFixture(change);
+    assert.equal(
+      (await configureExactIntegrationCredential(f.selected, f.deps)).status,
+      "FAIL",
+    );
+    assert.equal(f.reads.length, 1);
+    assert.equal(f.calls.filter((call) => call.method === "PUT").length, 0);
+  }
 });
 
 test("managed pins all-or-none, exact GitHub only; неизвестные CLI aliases запрещены", () => {

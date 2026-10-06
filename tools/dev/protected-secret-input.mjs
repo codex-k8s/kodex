@@ -416,7 +416,10 @@ async function requireManagedCopy(client, options, connection, definition) {
         provenance?.origin === "SHIPPED" &&
         provenance.sourceRef === definition.key &&
         provenance.sourceRevision === definition.definitionVersion &&
-        provenance.sourceVersion === definition.version &&
+        // OCC каталога может вырасти без смены immutable package pins.
+        version(provenance.sourceVersion) &&
+        version(definition.version) &&
+        provenance.sourceVersion <= definition.version &&
         provenance.sourceDigest === definition.digest &&
         Array.isArray(page.items) &&
         page.items.length <= 100,
