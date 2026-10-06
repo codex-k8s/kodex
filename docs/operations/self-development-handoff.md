@@ -10,6 +10,28 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 15:26 UTC: source `ffb9222f`, frontend fix `d4ec7b82`
+интегрирован. Native ENV38 Publish выполнен один раз с единственным
+потребителем «Помощник Kodex | Dev». Draft version3/PUBLISHED;
+environment version2/revision2/READY, published version
+`renvv_ZESMhTeQ1Q_LqBWq40r18U9H`, digest
+`7233e78b79e4833eb363b5fa1ae5fc19265f798b03a42da99b8012f7cec490f3`.
+Binding `aenv_PFnDbPM0TBK_1-9-8aTWE4mu` version2, digest
+`1b362d9bda112d896d26473813278dbd8db395f1582311a3c62e09ee67be1a45`,
+exact published version выше. Собственный B3 image и38 tools сохранены;
+configuration `rconf_gLQ32wIvuGKKJaQb4t2l910v` version2 не менялась.
+Native UI38из42/Publish enabled и localized inputs подтверждены screenshot.
+390px mobile emulation: document/dialog width390, overflow0; компактность
+header/actions ещё улучшается. ROOT targeted35/35, forced typecheck и
+callback search diagnostics units — PASS. Source/Pod hashes фронта и
+runtime-controller совпали; это debug hot reload, не immutable acceptance.
+Перед первым ownENV38 Context7 smoke ранний provider observer запущен;
+реальный smoke сейчас выполняется. GitHub connection пока отсутствует.
+Следующее: ownENV38 Context7/web/context/public Git proof, потом6roles.
+Full65 OPEN; PR остаётся Draft, предыдущие FAIL ниже — исторические.
+
+## Предыдущий checkpoint
+
 06.10.2026 15:12 UTC: source/remote/PR1798 `b80009fb` подтверждены ранее;
 новый live readback B3 — ACCEPTED/PROMOTED, artifact version10,
 `imgart_L23Bq2MEYAWPUNef41b1C4Aj`, image digest

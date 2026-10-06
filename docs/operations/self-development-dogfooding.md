@@ -4617,3 +4617,35 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
   Адресный frontend fix готовится, server validation/policy не ослаблены.
   Screenshot просмотрен; после reload Console error/warn0. Предыдущий405 —
   неверный диагностический GET host, не дефект приложения. Full65 OPEN.
+
+### 06.10.2026 15:26 UTC — публикация собственного PROJECT ENV38
+
+- Source `ffb9222fcfd28ad31aa8350f95cebcd99621ef53`: frontend hydration
+  `d4ec7b82` и diagnostic-only search classification `ffb9222f`.
+  ROOT35/35 targeted frontend unit и forced typecheck PASS; callback search
+  units PASS0.036с. Изолированный frontend patch66/66 и lint/format/typecheck
+  PASS; diagnostic patch full callback suite/vet/privacy PASS.
+- Native exact own artifact GET/inventory восстановлены, UI38из42, Publish
+  enabled. Editable metadata локализована без неявной записи перевода.
+  Desktop screenshot проверен. Mobile emulation390px: viewport/document и
+  оба dialog390px, overflow0; header/actions требует компактности, отдельная
+  UX-доработка идёт, mobile UX целиком ещё не принят. Console после reload0.
+- Publish/impact выбрал ровно1 потребителя: PROJECT helper. Single Publish
+  завершился: draft `renvd_IsyKjLINMobdJTWrM_Fm9HY0` version3/PUBLISHED;
+  environment `renv_zycHL70M8UYGvTAU_W6fgvaB` version2/ACTIVE/ready=true,
+  blockers0. Published `renvv_ZESMhTeQ1Q_LqBWq40r18U9H`, revision2/digest
+  `7233e78b79e4833eb363b5fa1ae5fc19265f798b03a42da99b8012f7cec490f3`.
+  Exact own B3 artifact/manifest сохранён, tools38.
+- Helper binding `aenv_PFnDbPM0TBK_1-9-8aTWE4mu` version2, versionRef
+  `renvv_ZESMhTeQ1Q_LqBWq40r18U9H`, digest
+  `1b362d9bda112d896d26473813278dbd8db395f1582311a3c62e09ee67be1a45`.
+  Runtime configuration version2/digest755e7171…157fe4 не изменена.
+- Host/Pod source PASS: editor SHA
+  `a07c636f468b4e0d6c7b9a5a13a2c557f62a7994ed4a7dde738edc32eef01c4b`;
+  callback search SHA
+  `7c63bcb6a8b5bc46110c324bfba465eac8c6ca4ee3dbc01faf32950b4c69856f`.
+  Оба workload Ready; source proof не подменяет executable/live search proof.
+  Новые closed failure classes не изменяют grants/eligibility/RPC outcomes.
+- OwnENV38 smoke и следующий team/bootstrap/dogfooding ещё OPEN; checklist
+  не отмечен по одной публикации. GitHub connection отсутствует; Context7
+  две exact helper grants присутствуют, но ownENV38 invocation ещё проверяется.
