@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   persistAssistantConversationRef,
+  persistAssistantScope,
   persistAssistantWorkspaceOpen,
   restoreAssistantConversationRef,
+  restoreAssistantScope,
   restoreAssistantWorkspaceOpen,
 } from "./workspace-state";
 
@@ -25,6 +27,60 @@ function memoryStorage(
 }
 
 describe("assistant workspace state", () => {
+  it("сохраняет режим отдельно для каждого проекта и не выводит его из ref диалога", () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    persistAssistantScope("prj_sales", "PROJECT", storage);
+    persistAssistantScope("prj_support", "SYSTEM", storage);
+    persistAssistantConversationRef(
+      "prj_other",
+      "cnv_project",
+      storage,
+      "PROJECT",
+    );
+    expect(restoreAssistantScope("prj_sales", storage)).toBe("PROJECT");
+    expect(restoreAssistantScope("prj_support", storage)).toBe("SYSTEM");
+    expect(restoreAssistantScope("prj_other", storage)).toBe("SYSTEM");
+    expect(restoreAssistantScope(undefined, storage)).toBe("SYSTEM");
+    const count = values.size;
+    persistAssistantScope(undefined, "PROJECT", storage);
+    expect(values.size).toBe(count);
+    persistAssistantScope("prj_sales", "SYSTEM", storage);
+    expect(restoreAssistantScope("prj_sales", storage)).toBe("SYSTEM");
+  });
+
+  it.each([null, "", "project", "SYSTEM_OTHER", " PROJECT", "cnv_saved"])(
+    "отклоняет неизвестное сохранённое предпочтение %s",
+    (value) => {
+      const storage = {
+        getItem: () => value,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      };
+      expect(restoreAssistantScope("prj_sales", storage)).toBe("SYSTEM");
+    },
+  );
+
+  it("недоступное хранилище не блокирует работу и не восстанавливает PROJECT", () => {
+    const storage = {
+      getItem: () => {
+        throw new Error("storage unavailable");
+      },
+      setItem: () => {
+        throw new Error("storage unavailable");
+      },
+      removeItem: () => undefined,
+    };
+    expect(restoreAssistantScope("prj_sales", storage)).toBe("SYSTEM");
+    expect(() =>
+      persistAssistantScope("prj_sales", "PROJECT", storage),
+    ).not.toThrow();
+  });
+
   it("хранит последний выбранный диалог отдельно для общего и проектного контекста", () => {
     const values = new Map<string, string>();
     const storage = {

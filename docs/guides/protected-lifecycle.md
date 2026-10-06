@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.3
-updated: 2026-09-08
+version: 1.1.4
+updated: 2026-10-06
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -201,6 +201,16 @@ delivery ID, canonical payload digest и фактический post/interaction
   current tuple процесса, occurrence и `ScheduledRun`.
 
 ## Свежая `RuntimeRevision`
+
+Право помощника использовать configuration tools выводится из принадлежащего
+серверу SYSTEM либо PROJECT профиля и точной связки organization/project,
+root actor, conversation/session/turn/node/attempt и immutable revision.
+Классификация автора события не является источником этого права: проектный
+помощник сохраняет автора AGENT, не становится SYSTEM_ASSISTANT и не выдаёт
+прав обычному сотруднику. Неизвестный профиль, чужой владелец, несовпадающий
+snapshot либо terminal execution закрыто отклоняются. До выполнения эффекта
+сохраняется RUNNING; SUCCEEDED/FAILED используют ту же привязку и terminal
+fence. Этот путь не заменяет отдельную проверку точного integration grant.
 
 Материализованные `SessionContext` и continuation notice имеют исполняемый
 consumer вплоть до фактического provider input, а не только запись в snapshot

@@ -10,6 +10,21 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 04:49 UTC — актуальная точка продолжения поверх `f99f85a5`:
+PROJECT02 `run_doreHYImEt8ia1i36EGaZ8j7` SUCCEEDED; конфигурационные tools
+больше не отклоняются в RUNNING projection, автор остаётся AGENT. Ранний
+provider ACK и protected preview exact template/materialization совпали.
+Frontend восстановление PROJECT после reload и native POST202 доказаны.
+Новый own-image plan `pln_5EsCYDfTgy8Xomtbs7Ld2VCT` revision1 уже APPLIEDv3,
+recipe `imgrec_6Ibn5suxWOqUYH2QMqIPiv5n` создан однократно04:47:21.
+Рабочая вкладка2 — его штатный PROJECT экран. Следующее действие: build,
+report, новое exact risk decision при необходимости, admission/promotion;
+затем typed own ENV38/network/managed Context7, четыре PROJECT smoke.
+Ни проект, ни PROJECT профиль, ни recipe не создавать повторно. Подробные
+адресные local/live PASS и actual binary evidence gap — журнал04:39–04:49.
+SYSTEM п.7 завершён; PROJECT п.8 и оставшийся full65 НЕ завершены.
+Старые срезы ниже — исторические, не текущая точка продолжения.
+
 06.10.2026 04:20 UTC: source `9e0a1c2fc8ce2c5b128ffd04e3fbea1732df84d2`
 запушен, remote/PR1798 exact readback PASS. Runtime catalog human name проверен
 живым SYSTEM65, old marker в ответе отсутствует. SYSTEM gen10/ENV25 gate п.7

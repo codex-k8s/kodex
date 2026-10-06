@@ -4080,3 +4080,53 @@ system_assistant.go `2cad51085a9424e1b863faa2fc77ade4fd62c78be63505d20816ef40b7e
 совпали; hot reload04:31:41 восстановил CP readiness. Context7 protobuf-go
 Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT RUN: сначала
 исправляется отдельная configuration-tool projection boundary.
+
+### 06.10.2026 04:39–04:49 UTC — PROJECT tools, восстановление scope и первый собственный recipe
+
+- Исправления проверены на tree поверх `f99f85a5e741f2ead026c3c4b632043340563335`:
+  отдельная server-owned PROJECT eligibility для записи configuration tools,
+  без подмены автора SYSTEM и без новых grants; frontend сохраняет SYSTEM/PROJECT
+  выбор отдельно для каждого проекта и восстанавливает до первой загрузки.
+  Исправлен SQL boundary header `role_images_risk_claim_attempt` на `:exec`;
+  исполняемый UPDATE и applied migrations не изменены. Общий инвариант
+  eligibility/авторства закреплён в GUIDE-DOC-006.
+- PASS ROOT: три disposable PostgreSQL suites — 29.096с, включая новый
+  RuntimeAssistantRecordToolCallPhaseComponent с 14 отрицательными owner/profile/
+  snapshot/state случаями, RUNNING→SUCCEEDED/FAILED всех четырёх tools,
+  duplicate conflict и terminal fence; существующие activity и PROJECT profile
+  suites тоже PASS. Matcher units0.060с, repository vet, SQL boundary, diff check
+  PASS. Frontend store/workspace-state61 tests0.740с, адресные ESLint/Prettier и
+  forced vue-tsc PASS. Это адресные локальные проверки, не весь baseline/CI.
+- PASS source/Pod readback runtime.go SHA256
+  `fc016695e8cef0f17f9f3564e69a8ef5dbf16390040f73f6c66fdd1a1358e761`,
+  SQL `475bf11676c6250421985af740ebff0de5b62909f0f570b71e1da3303e9a360d`,
+  store `c48d368771bcc8449e993ab1c1ef8a67474bc52d592cce40cb97b7d6a2b1c25f`
+  совпадают. CP hot reload Ready04:39:48. Immutable runner всё ещё source
+  `ad400574`; новые CP/frontend edits не объявляются обновлённым runner image.
+- PASS Chrome: reload04:41:07 и04:46:~50 сохраняют PROJECT, текущий проект и
+  conversation `cnv_l0xK2yyTOtfih5sTTydyk7Sf`; native send202 вместо прежнего500.
+  PROJECT02 `run_doreHYImEt8ia1i36EGaZ8j7` SUCCEEDED, user turn
+  `trn_6CYXF8hf20YrF_H0Fr6nN2gp`. Автор всех16 tool phase events — AGENT;
+  configuration catalog/search/proposal RUNNING→SUCCEEDED доказаны read200.
+  Переписка справа/слева, компактные tools и применённый план просмотрены
+  скриншотом; Console error/warn отсутствовали, relevant reads200.
+- PASS ранний provider ACK PROJECT02: RuntimeRevision
+  `rrev_qtYvMRvwwOo4T7pJaYfbDRkw`, generation1, PROJECT ENVrevision1,
+  gpt-6.1-sol/medium. Template digest
+  `5cc52a4fed5bcb5e14af55381a4abab2220ae073d2b9dd963feeb8670747a054`
+  и materialization digest
+  `86dc542ed82e3a284fdcf7a264aac9df87ab3ce868326aa18ec7a1dfc6e24c8f`
+  совпали с protected RUN preview200, complete=true, diagnostics=[].
+  Инструкции совпали с provider input; toolsCount0 относится к базовому ENV.
+  NOT RUN distinct actual binary readback: exec после terminal cleanup вернул
+  container not found; чужой SYSTEM binary readback не заменяет этот пробел.
+- PASS native plan `pln_5EsCYDfTgy8Xomtbs7Ld2VCT`, revision1:
+  VALIDv2 → APPLIEDv3 однократно04:47:21.996706. Один CREATE_ROLE_IMAGE_RECIPE
+  для PROJECT backing agent; Dockerfile/environmentKey назначил сервер по
+  штатному pinned template. Receipt `rct_dxLgq2CNpBp6DWbFU-kBp53V`, audit
+  `aud__dntsmoBxuxWYqliDLbt0y5L`; created recipe
+  `imgrec_6Ibn5suxWOqUYH2QMqIPiv5n`, имя kodex-selfdev-project-assistant.
+  Это создание рецепта, НЕ завершённые build/admission/promotion/ENV.
+- NEXT: через штатный экран build/report, новое точное решение о риске при
+  необходимости и promotion. Далее PROJECT own ENV38/network/Context7 и
+  четыре фактических smoke; п.8, шесть ролей и Workflow всё ещё OPEN.

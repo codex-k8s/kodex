@@ -21,7 +21,11 @@ import {
   validatePlanDraft,
 } from "@/features/assistant/api";
 import { conversationMatchesContext } from "@/features/assistant/context";
-import { restoreAssistantConversationRef } from "@/features/assistant/workspace-state";
+import {
+  persistAssistantScope,
+  restoreAssistantConversationRef,
+  restoreAssistantScope,
+} from "@/features/assistant/workspace-state";
 import type {
   AssistantContextDescriptor,
   AssistantConversation,
@@ -181,7 +185,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     nextProjectRef?: string,
     select = true,
     nextAssistantScope: AssistantScope = nextProjectRef
-      ? assistantScope.value
+      ? projectRef.value === nextProjectRef
+        ? assistantScope.value
+        : restoreAssistantScope(nextProjectRef)
       : "SYSTEM",
   ): Promise<void> {
     cancelReads();
@@ -471,8 +477,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     const projectChanged = projectRef.value !== nextProjectRef;
     context.value = nextContext;
     projectRef.value = nextProjectRef;
-    if (!nextProjectRef && assistantScope.value === "PROJECT")
-      assistantScope.value = "SYSTEM";
+    if (projectChanged)
+      assistantScope.value = restoreAssistantScope(nextProjectRef);
+    else if (!nextProjectRef) assistantScope.value = "SYSTEM";
     if (projectChanged) {
       cancelReads();
       pendingCreatedConversationVersions.clear();
@@ -776,6 +783,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       (scope === "PROJECT" && !projectRef.value)
     )
       return;
+    persistAssistantScope(projectRef.value, scope);
     await load(context.value, projectRef.value, true, scope);
   }
 

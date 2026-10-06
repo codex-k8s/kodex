@@ -523,6 +523,109 @@ describe("assistant workspace store", () => {
     expect(store.selectedRef).toBe(newer.ref);
   });
 
+  it("после reload восстанавливает PROJECT режим до чтения истории и выбранный диалог", async () => {
+    const selected = projectConversation();
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.scope.prj_sales"
+            ? "PROJECT"
+            : key === "kodex.assistant.workspace.conversation.PROJECT.prj_sales"
+              ? selected.ref
+              : null,
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [selected] });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    expect(store.assistantScope).toBe("PROJECT");
+    await store.load(context, "prj_sales");
+    expect(readProjectAssistantMock).toHaveBeenCalledWith(
+      "prj_sales",
+      expect.any(AbortSignal),
+    );
+    expect(readConversationsMock.mock.calls[0]?.[3]).toMatchObject({
+      assistantScope: "PROJECT",
+      assistantRef: profile.agentRef,
+    });
+    expect(store.selectedRef).toBe(selected.ref);
+    expect(store.selectedConversation?.assistantProfileRef).toBe(profile.ref);
+  });
+
+  it("direct load и новый чат без saved ref используют сохранённый PROJECT режим", async () => {
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.scope.prj_sales"
+            ? "PROJECT"
+            : null,
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [] });
+    createConversationMock.mockResolvedValue(projectConversation());
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    expect(store.assistantScope).toBe("PROJECT");
+    await store.startConversation();
+    expect(createConversationMock).toHaveBeenCalledWith(
+      context,
+      "prj_sales",
+      "PROJECT",
+    );
+  });
+
+  it("сохраняет явный SYSTEM выбор и не сбрасывает его повторным setContext", async () => {
+    const values = new Map([
+      ["kodex.assistant.workspace.scope.prj_sales", "PROJECT"],
+    ]);
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValue({ items: [conversation()] });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    await store.selectAssistantScope("SYSTEM");
+    expect(values.get("kodex.assistant.workspace.scope.prj_sales")).toBe(
+      "SYSTEM",
+    );
+    store.setContext({ ...context }, "prj_sales");
+    expect(store.assistantScope).toBe("SYSTEM");
+  });
+
+  it("не переносит режим и выбранный диалог между проектами или в общий контекст", () => {
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.scope.prj_sales"
+            ? "PROJECT"
+            : null,
+      },
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    expect(store.assistantScope).toBe("PROJECT");
+    store.conversations = [projectConversation()];
+    store.selectedRef = projectConversation().ref;
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    expect(store.assistantScope).toBe("SYSTEM");
+    expect(store.selectedRef).toBeUndefined();
+    expect(store.conversations).toEqual([]);
+    store.setContext(context, "prj_sales");
+    expect(store.assistantScope).toBe("PROJECT");
+    store.setContext(context);
+    expect(store.assistantScope).toBe("SYSTEM");
+  });
+
   it("восстанавливает выбор после пустого initial snapshot и смены scope, не после ручного выбора", () => {
     vi.stubGlobal("window", {
       sessionStorage: {

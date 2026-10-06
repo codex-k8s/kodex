@@ -214,19 +214,19 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, err
 	}
 	var actorRef, actorName string
-	var systemAssistant, grantAllowed bool
+	var systemAssistant, eligibleConfigurationAssistant, grantAllowed bool
 	if err := tx.QueryRow(ctx, queryRuntimeRecordtoolcallSelectActorAndGrant, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "node_id": lease["nodeID"], "generation": payload.Generation,
 		"grant_ref": payload.GrantRef, "capability_ref": payload.CapabilityRef,
 		"tool": payload.Tool, "purpose": filePurpose,
-	}).Scan(&actorRef, &actorName, &systemAssistant, &grantAllowed); errors.Is(err, pgx.ErrNoRows) {
+	}).Scan(&actorRef, &actorName, &systemAssistant, &eligibleConfigurationAssistant, &grantAllowed); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	} else if !grantAllowed {
 		return commandOutcome{}, errs.ErrForbidden
 	}
-	if !toolCapabilityMatches(payload.Tool, payload.CapabilityRef, payload.GrantRef != "", systemAssistant) {
+	if !toolCapabilityMatches(payload.Tool, payload.CapabilityRef, payload.GrantRef != "", eligibleConfigurationAssistant) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	previous, err := latestRuntimeActivity(ctx, tx, scope, lease, "TOOL", payload.CallRef)
@@ -302,7 +302,7 @@ func containsSensitiveToolKey(value any) bool {
 	return false
 }
 
-func toolCapabilityMatches(tool, capability string, integration, systemAssistant bool) bool {
+func toolCapabilityMatches(tool, capability string, integration, configurationAssistant bool) bool {
 	if runtimecontract.IsRuntimeFileTool(tool) {
 		return integration && capability == ""
 	}
@@ -332,7 +332,7 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 		"propose_run_metadata":       "platform.presentation.propose",
 		"delegate_agent":             "platform.run.delegate",
 	}
-	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !systemAssistant {
+	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !configurationAssistant {
 		return false
 	}
 	return expected[tool] != "" && expected[tool] == capability

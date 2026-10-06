@@ -22,15 +22,22 @@ func TestNativeToolProjectionDoesNotRequireMCPGrant(t *testing.T) {
 	}
 }
 
-func TestAssistantResourceSearchProjectionIsSystemOnly(t *testing.T) {
+func TestAssistantConfigurationProjectionRequiresEligibleAssistant(t *testing.T) {
 	t.Parallel()
-	if !toolCapabilityMatches("find_platform_resources", "platform.resources.search", false, true) {
-		t.Fatal("system assistant resource search projection was rejected")
-	}
-	if toolCapabilityMatches("find_platform_resources", "platform.resources.search", false, false) ||
-		toolCapabilityMatches("find_platform_resources", "platform.configuration.read", false, true) ||
-		toolCapabilityMatches("find_platform_resources", "platform.resources.search", true, true) {
-		t.Fatal("resource search projection crossed its exact capability boundary")
+	for tool, capability := range map[string]string{
+		"get_configuration_catalog":  "platform.configuration.read",
+		"find_platform_resources":    "platform.resources.search",
+		"propose_configuration_plan": "platform.configuration.plan",
+		"propose_assistant_metadata": "platform.presentation.propose",
+	} {
+		if !toolCapabilityMatches(tool, capability, false, true) {
+			t.Fatalf("eligible configuration assistant projection %s was rejected", tool)
+		}
+		if toolCapabilityMatches(tool, capability, false, false) ||
+			toolCapabilityMatches(tool, "platform.unknown", false, true) ||
+			toolCapabilityMatches(tool, capability, true, true) {
+			t.Fatalf("configuration assistant projection %s crossed its exact capability boundary", tool)
+		}
 	}
 }
 
