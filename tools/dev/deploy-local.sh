@@ -656,6 +656,42 @@ require_empty_local_image_admission_runs() {
     fail 'local image admission upgrade requires an empty managed Job and workspace inventory'
 }
 
+handover_local_image_admission_pause() {
+  [[ "$security_profile" == trusted-cluster ]] || return 0
+  [[ "$context" == k3d-kodex && "$mode" == apply && ( "$stage" == supply-chain || "$stage" == full ) ]] || fail 'image admission pause handover profile is invalid'
+  local controller desired location patch expected
+  controller=$(kubectl -n "$namespace" get deployment/image-admission-controller --ignore-not-found --show-managed-fields=true -o json) || fail 'image admission pause handover read failed'
+  [[ -n "$controller" ]] || return 0
+  location=$(jq -c '[.spec.template.spec.containers | to_entries[] | select(.value.name == "image-admission-controller") |
+    .key as $container | .value.env | to_entries[] | select(.value.name == "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS") |
+    {path:["template","spec","containers",$container,"env",.key,"value"], entry:.value}] |
+    if length == 0 then null elif length == 1 and (.[0].entry == {name:"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS",value:"true"} or
+      .[0].entry == {name:"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS",value:"false"}) then .[0] else error("invalid pause input") end' <<<"$controller") || fail 'image admission pause handover input is invalid'
+  [[ "$location" != null && "$(jq -r '.entry.value' <<<"$location")" == true ]] || return 0
+  desired=$(yq -o=json -I=0 'select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and .metadata.name == "image-admission-controller") |
+    .spec.template.spec.containers[] | select(.name == "image-admission-controller")' "$render" | jq -sre 'if length==1 and
+    ([.[0].env[]? | select(.name=="IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS")] == [{name:"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS",value:"false"}]) then .[0].image else error("invalid resume image") end') || fail 'image admission pause handover render is invalid'
+  jq -e --arg image "$desired" --arg namespace "$namespace" '
+    .metadata.name=="image-admission-controller" and .metadata.namespace==$namespace and
+    (.metadata.uid|test("^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")) and (.metadata.resourceVersion|test("^[0-9]+$")) and
+    .metadata.labels["app.kubernetes.io/part-of"]=="kodex" and .metadata.labels["kodex.dev/local-profile"]=="hot-reload" and
+    .spec.replicas==0 and (.status.replicas//0)==0 and (.status.readyReplicas//0)==0 and (.status.availableReplicas//0)==0 and
+    ([.spec.template.spec.containers[]|select(.name=="image-admission-controller")|.image]==[$image]) and
+    ([.metadata.managedFields[]? | select(.fieldsV1["f:spec"]["f:template"]["f:spec"]["f:containers"]["k:{\"name\":\"image-admission-controller\"}"]["f:env"]["k:{\"name\":\"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS\"}"]|has("f:value"))] |
+      length==1 and (.[0] as $owner | $owner.fieldsType=="FieldsV1" and $owner.apiVersion=="apps/v1" and ($owner.subresource//"")=="" and
+      (($owner.manager=="kubectl-patch" and $owner.operation=="Update") or ($owner.manager=="kodex-local-dev" and (["Update","Apply"]|index($owner.operation))!=null))))
+  ' <<<"$controller" >/dev/null || fail 'image admission pause handover ownership is invalid'
+  readback_local_control_plane_image_policy
+  readback_local_supply_chain_deployment_inputs control-plane
+  readback_local_supply_chain_deployment_inputs control-api-gateway
+  require_empty_local_image_admission_runs
+  patch=$(jq -c --argjson location "$location" '[{op:"test",path:"/metadata/uid",value:.metadata.uid},{op:"test",path:"/metadata/resourceVersion",value:.metadata.resourceVersion},
+    {op:"test",path:"/spec",value:.spec},{op:"replace",path:("/spec/"+($location.path|map(tostring)|join("/"))),value:"false"}]' <<<"$controller")
+  expected=$(jq -c --argjson location "$location" '.spec|setpath($location.path;"false")' <<<"$controller")
+  kubectl -n "$namespace" patch deployment/image-admission-controller --type=json --field-manager=kodex-local-dev -p "$patch" >/dev/null || fail 'image admission pause handover CAS failed'
+  kubectl -n "$namespace" get deployment/image-admission-controller -o json | jq -e --arg uid "$(jq -r '.metadata.uid' <<<"$controller")" --argjson expected "$expected" '.metadata.uid==$uid and .spec==$expected' >/dev/null || fail 'image admission pause handover readback failed'
+}
+
 require_local_image_admission_policy_upgrade() {
   [[ "$stage" == supply-chain || "$stage" == full ]] ||
     fail 'immutable image admission upgrade requires supply-chain or full activation'
@@ -2201,6 +2237,7 @@ PY
       kubectl -n "$namespace" rollout status deployment/control-api-gateway --timeout=15m >/dev/null ||
         fail 'control API gateway is unavailable after image admission owner publication'
       readback_local_supply_chain_deployment_inputs control-api-gateway
+      handover_local_image_admission_pause
       apply_render image-supply-chain-controllers '
         select(.kind == "Deployment" and
           (.metadata.name | test("^(image-admission-controller|role-image-builder|runtime-controller)$")))
@@ -2494,6 +2531,7 @@ if [[ "$mode" == apply ]]; then
   # CP seed назначает accountRef; каталог и warm не могут предшествовать импорту.
   kubectl -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
     fail 'control plane is unavailable before provider bootstrap'
+  handover_local_image_admission_pause
   apply_render image-admission-workloads '
     select(.kind == "Deployment" and
       (.metadata.name == "image-admission-controller" or

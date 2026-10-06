@@ -701,3 +701,16 @@ ROOT reader9/9 и deploy selection27/27 PASS. Следующий clean deploy ch
 должен явно содержать pause=false и пройти fresh supply-chain apply/readback.
 Бинарные OCI COPY-входы неизменны: c17d3c остаётся compiled source50545;
 не приписывать ему новый deploy SHA. Полный live resume пока NOT RUN.
+
+06.10.2026 06:39 UTC: apply sourceea35838d FAIL на SSA field ownership
+pause.value (`kubectl-patch`/Update). Controller остановленreplicas0, inventory0;
+CP/gateway Ready. Это не client-side pipeline: прежняя гипотеза уточнена.
+Следующий code-first fix — canonical stopped/fenced single-field ownership
+handover к `kodex-local-dev`, затем обычный apply/readback. Никакого broadforce,
+отдельного resume/manualPATCH. Бинарный c17d3c/compiled50545 неизменен.
+
+06.10.2026 06:49 UTC: интегрирован frozen SSA handover4/4; ROOT Node9/9,
+selection28/28 и syntax/diff-check PASS. Common invariant обновлён.
+Следующий шаг — clean checkpoint, fresh canonical render и обычный
+supply-chain apply/readback; live single-field manager transfer и pause=false
+пока NOT RUN. OCI c17d3c/compiled50545 не пересобирать. Full65 OPEN.

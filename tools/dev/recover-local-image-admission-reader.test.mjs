@@ -615,6 +615,11 @@ else if(a.includes('get')){const i=a.indexOf('get'),kind=a[i+1],name=a[i+2];if(k
     .map(JSON.parse);
   assert.equal(requests.filter((a) => a.includes("patch")).length, 1);
   assert.ok(
+    requests
+      .filter((a) => a.includes("patch"))
+      .every((a) => a.includes("--field-manager=kodex-local-dev")),
+  );
+  assert.ok(
     requests.every(
       (a) =>
         a.some((v) => v.startsWith("--cache-dir=" + state + "/")) &&

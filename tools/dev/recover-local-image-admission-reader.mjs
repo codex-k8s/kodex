@@ -663,6 +663,7 @@ function main(args) {
       "deployment",
       controllerName,
       "--type=json",
+      "--field-manager=kodex-local-dev",
       "-p",
       JSON.stringify(patch),
     ]);

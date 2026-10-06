@@ -4422,3 +4422,37 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
 - COPY-входы OCI не изменились; повторная сборка не нужна. Bundle c17d3c
   остаётся compiled source50545, отдельно от следующего deploy/source SHA.
   Live resume после нового fresh render/apply/readback пока NOT RUN.
+
+### 06.10.2026 06:39 UTC — SSA ownership conflict при resume
+
+- На clean deploy source `ea35838d0799168f5d6cd9f7606008ad39307846`
+  fresh render fingerprint
+  `6a896a79637985c238abca8f73259d4434e94097b1ae9323d5045deaf10d18dd`.
+  Новый адресный live readback до apply FAIL ожидаемо: renderfalse/livetrue
+  закрыто отклонён. Это реальный RED, не только disposable fixture.
+- Canonical apply FAIL на SSA ownership conflict единственного pause.value.
+  Actual pipeline использует server-side apply, поэтому прежнее объяснение
+  client-side merge было неточной гипотезой. Pause был unmanaged canonical
+  manifest и остался; после explicit false SSA обнаружил другого manager.
+  Actual `--show-managed-fields`: pause owned `kubectl-patch`/Update.
+- Controller остаётся stopped/replicas0; old managed inventory0. CP/gateway
+  готовы на новой source, bootstrap user acceptance не заявляется. Ни
+  broad force-conflicts, ни ручной PATCH/удаление не выполнялись.
+- Готовится canonical fenced handover только pause.value к уже используемому
+  `kodex-local-dev`, после owner/source/policy readback и пустого inventory.
+  Требуются UID/RV/fullspec tests, stopped controller и exact current field;
+  отдельного resume helper или full-Deployment force не будет. Full65 OPEN.
+
+### 06.10.2026 06:49 UTC — адресный SSA handover готов к доставке
+
+- Поверх `ea35838d` интегрированы4 frozen файла, manifest4/4 совпал.
+  Canonical delivery передаёт только pause.value с UID/RV/full-spec CAS;
+  известный field owner, stopped controller, owner/source/policy и пустой
+  managed inventory проверяются до изменения. Broad force и отдельного
+  ручного resume нет. Будущий reader использует тот же canonical manager.
+- ROOT PASS на изменённом дереве: Node9/9 (4.40с), deploy selection28/28
+  (2.84с), Bash/Node syntax и diff-check. Общий invariant обновлён в
+  GUIDE-DOC-003; Context7 Kubernetes SSA/managedFields проверены.
+- Live handover/resume пока NOT RUN. OCI COPY-входы неизменны, применяется
+  c17d3c с compiled source50545; новый deploy checkpoint — отдельная ревизия.
+  Native PROJECT/Full65 ещё OPEN; Chrome подключён, но открыт вход SSO.

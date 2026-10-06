@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.6
+version: 1.7.7
 updated: 2026-10-06
 ---
 
@@ -1501,6 +1501,12 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   добавленного env в manifest не снимает его при merge apply. Readback проверяет
   ровно один literal `false` одновременно в render и живом Deployment, а не
   выводит возобновление из Ready либо успешного применения остальных ресурсов.
+  Если прежний recovery PATCH владеет pause.value, canonical SSA не применяет
+  broad force-conflicts: штатная доставка передаёт только это поле своему
+  manager после owner/source/policy readback и пустого managed inventory.
+  Контроллер должен быть остановлен; UID/resourceVersion/full-spec CAS и
+  exact single-field readback обязательны. Неизвестный или неоднозначный
+  field owner закрыто отклоняется; failure не возобновляет controller через EXIT.
   Проверка прежнего trusted checkout для paused image-only reader не является
   protected source cutover: она сохраняет exact realpath/clean HEAD, закрытый
   credential-free GitHub origin (с `.git` либо без), runtime file access и

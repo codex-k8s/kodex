@@ -651,6 +651,7 @@ readback_local_runtime_materialization_admission() { phase runtime-vap-readback;
 readback_local_image_admission_controller_rbac() { phase rbac-readback; }
 readback_local_control_plane_image_policy() { phase owner-readback; }
 readback_local_supply_chain_deployment_inputs() { phase source-readback; }
+handover_local_image_admission_pause() { phase handover; }
 apply_image_admission_crd() { phase crd-readback; }
 readback_local_claim_evidence_network() { phase network-readback; }
 readback_local_supply_chain_configuration() { phase configuration-readback; }
@@ -681,7 +682,7 @@ trap cleanup_on_exit EXIT
                 path.chmod(0o700)
             for failed in ('pause', 'preflight', 'runtime-vap-readback', 'identity-policy', 'control-plane-migrate',
                            'crd-readback', 'network-readback', 'configuration-readback',
-                           'vap-readback', 'rbac-readback', 'kube-ready', 'owner-readback', 'source-readback', ''):
+                           'vap-readback', 'rbac-readback', 'kube-ready', 'owner-readback', 'source-readback', 'handover', ''):
                 with self.subTest(failed=failed):
                     result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
                         env=dict(os.environ, FAIL_PHASE=failed, STUB_DIRECTORY=directory),
@@ -764,6 +765,80 @@ readback_local_image_admission_controller_resume
                 if not success: self.assertIn('resume', result.stderr)
         readback = re.search(r'(?ms)^readback_local_image_supply_chain\(\) \{.*?^\}', source).group(0)
         self.assertIn('readback_local_image_admission_controller_resume', readback)
+
+    def test_stopped_pause_handover_has_exact_single_field_cas(self):
+        source = SCRIPT.read_text()
+        function = re.search(r'(?ms)^handover_local_image_admission_pause\(\) \{.*?^\}', source)
+        self.assertIsNotNone(function)
+        key = 'IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS'
+        owner = {'manager': 'kubectl-patch', 'operation': 'Update', 'apiVersion': 'apps/v1', 'fieldsType': 'FieldsV1',
+                 'fieldsV1': {'f:spec': {'f:template': {'f:spec': {'f:containers': {'k:{"name":"image-admission-controller"}': {
+                     'f:env': {'k:{"name":"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS"}': {'f:value': {}}}}}}}}}}
+        controller = {'metadata': {'name': 'image-admission-controller', 'namespace': 'kodex-system',
+            'uid': 'b0d061c8-a12f-4366-9413-cee2a8e774dd', 'resourceVersion': '550324',
+            'labels': {'app.kubernetes.io/part-of': 'kodex', 'kodex.dev/local-profile': 'hot-reload'}, 'managedFields': [owner]},
+            'spec': {'replicas': 0, 'template': {'spec': {'containers': [{'name': 'image-admission-controller',
+            'image': 'repo@sha256:' + 'a' * 64, 'env': [{'name': key, 'value': 'true'}]}]}}}, 'status': {'replicas': 0, 'availableReplicas': 0}}
+        desired = {'name': 'image-admission-controller', 'image': controller['spec']['template']['spec']['containers'][0]['image'], 'env': [{'name': key, 'value': 'false'}]}
+        command = function.group(0) + '''
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+readback_local_control_plane_image_policy() { [[ "$CASE" != owner-failure ]]; }
+readback_local_supply_chain_deployment_inputs() { [[ "$CASE" != source-failure ]]; }
+require_empty_local_image_admission_runs() { [[ "$CASE" != inventory ]]; }
+yq() { printf '%s\\n' "$DESIRED"; }
+PATCH_JSON=''
+kubectl() {
+ if [[ " $* " == *" patch "* ]]; then
+   [[ " $* " == *" --field-manager=kodex-local-dev "* && " $* " != *" --force-conflicts "* ]] || return 1
+   [[ "$CASE" != cas-failure ]] || return 1
+   local previous='' argument
+   for argument in "$@"; do [[ "$previous" != -p ]] || PATCH_JSON=$argument; previous=$argument; done
+   ACTUAL_DEPLOYMENT=$(jq -c --argjson patch "$PATCH_JSON" '.spec.template.spec.containers[0].env[0].value=$patch[-1].value' <<<"$ACTUAL_DEPLOYMENT")
+ else printf '%s\\n' "$ACTUAL_DEPLOYMENT"; fi
+}
+namespace=kodex-system
+render=synthetic
+security_profile=${PROFILE:-trusted-cluster}
+context=${CONTEXT:-k3d-kodex}
+mode=${MODE:-apply}
+stage=${STAGE:-supply-chain}
+handover_local_image_admission_pause
+printf '%s\\n' "${PATCH_JSON:-null}"
+'''
+        cases = [('valid', controller, {}, True)]
+        for name in ('foreign-manager', 'missing-managed-fields', 'duplicate-owner', 'replicas', 'ready', 'uid', 'image', 'duplicate-pause', 'valuefrom'):
+            bad = json.loads(json.dumps(controller))
+            if name == 'foreign-manager': bad['metadata']['managedFields'][0]['manager'] = 'foreign'
+            elif name == 'missing-managed-fields': del bad['metadata']['managedFields']
+            elif name == 'duplicate-owner': bad['metadata']['managedFields'] *= 2
+            elif name == 'replicas': bad['spec']['replicas'] = 1
+            elif name == 'ready': bad['status']['readyReplicas'] = 1
+            elif name == 'uid': bad['metadata']['uid'] = ''
+            elif name == 'image': bad['spec']['template']['spec']['containers'][0]['image'] = 'foreign'
+            elif name == 'duplicate-pause': bad['spec']['template']['spec']['containers'][0]['env'] *= 2
+            elif name == 'valuefrom': bad['spec']['template']['spec']['containers'][0]['env'][0]['valueFrom'] = {}
+            cases.append((name, bad, {}, False))
+        for name in ('owner-failure', 'source-failure', 'inventory', 'cas-failure'):
+            cases.append((name, controller, {}, False))
+        for options in ({'CONTEXT': 'foreign'}, {'MODE': 'readback'}, {'STAGE': 'core'}):
+            cases.append(('profile', controller, options, False))
+        canonical = json.loads(json.dumps(controller)); canonical['metadata']['managedFields'][0]['manager'] = 'kodex-local-dev'
+        cases.append(('canonical-manager', canonical, {}, True))
+        for name, current, options, success in cases:
+            with self.subTest(case=name):
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+                    env=dict(os.environ, CASE=name, ACTUAL_DEPLOYMENT=json.dumps(current), DESIRED=json.dumps(desired), **options),
+                    text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode == 0, success, result.stderr)
+                if success:
+                    patch = json.loads(result.stdout)
+                    self.assertEqual([p['op'] for p in patch], ['test', 'test', 'test', 'replace'])
+                    self.assertEqual(patch[0]['value'], current['metadata']['uid'])
+                    self.assertEqual(patch[1]['value'], current['metadata']['resourceVersion'])
+                    self.assertEqual(patch[2], {'op': 'test', 'path': '/spec', 'value': current['spec']})
+                    self.assertEqual(patch[3], {'op': 'replace', 'path': '/spec/template/spec/containers/0/env/0/value', 'value': 'false'})
+        self.assertIn('handover_local_image_admission_pause\n      apply_render image-supply-chain-controllers', source)
+        self.assertIn('handover_local_image_admission_pause\n  apply_render image-admission-workloads', source)
 
 
 if __name__ == "__main__":
