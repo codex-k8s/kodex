@@ -10,6 +10,26 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+06.10.2026 23:53UTC: source `732d74f0`, remote/PR последний подтверждён
+`ada2f0f9`. Native APPLIED restore: helper21, Developer24, Manager17,
+Architect16; fresh C206/CONNECTED, enabled78/117. Все117 прежних refs,
+recipient/capability/resourceScope/NONE[] независимо сравниваются с before,
+diff0. Architect plan `pln_x-DG2piGWR9aN3JUJbHqdUG8`, application200;
+его ранний input ACK NOT RUN. Documentation13 proposal готовится штатно
+на exact AGENT экране; Security13/Lexical13 после него, строго serial OCC.
+Карточка5+11 collapsed и modal16 проверены screenshot/Console0.
+Интегрированы fixes контекстной подсказки и cursor provenance/refresh
+мерцания; ROOT128 frontend tests на732d74f0 PASS1.68с. Native cursor
+повтор после fix пока NOT RUN. Закрытый leased recipient catalog в отдельной
+волне; owner observation restore не считать self-service discovery PASS.
+Четыре parent Workflow artifacts теперь полностью прочитаны с size/hash
+readback. Далее полный117 restore → native Git/Draft/review/response →
+concurrency → current checks/merge/readback → полный внутренний Workflow.
+Цель ACTIVE, Chrome5 собственная,6 чужая; SSO до07.10 06:23UTC,
+deadline04:30UTC. Последняя навигация23:53UTC.
+
+## Предыдущий checkpoint23:37
+
 06.10.2026 23:37UTC: source `8ed7d298`, remote/PR подтверждены
 `b60bb7a2` (новая карточка плана ещё не опубликована). PROJECT helper
 restoration plan `pln_vjkobaaNvfnOTEf-pqYXpwR9` APPLIED, 21 операций;

@@ -158,6 +158,35 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 06.10.2026 23:53 UTC — компактный план, история и роли
+
+Source `732d74f0`; remote/PR последний readback `ada2f0f9`.
+
+- PASS native: helper21, Developer24, Manager17, Architect16 plans APPLIED
+  через штатные Validate/Apply. Fresh C206/CONNECTED, enabled78/117;
+  independently exact117 tuple comparison diff0, новых/пропавших refs нет.
+  Documentation/Security/Lexical39 ещё не восстановлены, общий этап OPEN.
+- PASS native UX: карточка Architect16 показывает5 операций и closed
+  раскрытие остальных11; editor прокручивает16 readable role/capability
+  строк, footer доступен. Screenshot desktop, Console0, application200.
+- PASS ROOT units на732d74f0:128tests/3suites1.68с. Retained admitted
+  переписка не скрывается loader при refresh; unknown WS cursor не
+  отправляется с другим owner filter. Scope/profile/query сохраняются;
+  страницы используют адаптивный viewport размер. Native cursor regression
+  после fix пока NOT RUN.
+- PASS ROOT callback units на2f30bfd6:1.003с. Поиск другого AGENT/WORKFLOW
+  в том же Проекте теперь явно требует context switch; hint не выдаёт
+  authority и не выполняет навигацию. Native positive hint пока NOT RUN.
+- PASS readback:4 parent Workflow artifacts целиком прочитаны, size/digest
+  совпали:result497B/03fb9622…, receipt328B/84aad1f0…,
+  callback result921B/21565213…, receipt328B/be4a6daf….
+  Содержимое сохраняет UNKNOWN для Git/full review, не объявляет full QA.
+
+Leased ordinary recipient catalog ещё разрабатывается. Owner observation
+в restoration prompts не является self-service catalog acceptance.
+Ранние ACK Developer/SYSTEM/PROJECT captured; Manager/Architect NOT RUN.
+Полные Gitcycle/concurrency/full33-step Workflow пока OPEN.
+
 ### 06.10.2026 23:37 UTC — точное восстановление прав и компактный план
 
 Source `8ed7d298`; remote/PR readback `b60bb7a2`, следующая публикация
