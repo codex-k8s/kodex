@@ -10,6 +10,49 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 20:56 UTC — новый Workflow и browser prefill
+
+- `3da17911dcda6fe11b8c2623f7b493778373f318` опубликован bot identity;
+  remote/Draft1800 head EQUAL, дерево чистое, mainb5f6fcde неизменен.
+- PASS native Manager input ACK: session `ses_HdLt7sueqc9xONX_wbQWv-56`,
+  turn `trn_Gv_YWmgUiCv-YTRfNN2Zp_0V`, attempt1, task12138B/sha256
+  `df6ee4de94392f2a3cf1825d1af246993b05137e6602e9ad16b4802db1c84776`.
+  Expected task/inbox/instructions EQUAL, exact G5 image; same-Pod file binary
+  EQUAL (не serving-process proof). В этом Manager Pod `codex --version`
+  independently0.160.0, не только warm ориентир.
+- ONE native launch accepted `run_Va58jdtk2Z142rJ4LLkXvsOl`, session
+  `ses_dxcUXZ0HoamL1s3Sy-onZknO`, coordinator ACK61046B/sha256
+  `e5b19f3abbcba84838ed2831a7ddae924850efdbb02b67ba7a8c84a2e050193a`;
+  inbox/instructions EQUAL, original expected comparison NOT RUN для derived
+  prompt. Same-Pod binary NOT RUN: exec не захватил файл; image pins EQUAL.
+- INTAKE `run_PQ7jploZn32FzIRNmcKhoVjp` RUNNING, session
+  `ses_vEY4Vj_AVmHi9ftEpYbvl9Yc`, turn `trn_Zwaw2UBXxTKwNfSOywl8TST0`.
+  ACK1062B/sha256 `a7ab46c4b6485cf1bb42da3371fd89334c2c2b927454bd3b0a113c336dd5a39c`,
+  inbox/instructions/exact image/same-Pod image-file binary EQUAL;
+  original expected comparison NOT RUN. Issue/base main/PROJECT уже читаются
+  собственными native READ, dependent Architect ещё не запущен.
+- PASS browser event-prefill на3da: штатная «Передать на диагностику»
+  вставила885chars после async history load. Повтор с905chars тестовым
+  черновиком открыл стилизованное подтверждение; Cancel сохранил905chars;
+  Confirm заменил ровно885chars, одна вставка, focus в textarea.
+  Первый слишком быстрый chained-click был ошибкой оснастки: затем каждый
+  переход independently snapshot/ожидание history и штатные controls.
+  Полученный screenshot помощника PASS по истории/компактным tool/доступному
+  отдельному composer; Console0, history/session/graph/event read200.
+  Никаких Send/Apply/дополнительных AI launches. Только свой тестовый черновик
+  очищен штатным вводом, assistant закрыт. Рабочая1 вернулась к новому Workflow,
+  вкладка4 владельца неизменна. Новый active drawer screenshot20:49 PASS:
+  компактный последний tool group «Работает» с точками и читаемый текст.
+- PASS readonly GitHub current connection375/CONNECTED/binding2/120enabled,
+  config/revision refs неизменны. Running service Pods Ready. Три backend
+  stdout --since5m пусты, не proof отсутствия исторических ошибок.
+- Native regression536156B EOF остаётся NOT RUN: exact source mainb5f6fcde,
+  docs/operations/self-development-dogfooding.md, blob4deec6d997e711f1898268c7d2c98baa998801d4,
+  SHA256c227c64d8bb643992e56f7bdf4ca52a5ac37e38df61dd662f37b153f198eaaa8.
+  Host чтение не native proof. Direct страницы по returned next_offset_bytes,
+  code_mode текущим профилем отключён. Это регрессия обязательного native READ,
+  не отдельный66-й раздел QA. Full65/11/13/14/15 и финальный gate OPEN.
+
 ## Checkpoint 07.10.2026 20:44 UTC — upstream источник и компактные квитанции
 
 - Цель Full65 остаётся ACTIVE. Автономное окно владельца — до08.10 14:00

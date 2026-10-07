@@ -10,6 +10,29 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 20:56 UTC
+
+HEAD/remote/Draft1800 `3da17911dcda6fe11b8c2623f7b493778373f318` EQUAL,
+bot publication PASS, mainb5f6fcde неизменен. Нативный Manager input expected
+task/inbox/instructions EQUAL; его actual CLI0.160.0 независимо прочитан.
+Принят ОДИН Workflow `run_Va58jdtk2Z142rJ4LLkXvsOl` RUNNING; coordinator
+ACK61046B/e5b19f3abbcba84838ed2831a7ddae924850efdbb02b67ba7a8c84a2e050193a
+inbox/instructions/image EQUAL, derived expected NOT RUN, same-Pod binary
+NOT RUN. INTAKE `run_PQ7jploZn32FzIRNmcKhoVjp` RUNNING/native READ,
+ACK1062B/a7ab46c4b6485cf1bb42da3371fd89334c2c2b927454bd3b0a113c336dd5a39c
+inbox/instructions/image/same-Pod image-file binary EQUAL, expected NOT RUN.
+Следующее: INTAKE callback → Architect supported0.160 source/contract →
+Developer/три reviews/fixes/responses/re-review/READY. Не launch дубликаты.
+
+Закрыта browser event-prefill регрессия:885chars послеhistory, Cancel сохранил
+905chars тестового текста, Confirm ровно885chars/одна вставка/focustextarea.
+Screenshot/Console0/readonly Network200 PASS, никакогоSend/Apply. Свой
+тестовый черновик очищен; page1 новый Workflow, page4 owner untouched.
+Компактный active tool group с точками получил screenshot PASS.
+Connection375/binding2/120enabled readback неизменен. Full65 и11/13/14/15 OPEN;
+native large-source536156EOF по прежним exactpins ещёNOT RUN. Ограничение
+автономного окна08.10 14Саратов, list_pages/reload5мин сохраняются.
+
 ## Checkpoint 07.10.2026 20:44 UTC
 
 Продолжать Full65 ACTIVE до08.10 14:00 Саратов; текущая ветка
