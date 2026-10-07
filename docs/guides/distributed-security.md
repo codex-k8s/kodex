@@ -440,6 +440,15 @@ Destructive операции не получают автономный grant. �
 не декодируются через fallback и не переписываются: нужны новая каноническая
 revision соединения и свежие exact grants. Исторический terminal receipt
 остаётся read-only и не возобновляет effect.
+Глобальные числовые GitHub provider ID (`review_id`, `comment_id`, check,
+workflow, run и job ID) не ограничиваются `int32`: request, adapter и output
+сохраняют точное целое до `9007199254740991`, безопасное для JSON/JavaScript.
+Номера Issue/PR внутри репозитория и границы пагинации являются отдельными
+полями и не расширяются вместе с provider ID. Более крупное, дробное или
+неизвестное значение закрыто отклоняется; ошибка проверки результата записи
+сохраняет `UNKNOWN_OUTCOME` и не разрешает повтор эффекта. Изменение этих
+схем выпускается новой immutable package revision, без переписывания старых
+digest, grants и terminal receipts.
 Общий каталог соединений применяет `integration.view` к каждой строке до
 выдачи; фильтр UI, cursor и idempotency receipt не заменяют эту проверку.
 

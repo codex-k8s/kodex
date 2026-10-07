@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 2.4.0
+  version: 2.5.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -145,7 +145,7 @@ spec:
         - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
         - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
       outputFields:
-        - {key: comment_id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+        - {key: comment_id, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991}
         - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
       execution:
         idempotency: EFFECT_KEY
@@ -598,9 +598,9 @@ spec:
         connectionFields: [owner, repository]
       inputFields:
         - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"review_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"review_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
         - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"commit_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -625,7 +625,7 @@ spec:
         - {"key":"body","type":"STRING","format":"PLAIN","required":false,"maximumLength":32768,"allowEmpty":true}
         - {"key":"event","type":"STRING","format":"PLAIN","required":true,"maximumLength":32,"allowedValues":["APPROVE","REQUEST_CHANGES","COMMENT"]}
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
         - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"commit_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -669,9 +669,9 @@ spec:
         connectionFields: [owner, repository]
       inputFields:
         - {"key":"issue_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
       execution:
         idempotency: READ_ONLY
@@ -690,10 +690,10 @@ spec:
         connectionFields: [owner, repository]
       inputFields:
         - {"key":"issue_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
       execution:
         idempotency: EFFECT_KEY
@@ -712,7 +712,7 @@ spec:
         connectionFields: [owner, repository]
       inputFields:
         - {"key":"issue_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
         - {"key":"accepted","type":"BOOLEAN","required":true}
       execution:
@@ -754,9 +754,9 @@ spec:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
       inputFields:
-        - {"key":"check_run_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"check_run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"conclusion","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
@@ -801,9 +801,9 @@ spec:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
       inputFields:
-        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
         - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -823,7 +823,7 @@ spec:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
       inputFields:
-        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {key: workflow_inputs, type: STRING, format: PLAIN, required: false, maximumLength: 32768}
       outputFields:
@@ -868,10 +868,10 @@ spec:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
       inputFields:
-        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"conclusion","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
@@ -894,7 +894,7 @@ spec:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
       inputFields:
-        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
         - {"key":"accepted","type":"BOOLEAN","required":true}
       execution:
@@ -913,7 +913,7 @@ spec:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
       inputFields:
-        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
         - {"key":"accepted","type":"BOOLEAN","required":true}
       execution:
@@ -932,7 +932,7 @@ spec:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
       inputFields:
-        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
         - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
       outputFields:
@@ -955,11 +955,11 @@ spec:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
       inputFields:
-        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
         - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"conclusion","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
