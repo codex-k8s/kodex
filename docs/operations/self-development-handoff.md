@@ -10,6 +10,38 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 17:24 UTC
+
+Source/remote/Draft1800 `f4e77b384a770911eb1fb22c77321399622c0763`
+EQUAL, bot publish readback PASS; main `b5f6fcde` не менялся.
+Индикатор ordinary transcript исправлен между tools и при callback
+node/turn attempt2, когда Run retry attempt остаётся1. ROOT286/286 unit,
+forced typecheck/lint/format/build7.80с PASS; source/Pod hashes EQUAL.
+Visual/Console/Network нового пакета NOT RUN. Chrome MCP list_pages
+завершился TIMEOUT; актуальный pageId ещё не установлен, старую38 не считать
+подтверждённой. Чужие вкладки не закрывать; новый список/reload после доступа.
+
+Оба новых actual roots terminal: Manager
+`run_Ss6A8yDmwgp_eGR1v6LDouiP` FAILED3/seq231/REQUIRED_WORKFLOW_FAILED,
+Workflow `run_H9IrGdsDy0QlhiJzLlOY_2AX`
+FAILED3/seq257/RUNTIME_WORKFLOW_INCOMPLETE. Step-001 child
+`run_fNymg91-hQhas8VnYsXLEcVf` SUCCEEDED, callbacks COMPLETED,
+5leases COMPLETED. Не запускать duplicate/Retry вслепую.
+
+Уточнение ROOT input о единственном business output INTAKE получено;
+Workflow15/rev5/33steps и grants не менялись. Новые опубликованные ответы
+сообщают full4docsEOF, но это self-report. Координатор остановился semantic
+BLOCKED, причина UNKNOWN до чтения нового business artifact. Штатный owner
+read нужен для manager-plan `art_i6ozYAPM-0HweYiy1AEslB-h`, revision16/v1,
+40345B/SHA256b604df794ca39bf64d610daead4af52fa6694801272d44f5f2c6179132d75b55;
+CLEAN/AVAILABLE/ACTIVE, callback manifest exactpins EQUAL. Не читать Blob в
+обход artifact API, не подменять результат ручной записью. После выяснения
+причины исправить root cause и повторить native gate. Full65/11/13/14/15,
+Architect/Developer/reviews/fixes/READY остаются OPEN.
+Подробный актуальный checkpoint/ACK/terminal proof в self-development-dogfooding.md.
+
+## Предыдущий checkpoint16:35
+
 07.10.2026 16:35 UTC: HEAD/remote/Draft1800 9927da57 EQUAL, G5 RC serving
 PID2193 ea5c3ece EQUAL. Один новый native Manager
 run_XrSQ3mwXYkiV1OQMztkLsowq/ses_C1f3862PU6VLWEGBRusmLB9e/

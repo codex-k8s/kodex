@@ -117,7 +117,9 @@ forced typecheck, scoped lint/format и production build7.80с PASS.
 Mounted source/Pod совпали: Drawer.vue `b7e305b9`, run-activity.ts
 `2eb4e52c`, RunPage.vue `0b026b5a`. Test source hash `1f14a70e`.
 Контракты/API/БД/owner states не менялись: исправление только представления.
-Новый browser list повтор всё ещё ожидает ответа, без нового screenshot PASS.
+Новый browser list повтор завершился TIMEOUT, без нового screenshot PASS.
+17:23:46: пакет индикатора и журнала опубликован в `f4e77b384a770911eb1fb22c77321399622c0763`,
+remote/Draft1800 exact readback PASS. Новый визуальный этап ещё не закрыт.
 
 Дальше: получить опубликованную причину semantic stop через штатный owner
 read path, исправить root cause и повторить native gate после подтверждённого
