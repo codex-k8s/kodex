@@ -10,6 +10,40 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 22:10 UTC — отказ длинного чтения и ранний capture
+
+- HEAD/remote/Draft1800 `38b2ef6611110829cb9f00135d8137b682d654d2`
+  EQUAL по публикации предыдущего пакета; main `b5f6fcde` неизменен.
+  Последний native Manager diagnostic `run_RfC1i_aFYh1F3GU_i-I3HwDV`
+  FAILED3 в21:59:04.871939Z: seq815 `RUNTIME_PROVIDER_UNAVAILABLE`, seq816
+  root terminal. Ни EOF, ни итоговый artifact не получены; это FAIL полного
+  чтения, не успешная приемка и не доказанный отказ полномочий.
+- Подтверждены256 успешных native GitHub READ, последний seq814;
+  checkpoint240страниц/491466 из536156Б. Помимо восстановленной shell ошибки
+  seq198 обнаружена FAILED integration receipt seq284; следующий seq286
+  успешен. Wrapper tool SUCCEEDED не подменяет state внутренней квитанции.
+  Причина seq284 UNKNOWN; значения source/commit/blob/digest не менялись.
+- Usage: input35804799/cache35511296/output34517/reasoning380,
+  total35839316/modelContextWindow258400. Это накопленные значения, не
+  доказательство исчерпания окна. Сеть, compaction и schema mismatch пока
+  гипотезы. Поздний capture NOT_CAPTURED/EXACT_ACK_NOT_OBSERVED после удаления
+  точного Pod; отсутствие диагностики не объявляется исправлением.
+- Безопасный observer: верхняя граница timeout240→3600 секунд, default120
+  прежний. Exact ACK/Pod UID/session/turn/attempt/image, enum-only вывод,
+  ограничения512КиБ/4096Б, join/rejoin и cleanup не изменены. ROOT65/65
+  failure-capture/ACK tests PASS1.124s, diff-check PASS на этом пакете;
+  новый длительный live capture ещё NOT RUN. В следующем проходе включать
+  observer сразу после раннего ACK, не ждать terminal/удаления Pod.
+- OpenAI Docs app-server trigger-thread-compaction fetched: стандартные
+  item/started→item/completed с contextCompaction. Context7 `/openai/codex`
+  сообщает id/type; это текущая документация, не доказательство exact0.160.0.
+  Read-only сравнение локальной exact схемы с parser продолжается. Никакого
+  ослабления parser guards, новых grants или wire-version обходов не сделано.
+- Full65 ACTIVE до08.10 14:00 Саратов;11/13/14/15 OPEN. Подготовленный новый
+  SOFTWARE_CHANGE task не отправлен. Сначала установить и исправить причину
+  длинного native READ, затем полный Workflow силами внутренней команды и
+  обязательные reviews/fixes/READY. Финальный внутренний PR не merge/approve.
+
 ## Checkpoint 07.10.2026 21:55 UTC — компактный состав контекста и копирование
 
 - База HEAD/remote/Draft1800 b5a26a34d70ee9717c111ee4fee38b5e6b4cbf55

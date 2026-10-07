@@ -115,7 +115,7 @@ def validate_options(options):
     require(type(options.attempt) is int and 0 < options.attempt <= (1 << 53) - 1, 'ATTEMPT_INVALID')
     require(ACK.matches('sha256:' + ACK.HASH, options.image_manifest), 'IMAGE_DIGEST_INVALID')
     require(options.assistant_scope in ('NONE', 'PROJECT', 'SYSTEM'), 'ASSISTANT_SCOPE_INVALID')
-    require(type(options.timeout_seconds) is int and 30 <= options.timeout_seconds <= 240,
+    require(type(options.timeout_seconds) is int and 30 <= options.timeout_seconds <= 3600,
             'TIMEOUT_INVALID')
     require(options.pod_name is None or ACK.matches(r'[a-z0-9-]{1,253}', options.pod_name), 'POD_NAME_INVALID')
     require(options.pod_uid is None or ACK.matches(ACK.UUID, options.pod_uid), 'POD_UID_INVALID')

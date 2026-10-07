@@ -10,6 +10,32 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 22:10 UTC
+
+Full65 ACTIVE до08.10 14:00 Саратов /10:00UTC. Опубликованный
+HEAD/remote/Draft1800 `38b2ef6611110829cb9f00135d8137b682d654d2` EQUAL;
+mainb5f6fcde неизменен. Diagnostic run_RfC1i_aFYh1F3GU_i-I3HwDV уже
+FAILED3,21:59:04.871939Z/seq815–816/PROVIDER_UNAVAILABLE.256успешных READ,
+checkpoint240/491466из536156Б; EOF/artifact НЕ получены. Не Retry/Resume
+этот terminal root и не выдавать его за PASS. Seq284 integration receipt
+FAILED между успешными READ; причина UNKNOWN. Поздний capture НЕ получен,
+точный Pod удалён. Compaction/schema/network пока недоказанные гипотезы.
+
+Следующий пакет observer: только timeout upper240→3600, default120 и exact
+ACK/UID/image/privacy/rejoin/cleanup неизменны; ROOT65tests PASS1.124s.
+Новый длительный live capture NOT RUN. Следующий диагностический проход
+ONE: ранний ACK → немедленно запустить observer на точном tuple/image,
+дождаться закрытой причины или EOF. Read-only exactCLI0.160 schema analysis
+идёт отдельно; нельзя ослаблять guards по гипотезе. Source/docs/PR фиксировать
+в той же ветке kodex-agent/issue-1797-post-bootstrap-qa, Issue1797/Draft1800.
+Предыдущие frontend96tests/desktop/mobile preview/copy/source-Pod PASS.
+
+Подготовленный task14089Б/hash23801553b029c0e807f439497ca3ee91482b0fab9f9d353c4867248c39d40b8b
+не отправлен. После доказанного исправления — ONE новый полный Manager/
+33-step Workflow/собственные INTAKE и Architect чтения/Developer/reviews/
+fixes/re-review/READY.11/13/14/15 и Full65 OPEN. Финальный внутренний PR не
+merge/approve. Chrome page1 рабочая/reload5мин, page4 владельца untouched.
+
 ## Checkpoint 07.10.2026 21:55 UTC
 
 Full65 ACTIVE, автономно до08.10 14:00 Саратов /10:00UTC. База пакета

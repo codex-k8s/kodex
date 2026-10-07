@@ -424,7 +424,8 @@ class CaptureTests(unittest.TestCase):
         self.assertNotIn(SENTINEL, json.dumps(result))
 
     def test_options_bounds_and_private_cli_errors(self):
-        for field, value in (('timeout_seconds', 29), ('timeout_seconds', 241),
+        for field, value in (('timeout_seconds', 29), ('timeout_seconds', 3601),
+                             ('timeout_seconds', True), ('timeout_seconds', 3600.0),
                              ('attempt', 0), ('attempt', True), ('run_ref', SENTINEL + '/'),
                              ('image_manifest', SENTINEL), ('assistant_scope', SENTINEL)):
             _, _, options = fixture()
@@ -437,6 +438,57 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(json.loads(output.getvalue())['code'], 'ARGUMENTS_INVALID')
         self.assertNotIn(SENTINEL, output.getvalue())
+
+    def test_timeout_boundaries_accept_up_to_one_hour(self):
+        for seconds in (30, 120, 240, 3600):
+            _, _, options = fixture()
+            options.timeout_seconds = seconds
+            with self.subTest(seconds=seconds):
+                CAPTURE.validate_options(options)
+
+    def test_one_hour_capture_observes_late_failure_and_closes_follow(self):
+        proof, columns, options = fixture()
+        options.timeout_seconds = 3600
+        clock, closed = FakeClock(), []
+
+        def read(args):
+            if args[0] == 'get':
+                return columns
+            return json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof}).encode()
+
+        def follow(pod):
+            try:
+                yield json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof}).encode() + b'\n'
+                clock.sleep(3599)
+                yield request()
+                self.fail('capture did not close long follow after exact diagnostic')
+            finally:
+                closed.append(True)
+
+        result = CAPTURE.capture(options, read, follow, now=clock.now, sleep=clock.sleep)
+        self.assertEqual(result['status'], 'CAPTURED')
+        self.assertEqual(result['rejoin'], 'VERIFIED')
+        self.assertEqual(clock.value, 3599)
+        self.assertEqual(closed, [True])
+        self.assertNotIn(SENTINEL, json.dumps(result))
+
+    def test_cli_keeps_default_and_rejects_over_one_hour_before_io(self):
+        _, _, options = fixture()
+        arguments = ['--run-ref', options.run_ref, '--session-ref', options.session_ref,
+                     '--turn-ref', options.turn_ref, '--attempt', str(options.attempt),
+                     '--image-manifest', options.image_manifest]
+        for extra, expected in (([], 120), (['--timeout-seconds', '3600'], 3600)):
+            with self.subTest(seconds=expected), patch('sys.stdout', io.StringIO()), patch.object(
+                    CAPTURE, 'capture', return_value={'status': 'CAPTURED'}) as captured:
+                self.assertEqual(CAPTURE.main(arguments + extra), 0)
+                self.assertEqual(captured.call_args.args[0].timeout_seconds, expected)
+        output = io.StringIO()
+        with patch('sys.stdout', output), patch.object(CAPTURE, 'Kubectl') as kubectl, patch.object(
+                CAPTURE.tempfile, 'TemporaryDirectory') as temporary:
+            self.assertEqual(CAPTURE.main(arguments + ['--timeout-seconds', '3601']), 1)
+        kubectl.assert_not_called()
+        temporary.assert_not_called()
+        self.assertEqual(json.loads(output.getvalue()), {'status': 'NOT_CAPTURED', 'code': 'TIMEOUT_INVALID'})
 
     def test_cli_follow_failures_emit_only_closed_code_and_no_private_exception(self):
         _, _, options = fixture()
@@ -471,11 +523,14 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(kwargs['stdin'], subprocess.DEVNULL)
 
     def test_follow_timeout_uses_bounded_watch_budget_not_five_second_read_budget(self):
-        with patch.object(CAPTURE.subprocess, 'Popen') as popen:
-            CAPTURE.Kubectl('/home/s/.cache/owned-private', time.monotonic() + 30).start(['logs', '--follow'])
-        timeouts = [arg for arg in popen.call_args.args[0] if arg.startswith('--request-timeout=')]
-        self.assertEqual(len(timeouts), 1)
-        self.assertIn(timeouts[0], ('--request-timeout=30s', '--request-timeout=31s'))
+        for seconds in (30, 3600):
+            with self.subTest(seconds=seconds), patch.object(CAPTURE.subprocess, 'Popen') as popen, patch.object(
+                    CAPTURE.time, 'monotonic', return_value=0):
+                CAPTURE.Kubectl('/home/s/.cache/owned-private', seconds).start(['logs', '--follow'])
+                timeouts = [arg for arg in popen.call_args.args[0] if arg.startswith('--request-timeout=')]
+                self.assertEqual(timeouts, ['--request-timeout=' + str(seconds + 1) + 's'])
+                CAPTURE.Kubectl('/home/s/.cache/owned-private', seconds).start(['get', 'pods'])
+                self.assertIn('--request-timeout=5s', popen.call_args.args[0])
 
     def test_cancel_is_closed_error_for_join_finally(self):
         with self.assertRaisesRegex(CAPTURE.Failure, '^CAPTURE_CANCELLED$'):
