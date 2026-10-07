@@ -10,6 +10,56 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 13:06 UTC — понятная исправимая ошибка native чтения
+
+Criteria checkpoint `c9efed8b3a1cf27009578b5e3bd310587da1d455` commit/push/
+Draft1800 readback PASS, дерево чистое до данного исправления.
+Новый ordinary Manager штатно UI POST201:
+`run_Axq1lQDU4v9CEhCKGqHJK3f3`, `ses_vRH1wIvuaGqI2r6-M6lj--dE`,
+`trn_u2hFPbklg_tR6WrgcQ7hybX8`,attempt1 technical SUCCEEDED/version3/seq60.
+Native Issue1796/repository metadata/openPR/PR1799/file-list invocation SUCCEEDED.
+Main b5f6fcde подтверждён, поддержка upstream API для1796 пока UNKNOWN.
+File manifest SUCCEEDED, read_file FAILED: controller diagnostic
+`file_input_invalid`. Manager объявил semantic BLOCKED и не запустил Workflow.
+Это не доказанный owner denial: старый model error скрывал local parameter
+rejection тем же TOOL_UNAVAILABLE. Exact ошибочный input в лог не выводился;
+не утверждается, какой конкретно параметр был неверен.
+
+Исправлен общий системный аналог всех runtime file tools: только local
+errRuntimeFileInput при успешном terminal activity возвращает FILE_INPUT_INVALID,
+retryable=true и статическую подсказку про exact schema/manifest pins, один
+исправленный вызов и границы read_file. Никакого auto-retry или payload echo.
+Authority/integrity/metadata/audit/projection failure сохраняют прежний закрытый
+TOOL_UNAVAILABLE/retryable=false. Safe transcript receipt по-прежнему не содержит
+raw arguments или file content. Инвариант закреплён в GO-DOC-001/README.
+
+- PASS Go1.26.6 target0.116s/fullcallback4.136s/vet, gofmt/diffcheck.
+  Negative wire tests: invalid params не достигают owner; одна corrected exact
+  операция читает EOF; terminal audit, owner denial, final authority,
+  metadata version и checksum не превращаются в исправляемую ошибку caller.
+- PASS source/Pod filesSHA8687c6c1, serverSHA1ab98941 EQUAL;
+  hot serving ready/leader с13:04:36. Independent binary proof ниже.
+- PASS early ACK Manager CAPTURED/rejoined: Podruntime-turn-ab982e2f009e93ac,
+  UID7306e954-72d7-40c8-85f6-d269585717f3/G5/ENV5/binding6/tools38/grants19.
+  Task/provider/inbox3011B/SHAe4e58eb055aba75f82ae74a6505349abcfb80956ee827ad1fb6f85bf63084835
+  EQUAL; независимый host prompt comparison EQUAL. Instruction/file27451B/
+  SHAebc36d5257d66a6ef11738b60d284bb1f756145d85776340a415760503badf16 EQUAL.
+  Servicing `/proc/13/exe`40f3268a EQUAL same-Pod image file; это не новая
+  независимая сборка role image. RuntimeRevisionrrev_ZCsgBq09IrzUqW6TQKLSJP-i.
+- PASS Chrome5/Console0/relevantAPI200, run POST201, terminal screenshot
+  переписки с BLOCKED. DocumentWidth/innerWidth1692, scrollX0: capture clipping
+  отдельно от доказанного DOM overflow. Reload13:03, чужие вкладки сохранены.
+  Context7 /golang/go errors.Is/errors.Join проверены.
+
+Далее один Additional turn через существующий Manager UI после стабильного
+controller; прежний completion не retry/resume. Workflowrevision4 остаётся
+PUBLISHED/version12. Full65/внутренняя implementation1796/reviews/fixes/READY
+OPEN; host не подменяет Developer, final внутренний PR не merge.
+
+Independent Go1.26.6 CGO0/trimpath/buildvcsfalse binary и servicing
+`/proc/1367/exe` SHA
+`47459bbebde2dac5df9568883b6f3f7a3065bdddb2fee1f3a025197d91eaeca5` EQUAL.
+
 ## Checkpoint 07.10.2026 12:58 UTC — native план опубликован, единый лимит формы
 
 Tree поверх `29220a030164305175d233b0000c3d12c5e8da80`; commit этого раздела

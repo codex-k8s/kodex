@@ -118,6 +118,12 @@ UTF-8 rune отклоняется; размер страницы4..16384 бай�
 каждая страница заново читает источник, поэтому стоимость пропорциональна
 числу страниц и размеру файла. Ошибка/отмена/отзыв не выдают partial text.
 
+Локальная ошибка формы параметров возвращает `FILE_INPUT_INVALID` и безопасную
+подсказку исправить вызов один раз по schema/exact manifest pins. Это не отказ
+authority и не автоматический повтор прежнего запроса. Недоступный terminal
+audit, owner denial, checksum или metadata mismatch сохраняют закрытый
+`TOOL_UNAVAILABLE` без retry; тела/идентификаторы из input не отражаются в ошибке.
+
 Новый каталог требует согласованной доставки controller, control-plane и
 role image agent-runner с тем же закрытым набором из пяти file tools. До
 активации exact role image новые executions с `file_catalog` не запускаются:

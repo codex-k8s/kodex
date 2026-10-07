@@ -300,8 +300,8 @@ func TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC(t *testing.T) {
 	writer := httptest.NewRecorder()
 	server.callTool(writer, httptest.NewRequest(http.MethodPost, "/mcp", nil), mcpRequest{ID: json.RawMessage(`"private-fixture"`), Params: badParams}, input)
 	if !strings.Contains(diagnostic.String(), "failure_class="+runtimeFileInputFailureClass) || strings.Contains(diagnostic.String(), privateInput) ||
-		strings.Contains(diagnostic.String(), file.ArtifactRef) || strings.Contains(writer.Body.String(), privateInput) || !strings.Contains(writer.Body.String(), "TOOL_UNAVAILABLE") {
-		t.Fatal("file input failure diagnostic leaked input or changed the closed response")
+		strings.Contains(diagnostic.String(), file.ArtifactRef) || strings.Contains(writer.Body.String(), privateInput) || !strings.Contains(writer.Body.String(), runtimeFileInputInvalidCode) {
+		t.Fatal("file input failure diagnostic leaked input or omitted correction guidance")
 	}
 	owner.mu.Lock()
 	if owner.reads != 4 || owner.audits != 10 {

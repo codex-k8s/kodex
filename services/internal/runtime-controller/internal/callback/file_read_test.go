@@ -38,6 +38,40 @@ func TestReadFileAdvertisedForExactCatalog(t *testing.T) {
 	t.Fatal("exact runtime catalog omitted full paged file read")
 }
 
+func TestReadFileInputCorrectionDoesNotMaskAuthorityOrAuditFailure(t *testing.T) {
+	for _, scenario := range []string{"invalid input", "terminal audit", "owner denied", "final authority", "final version", "checksum"} {
+		t.Run(scenario, func(t *testing.T) {
+			fixture := newFileReadFixture(t, []byte(runtimeFileFixtureText), scenario)
+			arguments := fixture.arguments()
+			if scenario == "invalid input" || scenario == "terminal audit" {
+				arguments["maximum_bytes"] = float64(32768)
+			}
+			result, failed := fixture.call(t, t.Context(), arguments, "invalid-or-denied")
+			if !failed || result["text"] != nil {
+				t.Fatal("failed file read exposed content")
+			}
+			if scenario == "invalid input" {
+				if result["error_code"] != runtimeFileInputInvalidCode || result["retryable"] != true || result["guidance"] != runtimeFileInputGuidance {
+					t.Fatal("invalid arguments omitted bounded correction guidance")
+				}
+				fixture.owner.mu.Lock()
+				reads, transfers := fixture.owner.reads, fixture.owner.transfers
+				fixture.owner.mu.Unlock()
+				if reads != 0 || transfers != 0 {
+					t.Fatal("invalid arguments reached file owner")
+				}
+				delete(arguments, "maximum_bytes")
+				corrected, rejected := fixture.call(t, t.Context(), arguments, "corrected-once")
+				if rejected || corrected["text"] != runtimeFileFixtureText || corrected["eof"] != true {
+					t.Fatal("corrected exact file read failed")
+				}
+			} else if result["error_code"] != "TOOL_UNAVAILABLE" || result["retryable"] != false || result["guidance"] != nil {
+				t.Fatal("authority, integrity or audit failure was made retryable")
+			}
+		})
+	}
+}
+
 type fileReadOwnerFixture struct {
 	*runtimeFilesOwnerFixture
 	body             []byte

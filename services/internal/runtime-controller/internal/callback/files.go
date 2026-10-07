@@ -23,6 +23,8 @@ const (
 	maximumFileToolReplyBytes    = 512 << 10
 	runtimeFileInputFailureClass = "file_input_invalid"
 	runtimeFileReplyFailureClass = "file_reply_binding_invalid"
+	runtimeFileInputInvalidCode  = "FILE_INPUT_INVALID"
+	runtimeFileInputGuidance     = "Correct the arguments once using the current tool schema and exact entry_ref, artifact_ref, revision and sha256: digest from the manifest. For read_file use offset_bytes=0 first, then the returned next_offset_bytes; maximum_bytes must be 4..16384. This is not an authority denial."
 )
 
 var (

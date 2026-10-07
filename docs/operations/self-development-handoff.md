@@ -10,6 +10,35 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 13:06 UTC: HEAD/remote/Draft1800
+`c9efed8b3a1cf27009578b5e3bd310587da1d455`, критерии и native Publish4 закреплены.
+Новый ordinary Manager запущен ровно один раз штатным UI/run POST201:
+`run_Axq1lQDU4v9CEhCKGqHJK3f3`, session `ses_vRH1wIvuaGqI2r6-M6lj--dE`,
+turn `trn_u2hFPbklg_tR6WrgcQ7hybX8`,attempt1 technical SUCCEEDED/version3/seq60,
+semantic BLOCKED. Issue1796/main/PR1799 head/diff native READ SUCCEEDED,
+но read_file получил file_input_invalid, который скрывался за TOOL_UNAVAILABLE.
+Workflow не запущен; terminal handle не ждать. ACK CAPTURED/rejoined,
+task/input/file/inbox EQUAL; host expected3011B/SHAe4e58eb0 independently EQUAL,
+same-Pod serving `/proc/13/exe` SHA40f3268a EQUAL captured image file.
+
+Следующий scoped checkpoint исправляет только error mapping для file tools:
+локальный malformed input→FILE_INPUT_INVALID/один исправленный вызов;
+authority/integrity/audit/projection failure→прежний закрытый TOOL_UNAVAILABLE.
+Никакого автоматического retry, payload echo или новых прав. Адресные0.116s/
+fullcallback4.136s/vet PASS; source/Pod files/server hashes EQUAL.
+Код hot reload стабилен с13:04:36; после independently built serving proof
+и commit/push отправить ОДНО Additional задание в существующую session черезUI,
+ранний capture следующего tuple, затем native Workflow launch/роль proofs.
+Chrome5/Console0/relevantAPI200; screenshot terminal показывает BLOCKED reply.
+Clipping в capture не объявлять DOM overflow: measured documentWidth
+совпадает с innerWidth1692. Full65/internalDeveloperPR/reviews/READY OPEN.
+
+Independent Go1.26.6 CGO0/trimpath/buildvcsfalse binary и servicing
+`/proc/1367/exe` SHA47459bbebde2dac5df9568883b6f3f7a3065bdddb2fee1f3a025197d91eaeca5
+EQUAL. Перед Additional сохранить checkpoint в том же Draft1800.
+
+## Предыдущий checkpoint12:58
+
 07.10.2026 12:58 UTC: HEAD/remote/Draft1800 `29220a03`; следующий scoped
 checkpoint фиксирует единый Unicode-лимит критерия завершения2000 на CREATE,
 UPDATE, hydration, validation и MCP schema, а также счётчик/ошибку/Save guard.

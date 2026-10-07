@@ -775,6 +775,10 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	structured := result
 	if err != nil {
 		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
+		if runtimecontract.IsRuntimeFileTool(params.Name) && projectionErr == nil && errors.Is(err, errRuntimeFileInput) {
+			structured = map[string]any{"error_code": runtimeFileInputInvalidCode, "retryable": true,
+				"guidance": runtimeFileInputGuidance}
+		}
 		if params.Name == "delegate_agent" && projectionErr == nil && delegationInputFailureClass(err) != "" {
 			structured = map[string]any{"error_code": delegationInputInvalidCode, "retryable": true,
 				"guidance": delegationInputInvalidGuidance}
