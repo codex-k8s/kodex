@@ -1,0 +1,6 @@
+Квитанция ограниченного bootstrap Git-cycle
+Refs #1797
+Базовая ветка: kodex-agent/issue-1797-self-development-bootstrap
+Базовый SHA: e652f64f5b23bff5996364dba5261fc61cdf3a8c
+Роль: Developer
+Этот receipt фиксирует только ограниченный bootstrap Git-cycle.
