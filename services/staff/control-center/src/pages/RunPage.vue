@@ -1511,6 +1511,15 @@ onBeforeUnmount(() => {
     box-shadow: inset 0 0 0 1px var(--warning);
   }
 }
+@media (min-width: 761px) {
+  .run-workspace--activity .run-canvas-summary {
+    top: 70px;
+    width: min(360px, calc((100% - min(720px, 54%)) / 2 - 86px));
+  }
+  .run-workspace--activity .run-workspace-toolbar {
+    top: 70px;
+  }
+}
 @media (max-width: 760px) {
   .run-page-body {
     min-height: 0;
