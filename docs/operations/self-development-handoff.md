@@ -10,6 +10,22 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 00:00 UTC
+
+Full65 ACTIVE, автономно до14:00 Саратов. На базеc6fd7eff новая подпись
+инструментов:266/266 ROOT unit, lint/format/typecheck/build7.96s PASS;
+host/Pod RunTranscript877829c2 EQUAL, actual screenshot/compact раскрытие
+github.repository.content.read PASS, overflow=false. Browser rapid double
+create/изолированные A/B unsent drafts PASS; две пустые fixtures штатно
+ARCHIVED2/turns0, восстановимы30дней. Искусственная задержка browser NOT RUN.
+Диагностические ROOT GET405/state400 объясняют три Console ошибки;
+fresh reload00:00 подтвердил Console0; gateway bounded log0/panic=false.
+ONE EOF run_wFMGTAGfkOhNK9RuY0tbVvvj RUNNING2/80pages/offset163821;
+observer92093 активен, не запускать дубликат. Все четыре ENV опубликованы,
+preservation EQUAL. После actual EOF → ONE полный33-step Workflow.
+11/13/14/15 OPEN, final internalPR не merge/approve. Последний Chrome
+reload00:00, собственнаяpage1, owner4 untouched; продолжать5мин reload.
+
 ## Checkpoint 07.10.2026 23:49 UTC
 
 Full65 ACTIVE до08.10 14:00 Саратов/10:00UTC; ROOT плюс frozen3-file frontend

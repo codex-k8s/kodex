@@ -361,6 +361,14 @@ function compactServiceRow(item: (typeof displayItems.value)[number]): boolean {
 }
 
 function toolLabel(toolCall: NonNullable<RunActivityItem["toolCall"]>): string {
+  if (toolCall.tool === "invoke_integration") {
+    const label = t("runs.managedToolNames.invoke_integration");
+    const capability = toolCall.capabilityRef;
+    return typeof capability === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/.test(capability)
+      ? `${label} · ${capability}`
+      : label;
+  }
   if (toolCall.tool === "get_configuration_catalog") {
     const kind = toolCall.safeParameters.catalogKind;
     if (typeof kind === "string" && configurationCatalogKinds.has(kind))

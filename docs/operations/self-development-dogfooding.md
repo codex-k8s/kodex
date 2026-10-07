@@ -10,6 +10,35 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 00:00 UTC — черновики и подписи инструментов
+
+- На базе c6fd7eff ROOT повторил быстрые проверки нового отображения
+  инструментов: RunTranscript/run-activity 266/266 PASS, адресные ESLint,
+  Prettier, forced typecheck и production build PASS (7.96s, прежнее
+  предупреждение о крупных chunks). Подпись native integration теперь
+  содержит проверенную capabilityRef; некорректная строка не отображается,
+  произвольный input не используется. Host/Pod RunTranscript SHA256
+  877829c2ff6caabbe3b1694eb66f7c15f59794236c1d033be6781ed6a14aecdd EQUAL.
+- Chrome: rapid double-click «Новый диалог» создал ровно один новый диалог,
+  оба controls и composer блокировались на время create. Несохранённые A/B
+  drafts восстанавливались независимо при переключении; ни одного USER turn
+  не отправлено. Две точные пустые fixtures
+  cnv_3TI-n_lv56GUQcQZLqW-7L6n и cnv_zebgKz8T_TVU1V2L8SEPIoBq
+  штатно перемещены в корзину: обе ARCHIVED2/turns0, восстановимы30дней.
+  Искусственная network delay в browser NOT RUN; unit regression PASS.
+- Desktop screenshot реального Manager: компактные tool groups, раскрытие
+  показывает «Вызов интеграции · github.repository.content.read», статус,
+  время и безопасные подробности. Chat log639px/scroll2326px/bottom0,
+  horizontal overflow=false. Native archive200/history200. Три Console
+  ошибки созданы только диагностическими запросами ROOT к неподдерживаемому
+  одиночному GET и несуществующему state; это не ошибки UI. Для чистого
+  UI smoke после fresh reload00:00: Console error/warn0; bounded gateway
+  log5мин/tail400 содержит0строк, panic=false (не общий health proof).
+- ONE EOF run_wFMGTAGfkOhNK9RuY0tbVvvj продолжает RUNNING2: достигнуты
+  80 успешных страниц/offset163821 из536156Б; EOF ещё не подтверждён.
+  Observer92093 активен, повторного запуска нет. Full65 и11/13/14/15 OPEN;
+  следующим остаётся actual EOF, затем полный33-step Workflow команды.
+
 ## Checkpoint 07.10.2026 23:49 UTC — публикация окружений и новый EOF-проход
 
 - На базе c76663ab исправлена потеря ввода при асинхронном создании диалога:

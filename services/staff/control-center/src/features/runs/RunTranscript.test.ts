@@ -20,6 +20,7 @@ async function render(
   safeResult = "",
   state: NonNullable<RunActivityItem["toolCall"]>["state"] = "SUCCEEDED",
   working = false,
+  capabilityRef?: string,
 ): Promise<string> {
   const item: RunActivityItem = {
     id: "tool-example",
@@ -32,6 +33,7 @@ async function render(
         ref: "call_example",
         tool,
         safeParameters,
+        capabilityRef,
         state,
         revision: 1,
         durationMs: 10,
@@ -669,6 +671,63 @@ describe("RunTranscript: названия native инструментов", () =
 });
 
 describe("RunTranscript: managed инструменты", () => {
+  it.each(["ru", "en"] as const)(
+    "называет действие интеграции по опубликованной capability, без input (%s)",
+    async (locale) => {
+      const capability = "github.repository.pull_requests.list";
+      const html = await render(
+        "invoke_integration",
+        {
+          capability_key: capability,
+          connection_ref: "icn_fixture123",
+          input: { command: "RAW_INPUT_SENTINEL" },
+          displayName: "UNTRUSTED_NAME_SENTINEL",
+        },
+        locale,
+        "",
+        "RUNNING",
+        true,
+        capability,
+      );
+      const expected = `${locale === "ru" ? "Вызов интеграции" : "Integration call"} · ${capability}`;
+      expect(title(html)).toBe(expected);
+      expect(html).toContain(
+        `aria-label="${locale === "ru" ? "Подробности" : "Details"}: ${expected}"`,
+      );
+      const compactHeader = (
+        html.match(/<header[^>]*>[^]*?<\/header>/)?.[0] ?? ""
+      ).split("<details")[0];
+      expect(compactHeader).not.toMatch(
+        /RAW_INPUT_SENTINEL|UNTRUSTED_NAME_SENTINEL|icn_fixture123/,
+      );
+      expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+    },
+  );
+  it.each([
+    undefined,
+    "",
+    "github.read\nunsafe",
+    "<script>unsafe</script>",
+    "https://example.invalid/?token=sentinel",
+    "a".repeat(161),
+  ])(
+    "не берёт название из input при невалидной capability %s",
+    async (capabilityRef) => {
+      const html = await render(
+        "invoke_integration",
+        {
+          capability_key: "github.repository.read",
+          operation: "UNTRUSTED_OPERATION",
+        },
+        "ru",
+        "",
+        "SUCCEEDED",
+        false,
+        capabilityRef,
+      );
+      expect(title(html)).toBe("Вызов интеграции");
+    },
+  );
   it.each(["ru", "en"] as const)(
     "сворачивает служебные сведения в одно доступное раскрытие внутри header (%s)",
     async (locale) => {
