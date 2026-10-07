@@ -117,7 +117,12 @@ function formatTokenCount(value: number): string {
 </script>
 
 <template>
-  <ModalDialog :title="node.displayName" size="xl" @close="$emit('close')">
+  <ModalDialog
+    class="session-details-dialog"
+    :title="node.displayName"
+    size="xl"
+    @close="$emit('close')"
+  >
     <div class="session-details">
       <header class="session-details__summary">
         <span class="session-details__avatar">
@@ -386,7 +391,6 @@ function formatTokenCount(value: number): string {
             v-if="transcriptItems.length"
             class="session-details__transcript"
             :items="transcriptItems"
-            embedded
             @download="emit('download', $event)"
           />
           <p v-else class="session-details__unavailable">
@@ -399,20 +403,45 @@ function formatTokenCount(value: number): string {
 </template>
 
 <style scoped>
+.session-details-dialog :deep(.modal) {
+  height: calc(100dvh - 40px);
+}
+.session-details-dialog :deep(.modal__body) {
+  display: flex;
+  overflow: hidden;
+}
 .session-details {
-  display: grid;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   gap: 14px;
   min-width: 0;
+  min-height: 0;
+}
+.session-details > details {
+  min-height: 0;
+  max-height: 35%;
+  flex: 0 1 auto;
+  overflow: auto;
 }
 .session-details__summary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
+  flex: 0 0 auto;
   gap: 12px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
+}
+.session-details__summary strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 .session-details__summary p {
   display: -webkit-box;
@@ -455,8 +484,8 @@ function formatTokenCount(value: number): string {
 .session-details__workspace {
   display: grid;
   grid-template-columns: minmax(280px, 0.34fr) minmax(0, 1fr);
-  min-height: min(680px, calc(100dvh - 210px));
-  max-height: min(760px, calc(100dvh - 170px));
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -612,15 +641,14 @@ function formatTokenCount(value: number): string {
   padding: 14px;
 }
 .session-details__activity {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   padding: 0;
-  overflow: auto;
+  overflow: hidden;
   background: var(--surface);
 }
 .session-details__activity-heading {
-  position: sticky;
-  z-index: 2;
-  top: 0;
   display: flex;
   min-height: 58px;
   align-items: center;
@@ -641,22 +669,28 @@ function formatTokenCount(value: number): string {
   font-size: 0.72rem;
 }
 @media (max-width: 760px) {
+  .session-details {
+    gap: 10px;
+  }
+  .session-details__summary {
+    gap: 8px;
+    padding: 10px;
+  }
+  .session-details__summary p {
+    -webkit-line-clamp: 2;
+  }
   .session-details__workspace {
     grid-template-columns: 1fr;
-    max-height: none;
-    overflow: visible;
+    grid-template-rows: minmax(0, 0.18fr) minmax(0, 0.82fr);
+    gap: 12px;
     border: 0;
   }
   .session-details__sidebar {
-    max-height: none;
-    overflow: visible;
     border-right: 0;
     border: 1px solid var(--border);
     border-radius: 8px;
   }
   .session-details__activity {
-    min-height: 420px;
-    margin-top: 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
   }

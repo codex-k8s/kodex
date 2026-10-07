@@ -239,6 +239,8 @@ class CaptureTests(unittest.TestCase):
         stages = set(re.findall(r'providerStage\w+\s+providerExecutionStage = "([A-Z_]+)"', process))
         self.assertEqual(CAPTURE.STAGES, stages)
         parser = (source / 'parser.go').read_text()
+        reasons = set(re.findall(r'tokenUsage\w+\s+tokenUsageFailureReason = "([A-Z_]+)"', parser))
+        self.assertEqual(CAPTURE.TOKEN_USAGE_ERRORS, reasons)
         methods = parser.split('var serverNotificationMethods = stringSet(', 1)[1].split(')', 1)[0]
         broker = (source / 'broker.go').read_text()
         additional = broker.split('func safeNotificationMethod(', 1)[1].split('default:', 1)[0]
@@ -250,6 +252,24 @@ class CaptureTests(unittest.TestCase):
             'provider_error_info_invalid', 'provider_interrupted', 'RUNTIME_ARTIFACT_INVALID'})
         account = (source / 'account_read_failure.go').read_text().split('func safeAccountReadFailure(', 1)[1]
         self.assertEqual(CAPTURE.ACCOUNT_READ, set(re.findall(r'"([A-Z_]+)"', account)))
+
+    def test_closed_token_usage_reasons_bind_exact_method_and_preserve_privacy(self):
+        for reason in CAPTURE.TOKEN_USAGE_ERRORS | {'TOKEN_USAGE'}:
+            with self.subTest(reason=reason):
+                parsed = CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
+                    notification='thread/tokenUsage/updated', notification_error=reason))
+                self.assertEqual(parsed['notification_error'], reason)
+                self.assertNotIn(SENTINEL, json.dumps(parsed))
+                self.assertEqual(set(parsed), {'kind', 'stage', 'class', 'detail', 'rpc_code',
+                                              'notification', 'account_read', 'notification_error'})
+                if reason != 'TOKEN_USAGE':
+                    with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+                        CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
+                            notification='item/started', notification_error=reason))
+        with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$') as caught:
+            CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
+                notification='thread/tokenUsage/updated', notification_error='TOKEN_USAGE_'+SENTINEL))
+        self.assertNotIn(SENTINEL, str(caught.exception))
 
     def test_unknown_or_malformed_diagnostic_never_reflects_sentinel(self):
         for field in ('stage', 'category', 'detail', 'notification', 'account', 'notification_error', 'code'):

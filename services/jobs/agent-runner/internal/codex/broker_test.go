@@ -233,6 +233,36 @@ func TestProviderSafeFailureDetailsRemainClosed(t *testing.T) {
 	}
 }
 
+func TestTokenUsageFailureLogsRemainClosed(t *testing.T) {
+	var diagnostic bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&diagnostic)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	for _, reason := range []tokenUsageFailureReason{
+		tokenUsageStructure, tokenUsageRequiredMissing, tokenUsageRequiredNull, tokenUsageRequiredType,
+		tokenUsageOptionalNull, tokenUsageOptionalType, tokenUsageNegative, tokenUsageTotalArithmetic,
+		tokenUsageCacheInputBound, tokenUsageReasoningOutputBound, tokenUsageLastExceedsTotal,
+	} {
+		diagnostic.Reset()
+		logProviderSafeFailure(providerStageTerminalWait, notificationFailure("thread/tokenUsage/updated", &tokenUsageFailure{reason}))
+		if !strings.Contains(diagnostic.String(), "notification_error: "+string(reason)) {
+			t.Fatal("closed reason lost")
+		}
+	}
+	for _, test := range []struct{ method, reason, want string }{
+		{"thread/tokenUsage/updated", "PRIVATE_SECRET_BODY_SENTINEL", "UNKNOWN"},
+		{"item/started", string(tokenUsageLastExceedsTotal), "UNKNOWN"},
+		{"thread/tokenUsage/updated", "TOKEN_USAGE", "TOKEN_USAGE"},
+	} {
+		diagnostic.Reset()
+		err := &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: test.method, notificationError: test.reason, err: errors.New("PRIVATE_SECRET_BODY_SENTINEL")}
+		logProviderSafeFailure(providerStageTerminalWait, err)
+		if strings.Contains(diagnostic.String(), "PRIVATE_SECRET_BODY_SENTINEL") || !strings.Contains(diagnostic.String(), "notification_error: "+test.want) {
+			t.Fatal("unsafe or unbound usage diagnostic")
+		}
+	}
+}
+
 func providerTurnFixture(t *testing.T, authentication []byte) (model.Input, string) {
 	t.Helper()
 	root := t.TempDir()

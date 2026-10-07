@@ -2,6 +2,8 @@ package codex
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -9,6 +11,69 @@ import (
 )
 
 const codex160UsageBreakdownFixture = `{"totalTokens":100,"inputTokens":80,"cachedInputTokens":20,"outputTokens":20,"reasoningOutputTokens":5}`
+
+func TestTokenUsageClosedFailureReasons(t *testing.T) {
+	envelope := func(total, last string) string { return `{"total":` + total + `,"last":` + last + `}` }
+	changed := func(field, value string) string {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(codex160UsageBreakdownFixture), &fields); err != nil {
+			t.Fatal(err)
+		}
+		if value == "" {
+			delete(fields, field)
+		} else {
+			fields[field] = json.RawMessage(value)
+		}
+		return string(marshalProtocolFixture(t, fields))
+	}
+	for _, test := range []struct {
+		name, input string
+		reason      tokenUsageFailureReason
+	}{
+		{"unknown field", envelope(changed("PRIVATE_SECRET_BODY_SENTINEL", `0`), codex160UsageBreakdownFixture), tokenUsageStructure},
+		{"duplicate", envelope(strings.TrimSuffix(codex160UsageBreakdownFixture, `}`)+`,"totalTokens":100}`, codex160UsageBreakdownFixture), tokenUsageStructure},
+		{"nonobject", `[]`, tokenUsageStructure},
+		{"missing envelope", `{"last":` + codex160UsageBreakdownFixture + `}`, tokenUsageRequiredMissing},
+		{"null envelope", envelope(`null`, codex160UsageBreakdownFixture), tokenUsageRequiredNull},
+		{"missing required", envelope(changed("inputTokens", ""), codex160UsageBreakdownFixture), tokenUsageRequiredMissing},
+		{"null required", envelope(changed("inputTokens", `null`), codex160UsageBreakdownFixture), tokenUsageRequiredNull},
+		{"type required", envelope(changed("inputTokens", `"PRIVATE_SECRET_BODY_SENTINEL"`), codex160UsageBreakdownFixture), tokenUsageRequiredType},
+		{"overflow required", envelope(changed("inputTokens", `9223372036854775808`), codex160UsageBreakdownFixture), tokenUsageRequiredType},
+		{"null optional", envelope(changed("cacheWriteInputTokens", `null`), codex160UsageBreakdownFixture), tokenUsageOptionalNull},
+		{"type optional", envelope(changed("cacheWriteInputTokens", `"PRIVATE_SECRET_BODY_SENTINEL"`), codex160UsageBreakdownFixture), tokenUsageOptionalType},
+		{"context type", `{"total":` + codex160UsageBreakdownFixture + `,"last":` + codex160UsageBreakdownFixture + `,"modelContextWindow":true}`, tokenUsageOptionalType},
+		{"negative", envelope(changed("inputTokens", `-1`), codex160UsageBreakdownFixture), tokenUsageNegative},
+		{"arithmetic", envelope(changed("totalTokens", `101`), codex160UsageBreakdownFixture), tokenUsageTotalArithmetic},
+		{"cache bound", envelope(changed("cachedInputTokens", `81`), codex160UsageBreakdownFixture), tokenUsageCacheInputBound},
+		{"write bound", envelope(changed("cacheWriteInputTokens", `81`), codex160UsageBreakdownFixture), tokenUsageCacheInputBound},
+		{"reasoning bound", envelope(changed("reasoningOutputTokens", `21`), codex160UsageBreakdownFixture), tokenUsageReasoningOutputBound},
+		{"last bound", envelope(codex160UsageBreakdownFixture, changed("cachedInputTokens", `21`)), tokenUsageLastExceedsTotal},
+		{"last total", envelope(codex160UsageBreakdownFixture, strings.Replace(strings.Replace(codex160UsageBreakdownFixture, `"totalTokens":100`, `"totalTokens":101`, 1), `"inputTokens":80`, `"inputTokens":81`, 1)), tokenUsageLastExceedsTotal},
+		{"last input", envelope(codex160UsageBreakdownFixture, strings.Replace(strings.Replace(codex160UsageBreakdownFixture, `"inputTokens":80`, `"inputTokens":81`, 1), `"outputTokens":20`, `"outputTokens":19`, 1)), tokenUsageLastExceedsTotal},
+		{"last output", envelope(codex160UsageBreakdownFixture, strings.Replace(strings.Replace(codex160UsageBreakdownFixture, `"inputTokens":80`, `"inputTokens":79`, 1), `"outputTokens":20`, `"outputTokens":21`, 1)), tokenUsageLastExceedsTotal},
+		{"last cache write", envelope(codex160UsageBreakdownFixture, changed("cacheWriteInputTokens", `1`)), tokenUsageLastExceedsTotal},
+		{"last reasoning", envelope(codex160UsageBreakdownFixture, changed("reasoningOutputTokens", `6`)), tokenUsageLastExceedsTotal},
+		{"invalid last", envelope(codex160UsageBreakdownFixture, changed("outputTokens", `null`)), tokenUsageRequiredNull},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			usage, err := parseTokenUsage(raw(test.input))
+			var failure *tokenUsageFailure
+			if !errors.As(err, &failure) || failure.reason != test.reason || usage != (runtimecontract.TokenUsage{}) {
+				t.Fatalf("unexpected closed failure: %v", err)
+			}
+			if err.Error() != "Codex app-server token usage is invalid" {
+				t.Fatal("diagnostic reflected input")
+			}
+			notification := notificationFailure("thread/tokenUsage/updated", fmt.Errorf("PRIVATE_SECRET_BODY_SENTINEL: %w", err)).(*appServerCallFailure)
+			if notification.notificationError != string(test.reason) {
+				t.Fatalf("reason lost: %s", notification.notificationError)
+			}
+		})
+	}
+	if safeTokenUsageFailureReason(tokenUsageFailureReason("PRIVATE_SECRET_BODY_SENTINEL")) != "UNKNOWN" {
+		t.Fatal("unknown diagnostic accepted")
+	}
+}
 
 func TestCodex160UsageCacheWriteDefaultsOnlyWhenMissing(t *testing.T) {
 	for _, test := range []struct {

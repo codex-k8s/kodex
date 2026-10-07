@@ -157,6 +157,10 @@ func notificationFailure(method string, err error) error {
 	if errors.Is(err, ErrRequiredMCPUnavailable) {
 		category = "MCP"
 	}
+	var usageFailure *tokenUsageFailure
+	if method == "thread/tokenUsage/updated" && errors.As(err, &usageFailure) {
+		category = safeTokenUsageFailureReason(usageFailure.reason)
+	}
 	return &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: method, notificationError: category, err: err}
 }
 

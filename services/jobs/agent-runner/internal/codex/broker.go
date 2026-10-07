@@ -357,6 +357,11 @@ func logProviderSafeFailure(stage providerExecutionStage, err error) {
 				case "METHOD", "ENVELOPE", "TUPLE", "ITEM", "TIMESTAMP", "MESSAGE", "TOKEN_USAGE", "TERMINAL", "LIFECYCLE", "MCP", "PROVIDER_ERROR":
 					notificationError = failure.notificationError
 				}
+				if notification == "thread/tokenUsage/updated" {
+					if reason := safeTokenUsageFailureReason(tokenUsageFailureReason(failure.notificationError)); reason != "UNKNOWN" {
+						notificationError = reason
+					}
+				}
 			}
 		}
 	}

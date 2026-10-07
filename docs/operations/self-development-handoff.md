@@ -10,6 +10,39 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 22:48 UTC
+
+Frozen11-file пакет поверх91c9248f готов к commit/push того жеDraft1800.
+ROOT full runner unit/app16.506s/codex4.735s/vet/build PASS; capture+ACK66
+tests1.082s PASS. ROOT frontend138tests/typecheck/build11.24s/lint/format PASS.
+Desktop latest639px/bottom0, mobile summary116px/transcript314px/bottom1:
+скриншоты получены, host/Pod Vue4e9abcd3 EQUAL, Console0/rejoinConnected.
+Закрытая diagnostics typed11 TOKEN_USAGE enums без raw data/новыхполномочий.
+Previous run_sfvWS уже FAILED3/257nativeREAD/noEOF; early captureTOKEN_USAGE.
+Следующий cleanSHA → canonical full runner новыйinput/provenance/import →
+seed толькоrunner → fresh render/idle quiesce/apply/readback → native recipes,
+admission/promotion/environments → ONE EOF repeat → полный33-step Workflow.
+Private render-current.sh prepared/syntaxPASS, использует Go1.26.6 и exact
+state pins; не применяет кластер. Full65 ACTIVE до08.10 14:00 Саратов,
+11/13/14/15 OPEN, итоговый внутреннийPR не merge/approve. Reload22:46.
+
+## Checkpoint 07.10.2026 22:44 UTC
+
+Full65 ACTIVE до08.10 14:00 Саратов /10:00UTC. HEAD/remote/Draft1800
+91c9248f EQUAL, mainb5f6fcde. ONE diagnostic run_sfvWSr2p9B_JDuW_jUK6YYoU
+FAILED3/seq832–833 после257 успешных native receipts; EOF/artifact отсутствуют.
+Observer94720 завершён CAPTURED: NOTIFICATION_INVALID/thread/tokenUsage/updated/
+TOKEN_USAGE/TERMINAL_WAIT, exactPodUID3230621a и rejoin VERIFIED. Конкретная
+usage причина ещё UNKNOWN, не выдавать отсутствие optional за proven emitter.
+Подготовленный c114 runner/render не активирован; закрытый diagnostic пакет
+потребует нового input/image/provenance/render перед canonical cutover.
+Owner idle22:42 все active/pending/claim counters0; promoted32/pinsa9819e57.
+UI standalone transcript desktop bottomDistance0; ROOT137tests/build PASS,
+mobile summary UX FAIL исправляется. Затем exact publish/canonical activation/
+native recipes/admission/promotion/env → ONE EOF повтор → полный33-step.
+11/13/14/15 OPEN, internal final PR не merge/approve. Chrome reload22:43,
+чужие вкладки untouched; screenshot/Console/Network/backend/UX обязательны.
+
 ## Checkpoint 07.10.2026 22:23 UTC
 
 Full65 ACTIVE, владелец повторно подтвердил автономию до08.10 14:00 Саратов.

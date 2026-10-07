@@ -10,6 +10,84 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 22:48 UTC — final-tree проверки перед публикацией
+
+- ROOT полный agent-runner Go1.26.6 unit PASS: app16.506s/codex4.735s,
+  остальные packages PASS; vet/build PASS. Объединённые capture/ACK66tests
+  PASS1.082s; gofmt/diff-check PASS. Source91c9248f плюс frozen11-file пакет,
+  parser6ce07c2c3b4ed785add07583ae4e41e30a81ba58960a524dd345e799ed41fb1f.
+  Private publisher whitelist exact scope дополнен только изменёнными файлами.
+- Runtime mutation не выполнялась: native failed root не retry/resume,
+  новый launch отсутствует. Следующий обязательный шаг — clean commit/push
+  того же Draft1800, canonical full runner build/provenance/import и свежий
+  render. Preparedc114 до diagnostics не является образом этого пакета.
+  Full65 ACTIVE, обязательные11/13/14/15 OPEN; живой итоговый QA NOT RUN.
+
+## Checkpoint 07.10.2026 22:47 UTC — итоговый transcript и закрытые usage-причины
+
+- Адресный пакет поверх91c9248f frozen: основной transcript standalone с
+  собственным scroll/latest/unread; heading неподвижен, ручная история не
+  сбрасывается realtime по regression. Вложенные tool groups embedded.
+  ROOT138/138 frontend tests, pinned ESLint/Prettier и forced typecheck/build
+  PASS11.24s; предупреждение о больших chunks сохранено. Первый вызов ESLint
+  из неверного cwd FAIL/no matching files; повтор exact frontend binary PASS.
+- Chrome desktop2179×994: transcript639px/bottomDistance0; mobile390×844:
+  summary116px/transcript314px/bottomDistance1, горизонтального overflow нет.
+  Оба скриншота получены, mobile FAIL предыдущего checkpoint устранён.
+  Vue host/Pod SHA2564e9abcd318f597ed5a0da652a7f1f347c9e6a81d2e144d53f676f9d881fa3792
+  EQUAL. Console error/warn0, история#833/rejoin Connected; gateway bounded
+  последние4мин errorLines0/panicfalse, это не полный health acceptance.
+  Живой unread на новых событиях NOT RUN: run уже terminal; unit сценарий PASS.
+- Typed parser ошибка содержит только один из11 закрытых TOKEN_USAGE_* enums.
+  Existing notification_error строго привязан кthread/tokenUsage/updated;
+  broker повторно whitelist, capture отвергает чужой метод/unknown/sentinel.
+  Guards required/optional/null/arithmetic/last≤total НЕ ослаблены, raw JSON,
+  имена полей и значения не сохраняются. Никаких внешних API/events/grants.
+  Child full codex4.737s/vet и capture54tests0.830s PASS; ROOT final module
+  и объединённый capture/ACK subset ещё выполняются. Context7 Vue lifecycle,
+  Go errors.As/encoding/json проверены.
+- Конкретная причина старого usage-отказа UNKNOWN. Образc114 подготовлен
+  до нового diagnostic diff, не применять его как новый SHA. После clean
+  commit/push сборка нового full OCI с provenance, fresh render и canonical
+  idle cutover; затем native recipes/admission/promotion/окружения и повтор.
+  Full65/11/13/14/15 OPEN; цель ACTIVE, до08.10 14:00 Саратов.
+
+## Checkpoint 07.10.2026 22:44 UTC — точная причина отказа уведомления usage
+
+- Full65 ACTIVE; автономное окно владельца до08.10 14:00 Саратов
+  (10:00UTC), Chrome подключён и reload22:43. HEAD/remote/Draft1800
+  `91c9248f9ef3ac949da795bcb6a39faff9ae9491` EQUAL, mainb5f6fcde неизменен.
+- Диагностический run_sfvWSr2p9B_JDuW_jUK6YYoU FAILED3 в22:39:46 UTC,
+  terminal seq832–833. ROOT прочитал обе страницы истории:257 native
+  integration receipts SUCCEEDED, FAILED receipts0. Последний публичный
+  checkpoint250/511945из536156Б; EOF/артефакт НЕ получены, это FAIL.
+- Ранний exact-Pod observer94720 CAPTURED/rejoin VERIFIED: PROVIDER,
+  REQUEST_FAILURE/NOTIFICATION_INVALID, thread/tokenUsage/updated,
+  notification_error TOKEN_USAGE, TERMINAL_WAIT, rpc_code0. Это доказанный
+  отказ parser уведомления, а не доказательство сбоя сети. Конкретный
+  счётчик или межполевая причина UNKNOWN; raw notification не раскрывается.
+  Готовится закрытое различение причин без counters/значений/сырого тела.
+- Новый full runner c1149622 подготовлен локально с provenance на91c9248f;
+  binaryd9548a00. Fresh renderffe5fc09 PASS после выбора точного Go1.26.6
+  (первый запуск на host Go1.27.1 FAIL toolchain mismatch). Import, seed,
+  admission/promotion и activation NOT RUN; после диагностического пакета
+  потребуется новый immutable image и fresh source/render, старый не применять.
+- ROOT frontend адресные137/137 и build17.77s PASS на91c9248f+UI diff;
+  desktop screenshot/DOM PASS: transcript standalone, latest bottomDistance0,
+  собственный scroll, неизменяемый heading. Mobile390×844 screenshot выявил
+  длинный summary, оставляющий transcript161px: UX FAIL, исправляется до commit.
+  Console error/warn0; bootstrap/session/history200, rejoin Connected.
+- Fresh owner read22:42: openBuilds0/pendingAdmissions0/pendingPromotions0,
+  activeRuntimeRuns0/claimedRuntimeLeases0, promotedArtifactCount32 и exact
+  pinsSHAa9819e5791e7707dc18fef7118de7fd6849276ec0a8f608fb444ee1e43d3d42b.
+  Историческая запись22:10 уточняется: после FAILED receiptseq284 успешный
+  receiptseq287, не286. Предыдущие доказательства не переписываются.
+- Дальше: закрытые diagnostics и компактный mobile summary → адресные проверки,
+  commit/push того же Draft → canonical runner/seed/idle quiesce/apply/readback
+  → native SYSTEM/PROJECT recipes/admission/promotion/environment pins → ONE
+  native повтор до EOF → полный33-step Workflow.11/13/14/15 остаются OPEN;
+  внутренний финальный PR не merge/approve. Реальные STT/device-code NOT RUN.
+
 ## Checkpoint 07.10.2026 22:23 UTC — продолжение до 14:00 и final-tree проверки
 
 - Владелец повторно подтвердил автономную работу до08.10 14:00 Саратов

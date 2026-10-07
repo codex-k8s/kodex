@@ -686,15 +686,59 @@ func (state *protocolState) validateUsageTuple(fields map[string]json.RawMessage
 	return nil
 }
 
+type tokenUsageFailureReason string
+
+const (
+	tokenUsageStructure            tokenUsageFailureReason = "TOKEN_USAGE_STRUCTURE"
+	tokenUsageRequiredMissing      tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_MISSING"
+	tokenUsageRequiredNull         tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_NULL"
+	tokenUsageRequiredType         tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_TYPE"
+	tokenUsageOptionalNull         tokenUsageFailureReason = "TOKEN_USAGE_OPTIONAL_NULL"
+	tokenUsageOptionalType         tokenUsageFailureReason = "TOKEN_USAGE_OPTIONAL_TYPE"
+	tokenUsageNegative             tokenUsageFailureReason = "TOKEN_USAGE_NEGATIVE"
+	tokenUsageTotalArithmetic      tokenUsageFailureReason = "TOKEN_USAGE_TOTAL_ARITHMETIC"
+	tokenUsageCacheInputBound      tokenUsageFailureReason = "TOKEN_USAGE_CACHE_INPUT_BOUND"
+	tokenUsageReasoningOutputBound tokenUsageFailureReason = "TOKEN_USAGE_REASONING_OUTPUT_BOUND"
+	tokenUsageLastExceedsTotal     tokenUsageFailureReason = "TOKEN_USAGE_LAST_EXCEEDS_TOTAL"
+)
+
+// Ошибка содержит только закрытую причину, без поля, значения или исходного JSON.
+type tokenUsageFailure struct{ reason tokenUsageFailureReason }
+
+func (*tokenUsageFailure) Error() string { return "Codex app-server token usage is invalid" }
+
+func safeTokenUsageFailureReason(reason tokenUsageFailureReason) string {
+	switch reason {
+	case tokenUsageStructure, tokenUsageRequiredMissing, tokenUsageRequiredNull, tokenUsageRequiredType,
+		tokenUsageOptionalNull, tokenUsageOptionalType, tokenUsageNegative, tokenUsageTotalArithmetic,
+		tokenUsageCacheInputBound, tokenUsageReasoningOutputBound, tokenUsageLastExceedsTotal:
+		return string(reason)
+	default:
+		return "UNKNOWN"
+	}
+}
+
 func parseTokenUsage(raw json.RawMessage) (runtimecontract.TokenUsage, error) {
-	fields, err := decodeObject(raw, schema([]string{"last", "total"}, "last", "modelContextWindow", "total"))
+	fields, err := decodeObject(raw, schema(nil, "last", "modelContextWindow", "total"))
 	if err != nil {
-		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage is invalid")
+		return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageStructure}
+	}
+	for _, field := range []string{"last", "total"} {
+		value, present := fields[field]
+		if !present {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredMissing}
+		}
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredNull}
+		}
 	}
 	var contextWindow int64
 	if rawWindow, present := fields["modelContextWindow"]; present && !bytes.Equal(rawWindow, []byte("null")) {
-		if strictDecode(rawWindow, &contextWindow) != nil || contextWindow < 0 {
-			return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage is invalid")
+		if strictDecode(rawWindow, &contextWindow) != nil {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageOptionalType}
+		}
+		if contextWindow < 0 {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageNegative}
 		}
 	}
 	total, err := parseTokenUsageBreakdown(fields["total"], contextWindow)
@@ -702,28 +746,33 @@ func parseTokenUsage(raw json.RawMessage) (runtimecontract.TokenUsage, error) {
 		return runtimecontract.TokenUsage{}, err
 	}
 	last, err := parseTokenUsageBreakdown(fields["last"], contextWindow)
-	if err != nil || last.TotalTokens > total.TotalTokens || last.InputTokens > total.InputTokens ||
+	if err != nil {
+		return runtimecontract.TokenUsage{}, err
+	}
+	if last.TotalTokens > total.TotalTokens || last.InputTokens > total.InputTokens ||
 		last.CachedInputTokens > total.CachedInputTokens || last.CacheWriteInputTokens > total.CacheWriteInputTokens ||
 		last.OutputTokens > total.OutputTokens || last.ReasoningOutputTokens > total.ReasoningOutputTokens {
-		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage is invalid")
+		return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageLastExceedsTotal}
 	}
 	return total, nil
 }
 
 func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtimecontract.TokenUsage, error) {
-	const invalidBreakdownMessage = "Codex app-server token usage breakdown is invalid"
 	fields, err := decodeObject(raw, schema(
-		[]string{"cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens"},
+		nil,
 		"cacheWriteInputTokens", "cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens",
 	))
 	if err != nil {
-		return runtimecontract.TokenUsage{}, errors.New(invalidBreakdownMessage)
+		return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageStructure}
 	}
 	usage := runtimecontract.TokenUsage{ModelContextWindow: contextWindow}
 	// В schema rust-v0.160.0 поле необязательно с default 0, но null не разрешён.
 	if cacheWrite, present := fields["cacheWriteInputTokens"]; present {
-		if bytes.Equal(bytes.TrimSpace(cacheWrite), []byte("null")) || strictDecode(cacheWrite, &usage.CacheWriteInputTokens) != nil {
-			return runtimecontract.TokenUsage{}, errors.New(invalidBreakdownMessage)
+		if bytes.Equal(bytes.TrimSpace(cacheWrite), []byte("null")) {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageOptionalNull}
+		}
+		if strictDecode(cacheWrite, &usage.CacheWriteInputTokens) != nil {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageOptionalType}
 		}
 	}
 	values := []struct {
@@ -737,12 +786,29 @@ func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtime
 		{fields["reasoningOutputTokens"], &usage.ReasoningOutputTokens},
 	}
 	for _, value := range values {
-		if bytes.Equal(bytes.TrimSpace(value.raw), []byte("null")) || strictDecode(value.raw, value.target) != nil {
-			return runtimecontract.TokenUsage{}, errors.New(invalidBreakdownMessage)
+		if len(value.raw) == 0 {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredMissing}
+		}
+		if bytes.Equal(bytes.TrimSpace(value.raw), []byte("null")) {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredNull}
+		}
+		if strictDecode(value.raw, value.target) != nil {
+			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredType}
 		}
 	}
 	if usage.Validate() != nil {
-		return runtimecontract.TokenUsage{}, errors.New(invalidBreakdownMessage)
+		reason := tokenUsageTotalArithmetic
+		switch {
+		case usage.TotalTokens < 0 || usage.InputTokens < 0 || usage.CachedInputTokens < 0 || usage.CacheWriteInputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 || usage.ModelContextWindow < 0:
+			reason = tokenUsageNegative
+		case usage.TotalTokens != usage.InputTokens+usage.OutputTokens:
+			reason = tokenUsageTotalArithmetic
+		case usage.CachedInputTokens > usage.InputTokens || usage.CacheWriteInputTokens > usage.InputTokens:
+			reason = tokenUsageCacheInputBound
+		case usage.ReasoningOutputTokens > usage.OutputTokens:
+			reason = tokenUsageReasoningOutputBound
+		}
+		return runtimecontract.TokenUsage{}, &tokenUsageFailure{reason}
 	}
 	return usage, nil
 }
