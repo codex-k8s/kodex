@@ -134,10 +134,12 @@ func (repository *Repository) lockSessionArchiveTask(ctx context.Context, tx pgx
 		return lockedSessionArchiveTask{}, errs.ErrInvalid
 	}
 	var task lockedSessionArchiveTask
+	var storedFenceDigest, storedLeaseRef *string
+	var storedLeaseExpiresAt *time.Time
 	err := tx.QueryRow(ctx, querySessionArchiveLockTask, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "task_ref": payload.TaskRef,
-	}).Scan(&task.id, &task.ref, &task.kind, &task.state, &task.generation, &task.fenceDigest,
-		&task.leaseRef, &task.leaseExpiresAt, &task.attempt, &task.maximumAttempts,
+	}).Scan(&task.id, &task.ref, &task.kind, &task.state, &task.generation, &storedFenceDigest,
+		&storedLeaseRef, &storedLeaseExpiresAt, &task.attempt, &task.maximumAttempts,
 		&task.organizationID, &task.projectID, &task.sessionID, &task.archiveID,
 		&task.contentGeneration, &task.inputDigest, &task.objectKey, &task.objectVersion,
 		&task.storageState, &task.storageGeneration, &task.sourceRelativePath,
@@ -149,8 +151,14 @@ func (repository *Repository) lockSessionArchiveTask(ctx context.Context, tx pgx
 	if err != nil {
 		return lockedSessionArchiveTask{}, errs.ErrUnavailable
 	}
+	// READY и terminal задачи штатно не имеют lease. NULL либо частичный отзыв
+	// authority закрыто отклоняется до использования сохранённого fence.
+	if task.state != "CLAIMED" || storedFenceDigest == nil || storedLeaseRef == nil || storedLeaseExpiresAt == nil {
+		return lockedSessionArchiveTask{}, errs.ErrForbidden
+	}
+	task.fenceDigest, task.leaseRef, task.leaseExpiresAt = *storedFenceDigest, *storedLeaseRef, *storedLeaseExpiresAt
 	fenceDigest := sha256.Sum256([]byte(payload.Fence))
-	if task.state != "CLAIMED" || task.leaseRef != payload.LeaseRef || task.generation != payload.Generation ||
+	if task.leaseRef != payload.LeaseRef || task.generation != payload.Generation ||
 		task.fenceDigest != hex.EncodeToString(fenceDigest[:]) || !task.leaseExpiresAt.After(time.Now()) ||
 		(task.kind != "DELETE_OBJECT" && task.contentGeneration != task.storageGeneration) {
 		return lockedSessionArchiveTask{}, errs.ErrForbidden

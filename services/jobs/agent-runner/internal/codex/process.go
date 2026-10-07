@@ -215,11 +215,15 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	}
 	state := newProtocolState(input.CodexSessionID)
 	state.onActivity = onActivity
+	captureAttempted := false
 	defer func() {
 		if resultErr != nil {
 			// Учитываем только ранее проверенные измерения, даже если terminal,
 			// thread/read, остановка процесса или захват архива завершились ошибкой.
 			result = state.measuredResult()
+			if !captureAttempted {
+				result = captureFailedRollout(input, server, state, result)
+			}
 		}
 	}()
 	initialize := map[string]any{
@@ -286,15 +290,103 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	if err != nil {
 		return Result{}, atProviderStage(providerStageTerminalResult, err)
 	}
-	archivePath, relativePath, digest, sizeBytes, err := captureRollout(input, state.threadPath)
+	if !server.captureReady() {
+		return Result{}, atProviderStage(providerStageArchiveCapture, errors.New("Codex rollout writer is not stopped"))
+	}
+	captureAttempted = true
+	_, _, _, _, err = captureRollout(input, state.threadPath)
 	if err != nil {
 		return Result{}, atProviderStage(providerStageArchiveCapture, err)
 	}
-	result.ArchivePath = archivePath
-	result.ArchiveRelativePath = relativePath
-	result.ArchiveSHA256 = digest
-	result.ArchiveSizeBytes = sizeBytes
+	captured, err := CaptureStoppedRollout(input, state.threadID, state.threadPath)
+	if err != nil {
+		return Result{}, atProviderStage(providerStageArchiveCapture, err)
+	}
+	result = withRolloutCapture(result, captured.rolloutCapture)
+	result.ArchivePath = captured.ArchivePath
 	return result, nil
+}
+
+func captureFailedRollout(input model.Input, server *appServer, state *protocolState, result Result) Result {
+	if !server.captureReady() {
+		return result
+	}
+	if _, _, _, _, err := captureRollout(input, state.threadPath); err != nil {
+		return result
+	}
+	captured, err := CaptureStoppedRollout(input, state.threadID, state.threadPath)
+	if err != nil {
+		return result
+	}
+	result = withRolloutCapture(result, captured.rolloutCapture)
+	result.ArchivePath = captured.ArchivePath
+	return result
+}
+
+// CaptureStoppedRollout читает фактический источник после завершения writer.
+// Вызывающая доверенная сторона обязана предварительно выполнить bounded join.
+// Функция не принимает готовый digest и не меняет owner, group или mode.
+func CaptureStoppedRollout(input model.Input, sessionID, path string) (Result, error) {
+	relative, err := filepath.Rel(input.WorkspaceRoot, path)
+	if err != nil {
+		return Result{}, errProviderBrokerResponseInvalid
+	}
+	proof := &rolloutCaptureProof{Schema: rolloutCaptureSchema, ExecutionBindingDigest: input.ExecutionBindingDigest,
+		RuntimeRevisionDigest: input.RuntimeRevisionDigest, InputDigest: input.InputDigest, Attempt: input.Attempt,
+		SessionRef: input.SessionRef, TurnRef: input.TurnRef, SessionID: sessionID, RelativePath: filepath.ToSlash(relative)}
+	file, info, err := openProtectedFile(input.WorkspaceRoot, path)
+	if err != nil {
+		return Result{}, errProviderBrokerResponseInvalid
+	}
+	proof.SizeBytes = info.Size()
+	proof.SHA256, err = digestArchive(file, info)
+	closeErr := file.Close()
+	if err != nil || closeErr != nil || !proof.bound(input) {
+		return Result{}, errProviderBrokerResponseInvalid
+	}
+	result := Result{SessionID: proof.SessionID, ArchivePath: path, ArchiveRelativePath: proof.RelativePath, ArchiveSHA256: proof.SHA256, ArchiveSizeBytes: proof.SizeBytes}
+	if verifyRolloutCapture(input, result, proof, uint32(os.Geteuid())) != nil {
+		return Result{}, errProviderBrokerResponseInvalid
+	}
+	proof.sealed = true
+	return withRolloutCapture(result, proof), nil
+}
+
+// Consumer сверяет owner с authenticated provider peer, а не UID runner.
+func verifyRolloutCapture(input model.Input, result Result, proof *rolloutCaptureProof, writerUID uint32) error {
+	if !proof.bound(input) || !result.matchesCapture(proof) || result.ArchivePath != filepath.Join(input.WorkspaceRoot, filepath.FromSlash(proof.RelativePath)) {
+		return errProviderBrokerResponseInvalid
+	}
+	file, info, err := openProtectedFile(input.WorkspaceRoot, result.ArchivePath)
+	if err != nil {
+		return errProviderBrokerResponseInvalid
+	}
+	defer file.Close()
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != writerUID || (writerUID == providerWriterUID && stat.Gid != 29000) || info.Mode().Perm() != 0o640 || info.Size() != proof.SizeBytes {
+		return errProviderBrokerResponseInvalid
+	}
+	digest, err := digestArchive(file, info)
+	if err != nil || digest != proof.SHA256 {
+		return errProviderBrokerResponseInvalid
+	}
+	current, currentInfo, err := openProtectedFile(input.WorkspaceRoot, result.ArchivePath)
+	if err != nil {
+		return errProviderBrokerResponseInvalid
+	}
+	defer current.Close()
+	currentStat, currentOK := currentInfo.Sys().(*syscall.Stat_t)
+	if !currentOK || !os.SameFile(info, currentInfo) || currentInfo.Size() != info.Size() || currentInfo.Mode() != info.Mode() ||
+		currentStat.Uid != stat.Uid || currentStat.Gid != stat.Gid || currentStat.Nlink != stat.Nlink || currentStat.Mtim != stat.Mtim || currentStat.Ctim != stat.Ctim {
+		return errProviderBrokerResponseInvalid
+	}
+	return nil
+}
+
+// Неуспешный exit не мешает захвату байтов, но живой writer или reader мешает.
+func (server *appServer) captureReady() bool {
+	return server.waited && server.readerRead && server.diagnosticRead && server.command != nil && server.command.Process != nil &&
+		errors.Is(syscall.Kill(-server.command.Process.Pid, 0), syscall.ESRCH)
 }
 
 func turnStartParams(input model.Input, threadID string, prompt []byte) (map[string]any, error) {
@@ -973,6 +1065,11 @@ func captureRollout(input model.Input, returnedPath string) (string, string, str
 	if err != nil {
 		return "", "", "", 0, errors.New("open Codex app-server rollout")
 	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != uint32(os.Geteuid()) {
+		file.Close()
+		return "", "", "", 0, errors.New("verify Codex app-server rollout")
+	}
 	digest, hashErr := digestArchive(file, info)
 	groupErr := file.Chown(-1, 29000)
 	modeErr := file.Chmod(0o640)
@@ -1038,7 +1135,14 @@ func digestArchive(file *os.File, info os.FileInfo) (string, error) {
 	}
 	digest := sha256.New()
 	written, err := io.Copy(digest, io.LimitReader(file, maximumArchiveBytes+1))
-	if err != nil || written != info.Size() || written > maximumArchiveBytes {
+	after, statErr := file.Stat()
+	beforeStat, beforeOK := info.Sys().(*syscall.Stat_t)
+	var afterStat *syscall.Stat_t
+	if statErr == nil {
+		afterStat, _ = after.Sys().(*syscall.Stat_t)
+	}
+	if err != nil || written != info.Size() || written > maximumArchiveBytes || statErr != nil || !beforeOK || afterStat == nil ||
+		!os.SameFile(info, after) || after.Size() != info.Size() || beforeStat.Mtim != afterStat.Mtim || beforeStat.Ctim != afterStat.Ctim {
 		return "", errors.New("Codex rollout content is invalid")
 	}
 	return hex.EncodeToString(digest.Sum(nil)), nil

@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.10
+version: 1.7.11
 updated: 2026-10-07
 ---
 
@@ -1761,6 +1761,24 @@ SNAPSHOT/DELETE сохраняют прежние identities,
 claim/fence и минимальные capabilities. Уже созданный wrong-owner PVC не
 исправляется ручным chown: нужен штатный архив и новый owner-bound RESTORE
 с проверенным immutable archive receipt, без подмены terminal outcome.
+
+Ошибка после native append не означает отсутствия новой истории. Проверенный
+rollout tuple сохраняется и при generic process/activity/credential-refresh
+отказе, но только после ограниченной остановки и join фактического writer и
+readers. Произвольные exported result fields и JSON-флаг не являются proof:
+внутреннее доказательство связывает source identity/SHA/size с точными
+execution binding, RuntimeRevision и attempt. Между изолированными UID это
+доказательство передаётся через строгий versioned IPC с аутентификацией
+фактического Unix peer; consumer заново проверяет source, не получая право
+chown или authority provider. Success и failure используют один verifier.
+Lost ACK повторяет тот же failed completion; owner-транзакция обновляет source
+и content generation без fake success, artifacts или credential effect.
+Если join или проверка source не доказаны, tuple отсутствует; такой отказ
+нельзя выдавать за исправленное архивирование либо заменять старыми pins.
+Отозванные authority-поля lease/fence/expiry могут быть NULL в terminal
+строке. Adapter сохраняет эту nullable семантику до lifecycle-проверки:
+закрытая задача или отсутствующее поле дают штатный отказ полномочий, а не
+ошибку декодирования, ошибочно классифицированную как временная недоступность.
 
 Материализованные общие input/knowledge отделены от приватного spool: non-root
 init защищает принадлежащие ему файлы и потомков через дескрипторы без symlink.

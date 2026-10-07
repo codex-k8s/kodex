@@ -177,7 +177,110 @@ CP owner catalog/artifact → verified spool → повтор metadata → termi
 | Error/cancel/expiry/revoke | Невалидные arguments, source mismatch, stale lease/pins, timeout или отказ любого audit закрывают text response | FAILED activity только если прежняя lease ещё действительна; прежний owner terminal/cancel event и authoritative run/activity read, частичный текст не выдаётся |
 | Same page after lost response | Новое read-only обращение с теми же exact pins/offset и свежей lease; старый ответ не является authority cache | Новый безопасный tool-call ref и обычные audit/events, без внешнего эффекта или изменения artifact; contiguous offsets до EOF нужны для доказательства полного чтения |
 
+### Карта захвата архива после ошибки провайдера
+
+Источник требования — продолжение той же сессии и архивирование фактически
+записанного rollout даже при ошибочном ходе. Execution error не подтверждает
+успешный ответ, artifacts или credential effect. Владелец состояния — CP;
+runner передаёт tuple только после проверки source и execution binding.
+Путь: app-server → bounded stop/join → protected source capture → private
+input-bound proof → authenticated broker IPC → FAILED completion → прежняя
+owner-транзакция session storage → snapshot worker. Новые внешние команды,
+grants и migrations не требуются. Реализация и адресные local/component
+проверки выполнены; новый image и live-проверка пока NOT RUN.
+
+| Переход | Проверяемая граница | Результат и consumer |
+| --- | --- | --- |
+| До подтверждённого thread binding | Нет доказанного native session/path | Ошибка без archive tuple; существующая история не заимствуется |
+| Ошибка после записи rollout | Bounded остановка процесса и join readers; exact UUID/path, regular file, NOFOLLOW/ownership, SHA/size | Только свежий capture proof; исходная ошибка и измеренный Usage сохраняются |
+| Ошибка credential refresh после capture | Тот же input-bound proof, не exported Result fields | Проверенный archive tuple переживает отказ; успешный ответ и credential effect не подделываются |
+| Broker terminal success/failure | Один strict versioned decoder, authenticated UDS peer, exact attempt/revision/execution binding и source tuple | Private proof восстанавливается только после проверки; partial/foreign/unknown pins закрыто отклоняются |
+| Generic/activity/post-execution failure | Только private proof текущего input | FAILED completion с проверенным tuple и прежним Usage; final/artifacts не выдаются |
+| Completion / lost ACK | Exact lease/fence, generation, attempt/revision, тот же immutable callback payload | Прежний idempotent owner receipt; source/content generation и storage task обновляются атомарно |
+| Cancel/delete/expiry/retry | Прежняя owner lifecycle boundary; capture не продлевает lease и не запускает provider retry | Stale completion закрыто отклоняется; новая attempt не использует старый proof |
+| Capture невозможен | Нет join/source/integrity proof | Tuple отсутствует, ошибка сохраняется; такой residual path не объявляется исправленным без owner invalidation evidence |
+
 ## Журнал
+
+### 07.10.2026 05:33 UTC — проверенный capture при FAILED и terminal decoder
+
+Frozen tree поверх `69eb3552`:8 runner файлов,2 CP файла и3 документа.
+Generic execution, refresh и activity failure сохраняют только input-bound
+private capture proof после bounded join, regular NOFOLLOW source, полного
+SHA/size и read-only повторной проверки. Provider UDS IPC теперь v2, без
+legacy decoder: обе стороны требуют одного exact нового образа. Consumer
+проверяет SO_PEERCRED10002; plain tuple и чужие/неполные proofs отвергаются.
+Ошибка, Usage и прежняя callback authority не меняются.
+
+Исполнитель: whole runner unit/build, targeted race/vet и gofmt PASS.
+ROOT: изолированный `--network=none`, read-only контейнер с собственным tmpfs
+проверил UID10002 producer → UID10001 consumer: success/failure PASS0.15s.
+SHA статического fixture binary
+`47edb8feaaec46ffcf2dd17f57e0c2b39fef7d9af768a6fddc14913d7141fe9a`.
+Обычный UID fixture SKIP не использован как native PASS. Consumer не меняет
+owner/group/mode источника. Это synthetic kernel boundary, не live acceptance.
+ROOT повтор targeted runner capture/process/app regression — PASS:
+codex0.324s/app4.722s. Проверены замороженные CP file SHA256; diff-check PASS.
+
+Canonical disposable PG: три suites `AssistantSessionResume`,
+`AssistantFailedRolloutStorage`, `RuntimeTerminalStorage` — PASS15.172s,
+27 PASS events; worker-grant/runner-policy и vet/gofmt PASS. SYSTEM/PROJECT
+FAILED completion обновляет source generation1→2, отменяет старый DELETE_PVC,
+закрывает lease; audit rollback, lost-ACK replay, изменённый idempotency key,
+fresh snapshot2 и естественный revoke/retry проверены. Nullable terminal
+decoder теперь выдаёт Forbidden до использования отсутствующей authority;
+SQL/migrations не менялись. Исторический partial-NULL fixture FAIL нарушал
+DB CHECK и заменён штатным revoke, CHECK не отключался. Нового AGENT case нет.
+
+ROOT Chrome5 reload05:31; чужие вкладки не тронуты. Старый DEAD_LETTER
+остаётся UNKNOWN, capture-impossible residual не объявлен исправленным.
+Runner/worker activation, contiguous native read до EOF и новый full33
+ещё NOT RUN; Full65 OPEN. GUIDE-DOC-003 закрепляет общие capture/nullable
+boundary инварианты. Context7: Go UDS peer credentials и pgx nullable Scan.
+
+### 07.10.2026 05:19 UTC — публикация полного чтения и переход к archive analogue
+
+Source/remote/Draft1800 readback:
+`69eb3552b9ebf2bab1f43b298d55c09d9a5df477`, бот `kodex-agent`, PR OPEN/Draft.
+Исход last publisher был неизвестен до readback; повтор push не выполнялся.
+Native read_file local closure опубликован, активация нового image и полное
+чтение реальным Manager всё ещё NOT RUN.
+
+Матрица generic archive capture выше зафиксирована до реализации. Исполнитель
+получил GO только после remote readback, с отдельным владением runner files.
+Другие исполнители готовят read-only cutover и exact CP component coverage.
+Старый worker DEAD_LETTER не объявляется объяснённым этим статическим аналогом.
+
+UX: Chrome5 hard reload05:18, screenshot внешних callback дуг PASS, Console
+error/warn0, graph/events/ticket200, CONNECTED. Повтор focused layout/viewport
+16 tests PASS0.702s на неизменённых frontend blobs69eb; это не live acceptance
+нового backend. Чужие вкладки не изменялись. Full65/full33 остаются OPEN.
+
+05:22–05:27 UTC: обе ноды Ready, CP/RC/gateway/frontend/archive Ready1 с
+current source mounts. Exact SHA256 file_read.go `89eedbfa…4c68` и closed CP
+activity SQL `8daaa083…cf` совпали host/Pod; immutable runner этим не обновлён.
+Owner API200: обе новые probe sessions ARCHIVED, DELETE_PVC SUCCEEDED1/NONE;
+Manager snapshot task `sat_75cd5b96-7186-4a6a-92c2-8f12260f4c0a`.
+
+Fresh runtime-config API200 всех6 staff: G4 artifact
+`imgart_pZcw6O0VWkhXLrI1v7vHStSJ`, recipe `imgrec_zS2F5VUJeRIu_zOXWuF6lXdw`,
+manifest `sha256:e5e5a118be7a619fda9914a25491d3fd8b269679f33b06cbaa82e7565423ca16`,
+binding5/tools38/skills0. Review ENVversion4/revision4, Developer отдельный
+ENVversion4/revision4. PROJECT helper binding6/ENVversion6/revision7 с тем же
+G4; SYSTEM binding5/ENVrevision25/recipe generation10, manifest
+`sha256:04d4263b323137ca103eb73bb2dcce9a7edb11742e7fad21460e834c65d3df5e`.
+Это readback прежних pins, не доказательство новых binaries. SYSTEM/PROJECT
+tools38/secrets0/skills0. Первый child Chrome read timeout — UNKNOWN;
+ROOT повторный штатный owner GET дал свежие данные, без mutation.
+
+Новая disposable PG suite обнаружила отдельный terminal decoder дефект:
+nullable fence/lease/expiry архивной задачи сканировались в non-null Go поля
+и возвращали ErrUnavailable до lifecycle deny. Строгий negative остался FAIL,
+а не был ослаблен до PASS. Исполнителю разрешён узкий nullable decode fix
+без изменения owner/idempotency порядка; системные аналоги в archive scope
+проверяются. Ошибочное initial test expectation changed-key=ErrConflict
+исправлено на существующий ErrIdempotencyReuse; исторический fixture FAIL
+сохранён. Новые generation2/snapshot suites пока RUNNING.
 
 ### 07.10.2026 05:14 UTC — полное native чтение реализовано и проверено локально
 

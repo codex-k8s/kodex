@@ -179,7 +179,7 @@ func (proxy *turnProxyFixture) Close(ctx context.Context) error {
 }
 
 func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T) {
-	for _, mode := range []string{"timeline", "cancelled timeline", "partial broker", "cancelled broker", "success", "preparation", "provider before effect"} {
+	for _, mode := range []string{"timeline", "cancelled timeline", "partial broker", "cancelled broker", "verified timeline", "verified broker", "success", "preparation", "provider before effect"} {
 		t.Run(mode, func(t *testing.T) {
 			usage := runtimecontract.TokenUsage{TotalTokens: 70, InputTokens: 60, CachedInputTokens: 20, OutputTokens: 10, ReasoningOutputTokens: 3}
 			input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "synthetic task", RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3, LeaseRef: "lease_fixture", ExecutionBindingDigest: strings.Repeat("b", 64)}
@@ -221,7 +221,7 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 					w.WriteHeader(http.StatusNoContent)
 				case "/v1/executions/lease_fixture/native-tool-call":
 					timeline++
-					if mode == "timeline" {
+					if mode == "timeline" || mode == "verified timeline" {
 						w.WriteHeader(http.StatusForbidden)
 						return
 					}
@@ -233,7 +233,7 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 						payload.Success != (mode == "success") || payload.SafeErrorCode != wantCode || payload.Attempt != input.Attempt || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || len(payload.Artifacts) != 0 {
 						t.Error("turn completion lost measured usage or terminal outcome")
 					}
-					if mode == "success" {
+					if mode == "success" || strings.HasPrefix(mode, "verified") {
 						if payload.CodexSessionID != result.SessionID || payload.ArchiveRelativePath != result.ArchiveRelativePath || payload.ArchiveSHA256 != result.ArchiveSHA256 || payload.ArchiveSizeBytes != result.ArchiveSizeBytes {
 							t.Error("successful execution lost confirmed archive binding")
 						}
@@ -259,6 +259,30 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 			server.StartTLS()
 			defer server.Close()
 			client := completionTestClient(t, &input, server)
+			if strings.HasPrefix(mode, "verified") {
+				input.WorkspaceRoot = t.TempDir()
+				input.CodexHome = filepath.Join(input.WorkspaceRoot, ".kodex/state/codex-home")
+				input.InputDigest, input.SessionRef, input.TurnRef = strings.Repeat("e", 64), "ses_fixture", "turn_fixture"
+				path := filepath.Join(input.WorkspaceRoot, filepath.FromSlash(result.ArchiveRelativePath))
+				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0o640)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, writeErr := file.WriteString("{\"type\":\"session_meta\"}\n{\"type\":\"event_msg\"}\n")
+				syncErr, closeErr := file.Sync(), file.Close()
+				if writeErr != nil || syncErr != nil || closeErr != nil {
+					t.Fatal("fixture source was not durably closed")
+				}
+				captured, err := codex.CaptureStoppedRollout(input, result.SessionID, path)
+				if err != nil {
+					t.Fatal("actual source capture failed")
+				}
+				captured.Outcome, captured.FinalMessage, captured.Usage, captured.ToolCalls = result.Outcome, result.FinalMessage, result.Usage, result.ToolCalls
+				result = captured
+			}
 			proxy := &turnProxyFixture{t: t}
 			ready, executions, cleaned := false, 0, false
 			runtime := turnRuntime{

@@ -288,13 +288,24 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		return err
 	})
 	if activityFailed {
-		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_UNAVAILABLE", "i18n:RUNTIME_UNAVAILABLE", result.Usage)
+		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
 	}
 	if executionErr != nil {
 		code := runtimeExecutionFailureCode(executionErr)
-		return completeFailureWithSummaryAndUsage(ctx, input, client, code, "i18n:"+code, result.Usage)
+		return completeMeasuredFailure(ctx, input, client, result, code)
 	}
 	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace)
+}
+
+// Ошибка execute не подтверждает итог; только отдельное подтверждение capture
+// позволяет передать новые source pins в неизменённом failed completion.
+func completeMeasuredFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code string) error {
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
+		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: result.Usage}
+	if result.HasVerifiedRollout(input) {
+		payload.CodexSessionID, payload.ArchiveRelativePath, payload.ArchiveSHA256, payload.ArchiveSizeBytes = result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes
+	}
+	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
 // Завершение учитывает расход провайдера даже при отказе последующей проверки

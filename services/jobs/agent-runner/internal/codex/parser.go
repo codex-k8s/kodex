@@ -38,6 +38,7 @@ type Result struct {
 	ArchiveSizeBytes    int64
 	Usage               runtimecontract.TokenUsage
 	ToolCalls           []runtimecontract.NativeToolCall `json:"ToolCalls,omitempty"`
+	rolloutCapture      *rolloutCaptureProof
 }
 
 type messageKind uint8

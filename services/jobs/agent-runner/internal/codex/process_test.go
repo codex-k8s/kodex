@@ -50,6 +50,20 @@ func TestAppServerPipeProcessFixture(t *testing.T) {
 		_, _ = os.Stderr.Write(make([]byte, maximumDiagnosticSize+1))
 	case "nonzero":
 		os.Exit(3)
+	case "rollout-nonzero", "rollout-clean":
+		path := os.Getenv("KODEX_APP_SERVER_ROLLOUT_PATH")
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+		if err != nil {
+			os.Exit(6)
+		}
+		_, writeErr := file.WriteString("{\"type\":\"event_msg\"}\n")
+		syncErr, closeErr := file.Sync(), file.Close()
+		if writeErr != nil || syncErr != nil || closeErr != nil {
+			os.Exit(7)
+		}
+		if mode == "rollout-nonzero" {
+			os.Exit(3)
+		}
 	case "term-resistant":
 		signal.Ignore(syscall.SIGTERM)
 		pidPath := os.Getenv("KODEX_APP_SERVER_PIPE_PID_PATH")
@@ -201,6 +215,56 @@ func appServerPipeFixtureCommand(t *testing.T, mode string) *exec.Cmd {
 	command.Env = []string{"KODEX_APP_SERVER_PIPE_FIXTURE=" + mode}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	return command
+}
+
+func TestFailedProcessCanCaptureOnlyAfterBoundedJoin(t *testing.T) {
+	for _, mode := range []string{"rollout-nonzero", "rollout-clean"} {
+		t.Run(mode, func(t *testing.T) {
+			input, before := capturedRolloutFixture(t, model.Input{})
+			command := appServerPipeFixtureCommand(t, mode)
+			command.Env = append(command.Env, "KODEX_APP_SERVER_ROLLOUT_PATH="+before.ArchivePath)
+			gate := make(chan struct{})
+			server, err := startAppServerCommand(command, gate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state := newProtocolState(before.SessionID)
+			state.threadID, state.threadPath = before.SessionID, before.ArchivePath
+			if server.captureReady() || captureFailedRollout(input, server, state, Result{}).SessionID != "" {
+				t.Fatal("unjoined writer issued capture")
+			}
+			close(gate)
+			if mode == "rollout-nonzero" {
+				if err := server.stop(state); !errors.Is(err, errAppServerExited) {
+					t.Fatal("process failure was not retained")
+				}
+			} else {
+				// thread/read failure после append использует предыдущую проверенную identity.
+				server.waitErr = <-server.wait
+				server.waited = true
+				cause := errors.New("synthetic thread read failure")
+				if err := server.abort(t.Context(), state, cause); !errors.Is(err, cause) {
+					t.Fatal("protocol cause was not retained")
+				}
+			}
+			if !server.captureReady() {
+				t.Fatal("bounded join did not close writer and readers")
+			}
+			captured, err := CaptureStoppedRollout(input, state.threadID, state.threadPath)
+			if err != nil || !captured.HasVerifiedRollout(input) || captured.ArchiveSHA256 == before.ArchiveSHA256 || captured.ArchiveSizeBytes <= before.ArchiveSizeBytes {
+				t.Fatal("stopped failed writer lost appended source bytes")
+			}
+			// Обычный UID не может назначить deployment group; production helper
+			// не выдаёт pins при этом отказе вместо небезопасного fallback.
+			failed := captureFailedRollout(input, server, state, Result{Usage: before.Usage})
+			if failed.Usage != before.Usage {
+				t.Fatal("capture failure lost measured usage")
+			}
+			if failed.SessionID != "" && !failed.HasVerifiedRollout(input) {
+				t.Fatal("capture failure issued unverified pins")
+			}
+		})
+	}
 }
 
 func TestAppServerAbortPreservesRealReadError(t *testing.T) {

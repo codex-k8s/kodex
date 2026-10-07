@@ -10,6 +10,29 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 05:33 UTC: frozen runner generic failure capture8files + CP nullable
+terminal decoder/FAILED generation component2files +ROOT docs3files готовы
+к checkpoint поверх69eb. Whole runner unit/build/targeted race/vet PASS;
+ROOT native UID synthetic container success/failure PASS0.15s. Disposable PG
+27PASS events/15.172s, vet PASS; исторические FAIL и residual сохранены.
+После commit/push exact source → full runner/worker build → canonical seed,
+fresh render/apply/readback → typed recipe/ENV pins → full read/full33.
+Новые binaries и native acceptance ещё NOT RUN. Chrome5 reload05:31,
+следующий≤05:36; чужие6/13–17 не трогать. Goal ACTIVE, Full65 OPEN.
+
+## Предыдущий checkpoint05:19
+
+07.10.2026 05:19 UTC: source/remote/Draft1800 exact
+`69eb3552b9ebf2bab1f43b298d55c09d9a5df477` PASS после readback; повтор push
+не выполнялся. Native read_file опубликован, runner/worker activation и live
+полное чтение пока NOT RUN. Generic archive исполнитель получил IMPLEMENTATION
+GO по заранее записанной матрице; root владеет только журналом. Cutover и CP
+coverage исследуются отдельно read-only. Build только после нового clean SHA.
+Chrome5 hard reload05:18/screenshot/Console0/graph+events200/CONNECTED PASS,
+16 layout/viewport tests PASS0.702s. Чужие вкладки6/13–17 не трогать.
+
+## Предыдущий checkpoint05:14
+
 07.10.2026 05:14 UTC: native read_file closure FROZEN,13 implementation файлов
 и ROOT GUIDE003/два журнала готовы к commit поверхc819. Callback635PASS/2SKIP,
 runtimecontract/vet/public MCP wire PASS, canonical disposable PG bootstrap
