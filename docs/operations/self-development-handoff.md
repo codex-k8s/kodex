@@ -10,6 +10,33 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 11:04 UTC: HEAD/remote/Draft1800
+`52fc105655d6588456a918e9b627911bfdaa5aea`; новый адресный checkpoint DIRTY.
+Architect16 и Documentation14 завершены штатными Validate/Apply:
+`rct_vpmJ7QYKiWD8zbFl_lBPz9X8`, `rct_GYK-ERH9g8COypwu_tFoV6zu`.
+Свежий owner read connection223 CONNECTED:92/118 прежних grants ON,
+Security13/Lexical13 OFF; NONE/[] неизменны. Chrome MCP восстановился без
+restart, page5 доступна; Console0. Screenshot по-прежнему NOT RUN после
+зависания; DOM/Network не заменяют визуальную проверку.
+Security native restore13 отправлен ОДИН РАЗ из exact AGENT контекста:
+conversation `cnv__xwoPnyE0lWVRW2VAdNACkkF`,
+run `run_iNxWVJqOpC5aB7CugI66zGct`, turn `trn_8km64KIkLKzyCfh1JLDqFwkm`.
+RUNNING; ранний ACK CAPTURED/rejoined, input/inbox/instructions EQUAL.
+Не повторять submit. После DRAFT проверить13 unique existing grants,
+enabled-only diff и fresh version223 → native Validate/Apply → Lexical13.
+Не готовить агентские grants из WORKFLOW контекста: этот контекст разрешает
+изменение только workflow grants. После обеих ролей NEW33 Issue1796.
+
+ROOT интегрировал скрипт безопасной очистки завершённых worktree и оснастку.
+9 unit PASS0.764s; три exact preflight PASS, суммарно21282 inode.
+Apply ещё NOT RUN: сначала commit/push, затем repo-owned non-force remove.
+Сохранённые refs позволяют восстановить точный SHA; dirty/unknown каталоги
+и чужие кэши не трогать. Фикстуры находятся вне source в пользовательском
+`.cache`; CLI production boundary только `/tmp`. Publisher previous52fc1056.
+Full65 и финальный internalPR OPEN, finalPR не merge.
+
+## Предыдущий checkpoint10:41
+
 07.10.2026 10:41 UTC: HEAD/remote/Draft1800
 `ee84718118ae0e2a2522936006b2b1452931bf1f`, новый journal DIRTY.
 Developer restore24 native Validate/Apply PASS receipt

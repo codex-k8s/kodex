@@ -10,6 +10,60 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 11:04 UTC — восстановление ролей и очистка
+
+Исходный точный source `52fc105655d6588456a918e9b627911bfdaa5aea`;
+runtime application code не менялся. Architect16 owner Apply PASS
+`pln_P4zaQV4Ra_1WjoMg7706nOq2` / `rct_vpmJ7QYKiWD8zbFl_lBPz9X8`.
+Documentation14 owner Apply PASS `pln_mCdst90L2mUD_jzjZs8iChiV` /
+`rct_GYK-ERH9g8COypwu_tFoV6zu`. Connection223 CONNECTED:92 ON/26 OFF.
+Следующие Security13/Lexical13, без новых прав и без изменения NONE/[];
+typed plans только в exact AGENT контексте. WORKFLOW контекст не уполномочен
+менять grants сотрудника, это не причина расширять серверную authority.
+
+Docs helper actual ACK PASS: `run_LSmQGxG9qyepjUgmm4RYByVI`,
+Pod `runtime-turn-677aa499aef15445` UID7727a95b-56e0-4cf7-b64a-9500469b73d9;
+task/provider/inbox SHA375b8149f06b08bd2757ee686dbf6b3ed826ebc55895bad2d76d5ea6a8d39abc,
+instructions SHA57ae7731b4cc117168c620e642d0d75621fc8a0ef3d8ab422f0bb0156c0fcd3d.
+Same-Pod image file binary40f3268a: CAPTURED, но serving process comparison
+и independent task expected comparison NOT RUN, не объявлять их PASS.
+Security helper RUNNING `run_iNxWVJqOpC5aB7CugI66zGct`:
+CAPTURED/rejoined Pod `runtime-turn-6143c10d192ee966`,
+UIDdb27fa33-a431-44e0-9d72-ecaed5667523; task/provider/inbox
+SHA1d85c34c8b3ef1bbd3987415316933540ab30bc3bacce5b5ba0eaa2f48f6cf5c,
+instructions SHA961cefacfdc2118cd4b52287d599ef49525617fbecebe3dcef2767e7f8edbf7a.
+G5 exact image f8b60814, ENV8/binding7, tools38/grants23; binary comparison
+ограничен same-Pod image file, не доказательством обслуживаемого процесса.
+
+Chrome list/evaluate/snapshot/navigation/click PASS после восстановления
+общего MCP mutex без restart и без вмешательства в чужие вкладки.
+Screenshot остался NOT RUN: dialog-only попытка не вернула изображение.
+DOM без горизонтального overflow; Console error/warn0. В измеренном окне
+Network обновляет debug revision, entity list прочитан один раз при создании
+диалога; это не глобальная приемка отсутствия polling на всех экранах.
+
+Очистка реализована code-first: `tools/dev/cleanup-completed-worktrees.py`,
+оснастка `test_cleanup_completed_worktrees.py`; ROOT9 unit PASS0.764s,
+diff check PASS. Оператор подтверждает происхождение и завершение worktree,
+скрипт проверяет exact owned `/tmp` path, HEAD, common Git, регистрацию,
+отсутствие symlinks/credential-named файлов и dirty/untracked/ignored файлов.
+Apply сохраняет `refs/kodex/cleanup-preserved/<SHA>`, повторяет preflight и
+использует `git worktree remove` без force. Восстановление:
+`git worktree add --detach <прежний точный путь> <сохранённый SHA>`.
+Подтверждённые завершённые ROOT дочерние работы, preflight PASS:
+
+- `/tmp/kodex-callback-delegation-1797`,
+  `1c15e2f1efe5a40d474ee3dfab0d705687b9895e`,7166 inode;
+- `/tmp/kodex-search-bootstrap-54d3.8Ly87XqU`,
+  `d88676c1f7eb92b149ba4f917c3fb15e12783d14`,7057 inode;
+- `/tmp/kodex-history-d8d8.hkd3wF`,
+  `d5057e5d34f752f9fbbf133dc16827b1ab0a6aa5`,7059 inode.
+
+До Apply проверено553 свободных inode `/tmp`; Apply пока NOT RUN.
+Dirty/unknown worktree и чужие/shared caches исключены. Нет broad cleanup,
+Git GC, удаления branches или копирования содержимого credentials.
+Проверки full65/Workflow33/final internalPR остаются OPEN.
+
 Полностью выполнить согласованное владельцем задание
 [полное QA-задание](../qa/full-qa-task.md) (65 разделов), а не заменять
 его обходом экранов. После самонастройки системного и проектного помощников
