@@ -10,6 +10,29 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 10:08 UTC: HEAD/remote/Draft1800
+`4de83a637cb44230d509f6b3f74f41baeff36763`, дерево чистое.
+GitHub3 page implementation/codegen/tests и текущий журнал запушены.
+Свежая browser geometry:7 callbacks /41 nodes /196 samples per edge /
+crossings0, Console0. Screenshot честно FAIL: Page.captureScreenshot protocol
+timeout; MCP восстановился без restart. Рабочая page5 root run, reload10:07.
+
+Project helper restore21 завершился technical SUCCEEDED, semantic BLOCKED:
+CURRENT_CONFIGURATION прочитан после корректировки input, но
+PROJECT_INTEGRATION_GRANTS вернул TOOL_UNAVAILABLE, план не создан.
+Root read-only owner probe нового connection catalogue200/41 READY, old
+DISABLED GitHub2.4 catalogue403. Старый пакет имеет exact PUBLISHED UI binding,
+не только неизвестную unbound версию. Child manager_instruction_effective_path
+исправляет isolated own PROJECT catalog candidates через существующую
+read-only verified package projection, без ослабления execute/grant boundary;
+owned candidates.go/component fixture, frozenpatch от4de. Ни old connection,
+ни новые grants не менять вручную. После интеграции/tests/hot readback свежий
+native helper restore21 → owner Validate/Apply → остальные прежние role
+profiles → fresh actual GitHub paged READ → NEW33. Internal1796 PR не merge.
+Privatepublisher previous установлен4de; до новой публикации проверить SHA.
+
+## Предыдущий checkpoint09:56
+
 07.10.2026 09:51 UTC: HEAD/remote/Draft1800 остаётся `900f0cad`;
 постраничный GitHub v3 adapter/contracts/tests и журнал DIRTY.
 Root `run_TKTiAp9pDr6dbXxn5vI6vTQm` штатно CANCELLED в09:38:

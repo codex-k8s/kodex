@@ -202,6 +202,30 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 10:07–10:08 UTC — свежий граф и отказ собственного каталога
+
+- HEAD/remote/Draft1800 `4de83a637cb44230d509f6b3f74f41baeff36763`;
+  GitHub3 page implementation/codegen/tests и журнал опубликованы, дерево чистое.
+- Свежая рабочая page5:41 nodes /7 callback paths /196 sampled points per
+  path, crossings0; Console0. Screenshot завершился FAIL с
+  Page.captureScreenshot protocol timeout; после этого MCP again отвечает,
+  без restart/закрытия чужих вкладок. Reload10:07. Геометрия PASS не является
+  visual screenshot PASS.
+- Native PROJECT restore21 technical SUCCEEDED, semantic BLOCKED, DRAFTnone:
+  CURRENT_CONFIGURATION после корректного input прочитан, но
+  PROJECT_INTEGRATION_GRANTS вернул TOOL_UNAVAILABLE. Не считать этот ход
+  восстановлением grants или запускать duplicate Apply без плана.
+- Read-only owner probe: новый connection candidates200,41 READY; старый
+  DISABLED GitHub2.4 candidates403. Старый source — PUBLISHED UI configuration
+  `mcfg_haevEUO0q3MYYzhlW6jOLAIU` version4 / revision
+  `mrev_5rLtCVbDvTWb9V54JQFOMrJa`, digest
+  `509d016809b6a55ffc75a982cee2b642222004263eebd48a2b2b70b1c488382e`.
+  Он не является просто unbound неизвестной версией. Own PROJECT aggregate
+  использует execution decoder, в отличие от RECIPIENT verified read path;
+  isolated исправление и negative/component доказательства выполняются.
+  Corruption/authority/Unavailable должны остаться closed failures;
+  несовместимый валидный published package не получает execution/grant права.
+
 ### 07.10.2026 09:38–09:51 UTC — остановлен BLOCKED прогон, новый GitHub пакет
 
 - Штатный Cancel прежнего root `run_TKTiAp9pDr6dbXxn5vI6vTQm` подтверждён:
