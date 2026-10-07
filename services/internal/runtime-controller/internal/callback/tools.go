@@ -62,14 +62,17 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.IsAssistant() || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset", "assistant_configuration_catalog") {
+	if !input.IsAssistant() {
 		return nil, errors.New("configuration catalog is not available")
+	}
+	if !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset", "assistant_configuration_catalog") {
+		return nil, invalidAssistantCatalogInput(assistantCatalogShapeInvalid)
 	}
 	agentQuery := ""
 	if raw, supplied := arguments["agent_query"]; supplied {
 		query, ok := raw.(string)
 		if !ok || utf8.RuneCountInString(query) > 80 {
-			return nil, errors.New("configuration catalog agent query is invalid")
+			return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 		}
 		agentQuery = strings.ToLower(strings.TrimSpace(query))
 	}
@@ -80,14 +83,14 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 			agentOffset = value
 		case float64:
 			if value < 0 || value > 128 || value != float64(int(value)) {
-				return nil, errors.New("configuration catalog agent offset is invalid")
+				return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 			}
 			agentOffset = int(value)
 		default:
-			return nil, errors.New("configuration catalog agent offset is invalid")
+			return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 		}
 		if agentOffset < 0 || agentOffset > 128 {
-			return nil, errors.New("configuration catalog agent offset is invalid")
+			return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 		}
 	}
 	allSchemas := assistantPlanOperationSchemas(input)
@@ -681,6 +684,7 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 	field["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,79}$",
 		"description": "Preserve the existing field key from the workflow readback; omit only for a new field."}
 	steps := graph["steps"].(map[string]any)
+	steps["description"] = "For UPDATE_WORKFLOW, copy the complete ordered steps array from the full WORKFLOW_CONFIGURATION readback and preserve every existing key, parallel and numeric parallelGroup value. If the step count, order, keys and parallelism remain unchanged, the server preserves every original draft.Steps[].DependsOn; do not add dependsOn to the editable step objects. To change only capability ceilings, submit workflowRef and this complete steps array, changing only requiredCapabilityKeys on the intended steps and preserving all other step fields. Omitted workflow fields retain their current values; ResultSchema is retained and existing input defaults are preserved by input key. Validate the plan and inspect its server-owned Before, After and applied workflow readback before publishing."
 	step := steps["items"].(map[string]any)
 	step["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 96,
 		"description": "Preserve the existing step key from the workflow readback; omit only for a new step."}

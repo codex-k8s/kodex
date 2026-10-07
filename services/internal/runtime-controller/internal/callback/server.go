@@ -783,9 +783,11 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 			structured = map[string]any{"error_code": delegationInputInvalidCode, "retryable": true,
 				"guidance": delegationInputInvalidGuidance}
 		}
-		if params.Name == "get_configuration_catalog" && projectionErr == nil && errors.Is(err, errAssistantCatalogSelection) {
-			structured = map[string]any{"error_code": assistantCatalogInputInvalidCode, "retryable": true,
-				"guidance": assistantCatalogInputInvalidGuidance}
+		if params.Name == "get_configuration_catalog" && projectionErr == nil {
+			if guidance := assistantCatalogRecoveryGuidance(err); guidance != "" {
+				structured = map[string]any{"error_code": assistantCatalogInputInvalidCode, "retryable": true,
+					"guidance": guidance}
+			}
 		}
 		if params.Name == "find_platform_resources" && projectionErr == nil {
 			switch assistantSearchFailureClass(err) {

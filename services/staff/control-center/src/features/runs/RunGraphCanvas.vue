@@ -2,7 +2,6 @@
 import { Background } from "@vue-flow/background";
 import {
   VueFlow,
-  getTransformForBounds,
   useVueFlow,
   type GraphNode,
   type NodeMouseEvent,
@@ -34,6 +33,7 @@ import { runNodePresentationKey } from "@/features/runs/run-owner";
 import {
   createRunGraphFlowElements,
   runGraphFitViewOptions,
+  runGraphFitTransform,
   runGraphInitialFitOptions,
   runGraphRetryAttempts,
   runGraphMaximumZoom,
@@ -81,6 +81,7 @@ const legendExpanded = ref(false);
 const outline = ref<HTMLElement>();
 const userAdjustedView = ref(false);
 const programmaticViewportChange = ref(false);
+const minimumZoom = ref(runGraphMinimumZoom);
 const futureRefs = computed(() => new Set(props.futureNodeRefs));
 const activeRefs = computed(() => new Set(props.activeNodeRefs));
 const nodeByRef = computed(
@@ -240,19 +241,18 @@ async function fit(userInitiated = true): Promise<void> {
           props.edges,
           props.selectedRef,
           props.compact,
+          dimensions.value.height,
         );
     const bounds = runGraphContentBounds(layout.value, options.nodes);
-    await setViewport(
-      getTransformForBounds(
-        bounds,
-        dimensions.value.width,
-        dimensions.value.height,
-        options.minZoom ?? runGraphMinimumZoom,
-        options.maxZoom ?? runGraphMaximumZoom,
-        options.padding,
-      ),
-      { duration: options.duration },
+    const viewport = runGraphFitTransform(
+      bounds,
+      dimensions.value.width,
+      dimensions.value.height,
+      options,
     );
+    minimumZoom.value = Math.min(runGraphMinimumZoom, viewport.zoom);
+    await nextTick();
+    await setViewport(viewport, { duration: options.duration });
   } finally {
     programmaticViewportChange.value = false;
   }
@@ -545,7 +545,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
         class="run-flow"
         :nodes="flowElements.nodes"
         :edges="flowElements.edges"
-        :min-zoom="runGraphMinimumZoom"
+        :min-zoom="minimumZoom"
         :max-zoom="runGraphMaximumZoom"
         :nodes-draggable="false"
         :nodes-connectable="false"

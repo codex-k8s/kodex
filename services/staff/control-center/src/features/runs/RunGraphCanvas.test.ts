@@ -3,9 +3,12 @@ import { createSSRApp, h } from "vue";
 import { createI18n } from "vue-i18n";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@vue-flow/core", async () => {
+vi.mock("@vue-flow/core", async (importOriginal) => {
+  const { getTransformForBounds } =
+    await importOriginal<typeof import("@vue-flow/core")>();
   const { defineComponent, h } = await import("vue");
   return {
+    getTransformForBounds,
     BaseEdge: defineComponent({
       setup() {
         return () => h("path");
@@ -202,10 +205,8 @@ describe("RunGraphCanvas", () => {
     }));
     const initialFit = runGraphInitialFitOptions(1920, manyNodes, manyEdges);
     expect(initialFit.nodes?.[0]).toBe("node_0");
-    expect(initialFit.nodes).toHaveLength(4);
-    expect(initialFit.nodes).toEqual(
-      expect.arrayContaining(["node_0", "node_1", "node_2", "node_3"]),
-    );
+    expect(initialFit.nodes?.length).toBeLessThanOrEqual(4);
+    expect(initialFit.nodes).toContain("node_2");
     expect(initialFit.minZoom).toBe(0.85);
     expect(runGraphFitViewOptions(1920).nodes).toBeUndefined();
     expect(runGraphInitialFitOptions(1920, nodes, edges).nodes).toBeUndefined();

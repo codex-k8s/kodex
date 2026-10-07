@@ -25,7 +25,7 @@ func (server *Server) configurationCatalog(ctx context.Context, input runtimecon
 	_, requested := arguments["definition_query"]
 	if !requested {
 		if _, offsetOnly := arguments["definition_offset"]; offsetOnly {
-			return nil, errors.New("integration definition query is required for pagination")
+			return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 		}
 		return result, nil
 	}
@@ -35,7 +35,7 @@ func (server *Server) configurationCatalog(ctx context.Context, input runtimecon
 	query, ok := arguments["definition_query"].(string)
 	query = strings.TrimSpace(query)
 	if !ok || utf8.RuneCountInString(query) > 80 {
-		return nil, errors.New("integration definition query is invalid")
+		return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 	}
 	offset := 0
 	if raw, supplied := arguments["definition_offset"]; supplied {
@@ -44,15 +44,15 @@ func (server *Server) configurationCatalog(ctx context.Context, input runtimecon
 			offset = value
 		case float64:
 			if value != float64(int(value)) {
-				return nil, errors.New("integration definition offset is invalid")
+				return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 			}
 			offset = int(value)
 		default:
-			return nil, errors.New("integration definition offset is invalid")
+			return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 		}
 	}
 	if offset < 0 || offset > 10000 {
-		return nil, errors.New("integration definition offset is invalid")
+		return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 	}
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
@@ -157,54 +157,65 @@ func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput)
 
 func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any, raw any) (*controlplanev1.AssistantConfigurationCatalogRequest, error) {
 	invalid := errors.New("assistant configuration catalog request is invalid")
+	invalidInput := invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 	if !input.IsAssistant() || input.OrganizationRef == "" || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
 		return nil, invalid
 	}
 	for _, field := range []string{"agent_query", "agent_offset", "definition_query", "definition_offset"} {
 		if _, mixed := arguments[field]; mixed {
-			return nil, invalid
+			return nil, invalidAssistantCatalogInput(assistantCatalogShapeInvalid)
 		}
 	}
 	if rawOperations, supplied := arguments["operation_types"]; supplied {
 		operations, ok := rawOperations.([]any)
 		if !ok || len(operations) != 0 {
-			return nil, invalid
+			return nil, invalidAssistantCatalogInput(assistantCatalogShapeInvalid)
 		}
 	}
 	selector, ok := raw.(map[string]any)
 	if !ok || !onlyKeys(selector, "kind", "assistant_ref", "query", "offset", "account_ref", "runtime_profile_ref", "entity_kind", "entity_ref", "configuration_offset_bytes", "maximum_bytes", "configuration_sha256") {
-		return nil, invalid
+		return nil, invalidAssistantCatalogInput(assistantCatalogShapeInvalid)
 	}
 	kind, ok := selector["kind"].(string)
 	if !ok || !assistantConfigurationCatalogKindKnown(kind) {
+		return nil, invalidInput
+	}
+	// Недоступный server-owned контекст не превращается в исправляемый ввод.
+	if kind == "PROJECT_INTEGRATION_GRANTS" && input.AssistantScope != runtimecontract.AssistantScopeProject ||
+		kind == "RECIPIENT_INTEGRATION_GRANTS" && !assistantRecipientIntegrationCatalogAvailable(input) ||
+		kind == "WORKFLOW_CONFIGURATION" && !assistantWorkflowConfigurationAvailable(input) ||
+		kind == "AGENT_CONFIGURATION" && !assistantAgentConfigurationAvailable(input) {
 		return nil, invalid
 	}
 	if _, err := parseAssistantConfigurationPage(selector, kind); err != nil {
-		return nil, invalid
+		return nil, invalidAssistantCatalogInput(assistantCatalogPageInvalid)
 	}
 	assistantRef, ok := selector["assistant_ref"].(string)
-	if !ok || !validAssistantResourceRef(assistantRef) || input.AssistantScope == runtimecontract.AssistantScopeProject && assistantRef != input.AgentRef {
+	if !ok || !validAssistantResourceRef(assistantRef) {
+		return nil, invalidInput
+	}
+	if input.AssistantScope == runtimecontract.AssistantScopeProject && assistantRef != input.AgentRef {
 		return nil, invalid
 	}
 	request := &controlplanev1.AssistantConfigurationCatalogRequest{Kind: controlplanev1.AssistantConfigurationCatalogKind(controlplanev1.AssistantConfigurationCatalogKind_value["ASSISTANT_CONFIGURATION_CATALOG_KIND_"+kind]), AssistantRef: assistantRef}
 	entityKind, hasKind := selector["entity_kind"]
 	entityRef, hasRef := selector["entity_ref"]
 	if hasKind != hasRef {
-		return nil, invalid
+		return nil, invalidInput
 	}
 	if hasKind {
 		selectedKind, kindOK := entityKind.(string)
 		selectedRef, refOK := entityRef.(string)
 		if !kindOK || !refOK || selectedKind != "AGENT" && selectedKind != "WORKFLOW" || !validAssistantResourceRef(selectedRef) ||
 			kind != "RECIPIENT_INTEGRATION_GRANTS" && kind != "WORKFLOW_CONFIGURATION" && kind != "AGENT_CONFIGURATION" {
-			return nil, invalid
+			return nil, invalidInput
 		}
 		request.EntityKind, request.EntityRef = selectedKind, selectedRef
 	}
 	if query, supplied := selector["query"]; supplied {
 		value, ok := query.(string)
 		if !ok || utf8.RuneCountInString(value) > 80 {
-			return nil, invalid
+			return nil, invalidInput
 		}
 		request.Query = strings.TrimSpace(value)
 	}
@@ -212,16 +223,16 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 		switch offset := rawOffset.(type) {
 		case int:
 			if offset < 0 || offset > 10000 {
-				return nil, invalid
+				return nil, invalidInput
 			}
 			request.Offset = int32(offset)
 		case float64:
 			if offset < 0 || offset > 10000 || offset != float64(int32(offset)) {
-				return nil, invalid
+				return nil, invalidInput
 			}
 			request.Offset = int32(offset)
 		default:
-			return nil, invalid
+			return nil, invalidInput
 		}
 	}
 	for _, field := range []string{"account_ref", "runtime_profile_ref"} {
@@ -229,7 +240,7 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 			ref, ok := rawRef.(string)
 			if !ok || !safeInvocationRef(ref) || field == "account_ref" && (kind != "MODELS" || !validAssistantResourceRef(ref)) ||
 				field == "runtime_profile_ref" && kind != "MODELS" && kind != "PROVIDER_ACCOUNTS" {
-				return nil, invalid
+				return nil, invalidInput
 			}
 			if field == "account_ref" {
 				request.AccountRef = ref
@@ -238,10 +249,10 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 			}
 		}
 	}
-	if kind == "PROJECT_INTEGRATION_GRANTS" && (input.AssistantScope != runtimecontract.AssistantScopeProject || request.AccountRef != "" || request.RuntimeProfileRef != "") {
-		return nil, invalid
+	if kind == "PROJECT_INTEGRATION_GRANTS" && (request.AccountRef != "" || request.RuntimeProfileRef != "") {
+		return nil, invalidInput
 	}
-	if kind == "RECIPIENT_INTEGRATION_GRANTS" && (!assistantRecipientIntegrationCatalogAvailable(input) || assistantRef != input.AgentRef) {
+	if kind == "RECIPIENT_INTEGRATION_GRANTS" && assistantRef != input.AgentRef {
 		return nil, invalid
 	}
 	if kind == "RECIPIENT_INTEGRATION_GRANTS" && hasKind &&
@@ -250,19 +261,32 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 			input.AssistantContext.EntityKind == "WORKFLOW" && request.EntityKind == "AGENT" && !assistantWorkflowConfigurationAvailable(input)) {
 		return nil, invalid
 	}
-	if kind == "WORKFLOW_CONFIGURATION" && (!assistantWorkflowConfigurationAvailable(input) || assistantRef != input.AgentRef || request.EntityKind != "WORKFLOW" || request.EntityRef != input.AssistantContext.EntityRef || request.Query != "" || request.Offset != 0) {
-		return nil, invalid
+	if kind == "WORKFLOW_CONFIGURATION" {
+		if assistantRef != input.AgentRef || hasRef && request.EntityRef != input.AssistantContext.EntityRef {
+			return nil, invalid
+		}
+		if request.EntityKind != "WORKFLOW" || request.Query != "" || request.Offset != 0 {
+			return nil, invalidInput
+		}
 	}
-	if kind == "AGENT_CONFIGURATION" && (!assistantAgentConfigurationAvailable(input) || assistantRef != input.AgentRef || request.EntityKind != "AGENT" || request.EntityRef != input.AssistantContext.EntityRef || request.Query != "" || request.Offset != 0) {
-		return nil, invalid
+	if kind == "AGENT_CONFIGURATION" {
+		if assistantRef != input.AgentRef || hasRef && request.EntityRef != input.AssistantContext.EntityRef {
+			return nil, invalid
+		}
+		if request.EntityKind != "AGENT" || request.Query != "" || request.Offset != 0 {
+			return nil, invalidInput
+		}
 	}
 	if kind == "MODELS" && request.AccountRef == "" {
-		return nil, invalid
+		return nil, invalidInput
 	}
-	if kind == "CURRENT_CONFIGURATION" && (assistantRef != input.AgentRef || request.Query != "" || request.Offset != 0 ||
+	if kind == "CURRENT_CONFIGURATION" && (assistantRef != input.AgentRef ||
 		input.RuntimeRevisionRef == "" || input.RuntimeRevisionVersion < 1 || !validAssistantCatalogDigest(input.RuntimeRevisionDigest) ||
 		!validAssistantResourceRef(input.RunRef) || !validAssistantResourceRef(input.NodeRef) || !validAssistantResourceRef(input.SessionRef) || !validAssistantResourceRef(input.TurnRef) || input.Attempt < 1) {
 		return nil, invalid
+	}
+	if kind == "CURRENT_CONFIGURATION" && (request.Query != "" || request.Offset != 0) {
+		return nil, invalidInput
 	}
 	return request, nil
 }

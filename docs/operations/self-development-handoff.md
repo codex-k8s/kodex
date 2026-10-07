@@ -10,6 +10,88 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 14:53 UTC: оба host patch FROZEN, commit/push следующий шаг.
+Catalog input diagnostics: локальные shape/selector/page дают исправимую
+CATALOG_INPUT_INVALID лишь при successful terminal projection; owner/context/
+integrity/audit/upstream сохраняют закрытый отказ. Schema только уточняет
+сохранение dependsOn, новых операций/полей нет. Child callback fullunit4.495s,
+ROOT repeat4.471s/vet/build PASS Go1.26.6. Source/Pod catalog4581e5b3,
+diagnosticsf18de13b, serverc55234ea, tools47f9ddd0 EQUAL; независимый host
+executable и servicing `/proc/1962/exe` SHA2a0e7caf EQUAL.
+ROOT graph repeat24tests/2files PASS; child27/3files PASS.
+Новый screenshot14:46 не получен после bounded ожидания, visual PASS не
+объявлялся; subsequent list/evaluate/reload14:51 восстановились без restart,
+Console0. Не трактовать transient задержку как terminal запуска.
+После фиксации этих11scopedfiles в Draft1800 — один новый ordinary Manager
+с published Workflow15/revision5; ранние ACK/callback files доказательства
+для каждой реально принятой роли. Full65 и финальный внутренний PR OPEN.
+
+## Предыдущий checkpoint14:44
+
+07.10.2026 14:44 UTC: native helper завершён SUCCEEDED2/seq95; план
+`pln_LDWDPxhHrvXzAHwNkJDEL4vB` штатно VALID2→APPLIED3/revision1,
+receipt `rct_yb9gDQ1Jn6LHzj_88s7F4CyW`, conflicts0,
+audit `aud_BOLCxvWYABUrVZNe1KEs63O9`. Independent owner Before/After:
+ровно8 массивов capkeys22→24,33steps; остальные25steps и все editable
+поля неизменны. Данные Before совпадают с независимым owner GET v12;
+full canonical Before148295B/SHA98c9cb4083fdcfa25fd28a0182788c8e4e5d1a5bfe896ea0f22ff91cb9119195
+совпадает с native EOF readback. При проверке Apply смотреть draft.steps,
+не top-level опубликованные steps: они остаются прежними до Publish.
+WorkflowValidate/Publish PASS: v15/PUBLISHED/revision5,
+`wfv_EqR96za6ufj4wMoieQv_TIvI`; независимый повтор published33steps PASS.
+Actual helper task/instruction/inbox comparisons EQUAL; servicing /proc/13/exe
+SHA40f3268a EQUAL captured same-Pod role image file.
+
+Scoped frontend graph fix готов в dirty tree поверхf7: начальный fit сохраняет
+читаемую выбранную/root карточку вместо пустого экрана при48узлах;
+полный Fit вмещает все callback bounds без искусственного minZoom floor.
+27units/typecheck/lint/format PASS; ROOT build8.52s PASS с chunk warning.
+Chrome actual36nodes/48edges: начальная selectedcard читаема, full Fit36/36
+внутри viewport, zoom0.108039; screenshots/Console0/overflowfalse PASS.
+Source/Pod run-graph-flowc1fc36a4 и Canvas02c483ce EQUAL. Геометрия spline
+не изменялась: radius99/внешний corridor уже существовали. Foreign tabs
+не трогались; рабочая page5 вернулась в Workflow, reload14:43.
+
+Host catalog_input_diagnostics сейчас владеет только callback catalog/parser/
+error mapper/tests/schema guidance. Новые живые ходы не запускать до его
+freeze/быстрых unit/vet/serving proof. Потом commit/push всех scoped fixes,
+новый ordinary Manager на опубликованной revision5 и actual coordinator
+native READ полученных immutable дочерних результатов. Full65/internalPR/
+обязательные reviews/READY OPEN, финальный внутренний PR не merge.
+
+## Предыдущий checkpoint14:28
+
+07.10.2026 14:28 UTC: HEAD/remote/Draft1800
+`f7cd3815847c8de958038d7fe86837bb4c42f239`, fresh main
+`b5f6fcde885c4e6369255a86559b3ed2c785043f`. Пакет callback/terminal UX
+закоммичен и запушен; full CP unit повторён на этом SHA, PASS.
+Forward migration20261007135000 применена каноническим узким stage migrate:
+Job `control-plane-migrate-4d298dc1cd86` Complete14:16:58,
+UID77490bef-505d-43c5-b327-66d3a9d28fbd, точный Goose version readback PASS.
+Первый render с host Go1.27.1 отклонён до apply; повтор Go1.26.6 PASS.
+Same-render readback PASS не является полной приёмкой приложения.
+
+Helper14:18 `run_jWjMi84QOwRncl7J0tpn1ZvG` technical SUCCEEDED2,
+semantic BLOCKED: native catalog TOOL_UNAVAILABLE, DRAFT/effects0.
+Фактические arguments неизвестны; нельзя утверждать authority rejection.
+В14:26 отправлен один Additional той же conversation
+`cnv_5X2-Gl5ZEikGBED9rg588jy6`: новый
+`run_MPgJg-rB4DefhapW-9pVUrDj`, USER
+`trn_ydkwsWYhOA-JsU96UYrRZ50T`, session
+`ses_HpNZk3rbVpLrM6kk_NzTfs2Y`, attempt1, сейчас RUNNING.
+Исправленная точная READ форма раздельно читает WORKFLOW_CONFIGURATION и
+UPDATE_WORKFLOW schema; pagination использует configuration_offset_bytes и
+configuration_sha256, не invented expected_digest. Первый native READ
+SUCCEEDED/559ms; EOF/план пока НЕ доказаны. ACK CAPTURED/rejoin: expected
+task3148B/SHA db6bd00711a8e4a82a72b9612180031dc1422613799207471a0d8ec5eebfbdf6
+EQUAL, provider/inbox25083B и instructions/file28743B EQUAL; G5/ENV8/binding7.
+Serving role process comparison пока NOT RUN. Chrome5 reload14:25, Console0.
+Go source не менять до terminal нового helper. Далее проверить native DRAFT
+только8 Manager allowlists, все33steps, Validate/Apply/Publish; затем новый
+ordinary Manager/Workflow и настоящий coordinator callback READ. Full65 OPEN.
+
+## Предыдущий checkpoint14:10
+
 07.10.2026 14:10 UTC: CP patch frozen и проверки PASS, frontend terminal-busy
 patch frozen/220unit/typecheck/lint/buildPASS. HEAD ещё4d5845c5;
 ROOT фиксирует всё одним scoped commit в Draft1800, затем fresh render и

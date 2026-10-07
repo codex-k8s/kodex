@@ -10,6 +10,118 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 14:53 UTC — диагностика каталога frozen и serving proof
+
+Scoped RC patch и frontend graph patch FROZEN поверхf7cd3815, следующий
+шаг — один commit/push11files в том же Draft1800. Новые live ходы не запущены.
+
+- PASS get_configuration_catalog local shape/selector/page errors имеют
+  закрытый typed marker до owner RPC. CATALOG_INPUT_INVALID/retryable guidance
+  только при successful terminal projection; authority/context/integrity/audit/
+  upstream не классифицируются по тексту либо общему page sentinel. Подсказка
+  не содержит payload и разрешает максимум один исправленный вызов, без auto-retry.
+- PASS schema description объясняет сохранение server-owned DependsOn при
+  прежних count/order/key/parallel/numeric parallelGroup; новые fields/API/Proto
+  не добавлялись. Источник скрытых retained полей — сверяемый owner Before.
+- PASS wire tests: SYSTEM/PROJECT локально invalid→FAILED receipt/no ownersearch;
+  upstream InvalidArgument/text, foreign refs/pins, audit/projection failure
+  остаются закрытыми; full Workflow/Agent EOF сохраняет bytes/digest. Child
+  full callback4.495s/vet/gofmt PASS, ROOT repeat4.471s/vet/build PASS Go1.26.6.
+- PASS source/Pod catalog4581e5b3, diagnosticsf18de13b, serverc55234ea,
+  tools47f9ddd0; independent host executable и serving `/proc/1962/exe` SHA
+  `2a0e7caf1a8e9457e7c54c21d9b56491a8ef98391e5fd3e0079983de7faf6bae`
+  EQUAL. Это proof обслуживаемого нового кода, не новая live acceptance ошибки.
+- PASS ROOT graph24tests/2files повтор, отдельно child27tests/3files PASS;
+  предыдущий ROOT production build8.52s PASS того же frozen graph patch.
+- NOT RUN новый screenshot14:46: bounded ожидание остановлено без изображения.
+  Subsequent Chrome list/evaluate/reload14:51 восстановились без restart,
+  Console0; historical graph screenshots остаются доказательствами своего шага.
+
+Следующее — commit/push, новый ordinary Manager→published Workflow15/revision5,
+actual role ACK/templates/integration full READ и coordinator callback read.
+Новая исправимая ошибка каталога пока только unit/wire проверена; live NOT RUN.
+Full65/DeveloperPR/обязательные reviews/fixes/READY не закрыты.
+
+## Checkpoint 07.10.2026 14:44 UTC — восемь allowlists применены и опубликованы
+
+Native helper `run_MPgJg-rB4DefhapW-9pVUrDj` завершён SUCCEEDED2/seq95.
+Полный защищённый READ конфигурации до EOF148295B, schema READ отдельно;
+ROOT независимо пересчитал canonical серверный Before:
+SHA98c9cb4083fdcfa25fd28a0182788c8e4e5d1a5bfe896ea0f22ff91cb9119195,
+тот же размер и digest, что в native readback. Лишь после проверки был Apply.
+
+- PASS независимое Before/After сравнение плана
+  `pln_LDWDPxhHrvXzAHwNkJDEL4vB`:33steps/Manager8/nonManager25,
+  только два READ-ключа в восьми requiredCapabilityKeys22→24. Все остальные
+  step fields и editable workflow поля неизменны. Before совпадает с отдельным
+  owner GET версии12; полный canonical draft остаётся источником server-owned
+  dependencies/ResultSchema/defaults, не вручную заданным полем caller.
+- PASS штатные UI Validate200/VALID2 и Apply200/APPLIED3/revision1:
+  receipt `rct_yb9gDQ1Jn6LHzj_88s7F4CyW`, conflicts0,
+  audit `aud_BOLCxvWYABUrVZNe1KEs63O9`. Apply создал draft версии13;
+  независимое сравнение всех draft.steps PASS. Первое сравнение по опубликованным
+  top-level steps не проверяло новый draft; исправлена область чтения,
+  изменений или повторного Apply не выполнялось.
+- PASS WorkflowValidate→VALID14, Publish→PUBLISHED15/revision5,
+  `wfv_EqR96za6ufj4wMoieQv_TIvI`; published readback вновь подтверждает
+  ровно8 additions без других изменений33steps/inputs/gates/параметров.
+- PASS servicing role `/proc/13/exe` SHA40f3268a EQUAL ранее captured same-Pod
+  image file; independent task3148B/db6bd007 и provider/instructions pins EQUAL.
+- PASS scoped graph regression: большой48-node tree ранее мог оставлять все
+  выбранные карточки вне viewport из-за minZoom0.85. Начальный fit теперь
+  сохраняет читаемую selected/root card, children добавляет лишь при вмещении;
+  explicit full Fit вмещает все дуги с адаптивным minimum zoom. Геометрия
+  внешних spline/направление/пунктир не менялись.27tests/3files, lint/typecheck/
+  Prettier PASS на dirty tree поверхf7; ROOT build8.52s PASS, chunk warning.
+- PASS Chrome actual36nodes/48edges: selectedcard видна при открытии;
+  explicit Fit36/36 карточек внутри viewport/zoom0.108039, screenshots,
+  Console0, overflowfalse. Source/Pod graph-flowc1fc36a4/Canvas02c483ce EQUAL.
+  Page5 вернулась к Workflow, reload14:43; foreign tabs неизменны.
+
+Новый scoped patch отделяет локально неверный selector/page от authority/
+integrity/audit/upstream failure; Go source принадлежит одному host child,
+новые live ходы пока не запускать до freeze/unit/vet/serving proof и commit.
+Полный65, новый coordinator callback READ и SOFTWARE_CHANGE до внутреннего
+Developer PR/трёх review/fixes/READY остаются OPEN. Не считать этот этап
+доказательством завершения полной цели.
+
+## Checkpoint 07.10.2026 14:28 UTC — применённая схема и исправленный native READ
+
+HEAD/remote/Draft1800 `f7cd3815847c8de958038d7fe86837bb4c42f239`;
+fresh main `b5f6fcde885c4e6369255a86559b3ed2c785043f`. Пакет callback
+result pins и terminal UX опубликован; full CP unit повторён на exact SHA PASS.
+
+- PASS forward migration20261007135000: frozen-source render Go1.26.6,
+  канонический `deploy-local --stage migrate --workload control-plane-migrate`,
+  Job `control-plane-migrate-4d298dc1cd86`/UID77490bef-505d-43c5-b327-66d3a9d28fbd
+  Complete14:16:58 и безопасный exact Goose version readback. Same-render
+  readback PASS; это не доказательство всей live coordinator READ цепочки.
+  Первый render host Go1.27.1 FAIL GO_TOOLCHAIN_MISMATCH до какого-либо apply;
+  корректный pinned повтор PASS, остальные workloads этим stage не изменялись.
+- BLOCKED helper14:18: `run_jWjMi84QOwRncl7J0tpn1ZvG` SUCCEEDED2/seq13
+  только технически; get_configuration_catalog TOOL_UNAVAILABLE, DRAFT/effects0.
+  Actual arguments UNKNOWN, нельзя выдавать это за доказанный denial владельца.
+- PASS первый native catalog READ нового Additional14:26/559ms. Новый run
+  `run_MPgJg-rB4DefhapW-9pVUrDj`, turn `trn_ydkwsWYhOA-JsU96UYrRZ50T`/
+  attempt1 в conversation `cnv_5X2-Gl5ZEikGBED9rg588jy6` сейчас RUNNING.
+  Точная форма запроса использует assistant_configuration_catalog, entity_kind/
+  entity_ref, configuration_offset_bytes, configuration_sha256; operation_types
+  читается отдельным вызовом. Полное EOF и DRAFT пока NOT RUN.
+- PASS ранний ACK/rejoin и независимый expected-task comparison:3148B,
+  SHA db6bd00711a8e4a82a72b9612180031dc1422613799207471a0d8ec5eebfbdf6;
+  provider/inbox25083B/SHA5692de0d EQUAL, instructions/file28743B/SHA370c9c14
+  EQUAL. Exact G5/ENV8/binding7, tools38/grants23, RuntimeRevision
+  `rrev_NnrVX6eCPhVsbOo8y_AZn-q1`. Captured role image file SHA40f3268a;
+  сравнение с servicing process пока NOT RUN.
+- PASS Chrome5 reload14:25 с пустым вводом, connection/read/script доступны,
+  повторная авторизация не нужна, Console0. Чужие вкладки не изменены.
+
+Следующее действие: дождаться того же принятого хода, независимо сравнить native
+план с before33steps, применить только8 READ allowlists штатными Validate/Apply/
+Publish. Live coordinator child-result READ, новый реальный INTAKE/Architect/
+Developer и внутренний final PR/обязательные reviews/READY пока OPEN.
+Ни один partial/synthetic результат не закрывает full65.
+
 ## Checkpoint 07.10.2026 14:10 UTC — точные callback результаты и terminal UX
 
 Пакет поверх `4d5845c5eb02bf8ae57d06ae20b352071d1c757b` готов к scoped

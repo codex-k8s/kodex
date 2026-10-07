@@ -15,6 +15,8 @@ import {
 } from "@/features/runs/run-graph-layout";
 import {
   runGraphFitViewOptions,
+  runGraphFitTransform,
+  runGraphInitialFitOptions,
   runGraphMinimumZoom,
   runGraphMaximumZoom,
 } from "@/features/runs/run-graph-flow";
@@ -90,6 +92,87 @@ function sampleCurve(path: string): Array<{ x: number; y: number }> {
 }
 
 describe("layoutRunGraph", () => {
+  it.each([700, 412])(
+    "сохраняет читаемый начальный узел и полный обзор 48 узлов с callback при ширине %i",
+    (width) => {
+      const height = 480;
+      const nodes = Array.from({ length: 48 }, (_, index) =>
+        node(
+          `node_${String(index).padStart(2, "0")}`,
+          `2026-01-01T00:00:${String(index).padStart(2, "0")}Z`,
+        ),
+      );
+      const forward = nodes
+        .slice(1)
+        .map((item, index) =>
+          edge(
+            `delegation_${String(index)}`,
+            required(nodes[Math.floor(index / 3)]).ref,
+            item.ref,
+          ),
+        );
+      const edges = [
+        ...forward,
+        ...forward.map((item, index) =>
+          edge(
+            `callback_${String(index)}`,
+            item.targetNodeRef,
+            item.sourceNodeRef,
+            "CALLBACK_TO",
+          ),
+        ),
+      ];
+      const layout = layoutRunGraph(nodes, edges);
+      for (const selectedRef of [undefined, "node_25"]) {
+        const options = runGraphInitialFitOptions(
+          width,
+          nodes,
+          edges,
+          selectedRef,
+          true,
+          height,
+        );
+        expect(options.nodes?.[0]).toBe(selectedRef ?? "node_00");
+        const bounds = runGraphContentBounds(layout, options.nodes);
+        const viewport = runGraphFitTransform(bounds, width, height, options);
+        expect(viewport.zoom).toBeGreaterThanOrEqual(0.85);
+        for (const ref of options.nodes ?? []) {
+          const item = required(
+            layout.nodes.find((item) => item.node.ref === ref),
+          );
+          expect(item.x * viewport.zoom + viewport.x).toBeGreaterThan(0);
+          expect(item.y * viewport.zoom + viewport.y).toBeGreaterThan(0);
+          expect(
+            (item.x + runGraphNodeWidth) * viewport.zoom + viewport.x,
+          ).toBeLessThan(width);
+          expect(
+            (item.y + runGraphNodeHeight) * viewport.zoom + viewport.y,
+          ).toBeLessThan(height);
+        }
+      }
+      const options = runGraphFitViewOptions(width, true);
+      const viewport = runGraphFitTransform(
+        layout.bounds,
+        width,
+        height,
+        options,
+      );
+      expect(viewport.zoom).toBeLessThan(runGraphMinimumZoom);
+      for (const point of [
+        { x: layout.bounds.x, y: layout.bounds.y },
+        {
+          x: layout.bounds.x + layout.bounds.width,
+          y: layout.bounds.y + layout.bounds.height,
+        },
+      ]) {
+        expect(point.x * viewport.zoom + viewport.x).toBeGreaterThan(0);
+        expect(point.y * viewport.zoom + viewport.y).toBeGreaterThan(0);
+        expect(point.x * viewport.zoom + viewport.x).toBeLessThan(width);
+        expect(point.y * viewport.zoom + viewport.y).toBeLessThan(height);
+      }
+    },
+  );
+
   it.each([
     { width: 700, height: 480 },
     { width: 412, height: 480 },
