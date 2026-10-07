@@ -18,6 +18,11 @@ var queryIntegrationPackageBoundRevision string
 //go:embed sql/integration_package__bind_connection.sql
 var queryIntegrationPackageBindConnection string
 
+// Marker отделяет отсутствие executable ревизии от повреждения найденного
+// package: адресный read сохраняет Forbidden, aggregate может опустить только
+// заведомо недопущенный объект, но не скрыть SQL/parse/pin failure.
+var errIntegrationPackageUnavailable = errors.New("integration package revision is unavailable")
+
 func (repository *Repository) bindIntegrationPackage(ctx context.Context, tx pgx.Tx, current scope, connectionRef, format, content string) error {
 	connection, err := repository.lockIntegrationConnection(ctx, tx, current.organizationID, connectionRef)
 	if err != nil {
@@ -105,7 +110,7 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 func (repository *Repository) integrationPackage(ctx context.Context, runner queryRunner, organizationID, connectionRef, key, version, digest string) (integrationpackage.Package, error) {
 	shipped, ok := repository.integrationDefinitions[key]
 	if !ok {
-		return integrationpackage.Package{}, errs.ErrForbidden
+		return integrationpackage.Package{}, errors.Join(errs.ErrForbidden, errIntegrationPackageUnavailable)
 	}
 	if compatible, ok := integrationpackage.ResolveShippedRevision(shipped, version, digest); ok {
 		if key == "openapi-mcp" {
@@ -118,7 +123,7 @@ func (repository *Repository) integrationPackage(ctx context.Context, runner que
 	var format, content string
 	err := runner.QueryRow(ctx, queryIntegrationPackageBoundRevision, organizationID, connectionRef).Scan(&format, &content)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return integrationpackage.Package{}, errs.ErrForbidden
+		return integrationpackage.Package{}, errors.Join(errs.ErrForbidden, errIntegrationPackageUnavailable)
 	}
 	if err != nil {
 		return integrationpackage.Package{}, errs.ErrUnavailable

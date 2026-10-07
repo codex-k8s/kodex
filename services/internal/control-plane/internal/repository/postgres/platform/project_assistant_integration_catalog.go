@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"sort"
 	"strings"
 
@@ -38,6 +39,11 @@ func (repository *Repository) projectAssistantIntegrationCatalogTx(ctx context.C
 	for _, connection := range connections {
 		candidates, err := repository.projectAssistantIntegrationGrantCandidatesTx(ctx, tx, current, input.AssistantRef, connection.ref, "", query.Page{Size: 100})
 		if err != nil {
+			if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errIntegrationPackageUnavailable) {
+				// Непригодная точная ревизия не блокирует соседние допустимые
+				// подключения. Обычный Forbidden/corruption/Unavailable не скрываем.
+				continue
+			}
 			return nil, 0, err
 		}
 		if candidates.NextPageToken != "" {

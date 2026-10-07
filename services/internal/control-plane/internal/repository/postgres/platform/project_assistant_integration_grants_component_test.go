@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -139,6 +140,95 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 			t.Fatal("foreign connection leaked in own catalog")
 		}
 	}
+	t.Run("aggregate ignores unresolved exact package but preserves current corruption failure", func(t *testing.T) {
+		old := execute(command.CreateConnection, owner, "obsolete-connection", nil, command.ConnectionInput{DefinitionKey: "github", Name: "Own obsolete repository2.4", PublicConfiguration: map[string]any{"owner": "fixture", "repository": "obsolete"}}).Connection
+		old = execute(command.SetConnectionEnabled, owner, "obsolete-disable", &old.Version, command.ConnectionInput{Ref: old.Ref, Enabled: false}).Connection
+		// Disposable fixture неизвестной прошлой exact ревизии: не legacy decoder
+		// и не реальный historical digest. Purpose назначается только серверным tuple.
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET definition_version='2.4.0',definition_digest=repeat('9',64),version=version+1 WHERE ref=$1`, old.Ref); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO control_plane.project_assistant_connection_purposes
+		(organization_id,connection_id,project_ref,profile_ref,assistant_ref,profile_version,agent_version,created_by)
+		SELECT c.organization_id,c.id,p.ref,profile.ref,a.ref,profile.version,a.version,c.created_by
+		FROM control_plane.integration_connections c JOIN control_plane.project_assistant_profiles profile ON profile.organization_id=c.organization_id
+		JOIN control_plane.projects p ON p.id=profile.project_id JOIN control_plane.agents a ON a.id=profile.agent_id
+		WHERE c.ref=$1 AND profile.ref=$2`, old.Ref, profile.Ref); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, old.Ref, "", query.Page{Size: 100}); !errors.Is(err, errs.ErrForbidden) || !errors.Is(err, errIntegrationPackageUnavailable) {
+			// Domain service сохраняет исходную typed ошибку; transport не получает
+			// права на недоступный package даже при наличии purpose.
+			t.Fatalf("single unavailable package did not reject: %v", err)
+		}
+		// Sibling recipient index уже исключает unbound exact revision в
+		// authoritative admission до пагинации; никаких новых skip в нём нет.
+		rows, err := pool.Query(ctx, queryAssistantRecipientIntegrationCatalogEntries, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project_id": "",
+			"project_ref": project.Ref, "recipient_kind": "AGENT", "recipient_ref": profile.AgentRef, "query": old.Name, "offset": int32(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := rows.Next()
+		readErr := rows.Err()
+		rows.Close()
+		if found || readErr != nil {
+			t.Fatalf("recipient admission enumerated unresolved revision: %v", readErr)
+		}
+		read := func(search string, offset int32) (entity.AssistantConfigurationCatalogResponse, error) {
+			return service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64),
+				entity.AssistantConfigurationCatalogRequest{Kind: "PROJECT_INTEGRATION_GRANTS", AssistantRef: profile.AgentRef, Query: search, Offset: offset})
+		}
+		for _, search := range []string{"", connection.Name} {
+			for _, offset := range []int32{0, 10, 20, 30, 40} {
+				result, err := read(search, offset)
+				if err != nil {
+					t.Fatalf("unavailable old package poisoned catalog offset%d: %v", offset, err)
+				}
+				if offset == 0 && len(result.ProjectIntegrationGrants) == 0 {
+					t.Fatal("eligible current package disappeared")
+				}
+				for _, item := range result.ProjectIntegrationGrants {
+					if item.ConnectionRef != connection.Ref || item.DefinitionVersion != connection.DefinitionVersion || item.DefinitionDigest != connection.DefinitionDigest {
+						t.Fatal("unavailable or foreign connection leaked")
+					}
+				}
+			}
+		}
+		// Найденный published package с несовпавшими current pins — не marker.
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET definition_version=$2,definition_digest=$3,version=version+1 WHERE ref=$1`, old.Ref, connection.DefinitionVersion, connection.DefinitionDigest); err != nil {
+			t.Fatal(err)
+		}
+		definition := r.integrationDefinitions["github"]
+		definition.Spec.HealthCheck.TimeoutSeconds--
+		definition.Spec.Name = "Synthetic published current package"
+		bound := publishAndRebindManagedConfiguration(t, ctx, service, owner, "catalog-corrupt-pins", command.CreateIntegrationDefinition,
+			command.ValidateIntegrationDefinition, command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
+			command.ManagedConfigurationInput{Name: definition.Spec.Name, ContentFormat: "JSON", Content: string(asJSON(definition))},
+			entity.ManagedConfigurationConsumer{Kind: "INTEGRATION_CONNECTION", Ref: old.Ref})
+		if bound.ManagedRevision == nil {
+			t.Fatal("published fixture missing")
+		}
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET definition_digest=repeat('8',64),version=version+1 WHERE ref=$1`, old.Ref); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := read(connection.Name, 40); err == nil || errors.Is(err, errIntegrationPackageUnavailable) {
+			t.Fatalf("corrupt current pins were silently omitted: %v", err)
+		}
+		// Отказ query/SQL чтения также не превращается в успешный пустой catalog.
+		cancelled, cancelRead := context.WithCancel(ctx)
+		cancelRead()
+		if _, err := service.ListAssistantConfigurationCatalog(cancelled, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "PROJECT_INTEGRATION_GRANTS", AssistantRef: profile.AgentRef}); err == nil {
+			t.Fatal("unavailable read became a successful aggregate")
+		}
+		// Восстанавливаем только disposable fixture для остальных lifecycle cases.
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET definition_digest=$2,version=version+1 WHERE ref=$1`, old.Ref, bound.ManagedRevision.Digest); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM control_plane.project_assistant_connection_purposes WHERE connection_id=(SELECT id FROM control_plane.integration_connections WHERE ref=$1)`, old.Ref); err != nil {
+			t.Fatal(err)
+		}
+	})
 	readKeys := strings.Fields("github.repository.metadata.read github.repository.content.list github.repository.content.read github.branch.list github.branch.read github.commit.list github.commit.read github.issue.list github.issue.read github.pull_request.list github.pull_request.read github.pull_request.file.list github.pull_request.review.list github.pull_request.review.read github.check_run.list github.check_run.read github.actions.run.list github.actions.run.read github.actions.job.list github.actions.job.read")
 	operations := []entity.AssistantPlanOperation{}
 	for _, item := range candidates.Items {
@@ -281,5 +371,8 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	}
 	if _, err = service.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, connection.Ref, "", query.Page{Size: 100}); !errors.Is(err, errs.ErrForbidden) && !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("revoked candidates: %v", err)
+	}
+	if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "PROJECT_INTEGRATION_GRANTS", AssistantRef: profile.AgentRef}); err == nil {
+		t.Fatal("revoked/closed lease catalog returned entries")
 	}
 }
