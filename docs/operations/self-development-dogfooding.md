@@ -158,6 +158,41 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 01:47 UTC — подтверждённые рабочие исходники и первые права GitHub 2.5
+
+Source `dda27127e10e022deac2ad1680bd900a7ac892a9`; последний проверенный
+remote/PR `1b9c7b56`. Полный65/33step остаётся OPEN.
+
+- Native callback: повторный screenshot1692 четырёхузлового графа подтвердил
+  большую внешнюю пунктирную дугу без перекрытия карточками. Исходники
+  геометрии9030e6e0 и fit56d4a919 сохранены; нового backend перехода нет.
+- Native plan `pln_n6Tey1LY_Mlt3JHDo3e8ebTF` прошёл Validate и один Apply;
+  fresh owner read200 подтверждает APPLIED и новое GitHub2.5 подключение
+  version28/CONNECTED с21 собственным helper grant/NONE/[] в exact repository
+  scope. Старое подключение version247/DISABLED/enabled0 сохранено.
+  Перенос остальных97 прав шести сотрудников ещё НЕ завершён.
+- `19d91922`: unresolved/unbound package revision получает отдельный закрытый
+  маркер. Aggregate project catalog пропускает только этот маркер или
+  authoritative NotFound; обычный Forbidden, corrupt pins и SQL failure не
+  маскируются. Exact child disposablePG project grants suite PASS18.966s,
+  четыре marker units PASS0.138s; текущий native project catalog NOT RUN.
+- Host/Pod hashes project catalog, credential-test worker и runtime lease
+  keeper совпали: `69481270…`, `18d364f4…`, `cbe90ab8…` соответственно.
+  Это доказательство hot-reload source, не immutable release acceptance.
+- `dda27127` интегрирует test-only59b21e1a: fixture сама завершает owner catalog
+  tasks и использует собственное runtime environment через защищённый read.
+  Production и assertions неизменны. Exact59b21e1a paired publicPG model catalog
+  и managed configuration PASS7.664s/2subtests/0SKIP; whole Bootstrap ещё NOT RUN.
+- Новый helper run `run_gF_KbsTnRpGKZ2WhuHjM2SKP` готовит24 Developer права.
+  Ранний ACK same Pod UID `f5ccca35-e964-4504-a476-d5a7f440e47a` подтвердил
+  exact G4 manifest `e5e5a118…`,38tools/23grants, task/provider/inbox EQUAL
+  `e96f2d30…`, instructions/file EQUAL `1b42ac31…`; файл runner `be793827…`
+  захвачен, сравнение serving process и original task остаётся NOT RUN.
+  Proposal `pln_jk4gu9TRh_K5yzQug2TG2B8i` содержит exact24keys/recipient8/
+  expectedC28/package2.5/NONE[], Validatev2VALID/problems[], один native Apply
+  завершился v3APPLIED. Fresh read200: connection52/CONNECTED/45grants,
+  helper21 + Developer24, exact repository scope. Остальные роли ещё OPEN.
+
 ### 07.10.2026 01:38 UTC — внешняя callback-дуга и точные source проверки
 
 Source `73695c1f3ff9835e764f228f7572ccd4344f8069`; remote/PR пока `e652f64f`.

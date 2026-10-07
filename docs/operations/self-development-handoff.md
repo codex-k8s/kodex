@@ -10,6 +10,35 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 01:47 UTC: source `dda27127e10e022deac2ad1680bd900a7ac892a9`;
+последний подтверждённый remote/PR `1b9c7b56`. Цель ACTIVE, полный65/33step OPEN.
+
+- Повторный native callback screenshot1692: большая плавная дуга проходит
+  сверху снаружи всех четырёх карточек. Geometries9030e6e0/fit56d4a919 не менялись.
+- Helper plan `pln_n6Tey1LY_Mlt3JHDo3e8ebTF` APPLIED; новое GitHub2.5
+  connection version28/CONNECTED/21 helper grants, NONE/[], exact repository.
+  Старое version247/DISABLED/enabled0; UNKNOWN review не повторять.
+- `19d91922` aggregate catalog пропускает только unresolved/unbound revision,
+  сохраняет закрытые corruption/Forbidden/SQL ошибки. Exact child publicPG
+  project grants PASS18.966s/marker4units PASS; native own catalog ещё NOT RUN.
+- Host/Pod hashes project catalog/credential worker/lease keeper совпали.
+- `dda27127` test-only own fixture вместо зависимости от соседних subtests;
+  paired selected publicPG exact59b21e1a PASS7.664s/2cases/0SKIP.
+  Whole Bootstrap адресно запущен отдельно, пока НЕ объявлен PASS.
+- Developer24 plan `pln_jk4gu9TRh_K5yzQug2TG2B8i` создан собственным PROJECT
+  помощником, exact24keys/C28/recipient8/package2.5/NONE[] проверены; Validate
+  вернул v2VALID/problems[]. Один native Apply завершился v3APPLIED;
+  fresh read200: connection52/CONNECTED/45grants = helper21 + Developer24,
+  exact24keys/NONE[]/repository scope. Current run `run_gF_KbsTnRpGKZ2WhuHjM2SKP`
+  COMPLETED; ранний sameUID provider ACK38tools/23grants, G4/task/inbox/
+  instructions EQUAL. Остальные5 ролей ещё без новых grants.
+
+Далее: readback Developer Apply → Manager17/Architect16/Documentation14/
+Security13/Lexical13 через отдельные fresh AGENT typed plans → READ health/
+Manager callback existing review → publish/merge/freshmain → full33 Issue1796.
+
+## Предыдущий checkpoint01:38
+
 07.10.2026 01:38 UTC: source `73695c1f`; remote/PR ещё `e652f64f`.
 Цель ACTIVE; полный65/33step OPEN.
 
