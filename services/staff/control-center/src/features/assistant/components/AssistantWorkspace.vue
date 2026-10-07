@@ -388,6 +388,7 @@ const panel = ref<HTMLElement>();
 const planDialog = ref<HTMLElement>();
 const formSlot = ref<HTMLElement>();
 const composer = ref<{ focus(): void }>();
+const startingConversation = ref(false);
 const chatLog = ref<HTMLElement>();
 const chatFollowing = ref(true);
 const chatUnread = ref(false);
@@ -532,6 +533,7 @@ const canSend = computed(
     props.live &&
     !store.loading &&
     !store.busy &&
+    !startingConversation.value &&
     assistantRuntimeState.value === "READY" &&
     (store.assistantScope === "PROJECT"
       ? projectAssistantCanRun.value
@@ -548,7 +550,16 @@ const canStartConversation = computed(
     props.live &&
     store.conversationCreationReady &&
     !store.busy &&
+    !startingConversation.value &&
     canCreateConversation.value,
+);
+const composerDisabled = computed(
+  () =>
+    startingConversation.value ||
+    store.busy ||
+    !props.live ||
+    store.selectedConversation?.state === "ARCHIVED" ||
+    store.selectedConversation?.state === "CLOSED",
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 for (const [root, sentinel, visible] of [
@@ -906,13 +917,28 @@ function chooseConversation(ref?: string): void {
 }
 
 async function startConversation(): Promise<void> {
+  if (!canStartConversation.value) return;
+  startingConversation.value = true;
+  const generation = prefillGeneration.value;
+  const isCurrent = () => open.value && generation === prefillGeneration.value;
   historyOpen.value = false;
   titleEditing.value = false;
   openPlanRef.value = undefined;
-  if (!(await handleStoreMutation(() => store.startConversation()))) return;
-  attachmentComposer.value?.clear();
+  try {
+    if (!(await handleStoreMutation(() => store.startConversation()))) return;
+    if (!isCurrent()) return;
+    attachmentComposer.value?.clear();
+    await nextTick();
+  } finally {
+    startingConversation.value = false;
+  }
   await nextTick();
-  composer.value?.focus();
+  if (isCurrent()) composer.value?.focus();
+}
+
+function updateMessage(value: string): void {
+  if (composerDisabled.value || !open.value) return;
+  message.value = value;
 }
 
 async function handleStoreMutation(
@@ -1041,21 +1067,34 @@ async function saveTitle(): Promise<void> {
 async function send(
   deliveryMode: "QUEUE" | "INTERRUPT_ACTIVE" = "QUEUE",
 ): Promise<void> {
-  const value = message.value.trim();
-  if (!value || !canSend.value) return;
+  const draft = message.value;
+  const draftKey = currentDraftKey.value;
+  const generation = prefillGeneration.value;
+  const isCurrent = () =>
+    open.value &&
+    generation === prefillGeneration.value &&
+    currentDraftKey.value === draftKey;
+  const value = draft.trim();
+  const readyToSend = () => canSend.value;
+  if (!value || !readyToSend()) return;
   const attachmentSetRef = await attachmentComposer.value?.finalize();
+  if (!isCurrent() || !readyToSend() || message.value !== draft) return;
   if (
     !(await handleStoreMutation(() =>
       store.send(value, attachmentSetRef, deliveryMode),
     ))
   )
     return;
-  messageDrafts.delete(currentDraftKey.value);
+  if (messageDrafts.get(draftKey) === draft) messageDrafts.delete(draftKey);
+  if (!isCurrent() || message.value !== draft) return;
+  messageDrafts.delete(draftKey);
   message.value = "";
   attachmentComposer.value?.clear();
   await nextTick();
-  scrollToLatest();
-  composer.value?.focus();
+  if (isCurrent()) {
+    scrollToLatest();
+    composer.value?.focus();
+  }
 }
 
 async function stopActiveTurn(): Promise<void> {
@@ -2496,12 +2535,7 @@ onBeforeUnmount(() => {
                 compact
                 purpose="ASSISTANT_MESSAGE"
                 :project-ref="projectRef"
-                :disabled="
-                  store.busy ||
-                  !live ||
-                  store.selectedConversation?.state === 'ARCHIVED' ||
-                  store.selectedConversation?.state === 'CLOSED'
-                "
+                :disabled="composerDisabled"
                 @change="attachmentState = $event"
               />
               <div
@@ -2512,18 +2546,15 @@ onBeforeUnmount(() => {
               >
                 <VoiceTextarea
                   ref="composer"
-                  v-model="message"
+                  :key="currentDraftKey"
+                  :model-value="message"
                   name="assistant-message"
                   rows="2"
                   maxlength="32768"
                   :aria-label="$t('assistant.message')"
                   :placeholder="$t('assistant.message')"
-                  :disabled="
-                    store.busy ||
-                    !live ||
-                    store.selectedConversation?.state === 'ARCHIVED' ||
-                    store.selectedConversation?.state === 'CLOSED'
-                  "
+                  :disabled="composerDisabled"
+                  @update:model-value="updateMessage"
                   @keydown="handleComposerKeydown"
                 />
                 <div>

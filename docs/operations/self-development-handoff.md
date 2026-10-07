@@ -10,6 +10,30 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 23:49 UTC
+
+Full65 ACTIVE до08.10 14:00 Саратов/10:00UTC; ROOT плюс frozen3-file frontend
+пакет поверхc76663ab:147tests/lint/format/typecheck/build PASS, host/Pod
+Workspaceb1ce92f4 EQUAL. Исправлен delayed-create draft/attachment/send race.
+SYSTEMG12 и PROJECTG6 PROMOTED. Все четыре ENV опубликованы штатными
+планами/validation/impact: SYSTEM27/rev27/binding7, helper8/rev9/binding8,
+DeveloperWRITE6/rev6/binding7, пять REVIEW6/rev6/bindings7. Исходные четыре
+preservation fingerprints EQUAL;38tools и secret только WRITE сохранены.
+SYSTEM actual shortsmoke run_HnmROvUXCc63H5qVdc0Y_H97 SUCCEEDED, ACK EQUAL.
+
+ONE новый EOF diagnostic run_wFMGTAGfkOhNK9RuY0tbVvvj RUNNING2,
+session ses_WVY6zflpKL-jWtK4hsDjE1t1, turn trn_e8s28j-pGEbFoMfsXmD6Y0Qt/attempt1.
+Task2556Б/hash589698b798cbb9dfa57d5277846f64a7b03c76b2e96453d4fab01ce91faa5cc3.
+Early ACK CAPTURED/EQUAL, ManagerENV6/binding7/G6 image806c6ee3,
+Podruntime-turn-2879bfdf36d6d2fe UID27befd16-1425-4d96-b4a9-f3e65cfd1c19,
+instructionrevision3/template2ae45fb6/grants21/tools38. Binary0505713c EQUAL
+только SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS. Observer92093 active3600s
+от23:49, не прерывать и не запускать дубликаты. Затем actual EOF/file proof →
+ONE full33-step Workflow по prepared managerRevision3 task14089Б/hash23801553.
+Нельзя Retry/Resume прежние terminalroots;11/13/14/15 OPEN, final internalPR
+не merge/approve. Chrome page1 run route/reload23:47, owner4 untouched;
+reload5мин и screenshot/Console/Network/backend/UX обязательны.
+
 ## Checkpoint 07.10.2026 23:23 UTC
 
 Full65 ACTIVE; повторное поручение владельца — автономно до08.10 14:00

@@ -49,6 +49,18 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("блокирует composer во время создания и связывает ввод с точным черновиком диалога", () => {
+    const composer = template.match(
+      /<VoiceTextarea[^]*?name="assistant-message"[^]*?\/>/,
+    )?.[0];
+    expect(composer).toBeDefined();
+    expect(composer).toContain(':key="currentDraftKey"');
+    expect(composer).toContain(':disabled="composerDisabled"');
+    expect(composer).toContain(':model-value="message"');
+    expect(composer).toContain('@update:model-value="updateMessage"');
+    expect(composer).not.toContain('v-model="message"');
+  });
+
   it("использует один exact lifecycle turn для индикатора, Stop и очереди", () => {
     const lifecycle = source.slice(
       source.indexOf("const activeUserTurn = computed"),

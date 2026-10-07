@@ -84,6 +84,8 @@ function workspace(assistantScope: "SYSTEM" | "PROJECT" = "SYSTEM") {
     props,
     platform,
     message,
+    messageDrafts,
+    prefillGeneration: bindings.prefillGeneration,
     open,
     focus,
     requestConfirmation,
@@ -101,6 +103,241 @@ function workspace(assistantScope: "SYSTEM" | "PROJECT" = "SYSTEM") {
 async function settle() {
   for (let index = 0; index < 8; index += 1) await nextTick();
 }
+
+function creationWorkspace() {
+  const view = workspace();
+  let resolveCreate!: () => void;
+  let rejectCreate!: (error: Error) => void;
+  const creation = new Promise<void>((resolve, reject) => {
+    resolveCreate = resolve;
+    rejectCreate = reject;
+  });
+  const store = Object.assign(view.store, {
+    busy: false,
+    assistant: { nextActions: ["ADD_TURN"] },
+    selectedConversation: { state: "ACTIVE" },
+    historyQuery: "",
+    historyState: "ACTIVE",
+    conversationCreationReady: true,
+    startConversation: vi.fn(async () => {
+      store.busy = true;
+      try {
+        await creation;
+        store.selectedRef = "conversation_created";
+      } finally {
+        store.busy = false;
+      }
+    }),
+    send: vi.fn(async () => {
+      store.busy = true;
+      try {
+        await Promise.resolve();
+      } finally {
+        store.busy = false;
+      }
+    }),
+  });
+  const clear = vi.fn();
+  const finalize = vi.fn(() => Promise.resolve(undefined));
+  const startingConversation = ref(false);
+  const creationSource = source.slice(
+    source.indexOf("async function startConversation()"),
+    source.indexOf("async function handleStoreMutation("),
+  );
+  const sendingSource = source.slice(
+    source.indexOf("async function send("),
+    source.indexOf("async function stopActiveTurn()"),
+  );
+  const availabilitySource = source.slice(
+    source.indexOf("const canSend = computed("),
+    source.indexOf("const isRunContext = computed("),
+  );
+  const updateSource =
+    source.match(
+      /function updateMessage\(value: string\): void \{[^]*?\n\}/,
+    )?.[0] ??
+    "function updateMessage(value: string): void { message.value = value; }";
+  const bindings = runInNewContext(
+    transpile(
+      `${availabilitySource}\n${creationSource}\n${sendingSource}\n${updateSource}\n({startConversation, send, updateMessage, canSend, canStartConversation})`,
+    ),
+    {
+      computed,
+      nextTick,
+      store,
+      props: { live: true },
+      assistantRuntimeState: ref("READY"),
+      projectAssistantCanRun: ref(true),
+      canCreateConversation: ref(true),
+      attachmentState: ref({ ready: true }),
+      startingConversation,
+      prefillGeneration: view.prefillGeneration,
+      open: view.open,
+      historyOpen: ref(false),
+      titleEditing: ref(false),
+      openPlanRef: ref<string>(),
+      contextIdentity: computed(() => view.props.context),
+      currentDraftKey: computed(() => view.store.selectedRef),
+      messageDrafts: view.messageDrafts,
+      message: view.message,
+      attachmentComposer: ref({ clear, finalize }),
+      composer: ref({ focus: view.focus }),
+      scrollToLatest: vi.fn(),
+      handleStoreMutation: async (operation: () => Promise<unknown>) => {
+        try {
+          await operation();
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    },
+  ) as {
+    startConversation(): Promise<void>;
+    send(): Promise<void>;
+    updateMessage(value: string): void;
+    canSend: { value: boolean };
+    canStartConversation: { value: boolean };
+  };
+  return {
+    ...view,
+    ...bindings,
+    store,
+    clear,
+    finalize,
+    resolveCreate,
+    rejectCreate,
+  };
+}
+
+describe("AssistantWorkspace создание диалога", () => {
+  it("блокирует поздний ввод и send при delayed create, затем принимает сообщение только нового диалога", async () => {
+    const view = creationWorkspace();
+    try {
+      view.message.value = "Черновик прежнего диалога";
+      const creating = view.startConversation();
+      expect(view.canSend.value).toBe(false);
+      view.updateMessage("Ввод до ответа create");
+      await view.send();
+      expect(view.store.send).not.toHaveBeenCalled();
+      expect(view.message.value).toBe("Черновик прежнего диалога");
+      view.resolveCreate();
+      await creating;
+      expect(view.message.value).toBe("");
+      expect(view.canSend.value).toBe(true);
+      view.updateMessage("Первое сообщение нового диалога");
+      await view.send();
+      expect(view.store.send).toHaveBeenCalledOnce();
+      expect(view.store.send).toHaveBeenCalledWith(
+        "Первое сообщение нового диалога",
+        undefined,
+        "QUEUE",
+      );
+      view.store.selectedRef = "conversation_old";
+      expect(view.message.value).toBe("Черновик прежнего диалога");
+    } finally {
+      view.resolveCreate();
+      view.dispose();
+    }
+  });
+
+  it("не запускает второй create при повторном клике", async () => {
+    const view = creationWorkspace();
+    try {
+      const first = view.startConversation();
+      const second = view.startConversation();
+      view.resolveCreate();
+      await Promise.all([first, second]);
+      expect(view.store.startConversation).toHaveBeenCalledOnce();
+    } finally {
+      view.resolveCreate();
+      view.dispose();
+    }
+  });
+
+  it("повторный send после delayed finalize создаёт только одну отправку", async () => {
+    const view = creationWorkspace();
+    let finish!: () => void;
+    const attachments = new Promise<undefined>((resolve) => {
+      finish = () => resolve(undefined);
+    });
+    try {
+      view.finalize.mockReturnValue(attachments);
+      view.updateMessage("Одно сообщение");
+      const first = view.send();
+      const second = view.send();
+      finish();
+      await Promise.all([first, second]);
+      expect(view.store.send).toHaveBeenCalledOnce();
+      expect(view.message.value).toBe("");
+    } finally {
+      finish();
+      view.dispose();
+    }
+  });
+
+  it("поздний finalize не отправляет сообщение после смены диалога", async () => {
+    const view = creationWorkspace();
+    let finish!: () => void;
+    const attachments = new Promise<undefined>((resolve) => {
+      finish = () => resolve(undefined);
+    });
+    try {
+      view.finalize.mockReturnValue(attachments);
+      view.updateMessage("Черновик прежнего диалога");
+      const sending = view.send();
+      view.store.selectedRef = "conversation_other";
+      view.updateMessage("Черновик другого диалога");
+      finish();
+      await sending;
+      expect(view.store.send).not.toHaveBeenCalled();
+      expect(view.message.value).toBe("Черновик другого диалога");
+      expect(view.clear).not.toHaveBeenCalled();
+      view.store.selectedRef = "conversation_old";
+      expect(view.message.value).toBe("Черновик прежнего диалога");
+    } finally {
+      finish();
+      view.dispose();
+    }
+  });
+
+  it.each(["context", "scope", "close"])(
+    "поздний create callback не очищает attachments и не возвращает focus после %s",
+    async (change) => {
+      const view = creationWorkspace();
+      try {
+        const creating = view.startConversation();
+        if (change === "context") view.props.context = "screen_other";
+        if (change === "scope") view.store.assistantScope = "PROJECT";
+        if (change === "close") view.open.value = false;
+        view.resolveCreate();
+        await creating;
+        expect(view.clear).not.toHaveBeenCalled();
+        expect(view.focus).not.toHaveBeenCalled();
+      } finally {
+        view.resolveCreate();
+        view.dispose();
+      }
+    },
+  );
+
+  it("ошибка create сохраняет прежний черновик и открывает composer", async () => {
+    const view = creationWorkspace();
+    try {
+      view.message.value = "Незавершённый черновик";
+      const creating = view.startConversation();
+      view.rejectCreate(new Error("Synthetic creation failure"));
+      await creating;
+      expect(view.message.value).toBe("Незавершённый черновик");
+      expect(view.canSend.value).toBe(true);
+      view.updateMessage("Продолжение прежнего черновика");
+      expect(view.message.value).toBe("Продолжение прежнего черновика");
+    } finally {
+      view.resolveCreate();
+      view.dispose();
+    }
+  });
+});
 
 describe("AssistantWorkspace заполнение черновика", () => {
   it.each(["SYSTEM", "PROJECT"] as const)(

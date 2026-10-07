@@ -10,6 +10,49 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 23:49 UTC — публикация окружений и новый EOF-проход
+
+- На базе c76663ab исправлена потеря ввода при асинхронном создании диалога:
+  creation barrier, отдельный composer по ключу диалога, защита позднего
+  ввода/очистки вложений и повторная проверка отправки после finalize.
+  ROOT147/147 unit PASS; адресные lint/format и forced typecheck PASS;
+  ROOT production build PASS8.40s с прежним предупреждением chunk>500КБ.
+  Host/Pod Workspace SHA256b1ce92f48deae344816ce66ee200ce10fb21fba8e3d8dda9642c1b7d226dc2a8
+  EQUAL. Browser новый диалог → ввод → один POSTturn202 → план PASS;
+  воспроизведение задержанного create покрыто unit, отдельно browser NOT RUN.
+- Оба новых образа штатно ACCEPTED/PROMOTED: SYSTEM G12/artifact
+  imgart_rSn0VrHIRD7empBOgwmYySMh/manifesta7a03f1d; PROJECT G6/artifact
+  imgart_69MKfJMQ40a9gZixxPW7a3nA/manifest806c6ee3. Новых сборок не было.
+  Через помощников подготовлены планы image-only и штатно применены DRAFT,
+  затем owner validation/свежий impact/publication с точными consumers.
+  SYSTEM ENV27/rev27/renvv_NX4k2xYfWpc6c484cBJiNu5o/binding7;
+  PROJECT own ENV8/rev9/renvv_xGvAfU4oNOqdTh2YNeS-Yq5u/binding8;
+  WRITE ENV6/rev6/renvv_Tr7Sqj_fezbLimaI38TKvZJa/Developer binding7;
+  REVIEW ENV6/rev6/renvv_F6q-jMiYF9X3fe7uAAsWJrDW/пять bindings7.
+  Все четыре исходных preservation SHA256 EQUAL: имя, описание, tools,
+  values, secret descriptors и policy не изменились. SYSTEM/PROJECT по38tools;
+  raw push binding только WRITE. Новые risk решения ограничены local QA.
+- Native SYSTEM короткий run_HnmROvUXCc63H5qVdc0Y_H97 SUCCEEDED/COMPLETED:
+  Context7 resolve/query и terminal git --version PASS. Actual ACK exact
+  SYSTEM27/binding7/G12 и input/instructions/inbox EQUAL. Binary0505713c
+  совпал как SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS, не process-proof.
+- Ровно один новый ordinary Manager run_wFMGTAGfkOhNK9RuY0tbVvvj RUNNING2,
+  session ses_WVY6zflpKL-jWtK4hsDjE1t1, turn trn_e8s28j-pGEbFoMfsXmD6Y0Qt/attempt1.
+  Task2556Б/SHA256589698b798cbb9dfa57d5277846f64a7b03c76b2e96453d4fab01ce91faa5cc3;
+  exact actual ACK/task/instructions/inbox EQUAL, ENV6/binding7/G6,
+  instructionrevision3/template2ae45fb6,21grants/38tools. Pod
+  runtime-turn-2879bfdf36d6d2fe/UID27befd16-1425-4d96-b4a9-f3e65cfd1c19,
+  оба imageIDs806c6ee3/restarts0; binary0505713c EQUAL с file-only scope.
+  Bounded observer92093 уже следит за exact tuple/UID на3600s; не запускать
+  дубликат. Требуется actual EOF536156Б и native-read-proof.md, затем полный
+ 33-step Workflow. Старые terminal roots не Retry/Resume.
+- Chrome own1 connected/reload23:47, owner4 untouched; Console0 и relevant
+  validation/application200, publication200, run create201/history200.
+  Снимок Manager desktop читабелен, новые plan формы проверены. Full65 ACTIVE
+  до08.10 14:00 Саратов, обязательные11/13/14/15 OPEN; финальный внутренний
+  PR не merge/approve. Длительное чтение и полный Workflow ещё NOT RUN/PENDING,
+  короткий smoke не подменяет их; STT/device-code NOT RUN.
+
 ## Подтверждение режима 08.10.2026 — автономно до 14:00 Саратов
 
 Владелец повторно поручил довести прототип до согласованной готовности,
