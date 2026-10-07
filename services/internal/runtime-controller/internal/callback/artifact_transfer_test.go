@@ -6,13 +6,40 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
+
+func TestArtifactGETSpoolCapacityStillReturns503BeforeBody(t *testing.T) {
+	fixture := newFileReadFixture(t, []byte("private-source"), "")
+	for range maximumConcurrentArtifactTransfers {
+		_, release, err := fixture.server.spool.acquire(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(release)
+	}
+	file := fixture.owner.file
+	pin := artifactTransferPin{ref: file.ArtifactRef, project: file.ProjectRef, name: file.Name, media: file.MediaType,
+		digest: file.Digest, size: file.SizeBytes, revision: file.Revision, version: file.Version}
+	writer := httptest.NewRecorder()
+	fixture.server.serveArtifactTransfer(writer, httptest.NewRequest(http.MethodGet, "/artifact", nil), fixture.input, pin, file.MediaType)
+	if writer.Code != http.StatusServiceUnavailable || strings.Contains(writer.Body.String(), "private-source") || writer.Header().Get("X-Kodex-Artifact-Digest") != "" {
+		t.Fatal("exhausted GET spool changed status or exposed source bytes")
+	}
+	fixture.owner.mu.Lock()
+	defer fixture.owner.mu.Unlock()
+	if fixture.owner.transfers != 0 {
+		t.Fatal("exhausted GET spool opened a source transfer")
+	}
+}
 
 type transferPatternReader struct{ remaining, offset int64 }
 

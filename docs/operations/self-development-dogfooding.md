@@ -157,7 +157,96 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 | Integration completion → compact transcript | После exact lease/fence/generation owner берёт invocation ref из заблокированной строки; в той же транзакции сохраняет typed integrationInvocationRef в delta/outbox; Proto/HTTP/WS не выводят его из общего aggregateRef | Только совпавшая каноническая SUCCEEDED tool receipt revision≥2 и полный run/node/session/turn/turnNumber/attempt позволяют скрыть повторную служебную запись. Локализованный summary не источник привязки; ошибки, опубликованные сообщения, artifacts и unbound история остаются видимыми. Backfill и миграция не нужны |
 | UI consumer acquire/release | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию |
 
+### Карта native полного чтения файла
+
+Источник требования — полный handoff результатов Manager/Architect/Developer
+в исходном SOFTWARE_CHANGE, а не усечённое превью. Actor и Project назначает
+CP из свежей execution lease/root lineage; поля tool request только locators.
+Путь: model → protected MCP bridge → execution-scoped
+`POST /v1/executions/{lease}/mcp`/`tools/call read_file` → callback → generated
+`RuntimeWorkService.GetExecutionFileMetadata` и `StreamExecutionArtifact` →
+CP owner catalog/artifact → verified spool → повтор metadata → terminal audit.
+Новых публичных HTTP endpoints, Proto методов, grants или migrations нет.
+
+| Переход | Проверяемые полномочия и pins | State/event и consumer |
+| --- | --- | --- |
+| tools/list | Тот же valid immutable input/file catalog predicate у producer/runner; exact набор пяти tools | Read-only каталог, без нового доменного события; schema consumer — pinned runner |
+| Start page | Execution ticket и method/execution binding; server-resolved lease/fence/generation/catalog/purpose, exact entry/artifact/revision/digest | Прежний RecordRunToolCall RUNNING/revision1 и receipt/audit/event до owner чтения; UI хранит только purpose/catalog grant |
+| Read full source | Текущая owner eligibility и полный immutable artifact tuple; metadata/size/SHA/Complete/clean EOF, quota2/512MiB/64KiB chunks | Read-only artifact stream; приватные partial bytes не видны модели/UI, нового artifact event нет |
+| Complete page | Полный UTF-8/NUL scan; rune-aligned offset, bounded page и progress; повтор exact metadata; свежий terminal audit | Прежний RecordRunToolCall SUCCEEDED/revision2 только после проверок; модель получает page/source commitments и next offset/EOF, UI — безопасный статус |
+| Error/cancel/expiry/revoke | Невалидные arguments, source mismatch, stale lease/pins, timeout или отказ любого audit закрывают text response | FAILED activity только если прежняя lease ещё действительна; прежний owner terminal/cancel event и authoritative run/activity read, частичный текст не выдаётся |
+| Same page after lost response | Новое read-only обращение с теми же exact pins/offset и свежей lease; старый ответ не является authority cache | Новый безопасный tool-call ref и обычные audit/events, без внешнего эффекта или изменения artifact; contiguous offsets до EOF нужны для доказательства полного чтения |
+
 ## Журнал
+
+### 07.10.2026 05:14 UTC — полное native чтение реализовано и проверено локально
+
+Frozen closure поверх `c8199577`:13 файлов исполнителя плюс GUIDE-DOC-003
+и два ROOT журнала. Реализован пятый `read_file` через существующий protected
+stream/private spool, согласованы shared producer/consumer и закрытый CP
+activity registry. GET сохраняет503/no body/no source RPC при exhausted slots.
+GUIDE-DOC-003 закрепляет общий инвариант whole-source verification для страниц.
+
+Исполнитель: callback635 PASS test events (включая parents/subtests),2 SKIP,
+0 FAIL; unit/vet/runtimecontract/public actual catalog wire PASS. Canonical
+disposable PG `TestBootstrapComponent` PASS100.780s через поддерживаемый host
+network profile; worker-grant/runner-policy read-only проверки PASS.
+Initial отсутствующий tool regression FAIL, /tmp inode fixture FAIL и default
+bridge readiness FAIL до тестов сохранены; штатный cleanup disposable завершён.
+ROOT независимо повторил public producer/consumer PASS0.056/0.049s, новый
+focused read_file/GET suite PASS1.982s и vet PASS, в отдельном task TMPDIR.
+Evidence tool sessions: ROOT73735, исполнитель42134/17537/58521/84601/81506.
+Контекст7 `/golang/go`: io.ReadFull short-read/EOF, UTF-8 rune boundaries.
+
+Live full read пока NOT RUN. G4 ordinary file-catalog executions требуют нового
+immutable runner до запуска; exact readiness не ослабляется. SYSTEM без Project
+канонически не имеет FileCatalog, PROJECT helper без входных artifacts/skills
+может выполнить typed recipe update; перед ходом нужны fresh actual pins.
+Build не запускается с dirty source. Новые runner/worker delivery и нативное
+чтение plan26276/review39301 до EOF, затем новый full33 остаются следующими.
+
+Отдельный системный аналог архива статически доказан: verified capture теряется
+при последующем credential refresh отказе, а generic process failure после
+append может не capture-ить новый rollout. Это не установленная причина старого
+DEAD_LETTER. До сборки исполнитель готовит matrix и безопасное исправление
+broker/process/app, без fake success или непроверенных archive pins.
+
+### 07.10.2026 05:08 UTC — свежий архив и повторная проверка обратных дуг
+
+Source/remote/Draft1800 `c81995772afd1cd78ee5133ff1c0c84ffd5617b8`
+подтверждены readback после двух исправлений app/archive. Новые immutable
+runner и archive worker пока NOT RUN; controller hot reload не обновляет
+бинарь worker или G4/SYSTEM role images.
+
+Watcher23383: exact PVC binding PASS, worker наблюдался, доступный closed
+stage UNKNOWN; handle завершился штатно. getRun200 helper
+`run_9010_mFp0_tPlFzttJWy52dS` показал storage ARCHIVED и последнюю
+DELETE_PVC `sat_8deca70d-c368-4d3c-92c2-6df3465ac7c0` SUCCEEDED,
+attempt1/maximum5/safeErrorCode NONE. Таким образом новый G4 helper прошёл
+штатный архивный цикл; прежний DEAD_LETTER остаётся отдельным неизвестным
+инцидентом и не переписывается. Manager file probe session ещё LIVE.
+
+Read-only provider curl в прежнем terminal full33 Pod получил отказ
+proxy DNS. Текущий Pod имеет ClusterFirst, но его execution NetworkPolicy
+уже отсутствует, и действует default-deny; egress Service существует.
+Поэтому это не доказательство отсутствия сети во время активного хода.
+Диагностика safe provider log не нашла закрытую причину; исход UNKNOWN
+сохранён. Никаких grant/policy bypass, SQL/reset или Retry старого Run нет.
+
+UX callback: Chrome5 hard navigation/reload, настоящий граф6nodes/7edges,
+две отдельные плавные дуги снаружи карточек и в видимой области — PASS.
+Console error/warn0, graph/events/session/ticket и relevant reads200,
+realtime CONNECTED после rejoin. Повтор22 focused graph unit PASS2.44s
+на неизменённых frontend blobs `c8199577`; это не проверка новых read_file.
+Чужие6/13/14–17 не изменялись.
+
+Native `read_file` реализация готова в рабочем дереве, но ещё не frozen:
+whole source SHA/size/owner Complete/clean EOF, полный UTF-8/NUL scan,
+bounded rune-aligned pages и fresh exact metadata перед terminal audit.
+Первый callback suite остановлен оснасткой: /tmp inode exhaustion; исполнитель
+повторяет в отдельном task temp на cache без очистки чужих данных.
+Это исторический FAIL оснастки, не PASS и не найденная ошибка приложения.
+Full65/33 и итоговый внутренний PR Issue1796 остаются OPEN.
 
 ### 07.10.2026 04:59 UTC — два исправления завершения и диагностики
 

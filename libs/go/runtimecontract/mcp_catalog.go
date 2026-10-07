@@ -25,7 +25,7 @@ func RuntimeMCPToolNames(input RunnerInput) []string {
 	}
 	result := []string{"propose_run_metadata"}
 	if RuntimeFileToolsAvailable(input) {
-		result = append(result, FileToolSearch, FileToolMetadata, FileToolPreview, FileToolManifest)
+		result = append(result, FileToolSearch, FileToolMetadata, FileToolPreview, FileToolManifest, FileToolRead)
 	}
 	if input.IsAssistant() {
 		result = append(result, "get_configuration_catalog", "find_platform_resources", "propose_configuration_plan", "propose_assistant_metadata")

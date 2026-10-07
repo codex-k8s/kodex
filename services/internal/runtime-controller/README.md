@@ -4,8 +4,8 @@ title: runtime-controller
 type: service
 status: approved
 owner: developer
-version: 3.2.0
-updated: 2026-09-05
+version: 3.3.0
+updated: 2026-10-07
 ---
 
 # runtime-controller
@@ -93,8 +93,8 @@ turn/attempt, RuntimeRevision digest, input digest, method и binding digest.
 Проверка capability/grant выполняется по той же RuntimeRevision и не расширяет
 eligibility из payload.
 
-Execution с owner `file_catalog` получает четыре read-only инструмента:
-`search_files`, `get_file_metadata`, `preview_file`, `get_file_manifest`.
+Execution с owner `file_catalog` получает пять read-only инструментов:
+`search_files`, `get_file_metadata`, `preview_file`, `get_file_manifest`, `read_file`.
 Контроллер закрепляет descriptor в RuntimeRevision и execution/MCP digest до
 materialization. Tools берут lease/fence/generation/catalog из проверенного
 callback input; caller выбирает только объявленный purpose, query/page либо
@@ -102,6 +102,28 @@ exact entry/ref/revision/digest. Search и manifest ограничены 100 с�
 cursor — 512 символами, preview — 16KiB. Произвольного path/project selector
 нет. Ответ проверяется по catalog, purpose, project и exact file pins до
 выдачи агенту; activity содержит только purpose и catalog grant.
+
+`read_file` читает UTF-8 без NUL страницами до16KiB: exact entry/artifact/revision/
+digest сохраняются между вызовами, первый `offset_bytes=0`, следующий равен
+`next_offset_bytes` предыдущего ответа. `eof=true` означает конец файла;
+отдельная страница не доказывает полное чтение сотрудником. Перед каждой
+страницей controller принимает полный источник в существующий private spool,
+проверяет полный SHA/размер, owner Complete и EOF, валидирует весь UTF-8 текст,
+затем снова проверяет exact metadata и текущие права. `chunk_digest` связывает
+только страницу, `source_digest` — полностью проверенный источник. Тексты,
+spool paths и credentials не входят в activity или диагностику. Offset внутри
+UTF-8 rune отклоняется; размер страницы4..16384 байта обеспечивает progress.
+Операция ограничена45секундами с резервом RequestTimeout для terminal audit;
+общий MCP timeout60секунд и transfer limits сохраняются. Кэш отсутствует:
+каждая страница заново читает источник, поэтому стоимость пропорциональна
+числу страниц и размеру файла. Ошибка/отмена/отзыв не выдают partial text.
+
+Новый каталог требует согласованной доставки controller, control-plane и
+role image agent-runner с тем же закрытым набором из пяти file tools. До
+активации exact role image новые executions с `file_catalog` не запускаются:
+старый consumer закономерно отклоняет несовпадение фактического tools/list.
+Catalog readiness не ослабляется. Execution без `file_catalog` сохраняет
+свой прежний профиль; отсутствие artifact capability не выдаёт file tools.
 
 Вклад owner642: `ccefadda86f25370924a5a4fd19f57d7ace7ae85`.
 Локальные generated gRPC и authenticated callback tests проверяют все четыре

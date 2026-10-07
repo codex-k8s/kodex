@@ -58,12 +58,13 @@ func runtimeFileTools(input runtimecontract.RunnerInput) []map[string]any {
 	if !runtimeFilesAvailable(input) {
 		return nil
 	}
-	result := make([]map[string]any, 0, 4)
+	result := make([]map[string]any, 0, 5)
 	for _, tool := range []struct{ name, description string }{
 		{runtimecontract.FileToolSearch, "Search authorized files in this exact runtime catalog. Follow next_cursor within the same purpose and query."},
 		{runtimecontract.FileToolMetadata, "Read exact metadata using an entry_ref, artifact_ref, revision and digest returned by this runtime catalog."},
 		{runtimecontract.FileToolPreview, "Read a bounded UTF-8 text preview of an exact catalog entry. Binary files do not have text previews."},
 		{runtimecontract.FileToolManifest, "Read one page of the immutable runtime file manifest, filtered by current permissions and lifecycle."},
+		{runtimecontract.FileToolRead, "Read an exact UTF-8 text file in bounded pages after verification of its entire source. Start at offset_bytes 0, then use next_offset_bytes with the same exact file pins until eof. A page alone is not the complete file."},
 	} {
 		properties := map[string]any{"purpose": enumSchema(input.FileCatalog.Purposes...)}
 		required := []string{"purpose"}
@@ -80,6 +81,10 @@ func runtimeFileTools(input runtimecontract.RunnerInput) []map[string]any {
 			required = append(required, "entry_ref", "artifact_ref", "revision", "digest")
 			if tool.name == runtimecontract.FileToolPreview {
 				properties["maximum_bytes"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 16384, "default": 4096}
+			}
+			if tool.name == runtimecontract.FileToolRead {
+				properties["maximum_bytes"] = map[string]any{"type": "integer", "minimum": 4, "maximum": 16384, "default": 16384}
+				properties["offset_bytes"] = map[string]any{"type": "integer", "minimum": 0, "maximum": runtimecontract.MaximumArtifactTransferBytes, "default": 0}
 			}
 		}
 		result = append(result, map[string]any{"name": tool.name, "description": tool.description,
@@ -109,6 +114,9 @@ func (server *Server) callFileTool(ctx context.Context, input runtimecontract.Ru
 	purposeValue, ok := runtimeFilePurpose(input, purpose)
 	if !ok || !runtimecontract.IsRuntimeFileTool(tool) {
 		return nil, errRuntimeFileInput
+	}
+	if tool == runtimecontract.FileToolRead {
+		return server.readFile(ctx, input, purposeValue, arguments)
 	}
 	// Lease, generation и catalog берутся только из authenticated execution input.
 	execution := &cp.ExecutionFileContext{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,

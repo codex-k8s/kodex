@@ -48,7 +48,7 @@ func TestRuntimeMCPFilesRequireExactExecutionCatalog(t *testing.T) {
 			copy.FileCatalog = &catalog
 			change(&copy)
 			tools := RuntimeMCPToolNames(copy)
-			for _, tool := range []string{FileToolSearch, FileToolMetadata, FileToolPreview, FileToolManifest} {
+			for _, tool := range []string{FileToolSearch, FileToolMetadata, FileToolPreview, FileToolManifest, FileToolRead} {
 				if slices.Contains(tools, tool) != (name == "valid") {
 					t.Fatal("VFS tool profile expanded or lost")
 				}

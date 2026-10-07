@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.9
-updated: 2026-10-06
+version: 1.7.10
+updated: 2026-10-07
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -321,6 +321,18 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 Ошибка, отмена, отзыв или повреждение удаляют этот файл; содержимое, временные
 пути и удостоверения не попадают в диагностику. Разрешённый размер файла не
 обеспечивается увеличением общего unary buffer до размера всего файла.
+
+Постраничное native-чтение текста сохраняет тот же полный verified source:
+каждая страница выдаётся только после проверки всего размера, SHA256,
+owner Complete и clean EOF, полного UTF-8/NUL scan и свежего exact owner read.
+Offset и следующий offset измеряются в байтах и лежат на границе UTF-8 rune;
+непустой остаток требует продвижения. Source digest не подменяется digest
+страницы, а отдельная страница или preview не доказывает полного чтения.
+Используются прежние private spool quota, lease/fence/generation/catalog/purpose
+и terminal audit. Отзыв, timeout, несовпадение pins или отказ terminal audit
+закрывают выдачу текста; shell не получает credential, direct URL или filesystem
+authority. Повтор той же read-only страницы не создаёт внешнего эффекта и не
+разрешает authority cache либо legacy decoder.
 
 ## Карта доверия
 

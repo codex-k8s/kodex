@@ -10,6 +10,58 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 05:14 UTC: native read_file closure FROZEN,13 implementation файлов
+и ROOT GUIDE003/два журнала готовы к commit поверхc819. Callback635PASS/2SKIP,
+runtimecontract/vet/public MCP wire PASS, canonical disposable PG bootstrap
+PASS100.780s/host profile. ROOT public wire0.056/0.049s, focused read_file/GET
+1.982s/vet PASS. Исторические regression/inode/PG bridge FAIL сохранены.
+Publisher previousc819, allowlist49files; после commit требуется exact remote
+и Draft1800 readback. Новый runner/worker и native full read пока NOT RUN.
+
+До build нужно закрыть доказанный generic archive аналог: broker теряет verified
+capture при credential-refresh error, process generic error после append может
+пропустить capture. archive_failure_diagnostics пока только matrix/read-only,
+после remote PASS ROOT разрешит реализацию (broker/process/parser/activity/app).
+Не считать это установленной причиной старого worker DEAD_LETTER.
+
+Build/activation только clean checkpoint: full build-local-runner → exact
+seed runner → fresh render/current SHA → canonical supply-chain apply/readback.
+Затем compatible SYSTEM либо PROJECT(FileCatalog=nil) typed recipe update
+с явным fresh environmentKey=standard, native build/admit/risk/promotion,
+новые ENV revision/Impact/Publish. Default transition не обновляет G4/gen10
+bindings; его fixed production host не подходит local profile.
+Worker отдельно build-local-session-archive→seed component→fresh render→core
+explicit --workload session-archive. Ordinary file roles до новых pins не запускать.
+Chrome5 reload05:13, чужие6/13/14–17 не трогать; whole65/33 OPEN.
+
+## Предыдущий checkpoint05:08
+
+07.10.2026 05:08 UTC: source/remote/Draft1800
+`c81995772afd1cd78ee5133ff1c0c84ffd5617b8` подтверждены readback.
+Два исправления app/archive опубликованы; новый runner и archive worker
+ещё NOT RUN. Исполнитель реализовал native `read_file` (пятый MCP tool)
+через существующий verified spool; адресные проверки продолжаются,
+его рабочие файлы не считать frozen или опубликованными.
+
+Watcher23383 завершён: worker наблюдался, closed log stage UNKNOWN.
+Авторитетный getRun200 свежего helper `run_9010_mFp0_tPlFzttJWy52dS`
+подтвердил ARCHIVED и DELETE_PVC SUCCEEDED/attempt1/NONE. Это штатный
+успех одной новой сессии, не объяснение прежнего DEAD_LETTER.
+Manager file probe session пока LIVE.
+
+Read-only curl из уже terminal full33 Pod не разрешил proxy DNS. У Pod
+нет execution NetworkPolicy, остался default-deny; поэтому этот результат
+не доказывает сетевую причину прежнего активного отказа. Egress Service
+существует. Новый native ход проверять вместе с его действующей policy.
+Никаких bypass/DNS/NetworkPolicy изменений или повторов старой сессии нет.
+
+Chrome5: reload05:07, screenshot внешних дуг/Console0/relevant API200,
+22 focused graph tests PASS2.44s. Чужие6/13/14–17 не трогать.
+Далее read_file freeze/tests → commit/push → exact runner/worker activation
+→ contiguous native read до EOF → свежий полный33 Workflow. Whole65/33 OPEN.
+
+## Предыдущий checkpoint04:59
+
 07.10.2026 04:59 UTC: поверх опубликованного `4a08cbfc` готовы два frozen
 исправления и журнал. App post-execution сохраняет только валидный archive
 tuple при FAILED; generic execution/activity errors не получают pins.

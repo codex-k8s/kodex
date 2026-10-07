@@ -688,6 +688,11 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		server.writeMCPError(writer, rpc.ID, -32602, "Invalid params")
 		return
 	}
+	if params.Name == runtimecontract.FileToolRead {
+		bounded, cancel := context.WithTimeout(request.Context(), maximumFileReadDuration)
+		defer cancel()
+		request = request.WithContext(bounded)
+	}
 	if params.Name == "invoke_integration" {
 		if _, valid := integrationGrantForCall(input, params.Arguments); !valid {
 			guidance := map[string]any{"error_code": "INTEGRATION_INPUT_INVALID", "retryable": true,
@@ -731,7 +736,7 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		if err == nil {
 			result, err = server.invoke(request.Context(), input, invokeArguments, rpc.ID)
 		}
-	case runtimecontract.FileToolSearch, runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolManifest:
+	case runtimecontract.FileToolSearch, runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolManifest, runtimecontract.FileToolRead:
 		result, err = server.callFileTool(request.Context(), input, params.Name, params.Arguments)
 	default:
 		err = errors.New("tool is not available")

@@ -15,10 +15,11 @@ const (
 	FileToolMetadata          = "get_file_metadata"
 	FileToolPreview           = "preview_file"
 	FileToolManifest          = "get_file_manifest"
+	FileToolRead              = "read_file"
 )
 
 func IsRuntimeFileTool(tool string) bool {
-	return tool == FileToolSearch || tool == FileToolMetadata || tool == FileToolPreview || tool == FileToolManifest
+	return tool == FileToolSearch || tool == FileToolMetadata || tool == FileToolPreview || tool == FileToolManifest || tool == FileToolRead
 }
 
 // RuntimeFileCatalog закрепляет private owner catalog, но не передаёт его

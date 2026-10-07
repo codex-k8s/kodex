@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
 
@@ -89,20 +90,7 @@ func (server *Server) serveArtifactTransfer(writer http.ResponseWriter, request 
 	}
 	ctx, cancel := context.WithTimeout(request.Context(), server.config.FileTransferTimeout)
 	defer cancel()
-	file, release, err := server.spool.acquire(ctx)
-	if err != nil {
-		http.Error(writer, errArtifactSpool.Error(), http.StatusServiceUnavailable)
-		return
-	}
-	defer release()
-	stream, err := server.control.Runtime.StreamExecutionArtifact(ctx, &cp.StreamExecutionArtifactRequest{
-		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, ArtifactRef: pin.ref,
-	}, grpc.MaxCallRecvMsgSize(runtimecontract.MaximumArtifactTransferChunkBytes+(64<<10)))
-	if err != nil {
-		writeControlError(writer, err)
-		return
-	}
-	err = receiveArtifactTransfer(ctx, stream.Recv, file, pin)
+	file, release, err := server.verifiedArtifactSpool(ctx, input, pin)
 	if err != nil {
 		if errors.Is(err, errArtifactTransfer) {
 			http.Error(writer, errArtifactTransfer.Error(), http.StatusConflict)
@@ -113,15 +101,7 @@ func (server *Server) serveArtifactTransfer(writer http.ResponseWriter, request 
 		}
 		return
 	}
-	info, err := file.Stat()
-	if err != nil || info.Size() != pin.size {
-		http.Error(writer, errArtifactSpool.Error(), http.StatusServiceUnavailable)
-		return
-	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		http.Error(writer, errArtifactSpool.Error(), http.StatusServiceUnavailable)
-		return
-	}
+	defer release()
 	if _, ok := server.authorize(request, input.LeaseRef); !ok {
 		http.NotFound(writer, request)
 		return
@@ -133,6 +113,39 @@ func (server *Server) serveArtifactTransfer(writer http.ResponseWriter, request 
 	if _, err := io.CopyN(writer, file, pin.size); err != nil && server.logger != nil {
 		server.logger.WarnContext(request.Context(), "runtime artifact response delivery failed", "error_class", "transport")
 	}
+}
+
+// Возвращается только полный private spool после owner Complete и clean EOF.
+// Ошибочный путь всегда закрывает файл и освобождает общий слот передачи.
+func (server *Server) verifiedArtifactSpool(ctx context.Context, input runtimecontract.RunnerInput, pin artifactTransferPin) (*os.File, func(), error) {
+	file, release, err := server.spool.acquire(ctx)
+	if err != nil {
+		return nil, nil, errArtifactSpool
+	}
+	success := false
+	defer func() {
+		if !success {
+			release()
+		}
+	}()
+	stream, err := server.control.Runtime.StreamExecutionArtifact(ctx, &cp.StreamExecutionArtifactRequest{
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, ArtifactRef: pin.ref,
+	}, grpc.MaxCallRecvMsgSize(runtimecontract.MaximumArtifactTransferChunkBytes+(64<<10)))
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := receiveArtifactTransfer(ctx, stream.Recv, file, pin); err != nil {
+		return nil, nil, err
+	}
+	info, err := file.Stat()
+	if err != nil || info.Size() != pin.size {
+		return nil, nil, errArtifactSpool
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, nil, errArtifactSpool
+	}
+	success = true
+	return file, release, nil
 }
 
 func (server *Server) catalogArtifact(writer http.ResponseWriter, request *http.Request, input runtimecontract.RunnerInput, ref string) {

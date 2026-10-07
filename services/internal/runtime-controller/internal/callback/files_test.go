@@ -377,7 +377,7 @@ func TestRuntimeFileReplyAndInputSubstitutionFailClosed(t *testing.T) {
 		}
 	}
 	available := runtimeFileTools(input)
-	if len(available) != 4 {
+	if len(available) != 5 {
 		t.Fatal("exact execution omitted file tools")
 	}
 	for _, tool := range available {
