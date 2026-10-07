@@ -10,6 +10,29 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 21:44 UTC
+
+Full65 ACTIVE, автономно до08.10 14:00 Саратов /10:00UTC. База пакета
+HEAD/remote/Draft1800 07878e9e1f63d36a62a077cd9ed4062be5da2df2 EQUAL;
+mainb5f6fcde неизменен. Текущий пакет: RunPromptPreview.vue/test и два
+provider lifecycle компонента с двумя tests. ROOT82/82 unit, адресные
+lint/format, typecheck/build PASS; preview xl-модалка Chrome screenshot,
+Escape/Tab/focus и host/Pod hashes PASS. Live provider auth/STT NOT RUN.
+Исправлен watcher fresh-array reset при realtime replacement с прежними
+scalar pins; actual drift/unmount/stale ACK по-прежнему закрыто ограждены.
+
+ONE native Manager run_RfC1i_aFYh1F3GU_i-I3HwDV RUNNING2, session
+ses_8BfTi_ag77dJbqysf1G-fXRW /turn trn_WaWZG17rbzyWAlaaH4MVEH2f.
+latestseq484, checkpoint120страниц/245733 из536156Б; до EOF ещё OPEN.
+Provider expected/inbox/instructions/image/template/same-Pod file binary
+EQUAL ранее захвачены; exact taskSHA1d9bc50455c370fef7474ab6d33d261aa6eee26079b69d1c97dc944615f720c2.
+Не launch дубликат, не Retry прежние terminal roots. После EOF/artifact
+запустить ONE новый полный SOFTWARE_CHANGE с Manager instructionrevision3;
+INTAKE/Architect самостоятельно читают все свои обязательные входы доEOF.
+Затем Developer → три reviews/fixes/re-review → final Manager/READY,
+финальный внутренний PR не merge/approve. Full65/11/13/14/15 OPEN.
+Chrome page1 reload21:43, page4 untouched; literal reload каждые5мин.
+
 ## Checkpoint 07.10.2026 21:24 UTC
 
 Full65 goal ACTIVE; автономно до08.10 14:00 Саратов /10:00UTC, Chrome

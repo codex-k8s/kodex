@@ -240,11 +240,11 @@ function recovered(result: ProviderLifecycleResult): void {
   void load(true);
 }
 watch(
-  () => [
-    props.account.ref,
-    props.account.version,
-    props.account.deletion?.version,
-    props.account.deletion?.state,
+  [
+    () => props.account.ref,
+    () => props.account.version,
+    () => props.account.deletion?.version,
+    () => props.account.deletion?.state,
   ],
   () => {
     if (currentAccount.value?.ref !== props.account.ref) clearProjection();

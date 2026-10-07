@@ -10,6 +10,44 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 21:44 UTC — стабильный контекст и realtime recovery
+
+- Full65 goal ACTIVE; автономное окно до08.10 14:00 Саратов /10:00UTC.
+  База пакета HEAD/remote/Draft1800 07878e9e1f63d36a62a077cd9ed4062be5da2df2
+  EQUAL; mainb5f6fcde неизменен, bot identity и Issue1797/1796 OPEN подтверждены.
+  Chrome MCP доступен, рабочая вкладка1 reload21:43; вкладка4 не изменялась.
+- FAIL → PASS просмотра actual run context: realtime заменял объект Run с
+  прежними ref/version/attempt, getter возвращал новый массив и сбрасывал
+  preview даже после200. Watch теперь сравнивает отдельные scalar sources;
+  настоящий drift/unmount по-прежнему закрывает pending read и stale ACK.
+  Контекст открывается в отдельной xl-модалке вместо узкой панели графа.
+  Browser screenshot/readability PASS; Tab остаётся внутри, Escape закрывает
+  только preview, focus возвращается на opener без закрытия Project Manager.
+  Safe preview complete и template/materialization digests совпадают с ACK;
+  это безопасная проекция, не доказательство полного body provider input.
+- Исправлены два системных аналога в ProviderLifecycleRecovery и
+  ProviderAccountLifecyclePanel: replacement с прежними scalar pins больше
+  не отменяет read/retry и не теряет выбранное подтверждение. Actual pin drift,
+  unmount и stale result всё ещё ограждены. Реальная авторизация/STT/device-code
+  NOT RUN; эти результаты относятся к компонентным fixtures, не к live login.
+- ROOT на exact пакете: шесть suites82/82 unit PASS1.92s, адресные ESLint и
+  Prettier PASS, typecheck/Vite build PASS9.16s; предупреждение chunk>500КБ
+  сохраняется. Context7 Vue watch multiple sources проверен. Codegen/Go для
+  этого frontend-only пакета не менялись и заново не запускались.
+- Host/Pod hashes EQUAL, staff-control-center-6b75df7bcc-kmgsz, /workspace:
+  RunPromptPreview.vue5836ff3ae5b51cd8a48fd38ffc1b815b0da11b93d94587edf143fd560fd6bebd;
+  Recoveryf04713e51e8afc875ece5c58f264dbd2c9eb9c03db8fcc883cceae2d245e6880;
+  Panelf7cdd50496de268c73037799785fa650038989a68e62408ddbc0540c8804cf59.
+  Console error/warn0; readonly run/history/ticket Network200,
+  horizontal overflowfalse. Backend --since5m stdout пуст, не общий health PASS.
+- ONE Manager diagnostic run_RfC1i_aFYh1F3GU_i-I3HwDV RUNNING2, latestseq484:
+  public checkpointseq389 —120страниц/245733 из536156Б, pins совпадают.
+  Ранее локальная shell ошибка восстановлена самим исполнителем; не denial.
+  EOF ещё OPEN: не подменять его счётчиком вызовов или host-копией. После
+  actual EOF/artifact — ONE новый полный SOFTWARE_CHANGE с instructionrevision3;
+  собственные обязательные чтения INTAKE/Architect всё равно нужны.
+  Internal Developer/reviews/READY и checklist11/13/14/15 остаются OPEN.
+
 ## Checkpoint 07.10.2026 21:24 UTC — native исправление неполного READ
 
 - Full65 goal ACTIVE, продолжение существующей цели без дубликата; окно
