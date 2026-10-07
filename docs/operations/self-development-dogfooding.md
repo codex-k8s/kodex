@@ -10,6 +10,50 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 21:55 UTC — компактный состав контекста и копирование
+
+- База HEAD/remote/Draft1800 b5a26a34d70ee9717c111ee4fee38b5e6b4cbf55
+  EQUAL; первый publisher readback FAIL из-за ещё старого PR head после push.
+  Независимый повторный read показал exact remote/PR SHA; адресный повтор
+  публикации PASS. Не выполнялись blind push, force или новые PR.
+- PromptContextDetails: безопасные sections теперь сразу видны по порядку;
+  placeholders располагаются в адаптивных карточках, Markdown занимает
+  полную строку и прокручивается внутри без потери полного section.content.
+  Placeholder и copy icon копируют точное содержимое; visible Check и
+  постоянный доступный status не сдвигают верстку. Digests остаются под катом;
+  fullMaterializedPrompt, новые API/grants и i18n keys не добавлены.
+- ROOT96/96 unit7suites PASS1.95s; адресные lint/format исполнителя PASS,
+  ROOT typecheck/Vite build PASS9.80s (chunk>500КБ warning сохраняется).
+  Компонент SHA2569997f9460eb8ff9f72b81742f54f830bdbffa7b79a51a25b65293e8a44fe022b
+  равен host/Pod; testSHA944d575fb475d0fcb1c9739c991c1ce3afc94a235cc01f3aacbf1ed33c173ba7.
+  Old mounted regression3FAIL/1PASS; new14/14 component PASS.
+- Chrome actual safe RUN preview: desktop screenshot PASS, две колонки515px
+  и8карточек в доступной высоте; native copy блока3 status «Блок3скопирован»,
+  firstY358.78125 до/после EQUAL, один Check. Mobile390×844 screenshot PASS:
+  одна колонка348px, overflowfalse; scroll до восьмой карточки и native copy
+  «Блок8скопирован» PASS. Console error/warn0; desktop viewport восстановлен.
+  Source/Pod proof относится к hot reload, не immutable release acceptance.
+- READ run_RfC1i_aFYh1F3GU_i-I3HwDV RUNNING2/latestseq751, последний
+  public checkpoint200страниц/409551 из536156Б, source pins совпадают.
+  Новые failed tool events не обнаружены; EOF/artifact ещё OPEN.
+  Новый полный Manager task заранее подготовлен, но НЕ запущен:14089Б,
+  SHA25623801553b029c0e807f439497ca3ee91482b0fab9f9d353c4867248c39d40b8b.
+  Он сохраняет33-stepWorkflow/четыре exact input keys/границы, добавляет
+  instructionrevision3 и правило полного READ/checkpoints без обходов.
+- Read-only оценка ускорения: нынешний native GitHub output дублируется;
+  page4096 даёт9715Б против8192 guard (ASCII/path9), single content.text4997Б.
+  Изменение package/output schema требует нового controlled versioned rollout:
+  старые immutable revisions/grants нельзя тихо переопределить. Выбран
+  минимальный вариант оставить2048/current3.1.0 и закончить live QA.
+  Необязательная оптимизация не blocker и не новый обязательный checklist.
+  Guards tools/list8000 и GitHub envelope8192 различны; estimator не учитывает
+  final LF и не доказывает bound arbitrary RPC id. Архитектурное расширение,
+  drain/rebind и новый registry не выполнялись ради ускорения.
+- Full65 ACTIVE, окно до08.10 14:00 Саратов; checklist11/13/14/15 OPEN.
+  После actual EOF — ONE новый SOFTWARE_CHANGE, ранний ACK каждой роли,
+  собственные native чтения, Developer/reviews/fixes/re-review/READY. Итоговый
+  внутренний PR не merge/approve, owner gate OPEN; чужие вкладки не менять.
+
 ## Checkpoint 07.10.2026 21:44 UTC — стабильный контекст и realtime recovery
 
 - Full65 goal ACTIVE; автономное окно до08.10 14:00 Саратов /10:00UTC.
