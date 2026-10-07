@@ -10,6 +10,71 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 16:35 UTC — новый Manager и actual input proof
+
+HEAD/remote/Draft1800 `9927da5796b104b239cb8fc419a661974e408488`
+совпадают, bot readback PASS; main остаётся `b5f6fcde`.
+ROOT через штатную NewRun форму выбрал Project Manager и один раз отправил
+задание с правилом runtime-local catalog. Новый actual run
+`run_XrSQ3mwXYkiV1OQMztkLsowq`, session
+`ses_C1f3862PU6VLWEGBRusmLB9e`, turn
+`trn_K8nKl0GpCKYKwSOgriWAPhuG`/attempt1, node
+`nod_d-A28pnEQp8uRA-_F4cwGBQm`, RUNNING2/seq49 на16:32:43.
+Не запускать duplicate или retry по observation timeout.
+
+- PASS: source/Pod files.go `e316af6a`, server.go `f0f60a4e`; actual
+  runtime-controller PID2193 binary `ea5c3ece` совпадает с независимой сборкой.
+  Deployment runtime-controller51/51, gateway30/30, staff-control-center ready1.
+  Первая readback команда использовала неверное имя deployment control-center
+  и получила NotFound; точное имя подтверждено последующим read-only inventory.
+- PASS: форма содержит6868B/SHA256
+  `56bc05e45d4295482721dd43339469839f4a904d6a4c1be94be37b02b8a68194`.
+  Штатный NewRunPage.vue перед submit делает `form.task.trim()`:
+  независимое Node вычисление trimmed6867B даёт
+  `cef2ce68338b57d634eb8509b44eaa109e325e6f06aa4d2ef2b8651dcd39829a`.
+  Owner inputSummary, provider task/prompt/inbox совпали с trimmed digest.
+  Первый capture с raw digest был EXPECTED_ACK_PIN_MISMATCH; это сохранённый
+  результат сравнения до учёта штатной нормализации, не потеря части задания.
+- PASS: ранний ACK + same-Pod UID/rejoin, task_expected/inbox/instructions
+  EQUAL. Pod runtime-turn-797cc359c5fe6a32, UID
+  `5c4d6e4d-ca22-4a0a-83d3-4cc2b7ff43be`, ready3/3/restarts0;
+  rrev_TLKcfNAP9drzuL0oSA41Bf28/v1, G5/ENV5/binding6/tools38/grants21/caps24.
+  Instructions33151B/SHA256
+  `56d222861fd409a684413dcf5d75808511e6915e07a9a6e6a80d53a3c99f27c2`
+  совпали с file/inbox proof; модель gpt-6.1-sol/medium.
+- PASS image-file readback: image manifest `f8b60814`, runner binary
+  `40f3268a257abb9ed21e016069baf3cbfbf16698c4634da7fa102fa1508fc93b`.
+  Actual provider serving PID13/14 `/proc/exe` Permission denied: NOT RUN,
+  доступ не расширялся и image-file не выдан за serving-process proof.
+- PASS browser до16:32:43: connected, Console error/warn0, relevant reads200,
+  overflowfalse. Повтор screenshot без результата в bounded ожидании,
+  capture cell остановлен; screenshot состояния NOT RUN. Последующий reload
+  ещё ожидает MCP; нельзя объявлять его выполненным без ответа.
+
+Read-only watcher принимает только exact descendant owner lineage и early
+ACK, без новых запусков/restore/grants/DB writes. Native Manager READ идёт;
+liveplanned=true, новый Architect own-catalog/full EOF, actual Developer,
+внутренние reviews/fixes/final READY и full65 остаются OPEN.
+
+Повтор16:40:35: reload рабочей38 завершён16:35:53, connected восстановлен.
+Обычный Manager вызвал native `launch_workflow` seq173. Создан настоящий
+Workflow `run_IiwY_MWXvabNvleji5g4FWRq`, session
+`ses_c4SPEZ00545MiayW9T4q-T7X`, coordinator turn
+`trn_pcJHNN8o_bhgRjNfZR4CdwVI`/attempt1, node
+`nod_lj-VznrYiA-pTQ_a61nw2zvq`, RUNNING2. Новый owner graph содержит35nodes,
+33planned=true; DOM35cards, connected=true/internalError=false/overflow=false,
+graph/events/ticket200, Console0. Это live read/rejoin proof прежнего
+WSplanned failure path, не доказательство full Workflow либо нового screenshot.
+Ранний coordinatorACK+sameUID/rejoin PASS: Podruntime-turn-437fe70743f005cf,
+UIDa154b32f-b268-4d14-a5ef-86a70da22254, rrev_ki2a08ZwDjfikh39mE5v5bLr,
+task/provider/inboxSHA256
+`8e58302214f9a3302231554ee00a855d0954a623ecf3bcb7d761c79b3bd71389`,
+instructions/file EQUAL, G5/ENV5/binding6. Expected child task/serving NOT RUN;
+повтор exec после cleanup container notfound, не restart.
+Bounded backend log reads PASS: gateway/runtime-controller окно10мин0B,
+control-plane10неструктурированныхстрок не интерпретируются как zero-errors;
+нет raw log dump. Второй screenshot графа пока ожидает MCP, visual NOT RUN.
+
 ## Checkpoint 07.10.2026 16:23 UTC — runtime-local file handoff, без изменения прав
 
 WS checkpoint `c90d16f1cc21ca73f1ff41f19406554ecdf42a1b` запушен;

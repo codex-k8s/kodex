@@ -10,6 +10,33 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 16:35 UTC: HEAD/remote/Draft1800 9927da57 EQUAL, G5 RC serving
+PID2193 ea5c3ece EQUAL. Один новый native Manager
+run_XrSQ3mwXYkiV1OQMztkLsowq/ses_C1f3862PU6VLWEGBRusmLB9e/
+trn_K8nKl0GpCKYKwSOgriWAPhuG/attempt1 принят16:30, RUNNING2/seq49.
+Task raw6868/56bc05e4 штатно trim→6867/cef2ce68: independent Node +ownerGET
++actualACK/inbox EQUAL; первыйraw comparisonFAIL сохранён. Instructions33151/
+56d22286 EQUAL, Podruntime-turn-797cc359c5fe6a32 sameUID/rejoin ready3/3.
+ActualproviderPID13/14 readback Permission denied NOT RUN, imagefile40f3268a
+EQUAL не заменяет serving proof. NativeREAD идёт, не duplicate/retry.
+Screenshot bounded noresponse NOT RUN, последующийreload ещёбезответа;
+Chrome38 последняя подтверждённая connected16:32:43/Console0/overflowfalse.
+Read-only child earlyACK watcher descendants8мин, ROOT владеетChrome.
+Full65/actualArchitectEOF/Developer/reviews/fixes/finalREADY OPEN.
+
+Повтор16:40:35: Chrome38 reload16:35:53 подтверждён/connectedtrue.
+Manager native launch_workflowseq173 → run_IiwY_MWXvabNvleji5g4FWRq/
+ses_c4SPEZ00545MiayW9T4q-T7X/trn_pcJHNN8o_bhgRjNfZR4CdwVI/attempt1.
+LiveWSplannedPASS:35graphnodes/33planned/35DOMcards, connectedtrue,
+internalErrorfalse/Console0/API200/overflowfalse. CoordinatorACK/rejoinEQUAL,
+ownertuplepinsEQUAL/G5/imagefile40f3268a; expectedtask/servingNOTRUN.
+Workflow→descendant run_CLaB0S7TqixR0gN_3DYIUn7y/
+ses_oLhB2CSfv-Z6h7fq88hTf12A/trn_RINAFGV9_9_x6_0d4CdjiQdX/attempt1
+earlyACK16:41:24capturedexactlineage, stageROOTещёнепроверен.
+Второйgraph screenshot сноваMCPpending, visualNOTRUN.
+
+## Предыдущий checkpoint16:23
+
 07.10.2026 16:23 UTC: source/remote/Draft1800 c90d16f1; поверх него frozen
 4callback hints/tests +backend invariant +2journals готовы к commit/push.
 ROOT fullcallbackGo1.26.6 4.670s/vet/build/diff PASS; host/Pod files/server
