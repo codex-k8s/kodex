@@ -202,6 +202,100 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 06:28–06:33 UTC — причинность SYSTEM MCP и штатный global scope
+
+Exact diagnostic run_nZxycoAkP6UAx_QoXRoymFbP, turn
+trn_n6qBVTjblt7Sfe4f79D3UhIe, conversation cnv_m7RUA8yzMlzU4Ru_PYIUoh30:
+owner READ200 FAILED/version2; exact Pod runtime-turn-58d0204f5f5cdf98,
+UID71ad28d8-c358-4bfb-b9e6-2d537365286a, закрытый log stage CATALOG_BINDING.
+Actual immutable revision rrev_vEVteQep3wgiJYY52qQL9fGa SYSTEM+projectRef,
+FileCatalog138; old G10 expected14, producer15, diff только read_file.
+Fresh failure доказан до provider, без plan/effects. Watcher exit0/capturedInputs1.
+Предыдущий run_ok2U541… остаётся causal UNKNOWN: его exact input не сохранён.
+
+Source AppShell/context/api/store/CP snapshot capture подтверждает штатный
+global route /organization/assistant/environment: свежий SYSTEM conversation
+без projectRef имеет session.project_id=NULL, FileCatalog не создаётся.
+Это существующая owner/org authority boundary, не подмена runtime/grants
+и не fallback decoder. Новый native conversation cnv_Lk5LZWYhDLIgNBTTy308VK7f
+создан UI06:32:15; owner store selectedConversation SYSTEM/projectRefnull.
+Один submit стандартного UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE DRAFT:
+run_NtLhopH70zVQqgJtgisnuOp-/trn_9Aa1HZwICzqShAZaI2HS7Swy QUEUED.
+Native success/build ещё NOT RUN. ROOT-only GETconversation(ref)405 —
+неподдерживаемый read path, не platform failure; использован штатный store.
+Chrome own5, CONNECTED, relevant native API200; foreign6/13–17 не изменены.
+
+Fresh global actual input proof: rrev_CfBDDllZGEkXDpkahg7wbi9c,
+digest87051ef4…6b57c, hasProject=false/FileCatalog=false/delegationTargets0,
+Context7 profile1/grants2, oldG10 image04d4263b…3df5e. Exact Pod
+runtime-turn-2501cb39e5396fcc/UID960b12b0-0a29-4c68-abe6-d1647d5b01dd
+Running, role/provider/relay READYtrue/restarts0. Global expected9=producer9:
+5assistant/base+2integration+2Context7; project file/delegation tools
+штатно отсутствуют. Runtime readiness достигается после exact MCP startup
+compare; это доказательство startup PASS, не конечного plan/effect outcome.
+
+### 07.10.2026 06:07–06:22 UTC — PROJECT G5 допущен и опубликован
+
+Дополнение06:27 UTC: native Review ENV draft Validate200 VALID/version2,
+validation/target digest f1d75600ddb82f62f01e673a3ea10f3b538419b2dae3f0e05b3e5a261afe9ca8.
+Impact rvip_25Gp4Isi3ovW09NSazTDN4pO/201 показал ровно5 intended Review
+потребителей (без Developer). Screenshot compact modal PASS, all5 selected.
+Publish200 один раз: draft PUBLISHED/version3, ENVversion5/revision5,
+renvv_-0WysH45SV7kvjfxUwLb7_1b, digest совпал. Fresh impact READ200 APPLIED,
+каждый из5 items outcome APPLIED. Runtime configuration каждого5 READ200:
+bindingversion6, exact new revision/image artifactG5/f8b60814, tools38.
+Console0 после nativeSSO restoration. Developer/helper bindings ещё NOT RUN.
+
+Native SSO восстановлен06:25:17 после наблюдавшегося HTTP401/logout.
+Fresh readback absolute expiry18:25:17 UTC (12h), access expiry07:25:18,
+sliding expiry06:40:18, renewAfter06:35:18/BACKEND_REFRESH. Периодическое
+обновление страницы не заменяет штатное продление sliding сессии; отдельная
+диагностика WS/read dependency отказов продолжается. Значения credentials
+в output не передавались. Ранее disconnected screenshot не называется PASS.
+
+На source047f1898 (runtime delivery0d43cd0b) exact remote/Draft1800/body
+readback PASS. Build imgbld_ACNFBXnwoofhOguwhwRLBGjo COMPLETED, recipe9/G5;
+artifact imgart_Jtox7MxUELEPagOiOZT1BeCf, manifest
+`sha256:f8b6081413a12095ee1dd84e5a78afa6547fd8b2519caddaec79ad5d1748041c`.
+Admission1 REJECTED06:07:52: полный отчёт4640 matches/2938 advisories,
+suppressed2315/no-fix459, ровно2 blocking HIGH — undici6.27.0
+GHSA-rfgv-xxqx-mfg5 (fix6.28.1), tar7.5.19 GHSA-r292-9mhp-454m (fix7.5.21).
+Filtered blockingOnly READ200 вернул оба finding и пустой nextPageToken;
+image/build/policy/report pins совпали. Owner UI reason обязателен, exact
+digest/report показаны, screenshot layout PASS без переполнения.
+
+Native ACCEPT_RISK imgrisk_x-zm1S3w8l4IdfoDqys6BRsC/version1 сохранён06:13:10,
+только local trusted QA, policy1/a0ead18a, report projection
+8a0e23b89fd45b312b7d764c4a4e41f9c533130db34c34b72de731b61fdf78f8;
+evidence e81979f5. Предыдущий receipt0eeab008 остался immutable.
+Attempt2 imgadm_OI72Km-3xEStiDZvh-pSPnSf/fence3 ACCEPTED/version3,
+signed receipt e7d2a7b518cbcfc560769fea0b8b88547959ea4e886f8f5065c5471b396c02df.
+Native promotion POST202 выполнен один раз; READ06:17:56 HTTP200:
+recipe10, activeArtifact version10 ACCEPTED/PROMOTED. Новые ENV bindings
+и full-file/Workflow acceptance этим ещё не доказаны.
+
+Native PROJECT Review ENV prepare run_WpT63aZPxQKlA7k9tEFdaMwd подготовил
+pln_UGRMaafb1Dd30UsDDY4A0VVQ rev1: одна PREPARE_RUNTIME_ENVIRONMENT_REVISION,
+target selfdev-review/version4, image oldG4→newG5, остальные parameters
+не переданы и наследуются сервером. Validate200 VALID/version2;
+первый stale Apply UID timeout не сделал application request, base4/VALID
+readback; fresh Apply200 APPLIED/version3, draft
+renvd_Rf8-9ItrcsnH4Zza90N1l7Qq. ENV Validate/Impact/Publish пока NOT RUN.
+
+SYSTEM native own recipe update run_ok2U541VcbiDjxBDQh_SkMsP FAILED
+06:14:38 до provider с RUNTIME_MCP_UNAVAILABLE; причина UNKNOWN.
+Safe owner preview complete/materialization9fbe6fb9, но placeholders FILES/TOOLS
+не доказывают actual input/cause. Read-only watcher ждёт новый diagnostic turn;
+conversation cnv_m7RUA8yzMlzU4Ru_PYIUoh30 created, turns0 после disabled input,
+не было повторного submit/plan. WebSocket reconnect наблюдался на ENV screen;
+HTTP запросы200, отдельная диагностика выполняется. Исторические ROOT-only
+диагностические GET400 (pageSize200), GET412 (неверный report pin) и GET404
+(несуществующий plan read endpoint) сохранены как ошибки диагностики, не
+platform failures; после reload recipe Console0/relevant promotion202/READ200.
+CP52/GW30/RC51/archive10 observed==generation/Ready1; первое ошибочное имя
+session-archive-controller NotFound исправлено read-only чтением session-archive.
+Whole65/full33 остаются OPEN, goal ACTIVE, чужие Chrome tabs не затронуты.
+
 ### 07.10.2026 05:46–06:03 UTC — exact delivery и native PROJECT generation5
 
 Source/remote/Draft1800 `0d43cd0b783b47f4e82e32ff66d46d18e108b486`

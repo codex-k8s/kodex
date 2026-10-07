@@ -10,6 +10,61 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 06:33 UTC: PROJECT G5 admission/promotion PASS; Review ENV
+публикация завершена. Draft renvd_Rf8-9ItrcsnH4Zza90N1l7Qq PUBLISHED/version3,
+ENVversion5/revision5/renvv_-0WysH45SV7kvjfxUwLb7_1b. Impact
+rvip_25Gp4Isi3ovW09NSazTDN4pO APPLIED: все5 Review consumers APPLIED;
+fresh runtime configuration каждого5 bindingversion6/exact new G5/tools38.
+Developer/helper ENV ещё не обновлены; native EOF/full33 NOT RUN.
+
+Свежий SYSTEM diagnostic run_nZxycoAkP6UAx_QoXRoymFbP FAILED/version2:
+exact immutable input SYSTEM+projectRef+FileCatalog138, old G10 expected14,
+producer15 (единственное дополнение read_file), exact Pod log CATALOG_BINDING.
+Не transport/auth/schema failure. Старому run_ok2… причинность не приписана.
+Штатный новый global SYSTEM диалог cnv_Lk5LZWYhDLIgNBTTy308VK7f создан
+с /organization/assistant/environment, owner conversation state projectRefnull;
+run_NtLhopH70zVQqgJtgisnuOp-/trn_9Aa1HZwICzqShAZaI2HS7Swy QUEUED.
+Запрошен один DRAFT собственного ORGANIZATION recipe update standard;
+никакие grants/catalog/legacy decoder не изменены. Дождаться native plan,
+Validate/Apply → build/admission/promotion → SYSTEM ENV publication.
+
+SSO вновь штатно авторизован06:25:17: absolute18:25:17 UTC (12h), sliding
+06:40:18, renewAfter06:35:18; проверить реальный renew, reload его не заменяет.
+Chrome5 navigation06:31:36, next≤06:36:36; чужие6/13–17 не трогать.
+Source/remote/Draft1800 047f1898, runtime delivery0d43; docs checkpoint DIRTY.
+Whole65/full33 OPEN, goal ACTIVE.
+
+## Предыдущий checkpoint06:22
+
+07.10.2026 06:22 UTC: remote/Draft1800 exact047f1898 подтверждены readback,
+тело PR содержит delivery checkpoint. PROJECT generation5 build COMPLETED;
+первый admission REJECTED только по двум blocking HIGH: undici6.27.0 и
+tar7.5.19. Native owner decision imgrisk_x-zm1S3w8l4IdfoDqys6BRsC сохранён
+06:13:10 для exact image f8b60814/report8a0e23b8/policy a0ead18a, только
+local dogfooding. Attempt2 imgadm_OI72Km-3xEStiDZvh-pSPnSf/fence3 ACCEPTED,
+receipt e7d2a7b; штатный promotion202 один раз, readback06:17:56
+activeArtifact imgart_Jtox7MxUELEPagOiOZT1BeCf version10 PROMOTED,
+recipeversion10. Старый refusal/report не переписаны, остальные checks сохранены.
+
+Native Review ENV run_WpT63aZPxQKlA7k9tEFdaMwd/plan
+pln_UGRMaafb1Dd30UsDDY4A0VVQ rev1 Validate/Apply PASS: только image,
+target renv_am09ABl3ulJb9PRi4QQ_E_I4/version4; draft
+renvd_Rf8-9ItrcsnH4Zza90N1l7Qq создан, publication ещё NOT RUN.
+Apply stale UID timeout закрыт readback VALID/no application/base4;
+после fresh click APPLIED/version3. Не создавать повторный draft.
+Следующие этапы: validate/impact/publish Review(5), Developer(1), helper(1),
+fresh binding/image proof → native EOF → новый full33.
+
+SYSTEM own recipe update run_ok2U541VcbiDjxBDQh_SkMsP FAILED до provider:
+RUNTIME_MCP_UNAVAILABLE. Причина пока UNKNOWN, старый input Pod уже удалён;
+не считать один старый image pin доказательством catalog mismatch. Read-only
+watcher готов для одного нового SYSTEM диагностического хода, без plan/effects.
+Новая diagnostic conversation cnv_m7RUA8yzMlzU4Ru_PYIUoh30 пока turns0:
+Chrome inputs были disabled при reconnect; submit отсутствует. Reload06:22:25,
+следующий≤06:27:25, чужие вкладки6/13–17 не трогать. Goal ACTIVE/full65 OPEN.
+
+## Предыдущий checkpoint06:03
+
 07.10.2026 06:03 UTC: source/remote/Draft1800 exact0d43 PASS. Full runner
 2d1efe7f/binary40f3268a/provenance018e64ea и worker0db667ff verified/seeded.
 Fresh render b89d18e9 PASS после выбора private Go1.26.6 PATH; исторический
