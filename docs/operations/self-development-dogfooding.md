@@ -158,6 +158,100 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 02:51 UTC — диагностика точного файлового каталога
+
+Для предыдущего literal §43 результат остаётся BLOCKED: owner download не
+заменяет чтение файла сотрудником. Source-диагностика выявила два обязательных
+условия: `entry_ref` назначается заново каждому RuntimeRevision, а digest
+файлового инструмента имеет формат `sha256:<64hex>`. Передача чужого `vfe_`
+либо bare hash в задании не доказывает доступ к файлу получателя. Фактические
+параметры отказавшего вызова пока UNKNOWN; platform defect не объявлен.
+Следующий адресный READ-only сценарий должен сначала найти файл по имени в
+собственном RUN_RESULT каталоге и использовать возвращённый exact tuple.
+Guards не ослабляются, прежний завершённый root не перезапускается.
+
+После reload собственного Chrome5 screenshot шестиузлового графа подтвердил:
+обе обратные скруглённые дуги проходят над карточками; Console error/warn0,
+graph/events HTTP200. Историческая DNS ошибка предыдущей навигации сохраняется.
+
+### 07.10.2026 02:46 UTC — переменные организации, точные инструкции и чистый Chromium-повтор
+
+Проверенный checkpoint `e2e9e52da5e0fbd99cb6ccca26d0bf6fad29a998` опубликован:
+remote и Draft PR1798 head совпали после отдельного readback. Новые четыре
+файла control-plane проверяются отдельно как адресный dirty closure;
+полный65/33step по-прежнему OPEN.
+
+- Найден и исправлен пропуск `organization.name` в prospective AGENT и
+  WORKFLOW_STAGE: прежний scoped запрос теперь читает имя из авторитетной
+  organization, Scan сохраняет его в snapshot Variables. RuntimeRevision
+  прошлых RUN и правила полномочий не изменены. Host/serving Pod SHA файлов
+  совпали: context `c4047c2a1b63172e9f14bb6f008b5cfa9da886a4cf58a2f42eee913203074d79`,
+  SQL `5f43430da20babf7df978f727962dceef5d03bfb51e8de2fa002e2eb4c66a23f`.
+- Native catalog для всех6 ролей HTTP200: organization.name/project.name/
+  agent.name/integrations.items AVAILABLE. Защищённый prospective preview
+  всех6 HTTP200/complete/diagnostics0: имя организации непустое, проект и
+  сотрудник подставлены. Полные значения и prompt не публиковались.
+  Первые ручные preview запросы ошибочно включали поле projectRef, которого
+  нет в typed PreviewInput: закрытый400/INVALID_REQUEST. Исправлен сам
+  диагностический запрос по контракту, не серверный validator.
+- Три коротких ordinary READ-only хода Architect/Documentation/Lexical
+  завершились SUCCEEDED без внешних WRITE. Для каждого ранний canonical ACK
+  CAPTURED: same Pod UID, G4,38tools, exact task/provider/inbox и instruction/file
+  EQUAL. Защищённый RUN preview полного текста дал тот же SHA, template и
+  materialization digest; роль и проект подставлены, Go-template syntax нет.
+  Architect `run_E42Q9OhTRmIXTEiV3Jd82lHO`, instruction SHA
+  `ceb1b7aad5fabfdec03d7d57c0d2f4c62b5caf42e99df1729766a4b0bcf29397`;
+  Documentation `run_Em5xqDVEdH90Kw3DxBONmROa`, SHA
+  `7f32e87535bf847fef7bf22f06908634e778323987bc4924673a1241ee40366e`;
+  Lexical `run_j5Uh-rzf_dX2MjhBBTayQkdw`, SHA
+  `8c46e373feb03ada47c7bda595258c1e7221292ff8a6202dc64479a32713e3fd`.
+  Вместе с предыдущими current Manager/Developer/Security это закрывает
+  exact ordinary instruction render proof шести ролей, не полный Workflow.
+- Synthetic Chromium на exact frontend subtree
+  `742da3cfe867750127315fa5b15f08780825c52f`:10/10 PASS одним запуском48.3с,
+  worker1/retries0. Canonical forced types и обе сборки PASS. Исходники,
+  assertions и fixtures не менялись;14screenshots, errors[] и unexpected
+  network[] сверены. Это disposable/mock evidence, не живой provider QA.
+  Прежний9/10 fixture FAIL сохранён, его причина socket reset не переименована
+  в доказанный продуктовый дефект.
+- Screenshot живого Manager graph1692: широкая округлая dashed callback дуга
+  над всеми карточками, стрелка видна. Console0, graph/events200. Новый экран
+  ordinary Architect также просмотрен; компактные карточки, без переполнения.
+- Для literal §43 запущен ровно один новый Manager READ-only root
+  `run_pp2maqn9EYz1kC9XQXFpYn5L`: последовательные Architect и Documentation
+  handoff без Workflow/GitHub WRITE. Initial ACK task/inbox/instructions EQUAL;
+  accepted Architect child `run_JeuLoBqn9JFv7k098fI9mduD` уже SUCCEEDED.
+  Второе делегирование и итоговые файлы пока не подтверждены; не повторять root.
+
+Уточнение02:48: root и два child завершились SUCCEEDED, оба callback получены.
+Однако семантический результат BLOCKED, не PASS: Documentation штатные
+preview_file/get_file_metadata вернули TOOL_UNAVAILABLE/retryablefalse.
+Owner DOWNLOAD200 полностью сверил Arch handoff416B/SHA
+`1d09702e940c5aa7a7ad46c2f38de58f36b16a5d11319de11ff9ed69b1e6df81`
+и Doc результат1387B/SHA
+`bdab5c89847b07018fce592713f9ac89b9df66a31bf2af67cfa9c140554d5efa`.
+Последний честно указывает, что digest из задания не является прочтением файла;
+его текст и финальный Manager не подтверждают QA1797_DIRECT_DOC_OK. Корневая
+причина файлового инструмента исследуется, root не дублируется. На screenshot
+два внешних callback loop не скрыты карточками; одна browser DNS ошибка
+зарегистрирована отдельно и не выдаётся за чистую Console.
+
+Финальный frozen organization-name closure:4files/+93/-3, unit21PASS/0FAIL/
+0SKIP, vetPASS, public targeted disposable PG4testnodesPASS/0FAIL/0SKIP,
+SQLboundary/diffcheckPASS. Initial bridge readiness FAIL до tests, fixture
+proofPrincipal forbidden и selected PATH без pinnedGo сохранены. Поддерживаемый
+host-network повтор и canonical ResolvePrincipal в тесте исправили оснастку;
+production checks/guards не ослаблены.
+
+На exact e2e9e52 contract closure public Proto lint/build/repro-codegen,
+AsyncAPI validation/structural check, policy92invariants/repro, pinned OpenAPI
+toolchain/overlay2tests и SQLboundary PASS. На isolated WT с точно совпавшими
+inputs/config/frontend/output trees public OpenAPI Go/TS и AsyncAPI70Go/70TS
+generation PASS/netdiff0. Отдельный ad-hoc private-output generator FAIL сохранён:
+config.output победил CLI-o, canonical ROOT generated файл переписан теми же
+bytes, diff0. Повтор только в isolated WT. Whole contracts не объявлен равным
+historical49: GitHub2.5 изменён и проверялся своим отдельным contour.
+
 ### 07.10.2026 02:34 UTC — обычное делегирование и известные GitHub эффекты
 
 Source `8ca601bb60d649b181647f7734a14a675c7ad08d`; последний подтверждённый

@@ -172,3 +172,29 @@ func TestTemplateVariableAvailabilityUsesMaterializedValues(t *testing.T) {
 		}
 	}
 }
+
+func TestTemplateOrganizationNameAvailabilityRequiresMaterializedValue(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		variables map[string]string
+		available bool
+	}{
+		{"present", map[string]string{"organization.ref": "org_example", "organization.name": "Организация & проект"}, true},
+		{"missing", map[string]string{"organization.ref": "org_example"}, false},
+		{"empty", map[string]string{"organization.ref": "org_example", "organization.name": ""}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			available := materializedVariableAvailability(entity.PromptMaterializationSnapshot{Variables: test.variables})
+			if available["organization.name"] != test.available {
+				t.Fatal("organization name availability does not match the materialized value")
+			}
+			want := variableNotMaterialized
+			if test.available {
+				want = variableAvailable
+			}
+			if got := variableAvailabilityReason(entity.TemplateVariable{Name: "organization.name"}, available, true); got != want {
+				t.Fatal("organization name availability reason is inconsistent")
+			}
+		})
+	}
+}

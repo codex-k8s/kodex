@@ -281,10 +281,10 @@ func (repository *Repository) promptPreviewAgentForActorTx(ctx context.Context, 
 	snapshot := entity.PromptMaterializationSnapshot{ServiceTemplateRevision: promptservice.ServiceTemplateRevision,
 		TargetKind: promptservice.TargetAgent, TargetRef: ref, Variables: map[string]string{}}
 	snapshot.UnavailableVariables = map[string]string{"run.ref": "RUNTIME_CONTEXT_REQUIRED", "session.ref": "RUNTIME_CONTEXT_REQUIRED", "turn.ref": "RUNTIME_CONTEXT_REQUIRED", "node.ref": "RUNTIME_CONTEXT_REQUIRED"}
-	var name, purpose, projectName string
+	var name, purpose, projectName, organizationName string
 	err := tx.QueryRow(ctx, queryPromptPreviewAgent, pgx.StrictNamedArgs{"organization_id": current.organizationID, "agent_ref": ref}).Scan(
 		&snapshot.ContextPin.AgentRef, &name, &purpose, &snapshot.ContextPin.AgentVersion, &snapshot.ProjectRef, &projectName, &snapshot.Locale,
-		&snapshot.TemplateRef, &snapshot.TemplateContent, &snapshot.TemplateDigest, &snapshot.AgentCapabilities)
+		&snapshot.TemplateRef, &snapshot.TemplateContent, &snapshot.TemplateDigest, &snapshot.AgentCapabilities, &organizationName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.PromptMaterializationSnapshot{}, errs.ErrNotFound
 	}
@@ -300,6 +300,7 @@ func (repository *Repository) promptPreviewAgentForActorTx(ctx context.Context, 
 	snapshot.ContextPin.EnvironmentVersionRef, snapshot.ContextPin.EnvironmentDigest = view.Environment.CurrentVersion.Ref, view.Environment.CurrentVersion.Digest
 	snapshot.Variables["agent.ref"], snapshot.Variables["agent.name"], snapshot.Variables["project.ref"], snapshot.Variables["project.name"] = ref, name, snapshot.ProjectRef, projectName
 	snapshot.Variables["organization.ref"], snapshot.Variables["user.ref"], snapshot.Variables["task"] = current.organizationRef, execution.actorRef, purpose
+	snapshot.Variables["organization.name"] = organizationName
 	snapshot.Variables["user.name"] = execution.actorName
 	snapshot.Variables["environment.ref"] = view.Environment.CurrentVersion.Ref
 	tools := make([]runtimecontract.RuntimeEnvironmentTool, 0, len(view.Environment.CurrentVersion.Tools))

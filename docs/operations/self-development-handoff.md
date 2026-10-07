@@ -10,6 +10,41 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 02:46UTC: source/remote/PR `e2e9e52da5e0fbd99cb6ccca26d0bf6fad29a998`
+подтверждены. Dirty4 CP organization-name fix + journal; цель ACTIVE, full65/33OPEN.
+
+- Six current ordinary actual prompts теперь доказаны: Manager/Developer/Security
+  предыдущего checkpoint + новые Architect/Documentation/Lexical SUCCEEDED,
+  earlyACK/file/inbox/task EQUAL и full protected RUN SHA equal. Новый catalog и
+  full prospective previews6/6 показывают organization.name AVAILABLE/nonempty.
+- Public disposable organization-name PG адресный repeat4PASS/0FAIL/0SKIP;
+  finalunit21PASS/0FAIL/0SKIP, vet/SQLboundary/diffcheckPASS. Исходные bridge
+  fixture readiness FAIL и proofPrincipal fixture FAIL сохранены, guards не
+  ослаблялись. Final4filepatchSHA105a6dc1… уже проверен, можно commit.
+- Exact frontend subtree742da3cfe… unchanged: synthetic Chromium10/10 одним
+  запуском48.3с, canonical types/build PASS. Public Proto/OpenAPI/AsyncAPI/policy
+  checks и freshisolated generation/netdiff0PASS, handoffs MAINполностью прочёл.
+- Literal §43 root `run_pp2maqn9EYz1kC9XQXFpYn5L`, Architect child
+  `run_JeuLoBqn9JFv7k098fI9mduD` и Documentation child
+  `run_hYZIR21GVA1Krk2L0yoWk1k3` SUCCEEDED; оба callback есть. Но semantic
+  BLOCKED: Doc preview_file/get_file_metadata TOOL_UNAVAILABLE; actual handoff
+  не прочтён. Owner3fullfiles200/hashExact не заменяет read самим reviewer.
+  Source-диагностика: чужой entry_ref нельзя переносить между RuntimeRevision,
+  digest должен иметь sha256: prefix. Actual args отказа UNKNOWN; следующий
+  READ-only child сначала ищет файл по имени в собственном RUN_RESULT каталоге.
+  Не запускать тот же task заново. Initial earlyACK CAPTURED.
+- Own Chrome5 на этом root, последний explicit reload около02:50;
+  чужие6/13не трогать. Full prompt fresh-auth2minute gate не обходить.
+- Private publisher ожидает e2e9, remote old3a; push уже прошёл и readbackPASS.
+  PR body update отказал closed source guard после появления dirty4, PATCH не
+  выполнялся. После commit установить новые exact expectedHead/remote=e2e9,
+  опубликовать и readback, затем update-pr. Старое тело пока не обновлено.
+
+Далее: завершить 4filefix проверки/commit → literal2child handoff/readback →
+§44/45acceptance/checks → merge bootstrap/freshmain/pins → full33Issue1796.
+
+## Предыдущий checkpoint02:34
+
 07.10.2026 02:34UTC: source `8ca601bb60d649b181647f7734a14a675c7ad08d`;
 подтверждённый remote/PR `3a26d78a`. Цель ACTIVE, полный65/33step OPEN.
 
