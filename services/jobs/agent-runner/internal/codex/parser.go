@@ -711,14 +711,21 @@ func parseTokenUsage(raw json.RawMessage) (runtimecontract.TokenUsage, error) {
 }
 
 func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtimecontract.TokenUsage, error) {
+	const invalidBreakdownMessage = "Codex app-server token usage breakdown is invalid"
 	fields, err := decodeObject(raw, schema(
-		[]string{"cacheWriteInputTokens", "cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens"},
+		[]string{"cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens"},
 		"cacheWriteInputTokens", "cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens",
 	))
 	if err != nil {
-		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage breakdown is invalid")
+		return runtimecontract.TokenUsage{}, errors.New(invalidBreakdownMessage)
 	}
 	usage := runtimecontract.TokenUsage{ModelContextWindow: contextWindow}
+	// В schema rust-v0.160.0 поле необязательно с default 0, но null не разрешён.
+	if cacheWrite, present := fields["cacheWriteInputTokens"]; present {
+		if bytes.Equal(bytes.TrimSpace(cacheWrite), []byte("null")) || strictDecode(cacheWrite, &usage.CacheWriteInputTokens) != nil {
+			return runtimecontract.TokenUsage{}, errors.New(invalidBreakdownMessage)
+		}
+	}
 	values := []struct {
 		raw    json.RawMessage
 		target *int64
@@ -726,17 +733,16 @@ func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtime
 		{fields["totalTokens"], &usage.TotalTokens},
 		{fields["inputTokens"], &usage.InputTokens},
 		{fields["cachedInputTokens"], &usage.CachedInputTokens},
-		{fields["cacheWriteInputTokens"], &usage.CacheWriteInputTokens},
 		{fields["outputTokens"], &usage.OutputTokens},
 		{fields["reasoningOutputTokens"], &usage.ReasoningOutputTokens},
 	}
 	for _, value := range values {
-		if strictDecode(value.raw, value.target) != nil {
-			return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage breakdown is invalid")
+		if bytes.Equal(bytes.TrimSpace(value.raw), []byte("null")) || strictDecode(value.raw, value.target) != nil {
+			return runtimecontract.TokenUsage{}, errors.New(invalidBreakdownMessage)
 		}
 	}
 	if usage.Validate() != nil {
-		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage breakdown is invalid")
+		return runtimecontract.TokenUsage{}, errors.New(invalidBreakdownMessage)
 	}
 	return usage, nil
 }

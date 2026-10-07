@@ -10,6 +10,41 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 22:23 UTC
+
+Full65 ACTIVE, владелец повторно подтвердил автономию до08.10 14:00 Саратов.
+Chrome MCP PASS/reload22:20; page4 untouched. ROOT final parser-tree полный
+agent-runner unit/app16.508s/codex4.707s/vet/build PASS. Parser791ed49a,
+test16329041; optional default только absence, null всех counters deny.
+Адресный пакет готов к commit/push, immutable runner activation NOT RUN.
+Current ONE run_sfvWSr2p9B_JDuW_jUK6YYoU RUNNING2/latestseq294,
+90nativeREAD/182250из536156Б, EOF/artifact OPEN. Observer94720 ещё active
+с exactPodUID3230621a; не прерывать run/observer и не делать новый launch.
+После terminal/capture — repo-owned full runner/admission/promotion/native
+role configuration, затем полный Workflow.11/13/14/15 OPEN, internal final
+PR не merge/approve; screenshot/Console/Network/UX проверять по ходу.
+
+## Checkpoint 07.10.2026 22:18 UTC
+
+Full65 ACTIVE; опубликованный HEAD/remote/Draft1800
+`9fb4d4ee19330dc21897ece3a67e7fe5cbd8d534` EQUAL. Новая ONE native READ
+run_sfvWSr2p9B_JDuW_jUK6YYoU RUNNING2, session ses_FliFzWvYI8kf6cyOa_dOD1kG,
+turn trn_xbe6ZZPXGdW6SVJ78CStlPVX/attempt1. Task2470Б/hashd136146051ff719b932f54917e783910e4fd0dae5e61305727b1b9be2f76cc4c,
+early ACK EQUAL, G5image/filebinary EQUAL, template2ae45fb6/revision3.
+Observer session94720 уже следит за exactPodUID3230621a-b34a-4892-bd9e-f100db27580d,
+deadline3600s от22:12. Не запускать дубликат; polling stdout только закрытая
+диагностика, raw logs не раскрывать.40страниц/81910Б seq137, EOF/artifact OPEN.
+
+Current code пакет parser.go + новый parser_usage_compaction_test.go:
+exact0.160 optional cacheWriteInputTokens/default0, null всех counters deny;
+GO-DOC-001 invariant. Это не доказанная причина прежнего provider отказа.
+Первый полный ROOT agent-runner unit/vet/build PASS; повтор finaltree идёт.
+Новый runner image/admission/promotion/activation NOT RUN, действующий Pod
+не менять. Read-only repo-owned activation план готовится отдельно. После
+новой capture причины исправить exact boundary, затем полный native Workflow.
+Active transcript Chrome screenshot/Console0/runhistory200 PASS; page4 untouched.
+11/13/14/15 OPEN, final внутренний PR не merge/approve. Reload5мин до14Саратов.
+
 ## Checkpoint 07.10.2026 22:10 UTC
 
 Full65 ACTIVE до08.10 14:00 Саратов /10:00UTC. Опубликованный

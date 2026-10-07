@@ -10,6 +10,66 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 22:23 UTC — продолжение до 14:00 и final-tree проверки
+
+- Владелец повторно подтвердил автономную работу до08.10 14:00 Саратов
+  (10:00UTC); существующая Full65 goal ACTIVE, дубликат не создавался.
+  При обычных развилках выбирать рекомендуемый из2–3 вариантов; полномочия
+  не расширять. Chrome MCP подключён, рабочая вкладка1 reload22:20,
+  вкладка4 владельца не менялась; обязательные screenshot/Console/Network/UX
+  и reload каждые5мин сохраняются.
+- На окончательном parser дереве ROOT полный agent-runner unit PASS:
+  app16.508s/codex4.707s и все остальные packages; vet/build PASS.
+  Parser SHA256791ed49a05f53f8b0c5d45ccbcf0b0672a93de6b385a785b21cbe9f0b194036f;
+  regression test163290410f6b72283394db39ca76e401e4f313412f9ffcd0bf15636c913aa8ca.
+  Это локальные synthetic проверки exact0.160 usage contract, не live PASS.
+- Новый run_sfvWSr2p9B_JDuW_jUK6YYoU RUNNING2/seq294:90успешных READ,
+  checkpoint182250из536156Б. Native receipts послеseq137 SUCCEEDED,
+  EOF/artifact OPEN. Console error/warn0, run/history200, overflowfalse.
+  Exact-Pod observer94720 активен. Новый runner ещё не активирован;
+  текущую попытку не прерывать и не запускать дубликат.
+- Дальше: commit/push адресного parser пакета; подготовить новый full runner
+  repo-owned путём, дождаться terminal/capture текущей попытки, затем exact
+  admission/promotion и native configuration. Полный SOFTWARE_CHANGE,
+  внутренние Developer/reviews/fixes/READY и пункты11/13/14/15 остаются OPEN.
+
+## Checkpoint 07.10.2026 22:18 UTC — exact usage schema и новый наблюдаемый ход
+
+- Observer пакет опубликован: HEAD/remote/Draft1800
+  `9fb4d4ee19330dc21897ece3a67e7fe5cbd8d534` EQUAL, bot publication PASS.
+  Exact SHA65 capture/ACK tests PASS1.070s. Новый ONE обычный Manager
+  `run_sfvWSr2p9B_JDuW_jUK6YYoU` RUNNING, session
+  `ses_FliFzWvYI8kf6cyOa_dOD1kG`/turn `trn_xbe6ZZPXGdW6SVJ78CStlPVX`/attempt1.
+  Task2470Б/hashd136146051ff719b932f54917e783910e4fd0dae5e61305727b1b9be2f76cc4c;
+  expected/inbox/instructions EQUAL, template2ae45fb6/revision3, G5 image
+  и same-Pod image-file binary40f3268a EQUAL. Materialization4e32fb714b065782f54b8f260ef01021a18b030d23b7bb36333ee889256bf2e8.
+  Точный PodUID3230621a-b34a-4892-bd9e-f100db27580d; ранний bounded observer
+  запущен до первых READ. Capture закрытой terminal причины ещё OPEN.
+- Public seq137:40страниц/81910из536156Б; новый EOF/artifact пока OPEN.
+  Chrome actual active transcript screenshot PASS: user справа, commentary
+  слева, compact tools с раскрытием, «Работает» и точки у последней группы;
+  scroll/controls не перекрываются. Console0, run/history200, overflowfalse.
+  Все Running system Pods Ready; четыре исторических Failed сохранены.
+- Offline schema точного ELF CLI0.160.0/hash12eb3e81 подтверждает compaction
+  envelopes; доказанного mismatch здесь нет. Обнаружен иной FAIL: optional
+  cacheWriteInputTokens/default0 требовался parser как обязательный. Кроме
+  того, null числовых счётчиков принимался Go decoder как0. Исправлены только
+  этот optional default и закрытое отклонение null всех шести counters;
+  required поля, unknown/duplicate/type/overflow и Validate invariants сохранены.
+  Это не утверждение о причине прежнего provider отказа; current emitter
+  evidence для missing поля отсутствует, live активация нового runner NOT RUN.
+- Карта изменения: exact app-server schema → parser notification/usage →
+  проверенный Result.Usage → прежний completion/owner state. Actor/grants,
+  session/turn/attempt, terminal/cancel/retry/expiry и события неизменны;
+  нового lifecycle или API/codegen нет. GO-DOC-001 закрепляет различие
+  отсутствующего optional поля и недопустимого присутствующего значения.
+- TDD missing/null FAIL→PASS; семь synthetic regressions, включая
+  compaction→обычный terminal и отрицательные tuple/item fields. Первый ROOT
+  полный agent-runner unit PASS: app16.369s/codex4.813s и остальные packages;
+  vet/build PASS. После выделения локальной diagnostic constant выполняется
+  повтор на окончательном дереве. Новый immutable image/admission/promotion
+  и serving proof пока NOT RUN; действующий диагностический Pod не менять.
+
 ## Checkpoint 07.10.2026 22:10 UTC — отказ длинного чтения и ранний capture
 
 - HEAD/remote/Draft1800 `38b2ef6611110829cb9f00135d8137b682d654d2`
