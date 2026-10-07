@@ -10,6 +10,80 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 01:10 UTC: source `cb4136a92fef9942344914ee6b90f481b0c99047`;
+remote/PR пока `e652f64f`. Цель ACTIVE; полный65/33step остаётся OPEN.
+
+- `edbec1a9` исправляет reset slider при same-version usage overlay;
+  `cb4136a9` исправляет mobile grid/toolbar. Child15units/lint/format PASS.
+  Native Save: account8/limit10/active0 GET200. Native mobile390 screenshot
+  PASS: workspace/toolbar370px, table client370/scroll1120, кнопка целиком
+  внутри380px; Console0 и concurrency PUT200. Предыдущий mobile FAIL на50fda
+  не отменяется задним числом.
+- Native10:11 собственных PROJECT dialogs,11 distinct sessions;
+  01:07:14 и01:08:58 account8/limit10/active10, первые10 USER RUNNING,
+  11-й QUEUED. Все10 имеют whitelisted provider ACK с inbox/instructions EQUAL;
+  десятый прошёл startup re-claim с lease generation2/new Pod UID, первый
+  capture NOT_CAPTURED не скрыт. Это не immutable release acceptance.
+- Native Stop только первого:01:09:01 CANCELLED, остальные9 RUNNING,
+  active9 и11-й ещё QUEUED;11-й started01:09:06, completed01:10:00.
+  Hard reload сохранил refs/history; native header после rejoin CONNECTED.
+  Не утверждать полноту всех9 terminal до нового readback. Полное снижение
+  лимита с новым blocked demand и backend restart пока NOT RUN.
+- Old GitHub connection246 имеет118 enabled grants; безопасный exact snapshot
+  recipient/capability/policy/paths получен до DISABLE. Новый2.5 connection
+  готовится через PROJECT helper typed plan; старый UNKNOWN review invocation
+  НЕ повторять. Review5436151248 реально существует на PR1799/H=a22785d6.
+- Native history по selected conversation сохраняется при reload, но
+  несохранённые composer drafts живут только в памяти компонента и reload
+  их очищает. Не объявлять draft persistence PASS; новое хранение не добавлено.
+
+Далее: дождаться terminal own10wave, новый GitHub2.5 typed connection/credential/
+TEST и exact118 grants → native Manager/Developer response → адресные проверки,
+publish/merge/fresh main/pins → полный SOFTWARE_CHANGE Issue1796.
+
+## Предыдущий checkpoint00:54
+
+07.10.2026 00:54 UTC: source `48a717feef9a5a5d434255940dfea2c9281261b1`;
+remote/PR пока `e652f64f`. Цель ACTIVE, полный65/33step ещё не завершён.
+
+- Callback дуга и fit PASS: desktop1692, открытый drawer720 и mobile390;
+  сводка/toolbar разведены `95b8e4a8`, ROOT36tests/6suites PASS4.81s.
+  `64582287` исправил common.no; последняя graph навигация Console0/API200.
+- Doc branch.read plan `pln_2mDTIDTJKg2MZ-npEuADg3fT` APPLIED.
+  Native review действительно создан:5436151248/COMMENTED, exact PR1799
+  head a22785d6bbb1a33cac6c6a33d2fccbdb4743fec9. Его WRITE invocation
+  inv_Iz_O8YmcvEH_q7Q9FUldQBpO остался UNKNOWN: old schema int32 ошибочно
+  отклонила уже совершённый effect. НИКОГДА не повторять этот COMMENT.
+- `48a717fe`: новый canonical GitHub2.5 digest133fd4b1fc378bb8458f643dc104bf1cbf9ed625964d7c7deea98722884cd500,
+  безопасные JSON ID. Child104/1685tests+vet/codegen PASS,1fixture SKIP.
+  Native definitions GET200 подтвердил2.5/digest; host/CP Pod source hashes
+  совпали. Старое connection не перепривязывать при UNKNOWN: штатно DISABLE,
+  новый typed connection2.5, защищённая credential UI, TEST и exact grants.
+- `cca7971a`: ordinary continuation теперь сохраняет delegate_agent по
+  current capability; revoke закрывает catalog/command. На exactcca7971a
+  whole disposable PG Workflow11subtests PASS18.179s,4+5units PASS.
+  Native второй callback→Developer response ещё NOT RUN; ROOT не заменяет
+  Manager direct-launch и не переписывает old immutable input.
+- Native2: A/B действительно RUNNING, account6/limit2/active2 в00:47:52;
+  C QUEUED в00:48:15. A завершился до снижения лимита; account7/limit1
+  сохранил уже активные B/C (не A/B). StopB CANCELLED только выбранный ход;
+  B-Q1/Q2 завершились FIFO в same session. A/C unchanged; hard reload сохранил
+  B/history. Native trashB+restore выполнены; нужен final owner readback restore.
+  Actual10+11 queue, lowered-limit blocked demand, Stop при соседнем RUNNING
+  и реальный backend restart ещё NOT RUN. Восстановление исходного limit10
+  пока не подтверждено: slider10 выбран, Save tool не нашёл интерактивную
+  кнопку; fresh GET сохраняет version7/limit1/active0. Нужен новый native Save.
+- При последнем helper reload Console имел1 ERR_NAME_NOT_RESOLVED без URL;
+  выбранные Network slices не содержат failed/4xx/5xx. Это не Console0.
+  Provider table badge wrap отдельно проверяется, не считать native PASS.
+
+Далее: cutover2.5 без повтора effects → read existing review → native Manager
+делегирует Developer response; native concurrency → publish/merge/fresh main
+и source/image pins → полный SOFTWARE_CHANGE Issue1796. До actual10wave:
+fresh MemAvailable≥54272Mi, pressure=false, ownactive0, без тяжёлых сборок.
+
+## Предыдущий checkpoint00:32
+
 07.10.2026 00:32UTC: source `7fde1921`; подтверждённый remote/PR `e652f64f`.
 Callback fit `56d4a919`: Chrome screenshot PASS как без панели, так и с
 «Ходом работы»; вся дуга снаружи карточек и внутри видимой области.

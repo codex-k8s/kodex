@@ -158,6 +158,71 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 01:10 UTC — native10, Stop и мобильные настройки
+
+Source `cb4136a92fef9942344914ee6b90f481b0c99047`, remote/PR `e652f64f`;
+local trusted-cluster. Полный65 и финальный33step Workflow ещё OPEN.
+
+- `edbec1a9`: same-version usage не сбрасывает ввод slider; actual Save
+  подтверждён GET200: account8/limit10/active0. `cb4136a9`: mobile ancestor
+  grid и toolbar не обрезают controls; screenshot390 PASS, workspace370,
+  внутренний table scroll1120, кнопка целиком видима. Child15units/lint/format
+  PASS; Console0/concurrencyPUT200. Types/build нового source ещё NOT RUN.
+-11 native dialogs созданы/названы через UI. 01:07:14 и01:08:58 authoritative
+  account active10/limit10, первые10 USER RUNNING,11-й QUEUED;11 distinct
+  sessions. Все10 early+same-UID provider ACK CAPTURED, inbox/instructions
+  EQUAL и task_in_prompt=true. Ожидаемый original task digest comparison
+  NOT RUN: app добавляет свой контекст; не выдавать предполагаемый SHA за proof.
+  Десятый сначала NOT_CAPTURED, затем startup re-claim generation2/new UID
+  дал actual CAPTURED. Старый role-runtime exit1 — исторический FAIL startup,
+  причина ещё UNKNOWN; замена Pod не скрывается за общим green.
+- Stop первого01:09:01: USER/Run CANCELLED, active9, остальные9 RUNNING,
+ 11-й QUEUED. 11-й started01:09:06 после освобождения slot,
+  completed01:10:00. Hard reload сохранил exact refs/history и rejoin;
+  свежий native header CONNECTED. Конец остальных9 требует final readback.
+- Old connection246/2.4 имеет118 enabled grants: exact safe owner snapshot
+  recipients/capabilities/policies/paths получен до cutover. Новый2.5
+  connection/credential/TEST/grants ещё pending; old UNKNOWN GitHub review
+  invocation не переписывается и внешняя операция не повторяется.
+- Draft isolation при выборе сохраняется в памяти component; hardreload
+  очищает composer drafts. Persistence не реализована и не заявлена PASS.
+
+### 07.10.2026 00:54 UTC — review effect, два чата и исправления продолжения
+
+Source `48a717fe`, remote/PR `e652f64f`; только local trusted-cluster.
+Полный65 и итоговый33step Workflow остаются OPEN.
+
+- `95b8e4a8`: сводка и кнопки не перекрываются с drawer; большая callback
+  дуга полностью видна на desktop/drawer/mobile. Screenshot PASS, graph
+  Console0 и graph/events/bootstrap/session200. ROOT36tests PASS4.81s;
+  warning3 missing keys относится к ограниченному unit fixture, не native.
+- Применён Doc branch.read draft; native Review5436151248/COMMENTED на
+  PR1799/exact a22785d6 подтверждён независимым readback. Исторический
+  WRITE invocation UNKNOWN_OUTCOME из-за int32 output schema не переписан.
+  Общий цикл ещё не PASS: response не выполнен; прежний workspace FAIL
+  остаётся историческим FAIL, причина UNKNOWN.
+- Новая GitHub2.5 schema `48a717fe`:24provider-ID slots до JSON-safe2^53−1;
+  Issue/PR numbers/pagination/authority не расширены. Child104library/
+  1685adapter tests+vet/codegen PASS,1unrelated fixture SKIP. Actual definitions
+  GET200: version2.5/digest133fd4b1…4cd500; host/Pod source совпал. Old
+  connection/UNKNOWN не rebind/replay; новый connection/grants cutover pending.
+- `cca7971a`: ordinary callback сохраняет текущий каталог делегирования,
+  NULL system_key не обходит capability revoke. Whole PG Workflow11cases
+  PASS18.179s на exactcca7971a,4CP+5runtimecontract units PASS. First negative
+  PG FAIL до NULL correction сохранён в handoff. Native acceptance NOT RUN.
+- Native2: PROJECT helper, один FIXED account pacc_ZxWMOJE8BHvCZ_L9jCmHPwLu,
+  account6/limit2/active2 наблюдались00:47:52; A/B имеют разные sessions.
+  C QUEUED при active2 в00:48:15. A completed00:48:18, C started00:48:23;
+  account7/limit1/active2 в00:48:32 сохраняет B/C, а не A/B. StopB00:49:18
+  дал CANCELLED только trn_Njj3OrSakZ08A3hPwGiVXJIR. Q1 started00:49:23,
+  completed00:49:32; Q2 started00:49:37, completed00:49:44, одна B session
+  ses_z6kE2zZozUFgqaSzK4Pjhnbh. A/C completed без изменения. Hard reload
+  сохранил B и все5turns без дублей; native trashB ARCHIVEDv7, restore нажато.
+  Настройка10 возвращается штатно. Не выдавать эти факты за actual10+11,
+  Stop с соседним RUNNING, blocked demand после lowering или backend restart.
+- Helper reload Console1ERR_NAME_NOT_RESOLVED без доступного locator;
+  bounded Network slices не нашли failed/4xx/5xx. Console0 не заявляется.
+
 ### 07.10.2026 00:32 UTC — дуга целиком помещается; компактная таблица
 
 - `56d4a919`: границы callback-дуги входят в расчёт «Вместить».
