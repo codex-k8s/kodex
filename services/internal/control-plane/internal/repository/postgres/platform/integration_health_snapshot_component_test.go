@@ -62,9 +62,13 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 		}
 		return result
 	}
-	connection := func(key string) entity.IntegrationConnection {
+	connectionWithDefinition := func(key, definition string) entity.IntegrationConnection {
 		t.Helper()
-		created := execute(command.CreateConnection, key+"-create", nil, command.ConnectionInput{DefinitionKey: "context7", Name: "Synthetic health " + key, PublicConfiguration: map[string]any{"base_url": "https://mcp.context7.com"}}).Connection
+		configuration := map[string]any{"base_url": "https://mcp.context7.com"}
+		if definition == "github" {
+			configuration = map[string]any{"owner": "acme", "repository": "fixture"}
+		}
+		created := execute(command.CreateConnection, key+"-create", nil, command.ConnectionInput{DefinitionKey: definition, Name: "Synthetic health " + key, PublicConfiguration: configuration}).Connection
 		if created == nil {
 			t.Fatal("connection missing")
 		}
@@ -83,6 +87,7 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 		}
 		return fresh
 	}
+	connection := func(key string) entity.IntegrationConnection { return connectionWithDefinition(key, "context7") }
 	start := func(key string, c entity.IntegrationConnection) (entity.IntegrationConnection, string) {
 		t.Helper()
 		tested := execute(command.TestConnection, key+"-start", &c.Version, command.ConnectionInput{Ref: c.Ref}).Connection
@@ -117,6 +122,150 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 			t.Fatal("mutate isolated health configuration")
 		}
 	}
+
+	t.Run("projection pending READ retry preserves exact snapshot and bounded fenced attempts", func(t *testing.T) {
+		for _, definition := range []string{"github", "context7"} {
+			t.Run(definition, func(t *testing.T) {
+				c, ref := start("projection-"+definition, connectionWithDefinition("projection-"+definition, definition))
+				first := claim(c.Ref)
+				if first == nil || first["credential"] == nil {
+					t.Fatal("exact credential health claim missing")
+				}
+				var before, after []byte
+				if err := pool.QueryRow(ctx, `SELECT input_snapshot FROM control_plane.integration_connection_tests WHERE ref=$1`, ref).Scan(&before); err != nil {
+					t.Fatal(err)
+				}
+				var writesBefore, writesAfter int
+				if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.integration_invocations`).Scan(&writesBefore); err != nil {
+					t.Fatal(err)
+				}
+				pending := payload(first)
+				pending.Success, pending.SafeErrorCode = false, credentialProjectionPendingCode
+				result, err := complete("projection-"+definition+"-pending", first, pending)
+				if err != nil || result.Connection == nil || result.Connection.State != "TESTING" || result.Connection.MaskedCredentialsState != "CONFIGURED" {
+					t.Fatalf("projection pending invalidated credential: %v", err)
+				}
+				if claim(c.Ref) != nil {
+					t.Fatal("projection retry skipped backoff")
+				}
+				if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests SET updated_at=clock_timestamp()-INTERVAL '6 seconds' WHERE ref=$1`, ref); err != nil {
+					t.Fatal(err)
+				}
+				second := claim(c.Ref)
+				if second == nil || stringMap(second, "testRef") != ref || second["generation"].(int64) <= first["generation"].(int64) || stringMap(second, "fence") == stringMap(first, "fence") || stringMap(second, "leaseRef") == stringMap(first, "leaseRef") {
+					t.Fatal("projection retry reused fenced claim")
+				}
+				if err := pool.QueryRow(ctx, `SELECT input_snapshot FROM control_plane.integration_connection_tests WHERE ref=$1`, ref).Scan(&after); err != nil || !bytes.Equal(before, after) {
+					t.Fatal("projection retry replaced immutable input")
+				}
+				if _, err := complete("projection-"+definition+"-stale", first, payload(first)); !errors.Is(err, errs.ErrForbidden) {
+					t.Fatalf("old lease completed new attempt: %v", err)
+				}
+				if result, err := complete("projection-"+definition+"-ready", second, payload(second)); err != nil || result.Connection == nil || result.Connection.State != "CONNECTED" {
+					t.Fatalf("fresh projection test did not complete: %v", err)
+				}
+				if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.integration_invocations`).Scan(&writesAfter); err != nil || writesAfter != writesBefore {
+					t.Fatal("READ projection retry created invocation/WRITE work")
+				}
+			})
+		}
+	})
+	t.Run("projection pending does not retry permanent or general provider failures", func(t *testing.T) {
+		for index, code := range []string{"INTEGRATION_AUTH_REJECTED", "INTEGRATION_CREDENTIAL_UNAVAILABLE", "INTEGRATION_UNAVAILABLE", "INTEGRATION_RESPONSE_INVALID"} {
+			key := "projection-permanent-" + string(rune('a'+index))
+			c, _ := start(key, connectionWithDefinition(key, "github"))
+			item := claim(c.Ref)
+			if item == nil {
+				t.Fatal("permanent health claim missing")
+			}
+			bad := payload(item)
+			bad.Success, bad.SafeErrorCode = false, code
+			result, err := complete(key, item, bad)
+			if err != nil || result.Connection == nil || result.Connection.State != "DEGRADED" || claim(c.Ref) != nil {
+				t.Fatalf("permanent/general failure was retried: %s %v", code, err)
+			}
+		}
+	})
+	t.Run("projection pending stops at attempt or time budget", func(t *testing.T) {
+		for _, limit := range []string{"attempt", "time"} {
+			key := "projection-exhausted-" + limit
+			c, ref := start(key, connectionWithDefinition(key, "github"))
+			item := claim(c.Ref)
+			if item == nil {
+				t.Fatal("budget health claim missing")
+			}
+			query := `UPDATE control_plane.integration_connection_tests SET attempt=8 WHERE ref=$1`
+			if limit == "time" {
+				query = `UPDATE control_plane.integration_connection_tests SET created_at=clock_timestamp()-INTERVAL '91 seconds' WHERE ref=$1`
+			}
+			if _, err := pool.Exec(ctx, query, ref); err != nil {
+				t.Fatal(err)
+			}
+			bad := payload(item)
+			bad.Success, bad.SafeErrorCode = false, credentialProjectionPendingCode
+			result, err := complete(key, item, bad)
+			if err != nil || result.Connection == nil || result.Connection.State != "DEGRADED" || result.Connection.MaskedCredentialsState != "CONFIGURED" || claim(c.Ref) != nil {
+				t.Fatalf("projection budget retried or invalidated credential: %s %v", limit, err)
+			}
+		}
+	})
+	t.Run("projection pending does not adopt current configuration or credential drift", func(t *testing.T) {
+		for _, drift := range []string{"configuration", "credential"} {
+			key := "projection-drift-" + drift
+			c, _ := start(key, connectionWithDefinition(key, "github"))
+			item := claim(c.Ref)
+			if item == nil {
+				t.Fatal("drift health claim missing")
+			}
+			if drift == "configuration" {
+				mutateConfig(c.Ref)
+			} else if _, err := pool.Exec(ctx, `WITH credential AS (
+			INSERT INTO control_plane.integration_credential_revisions(ref,organization_id,connection_id,revision,secret_ref,secret_uid,secret_resource_version,content_sha256,created_by)
+			SELECT 'icr_drift_'||ref,organization_id,id,2,'kodex-system/synthetic#new_key','60000000-0000-4000-8000-000000000001'::uuid,'2',repeat('b',64),created_by
+			FROM control_plane.integration_connections WHERE ref=$1 RETURNING id,connection_id)
+			UPDATE control_plane.integration_connections c SET credential_revision_id=credential.id,version=version+1 FROM credential WHERE c.id=credential.connection_id`, c.Ref); err != nil {
+				t.Fatal(err)
+			}
+			bad := payload(item)
+			bad.Success, bad.SafeErrorCode = false, credentialProjectionPendingCode
+			if _, err := complete(key, item, bad); err == nil || claim(c.Ref) != nil {
+				t.Fatal("changed current pins authorized retry")
+			}
+		}
+	})
+	t.Run("projection pending cannot revive revoked owner test", func(t *testing.T) {
+		c, _ := start("projection-revoked", connectionWithDefinition("projection-revoked", "github"))
+		item := claim(c.Ref)
+		if item == nil {
+			t.Fatal("revoke health claim missing")
+		}
+		execute(command.SetConnectionEnabled, "projection-disable", &c.Version, command.ConnectionInput{Ref: c.Ref, Enabled: false})
+		bad := payload(item)
+		bad.Success, bad.SafeErrorCode = false, credentialProjectionPendingCode
+		if _, err := complete("projection-revoked", item, bad); err == nil || claim(c.Ref) != nil {
+			t.Fatal("revoked test was requeued")
+		}
+	})
+	t.Run("projection pending is forbidden for invocation WRITE completion", func(t *testing.T) {
+		invocationWorker := principal("integration-gateway", "platform.runtime.integrations.claim", "kodex-system-subject", "kodex-installation")
+		input := command.Command{Kind: command.CompleteIntegrationInvocation, Principal: invocationWorker,
+			Mutation: value.Mutation{IdempotencyKey: "health-projection-write-rejected"},
+			Payload: command.IntegrationInvocationInput{InvocationRef: "inv_projected_write", LeaseRef: "lea_projected_write", Fence: "fnc_projected_write",
+				Generation: 1, Success: false, SafeErrorCode: credentialProjectionPendingCode}}
+		if _, err := service.Execute(ctx, input); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("unowned invocation completion accepted: %v", err)
+		}
+		// Даже до разрешения реального invocation специализированный adapter
+		// отклоняет test-only код: наличие WRITE claim не изменит этот allowlist.
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		if _, err := r.completeIntegrationInvocation(ctx, tx, scope{}, input); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("test-only code authorized invocation completion: %v", err)
+		}
+	})
 
 	t.Run("immutable capture and stale before claim", func(t *testing.T) {
 		c, testRef := start("capture", connection("capture"))

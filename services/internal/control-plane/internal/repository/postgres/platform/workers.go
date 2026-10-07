@@ -27,6 +27,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+const credentialProjectionPendingCode = "INTEGRATION_CREDENTIAL_PROJECTION_PENDING"
+
 func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principal value.Principal, instance string) (entity.SystemAssistant, map[string]any, bool, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1036,7 +1038,8 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 
 func (repository *Repository) completeIntegrationConnectionTest(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.IntegrationConnectionTestInput)
-	if !ok || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !safeIntegrationErrorCode(payload.SafeErrorCode) {
+	if !ok || payload.Success && payload.SafeErrorCode != "" || !payload.Success &&
+		!safeIntegrationErrorCode(payload.SafeErrorCode) && payload.SafeErrorCode != credentialProjectionPendingCode {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 
@@ -1051,7 +1054,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 		healthCredentialInvalid = report.CredentialInvalid()
 	}
 	var testID, connectionID, connectionRef, storedDigest, state, leaseRef string
-	var definitionKey, connectionState, purpose string
+	var definitionKey, connectionState, purpose, definitionVersion, definitionDigest string
 	var connectionEnabled bool
 	var attempt int
 	var createdAt time.Time
@@ -1059,7 +1062,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	var expiresAt time.Time
 	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef, input.Principal.CallerWorkload).Scan(
 		&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt,
-		&attempt, &createdAt, &definitionKey, &connectionState, &connectionEnabled, &purpose,
+		&attempt, &createdAt, &definitionKey, &connectionState, &connectionEnabled, &purpose, &definitionVersion, &definitionDigest,
 	); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
@@ -1067,14 +1070,23 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	if state != "CLAIMED" || leaseRef != payload.LeaseRef || generation != payload.Generation || storedDigest != hex.EncodeToString(digest[:]) || time.Now().After(expiresAt) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
-	// Первый READ-test может опередить публикацию сетевой проекции нового
-	// OpenAPI origin. Только временную недоступность повторяем новой fenced
-	// попыткой; credential, schema, чужой adapter и WRITE здесь не повторяются.
-	if !payload.Success && payload.SafeErrorCode == "INTEGRATION_UNAVAILABLE" &&
-		definitionKey == "openapi-mcp" && connectionEnabled && connectionState == "TESTING" &&
+	// Повторяется только exact owner READ-test при задержке проекции credential
+	// либо прежней сетевой проекции OpenAPI, но не произвольный provider failure.
+	projectionPending := payload.SafeErrorCode == credentialProjectionPendingCode
+	if !payload.Success && (projectionPending || payload.SafeErrorCode == "INTEGRATION_UNAVAILABLE" && definitionKey == "openapi-mcp") &&
+		purpose == "OWNER_TEST" && input.Principal.CallerWorkload == "integration-gateway" && connectionEnabled && connectionState == "TESTING" &&
 		attempt < 8 && time.Now().Before(createdAt.Add(90*time.Second)) {
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, connectionRef, definitionKey, definitionVersion, definitionDigest)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		health, exists := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
+		if !exists || health.Risk != "READ" || health.ApprovalPolicy != "NONE" ||
+			definition.Spec.AdapterOwner != "integration-gateway" || definition.Spec.ExecutionRoute != "MANAGED_MCP" || definition.Spec.Readiness != "READY" {
+			return commandOutcome{}, errs.ErrForbidden
+		}
 		var requeuedRef string
-		if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestRequeueTransientOpenAPI,
+		if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestRequeueTransientHealth,
 			testID, leaseRef, generation).Scan(&requeuedRef); err != nil || requeuedRef != payload.TestRef {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -1084,6 +1096,10 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 		}
 		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION",
 			resourceRef: connectionRef, summary: "i18n:INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED"}, nil
+	}
+	if projectionPending {
+		// Исчерпанное ожидание проекции не доказывает невалидность credential.
+		payload.SafeErrorCode = "INTEGRATION_UNAVAILABLE"
 	}
 	nextTest, nextConnection, credentials := "SUCCEEDED", "CONNECTED", "CONFIGURED"
 	summary := "i18n:INTEGRATION_TEST_SUCCEEDED"

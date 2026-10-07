@@ -26,11 +26,12 @@ import (
 )
 
 const (
-	maximumResponseBytes        = 64 << 10
-	githubAPIBaseURL            = "https://api.github.com/"
-	syntheticServiceHost        = "integration-synthetic.kodex-system.svc.cluster.local"
-	exactCredentialSecretPrefix = "kodex-system/kodex-integration-credentials#"
-	credentialReadRetryInterval = 250 * time.Millisecond
+	maximumResponseBytes            = 64 << 10
+	githubAPIBaseURL                = "https://api.github.com/"
+	syntheticServiceHost            = "integration-synthetic.kodex-system.svc.cluster.local"
+	exactCredentialSecretPrefix     = "kodex-system/kodex-integration-credentials#"
+	credentialReadRetryInterval     = 250 * time.Millisecond
+	credentialProjectionPendingCode = "INTEGRATION_CREDENTIAL_PROJECTION_PENDING"
 )
 
 type Config struct {
@@ -276,12 +277,13 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	if err != nil || definition.ValidateConfiguration(configuration) != nil {
 		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	if definition.Spec.Adapter == "CONTEXT7" {
-		return adapter.testContext7(ctx, request)
-	}
 	capability, ok := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
-	if !ok || capability.ApprovalPolicy != "NONE" {
+	if !ok || capability.Risk != "READ" || capability.ApprovalPolicy != "NONE" {
 		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+	}
+	if definition.Spec.Adapter == "CONTEXT7" {
+		summary, err := adapter.testContext7(ctx, request)
+		return summary, healthCredentialError(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(definition.Spec.HealthCheck.TimeoutSeconds)*time.Second)
 	defer cancel()
@@ -299,12 +301,7 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	request.Input, request.EffectKey = map[string]any{}, "health-check"
 	result, err := adapter.Execute(ctx, request)
 	var safe *SafeError
-	if definition.Spec.Adapter == string(integrationpackage.AdapterOpenAPIMCP) &&
-		errors.As(err, &safe) && safe.Code == "INTEGRATION_CREDENTIAL_UNAVAILABLE" && safe.Transient {
-		// Монтирование нового Kubernetes Secret может отстать от owner-команды.
-		// Повторяется только READ health-test, без внешнего WRITE-эффекта.
-		return "", &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
-	}
+	err = healthCredentialError(err)
 	if errors.As(err, &safe) && safe.Code == emailapi.HealthNotReadyCode {
 		return safe.HealthSummary, err
 	}
@@ -315,6 +312,16 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 		return "i18n:INTEGRATION_TEST_SUCCEEDED", nil
 	}
 	return "i18n:INTEGRATION_TEST_SUCCEEDED", err
+}
+
+func healthCredentialError(err error) error {
+	var safe *SafeError
+	if errors.As(err, &safe) && safe.Code == "INTEGRATION_CREDENTIAL_UNAVAILABLE" && safe.Transient {
+		// Только READ health-test: ожидание exact проекции не означает неверный
+		// credential и не разрешает повтор обычного invocation/WRITE.
+		return &SafeError{Code: credentialProjectionPendingCode}
+	}
+	return err
 }
 
 func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, error) {

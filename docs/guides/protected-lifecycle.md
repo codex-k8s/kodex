@@ -391,6 +391,15 @@ component, contract, render и lifecycle suites выполняются по `GOV
 `GO-DOC-004`, `GO-DOC-005`, `GUIDE-DOC-003`, `GUIDE-DOC-004`,
 `INFRA-DOC-001`.
 
+Задержка проекции exact credential не равна отклонению credential провайдером.
+Только специализированный owner READ/NONE health-test может передать закрытый
+код ожидания проекции. Owner повторяет его с прежним immutable snapshot,
+новой fenced attempt и bounded бюджетом; current package/credential/config,
+enabled и workload route проверяются снова. Обычный invocation, WRITE,
+auth rejection, digest mismatch и произвольная сетевая ошибка нового retry
+не получают. Исчерпание ожидания проекции означает недоступность, не доказанную
+невалидность credential; authoritative read path — ledger test/connection.
+
 При сравнении delivery precondition с общим OCC агрегата служебный HEALTH или
 изменение отдельного grant не должны молча становиться отзывом неизменённой
 конфигурации. Исключение оформляется закрытым набором typed transitions и
