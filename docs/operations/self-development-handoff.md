@@ -10,6 +10,43 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 13:20 UTC: HEAD/remote/Draft1800
+`be34792fcaa5fa3686d3febd90de83d7ef249af4`, дерево чистое до следующего
+scoped checkpoint. Единственный Additional в прежней session
+`ses_vRH1wIvuaGqI2r6-M6lj--dE` создал
+`run_sZnVad4Qu34QxmBcLWQK-Iga` / `trn_s1dXSGZkj0YvydDaKvEPFWGF`,
+attempt1: technical SUCCEEDED/version3/seq59, semantic BLOCKED.
+Native read_file PASS: PROJECT manager-plan.md/revision1,2395B/EOF,
+digest958c4ae7562f247e4eb4c01429815730ca107f933b18b4f10ef1293ee3e732e4.
+Текущий blocker — launch_workflow: controller13:10:56 сообщает
+control_invalidargument; один вызов, acceptance отсутствует, graph3nodes/2edges
+без child Workflow. Launch-blocked artifact полностью прочитан owner PREVIEW.
+Exact ошибочные параметры неизвестны; не объявлять доказанным owner denial
+или конкретным alias mismatch. Owner опубликованный Workflow12/revision4
+содержит четыре required TEXT/LONG_TEXT ключа field-001..field-004, которых
+не было в заданиях Manager. Native schema пока не объясняет keyed input.
+Далее статическая подсказка без RPC/authority/retry changes и одно новое
+Additional с exact опубликованными input keys. CP InvalidArgument возвращается
+из owner transaction до Commit/с rollback; accepted launch не повторять.
+
+ACK Additional CAPTURED/rejoined: task2327B/SHAeab7d4d2 EQUAL independent
+host prompt; provider/history/inbox21387B/SHAf154a5a5 EQUAL,
+instructions/file26765B/SHAb68e69c7 EQUAL. RuntimeRevision
+rrev_KyENNqTcuAmtppAmKO_0AEKJ; G5/ENV5/binding6/tools38/grants19.
+Same-Pod servicing /proc/14/exe SHA40f3268a EQUAL captured image file;
+не новая независимая сборка role image. Chrome5 reload13:16, Console0,
+owner Workflow/run/artifact/event reads200. Full65/internalPR/reviews OPEN.
+
+Статическая schema guidance и адресный regression готовы: exact keys,
+required/type/options, без RPC/error retry/authority changes. Exact serving
+Go1.26.6 fullcallback4.360s/vet PASS; source/Pod4d4ec22d EQUAL,
+independent build и servicing /proc/1571/exe SHA71bcd605 EQUAL.
+HostGo1.27.1 initial binary comparison mismatch не PASS; exact повтор EQUAL.
+Controller ready/leader13:21:04. Сначала commit/push этого checkpoint,
+потом один Additional по exact input fields; прежние terminal не ждать.
+
+## Предыдущий checkpoint13:06
+
 07.10.2026 13:06 UTC: HEAD/remote/Draft1800
 `c9efed8b3a1cf27009578b5e3bd310587da1d455`, критерии и native Publish4 закреплены.
 Новый ordinary Manager запущен ровно один раз штатным UI/run POST201:

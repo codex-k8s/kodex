@@ -10,6 +10,51 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 13:20 UTC — чтение восстановлено, keyed input процесса
+
+HEAD/remote/Draft1800 `be34792fcaa5fa3686d3febd90de83d7ef249af4`.
+Один Additional той же Manager session создал
+`run_sZnVad4Qu34QxmBcLWQK-Iga`, turn `trn_s1dXSGZkj0YvydDaKvEPFWGF`,
+attempt1; terminal SUCCEEDED/version3/seq59, semantic BLOCKED отдельно.
+Native PROJECT manager-plan.md/revision1 прочитан до EOF2395B/exact digest
+958c4ae7562f247e4eb4c01429815730ca107f933b18b4f10ef1293ee3e732e4.
+Issue/main/openPR/PR1799/head/diff перечитаны штатными инструментами.
+
+Единственный launch_workflow получил owner InvalidArgument13:10:56,
+не timeout и не доказанный denial. Квитанции child/launch нет, graph3nodes/2edges
+без Workflow; Manager сохранил launch-blocked.md и не повторял действие.
+Owner PREVIEW артефакта200/full read подтверждает этот outcome.
+Ошибочные raw parameters не логировались и неизвестны; конкретный mismatch
+не доказан. Проверенный owner Workflow PUBLISHED12/revision4 требует
+четыре поля field-001..field-004; task не передавал их keys, статическая
+native schema не объясняла map по exact WorkflowInputField.Key.
+Исправляется подсказка/task, не authorization/контракт/lifecycle/retry.
+Failed owner transaction возвращает InvalidArgument с rollback до Commit;
+повтор accepted/UNKNOWN launch по-прежнему запрещён.
+
+- PASS early ACK task2327B/SHAeab7d4d2 EQUAL независимому host task;
+  provider/history/inbox21387B/SHAf154a5a5 и instructions/file26765B/
+  SHAb68e69c7 EQUAL. G5/ENV5/binding6/tools38/grants19,
+  RuntimeRevisionrrev_KyENNqTcuAmtppAmKO_0AEKJ.
+- PASS same-Pod serving /proc/14/exe SHA40f3268a EQUAL captured image file;
+  независимая новая сборка role image NOT RUN.
+- PASS Chrome5 reload13:16, Console0; owner workflow/run/events/artifact200,
+  foreign tabs сохранены. Полный SOFTWARE_CHANGE/internalDeveloper/reviews/
+  READY и остальные65 пункты OPEN.
+
+Scoped schema guidance: точные WorkflowInputField.Key, все required поля и
+declared type/options; отсутствующую схему получить до launch, не угадывать.
+RPC/authority/error mapping не менялись, новых API/grants/retry нет.
+Адресный TestWorkflowLaunch0.043s PASS на hostGo1.27.1;
+повтор на точном serving Go1.26.6: fullcallback4.360s/vet PASS.
+Source/Pod workflow_launch SHA4d4ec22d EQUAL; independently built
+CGO0/trimpath/buildvcsfalse Go1.26.6 и servicing /proc/1571/exe
+SHA71bcd6056c0ba52a0e19f7e29b7c970bf179b67ee64e5e5739a63c2f4dd53efc EQUAL.
+Первое сравнение hostGo1.27.1 mismatch не считалось PASS, повтор exact
+toolchain устранил различие. Hot controller ready/leader13:21:04.
+Нового live launch после подсказки пока NOT RUN; следующий шаг один
+Additional с четырьмя exact опубликованными полями в прежней session.
+
 ## Checkpoint 07.10.2026 13:06 UTC — понятная исправимая ошибка native чтения
 
 Criteria checkpoint `c9efed8b3a1cf27009578b5e3bd310587da1d455` commit/push/

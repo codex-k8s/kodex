@@ -25,6 +25,29 @@ func (client *workflowLaunchClient) LaunchWorkflowExecution(_ context.Context, i
 	return &controlplanev1.LaunchWorkflowExecutionResponse{Run: &controlplanev1.Run{Ref: "run_workflow001"}, LaunchRef: "wlaunch_workflow01", CallbackEdgeRef: "edg_callback001"}, nil
 }
 
+func TestWorkflowLaunchSchemaExplainsExactInputKeys(t *testing.T) {
+	tool := workflowLaunchTool()
+	schema := tool["inputSchema"].(map[string]any)
+	properties := schema["properties"].(map[string]any)
+	input := properties["input"].(map[string]any)
+	if input["type"] != "object" {
+		t.Fatal("workflow launch input must remain an object map")
+	}
+	for name, description := range map[string]any{"tool": tool["description"], "input": input["description"]} {
+		t.Run(name, func(t *testing.T) {
+			text, ok := description.(string)
+			if !ok {
+				t.Fatal("workflow launch input guidance is absent")
+			}
+			for _, requirement := range []string{"WorkflowInputField.Key", "every required field", "labels", "aliases", "obtain them before launching"} {
+				if !strings.Contains(text, requirement) {
+					t.Fatalf("workflow launch input guidance omits %q", requirement)
+				}
+			}
+		})
+	}
+}
+
 func TestWorkflowLaunchNativeCatalogAndClosedAuthority(t *testing.T) {
 	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: runtimecontract.AssistantScopeNone, ProjectRef: "prj_project001", Capabilities: []string{"platform.run.launch"}, LeaseRef: "lse_origin001", LeaseFence: "private-test-fence", LeaseGeneration: 7}
 	hasTool := func(input runtimecontract.RunnerInput) bool {
