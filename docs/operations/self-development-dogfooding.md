@@ -202,6 +202,81 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 08:49–08:53 UTC — Manager исправлен штатным планом
+
+- Helper создал единственный `pln_bpIYxKQa2dSZ00TSVEbi1Hxb`, операция
+  CREATE_INSTRUCTION_DRAFT, exact Manager/expectedVersion 9. ROOT сравнил
+  полный исходный и новый текст: 3091 → 3612 символов, неизменны prefix 337
+  и suffix 2707. Изменено только фазовое actual PR/SHA требование;
+  security, роли, полномочия, lifecycle и обязательный review сохранены.
+- Native owner Validate дал VALID2/problems `[]`, Apply — APPLIED3;
+  Manager10/draft `ins_04NnrCfFVvQRhIAwjW_Hlk2k` DRAFT2. Отдельный
+  instruction Validate — Manager11/VALID2/problems `[]`. В impact plan
+  выбран только Project Manager; штатная публикация дала Manager12,
+  PUBLISHED revision2/version2 и binding2/effective=true на новый ref.
+  Owner GET SHA256 полного опубликованного текста
+  `acd059570e70841d23b49d7df708f2e28f4400f984717f0e94e7764e8a9f6ece`
+  совпал с проверенным содержимым плана. Никакого managed detach или
+  ручного API/SQL write не было; fresh runtime claim ещё NOT RUN.
+- Найден realtime UX дефект: после helper Apply owner GET уже возвращал
+  draft, но открытая AgentDetailPage показывала прежнее состояние; после
+  hardreload появились draft и Validate. Source подтвердил отсутствие
+  instruction CREATE/VALIDATE invalidation event и синхронизации чистого
+  editor. Исправления FE/backend разделены по файлам; polling не добавлять,
+  не перезаписывать dirty пользовательскую форму. Полное исправление OPEN.
+- Frozen исправление failure watcher интегрировано в ROOT через apply_patch;
+  два file SHA256 совпали с frozen source. ROOT 50 failure tests PASS0.800s
+  и 12 ACK tests PASS0.273s; diff-check PASS. EOF, nonzero transport exit,
+  alive-after-EOF и реальный deadline разделены. Не более двух rejoin,
+  каждый same UID/pins/ACK; terminal/missing остаются NOT_CAPTURED.
+  Live исправленный watcher пока NOT RUN; old provider root cause UNKNOWN.
+- Chrome native инструкции/plan/impact проверены по snapshot/Console и
+  соответствующим API readback; errors/warnings 0. Свежий screenshot NOT RUN
+  после зависания capture. Следующий этап: новый full33 на опубликованной
+  инструкции Manager, ранние ACK всех ролей и внутренний Developer PR.
+
+### 07.10.2026 08:39–08:47 UTC — свежие SYSTEM и PROJECT чтения
+
+- На чистом SHA `60762898639b427395a4dca7776d9fa52e7a3215` Chrome MCP
+  восстановился без перезапуска. Рабочая вкладка 5; чужие вкладки не менялись.
+  Новый screenshot завис; свежая визуальная проверка — NOT RUN. Позднее
+  `list_pages`, snapshot, чтение, ввод и штатная навигация снова завершились.
+  Reload выполнен после проверки пустого composer; Console error/warn 0.
+- SYSTEM: новый `run_OZ59rN6b12B1chpfeFWFHF9R`,
+  `ses_6u9SCM5u0m4IA2x_FAmmo8KL`, `trn_NTJdWgFtH-qxpLocLS5iGuk3`,
+  attempt 1 завершился SUCCEEDED version 2. Авторитетные события 6–9:
+  CURRENT_CONFIGURATION; 10–12: Context7 resolve; 13–15: Context7 query;
+  17: TURN_COMPLETED. Ответ содержит выбранный `/python/cpython` и результат
+  проверки subprocess. Это live READ PASS, без планов и изменений.
+- Ранний ACK SYSTEM захвачен в том же Pod UID
+  `0bd4a36f-cf97-4fd1-933f-bf83135fb17b`: G11, ENV26/binding6,
+  task/inbox/instructions EQUAL, binary `40f3268a…c93b` EQUAL.
+  Protected preview complete с diagnostics `[]`; materialization
+  `264bdec2c044cf263570742a1e00d2bea1692f1c9979822f5a7372f53f3667c2`
+  и template `f4926f1b566084b89033593f9804e9ec04d04e706c659c769ccc30f070a1d962`
+  совпали с ACK. Сборщик failure вернул early EOF за 0.45 с, а не реальный
+  deadline; причина прежних FAILED ходов по этому результату не установлена.
+- PROJECT: новый `run_Yq_si_BeVFJDGhanmPEaZeHn`,
+  `ses_07I8JuxguIs7k9FF3kyQrn-6`, `trn_ufM0qBwaXSOyTty3M8C20vJt`,
+  attempt 1: первый запрос каталога TOOL_UNAVAILABLE, следующие три
+  SUCCEEDED, затем TURN_COMPLETED. Полное адресное чтение Manager установило
+  одинаковые published/effective revision `ins_-otL2zl0QPgcT0rlA8ajz3t6`,
+  digest `527e660e59d6532bef4c6438ed43089c3a345dc0b3b6b6eac536900d6463d527`.
+  Owner GET независимо подтвердил Manager v9, binding
+  `inb_g3bt8F__i8bdt5ywpXbvslD3` v1/effective=true и тот же revisionRef.
+  Поэтому для этого Manager применим native instruction impact/publish;
+  гипотеза managed override к нему не относится.
+- PROJECT ACK same Pod UID `2b2516a2-072d-453b-8dca-5ffa944759e8`:
+  G5, ENV8/binding7, task/inbox/instructions/binary EQUAL. Failure watcher
+  снова вернул early EOF за 0.49 с. Отдельная read-only диагностика same UID
+  и exact ACK доказала natural kubectl exit 0 без stderr/failure output;
+  это не provider PASS и не доказательство причины прежних отказов.
+- Helper подтвердил безусловное требование actual PR перед задачей в
+  действующей инструкции Manager. Запрошен один native DRAFT с полным
+  сохранением остальных правил и разделением INTAKE/review/final фаз.
+  Apply/impact/publish и новый full33 пока NOT RUN. Полные 65 разделов и
+  внутренний Developer PR/reviews/READY остаются OPEN.
+
 ### 07.10.2026 08:27 UTC — опубликованный checkpoint и границы продолжения
 
 - Код адресного каталога зафиксирован и опубликован на exact

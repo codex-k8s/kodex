@@ -25,6 +25,7 @@ _SPEC.loader.exec_module(ACK)
 Failure, require = ACK.Failure, ACK.require
 MAX_BYTES = 512 << 10
 MAX_LINE = 4096
+MAX_FOLLOW_REJOINS = 2
 STAGES = frozenset('SELECTION CONTEXT BROKER_REQUEST AUTH_READ MCP_BINDING MCP_BRIDGE '
                    'HOME_PREPARE ACCOUNT_PIN ARCHIVE_RESTORE PROCESS_START INITIALIZE SKILLS '
                    'ACCOUNT_READ THREAD_CALL THREAD_BIND MCP_READINESS USAGE_BASELINE '
@@ -149,15 +150,17 @@ def selected_pod(read, options, pending_identity=False):
 
 def stop_process(process):
     """Join собственного kubectl до закрытия private cache и stdout pipe."""
-    if process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            process.kill()
-    process.wait(timeout=2)
-    if process.stdout is not None:
-        process.stdout.close()
+    try:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        process.wait(timeout=2)
+    finally:
+        if process.stdout is not None:
+            process.stdout.close()
 
 
 def chunks(process, deadline, maximum=MAX_BYTES, now=time.monotonic):
@@ -170,13 +173,15 @@ def chunks(process, deadline, maximum=MAX_BYTES, now=time.monotonic):
                 continue
             data = os.read(process.stdout.fileno(), 4096)
             if not data:
-                return
+                return 'EOF'
             received += len(data)
             require(received <= maximum, 'PROVIDER_LOG_LIMIT')
             yield data
+    return 'DEADLINE'
 
 
-def diagnostic_from_chunks(stream, expected_ack=None, run_ref=None, scope='NONE'):
+def diagnostic_from_chunks(stream, expected_ack=None, run_ref=None, scope='NONE',
+                           deadline=None, now=time.monotonic):
     pending = bytearray()
     dropping = False
     acknowledged = expected_ack is None
@@ -216,7 +221,10 @@ def diagnostic_from_chunks(stream, expected_ack=None, run_ref=None, scope='NONE'
         result = consume(bytes(pending))
         if result is not None:
             return result
-    raise Failure('FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+    if deadline is not None and now() >= deadline:
+        raise Failure('FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+    require(acknowledged, 'FOLLOW_ACK_NOT_OBSERVED')
+    raise Failure('FOLLOW_STREAM_ENDED')
 
 
 class Kubectl:
@@ -251,7 +259,17 @@ class Kubectl:
         process = self.start(['logs', pod['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
                               '--follow', '--tail=256', '--timestamps=false'])
         try:
-            yield from chunks(process, self.deadline)
+            ended = yield from chunks(process, self.deadline)
+            if ended == 'EOF':
+                code = process.poll()
+                remaining = self.deadline - time.monotonic()
+                if code is None and remaining > 0:
+                    try:
+                        code = process.wait(timeout=min(0.5, remaining))
+                    except subprocess.TimeoutExpired:
+                        if time.monotonic() < self.deadline:
+                            raise Failure('KUBECTL_FOLLOW_EXIT_TIMEOUT') from None
+                require(code in (None, 0), 'KUBECTL_FOLLOW_FAILED')
         finally:
             stop_process(process)
 
@@ -277,12 +295,36 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
     current = selected_pod(read, options, pending_identity=True)
     require(current is not None and current['uid'] == pod['uid'], 'POD_CHANGED_BEFORE_FOLLOW')
     ACK.bind_pod(current, proof)
-    stream = follow(current)
-    try:
-        diagnostic = diagnostic_from_chunks(stream, expected_ack=proof,
-                                            run_ref=options.run_ref, scope=options.assistant_scope)
-    finally:
-        stream.close()
+    rejoins = 0
+    while True:
+        require(now() < deadline, 'FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+        stream = follow(current)
+        try:
+            diagnostic = diagnostic_from_chunks(stream, expected_ack=proof,
+                                                run_ref=options.run_ref, scope=options.assistant_scope,
+                                                deadline=deadline, now=now)
+            break
+        except Failure as error:
+            if str(error) != 'FOLLOW_STREAM_ENDED':
+                raise
+        finally:
+            stream.close()
+        # Нормальный EOF допускает только ограниченное переподключение к тому
+        # же Running Pod. Ошибка transport никогда не повторяется и не скрывается.
+        current = selected_pod(read, options, pending_identity=True)
+        require(current is not None, 'FOLLOW_POD_CLEANED')
+        require(current['uid'] == pod['uid'], 'POD_CHANGED_BEFORE_FOLLOW')
+        ACK.bind_pod(current, proof)
+        require(current['phase'] not in ('Succeeded', 'Failed'), 'FOLLOW_POD_TERMINAL')
+        require(current['phase'] == 'Running', 'FOLLOW_POD_NOT_RUNNING')
+        require(rejoins < MAX_FOLLOW_REJOINS, 'FOLLOW_STREAM_ENDED')
+        raw = read(['logs', current['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
+                    '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
+        rejoined = ACK.ack_from_logs(raw, options.run_ref, options.assistant_scope)
+        require(rejoined is not None, 'FOLLOW_ACK_NOT_OBSERVED')
+        require(rejoined == proof, 'FOLLOW_ACK_BINDING_MISMATCH')
+        rejoins += 1
+        sleep(min(0.5, max(0, deadline - now())))
     try:
         current = selected_pod(read, options, pending_identity=True)
     except Failure as error:

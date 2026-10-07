@@ -283,8 +283,121 @@ class CaptureTests(unittest.TestCase):
             CAPTURE.diagnostic_from_chunks(iter([CAPTURE.REQUEST_PREFIX.encode() + b'x' * 5000 + b'\n']))
 
     def test_no_diagnostic_is_not_pass(self):
-        with self.assertRaisesRegex(CAPTURE.Failure, '^FAILURE_NOT_OBSERVED_BEFORE_DEADLINE$'):
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FOLLOW_STREAM_ENDED$'):
             CAPTURE.diagnostic_from_chunks(iter([SENTINEL.encode() + b'\n']))
+
+    def test_only_elapsed_deadline_reports_no_failure_before_deadline(self):
+        clock = FakeClock()
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FOLLOW_STREAM_ENDED$'):
+            CAPTURE.diagnostic_from_chunks(iter([]), deadline=30, now=clock.now)
+        clock.value = 30
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FAILURE_NOT_OBSERVED_BEFORE_DEADLINE$'):
+            CAPTURE.diagnostic_from_chunks(iter([]), deadline=30, now=clock.now)
+
+    def test_no_follow_ack_at_early_eof_is_explicit(self):
+        proof, _, options = fixture()
+        expected = CAPTURE.ACK.project_ack({'event': CAPTURE.ACK.EVENT, 'proof': proof}, options.run_ref)
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FOLLOW_ACK_NOT_OBSERVED$'):
+            CAPTURE.diagnostic_from_chunks(iter([SENTINEL.encode()]), expected, options.run_ref)
+
+    def exercise_early_eof(self, after=None, rejoined_proof=None, later_diagnostic=False,
+                           transport_error=False, deadline_on_eof=False):
+        proof, columns, options = fixture()
+        clock, follows, closed, calls = FakeClock(), [], [], []
+        gets, logs = 0, 0
+
+        def read(args):
+            nonlocal gets, logs
+            calls.append(args[0])
+            if args[0] == 'get':
+                gets += 1
+                if gets >= 3 and isinstance(after, Exception):
+                    raise after
+                return after if gets >= 3 and after is not None else columns
+            logs += 1
+            value = rejoined_proof if logs > 1 and rejoined_proof is not None else proof
+            return json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': value}).encode()
+
+        def follow(pod):
+            follows.append(pod['uid'])
+            try:
+                yield json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof}).encode() + b'\n'
+                if transport_error:
+                    raise CAPTURE.Failure('KUBECTL_FOLLOW_FAILED')
+                if deadline_on_eof:
+                    clock.value = 30
+                if later_diagnostic and len(follows) == 2:
+                    yield request()
+            finally:
+                closed.append(True)
+
+        try:
+            result = CAPTURE.capture(options, read, follow, now=clock.now, sleep=clock.sleep)
+        except CAPTURE.Failure as error:
+            result = {'status': 'NOT_CAPTURED', 'code': str(error)}
+        self.assertEqual(len(closed), len(follows))
+        self.assertNotIn(SENTINEL, json.dumps(result))
+        return result, follows, calls, clock.value
+
+    def test_clean_eof_rejoins_same_uid_exact_ack_for_later_failure(self):
+        result, follows, _, elapsed = self.exercise_early_eof(later_diagnostic=True)
+        self.assertEqual(result['status'], 'CAPTURED')
+        self.assertEqual(len(follows), 2)
+        self.assertEqual(len(set(follows)), 1)
+        self.assertEqual(elapsed, 0.5)
+
+    def test_clean_eof_rejoin_budget_is_bounded_and_not_provider_pass(self):
+        result, follows, _, elapsed = self.exercise_early_eof()
+        self.assertEqual(result, {'status': 'NOT_CAPTURED', 'code': 'FOLLOW_STREAM_ENDED'})
+        self.assertEqual(len(follows), 1 + CAPTURE.MAX_FOLLOW_REJOINS)
+        self.assertEqual(elapsed, 0.5 * CAPTURE.MAX_FOLLOW_REJOINS)
+
+    def test_clean_eof_missing_terminal_and_pending_are_explicit(self):
+        _, columns, _ = fixture()
+        for after, expected in ((b'', 'FOLLOW_POD_CLEANED'),
+                                (columns.replace(b'|Running|', b'|Succeeded|'), 'FOLLOW_POD_TERMINAL'),
+                                (columns.replace(b'|Running|', b'|Failed|'), 'FOLLOW_POD_TERMINAL'),
+                                (columns.replace(b'|Running|', b'|Pending|'), 'FOLLOW_POD_NOT_RUNNING')):
+            with self.subTest(expected=expected):
+                result, follows, _, _ = self.exercise_early_eof(after=after)
+                self.assertEqual(result['code'], expected)
+                self.assertEqual(len(follows), 1)
+
+    def test_clean_eof_replacement_and_changed_binding_fail_closed(self):
+        proof, columns, _ = fixture()
+        changed = columns.replace(b'12345678-1234-1234-1234-123456789abc',
+                                  b'12345678-1234-1234-1234-123456789abd')
+        result, follows, _, _ = self.exercise_early_eof(after=changed)
+        self.assertEqual(result['code'], 'POD_CHANGED_BEFORE_FOLLOW')
+        self.assertEqual(len(follows), 1)
+        result, follows, _, _ = self.exercise_early_eof(after=columns.replace(b'a' * 64, b'c' * 64, 1))
+        self.assertEqual(result['status'], 'NOT_CAPTURED')
+        self.assertEqual(len(follows), 1)
+        result, follows, _, _ = self.exercise_early_eof(rejoined_proof=dict(proof, lease_generation=2))
+        self.assertEqual(result['code'], 'FOLLOW_ACK_BINDING_MISMATCH')
+        self.assertEqual(len(follows), 1)
+        result, follows, _, _ = self.exercise_early_eof(rejoined_proof=dict(proof, run_ref='run_foreign01'))
+        self.assertEqual(result['code'], 'FOLLOW_ACK_NOT_OBSERVED')
+        self.assertEqual(len(follows), 1)
+
+    def test_follow_transport_failure_never_rejoins(self):
+        result, follows, calls, _ = self.exercise_early_eof(transport_error=True)
+        self.assertEqual(result['code'], 'KUBECTL_FOLLOW_FAILED')
+        self.assertEqual(len(follows), 1)
+        self.assertEqual(calls, ['get', 'logs', 'get'])
+
+    def test_clean_eof_rejoin_read_failure_is_not_swallowed(self):
+        result, follows, calls, _ = self.exercise_early_eof(after=CAPTURE.Failure('KUBECTL_READ_FAILED'))
+        self.assertEqual(result['code'], 'KUBECTL_READ_FAILED')
+        self.assertEqual(len(follows), 1)
+        self.assertEqual(calls, ['get', 'logs', 'get', 'get'])
+
+    def test_follow_deadline_never_rejoins(self):
+        result, follows, calls, elapsed = self.exercise_early_eof(deadline_on_eof=True)
+        self.assertEqual(result['code'], 'FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+        self.assertEqual(len(follows), 1)
+        self.assertEqual(calls, ['get', 'logs', 'get'])
+        self.assertEqual(elapsed, 30)
 
     def test_follow_requires_same_exact_ack_not_only_pre_read_metadata(self):
         proof, _, options = fixture()
@@ -323,6 +436,26 @@ class CaptureTests(unittest.TestCase):
             status = CAPTURE.main(['--unknown-' + SENTINEL])
         self.assertEqual(status, 1)
         self.assertEqual(json.loads(output.getvalue())['code'], 'ARGUMENTS_INVALID')
+        self.assertNotIn(SENTINEL, output.getvalue())
+
+    def test_cli_follow_failures_emit_only_closed_code_and_no_private_exception(self):
+        _, _, options = fixture()
+        arguments = ['--run-ref', options.run_ref, '--session-ref', options.session_ref,
+                     '--turn-ref', options.turn_ref, '--attempt', str(options.attempt),
+                     '--image-manifest', options.image_manifest]
+        for code in ('KUBECTL_FOLLOW_FAILED', 'KUBECTL_FOLLOW_EXIT_TIMEOUT', 'FOLLOW_STREAM_ENDED',
+                     'FOLLOW_POD_CLEANED', 'FOLLOW_POD_TERMINAL', 'FOLLOW_POD_NOT_RUNNING',
+                     'FAILURE_NOT_OBSERVED_BEFORE_DEADLINE'):
+            output = io.StringIO()
+            with self.subTest(code=code), patch('sys.stdout', output), patch.object(
+                    CAPTURE, 'capture', side_effect=CAPTURE.Failure(code)):
+                self.assertEqual(CAPTURE.main(arguments), 1)
+            self.assertEqual(json.loads(output.getvalue()), {'status': 'NOT_CAPTURED', 'code': code})
+            self.assertNotIn(SENTINEL, output.getvalue())
+        output = io.StringIO()
+        with patch('sys.stdout', output), patch.object(CAPTURE, 'capture', side_effect=OSError(SENTINEL)):
+            self.assertEqual(CAPTURE.main(arguments), 1)
+        self.assertEqual(json.loads(output.getvalue()), {'status': 'NOT_CAPTURED', 'code': 'CAPTURE_IO_FAILED'})
         self.assertNotIn(SENTINEL, output.getvalue())
 
     def test_kubectl_exact_identity_private_cache_and_no_inherited_env(self):
@@ -371,6 +504,115 @@ class CaptureTests(unittest.TestCase):
         finally:
             CAPTURE.stop_process(process)
         self.assertIsNotNone(process.returncode)
+
+    def actual_follow(self, code, seconds=2):
+        process = subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        client = CAPTURE.Kubectl('/unused', time.monotonic() + seconds)
+        with patch.object(client, 'start', return_value=process):
+            try:
+                result = CAPTURE.diagnostic_from_chunks(client.follow({'name': 'synthetic'}),
+                                                        deadline=client.deadline)
+            except CAPTURE.Failure as error:
+                result = {'status': 'NOT_CAPTURED', 'code': str(error)}
+        self.assertIsNotNone(process.returncode)
+        self.assertTrue(process.stdout.closed)
+        self.assertNotIn(SENTINEL, json.dumps(result))
+        return result, process
+
+    def test_actual_follow_nonzero_eof_is_transport_error_not_deadline(self):
+        result, process = self.actual_follow('import sys;sys.stderr.write("' + SENTINEL + '");sys.exit(7)')
+        self.assertEqual(result['code'], 'KUBECTL_FOLLOW_FAILED')
+        self.assertEqual(process.returncode, 7)
+
+    def test_actual_follow_zero_eof_is_stream_end_not_deadline(self):
+        result, process = self.actual_follow('import sys;sys.stdout.write("' + SENTINEL + '\\n")')
+        self.assertEqual(result['code'], 'FOLLOW_STREAM_ENDED')
+        self.assertEqual(process.returncode, 0)
+
+    def test_actual_follow_partial_safe_line_is_consumed_on_clean_eof(self):
+        code = 'import sys;sys.stdout.buffer.write(' + repr(request().rstrip(b'\n')) + ')'
+        result, process = self.actual_follow(code)
+        self.assertEqual(result['kind'], 'REQUEST_FAILURE')
+        self.assertEqual(process.returncode, 0)
+
+    def test_actual_follow_deadline_terminates_and_joins_owned_child(self):
+        started = time.monotonic()
+        result, process = self.actual_follow('import time;time.sleep(30)', seconds=0.05)
+        self.assertEqual(result['code'], 'FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+        self.assertLess(process.returncode, 0)
+        self.assertLess(time.monotonic() - started, 1)
+
+    def test_actual_follow_eof_while_process_alive_is_exit_timeout_and_joined(self):
+        result, process = self.actual_follow('import os,time;os.close(1);time.sleep(30)')
+        self.assertEqual(result['code'], 'KUBECTL_FOLLOW_EXIT_TIMEOUT')
+        self.assertLess(process.returncode, 0)
+
+    def test_actual_follow_early_diagnostic_closes_stream_and_joins_owned_child(self):
+        code = ('import sys,time;sys.stdout.buffer.write(' + repr(request()) +
+                ');sys.stdout.flush();time.sleep(30)')
+        process = subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        client = CAPTURE.Kubectl('/unused', time.monotonic() + 2)
+        with patch.object(client, 'start', return_value=process):
+            stream = client.follow({'name': 'synthetic'})
+            try:
+                self.assertEqual(CAPTURE.diagnostic_from_chunks(stream)['kind'], 'REQUEST_FAILURE')
+            finally:
+                stream.close()
+        self.assertIsNotNone(process.returncode)
+        self.assertTrue(process.stdout.closed)
+
+    def test_follow_cancel_closes_stream_and_joins_owned_child(self):
+        process = subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(30)'],
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   stdin=subprocess.DEVNULL)
+        client = CAPTURE.Kubectl('/unused', time.monotonic() + 2)
+
+        def cancelled_chunks(*args):
+            yield SENTINEL.encode() + b'\n'
+            raise CAPTURE.Failure('CAPTURE_CANCELLED')
+
+        with patch.object(client, 'start', return_value=process), patch.object(
+                CAPTURE, 'chunks', cancelled_chunks):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^CAPTURE_CANCELLED$'):
+                list(client.follow({'name': 'synthetic'}))
+        self.assertIsNotNone(process.returncode)
+        self.assertTrue(process.stdout.closed)
+
+    def test_follow_observed_nonzero_exit_is_retained_at_deadline(self):
+        from unittest.mock import Mock
+        process = Mock(stdout=io.BytesIO())
+        process.poll.return_value = 7
+        process.wait.return_value = 7
+        client = CAPTURE.Kubectl('/unused', 0)
+
+        def ended_chunks(*args):
+            yield b''
+            return 'EOF'
+
+        with patch.object(client, 'start', return_value=process), patch.object(
+                CAPTURE, 'chunks', ended_chunks):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^KUBECTL_FOLLOW_FAILED$'):
+                list(client.follow({'name': 'synthetic'}))
+        self.assertTrue(process.stdout.closed)
+
+    def test_stop_process_escalates_to_kill_and_always_closes_stdout(self):
+        from unittest.mock import Mock
+        process = Mock(stdout=io.BytesIO())
+        process.poll.return_value = None
+        process.wait.side_effect = [subprocess.TimeoutExpired('synthetic', 1), 0]
+        CAPTURE.stop_process(process)
+        process.terminate.assert_called_once_with()
+        process.kill.assert_called_once_with()
+        self.assertEqual([call.kwargs['timeout'] for call in process.wait.call_args_list], [1, 2])
+        self.assertTrue(process.stdout.closed)
+        process = Mock(stdout=io.BytesIO())
+        process.poll.return_value = 0
+        process.wait.side_effect = subprocess.TimeoutExpired('synthetic', 2)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            CAPTURE.stop_process(process)
+        self.assertTrue(process.stdout.closed)
 
 
 if __name__ == '__main__':

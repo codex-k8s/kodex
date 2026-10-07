@@ -10,6 +10,53 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 08:53 UTC: runtime HEAD60762898 + ROOT watcher2/docs2 DIRTY.
+Manager native instruction фазовое actual PR требование исправлено штатно:
+helper plan `pln_bpIYxKQa2dSZ00TSVEbi1Hxb` APPLIED3 → instruction Validate
+→ impact с единственным Manager → Publish. Manager12/native revision2
+`ins_04NnrCfFVvQRhIAwjW_Hlk2k`, binding2/effective=true. Новый content SHA
+`acd059570e70841d23b49d7df708f2e28f4400f984717f0e94e7764e8a9f6ece`;
+полный minimal diff проверен, остальные правила неизменны. Fresh claim NOT RUN.
+Рабочая page5 Manager ?tab=instructions, reload08:51; Console0. Screenshot
+после hang NOT RUN, native snapshot/click/readback PASS, foreign6/13/18 нетронуты.
+SYSTEM CURRENT_CONFIGURATION + Context7 и PROJECT AGENT_CONFIGURATION
+fresh READ PASS; прежний first unavailable вызов сохранён в журнале.
+Watcher EOF fix root62 tests PASS/hash-match/diff-check; live NOT RUN.
+Параллельно FE assistant_frontend исправляет clean editor authoritative sync,
+backend manager_instruction_effective_path — instruction CREATE/VALIDATE
+existing AGENT_CHANGED атомарно. Только isolated WT/frozenpatch, не main.
+Сначала зафиксировать watcher/docs sameDraft1800 (privatepublisherprevious607),
+затем NEW full33 через native Workflow UI, новый Managerinstruction ACK и
+реальные внутренние роли/PR/reviews. Не повторять старый FAILED root.
+Goal ACTIVE; full65/full33/internal finalPR OPEN, finalPR не сливать.
+
+## Предыдущий checkpoint08:47
+
+07.10.2026 08:47 UTC: чистый runtime SHA/remote/Draft1800
+`60762898639b427395a4dca7776d9fa52e7a3215`; новые записи журнала DIRTY.
+Chrome снова отвечает без restart: рабочая вкладка 5 на Manager, PROJECT
+helper `cnv_9BHWJexjJ2Be8CswHTAHL1M6`. Новый screenshot завис, визуальная
+проверка NOT RUN; list/snapshot/evaluate/native ввод и навигация восстановились.
+SYSTEM свежий CURRENT_CONFIGURATION + Context7 resolve/query SUCCEEDED,
+exact G11 ACK/preview/task/instructions EQUAL. PROJECT полный
+AGENT_CONFIGURATION прочитан; actual Manager v9 native binding effective=true,
+published/effective один `ins_-otL2zl0QPgcT0rlA8ajz3t6` v1. Managed override
+НЕ подтверждается для этого Manager; native draft/impact/publish применим.
+Запрошен один DRAFT CREATE_INSTRUCTION_DRAFT для исправления фазового actual PR
+требования без изменения иных правил; наблюдать текущий helper ход, не
+создавать дубликат. Потом Validate/Apply → инструкции Validate/impact/Publish
+с выбором Manager → fresh binding/runtime proof → NEW full33.
+Failure watcher дважды natural early EOF; child failure_capture_eof исправляет
+классификацию и bounded exact rejoin в изолированном worktree. Старые причины
+provider failure UNKNOWN; SYSTEM свежий READ уже PASS. Child
+manager_instruction_effective_path завершил source-only разбор: managed path
+отдельный, не требуется для доказанного native binding Manager.
+Goal ACTIVE; full65/full33/internal Developer PR/review/fix/READY OPEN.
+Перед следующим commit private publisher previous →60762898.
+Каждые 5 минут reload только page5, сохранив ввод; чужие6/13/18 не трогать.
+
+## Предыдущий checkpoint08:27
+
 07.10.2026 08:27 UTC: runtime code HEAD/remote/Draft1800 exact
 `8507251725126560f302e38e8b826c117f09ff91`, publisher finalreadback PASS,
 каталог16files иwatcher2 committed/pushed. ROOT targeted catalog/recovery
