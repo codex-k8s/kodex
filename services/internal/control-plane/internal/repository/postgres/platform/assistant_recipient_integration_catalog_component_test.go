@@ -2,10 +2,13 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -26,6 +29,11 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 		t.Fatal(err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "recipient-catalog-agent", "Catalog Developer")
+	unassigned := createLifecycleAgent(t, ctx, service, owner, project.Ref, "recipient-catalog-unassigned", "Unassigned Developer")
+	unbound, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "recipient-catalog-unbound-registry"}, Payload: command.ConnectionInput{DefinitionKey: "github", Name: "Recipient registry github.repository fixture", PublicConfiguration: map[string]any{"owner": "fixture", "repository": "registry"}}})
+	if err != nil || unbound.Connection == nil {
+		t.Fatal("create isolated unbound registry fixture")
+	}
 	draft := entity.WorkflowVersion{Name: "Catalog workflow", Purpose: "Closed catalog fixture", CoordinatorAgentRef: agent.Ref, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, CompletionCriteria: "Bounded result", ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{{Key: "step", Position: 1, Name: "Step", AgentRef: agent.Ref, Instructions: "Complete fixture.", ExpectedResult: "Fixture result", TimeoutSeconds: 900}}}
 	workflow, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "recipient-catalog-workflow"}, Payload: command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: agent.Ref, Draft: &draft}})
 	if err != nil || workflow.Workflow == nil {
@@ -97,6 +105,109 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 				if catalog == nil || catalog.RecipientRef != recipient.ref || catalog.RecipientKind != recipient.kind || catalog.RecipientVersion != recipient.version || result.ProjectRef != project.Ref || result.AssistantProfileRef != "" || len(catalog.Entries) == 0 {
 					t.Fatal("recipient catalog missing exact pins")
 				}
+				if scope == "PROJECT" && recipient.kind == "AGENT" {
+					t.Run("source registry filters unresolved revision before pagination", func(t *testing.T) {
+						selected := input
+						selected.Query = unbound.Connection.Name
+						original, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected)
+						if err != nil || original.RecipientIntegrationGrants == nil || len(original.RecipientIntegrationGrants.Entries) == 0 {
+							t.Fatal("DB admission did not enumerate exact unbound fixture", err)
+						}
+						// Отдельный producer воспроизводит hot reload раньше обновления DB
+						// registry, не меняя реальные fixtures или общий repository map.
+						updated := *repository
+						updated.integrationDefinitions = make(map[string]integrationpackage.Package, len(repository.integrationDefinitions))
+						for key, definition := range repository.integrationDefinitions {
+							updated.integrationDefinitions[key] = definition
+						}
+						previous := updated.integrationDefinitions["github"]
+						currentDefinition := previous
+						currentDefinition.Metadata.Version = "9000.0.0"
+						currentDefinition, err = integrationpackage.Parse(asJSON(currentDefinition))
+						if err != nil {
+							t.Fatal("canonical prospective registry fixture", err)
+						}
+						// Новый adapter output contract делает существующий published
+						// managed package пригодным только для metadata read, не execution.
+						for index := range currentDefinition.Spec.Capabilities {
+							if currentDefinition.Spec.Capabilities[index].Key == "github.pull_request.review.create" {
+								for field := range currentDefinition.Spec.Capabilities[index].OutputFields {
+									if currentDefinition.Spec.Capabilities[index].OutputFields[field].Key == "id" {
+										currentDefinition.Spec.Capabilities[index].OutputFields[field].Maximum--
+									}
+								}
+							}
+						}
+						currentDefinition, err = integrationpackage.Parse(asJSON(currentDefinition))
+						if err != nil {
+							t.Fatal("canonical prospective adapter contract", err)
+						}
+						updated.integrationDefinitions["github"] = currentDefinition
+						updatedService, err := serviceplatform.New(&updated)
+						if err != nil {
+							t.Fatal(err)
+						}
+						for _, search := range []string{unbound.Connection.Name, "registry github.repository"} {
+							for _, offset := range []int32{0, 10, 20, 30, 40, 50} {
+								selected := input
+								selected.Query, selected.Offset = search, offset
+								filtered, err := updatedService.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected)
+								if err != nil || filtered.RecipientIntegrationGrants == nil || len(filtered.RecipientIntegrationGrants.Entries) != 0 || filtered.NextOffset != 0 {
+									t.Fatalf("unresolved source revision poisoned page%d: %v", offset, err)
+								}
+							}
+						}
+						selected.Query = "Own obsolete repository2.4"
+						retired, err := updatedService.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected)
+						if err != nil || retired.RecipientIntegrationGrants == nil || len(retired.RecipientIntegrationGrants.Entries) == 0 {
+							t.Fatal("exact bound incompatible package metadata vanished", err)
+						}
+						for _, entry := range retired.RecipientIntegrationGrants.Entries {
+							if entry.Grant.Candidate.Grantable || entry.Grant.Candidate.Reason != "PACKAGE_UNAVAILABLE" {
+								t.Fatal("bound incompatible package gained grant eligibility")
+							}
+						}
+						// Исключённый tuple не становится исполняемым: exact loader по-прежнему
+						// закрыто отказывает, а исходный producer сохраняет доступные rows.
+						resolved, err := repository.ResolvePrincipal(ctx, owner)
+						if err != nil {
+							t.Fatal(err)
+						}
+						ownerScope, err := repository.resolveScope(ctx, resolved)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if _, err := updated.integrationPackage(ctx, repository.pool, ownerScope.organizationID, unbound.Connection.Ref, previous.Metadata.Key, previous.Metadata.Version, previous.Digest); !errors.Is(err, errIntegrationPackageUnavailable) || !errors.Is(err, errs.ErrForbidden) {
+							t.Fatalf("excluded revision gained execution eligibility: %v", err)
+						}
+						seen := map[string]bool{}
+						for offset := int32(0); ; {
+							selected := input
+							selected.Offset = offset
+							page, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected)
+							if err != nil || page.RecipientIntegrationGrants == nil {
+								t.Fatalf("current revision page%d: %v", offset, err)
+							}
+							for _, entry := range page.RecipientIntegrationGrants.Entries {
+								key := entry.Grant.ConnectionRef + "\x00" + entry.Grant.Candidate.Capability.Key
+								if seen[key] {
+									t.Fatal("pagination duplicated eligible candidate")
+								}
+								seen[key] = true
+							}
+							if page.NextOffset == 0 {
+								break
+							}
+							if page.NextOffset != offset+10 || len(page.RecipientIntegrationGrants.Entries) != 10 || page.NextOffset > 1000 {
+								t.Fatal("pagination lost bounded monotonic progress")
+							}
+							offset = page.NextOffset
+						}
+						if len(seen) == 0 {
+							t.Fatal("current eligible candidates disappeared")
+						}
+					})
+				}
 				found := false
 				disabled := false
 				for _, entry := range catalog.Entries {
@@ -112,6 +223,51 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 				}
 				if !found || !disabled {
 					t.Fatal("missing disabled/unconfigured recipient candidate")
+				}
+				if recipient.kind == "WORKFLOW" {
+					selected := entity.AssistantConfigurationCatalogRequest{Kind: "WORKFLOW_CONFIGURATION", AssistantRef: input.AssistantRef, EntityKind: "WORKFLOW", EntityRef: recipient.ref}
+					snapshot, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected)
+					if err != nil || snapshot.WorkflowConfiguration == nil || snapshot.WorkflowConfiguration.Version != recipient.version || snapshot.WorkflowConfiguration.ProjectRef != project.Ref {
+						t.Fatalf("full Workflow snapshot missing: %v", err)
+					}
+					var before map[string]any
+					if json.Unmarshal(snapshot.WorkflowConfiguration.ConfigurationJSON, &before) != nil || assistantString(before, "workflowRef") != recipient.ref || !assistantWorkflowContainsAgent(before, agent.Ref) || len(before["steps"].([]any)) != 1 {
+						t.Fatal("Workflow graph snapshot lost exact assigned role")
+					}
+					fresh, err := service.GetWorkflow(ctx, owner, recipient.ref)
+					if err != nil {
+						t.Fatal(err)
+					}
+					exactDraft, _ := json.Marshal(fresh.Draft)
+					snapshotDraft, _ := json.Marshal(before["draft"])
+					var original map[string]any
+					if json.Unmarshal(exactDraft, &original) != nil || !reflect.DeepEqual(original, before["draft"]) || len(snapshotDraft) == 0 {
+						t.Fatal("Workflow read changed authoritative draft")
+					}
+					selected.EntityRef = "wfl_foreign123"
+					if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected); !errors.Is(err, errs.ErrNotFound) {
+						t.Fatal("foreign Workflow selector accepted")
+					}
+					selected.Kind, selected.EntityKind, selected.EntityRef = "RECIPIENT_INTEGRATION_GRANTS", "AGENT", agent.Ref
+					if scope == "PROJECT" {
+						grants, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected)
+						if err != nil || grants.RecipientIntegrationGrants == nil || grants.RecipientIntegrationGrants.RecipientRef != agent.Ref || grants.RecipientIntegrationGrants.ContextEntityRef != recipient.ref || grants.RecipientIntegrationGrants.ContextEntityVersion != recipient.version || len(grants.RecipientIntegrationGrants.Entries) == 0 {
+							t.Fatalf("assigned AGENT catalog missing: %v", err)
+						}
+					}
+					for _, ref := range []string{unassigned.Ref, foreignHelperRef} {
+						selected.EntityRef = ref
+						if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected); !errors.Is(err, errs.ErrNotFound) {
+							t.Fatal("unassigned or foreign AGENT selector accepted")
+						}
+					}
+				}
+				if recipient.kind == "AGENT" {
+					selected := input
+					selected.EntityKind, selected.EntityRef = "AGENT", unassigned.Ref
+					if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), selected); !errors.Is(err, errs.ErrNotFound) {
+						t.Fatal("AGENT context read another AGENT")
+					}
 				}
 				if _, err := read(owner, stringMap(lease, "fence"), lease["generation"].(int64)); !errors.Is(err, errs.ErrForbidden) {
 					t.Fatal("ordinary actor bypassed runtime read")

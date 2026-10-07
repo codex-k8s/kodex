@@ -11,6 +11,7 @@ type AssistantRuntimeProfilePin struct {
 type AssistantConfigurationCatalogRequest struct {
 	Kind, AssistantRef, Query, AccountRef, RuntimeProfileRef string
 	Offset                                                   int32
+	EntityKind, EntityRef                                    string
 }
 
 type AssistantConfigurationCatalogEntry struct {
@@ -33,12 +34,21 @@ type AssistantConfigurationCatalogResponse struct {
 	CurrentConfiguration                                                            *AssistantCurrentConfiguration
 	ProjectIntegrationGrants                                                        []ProjectAssistantIntegrationGrantCatalogEntry
 	RecipientIntegrationGrants                                                      *AssistantRecipientIntegrationGrantCatalog
+	WorkflowConfiguration                                                           *AssistantWorkflowConfiguration
+}
+
+type AssistantWorkflowConfiguration struct {
+	WorkflowRef, ProjectRef, ConfigurationSHA256 string
+	Version                                      int64
+	ConfigurationJSON                            []byte
 }
 
 type AssistantRecipientIntegrationGrantCatalog struct {
 	RecipientKind, RecipientRef, RecipientName string
 	RecipientVersion, ProjectVersion           int64
 	Entries                                    []AssistantRecipientIntegrationGrantCatalogEntry
+	ContextEntityKind, ContextEntityRef        string
+	ContextEntityVersion                       int64
 }
 
 type AssistantRecipientIntegrationGrantCatalogEntry struct {

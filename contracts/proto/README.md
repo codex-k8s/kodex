@@ -110,6 +110,56 @@ Query/refresh не получают новую authority на shell, arbitrary M
 
 ## Package и версии
 
+### Адресное чтение Workflow и назначенных сотрудников
+
+`WORKFLOW_CONFIGURATION` расширяет тот же leased configuration catalog:
+`assistant_ref` остаётся собственным помощником, а парные `entity_kind=WORKFLOW`
+и `entity_ref` выбирают только Workflow сохранённого контекста execution.
+Сервер повторно проверяет root actor, SYSTEM/PROJECT source, organization/project,
+lease/fence/generation и совпадение immutable/current context version. В обеих
+проекциях требуется `UPDATE_WORKFLOW`; состояние должно допускать штатный EDIT.
+Query, pagination, account/profile override и неизвестные поля запрещены.
+
+Ответ содержит typed envelope `workflow_ref`, `project_ref`, OCC `version`,
+canonical `configuration_json` и SHA256 этих точных bytes. JSON ограничен 1MiB
+и содержит полный authoritative before snapshot существующего UPDATE_WORKFLOW:
+editable fields со стабильными step keys и полный draft с dependencies,
+instructions, gates и defaults. Consumer проверяет закрытые поля, hash,
+полный graph без усечения и соответствие editable projection исходному draft.
+Этот snapshot не переписывает опубликованную Workflow revision либо Run input.
+
+`RECIPIENT_INTEGRATION_GRANTS` принимает те же парные locators. Без них
+получателем остаётся exact сохранённый AGENT/WORKFLOW context. Из Workflow
+разрешён адресный AGENT только среди coordinator/Steps текущего draft с тем же
+context version и project. Чтение дополнительно требует UPDATE_WORKFLOW,
+canonical AGENT context eligibility и GRANT admission каждой записи. С другого
+AGENT context нельзя читать произвольного сотрудника. Поля context entity
+kind/ref/version ответа отдельно связывают исходный Workflow, а recipient pins
+относятся к выбранному сотруднику. Locators и graph membership не выдают grants.
+
+Каталог отличает безопасный metadata read от исполняемости package. Exact
+published binding читается только после strict Parse и совпадения key/version/
+digest. Несовместимая с текущим adapter ревизия видна как
+`reason=PACKAGE_UNAVAILABLE`, `grantable=false`; сохранённый
+`current_grant_enabled` остаётся фактом конфигурации, а не правом исполнения.
+Malformed content, неизвестный package, mismatch pins и отказ SQL не становятся
+успешным unavailable snapshot. Exact unbound ревизии, отсутствующие в текущем
+source registry, исключаются до LIMIT/OFFSET. Execution resolver, mutation
+admission и owner/OCC checks не получают legacy compatibility либо fallback.
+
+| Сценарий | Авторитетный результат |
+| --- | --- |
+| Действующий Workflow context | Один RR snapshot полного draft/OCC либо назначенного AGENT grant catalog |
+| Foreign project/tenant, unassigned AGENT, другой Workflow | Закрытый отказ без target payload |
+| Отзыв actor/EDIT/GRANT authority, context drift | Свежая owner eligibility отклоняет read |
+| Cancel/terminal/expiry/stale fence/generation | Прежний exact lease resolver отклоняет read; retry требует новую lease |
+| Повтор/rejoin | Read не создаёт mutation, receipt, event, lease или grant |
+| Следующий UPDATE_WORKFLOW | Прежняя owner confirmation и snapshot/OCC; чтение не заменяет проверки Apply |
+
+Producer → прежний generated RPC/client → CP owner snapshot → закрытый callback
+caster материализуются вместе. Native runner получает descriptor динамически
+из runtime-controller, без нового image, transport permission или credentials.
+
 ```proto
 syntax = "proto3";
 

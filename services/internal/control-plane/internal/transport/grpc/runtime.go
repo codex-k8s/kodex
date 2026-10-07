@@ -367,13 +367,16 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 			return nil, transportError(errs.ErrInvalid)
 		}
 		kind := strings.TrimPrefix(catalog.GetKind().String(), "ASSISTANT_CONFIGURATION_CATALOG_KIND_")
-		result, err := server.service.ListAssistantConfigurationCatalog(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: catalog.GetAssistantRef(), Query: catalog.GetQuery(), Offset: catalog.GetOffset(), AccountRef: catalog.GetAccountRef(), RuntimeProfileRef: catalog.GetRuntimeProfileRef()})
+		result, err := server.service.ListAssistantConfigurationCatalog(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: catalog.GetAssistantRef(), Query: catalog.GetQuery(), Offset: catalog.GetOffset(), AccountRef: catalog.GetAccountRef(), RuntimeProfileRef: catalog.GetRuntimeProfileRef(), EntityKind: catalog.GetEntityKind(), EntityRef: catalog.GetEntityRef()})
 		if err != nil {
 			return nil, assistantCatalogTransportError(catalog.GetKind(), err)
 		}
 		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
+		if workflow := result.WorkflowConfiguration; workflow != nil {
+			response.WorkflowConfiguration = &controlplanev1.AssistantWorkflowConfiguration{WorkflowRef: workflow.WorkflowRef, ProjectRef: workflow.ProjectRef, Version: workflow.Version, ConfigurationJson: workflow.ConfigurationJSON, ConfigurationSha256: workflow.ConfigurationSHA256}
+		}
 		if recipient := result.RecipientIntegrationGrants; recipient != nil {
-			response.RecipientIntegrationGrants = &controlplanev1.AssistantRecipientIntegrationGrantCatalog{RecipientKind: recipient.RecipientKind, RecipientRef: recipient.RecipientRef, RecipientName: recipient.RecipientName, RecipientVersion: recipient.RecipientVersion, ProjectVersion: recipient.ProjectVersion}
+			response.RecipientIntegrationGrants = &controlplanev1.AssistantRecipientIntegrationGrantCatalog{RecipientKind: recipient.RecipientKind, RecipientRef: recipient.RecipientRef, RecipientName: recipient.RecipientName, RecipientVersion: recipient.RecipientVersion, ProjectVersion: recipient.ProjectVersion, ContextEntityKind: recipient.ContextEntityKind, ContextEntityRef: recipient.ContextEntityRef, ContextEntityVersion: recipient.ContextEntityVersion}
 			for _, entry := range recipient.Entries {
 				candidate, err := castAssistantIntegrationGrantCandidate(entry.Grant.Candidate)
 				if err != nil {

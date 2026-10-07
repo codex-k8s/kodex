@@ -159,6 +159,124 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 04:04 UTC — чтение недоступных пакетов и повтор визуальной проверки
+
+Exact published package теперь читается отдельно от возможности исполнения:
+старый несовместимый GitHub2.4 возвращает `PACKAGE_UNAVAILABLE`,
+`grantable=false`, не теряя сохранённый currentGrantEnabled. Unknown package,
+повреждённый content, несовпадение pins и SQL failure остаются закрытыми
+ошибками. Execution validator, admission и выдача прав не расширены.
+Production resolver SHA
+`f16cd2f05ed4f42665b53f7e62b486c9930acc8373767077ae7fe8796f4c192f`;
+serving CP PID1069/build executable SHA
+`c32ec9c6ddf8e32a77f5e7f787cf6dbeca4af07c3912ff8261d4ef0aff93f28d`,
+host/Pod source EQUAL после hot reload.
+
+- PASS на замороженном diff от51c6f3af: public disposable PostgreSQL7,
+  CP unit13, адресные callback5, whole callback582/0FAIL/2SKIP;
+  vet/gofmt/diff-check. Optional SKIP не заменяют отдельный wire profile.
+- PASS, retry3 `run_t_XqdSmlqdAeXunpLysCUyqB`: Manager дочитал страницы
+  до next_offset0 и сам исключил недоступное старое подключение. Прежний
+  PermissionDenied pagination устранён. Однако весь ход FAILED с
+  `PROVIDER_UNAVAILABLE` после дальнейших чтений (sequence53), без плана
+  и effects. Это не PASS всех шести ролей. Причина конкретного отказа
+  провайдера по публичному terminal code не установлена.
+- PASS, retry3 early ACK с same-UID Pod rejoin: instructions29837bytes
+  SHA9544f731…abfd, task98934b9d…d3f, image/binary/file/inbox EQUAL.
+  Полный защищённый RUN preview этой итерации NOT RUN после истечения
+  короткого fresh-auth окна; ранний ACK его не подменяет.
+- PASS, повторный Chrome screenshot графа `run_fm-f-zh-FncAs0zbwbGNEN-d`
+  на1692×1159: обе зелёные обратные дуги огибают карточки сверху целиком;
+  основной граф не переставлен. Console error/warn0, graph/events200,
+  realtime подключён. Callback layout входит в слитый b5f6fcde.
+- Новый отдельный диалог `cnv_YEUigovM-MKkkVUDwG9xl1vV` и один accepted
+  turn `run_f7dC8OHmUvIGyE4xIG10Hew8`: fresh Workflow и права шести ролей
+  читаются query-фильтрами действующих GitHub/Context7 до next_offset0.
+  Это штатный server-side каталог, не подстановка прав вручную. Старый
+  диалог и FAILED ходы не повторены. На checkpoint новый ход RUNNING,
+  Apply/Validate/Publish и новый полный SOFTWARE_CHANGE NOT RUN.
+  Его полный ACK CAPTURED: RR `rrev_67jqtIbHNsMOCJGyznvVZcto`, task
+  `f4dc44ad013263036ff8b8a3e515e5a0cc74d56105fb183ae21b65955bca6555`,
+  instructions31029bytes SHA6419acc3…59ad, G4 image/binary и file/inbox
+  EQUAL; 38tools/23grants, gpt-6.1-sol medium, оба контейнера0restarts.
+
+Пункты11/13–15 остаются открытыми. Source commit фиксирует platform fix,
+не объявляет принятым whole65/33. Чужие вкладки не изменены.
+
+### 07.10.2026 03:51 UTC — повтор пагинации и точное доказательство serving binary
+
+Первый фильтр source pins до LIMIT/OFFSET воспроизводимо проверен: public
+disposable PostgreSQL 7PASS/0FAIL/0SKIP (32.79s), адресные hermetic6PASS,
+vet/SQL boundary/diff-check PASS. Initial fixture и toolchain FAIL сохранены;
+guards не ослаблялись. Source freeze не означает успех живого сценария.
+
+Новый distinct helper `run_8CkLfBQEx7V1KGCMoayDtK4r` снова прочитал полный
+Workflow и страницы0–30, но offset40 дважды TOOL_UNAVAILABLE. Итог семантически
+BLOCKED; никакого плана или resource effect. Его ранний ACK с same-UID Pod
+rejoin CAPTURED: task SHA `0dfd7450…eda1`, file/inbox EQUAL, exact image и
+binary image-file hash EQUAL. Защищённый RUN preview200/complete/diag[]:
+29733bytes, SHA `135b4b0932f7cc776a3e7f65f36a5a9639b74e9515f220c0ea9110f59514d961`
+совпадает с ACK. Это не ошибка provider network или передачи prompt.
+
+Mount hashes совпадают для Go `bb674695…9522` и embedded SQL `b82ab9c4…6da1`.
+Новый serving CP executable `/proc/809/exe` и build/main имеют один SHA
+`b66b4d7348afd4d01d69b90f9b2883a08fe98c720f5b8d9a3f60c1c3623829dd`;
+в фактически запущенном executable есть новый resolver и shipped_revisions.
+Процесс стартовал около03:44:25, после обоих source mtime03:44:12.
+Первоначальная приблизительная оценка03:44:09 неверна; binary не старый.
+Сообщение kubectl «Found10pods» включает девять завершённых Jobs, не десять
+живых replicas. Repo-owned hot-reload verify PASS; runtime_CONTROLLER отказ —
+domain_permission/PermissionDenied. Возвраты400/403/два404 в дополнительных
+host SDK probes связаны соответственно с неверным preview payload,
+штатным fresh-auth gate и неверным именем path field; не frontend UI defect.
+
+Fresh API показывает только два CONNECTED актуальных подключения и одно
+DISABLED старое GitHub2.4; source-диагностика указывает на несовместимый контракт
+старого published bound package. Следующий fix — только безопасное metadata
+чтение exact bound revision с явным PACKAGE_UNAVAILABLE/grantable=false,
+без возможности исполнения или выдачи права. Ошибки целостности/pins/SQL не
+скрывать, runtime validator не менять. Live causal proof пока требуется.
+Полный SOFTWARE_CHANGE и Apply/Validate/Publish остаются NOT RUN.
+
+### 07.10.2026 03:40 UTC — полный native snapshot и обнаруженный сбой пагинации
+
+Продолжение ведётся в Draft [PR #1800](https://github.com/codex-k8s/kodex/pull/1800),
+ветка `kodex-agent/issue-1797-post-bootstrap-qa`, база `51c6f3af` плюс
+18 файлов защищённого каталога. Полный Workflow snapshot и выбор только
+назначенных AGENT не расширяют grants и не обходят lease/OCC/owner Apply.
+Новый runner image не требуется: схема доставляется через runtime-controller.
+
+- PASS, локально на этой базе и точном замороженном diff: callback 582/0FAIL/
+  2SKIP, адресные CP 11/0FAIL, disposable PostgreSQL 6/0FAIL; vet, Proto
+  generation/check, SQL boundary и отдельный публичный MCP wire checker.
+  Два optional SKIP не обозначаются как успешные проверки.
+- PASS, native PROJECT helper `run_LyWHOXDl5gD8-RRlJKCZ-mL2`: получены
+  authoritative Workflow v3, 33 этапа, четыре поля, concurrency3 и единственный
+  финальный human gate. Digest снимка
+  `c92df4501a8d29c7881e9cbf98b121615d321749709963d6476311e01d01ab7d`.
+- FAIL, тот же живой ход: страницы grants Manager 0/10/20/30 успешны,
+  offset40 возвращает `TOOL_UNAVAILABLE`; первая страница Architect успешна.
+  Framework SUCCEEDED не означает принятия сценария: помощник закончил
+  семантическим BLOCKED, без плана, Apply, публикации и нового Workflow Run.
+  Исправление причины и регресс пагинации в работе; не обходить каталог ручной
+  подстановкой уже известных owner-read grants.
+- PASS, Chrome после reload: переписка восстановлена, инструменты компактны,
+  ошибки видны, финальный ответ читается и прокручивается, Console без ошибок,
+  realtime подключён. Все21 Deployment готовы. Новые защищённые права/полный
+  SOFTWARE_CHANGE не объявляются проверенными по одному зелёному Pod.
+- Ранний ACK захвачен до удаления Pod: RR `rrev_M9KK-Gjn7zd0E51nRIm669aN`,
+  task SHA `6fe54e92…e65`, instructions SHA `9f40ca8d…72e`, file/inbox equal.
+  Повторное чтение после terminal уже NOT_CAPTURED; полный поздний Pod rejoin
+  здесь NOT RUN, не восстановленный PASS. В03:42 после штатного свежего входа
+  защищённый RUN preview200/complete/diagnostics[]: full29879bytes SHA
+  `9f40ca8d52ae89d98a7083a3da03edefebb74cac93ac48a318fe337886c8727e`
+  совпал с ранним provider ACK. Backend трижды подтвердил domain_permission /
+  PermissionDenied на чтении каталога, а не ошибку сети либо materialization.
+
+Далее: пагинация→нативный новый helper turn→единственный UPDATE_WORKFLOW
+только allowlists→подтверждение/Validate/Publish→новая immutable revision и
+настоящий SOFTWARE_CHANGE силами внутренней команды. Пункты11/13–15 открыты.
+
 ### 07.10.2026 03:23 UTC — bootstrap merge и первый настоящий SOFTWARE_CHANGE
 
 PR #1798 штатно переведён из Draft и слит squash без admin bypass на точном

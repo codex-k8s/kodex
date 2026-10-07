@@ -1948,6 +1948,7 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION = 8;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_PROJECT_INTEGRATION_GRANTS = 9;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS = 10;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_CONFIGURATION = 11;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -1958,6 +1959,9 @@ message AssistantConfigurationCatalogRequest {
   int32 offset = 4;
   string account_ref = 5;
   string runtime_profile_ref = 6;
+  // Парные locators: разрешённый target повторно выводится из exact lease context.
+  string entity_kind = 7;
+  string entity_ref = 8;
 }
 
 message AssistantConfigurationCatalogEntry {
@@ -2003,6 +2007,16 @@ message AssistantConfigurationCatalogResponse {
   repeated ProjectAssistantIntegrationGrantCatalogEntry project_integration_grants = 10;
   // Получатель разрешён из сохранённого контекста exact lease, не из request.
   AssistantRecipientIntegrationGrantCatalog recipient_integration_grants = 11;
+  AssistantWorkflowConfiguration workflow_configuration = 12;
+}
+
+message AssistantWorkflowConfiguration {
+  string workflow_ref = 1;
+  string project_ref = 2;
+  int64 version = 3;
+  // Полный canonical before snapshot UPDATE_WORKFLOW, не caller input.
+  bytes configuration_json = 4;
+  string configuration_sha256 = 5;
 }
 
 message AssistantRecipientIntegrationGrantCatalog {
@@ -2012,6 +2026,9 @@ message AssistantRecipientIntegrationGrantCatalog {
   int64 recipient_version = 4;
   int64 project_version = 5;
   repeated AssistantRecipientIntegrationGrantCatalogEntry entries = 6;
+  string context_entity_kind = 7;
+  string context_entity_ref = 8;
+  int64 context_entity_version = 9;
 }
 
 message AssistantRecipientIntegrationGrantCatalogEntry {

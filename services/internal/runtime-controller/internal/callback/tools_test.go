@@ -382,6 +382,14 @@ func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 	if stepSchema["key"] == nil || fieldSchema["key"] == nil || stepSchema["requiredCapabilityKeys"] == nil {
 		t.Fatalf("workflow update schema lost graph identity or capabilities: %#v %#v", stepSchema, fieldSchema)
 	}
+	create := workflowInputSchema(opaqueRefSchema(), opaqueRefSchema())["properties"].(map[string]any)["steps"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	for _, schema := range []map[string]any{stepSchema, create} {
+		capabilities := schema["requiredCapabilityKeys"].(map[string]any)
+		description, _ := capabilities["description"].(string)
+		if !strings.Contains(description, "Complete stage capability ceiling") || !strings.Contains(description, "existing enabled integration keys") || !strings.Contains(description, "never grants permissions") || capabilities["maxItems"] != 50 {
+			t.Fatal("Workflow schema did not explain exact capability attenuation")
+		}
+	}
 }
 
 func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {

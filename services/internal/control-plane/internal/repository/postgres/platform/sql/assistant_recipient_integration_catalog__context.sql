@@ -12,11 +12,11 @@ JOIN LATERAL control_plane.assistant_context_projection_v2(run.organization_id,@
  run.project_id,run.assistant_context_entity_kind,run.assistant_context_entity_ref,transaction_timestamp(),conversation.project_id) context ON true
 WHERE lease.organization_id=@organization_id::uuid AND lease.ref=@lease_ref
  AND run.assistant_context_entity_kind IN ('AGENT','WORKFLOW') AND project.lifecycle='ACTIVE'
- AND 'CHANGE_INTEGRATION_GRANT'=ANY(context.allowed_operations)
+ AND @required_operation=ANY(context.allowed_operations)
  AND revision.safe_snapshot->'assistantContext'->>'entityKind'=recipient.kind
  AND revision.safe_snapshot->'assistantContext'->>'entityRef'=recipient.ref
  AND revision.safe_snapshot->'assistantContext'->>'entityVersion'=context.entity_version::text
- AND COALESCE(revision.safe_snapshot->'assistantContext'->'allowedOperations','[]'::jsonb) ? 'CHANGE_INTEGRATION_GRANT'
+ AND COALESCE(revision.safe_snapshot->'assistantContext'->'allowedOperations','[]'::jsonb) ? @required_operation
  AND (conversation.assistant_scope='SYSTEM' OR (conversation.assistant_scope='PROJECT' AND conversation.project_id=project.id))
  AND control_plane.catalog_resource_visible(run.organization_id,@actor_id::uuid,
  CASE recipient.kind WHEN 'AGENT' THEN 'agent.view' ELSE 'workflow.view' END,

@@ -163,9 +163,13 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 		}
 		// Sibling recipient index уже исключает unbound exact revision в
 		// authoritative admission до пагинации; никаких новых skip в нём нет.
+		shippedRevisions, err := r.assistantRecipientCatalogShippedRevisions()
+		if err != nil {
+			t.Fatal(err)
+		}
 		rows, err := pool.Query(ctx, queryAssistantRecipientIntegrationCatalogEntries, pgx.StrictNamedArgs{
 			"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project_id": "",
-			"project_ref": project.Ref, "recipient_kind": "AGENT", "recipient_ref": profile.AgentRef, "query": old.Name, "offset": int32(0)})
+			"project_ref": project.Ref, "recipient_kind": "AGENT", "recipient_ref": profile.AgentRef, "query": old.Name, "offset": int32(0), "shipped_revisions": shippedRevisions})
 		if err != nil {
 			t.Fatal(err)
 		}

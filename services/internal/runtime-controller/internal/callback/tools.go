@@ -821,7 +821,7 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 		}},
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}, "expectedResult": stringSchema(0, 1000),
 		"humanGate": map[string]any{"type": "boolean"}, "gateDecisions": stringArraySchema(0, 4, []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}),
-		"requiredCapabilityKeys": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": capabilityKeySchema()},
+		"requiredCapabilityKeys": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": capabilityKeySchema(), "description": "Complete stage capability ceiling, not additional requirements. Include needed platform keys and exact existing enabled integration keys of this step's agent. Empty denies all capabilities; this list never grants permissions."},
 	})
 	return objectSchema([]string{"projectRef", "name", "purpose", "coordinatorAgentRef", "steps"}, map[string]any{
 		"projectRef": projectRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": agentRef,
