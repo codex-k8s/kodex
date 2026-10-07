@@ -10,6 +10,27 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 11:52 UTC: source/remote/Draft1800
+`42def6ed86949f51855025a694be6e9bb46f36cb`, дерево чистое.
+ExactSHA Go1.26.6 full gateway unit22.700s/vet/build/codegen,
+targeted race5.724s PASS; PR тело сокращено, без merge/ready.
+Connection249 CONNECTED/GitHub3.0.0, четыре native READ PASS, старый
+Workflow run_DBoj7UpTwj-D0nuA6AsTSQ26 owner CANCELLED/активных узлов0.
+
+Новый ordinary Manager `run_HlZ_jAiNMRgOAewB2OxpEC4Z` RUNNING,
+session `ses_GfjFJTcboOkW19GTD610XVUp`, turn `trn_ep-Eg8GiWIG1YW_QQu1gG1iJ`,
+attempt1. Ранний ACK CAPTURED/rejoined/EQUAL G5/ENV5/binding6/
+tools38/grants19/capabilities22. До actual launch receipt нового33
+не считать Workflow созданным; не повторять Run/Launch при UNKNOWN.
+Задача явно требует fresh Issue/PR1799/head/diff, без дубликатов,
+outbox автоматического capture и полного внутреннего review/fix.
+Далее наблюдать этот exactrun, ранние capture ролей, actual внутреннийPR;
+host не подменяет Developer1796. Финальный внутреннийPR не merge.
+Chrome page5 новый Manager, Console0; screenshot NOT RUN. Full65 OPEN.
+Publisher previous42def6ed; следующий checkpoint затрагивает только docs2.
+
+## Предыдущий checkpoint11:47
+
 07.10.2026 11:47 UTC: исправлено доказанное превышение бюджета PR list:
 raw SDK budget2МиБ, безопасный result64КиБ, компактный list без body,
 full read/create/update без усечения; SafeError без READ retry,

@@ -10,6 +10,36 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 11:52 UTC — исправление опубликовано, новый Manager
+
+HEAD/remote/Draft1800 `42def6ed86949f51855025a694be6e9bb46f36cb`;
+дерево чистое. ROOT повторил на этом exactSHA Go1.26.6 gateway
+unit22.700s/vet/build/codegen и адресные race5.724s: PASS.
+Publisher bot identity/readback PASS, PR остаётся Draft; тело сокращено
+до исправленных сценариев, проверок и оставшейся acceptance без портянки.
+Authoritative integration connection GET200: CONNECTED/version249,
+definition3.0.0 неизменна после четырёх native READ.
+
+Через обычный Agent UI отправлено одно новое задание Manager:
+`run_HlZ_jAiNMRgOAewB2OxpEC4Z`, session `ses_GfjFJTcboOkW19GTD610XVUp`,
+turn `trn_ep-Eg8GiWIG1YW_QQu1gG1iJ`, attempt1 RUNNING.
+Manager должен сам разрешить actual Issue/PR1799 и запустить новый
+SOFTWARE_CHANGE33; до native launch receipt не считать Workflow запущенным.
+Старый root run_DBoj7UpTwj-D0nuA6AsTSQ26 CANCELLED, не retry/resume.
+Наличие host fix42def6ed/Draft1800 не является implementation1796.
+Автоматическое серверное capture/publish outbox явно объяснено:
+отсутствие callable publishArtifacts не является само по себе BLOCKED.
+
+Actual ACK CAPTURED/rejoined: Podruntime-turn-9cd43c8c9cc1ab2c,
+UID01ca937d-db69-4272-afd4-54fc81208e59; task/provider/inbox
+SHA6998edd1081ed7ebd50a60b2af16aa38efefdfbc8e5a96dbcfc26eb32040e430,
+instructions0ed2cf6d9d02343514da3dcac9ed5aac7e9d49efe918e5a44aab93dfd1ff1450 EQUAL;
+templateacd05957, materialization2f3865b4d17d3801dfc9df7337fcaf6b88ca1eb6e668c4af6a112fa9601a9f9d.
+G5/ENV5/binding6/tools38/grants19/capabilities22. Independent task comparison
+и serving runner binary comparison NOT RUN; same-Pod image file40f3268a.
+Chrome same page5 новый Manager run, Console0, source UI ready;
+11:49 reload сохранил пустой ввод, screenshot NOT RUN. Full65/finalPR OPEN.
+
 ## Checkpoint 07.10.2026 11:47 UTC — исправлено живое чтение истории PR
 
 Рабочий tree поверх `cf060b1c49a0cf581dbcc1853244b0352662adb0`;
