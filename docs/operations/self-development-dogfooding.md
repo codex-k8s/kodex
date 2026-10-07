@@ -159,6 +159,42 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 04:40 UTC — terminal full33 и закрытая диагностика файлов
+
+Base source/remote/Draft1800 `8c1feb31891158e6552be5835aefa8989ab1be45`.
+Full33 `run_MKgCFtKbMOiEkqX_5-iEM4wM` завершился FAILED на sequence667:
+stage007 Manager `run_HX4eZguWcuppk1CzGSOYdTwY`,
+turn `trn_ltpWMi2hN9NxS-Opq2JrYPTE`, TURN_COMPLETED640
+`RUNTIME_PROVIDER_UNAVAILABLE`. Авторитетный graph readback: 39 узлов,
+11 SUCCEEDED, 2 FAILED, 26 CANCELLED, активных нет. Это FAIL полного
+сценария; техническое завершение предыдущих ролей не означает принятую
+реализацию Issue1796. Root Retry/Cancel/повторный Launch не выполнялись.
+
+Три callback файла добавляют только закрытые классы `file_input_invalid`
+и `file_reply_binding_invalid` в существующий operation Warn. Authority,
+проверки параметров, лимит preview16384, RPC, публичные ошибки и grants
+не изменены. Адресные28 тестов PASS0.092s, полный callback suite
+PASS1.340s, vet/gofmt/diff-check PASS. Негативные pins/digest/UTF-8/privacy
+сохранены. Первоначальные ошибки test fixture/import исправлены без
+ослабления production validation; historical FAIL не переименованы.
+Actual причина прежнего native preview остаётся UNKNOWN.
+
+Host/Pod files.go SHA4a5ccf31…720e и server.go SHA52e3245c…1e16 EQUAL;
+hot reload serving PID1802, binary SHA
+`4379be2b3da6700a67cf001913776efa813c169a7543791f1aa35526e4f653fd`.
+Один новый read-only PROJECT helper ход принят HTTP202:
+conversation `cnv_YEUigovM-MKkkVUDwG9xl1vV` v7,
+run `run_lPGL0JNt36ao3eC-RagOFp-q`,
+turn `trn_N3RW4CJw-MEGuAMorE5W1PFn`. Он FAILED до инструментов,
+sequence3, safeErrorCode `RUNTIME_INPUT_INVALID`; это отдельный исход,
+не provider failure и не доказательство нового preview. Guard принятого
+эффекта сохранён; повтор не выполнялся. Следующий шаг — точный source
+predicate input invalid, затем native preview; права вручную не расширять.
+
+Chrome5 reload04:38, screenshot: внешние широкие callback-дуги огибают
+карточки. Console error/warn0; bootstrap/session/graph/events HTTP200,
+realtime connected. Чужие6/13 не тронуты. Whole65/33 остаются OPEN.
+
 ### 07.10.2026 04:29 UTC — публикация и три реальных review-исполнителя
 
 Source/remote/Draft PR1800 `820d2906172540f64376dca333ddbd7c0356410e`

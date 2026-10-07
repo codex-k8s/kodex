@@ -19,7 +19,11 @@ import (
 	"google.golang.org/grpc"
 )
 
-const maximumFileToolReplyBytes = 512 << 10
+const (
+	maximumFileToolReplyBytes    = 512 << 10
+	runtimeFileInputFailureClass = "file_input_invalid"
+	runtimeFileReplyFailureClass = "file_reply_binding_invalid"
+)
 
 var (
 	errRuntimeFileInput      = errors.New("runtime file tool input is invalid")

@@ -10,6 +10,20 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 04:40 UTC: base source/remote/Draft1800 `8c1feb31`; три frozen
+callback файла + root journal готовы к публикации. Только closed file failure
+classes, limits/authority/grants unchanged; targeted28/full callback/vet PASS,
+host/Pod source EQUAL, serving binary4379be…53fd. Full33 теперь FAILED667,
+39 узлов:11SUCCEEDED/2FAILED/26CANCELLED/0active, stage007 provider unavailable.
+Новый единственный read-only helper probe `run_lPGL0JNt36ao3eC-RagOFp-q`
+FAILED до tools с RUNTIME_INPUT_INVALID; не повторять эффект вслепую.
+Agent assistant_architecture исследует только source predicate безопасными
+read-only проверками, не меняет файлы/DB/grants. Native preview rootcause
+UNKNOWN, full65/33 OPEN. Chrome5 reload04:38, след≤04:43; чужие6/13.
+Следующий publisher previous8c1, allowlist28files после freeze.
+
+## Предыдущий checkpoint04:29
+
 07.10.2026 04:29 UTC: source/remote/Draft1800 `820d2906` exact PASS,
 child transcript fix опубликован. Root full33RUNNING; Developer semanticBLOCKED
 безbranch/headSHA/PR, три review роли RUNNING с полными ранними ACK EQUAL.

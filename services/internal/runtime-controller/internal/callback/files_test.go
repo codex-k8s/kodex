@@ -1,11 +1,12 @@
 package callback
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"io"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -40,6 +41,7 @@ type runtimeFilesOwnerFixture struct {
 	failAudit     bool
 	failTransfer  bool
 	transfers     int
+	preview       *cp.PreviewExecutionFileResponse
 }
 
 func (fixture *runtimeFilesOwnerFixture) StreamExecutionArtifact(request *cp.StreamExecutionArtifactRequest, stream cp.RuntimeWorkService_StreamExecutionArtifactServer) error {
@@ -175,6 +177,12 @@ func (fixture *runtimeFilesOwnerFixture) GetExecutionFileMetadata(ctx context.Co
 func (fixture *runtimeFilesOwnerFixture) PreviewExecutionFile(ctx context.Context, request *cp.PreviewExecutionFileRequest) (*cp.PreviewExecutionFileResponse, error) {
 	fixture.check(ctx, request.GetContext())
 	fixture.checkFile(request.GetFile())
+	if fixture.preview != nil {
+		if request.GetMaximumBytes() != 16384 {
+			fixture.t.Error("large preview bound was not forwarded")
+		}
+		return fixture.preview, nil
+	}
 	if request.GetMaximumBytes() != 4096 {
 		fixture.t.Error("preview bound was not forwarded")
 	}
@@ -233,7 +241,8 @@ func TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = connection.Close() })
-	server := &Server{manager: manager, config: Config{RequestTimeout: 2 * time.Second}, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	var diagnostic bytes.Buffer
+	server := &Server{manager: manager, config: Config{RequestTimeout: 2 * time.Second}, logger: slog.New(slog.NewTextHandler(&diagnostic, nil)),
 		control: &controlplaneclient.Client{Runtime: cp.NewRuntimeWorkServiceClient(connection)}}
 	invoke := func(tool string, fail bool) {
 		t.Helper()
@@ -280,8 +289,22 @@ func TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC(t *testing.T) {
 	for _, tool := range []string{runtimecontract.FileToolSearch, runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolManifest} {
 		invoke(tool, false)
 	}
+	privateInput := "PRIVATE_FILE_BODY_AND_CREDENTIAL"
+	badParams, err := json.Marshal(map[string]any{"name": runtimecontract.FileToolPreview, "arguments": map[string]any{
+		"purpose": runtimecontract.FilePurposeProject, "entry_ref": privateInput, "artifact_ref": file.ArtifactRef,
+		"revision": 1, "digest": privateInput,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := httptest.NewRecorder()
+	server.callTool(writer, httptest.NewRequest(http.MethodPost, "/mcp", nil), mcpRequest{ID: json.RawMessage(`"private-fixture"`), Params: badParams}, input)
+	if !strings.Contains(diagnostic.String(), "failure_class="+runtimeFileInputFailureClass) || strings.Contains(diagnostic.String(), privateInput) ||
+		strings.Contains(diagnostic.String(), file.ArtifactRef) || strings.Contains(writer.Body.String(), privateInput) || !strings.Contains(writer.Body.String(), "TOOL_UNAVAILABLE") {
+		t.Fatal("file input failure diagnostic leaked input or changed the closed response")
+	}
 	owner.mu.Lock()
-	if owner.reads != 4 || owner.audits != 8 {
+	if owner.reads != 4 || owner.audits != 10 {
 		t.Error("file calls omitted a generated RPC or durable activity")
 	}
 	owner.failAudit = true
@@ -361,6 +384,112 @@ func TestRuntimeFileReplyAndInputSubstitutionFailClosed(t *testing.T) {
 		schema := tool["inputSchema"].(map[string]any)
 		if schema["additionalProperties"] != false {
 			t.Fatal("file tool allows arbitrary authority fields")
+		}
+	}
+}
+
+func TestRuntimeRunResultPreviewBoundsAndBinding(t *testing.T) {
+	for _, scenario := range []string{"full", "26276 bytes", "39301 bytes", "UTF8 boundary", "wrong digest", "wrong catalog", "wrong pin", "wrong size", "oversized", "invalid UTF8", "NUL", "wrong input digest", "string revision", "maximum exceeded"} {
+		t.Run(scenario, func(t *testing.T) {
+			input := validWarmExecutionInput()
+			input.FileCatalog = &runtimecontract.RuntimeFileCatalog{Ref: "vfc_filefixture1", Digest: strings.Repeat("a", 64), Total: 1, Purposes: []string{runtimecontract.FilePurposeRunResult}}
+			catalog, file := fileFixture(input)
+			catalog.Purposes = []cp.RuntimeFilePurpose{cp.RuntimeFilePurpose_RUNTIME_FILE_PURPOSE_RUN_RESULT}
+			file.Purpose, file.Source, file.RunRef = catalog.Purposes[0], "AGENT_RESULT", "run_filefixture1"
+			text := strings.Repeat("x", 39301)
+			if scenario == "full" {
+				text = runtimeFileFixtureText
+			} else if scenario == "26276 bytes" {
+				text = strings.Repeat("x", 26276)
+			} else if scenario == "UTF8 boundary" {
+				text = strings.Repeat("x", 16383) + "я" + strings.Repeat("x", 9900)
+			}
+			digest := func(value string) string {
+				sum := sha256.Sum256([]byte(value))
+				return "sha256:" + hex.EncodeToString(sum[:])
+			}
+			file.SizeBytes, file.Digest = int64(len(text)), digest(text)
+			preview := text
+			if len(preview) > 16384 {
+				preview = preview[:16384]
+				if scenario == "UTF8 boundary" {
+					preview = preview[:16383]
+				}
+			}
+			response := &cp.PreviewExecutionFileResponse{Catalog: proto.Clone(catalog).(*cp.RuntimeFileCatalog), File: proto.Clone(file).(*cp.ExecutionFileDescriptor), Text: preview, Truncated: len(text) > 16384, PreviewDigest: digest(preview)}
+			arguments := map[string]any{"purpose": runtimecontract.FilePurposeRunResult, "entry_ref": file.EntryRef, "artifact_ref": file.ArtifactRef, "revision": float64(file.Revision), "digest": file.Digest, "maximum_bytes": float64(16384)}
+			wantClass := runtimeFileReplyFailureClass
+			switch scenario {
+			case "full", "26276 bytes", "39301 bytes", "UTF8 boundary":
+				wantClass = ""
+			case "wrong digest":
+				response.PreviewDigest = digest("different preview")
+			case "wrong catalog":
+				response.Catalog.Total++
+			case "wrong pin":
+				response.File.Revision++
+			case "wrong size":
+				response.File.SizeBytes = int64(len(preview))
+			case "oversized":
+				response.Text = strings.Repeat("x", 16385)
+				response.PreviewDigest = digest(response.Text)
+			case "invalid UTF8":
+				response.Text = string([]byte{0xff})
+				response.PreviewDigest = digest(response.Text)
+				// Proto string закрыто отклоняется до callback validation.
+				wantClass = "control_internal"
+			case "NUL":
+				response.Text = "x\x00x"
+				response.PreviewDigest = digest(response.Text)
+			case "wrong input digest":
+				arguments["digest"] = strings.TrimPrefix(file.Digest, "sha256:")
+				wantClass = runtimeFileInputFailureClass
+			case "string revision":
+				arguments["revision"] = "1"
+				wantClass = runtimeFileInputFailureClass
+			case "maximum exceeded":
+				arguments["maximum_bytes"] = float64(16385)
+				wantClass = runtimeFileInputFailureClass
+			}
+			owner := &runtimeFilesOwnerFixture{t: t, input: input, catalog: catalog, file: file, preview: response}
+			listener := bufconn.Listen(1 << 20)
+			upstream := grpc.NewServer()
+			cp.RegisterRuntimeWorkServiceServer(upstream, owner)
+			done := make(chan error, 1)
+			go func() { done <- upstream.Serve(listener) }()
+			t.Cleanup(func() { upstream.Stop(); _ = listener.Close(); <-done })
+			connection, err := grpc.NewClient("passthrough:///run-result-preview-fixture", grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = connection.Close() })
+			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: cp.NewRuntimeWorkServiceClient(connection)}}
+			result, err := server.callFileTool(t.Context(), input, runtimecontract.FileToolPreview, arguments)
+			if wantClass == "" {
+				if err != nil || result["text"] != preview || result["truncated"] != response.Truncated || result["preview_digest"] != digest(preview) {
+					t.Fatal("exact bounded RUN_RESULT preview rejected")
+				}
+			} else if err == nil || result != nil || controlFailureClass(err) != wantClass {
+				t.Fatal("invalid preview did not preserve its closed rejection class")
+			}
+			if wantClass == runtimeFileInputFailureClass && owner.reads != 0 {
+				t.Fatal("invalid arguments reached the owner RPC")
+			}
+		})
+	}
+}
+
+func TestRuntimeFileFailureClassDoesNotExposeNestedErrors(t *testing.T) {
+	for _, scenario := range []struct {
+		err   error
+		class string
+	}{
+		{errors.Join(errors.New("PRIVATE_FILE_BODY_AND_CREDENTIAL"), errRuntimeFileInput), runtimeFileInputFailureClass},
+		{errors.Join(errors.New("PRIVATE_FILE_BODY_AND_CREDENTIAL"), errRuntimeFileReply), runtimeFileReplyFailureClass},
+		{errors.New("PRIVATE_FILE_BODY_AND_CREDENTIAL"), "control_unknown"},
+	} {
+		if got := controlFailureClass(scenario.err); got != scenario.class || strings.Contains(got, "PRIVATE") {
+			t.Fatal("file failure classification exposed an unregistered value")
 		}
 	}
 }

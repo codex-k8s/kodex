@@ -826,6 +826,12 @@ func invalidAssistantPlan(reason string) error {
 }
 
 func controlFailureClass(err error) string {
+	if errors.Is(err, errRuntimeFileInput) {
+		return runtimeFileInputFailureClass
+	}
+	if errors.Is(err, errRuntimeFileReply) {
+		return runtimeFileReplyFailureClass
+	}
 	if class := assistantCatalogFailureClass(err); class != "" {
 		return class
 	}
