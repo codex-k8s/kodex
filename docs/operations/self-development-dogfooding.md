@@ -159,6 +159,84 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 04:59 UTC — два исправления завершения и диагностики
+
+Frozen tree поверх exact `4a08cbfc`, без изменения опубликованных histories.
+App `completeExecutedTurn` теперь сохраняет полный валидный archive tuple
+при post-execute workspace/final/result publication/artifact failure. Ошибочный
+исход, safe code, Usage и повторяемый callback receipt сохранены. Partial,
+foreign-session, unsafe-path, digest/size/outcome mismatch не публикуются;
+generic executionErr/activityFailed по-прежнему не получают неподтверждённые
+pins. App source SHA cc3c8237ac048be390d6e41c97dfc350748fe2f392697c4f0de09c4e27ce135a.
+ROOT focused regression+vet PASS10.030s; исполнитель full app118PASS,
+0FAIL,2 явных container SKIP,16.341s. Исходный воспроизводящий FAIL7 сохранён
+как исторический исход, не результат нового кода.
+
+Внутренний worker→controller termination result содержит только закрытую
+failure_stage: SOURCE_IDENTITY/SOURCE_DIGEST/OBJECT_WRITE/OBJECT_READBACK,
+unknown→UNKNOWN. Archive классифицирует идентичность sentinel через errors.Is,
+не текст SDK; controller нормализует только после exact task/attempt/Job UID/
+Pod owner/PVC binding и пишет log до cleanup. Внешние RPC, safe_error_code,
+retry/lease/dead-letter и authority unchanged. ROOT `go test ./...`,
+`go vet ./...`, `go build ./...` session-archive PASS; tests доказывают log
+SOURCE_DIGEST до удаления Job, privacy, неизвестные/поддельные стадии и
+неизменный error result. Ранний FAIL reactor test fixture исправлен только
+в fixture. Source старого live incident по-прежнему UNKNOWN.
+
+Эти изменения ещё требуют exact runner/worker image activation; live исправленных
+путей NOT RUN. Старый storage ERROR вручную не восстановлен. Для полного
+файлового handoff выбрана матрица нового native read_file: существующий
+защищённый full StreamExecutionArtifact→private spool→полностью проверенные
+SHA/size/EOF и UTF-8→bounded page, terminal audit после фактического read.
+Нет новых Proto/RPC или authority в shell; implementation пока NOT RUN.
+Whole65/33 и финальный dogfooding PR остаются OPEN.
+
+### 07.10.2026 04:56 UTC — storage blocker и свежая проверка file tools
+
+Source/remote/Draft1800 `4a08cbfcf123d0a6baafb00198611b9d7672e8b3`
+проверены через GitHub и branch readback; Issue1797/1796 OPEN.
+Старый helper run `run_lPGL0JNt36ao3eC-RagOFp-q` FAILED до инструментов
+из-за session `ses_5aoeibRS7_8TQx-JmoyxA3oH`: storage ERROR,
+reason STORAGE_NOT_LIVE, SNAPSHOT task
+`sat_a91290cc-5313-4e9c-a88c-6918a854f193` DEAD_LETTER,
+attempt5/maximum5, SESSION_ARCHIVE_WORKER_FAILED. Source path — terminal
+storage reconcile до обычного runtime eligibility; отсутствие eligibility
+Warn не означает потерю лога. Controller сохранил worker exit1/Error и
+успешный Fail RPC каждой попытки. Worker удалён штатным cleanup; внутренняя
+стадия snapshot UNKNOWN, ни stale SHA, ни S3/network cause пока не доказаны.
+Штатного owner Recover для такого storage нет; SQL/reset/forced completion,
+повтор старого хода и изменение grants не выполнялись.
+
+Отдельный fresh PROJECT helper `run_9010_mFp0_tPlFzttJWy52dS`
+SUCCEEDED7, session `ses_XWZWF5ezAgYkAF2INpI2PoBu` LIVE. Вызовы файлов
+NOT RUN: authoritative effective `platform.artifact.manage=false`,
+каталог закономерно не материализован. Это не доказательство file defect.
+
+Обычный Manager с уже существующей artifact capability выполнил новый
+read-only run `run_wvnxw4augq0rDmANZngbcEFh`, session
+`ses_uIh8JDqFGjT7ZBKSctZfFeFn`. HTTP201 принят один раз, без sessionRef
+старого диалога; никакого delegation/Launch/Git write. Итог SUCCEEDED24:
+search_files3, get_file_metadata2 и preview_file2 SUCCEEDED с durable tool
+receipts. Exact `manager-plan.md` art_HjIkZsPbF_YcLy6sQTzNFiyC,26276B,
+SHA e8688388f96f096b0be4e16676d844389143fb5442b3b1ec5cf5e584233e9c96;
+`architecture-review.md` art_RT7lMAhhZ1SD3s3YXJy-L5Vs,39301B,
+SHA 825dd981d9632b818416c8682b50e191c5f26fc0a78a3a24509d113a0ecd5cd6.
+Оба preview truncated при maximum16384: полный read NOT RUN. Новый источник
+доказал текущий bounded path, но не причину старых TOOL_UNAVAILABLE.
+
+Source-proven отдельный дефект: при успешном provider capture последующий
+workspace/result/artifact failure теряет проверенный archive tuple, тогда
+continuation может оставить прежний SHA/size. Это гипотеза связи с incident,
+не actual cause. Узкий app regression/fix и закрытая worker-stage диагностика
+готовятся независимо; до tests/freeze/rebuild не считаются завершёнными.
+Другой read-only agent проверяет существующий full-file bridge и возможность
+его использования сотрудником без выдачи shell authority.
+
+Chrome5: native Manager graph screenshot, Console0, relevant API200,
+realtime connected. Внешние callback arcs повторно видны вне карточек;
+22 focused graph unit tests PASS1.60s на 4a08. Чужие вкладки6/13 не тронуты.
+Whole65/33 остаются OPEN, полный догфудинг FAIL, Issue1796 не реализована.
+
 ### 07.10.2026 04:40 UTC — terminal full33 и закрытая диагностика файлов
 
 Base source/remote/Draft1800 `8c1feb31891158e6552be5835aefa8989ab1be45`.

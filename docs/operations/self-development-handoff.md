@@ -10,6 +10,51 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 04:59 UTC: поверх опубликованного `4a08cbfc` готовы два frozen
+исправления и журнал. App post-execution сохраняет только валидный archive
+tuple при FAILED; generic execution/activity errors не получают pins.
+ROOT адресные regression/vet PASS10.030s; исполнитель whole app118PASS,
+2 явных container SKIP. Session-archive закрытая failure_stage в termination
+JSON/log до cleanup; ROOT whole module test/vet/build PASS. Результаты относятся
+к frozen tree, app SHA cc3c8237…135a. Новые image/live paths ещё NOT RUN.
+Следующий checkpoint publisher previous4a08/allowlist38; все12 файлов frozen.
+
+Для полного чтения выбран native read_file через существующий защищённый
+StreamExecutionArtifact и private spool в callback: bounded UTF-8 pages,
+whole source SHA/size/EOF, никакой выдачи shell authority/новых внешних RPC.
+Матрица подготовлена; реализация ещё не начата. После публикации текущих
+двух исправлений → read_file → новый exact runner/worker → native/Workflow.
+Archive свежего helper ожидается после05:02; watcher запускать перед idle
+порогом, отсутствие worker раньше порога не считать успехом/дефектом.
+
+## Предыдущий checkpoint04:56
+
+07.10.2026 04:56 UTC: source/remote/Draft1800
+`4a08cbfcf123d0a6baafb00198611b9d7672e8b3` подтверждены readback.
+Полный65/33 остаётся OPEN; root full33 FAILED667, финального PR Issue1796 нет.
+Причина input-invalid старого helper установлена: session storage ERROR,
+SNAPSHOT `sat_a91290cc-5313-4e9c-a88c-6918a854f193` DEAD_LETTER5,
+SESSION_ARCHIVE_WORKER_FAILED. Внутренняя причина worker UNKNOWN: Job удалён
+штатным cleanup. Никакого SQL/reset/Retry старой сессии не выполнялось.
+
+Свежий PROJECT helper `run_9010_mFp0_tPlFzttJWy52dS` SUCCEEDED7,
+но file tools NOT RUN: artifact capability false, поэтому каталог отсутствует.
+Отдельный обычный Manager `run_wvnxw4augq0rDmANZngbcEFh` SUCCEEDED24:
+search3/metadata2/preview2 PASS для exact plan/review, оба truncated16384.
+Полное чтение NOT RUN; это не принятие Workflow. Новая Manager session
+`ses_uIh8JDqFGjT7ZBKSctZfFeFn` LIVE, helper fresh session
+`ses_XWZWF5ezAgYkAF2INpI2PoBu` LIVE; archive idle15min ещё не истёк.
+
+Разделённая работа: assistant_architecture исправляет потерю уже проверенного
+archive tuple в post-execution app failure; archive_failure_diagnostics
+добавляет закрытую внутреннюю stage без изменения публичных ошибок/authority;
+native_full_file_path read-only ищет достижимый защищённый full-file consumer.
+Патчи ещё не приняты/не опубликованы. Далее exact tests → source/image pins →
+native file consumer → полный Workflow. Chrome5 reload04:52, screenshot/
+Console0/API200; external callback arcs +22 focused tests PASS, чужие6/13.
+
+## Предыдущий checkpoint04:40
+
 07.10.2026 04:40 UTC: base source/remote/Draft1800 `8c1feb31`; три frozen
 callback файла + root journal готовы к публикации. Только closed file failure
 classes, limits/authority/grants unchanged; targeted28/full callback/vet PASS,

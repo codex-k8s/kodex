@@ -142,15 +142,35 @@ func (binding ArchiveBinding) Validate() error {
 	return nil
 }
 
+type FailureStage string
+
+const (
+	FailureStageUnknown        FailureStage = "UNKNOWN"
+	FailureStageSourceIdentity FailureStage = "SOURCE_IDENTITY"
+	FailureStageSourceDigest   FailureStage = "SOURCE_DIGEST"
+	FailureStageObjectWrite    FailureStage = "OBJECT_WRITE"
+	FailureStageObjectReadback FailureStage = "OBJECT_READBACK"
+)
+
+func NormalizeFailureStage(stage FailureStage) FailureStage {
+	switch stage {
+	case FailureStageSourceIdentity, FailureStageSourceDigest, FailureStageObjectWrite, FailureStageObjectReadback:
+		return stage
+	default:
+		return FailureStageUnknown
+	}
+}
+
 type Result struct {
-	Success         bool   `json:"success"`
-	SafeErrorCode   string `json:"safe_error_code,omitempty"`
-	FormatVersion   uint32 `json:"format_version,omitempty"`
-	ObjectKey       string `json:"object_key,omitempty"`
-	ObjectVersion   string `json:"object_version,omitempty"`
-	ObjectETag      string `json:"object_etag,omitempty"`
-	ObjectDigest    string `json:"object_digest,omitempty"`
-	ObjectSizeBytes int64  `json:"object_size_bytes,omitempty"`
-	SourceSHA256    string `json:"source_sha256,omitempty"`
-	SourceSizeBytes int64  `json:"source_size_bytes,omitempty"`
+	Success         bool         `json:"success"`
+	SafeErrorCode   string       `json:"safe_error_code,omitempty"`
+	FailureStage    FailureStage `json:"failure_stage,omitempty"`
+	FormatVersion   uint32       `json:"format_version,omitempty"`
+	ObjectKey       string       `json:"object_key,omitempty"`
+	ObjectVersion   string       `json:"object_version,omitempty"`
+	ObjectETag      string       `json:"object_etag,omitempty"`
+	ObjectDigest    string       `json:"object_digest,omitempty"`
+	ObjectSizeBytes int64        `json:"object_size_bytes,omitempty"`
+	SourceSHA256    string       `json:"source_sha256,omitempty"`
+	SourceSizeBytes int64        `json:"source_size_bytes,omitempty"`
 }

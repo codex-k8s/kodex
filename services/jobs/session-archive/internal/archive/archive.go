@@ -50,7 +50,7 @@ func Snapshot(ctx context.Context, store objectstorage.Store, workspace string, 
 	receipt, err := store.Put(ctx, objectstorage.PutInput{Key: task.TargetObjectKey, MediaType: "application/x-tar", Digest: archiveDigest, SizeBytes: int64(len(archive)), Body: bytes.NewReader(archive)})
 	if err != nil {
 		cleanupObject(ctx, store, task.TargetObjectKey, "")
-		return model.Result{}, errors.New("put session archive object")
+		return model.Result{}, errObjectWrite
 	}
 	committed := false
 	defer func() {
@@ -61,13 +61,13 @@ func Snapshot(ctx context.Context, store objectstorage.Store, workspace string, 
 	}()
 	object, err := store.Get(ctx, receipt.Key, receipt.VersionID)
 	if err != nil {
-		return model.Result{}, errors.New("read back session archive object")
+		return model.Result{}, errObjectReadback
 	}
 	readback, readErr := io.ReadAll(io.LimitReader(object.Body, model.MaximumObjectBytes+1))
 	closeErr := object.Body.Close()
 	if readErr != nil || closeErr != nil || int64(len(readback)) != receipt.SizeBytes || digest(readback) != receipt.Digest ||
 		object.Key != receipt.Key || object.VersionID != receipt.VersionID || object.ETag != receipt.ETag {
-		return model.Result{}, errors.New("session archive object readback mismatch")
+		return model.Result{}, errObjectReadbackMismatch
 	}
 	if _, err := decode(task, readback); err != nil {
 		return model.Result{}, err
@@ -197,7 +197,7 @@ func readSource(root, relative, expectedSHA string, expectedSize int64) ([]byte,
 	}
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() != expectedSize || info.Mode()&os.ModeSymlink != 0 {
-		return nil, errors.New("session source file identity is invalid")
+		return nil, errSourceIdentity
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -206,7 +206,7 @@ func readSource(root, relative, expectedSHA string, expectedSize int64) ([]byte,
 	raw, readErr := io.ReadAll(io.LimitReader(file, model.MaximumSourceBytes+1))
 	closeErr := file.Close()
 	if readErr != nil || closeErr != nil || int64(len(raw)) != expectedSize || digestPlain(raw) != expectedSHA {
-		return nil, errors.New("session source file digest mismatch")
+		return nil, errSourceDigest
 	}
 	return raw, nil
 }
