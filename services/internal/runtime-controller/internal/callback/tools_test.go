@@ -707,6 +707,45 @@ func TestDelegationToolPinsWorkflowTargetsAndStepKeys(t *testing.T) {
 	}
 }
 
+func TestDelegationToolExposesNamedServerOwnedTargets(t *testing.T) {
+	t.Parallel()
+	for _, workflow := range []bool{false, true} {
+		t.Run(fmt.Sprintf("workflow_%t", workflow), func(t *testing.T) {
+			t.Parallel()
+			target := runtimecontract.RunnerDelegationTarget{
+				Ref: "agt_12345678", Name: "Developer \"Кодекс\"", Purpose: "Реализовать изменение",
+				RoleDescription: strings.Repeat("Я", 300), Instructions: "private-instructions-sentinel",
+				ExpectedResult: "private-expected-result-sentinel",
+			}
+			if workflow {
+				target.WorkflowStepKey, target.WorkflowStepName = "implement", "Разработка"
+			}
+			tool := delegationTool([]runtimecontract.RunnerDelegationTarget{target})
+			description := tool["description"].(string)
+			_, encoded, found := strings.Cut(description, delegationTargetsDescriptionPrefix)
+			var metadata []map[string]string
+			if !found || json.Unmarshal([]byte(encoded), &metadata) != nil || len(metadata) != 1 {
+				t.Fatal("delegation identity metadata must be a closed JSON projection")
+			}
+			item := metadata[0]
+			if item["ref"] != target.Ref || item["name"] != target.Name || item["purpose"] != target.Purpose ||
+				item["role_description"] != strings.Repeat("Я", 240) || item["workflow_step_key"] != target.WorkflowStepKey ||
+				strings.Contains(description, "private-") {
+				t.Fatal("delegation identity metadata lost its target or leaked instructions")
+			}
+			properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+			expectedFields := 4
+			if workflow {
+				expectedFields = 6
+			}
+			if !reflect.DeepEqual(properties["target_agent_ref"].(map[string]any)["enum"], []string{target.Ref}) ||
+				(properties["workflow_step_key"] != nil) != workflow || len(item) != expectedFields {
+				t.Fatal("delegation metadata changed the server-owned target or step boundary")
+			}
+		})
+	}
+}
+
 func TestDecodeMCPToolCallParamsAcceptsStandardMetadata(t *testing.T) {
 	t.Parallel()
 	params, err := decodeMCPToolCallParams(json.RawMessage(`{
