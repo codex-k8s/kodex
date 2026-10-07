@@ -65,7 +65,7 @@ NUMBER_FIELDS = ('attempt', 'lease_generation', 'runtime_revision_version',
                  'image_recipe_generation', 'provider_prompt_bytes', 'instructions_bytes')
 
 
-def project_ack(record, run_ref):
+def project_ack(record, run_ref, assistant_scope='NONE'):
     """Никогда не возвращает log envelope, raw body, tool commands или grants."""
     if not isinstance(record, dict) or record.get('event') != EVENT:
         return None
@@ -73,8 +73,16 @@ def project_ack(record, run_ref):
     require(isinstance(source, dict), 'ACK_SHAPE_INVALID')
     if source.get('run_ref') != run_ref:
         return None
-    result = {}
+    require(assistant_scope in ('NONE', 'PROJECT', 'SYSTEM') and
+            source.get('assistant_scope') == assistant_scope, 'ACK_SCOPE_INVALID')
+    # Только явно выбранный организационный SYSTEM без project. Обычный NONE
+    # и PROJECT сохраняют строгий project pin; неизвестный scope не fallback.
+    if assistant_scope == 'SYSTEM':
+        require(source.get('project_ref', '') == '', 'ACK_PROJECT_SCOPE_INVALID')
+    result = {'assistant_scope': assistant_scope}
     for field in REF_FIELDS:
+        if field == 'project_ref' and assistant_scope == 'SYSTEM':
+            continue
         require(matches(REF, source.get(field)), 'ACK_REFERENCE_INVALID')
         result[field] = source[field]
     for field in HASH_FIELDS:
@@ -114,7 +122,7 @@ def project_ack(record, run_ref):
     return result
 
 
-def ack_from_logs(raw, run_ref):
+def ack_from_logs(raw, run_ref, assistant_scope='NONE'):
     require(len(raw) <= 512 << 10, 'LOG_SIZE_LIMIT')
     found = []
     for line in raw.splitlines():
@@ -125,7 +133,7 @@ def ack_from_logs(raw, run_ref):
             record = json.loads(line, object_pairs_hook=unique)
         except (ValueError, UnicodeError):
             raise Failure('ACK_JSON_INVALID') from None
-        proof = project_ack(record, run_ref)
+        proof = project_ack(record, run_ref, assistant_scope)
         if proof is not None and proof not in found:
             found.append(proof)
     require(len(found) <= 1, 'MULTIPLE_ACK_TUPLES')
@@ -208,6 +216,7 @@ def list_pods(read):
 
 
 def capture(options, read=kube, now=time.monotonic, sleep=time.sleep, on_ack=None):
+    require(options.assistant_scope in ('NONE', 'PROJECT', 'SYSTEM'), 'ASSISTANT_SCOPE_INVALID')
     deadline = now() + options.timeout_seconds
     while now() < deadline:
         selected = []
@@ -226,7 +235,7 @@ def capture(options, read=kube, now=time.monotonic, sleep=time.sleep, on_ack=Non
                             '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
             except Failure:
                 continue
-            proof = ack_from_logs(raw, options.run_ref)
+            proof = ack_from_logs(raw, options.run_ref, options.assistant_scope)
             if proof is not None:
                 selected.append((pod, proof))
         require(len(selected) <= 1, 'MULTIPLE_ACK_PODS')
@@ -280,6 +289,7 @@ class PrivateArgumentParser(argparse.ArgumentParser):
 def main():
     parser = PrivateArgumentParser(description=__doc__)
     parser.add_argument('--run-ref', required=True)
+    parser.add_argument('--assistant-scope', choices=('NONE', 'PROJECT', 'SYSTEM'), default='NONE')
     parser.add_argument('--pod-name')
     parser.add_argument('--session-ref')
     parser.add_argument('--turn-ref')

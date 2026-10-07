@@ -10,6 +10,34 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 07:52 UTC: source253d5fe6 + ROOT working tree callback3/capture2/
+GUIDE006+2docs. Full33run_qac3AdH1vgybtUSD99lyrhL9 FAILED3/active0: actual
+Developer+step002 wrongpair доказан seq110–111; guard правильно отклонил.
+Hot callback local typed recovery внедрена без RPC replay/authority bypass,
+ROOT unit2.779s/vetPASS, agent688PASS/2existingSKIP, publicwirePASS.
+RC source2hashEQUAL/build167c472e/recovery symbols есть; servingPID ещё
+independentNOTRUN, immutableimageне менялся. Capture SYSTEM/NONE/PROJECT
+scopefix12PASS, freshSYSTEMG11 ACK+protectedpreview exactmatchPASS.
+Combined READrun_V2BTNVeFhR8QqzrFP2lNCbvh FAILEDPROVIDER_UNAVAILABLE после
+config/C7resolveSUCCEEDED; exactPodgone, primaryclosedstageUNKNOWN.
+
+Native PROJECThelpercnv_PlwVU_OJZIGMEjTJQkDeEXNA/run_BNSJqj36t5_rCm-NvpXy85jO
+technicalSUCCEEDED/semanticBLOCKED, no draft: Managerinstructions actualPR
+preimplementation исправитьнадо, но recipient fullinstructions read отсутствует.
+PROJECTcontext AGENTProjectManagerversion9; CURRENT_CONFIGURATION own-only
+не расширять. Child callback_delegation_resume проектирует exactrecipient
+AGENT_CONFIGURATION chain/tests вisolatedWT; ROOT docs/Chrome/publisher.
+Child assistant_architecture пишет НОВЫЕ2 providerfailurecapture diagnostic
+files, без overwrite existingACKcapture. Новых providerRUN без раннего
+watcher пока не нужно. После scopedcatalogimplementation: exactcutover при
+необходимости→native draftManagerinstructions→Validate/Apply/publish→NEWfull33.
+ROOT готовит checkpoint commit/push sameDraft1800, parentprivatepublisher
+обновить5eba→253d5fe6 и allow5newchanged sourcepaths+GUIDE006.
+Chrome5Managerpage/PROJECTdialog, reload07:50/next≤07:55; чужие6/13/18не трогать.
+Full65/33/finalinternalPR OPEN, goalACTIVE. Никакогоhostimplementation1796.
+
+## Предыдущий checkpoint07:24
+
 07.10.2026 07:24 UTC: nativefull-readplan pln_o5QbzUBxCc-ScX4gQczSrkNA
 APPLIED3, UPDATEWORKFLOW толькоtext2–33/33steps, prefix/все другиеfields
 сохранены. NativeWorkflowValidate→Publish version9/revision3,

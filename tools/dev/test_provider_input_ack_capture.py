@@ -21,7 +21,7 @@ def fixture():
     proof.update({field: 1 for field in CAPTURE.NUMBER_FIELDS})
     proof.update(image_reference='registry.fixture/roles@sha256:' + 'b' * 64,
                  image_manifest_digest='sha256:' + 'b' * 64,
-                 model='gpt-6.1-sol', reasoning_effort='medium', reasoning_mode='SUPPORTED',
+                 assistant_scope='NONE', model='gpt-6.1-sol', reasoning_effort='medium', reasoning_mode='SUPPORTED',
                  task_in_prompt=True, instructions_file_comparison='EQUAL',
                  instructions_file_sha256='a' * 64, inbox_prompt_comparison='EQUAL',
                  inbox_prompt_sha256='a' * 64, tools=[{}] * 38, grants=[], capabilities=[])
@@ -34,11 +34,82 @@ def fixture():
     options = argparse.Namespace(run_ref=proof['run_ref'], session_ref=proof['session_ref'],
                                  turn_ref=proof['turn_ref'], attempt=1, pod_name=None,
                                  task_sha256='a' * 64, image_manifest='sha256:' + 'b' * 64,
-                                 binary_sha256='c' * 64, timeout_seconds=1)
+                                 binary_sha256='c' * 64, timeout_seconds=1, assistant_scope='NONE')
     return proof, columns, options
 
 
 class CaptureTest(unittest.TestCase):
+    def test_none_default_and_explicit_project_require_current_source_scope(self):
+        proof, _, _ = fixture()
+        record = {'event': CAPTURE.EVENT, 'proof': proof}
+        self.assertEqual(CAPTURE.project_ack(record, proof['run_ref'])['assistant_scope'], 'NONE')
+        proof['assistant_scope'] = 'PROJECT'
+        self.assertEqual(CAPTURE.project_ack(record, proof['run_ref'], 'PROJECT')['project_ref'], proof['project_ref'])
+        with self.assertRaises(CAPTURE.Failure):
+            CAPTURE.project_ack(record, proof['run_ref'])
+
+    def test_explicit_system_without_project_retains_exact_pod_and_binary_binding(self):
+        proof, columns, options = fixture()
+        proof['assistant_scope'], options.assistant_scope = 'SYSTEM', 'SYSTEM'
+        del proof['project_ref']
+        logs = json.dumps({'event': CAPTURE.EVENT, 'proof': proof}).encode()
+
+        def read(args):
+            if args[0] == 'get':
+                return columns
+            if args[0] == 'logs':
+                return logs
+            return ('c' * 64 + '  ' + CAPTURE.BINARY + '\n').encode()
+
+        result = CAPTURE.capture(options, read=read)
+        self.assertEqual(result['status'], 'CAPTURED')
+        self.assertEqual(result['proof']['assistant_scope'], 'SYSTEM')
+        self.assertNotIn('project_ref', result['proof'])
+        self.assertEqual(result['proof']['run_ref'], options.run_ref)
+        self.assertEqual(result['binary']['expected_comparison'], 'EQUAL')
+        self.assertEqual(result['pod']['uid'], '12345678-1234-1234-1234-123456789abc')
+
+    def test_scope_missing_project_and_cross_scope_fail_closed(self):
+        proof, _, _ = fixture()
+        for selected, scope, project in (
+                ('NONE', 'NONE', None), ('NONE', 'NONE', ''),
+                ('NONE', 'PROJECT', 'project_fixture'), ('PROJECT', 'NONE', 'project_fixture'),
+                ('NONE', 'SYSTEM', None), ('SYSTEM', 'NONE', None),
+                ('PROJECT', 'PROJECT', None), ('PROJECT', 'PROJECT', ''),
+                ('PROJECT', 'SYSTEM', None), ('SYSTEM', 'PROJECT', None),
+                ('SYSTEM', 'SYSTEM', 'project_foreign'), ('SYSTEM', 'SYSTEM', None),
+                ('SYSTEM', 'UNKNOWN', None), ('UNKNOWN', 'SYSTEM', None),
+                ('SYSTEM', None, None)):
+            candidate = dict(proof)
+            if scope is None:
+                del candidate['assistant_scope']
+            else:
+                candidate['assistant_scope'] = scope
+            if project is None:
+                candidate.pop('project_ref')
+            else:
+                candidate['project_ref'] = project
+            record = {'event': CAPTURE.EVENT, 'proof': candidate}
+            with self.subTest(selected=selected, scope=scope, project=project):
+                if selected == scope == 'SYSTEM' and project is None:
+                    self.assertEqual(CAPTURE.project_ack(record, proof['run_ref'], selected)['assistant_scope'], 'SYSTEM')
+                else:
+                    with self.assertRaises(CAPTURE.Failure):
+                        CAPTURE.project_ack(record, proof['run_ref'], selected)
+
+    def test_system_does_not_relax_other_pins_or_requested_run(self):
+        proof, _, _ = fixture()
+        proof['assistant_scope'] = 'SYSTEM'
+        del proof['project_ref']
+        for field, bad in [('lease_ref', ''), ('image_recipe_ref', ''), ('runtime_revision_digest', ''), ('attempt', 0)]:
+            candidate = dict(proof)
+            candidate[field] = bad
+            with self.subTest(field=field), self.assertRaises(CAPTURE.Failure):
+                CAPTURE.ack_from_logs(json.dumps({'event': CAPTURE.EVENT, 'proof': candidate}).encode(), proof['run_ref'], 'SYSTEM')
+        self.assertIsNone(CAPTURE.project_ack({'event': CAPTURE.EVENT, 'proof': proof}, 'run_foreign01', 'SYSTEM'))
+        with self.assertRaises(CAPTURE.Failure):
+            CAPTURE.project_ack({'event': CAPTURE.EVENT, 'proof': proof}, proof['run_ref'])
+
     def test_closed_projection_privacy_and_exact_equal(self):
         proof, columns, options = fixture()
         record = {'event': CAPTURE.EVENT, 'proof': proof, 'message': 'PRIVATE_COOKIE_SENTINEL'}
@@ -150,7 +221,8 @@ class CaptureTest(unittest.TestCase):
 
     def test_invalid_cli_never_echoes_argument_values(self):
         for args in (['--run-ref', 'PRIVATE PASSWORD'],
-                     ['--run-ref', 'run_fixture', '--unknown', 'PRIVATE_TOKEN']):
+                     ['--run-ref', 'run_fixture', '--unknown', 'PRIVATE_TOKEN'],
+                     ['--run-ref', 'run_fixture', '--assistant-scope', 'PRIVATE_SCOPE']):
             result = subprocess.run([sys.executable, str(SOURCE), *args],
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             self.assertEqual(result.returncode, 1)

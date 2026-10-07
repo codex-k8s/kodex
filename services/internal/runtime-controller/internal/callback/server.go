@@ -775,6 +775,10 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	structured := result
 	if err != nil {
 		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
+		if params.Name == "delegate_agent" && projectionErr == nil && delegationInputFailureClass(err) != "" {
+			structured = map[string]any{"error_code": delegationInputInvalidCode, "retryable": true,
+				"guidance": delegationInputInvalidGuidance}
+		}
 		if params.Name == "get_configuration_catalog" && projectionErr == nil && errors.Is(err, errAssistantCatalogSelection) {
 			structured = map[string]any{"error_code": assistantCatalogInputInvalidCode, "retryable": true,
 				"guidance": assistantCatalogInputInvalidGuidance}
@@ -831,6 +835,9 @@ func invalidAssistantPlan(reason string) error {
 }
 
 func controlFailureClass(err error) string {
+	if class := delegationInputFailureClass(err); class != "" {
+		return class
+	}
 	if errors.Is(err, errRuntimeFileInput) {
 		return runtimeFileInputFailureClass
 	}
@@ -1934,26 +1941,9 @@ func assistantPlanTextWithinLimit(value string, maximum int) bool {
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
-	if !onlyKeys(arguments, "target_agent_ref", "workflow_step_key", "task", "input") {
-		return nil, errors.New("delegation input is invalid")
-	}
-	target, _ := arguments["target_agent_ref"].(string)
-	stepKey, _ := arguments["workflow_step_key"].(string)
-	task, _ := arguments["task"].(string)
-	allowed := false
-	for _, item := range input.DelegationTargets {
-		if item.Ref == target && item.WorkflowStepKey == stepKey {
-			allowed = true
-			break
-		}
-	}
-	if !allowed || strings.TrimSpace(task) == "" || len(task) > 64<<10 {
-		return nil, errors.New("delegation is not allowed")
-	}
-	bounded, _ := arguments["input"].(map[string]any)
-	structure, err := structpb.NewStruct(bounded)
+	target, stepKey, task, structure, err := validateDelegationInput(input, arguments)
 	if err != nil {
-		return nil, errors.New("delegation input is invalid")
+		return nil, err
 	}
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()

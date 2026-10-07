@@ -202,6 +202,72 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 07:31–07:52 UTC — причины остановки, hot fix и свежие input proofs
+
+На source253d5fe6 полный run_qac3AdH1vgybtUSD99lyrhL9 завершился FAILED3,
+safeErrorCode RUNTIME_WORKFLOW_INCOMPLETE: FAILED1/SUCCEEDED3/CANCELLED32,
+active0. Native seq110–111 callback turntrn_FgYgkPnIIqDl3Xww87RHdp1J
+передал Developeragt_pWHh9efzn_Ug0qYiMdVlqjeb вместе сstep-002, который
+опубликованная Workflow9/revision3 закрепляет за Architect. Намерение в
+commentary109 не совпало с actual safeParameters. Guards правильно отклонили
+пару; потери authority или upstreamRPC причины этим не доказаны.
+
+Hot working tree253d5fe6: typed local shape/selection/task/input rejection
+delegate_agent теперь возвращает DELEGATION_INPUT_INVALID и ограниченную
+подсказку исправить вход один раз по текущей schema — только до owner command
+и после принятого FAILED activity receipt. RPC/permission/UNKNOWN/projection
+failures не повторяются, server pair не подменяет. Agent isolated callback
+688PASS/2existingSKIP3.083s/vetPASS; catalog public producer/consumer PASS.
+ROOT callback unit PASS2.779s/vetPASS; Python capture12/12 PASS0.272s;
+graph13/13 PASS0.752s. Native bounded correction пока NOT RUN.
+
+RC Ready1/PodUID38269def-50fc-402e-ab6e-b876424d929a. Host/Pod SHA равны:
+server.go b051da911bef1a15063cc2623122cdd5f2911bcbfb213cf6e680f6c71dd428f2,
+delegation_input.go d8bb8d978d2af597223eefc84d7c3e82ee5af93252b0b08045c7dcd7ea17a96a.
+Air пересобрал buildmain167c472e3ec3c17b0cfc83c1534c7ca9933bc2d638877b5d96feb28b5b70bcb9;
+symbols validateDelegationInput/delegationInputFailureClass присутствуют.
+Это build/source proof, не immutable release либо independently proven
+serving-PID closure; исторические annotations не переименованы в новый SHA.
+
+Capture теперь выбирает scope NONE/PROJECT/SYSTEM явно (defaultNONE).
+NONE/PROJECT сохраняют обязательный projectRef; только explicit SYSTEM
+допускает отсутствующий/пустой projectRef. Никакие остальные pins не ослаблены.
+Старые SYSTEM C7/web/context runs SUCCEEDED, GitHub run_9quphQV6GBUOggH7N0sDjHcJ
+FAILED2 PROVIDER_UNAVAILABLE. Их early ACK не захвачен — UNKNOWN, не PASS.
+
+Новый SYSTEM combined READ run_V2BTNVeFhR8QqzrFP2lNCbvh,
+session ses_ojXxSQljvEnXBAaSPdk94Ahr/turntrn_84RMUt3LU9Mn0-XQb79s1w0j,
+PodUIDb7a1b340-8d70-4db4-83c5-0b3f8dba061d: early ACK CAPTURED, ownG11
+manifest46df7c91/ENV26/binding6/tools38. Expectedtask/provider/inbox SHA
+6ce34ed77de1cac1a43934017e05a17bac80eac0da69fcddd24862323e2bc5bb EQUAL,
+instructions EQUAL, samePod image binary40f3268a…c93b EQUAL. ProtectedRUN
+preview complete/diagnostics0/templatef4926f1b/materialization
+cd367779b0f226990df25ba3802d8baa0ae5820ba31516f49ca83cb76d51553f совпал.
+Config и Context7resolve inv_UpDUPbzSJFZMv5Yf67p7_Ng1 SUCCEEDED, затем
+FAILED2 PROVIDER_UNAVAILABLE до query/web/git. Exact Pod удалён до чтения
+failure stage; stage/class/detail UNKNOWN. Archive не содержит brokerstderr,
+чужие логи не читались. Подготовляется bounded exactPod failure watcher;
+ещё не выполненные инструменты не считать PASS или доказанной network ошибкой.
+
+Manager instructions опубликованы с фазовым противоречием: actual PR нужен
+до любой задачи, хотя INTAKE идёт до реализации. Native PROJECT helper
+run_BNSJqj36t5_rCm-NvpXy85jO/session ses_m_gnlQ49gF30J74Mw2vEtdgO/
+turntrn_OTNjQ92Idq_23DPQOT66WiMM попросили подготовить ровно один draft,
+сохранив исходные security/review правила, без новых grants. Early ACK:
+PROJECT/G5/ENV8/binding7/tools38, exact own task/inbox/provider
+9a811499cf17e58c29a174ba61a9f47a16ae88cb07ae38d2e5849f637d9e0923 EQUAL,
+materialization6f54013014e00aabbbff1a14b5470eca2fdec8efd62a952d81c2a01111fd943a.
+Первый samePod image binary CAPTURED/EQUAL, повторный exec NOT RUN — не
+смешивать результаты. Native helper technicalSUCCEEDED, semanticBLOCKED:
+штатный каталог не отдаёт полные инструкции обычного recipientAGENT.
+CURRENT_CONFIGURATION правильно own-only; AGENT_CONFIGURATION пока нет.
+Draft не создан, Validate/Apply/Publish NOT RUN. Новый scoped read path
+проектируется только для current AGENT context и свежих owner permissions;
+не расширять own-only каталог как запасной путь.
+
+Chrome5 reload07:50, Console error/warn0, чужие6/13/18 не затрагивались.
+Полный65/full33/finalPR остаются OPEN; старый root FAIL не переписывается.
+
 ### 07.10.2026 07:19–07:24 UTC — публикация full-read Workflow и новый full33
 
 PROJECT helper run_blWnh6vvHg9vyeEmpUcnP0gb завершился с native plan
