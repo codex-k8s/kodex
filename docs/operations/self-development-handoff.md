@@ -24,7 +24,8 @@ updated: 2026-10-06
 - Host/Pod hashes project catalog/credential worker/lease keeper совпали.
 - `dda27127` test-only own fixture вместо зависимости от соседних subtests;
   paired selected publicPG exact59b21e1a PASS7.664s/2cases/0SKIP.
-  Whole Bootstrap адресно запущен отдельно, пока НЕ объявлен PASS.
+  Полный public TestBootstrapComponent exactdda27127 PASS92.485s,
+  83direct/153nested cases/0FAIL/0SKIP, остальные CP suites не запускались.
 - Developer24 plan `pln_jk4gu9TRh_K5yzQug2TG2B8i` создан собственным PROJECT
   помощником, exact24keys/C28/recipient8/package2.5/NONE[] проверены; Validate
   вернул v2VALID/problems[]. Один native Apply завершился v3APPLIED;
@@ -33,8 +34,11 @@ updated: 2026-10-06
   COMPLETED; ранний sameUID provider ACK38tools/23grants, G4/task/inbox/
   instructions EQUAL. Остальные5 ролей ещё без новых grants.
 
-Далее: readback Developer Apply → Manager17/Architect16/Documentation14/
-Security13/Lexical13 через отдельные fresh AGENT typed plans → READ health/
+Manager17 plan `pln_BfB973d00nFtZ80BZ_aGzGsU` тоже v3APPLIED: fresh69CONNECTED/
+62enabled = helper21 + Developer24 + Manager17, все exact scope/NONE[].
+
+Далее: Architect16/Documentation14/Security13/Lexical13 через отдельные fresh
+AGENT typed plans → READ health/
 Manager callback existing review → publish/merge/freshmain → full33 Issue1796.
 
 ## Предыдущий checkpoint01:38

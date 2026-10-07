@@ -182,7 +182,10 @@ remote/PR `1b9c7b56`. Полный65/33step остаётся OPEN.
 - `dda27127` интегрирует test-only59b21e1a: fixture сама завершает owner catalog
   tasks и использует собственное runtime environment через защищённый read.
   Production и assertions неизменны. Exact59b21e1a paired publicPG model catalog
-  и managed configuration PASS7.664s/2subtests/0SKIP; whole Bootstrap ещё NOT RUN.
+  и managed configuration PASS7.664s/2subtests/0SKIP. Полный публичный
+  TestBootstrapComponent на exactdda27127 PASS92.485s,83direct/153nested
+  cases,0FAIL/0SKIP; managed lifecycle PASS13.53s в полном порядке.
+  Остальные CP suites этим запуском не проверялись.
 - Новый helper run `run_gF_KbsTnRpGKZ2WhuHjM2SKP` готовит24 Developer права.
   Ранний ACK same Pod UID `f5ccca35-e964-4504-a476-d5a7f440e47a` подтвердил
   exact G4 manifest `e5e5a118…`,38tools/23grants, task/provider/inbox EQUAL
@@ -192,6 +195,12 @@ remote/PR `1b9c7b56`. Полный65/33step остаётся OPEN.
   expectedC28/package2.5/NONE[], Validatev2VALID/problems[], один native Apply
   завершился v3APPLIED. Fresh read200: connection52/CONNECTED/45grants,
   helper21 + Developer24, exact repository scope. Остальные роли ещё OPEN.
+- Native Manager17 plan `pln_BfB973d00nFtZ80BZ_aGzGsU`: DRAFTv1 exact17keys/
+  recipient8/C52/package2.5/NONE[]; Validatev2VALID/problems[], один Apply
+  завершился v3APPLIED. Fresh read200: connection69/CONNECTED/62enabled,
+  helper21 + Developer24 + Manager17, все exact repository scope/NONE[].
+  Архитектор и три Reviewer ещё OPEN. Ранний sameUID helper ACK G4/38tools/
+  23grants/inbox/instructions EQUAL; это не обычный Manager runtime proof.
 
 ### 07.10.2026 01:38 UTC — внешняя callback-дуга и точные source проверки
 
