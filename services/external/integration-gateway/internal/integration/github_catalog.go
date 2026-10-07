@@ -38,14 +38,16 @@ type githubCatalogInput struct {
 	JobID          int64  `json:"job_id"`
 	Limit          int    `json:"limit"`
 	Cursor         int    `json:"cursor"`
+	OffsetBytes    int64  `json:"offset_bytes"`
+	MaximumBytes   *int   `json:"maximum_bytes"`
+	ExpectedSHA    string `json:"expected_sha"`
 }
 
 type githubContentView struct {
-	Path    string `json:"path"`
-	Type    string `json:"type"`
-	SHA     string `json:"sha"`
-	Size    int    `json:"size"`
-	Content string `json:"content_base64,omitempty"`
+	Path string `json:"path"`
+	Type string `json:"type"`
+	SHA  string `json:"sha"`
+	Size int    `json:"size"`
 }
 
 type githubBranchView struct {
@@ -139,7 +141,9 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 	}
 	options := github.ListOptions{Page: in.Cursor, PerPage: in.Limit}
 	switch request.Operation {
-	case "github.repository.content.read", "github.repository.content.list":
+	case "github.repository.content.read":
+		return executeGitHubContentRead(ctx, client, owner, repo, request, capability, in)
+	case "github.repository.content.list":
 		var directory []*github.RepositoryContent
 		file, err := githubRead(ctx, capability, func() (*github.RepositoryContent, *github.Response, error) {
 			file, entries, response, err := client.Repositories.GetContents(ctx, owner, repo, in.Path, &github.RepositoryContentGetOptions{Ref: in.Ref})
@@ -148,16 +152,6 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 		})
 		if err != nil {
 			return Result{}, err
-		}
-		if request.Operation == "github.repository.content.read" {
-			if file == nil || file.GetPath() != in.Path || file.GetType() != "file" || file.GetEncoding() != "base64" || file.GetSize() > maximumResponseBytes {
-				return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-			}
-			content, err := file.GetContent()
-			if err != nil || len(content) != file.GetSize() {
-				return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-			}
-			return providerResult(request, "github-content:"+file.GetSHA(), githubContentView{file.GetPath(), file.GetType(), file.GetSHA(), file.GetSize(), base64.StdEncoding.EncodeToString([]byte(content))})
 		}
 		if file != nil || len(directory) > 1000 {
 			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}

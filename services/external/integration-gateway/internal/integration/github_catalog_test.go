@@ -53,7 +53,7 @@ func githubExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 		if path != "/contents/src/a.txt" || r.Method != "GET" {
 			t.Error("content read route changed")
 		}
-		return `{"path":"src/a.txt","type":"file","sha":"abc","size":4,"encoding":"base64","content":"VGV4dA=="}`, true
+		return `{"path":"src/a.txt","type":"file","sha":"4add785dafe43f11202c6b7286b47c3b62401dd2","size":4,"encoding":"base64","content":"VGV4dA=="}`, true
 	case "github.repository.content.create", "github.repository.content.update", "github.repository.content.delete":
 		method := "PUT"
 		if strings.HasSuffix(operation, "delete") {

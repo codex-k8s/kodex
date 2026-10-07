@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 2.5.0
+  version: 3.0.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -200,7 +200,7 @@ spec:
         retryBackoffMilliseconds: 250
     - key: github.repository.content.read
       name: Прочитать файл
-      description: Прочитать файл в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      description: Читать UTF-8 файл страницами до eof в одном разрешённом репозитории. ref — точный commit SHA; после первой страницы передавать expected_sha и next_offset_bytes. Ответ содержит дайджесты полного файла и страницы. Каждая страница имеет отдельный receipt.
       operation: github.repository.content.read
       risk: READ
       approvalPolicy: NONE
@@ -210,13 +210,22 @@ spec:
         connectionFields: [owner, repository]
       inputFields:
         - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"expected_sha","type":"STRING","format":"PLAIN","required":false,"maximumLength":40}
+        - {"key":"offset_bytes","type":"INTEGER","required":false,"minimum":0,"maximum":65536}
+        - {"key":"maximum_bytes","type":"INTEGER","required":false,"minimum":4,"maximum":2048}
       outputFields:
         - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
         - {"key":"type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"size","type":"INTEGER","required":true,"minimum":0,"maximum":2147483647}
-        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":false,"maximumLength":65536,"allowEmpty":true}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":40}
+        - {"key":"size","type":"INTEGER","required":true,"minimum":0,"maximum":65536}
+        - {"key":"text","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048,"allowEmpty":true}
+        - {"key":"commit_sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":40}
+        - {"key":"offset_bytes","type":"INTEGER","required":true,"minimum":0,"maximum":65536}
+        - {"key":"next_offset_bytes","type":"INTEGER","required":true,"minimum":0,"maximum":65536}
+        - {"key":"eof","type":"BOOLEAN","required":true}
+        - {"key":"source_digest","type":"STRING","format":"PLAIN","required":true,"maximumLength":71}
+        - {"key":"chunk_digest","type":"STRING","format":"PLAIN","required":true,"maximumLength":71}
       execution:
         idempotency: READ_ONLY
         timeoutSeconds: 30

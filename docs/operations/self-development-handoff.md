@@ -10,6 +10,72 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 09:51 UTC: HEAD/remote/Draft1800 остаётся `900f0cad`;
+постраничный GitHub v3 adapter/contracts/tests и журнал DIRTY.
+Root `run_TKTiAp9pDr6dbXxn5vI6vTQm` штатно CANCELLED в09:38:
+version3, last sequence666, граф28 CANCELLED +13 SUCCEEDED;
+подов runtime-turn после cleanup нет. Lexical также вернул смысловой BLOCKED,
+actual Developer PR отсутствует. Новый root не запускать до fresh полного READ.
+
+Codegen/integration library PASS3.864s; integration-gateway full unit PASS26.490s,
+vet/gofmt/diff PASS; CP platform/domain/transport unit PASS1.116/.265/.598s;
+runtime callback unit PASS3.556s. Точный disposable PostgreSQL
+TestBootstrapComponent/managed_configuration_lifecycle_is_immutable_and_selectively_rebound
+PASS7.46s (parent7.79s), включая managed integration execution. Прежний фильтр
+без выбранных тестов не засчитывается. Host/Pod helper/catalog SHA совпадают,
+обслуживаемый executable `d9090ab5…367b` содержит новый page helper;
+compiled Git SHA UNKNOWN (`-buildvcs=false`).
+
+Штатно создана, проверена и опубликована UI-копия SHIPPED GitHub3.0.0:
+configuration `mcfg_2qHLfZHqxPZ6-_WTJcDsBEAI` version4,
+revision `mrev_hJOKWOi2raJpAUGLi6V6fHu_`, digest
+`14ebb336f843f4b7b54e0326289363569fb660560c29a9260a853d6af145dd3a`.
+Перепривязано только `int_Pn1ALY1e8kAn67vrr1-okIKe`: version128,
+NOT_CONNECTED, credentials/grants сброшены штатно. Отключённый второй GitHub
+не изменялся. Защищённая настройка credentials ещё выполняется; перед повтором
+проверить readback, затем native Test и восстановить только прежние exact
+least-privilege profiles подтверждаемыми планами. Chrome page5 /integrations,
+reload09:50; Console0. Screenshot всё ещё NOT RUN.
+
+09:56 UTC: protected credential setup PASS version129; штатный Test завершён
+CONNECTED version131. Две предыдущие закрытые ошибки до mutation: исчерпан
+лимит файлов /tmp и Node TLS trust; повтор с доступным TMPDIR и системным CA,
+без TLS bypass. Project helper native DRAFT restore21 запущен:
+conversation `cnv_rW3Z3ytNkCUngDLDDn12hYxG`,
+run `run_FqVAVYIG7uMxxTyz9II7u0S5`, turn `trn_iB5oVL8K1udNAlqVSd5glmUH`.
+План ещё UNKNOWN; не запускать duplicate. Page5 проект, helper открыт.
+Owner GET ошибочного single conversation endpoint дал405; read-only
+collection readback подтвердил единственный RUNNING turn. Это не ошибка
+штатного frontend и не повод повторять уже принятый ход.
+
+## Предыдущий checkpoint09:37
+
+07.10.2026 09:37 UTC: HEAD/remote/Draft1800
+`900f0cadec76c653bf1c69441fc306b736d36e21`. Realtime/широкие callback дуги
+зафиксированы и опубликованы; на фактическом SVG четыре дуги не пересекают
+38 карточек. Chrome восстановился без restart, page5 scoped read/reload
+Console/Network PASS; screenshot пока NOT RUN. Чужие6/13/18 не трогать.
+
+Текущий full33 root `run_TKTiAp9pDr6dbXxn5vI6vTQm` ещё RUNNING, но
+Architect/Developer/Documentation/Security вернули смысловой BLOCKED:
+полное чтение repo AGENTS моделью не подтверждено, architecture gate закрыт,
+actual Developer PR/SHA отсутствуют. Lexical выполняется, exact ACK CAPTURED.
+Не принимать technical success за semantic PASS и не запускать повторный root
+до устранения причины. Security full capture до cleanup NOT RUN;
+Developer watcher завершился NOT_CAPTURED/FOLLOW_STREAM_ENDED, не PASS.
+
+Исправление DIRTY: ROOT contracts/github.yaml version3 с bounded UTF-8 pages,
+exact commit/blob pins, offsets/digests/EOF; manager_instruction_effective_path
+владеет adapter/helper/tests, не contracts/docs. Whole-file native base64
+путь удаляется; отдельные configuration source/writeback full-file workflows
+сохраняют собственную authority/claim. Native envelope page budget проверять
+после сериализации. Далее codegen/unit, штатный новый package/connection/grant
+profile lifecycle (без SQL/manual source подмены), fresh actual READ → NEW33.
+Окончательный internal PR НЕ merge; full65/33/3reviews/fix/READY OPEN.
+Перед следующим publication privatepublisher previous →900f0cad.
+
+## Предыдущий checkpoint09:18
+
 07.10.2026 09:18 UTC: HEAD/remote/Draft1800
 `594d455f9ddba0f67fabce03f85621dc2661a6b5`; ROOT realtime backend5/FE2,
 callback geometry2 и журнал/handoff DIRTY, адресные проверки PASS.

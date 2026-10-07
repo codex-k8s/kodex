@@ -69,7 +69,7 @@ func catalogInputs() map[string]string {
 		"gitlab.job.cancel":                    `{"job_id":4}`,
 		"gitlab.job.trace.read":                `{"job_id":4}`,
 		"github.repository.content.list":       `{"path":"src","ref":"main"}`,
-		"github.repository.content.read":       `{"path":"src/a.txt","ref":"main"}`,
+		"github.repository.content.read":       `{"path":"src/a.txt","ref":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
 		"github.repository.content.create":     `{"path":"src/a.txt","branch":"main","message":"Change","content_base64":"VGV4dA=="}`,
 		"github.repository.content.update":     `{"path":"src/a.txt","branch":"main","message":"Change","content_base64":"VGV4dA==","sha":"abc"}`,
 		"github.repository.content.delete":     `{"path":"src/a.txt","branch":"main","message":"Change","sha":"abc"}`,

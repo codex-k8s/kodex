@@ -202,6 +202,118 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 09:38–09:51 UTC — остановлен BLOCKED прогон, новый GitHub пакет
+
+- Штатный Cancel прежнего root `run_TKTiAp9pDr6dbXxn5vI6vTQm` подтверждён:
+  CANCELLED version3, last sequence666, граф28 CANCELLED +13 SUCCEEDED;
+  cleanup runtime-turn Pod завершён. Lexical FINAL также BLOCKED: отсутствует
+  actual Developer PR/diff, review не объявлен успешным. Нового root нет.
+- Version3 GitHub всегда возвращает bounded UTF-8 page с exact commit/blob,
+  source/chunk digest, offset/next/eof; whole-file native base64 удалён.
+  Сериализованный двойной MCP envelope ограничен8192 bytes, page2048 bytes.
+  Все45730 bytes synthetic fixture восстанавливаются до EOF; Unicode,
+  empty/invalid/NUL, stale blob, неверные offsets и metadata проверены.
+- ROOT codegen и integration library PASS3.864s; integration-gateway полный
+  suite PASS26.490s, vet/gofmt/diff PASS. CP platform/domain/transport unit
+  PASS1.116/.265/.598s, callback PASS3.556s. Исторические FAIL старых fixture
+  versions, неверного target/toolchain и /tmp capacity не считаются PASS;
+  исправленные команды повторены. PG прежний неверный фильтр не выбрал тестов;
+  fresh точный managed lifecycle subtest PASS7.46s (parent7.79s), execution
+  helper действительно выполнялся; worker grant/policy queries PASS.
+- Runtime integration-gateway Pod UID `078c2a47-39c4-4e07-be7c-f4d1a5ae6dc0`:
+  host/Pod page helper SHA `d08dc642…60edfa571b335bee9d`, catalog
+  `8c48bf4f…35ee9d`; servicing executable и hot build SHA
+  `d9090ab5470622a4310a81d18af0db12cc48959f39982b0a76a1fe3904de367b`.
+  Symbols новых page helpers есть; exact compiled Git SHA UNKNOWN, поскольку
+  hot build использует -buildvcs=false. Это source/binary proof, не full QA.
+- Штатный owner UI Copy → Validate → Publish → Impact → Bind выполнен только
+  для активного GitHub подключения. Новый package3.0.0/UI revision
+  `mrev_hJOKWOi2raJpAUGLi6V6fHu_`, configuration
+  `mcfg_2qHLfZHqxPZ6-_WTJcDsBEAI` version4, digest
+  `14ebb336f843f4b7b54e0326289363569fb660560c29a9260a853d6af145dd3a`.
+  Connection `int_Pn1ALY1e8kAn67vrr1-okIKe` version128 NOT_CONNECTED,
+  credentials/grants сняты owner transaction; второй DISABLED GitHub сохранён.
+  Protected credential setup затем PASS version129; штатный owner Test
+  завершился CONNECTED version131. Прежние readback перед повтором подтверждали
+  отсутствие mutation. TLS bypass не использован. Profile restore и fresh
+  native READ ещё NOT RUN; не менять старые pins и не выдавать новые полномочия.
+- Chrome page5 reload09:50, Console0; чужие вкладки не изменялись. Fresh
+  screenshot/полный native EOF/NEW33/internal Developer PR/reviews OPEN.
+  Context7 /google/go-github: GetContents/ref/decoding; официальная Codex
+  configuration reference: отдельный MCP output budget. Точная сохранённая
+  model-history граница старого усечения остаётся UNKNOWN.
+- 09:56 UTC: native PROJECT helper DRAFT restore21 принят один раз:
+  conversation `cnv_rW3Z3ytNkCUngDLDDn12hYxG`,
+  run `run_FqVAVYIG7uMxxTyz9II7u0S5`, turn `trn_iB5oVL8K1udNAlqVSd5glmUH`.
+  Задача ограничена21 existing disabled собственными grants; Apply ещё NOT RUN.
+  Readback выполняется collection endpoint; ошибочный diagnostic single GET405
+  не принят за frontend defect. Ожидаемый план и его фактический diff OPEN.
+
+### 07.10.2026 09:32–09:37 UTC — текущий full33 заблокирован, чтение репозитория
+
+- HEAD/remote/Draft #1800 — `900f0cadec76c653bf1c69441fc306b736d36e21`,
+  предыдущие realtime и широкие обратные дуги опубликованы; это не merge.
+  Chrome восстановился без перезапуска. Reload рабочей page5 и scoped
+  Console/Network снова доступны. На фактическом SVG четыре callback дуги
+  проверены по 197 точкам относительно 38 карточек: пересечений нет.
+  Свежий screenshot пока NOT RUN; геометрия не заменяет визуальную проверку.
+- Actual Architect, Developer, Documentation и Security вернули BLOCKED:
+  GitHub READ большой `AGENTS.md` не подтвердил полное чтение моделью;
+  архитектурный gate не пройден. Developer не создавал ветку, PR или SHA.
+  Documentation/Security правильно не объявили review несуществующего diff.
+  Lexical шаг выполняется; root ещё RUNNING. Нового запуска/retry не было.
+  Полный33, реальный PR1796 и итоговая готовность остаются OPEN.
+- Docs input ACK CAPTURED: template `a25dd206…5b5`, materialization
+  `689898e1…0020a`, task/inbox `c7071b2c…1e9f`, сравнения EQUAL.
+  Lexical ACK CAPTURED: run `run_LDAN7EJfEICtXVzBCPRZxGeP`, session
+  `ses_jeYWNHyWvOx2esH4f25qXmIY`, turn `trn_B3l5orNbf72BDnPwAYicjqGR`,
+  attempt1; Pod UID `1ba7fba3-9a51-4bf0-969d-cf0ac14bea0b`, ENV5/binding6,
+  image generation5, tools38/grants15. Template `613041c7…70fea`,
+  materialization `16d0fa82…7762`, task/inbox
+  `0f8eed4aa373bad9a2bab572d4f730f7252b9f190fa4c8966c65620d21fbf186`,
+  instruction `757f3047…a0ab`, EQUAL. Independent expected-task comparison
+  NOT RUN. Security early ACK был виден, полный capture до cleanup NOT RUN.
+- Developer failure watcher завершился `NOT_CAPTURED/FOLLOW_STREAM_ENDED`,
+  а не timeout/PASS. Успешное завершение native роли не является проверкой
+  доставки provider failure или доказательством реализации Issue.
+- На main `b5f6fcde…` файл `AGENTS.md` имеет45730 bytes (60976 base64).
+  GitHub adapter/CP receipt/native MCP передают полный bounded результат;
+  native wire дублирует его в text/structuredContent. Официальная документация
+  Codex подтверждает отдельный budget усечения output. Точная сохранённая
+  model-history двух invocation не проверена: конкретная граница UNKNOWN.
+  Отдельный continuation после owner gate режет summary до4000 символов;
+  это другой путь, не причина, доказанная для READ с NONE.
+
+#### Карта исправления большого чтения
+
+Источник: full QA §§42/52/54–56, обязательное чтение правил до архитектурного
+gate. Actor — сотрудник, authority — authenticated lease/fence/generation,
+проектная connection и immutable grant/RuntimeRevision, не поля input.
+Путь: native `invoke` → Runtime.ExecuteIntegration → CP-owned invocation/
+worker claim → integration-gateway Execute → GitHub Contents API внутри
+закреплённого owner/repository → immutable receipt → CP GetInvocation →
+native MCP result → модель. Idempotency каждого вызова сохраняется, его input
+digest включает commit, blob pin и offset; actor/root/tenant не добавляются
+в payload как источник полномочий.
+
+Новый native `github.repository.content.read` version3 всегда выдаёт небольшую
+UTF-8 страницу, не whole-file base64. Требует exact commit; offset>0 требует
+expected blob SHA. Каждая страница содержит source/chunk SHA256, size,
+offset/next и eof; неверный pin/UTF-8/offset закрыто отклоняется. Размер
+проверяется также после сериализации native envelope. Existing server-owned
+configuration-source/writeback читает полный bounded файл отдельным
+claim/snapshot lifecycle, а не прежним native decoder. Новый контракт
+публикуется штатно, connections/grants/profiles закрепляют новую revision;
+старые pins не переписываются. Вызов READ не меняет бизнесовые сущности и
+не вводит событие вне существующего invocation/receipt lifecycle.
+
+Проверки до принятия: все страницы45730-byte fixture до EOF/реконструкция,
+Unicode/empty/invalid source и mismatch, bounded wire, прежние configuration
+source/writeback, codegen, exact hot source. Затем штатное обновление
+интеграции/профилей и реальный полный READ; только после этого NEW full33.
+GitLab/Confluence whole-content аналоги требуют своей version-pinned границы;
+GitHub PASS автоматически не распространяется на них.
+
 ### 07.10.2026 09:12–09:18 UTC — realtime интегрирован, Developer начал работу
 
 - Frozen backend patch SHA256
