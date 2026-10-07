@@ -202,6 +202,103 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 07:19–07:24 UTC — публикация full-read Workflow и новый full33
+
+PROJECT helper run_blWnh6vvHg9vyeEmpUcnP0gb завершился с native plan
+pln_o5QbzUBxCc-ScX4gQczSrkNA/revision1/contentDigest
+0ca2d5857a099636527acd3147ddd4ae8f225070bd36ba5c6cf87babea032e19.
+После прежнего PLAN_INPUT_INVALID повтор DRAFT1→VALID2→APPLIED3 через UI.
+ROOT сравнил actualbefore/parameters: top-level изменений0,33/33stepkeys,
+все нетекстовые поля без изменений; INTAKE неизменён, тексты2–33 сохраняют
+прежний prefix. Максимум purpose699B/result491B, общий текст36885B.
+Конкретная причина первого отказа UNKNOWN; доказан schema maxLength1000
+символов против CP byte-limit1000, но это не доказательство старого payload.
+
+Workflow wfl_1G05mcW4c7pweOjzfIzFYr6c version7 DRAFT → nativeValidate8VALID
+→ nativePublish9PUBLISHED/revision3/wfv_gudwoKZU1WRJMn4E2qmENORd.
+Draft и опубликованные invariant projections сохранили SHA
+6a4d52e377e61166cd09f6eb401870e2dee66a44c05d99016e0b01088560b3f3.
+ReadinessREADY/allowed,33steps, finalgatetrue/4decisions сохранены.
+Plan screenshot: scroll body/stickyfooter/32px controls без x-overflow;
+Console0. Это configurationPASS, не принятие всего SOFTWARE_CHANGE.
+
+Новый обычный UI launch07:23:09: run_qac3AdH1vgybtUSD99lyrhL9,
+session ses_RNRufiv4ypgyHGCdl2ggk8sX, attempt1, targetWorkflowversion9.
+Coordinator native делегировал step001 run_6TgIzsNfT84A1H0DzOrXPhOJ,
+session ses_gNVOmcBgiqCNndMjCRdAs49f, turn trn_6JWL-gVQjCx6t3SwngefYrnJ.
+Ранние actual ACK обоих: PROJECT G5/f8b60814, ENV5/binding6/tools38,
+instructionsfile/inbox EQUAL/taskInPrompttrue; coordinatorcap1/grants0,
+INTAKEcap22/grants19 — штатное attenuation, не новый доступ.
+INTAKE samePod UIDa4ad857e-4ca0-4b34-921b-57ae029cbb75 rejoinCAPTURED,
+image-file binary40f3268a257abb9ed21e016069baf3cbfbf16698c4634da7fa102fa1508fc93b
+EQUAL. RuntimeRevisionrrev_hflPzy0tY3uBAgtS_-I4z0VR/eb05f34e…68ed87c,
+materializationdc7f1774…d5ed95; taskbda5c0e…35be29. Независимое сравнение
+expectedtask и protectedRUNpreview ещё NOT RUN; ACK не подменяет его.
+Coordinator binaryfilecapture NOT RUN (exec недоступен), не объявлятьEQUAL.
+Root screenshot35nodes/47edges: текущий stage виден, внешний callback loop
+обходит карточки; обзор/рабочийzoom различаются. Console0/realtimeCONNECTED.
+Full33 RUNNING, finalPR/внутренниеreviews/§64 пока NOT RUN; whole65 OPEN.
+
+### 07.10.2026 07:16 UTC — повторная приёмка внешних обратных дуг
+
+На source5eba55bc повторно открыли живой run_fm-f-zh-FncAs0zbwbGNEN-d:
+6nodes/7edges, две зелёные пунктирные ответные связи идут широкими плавными
+дугами над карточками и не скрываются за ними. Screenshot desktop1692×1159
+PASS; Console error/warn0; graph/events/session/ticket и relevant reads200,
+realtimeCONNECTED. Fresh focused run-graph-layout unit13/13 PASS0.667s.
+Геометрия уже включена в текущий source; повторное изменение не требуется.
+Чужие Chrome6/13 не затрагивались.
+
+Native PROJECT helper run_blWnh6vvHg9vyeEmpUcnP0gb продолжает подготовку
+одного UPDATE_WORKFLOW полного33steps. Первый propose закрыто отклонён
+PLAN_INPUT_INVALID; после fresh catalog helper самостоятельно сокращает
+формулировки без потери правил. Apply/Publish ещё NOT RUN, исходный процесс
+не изменён. Это не PASS подготовки плана. Полный65/full33/finalPR OPEN.
+
+### 07.10.2026 07:04–07:08 UTC — exact checkpoint и native EOF PASS
+
+Source/remote/Draft1800 exact
+5eba55bcaa40cb062c7733a245083f6be9f1ccd3 readback PASS. Первый publisher
+после push получил временный readback FAIL; inspect доказал exact remote/PR,
+старое body. Повтор не делал второй push, обновил body/readback PASS.
+Hot running ELF d5d36271…a7f4 совпал после commit; git дерево clean.
+Повторные owner runtime reads подтвердили ReviewManager binding6/rev5/G5,
+PROJECThelper binding7/rev8/G5 и SYSTEM binding6/rev26/G11, tools38 у всех.
+
+Первый read-only Manager run_X7Ng_KaONPC46wrW7XMWu1YS вернул BLOCKED
+при SUCCEEDED execution: host prompt ошибочно требовал purposePROJECT для
+AGENT_RESULT. Найденный одноимённый PROJECT файл2395B не был заданным26276B;
+отказ от подмены корректен, read_file NOT RUN. Штатный result artifact
+создан pipeline; отдельные внешние effects/delegation не запускались.
+Root cause задания подтверждён canonical capture SQL: run-less files PROJECT,
+AGENT_RESULT/INTEGRATION_RESULT RUN_RESULT. Owner GET200 exact двух artifacts
+подтвердил26276/revision6 и39301/revision1; ни runtime authority, ни grants
+не ослаблены. Диагностический host GET несуществующего /files дал404;
+приложение после fresh navigation Console0.
+
+Новый ordinary Manager run_ITQ0pLg04CacIbV78sreopHq SUCCEEDED3,
+sessionses_LXav-lsRaKi6tUNoPVWib-FT, turntrn_b0lckcKNg0VQLarLSAIv1N4o/
+attempt1. Search2/metadata2/read_file5 SUCCEEDED; owner eventsGET200/sequence28
+содержит5 exact15field receipts (sequences15,17,19,21,23).
+Catalogvfc_lGre3OM8M6u7ZkhK0Yit5cQS/digest
+96cced23dc6047487f4b5def5f71e352668e65fce55e48fdd04684c4b30b62c1
+не менялся, purposeRUN_RESULT, source digests совпали с exact owner files.
+
+| Artifact | Revision/version/bytes | Actual contiguous pages |
+| --- | --- | --- |
+| art_HjIkZsPbF_YcLy6sQTzNFiyC | 6/1/26276 | 0→16384(false),16384→26276(true) |
+| art_RT7lMAhhZ1SD3s3YXJy-L5Vs | 1/1/39301 | 0→16383(false),16383→32767(false),32767→39301(true) |
+
+ROOT independent owner-read verifier PASS: exact run/session/turn/attempt,
+catalog/entry/version/source pins, size/offset/progress/EOF, ≤16384 page,
+15fields/≤2000bytes и две полные последовательности без gaps/overlaps.
+Это durable handler page proof, НЕ отдельный provider read ACK. Native final
+таблица совпала; исторические preview/completed не объявлены full-read proof.
+Chrome screenshot первого отказа/компактные tools проверен, Console0.
+Следующее: новый typed UPDATE_WORKFLOW с прежними33steps и инструкцией full
+read → ownerValidate/Publish → новый full33, не continuation старого run.
+Full65/full33 ещё OPEN.
+
 ### 07.10.2026 06:50–06:59 UTC — helper G5, SYSTEM promotion и квитанции
 
 Source137058d9 плюс ограниченные callback/UI changes; commit этих изменений
