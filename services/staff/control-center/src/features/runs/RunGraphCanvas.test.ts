@@ -20,6 +20,7 @@ vi.mock("@vue-flow/core", async () => {
     }),
     getBezierPath: () => ["M0 0"],
     useVueFlow: () => ({
+      dimensions: { value: { width: 700, height: 480 } },
       fitView: vi.fn().mockResolvedValue(undefined),
       getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
       onInit: vi.fn(),

@@ -2,6 +2,7 @@
 import { Background } from "@vue-flow/background";
 import {
   VueFlow,
+  getTransformForBounds,
   useVueFlow,
   type GraphNode,
   type NodeMouseEvent,
@@ -39,7 +40,10 @@ import {
   runGraphMinimumZoom,
   type RunGraphNodeData,
 } from "@/features/runs/run-graph-flow";
-import { layoutRunGraph } from "@/features/runs/run-graph-layout";
+import {
+  layoutRunGraph,
+  runGraphContentBounds,
+} from "@/features/runs/run-graph-layout";
 import { runGraphViewportCommand } from "@/features/runs/run-graph-viewport";
 import type {
   RunEdge,
@@ -111,7 +115,7 @@ const layout = computed(() => layoutRunGraph(props.nodes, props.edges));
 const retryAttempts = computed(() =>
   runGraphRetryAttempts(props.nodes, props.edges),
 );
-const { fitView, getViewport, onInit, setViewport, zoomIn, zoomOut } =
+const { dimensions, getViewport, onInit, setViewport, zoomIn, zoomOut } =
   useVueFlow(flowId);
 
 const flowElements = computed(() =>
@@ -222,16 +226,32 @@ async function fit(userInitiated = true): Promise<void> {
   if (userInitiated) userAdjustedView.value = true;
   programmaticViewportChange.value = true;
   try {
-    await fitView(
-      userInitiated
-        ? runGraphFitViewOptions(window.innerWidth, props.compact)
-        : runGraphInitialFitOptions(
-            window.innerWidth,
-            props.nodes,
-            props.edges,
-            props.selectedRef,
-            props.compact,
-          ),
+    if (
+      !dimensions.value.width ||
+      !dimensions.value.height ||
+      !props.nodes.length
+    )
+      return;
+    const options = userInitiated
+      ? runGraphFitViewOptions(dimensions.value.width, props.compact)
+      : runGraphInitialFitOptions(
+          dimensions.value.width,
+          props.nodes,
+          props.edges,
+          props.selectedRef,
+          props.compact,
+        );
+    const bounds = runGraphContentBounds(layout.value, options.nodes);
+    await setViewport(
+      getTransformForBounds(
+        bounds,
+        dimensions.value.width,
+        dimensions.value.height,
+        options.minZoom ?? runGraphMinimumZoom,
+        options.maxZoom ?? runGraphMaximumZoom,
+        options.padding,
+      ),
+      { duration: options.duration },
     );
   } finally {
     programmaticViewportChange.value = false;

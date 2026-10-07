@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getTransformForBounds } from "@vue-flow/core";
 
 import type {
   RunEdge,
@@ -9,8 +10,14 @@ import {
   layoutRunGraph,
   runGraphNodeHeight,
   runGraphNodeWidth,
+  runGraphContentBounds,
   smoothRunEdgePath,
 } from "@/features/runs/run-graph-layout";
+import {
+  runGraphFitViewOptions,
+  runGraphMinimumZoom,
+  runGraphMaximumZoom,
+} from "@/features/runs/run-graph-flow";
 
 function node(ref: string, createdAt: string): RunNode {
   return {
@@ -83,6 +90,87 @@ function sampleCurve(path: string): Array<{ x: number; y: number }> {
 }
 
 describe("layoutRunGraph", () => {
+  it.each([
+    { width: 700, height: 480 },
+    { width: 412, height: 480 },
+  ])(
+    "вмещает карточки и все callback-полосы в область $width × $height",
+    ({ width, height }) => {
+      const nodes = [
+        node("root", "2026-01-01T00:00:00Z"),
+        node("manager", "2026-01-01T00:00:01Z"),
+        node("developer", "2026-01-01T00:00:02Z"),
+      ];
+      const layout = layoutRunGraph(nodes, [
+        edge("root_manager", "root", "manager"),
+        edge("manager_developer", "manager", "developer"),
+        ...Array.from({ length: 3 }, (_, index) =>
+          edge(
+            `callback_${String(index)}`,
+            "developer",
+            "manager",
+            "CALLBACK_TO",
+          ),
+        ),
+      ]);
+      const options = runGraphFitViewOptions(width, true);
+      const viewport = getTransformForBounds(
+        layout.bounds,
+        width,
+        height,
+        options.minZoom ?? runGraphMinimumZoom,
+        options.maxZoom ?? runGraphMaximumZoom,
+        options.padding,
+      );
+      expect(layout.bounds.y).toBeLessThan(
+        Math.min(...layout.nodes.map((item) => item.y)) - 180,
+      );
+      const points = layout.edges
+        .filter((item) => item.edge.type === "CALLBACK_TO")
+        .flatMap((item) => sampleCurve(required(item.path)));
+      points.push(
+        ...layout.nodes.flatMap((item) => [
+          { x: item.x, y: item.y },
+          { x: item.x + runGraphNodeWidth, y: item.y + runGraphNodeHeight },
+        ]),
+      );
+      for (const point of points) {
+        expect(point.x * viewport.zoom + viewport.x).toBeGreaterThan(0);
+        expect(point.x * viewport.zoom + viewport.x).toBeLessThan(width);
+        expect(point.y * viewport.zoom + viewport.y).toBeGreaterThan(0);
+        expect(point.y * viewport.zoom + viewport.y).toBeLessThan(height);
+      }
+    },
+  );
+
+  it("считает bounds выбранной окрестности, включая только её обратные связи", () => {
+    const nodes = [
+      node("root", "2026-01-01T00:00:00Z"),
+      node("manager", "2026-01-01T00:00:01Z"),
+      node("developer", "2026-01-01T00:00:02Z"),
+    ];
+    const layout = layoutRunGraph(nodes, [
+      edge("root_manager", "root", "manager"),
+      edge("manager_developer", "manager", "developer"),
+      edge("callback", "developer", "manager", "CALLBACK_TO"),
+    ]);
+    const isolated = runGraphContentBounds(layout, ["developer"]);
+    const developer = required(
+      layout.nodes.find((item) => item.node.ref === "developer"),
+    );
+    expect(isolated).toEqual({
+      x: developer.x,
+      y: developer.y,
+      width: runGraphNodeWidth,
+      height: runGraphNodeHeight,
+    });
+    const paired = runGraphContentBounds(layout, ["manager", "developer"]);
+    expect(paired.y).toBe(layout.bounds.y);
+    expect(paired.x + paired.width).toBeGreaterThan(
+      developer.x + runGraphNodeWidth,
+    );
+  });
+
   it("возвращает callback над четырьмя карточками без изменения основной цепочки", () => {
     const nodes = [
       node("root", "2026-01-01T00:00:00Z"),

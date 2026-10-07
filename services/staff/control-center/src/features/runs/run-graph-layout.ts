@@ -22,6 +22,14 @@ export interface PositionedRunNode {
 export interface PositionedRunEdge {
   edge: RunEdge;
   path?: string;
+  bounds?: RunGraphBounds;
+}
+
+export interface RunGraphBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface RunGraphLayout {
@@ -29,6 +37,7 @@ export interface RunGraphLayout {
   edges: PositionedRunEdge[];
   width: number;
   height: number;
+  bounds: RunGraphBounds;
 }
 
 export function layoutRunGraph(
@@ -36,7 +45,13 @@ export function layoutRunGraph(
   edges: RunEdge[],
 ): RunGraphLayout {
   if (nodes.length === 0) {
-    return { nodes: [], edges: [], width: 0, height: 0 };
+    return {
+      nodes: [],
+      edges: [],
+      width: 0,
+      height: 0,
+      bounds: { x: 0, y: 0, width: 0, height: 0 },
+    };
   }
 
   const nodeByRef = new Map(nodes.map((node) => [node.ref, node]));
@@ -103,15 +118,14 @@ export function layoutRunGraph(
       const target = positionByRef.get(edge.targetNodeRef);
       return {
         edge,
-        path:
-          source && target
-            ? callbackRunEdgePath(
-                source,
-                target,
-                positioned,
-                callbackLanes.get(edge.ref) ?? 0,
-              )
-            : undefined,
+        ...(source && target
+          ? callbackRunEdgeGeometry(
+              source,
+              target,
+              positioned,
+              callbackLanes.get(edge.ref) ?? 0,
+            )
+          : {}),
       };
     }
     const points = graph.edge({
@@ -124,12 +138,16 @@ export function layoutRunGraph(
       path: points ? smoothRunEdgePath(points) : undefined,
     };
   });
-  const bounds = graph.graph();
+  const bounds = runGraphContentBounds({
+    nodes: positioned,
+    edges: positionedEdges,
+  });
   return {
     nodes: positioned,
     edges: positionedEdges,
-    width: bounds.width ?? 0,
-    height: bounds.height ?? 0,
+    width: bounds.width,
+    height: bounds.height,
+    bounds,
   };
 }
 
@@ -139,6 +157,15 @@ export function callbackRunEdgePath(
   nodes: ReadonlyArray<Pick<PositionedRunNode, "x" | "y">>,
   lane = 0,
 ): string {
+  return callbackRunEdgeGeometry(source, target, nodes, lane).path;
+}
+
+function callbackRunEdgeGeometry(
+  source: Pick<PositionedRunNode, "x" | "y">,
+  target: Pick<PositionedRunNode, "x" | "y">,
+  nodes: ReadonlyArray<Pick<PositionedRunNode, "x" | "y">>,
+  lane: number,
+): { path: string; bounds: RunGraphBounds } {
   // Боковые участки остаются в межколоночном зазоре, а обратная дуга
   // проходит над всеми карточками, включая продолжение в колонке исполнителя.
   const bend = horizontalGap / (target.x > source.x ? 3 : 2);
@@ -155,7 +182,7 @@ export function callbackRunEdgePath(
   const entryX = targetX - bend;
   const shoulderY = corridorY + radius;
 
-  return [
+  const path = [
     ["M", sourceX, sourceY],
     ["C", exitX, sourceY, exitX, shoulderY + radius, exitX, shoulderY],
     [
@@ -171,6 +198,51 @@ export function callbackRunEdgePath(
   ]
     .map((segment) => segment.join(" "))
     .join(" ");
+  const x = Math.min(sourceX, targetX, exitX, entryX);
+  const y = corridorY - radius / 2;
+  return {
+    path,
+    bounds: {
+      x,
+      y,
+      width: Math.max(sourceX, targetX, exitX, entryX) - x,
+      height: Math.max(sourceY, targetY) - y,
+    },
+  };
+}
+
+export function runGraphContentBounds(
+  layout: Pick<RunGraphLayout, "nodes" | "edges">,
+  nodeRefs?: readonly string[],
+): RunGraphBounds {
+  const refs = nodeRefs ? new Set(nodeRefs) : undefined;
+  const rectangles: RunGraphBounds[] = layout.nodes
+    .filter((item) => !refs || refs.has(item.node.ref))
+    .map((item) => ({
+      x: item.x,
+      y: item.y,
+      width: runGraphNodeWidth,
+      height: runGraphNodeHeight,
+    }));
+  for (const item of layout.edges) {
+    if (
+      item.bounds &&
+      (!refs ||
+        (refs.has(item.edge.sourceNodeRef) &&
+          refs.has(item.edge.targetNodeRef)))
+    ) {
+      rectangles.push(item.bounds);
+    }
+  }
+  if (!rectangles.length) return { x: 0, y: 0, width: 0, height: 0 };
+  const x = Math.min(...rectangles.map((item) => item.x));
+  const y = Math.min(...rectangles.map((item) => item.y));
+  return {
+    x,
+    y,
+    width: Math.max(...rectangles.map((item) => item.x + item.width)) - x,
+    height: Math.max(...rectangles.map((item) => item.y + item.height)) - y,
+  };
 }
 
 export function smoothRunEdgePath(
