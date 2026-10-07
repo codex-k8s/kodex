@@ -373,6 +373,9 @@ func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 	}
 	parameters := properties["parameters"].(map[string]any)
 	fields := parameters["properties"].(map[string]any)
+	if fields["completionCriteria"].(map[string]any)["maxLength"] != 2000 {
+		t.Fatal("workflow completion criteria exceeded the canonical character limit")
+	}
 	if fields["workflowRef"].(map[string]any)["enum"].([]string)[0] != "wfl_12345678" ||
 		fields["steps"] == nil || fields["inputFields"] == nil || fields["coordinatorAgentRef"] == nil || fields["projectRef"] != nil {
 		t.Fatalf("workflow update schema lost editable graph or exposed project authority: %#v", fields)

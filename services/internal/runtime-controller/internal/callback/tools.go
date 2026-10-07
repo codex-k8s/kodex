@@ -688,7 +688,7 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 		"workflowRef": enumSchema(workflowRef), "name": stringSchema(1, 160),
 		"purpose": stringSchema(0, 2000), "coordinatorAgentRef": opaqueRefSchema(),
 		"instructions":       stringSchema(0, 65536),
-		"completionCriteria": stringSchema(0, 65536),
+		"completionCriteria": stringSchema(0, 2000),
 		"maxConcurrency":     map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"timeoutSeconds":     map[string]any{"type": "integer", "minimum": 1, "maximum": 604800},
 		"inputFields":        fields, "steps": steps,

@@ -10,6 +10,39 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 12:58 UTC: HEAD/remote/Draft1800 `29220a03`; следующий scoped
+checkpoint фиксирует единый Unicode-лимит критерия завершения2000 на CREATE,
+UPDATE, hydration, validation и MCP schema, а также счётчик/ошибку/Save guard.
+Полный CP unit PASS, RC callback unit/vet PASS, frontend39 unit/typecheck/lint
+PASS; production build8.80s PASS до уточнения accessible label, повтор ниже.
+Компонентный PostgreSQL contour этого patch NOT RUN. CP source/Pod hashes и
+independent serving executable31618466 EQUAL; frontend source/Pod EQUAL.
+
+Полное native чтение WORKFLOW PASS:32pages/EOF128819B, общий SHA525aa117.
+Первый plan pln_Hl8sAc4L90GdI7c02h71LQMO ошибочно прошёл serverValidate с
+критерием2286, UIApply закрыт; plan штатно REJECTED/version3, effects0.
+После фикса schema/server новый ход того же PROJECT helper
+run_B8C3iKOxuHD61jeoe-bKtCZv/turntrn_bzZnwh6RgaspiSxg4bPaNmMx
+SUCCEEDED/attempt1. Native plan pln_1z-jhMRo13Lacb3ZBiDppqK2 изменил только
+instructions/completionCriteria783, сохранил все33steps/inputs/права.
+Validate VALID2, Apply APPLIED3/conflicts0, receipt
+rct_hOF11y6mSAnHBXJkQwYtRZoR. WorkflowValidate/Publish PASS:version12,
+PUBLISHED/revision4 `wfv_WGM47-yL7EyBjSQiMNJTaI_v`.
+No-op/source proof не заменяет actual prompt нового запуска.
+
+Ранний ACK нового helper CAPTURED/rejoined; instruction/file и provider/inbox
+EQUAL. Independent expected task/serving runner comparison NOT RUN.
+Chrome5: screenshot field2001/aria-invalid/error/SaveDisabled PASS, тестовый
+ввод возвращён к783 без Save; reload12:55, Console0/relevantAPI200.
+Далее один новый ordinary Manager и ранние capture дочерних ролей;
+не повторять старые terminal runs. Full65/внутренний DeveloperPR/reviews/READY
+OPEN; финальный внутренний PR не merge/auto-merge/owner approve.
+
+Повтор финального tree:20unit2.44s/Prettier/lint/typecheck/build9.15s PASS;
+source/Pod accessible-label patch EQUAL. Первый fixture lint FAIL исправлен.
+
+## Предыдущий checkpoint12:26
+
 07.10.2026 12:26 UTC: HEAD8456fc53/remoteDraft1800; RC paging patch+docs DIRTY
 до последующего scoped commit. Полный runtime-controller Go1.26.6 unit/vet/
 build PASS, native MCP page/full-read fixtures+race7.272s PASS. Source/Pod

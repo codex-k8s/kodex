@@ -2032,6 +2032,9 @@ const ru = {
     parallel: "Можно выполнять параллельно",
     humanGate: "Требуется решение человека",
     completion: "Критерий завершения",
+    completionLength: "{count} / {max} символов",
+    completionTooLong:
+      "Превышен лимит {max} символов. Сократите критерий завершения, чтобы сохранить изменения.",
     timeout: "Тайм-аут, секунд",
     concurrency: "Максимум параллельных исполнений",
     inputFields: "Входные данные",
@@ -6641,6 +6644,9 @@ const en = {
     parallel: "Can run in parallel",
     humanGate: "Human decision required",
     completion: "Completion criteria",
+    completionLength: "{count} / {max} characters",
+    completionTooLong:
+      "The {max}-character limit is exceeded. Shorten the completion criteria to save your changes.",
     timeout: "Timeout, seconds",
     concurrency: "Maximum parallel executions",
     inputFields: "Input data",

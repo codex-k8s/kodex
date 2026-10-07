@@ -10,6 +10,73 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 12:58 UTC — native план опубликован, единый лимит формы
+
+Tree поверх `29220a030164305175d233b0000c3d12c5e8da80`; commit этого раздела
+фиксирует backend/schema/frontend вместе. Большая конфигурация прочитана
+помощником до EOF:32страницы,128819B/SHA
+`525aa117a6e4b9a54e2c2223a2e9e86f9883fd5885680e4140457035895cefb4`.
+Независимая canonical реконструкция before дала те же bytes/digest.
+
+Обнаружен FAIL: native server Validate принимал completionCriteria2286 при
+каноническом UI/CREATE лимите2000; UPDATE MCP schema допускала65536.
+Plan `pln_Hl8sAc4L90GdI7c02h71LQMO` штатно REJECTED/version3; Apply не было.
+Общий `validWorkflowVersion` теперь закрыто отклоняет invalid UTF8 и >2000
+Unicode codepoints; CREATE/UPDATE/hydration/publication используют один gate.
+UPDATE schema2000 совпадает с CREATE. UI не обрезает loaded/user text,
+считает Unicode, показывает рядом счётчик и ошибку, связывает accessibility
+описание и отключает Save при overflow. Helper plan editor использует тот же
+Unicode-предел. Инвариант command/schema/ValidateApply закреплён в GO-DOC-001.
+
+- PASS Go1.26.6 CP full unit (`platform`1.015s, `transport/grpc`0.593s),
+  отдельный platform1.108s/vet; ASCII/русский/emoji2000/2001 и invalidUTF8
+  покрыты shared validator, CREATE/UPDATE cast и hydration.
+- PASS RC full callback4.166s/vet и адресный schema test0.286s.
+- PASS frontend39 tests/7suites6.06s, forced typecheck, ESLint7paths,
+  Prettier и production build8.80s. После уточнения accessible label повтор
+  адресных tests/typecheck/lint/build фиксируется отдельным readback ниже.
+  Существующее предупреждение о крупных chunks не подавлено.
+- PASS CP source/Pod commandsSHA64412d26, independently built binary и
+  servicing `/proc/1434/exe` SHA
+  `3161846698741a268389a9573edab9981d2eae63d60dd34a27d86620f81e8582` EQUAL.
+  RC tools source/Pod SHA dd0932b2 EQUAL. Frontend source/Pod EQUAL до последнего
+  accessible-label уточнения, повтор pending. PostgreSQL component NOT RUN.
+- PASS Chrome5 screenshot:2001 chars/aria-invalid=true/понятная ошибка/
+  SaveDisabled. Нет усечения, тестовый input возвращён к783 без сохранения.
+  После reload Console0 и workflow/session/bootstrap relevant HTTP200.
+
+Повторный native PROJECT helper `run_B8C3iKOxuHD61jeoe-bKtCZv`,
+session `ses_Q-40jcYi03wJpt7eXJNGIfMl`,
+turn `trn_bzZnwh6RgaspiSxg4bPaNmMx`,attempt1 SUCCEEDED/seq16.
+Plan `pln_1z-jhMRo13Lacb3ZBiDppqK2` содержит ровно1 UPDATE_WORKFLOW/version9:
+только instructions/completionCriteria783; all33steps/inputs/coordinator/
+limits/права неизменны. Instructions6570 совпали с предыдущим text-only plan.
+Native VALID/version2→APPLIED/version3/conflicts0, receipt
+`rct_hOF11y6mSAnHBXJkQwYtRZoR`, audit `aud_TPx_169sGQYWGLQZDWn9rvZ8`.
+Первый click после HMR timeout не принят за применение: authoritative plan
+оставался VALID2; свежий UID привёл к единственному effect12:46:56 UTC.
+Workflow native Validate(version11)/Publish(version12) PASS:
+PUBLISHED/revision4/ref `wfv_WGM47-yL7EyBjSQiMNJTaI_v`,stepCount33.
+Новый ordinary Manager ещё не запущен; actual prompt новых ролей не доказан.
+
+Ранний ACK CAPTURED/rejoined: Podruntime-turn-b26e4119ae864bab,
+UIDc95f6f6e-669c-4a1a-b126-3ef479e8589a; G5/ENV8/binding7/tools38/grants23.
+Provider/inbox SHA3aa797c0 EQUAL; instructions/file SHA2d43b1b5 EQUAL,
+27420B. Independent expected task и servicing runner comparison NOT RUN.
+Ошибочные host-диагностические GET на неподдержанные plan/conversation
+single endpoints404/405 не являются дефектами продукта; далее используется
+утверждённый list/rejoin read path. Старые root/parent terminal не повторяются.
+Context7 child checks: /golang/go Unicode; /websites/vuejs useId/a11y.
+Полный65 QA, реальная Developer1796 implementation, внутренние reviews/fixes
+и READY_FOR_HUMAN_REVIEW остаются OPEN; final internalPR не merge.
+
+Повтор на финальном tree:20 адресных tests2.44s/Prettier/ESLint PASS,
+forced typecheck и production build9.15s PASS. Первый label-test lint FAIL
+из-за optional capture в template literal; fixture исправлен, повтор PASS.
+Accessible textbox label теперь только «Критерий завершения», счётчик отдельно
+в description. Source/Pod WorkflowOverviewFields SHA
+`dd7e66527e4f85cc3dd08610edeaeb8e8304fa411da69b480ed36d240b054048` EQUAL.
+
 ## Checkpoint 07.10.2026 12:26 UTC — доступное полное чтение больших конфигураций
 
 Рабочий tree поверх опубликованного `8456fc5356f26e6bf91fad7ba59d78cd832a9868`.

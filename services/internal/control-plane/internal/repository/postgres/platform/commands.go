@@ -1350,6 +1350,10 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 }
 
 func validWorkflowVersion(version entity.WorkflowVersion) bool {
+	// Критерии завершения соблюдают общий лимит OpenAPI в Unicode-символах.
+	if !utf8.ValidString(version.CompletionCriteria) || utf8.RuneCountInString(version.CompletionCriteria) > 2000 {
+		return false
+	}
 	if strings.TrimSpace(version.Name) == "" || len(version.Name) > 160 || len(version.Purpose) > 2000 || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Inputs) > 100 || len(version.Steps) < 1 || len(version.Steps) > 200 || !validWorkflowInputFields(version.Inputs) {
 		return false
 	}
