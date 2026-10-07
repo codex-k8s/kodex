@@ -10,6 +10,34 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 21:24 UTC
+
+Full65 goal ACTIVE; автономно до08.10 14:00 Саратов /10:00UTC, Chrome
+list_pages/reload каждые5мин с сохранением ввода. HEAD/remote/Draft1800
+cca89eddef8cd867c0d2fba05aae3e055d856f49 EQUAL, mainb5f6fcde неизменен.
+Последний Workflow run_Va58jdtk2Z142rJ4LLkXvsOl и root
+run_h2oExBQKp1LV87QHuxxmZciJ FAILED3: INTAKE technical SUCCEEDED2,
+но семантически неполный READ. Пять документов EOF, восемь только первая
+страница; отказ полномочий или provider/runtime limit не доказан.
+Coordinator прочитал все три артефакта callback до EOF и не запустил Developer.
+
+PROJECT helper run_3oL19Vy7ZRMtPT1TM0G9FLcf SUCCEEDED2, подготовил ровно
+один CREATE_INSTRUCTION_DRAFT plan pln_FzzpfFhXqvLBHmRaO98pNkKX.
+ROOT проверил полный неизменённый prefix и точный append; SHA256 нового текста
+2ae45fb6ea055d4dae9e2c0dad151dded86f5b47cb4c5a52de9e5912561bda46.
+Native Validate/Apply и отдельные Validate/Publish инструкции PASS:
+Manager v15, ins_lq5v0BIGu-nqv8zEIJIM8gmt revision3 PUBLISHED,
+binding inb_g3bt8F__i8bdt5ywpXbvslD3 version3/effective. Grants/Workflow
+не менялись. Поздний capture helper ACK NOT_CAPTURED, не выдавать за PASS.
+Следующее: ONE ordinary Manager diagnostic READ exact536156B source до EOF,
+затем новый полный Workflow с корректной опубликованной инструкцией.
+ONE ordinary Manager run_RfC1i_aFYh1F3GU_i-I3HwDV RUNNING, session
+ses_8BfTi_ag77dJbqysf1G-fXRW /turn trn_WaWZG17rbzyWAlaaH4MVEH2f,
+task1852B/SHA2561d9bc50455c370fef7474ab6d33d261aa6eee26079b69d1c97dc944615f720c2.
+Provider ACK expected/inbox/instructions EQUAL, exact revision3 template,
+image/same-Pod file binary EQUAL. READ начатseq12; не launch дубликат.
+Старые terminal roots/дети не Retry/Resume. Full65/11/13/14/15 OPEN.
+
 ## Checkpoint 07.10.2026 21:04 UTC
 
 Full65 goal ACTIVE, автономно до08.10 14:00 Саратов; дубликат не создан.

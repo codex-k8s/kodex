@@ -10,6 +10,49 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 21:24 UTC — native исправление неполного READ
+
+- Full65 goal ACTIVE, продолжение существующей цели без дубликата; окно
+  владельца до08.10 14:00 Саратов /10:00UTC. Chrome MCP подключён, page4
+  владельца не менялась, reload рабочей1 выполнен21:20.
+- HEAD/remote/Draft1800 cca89eddef8cd867c0d2fba05aae3e055d856f49 EQUAL,
+  bot identity подтверждена, mainb5f6fcde неизменен, Issue1797/1796 OPEN.
+- FAIL полный Workflow run_Va58jdtk2Z142rJ4LLkXvsOl и root
+  run_h2oExBQKp1LV87QHuxxmZciJ: INTAKE run_PQ7jploZn32FzIRNmcKhoVjp
+  технически SUCCEEDED2, семантически неполный. manager-plan.md revision18,
+  23613B/SHA256632288502b8cf8b3904a6056a6ed67578eb080ade5dcf12df6552016fc5658e8:
+  пять обязательных документов EOF, восемь только первая страница.
+  Native READ ошибки полномочий не обнаружены; ~85 calls не доказывают budget.
+  Coordinator прочитал все три callback артефакта до EOF, зависимые этапы
+  не запустил; Developer/reviews этого процесса NOT RUN.
+- Read-only диагностика кода: max2048 native calls, controller default60min,
+  context/budget ошибки имеют отдельный path. Отказ этих лимитов здесь не доказан.
+  Рассмотрены инструкция, оптимизация wire и immutable materialization;
+  выбран минимальный текущий путь без новых API/grants/обходов.
+- PROJECT helper run_3oL19Vy7ZRMtPT1TM0G9FLcf SUCCEEDED2, plan
+  pln_FzzpfFhXqvLBHmRaO98pNkKX содержит один CREATE_INSTRUCTION_DRAFT.
+  ROOT independently сравнил весь prefix: прежний текст и templates сохранены,
+  добавлен только заданный абзац о последовательном READ до EOF/checkpoints.
+  SHA256 old acd059570e70841d23b49d7df708f2e28f4400f984717f0e94e7764e8a9f6ece,
+  new 2ae45fb6ea055d4dae9e2c0dad151dded86f5b47cb4c5a52de9e5912561bda46.
+  Native plan Validate/Apply, затем штатный instruction Validate/Publish PASS:
+  Manager15, ins_lq5v0BIGu-nqv8zEIJIM8gmt revision3 PUBLISHED,
+  binding inb_g3bt8F__i8bdt5ywpXbvslD3 version3/effective, draft отсутствует.
+  Поздний helper provider ACK capture NOT_CAPTURED, не PASS.
+- Screenshot плана PASS: редактор, внутренняя прокрутка и footer controls
+  читаемы; Console0. Новый screenshot публикации ещё ожидается.
+  Полученный screenshot публикации PASS: один потребитель, статус Применён,
+  текущая revision3 видна; footer/scroll не перекрываются. Три backend
+  --since5m/--tail100 stdout пусты, не proof всей истории. ONE ordinary native
+  Manager run_RfC1i_aFYh1F3GU_i-I3HwDV RUNNING, task1852B/SHA256
+  1d9bc50455c370fef7474ab6d33d261aa6eee26079b69d1c97dc944615f720c2,
+  session ses_8BfTi_ag77dJbqysf1G-fXRW /turn trn_WaWZG17rbzyWAlaaH4MVEH2f.
+  PASS provider ACK expected/inbox/instructions EQUAL; prompt template digest
+  совпадает с опубликованной revision3, G5 image EQUAL, same-Pod image-file
+  binary40f3268a EQUAL (не serving-process proof). Native READ начатseq12.
+  Source536156B native EOF, supported upstream, Developer/reviews/READY,
+  итоговый Full65 остаются OPEN. Ни host чтение, ни metadata не закрывают EOF.
+
 ## Checkpoint 07.10.2026 21:04 UTC — восстановление цели и текущие ресурсы
 
 - Цель Full65 ACTIVE подтверждена через goal readback; дубликат не создаётся.
