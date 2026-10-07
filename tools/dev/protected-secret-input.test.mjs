@@ -596,6 +596,7 @@ test("managed unknown outcome не повторяет PUT; stdout не соде�
   assert.deepEqual(JSON.parse(output), {
     status: "UNKNOWN",
     code: "UNKNOWN_OUTCOME",
+    phase: "CREDENTIAL",
   });
   assert.equal(f.calls.filter((call) => call.method === "PUT").length, 1);
   assert.ok(
@@ -655,21 +656,21 @@ test("rejected/unknown mutation не повторяется и не продол
   for (const [effect, expected] of [
     [
       () => json({ detail: token }, 403),
-      { status: "FAIL", code: "CREDENTIAL_REJECTED" },
+      { status: "FAIL", code: "CREDENTIAL_REJECTED", phase: "CREDENTIAL" },
     ],
     [
       () => json({ detail: token }, 409),
-      { status: "FAIL", code: "CREDENTIAL_REJECTED" },
+      { status: "FAIL", code: "CREDENTIAL_REJECTED", phase: "CREDENTIAL" },
     ],
     [
       () => json({ detail: token }, 503),
-      { status: "UNKNOWN", code: "UNKNOWN_OUTCOME" },
+      { status: "UNKNOWN", code: "UNKNOWN_OUTCOME", phase: "CREDENTIAL" },
     ],
     [
       () => {
         throw new Error(`Lost ACK ${token}`);
       },
-      { status: "UNKNOWN", code: "UNKNOWN_OUTCOME" },
+      { status: "UNKNOWN", code: "UNKNOWN_OUTCOME", phase: "CREDENTIAL" },
     ],
   ]) {
     const f = fixture({ effect });
@@ -714,6 +715,7 @@ test("main stdout только закрытые коды, без exception/stack
   assert.deepEqual(JSON.parse(output), {
     status: "UNKNOWN",
     code: "UNKNOWN_OUTCOME",
+    phase: "CREDENTIAL",
   });
   assert.ok(
     !output.includes(token) &&
@@ -729,7 +731,107 @@ test("main stdout только закрытые коды, без exception/stack
     }),
     1,
   );
-  assert.equal(output, '{"status":"FAIL","code":"CLI_INVALID"}\n');
+  assert.equal(
+    output,
+    '{"status":"FAIL","code":"CLI_INVALID","phase":"PREFLIGHT"}\n',
+  );
+});
+
+test("закрытый этап различает SSO, session bootstrap, connection, catalog, credential и readback", async () => {
+  const cases = [
+    {
+      phase: "SSO",
+      code: "READ_FAILED",
+      inject: (f) => {
+        f.deps.authenticate = async () => {
+          throw Object.assign(new Error(token), {
+            phase: password,
+            code: token,
+          });
+        };
+      },
+    },
+    { phase: "BOOTSTRAP", code: "READ_FAILED", path: "/api/v1/session" },
+    { phase: "BOOTSTRAP", code: "READ_FAILED", path: "/api/v1/bootstrap" },
+    {
+      phase: "BOOTSTRAP",
+      code: "OWNER_INVALID",
+      change: { bootstrap: { platformRole: "MEMBER" } },
+    },
+    {
+      phase: "CONNECTION",
+      code: "READ_FAILED",
+      path: "/api/v1/integration-connections/int_synthetic01",
+    },
+    {
+      phase: "CONNECTION",
+      code: "TARGET_INVALID",
+      change: { connection: { version: 9 } },
+    },
+    {
+      phase: "CATALOG",
+      code: "CATALOG_INVALID",
+      change: { definition: { available: false } },
+    },
+    {
+      phase: "CATALOG",
+      code: "READ_FAILED",
+      path: "/api/v1/integration-definitions",
+    },
+    {
+      phase: "CREDENTIAL",
+      code: "SECRET_INPUT_INVALID",
+      inject: (f) => {
+        const read = f.deps.readSecrets;
+        f.deps.readSecrets = (keys) => {
+          if (keys.length === 1) throw new Error("SECRET_INPUT_INVALID");
+          return read(keys);
+        };
+      },
+    },
+    {
+      phase: "READBACK",
+      code: "READBACK_FAILED",
+      change: { readback: { credentialsConfigured: false } },
+      status: "UNKNOWN",
+    },
+  ];
+  for (const item of cases) {
+    const f = fixture(item.change);
+    if (item.path) {
+      const fetch = f.deps.fetchAPI;
+      f.deps.fetchAPI = async (url, init) => {
+        if (url.pathname === item.path)
+          throw Object.assign(new Error(`${token} ${password}`), {
+            phase: token,
+          });
+        return fetch(url, init);
+      };
+    }
+    item.inject?.(f);
+    let output = "";
+    const exit = await main(argumentsFor(), {
+      ...f.deps,
+      output: (value) => {
+        output += value;
+      },
+    });
+    assert.equal(exit, item.status === "UNKNOWN" ? 2 : 1);
+    assert.deepEqual(JSON.parse(output), {
+      status: item.status ?? "FAIL",
+      code: item.code,
+      phase: item.phase,
+    });
+    assert.equal(
+      f.calls.filter((call) => call.method === "PUT").length,
+      item.status === "UNKNOWN" ? 1 : 0,
+    );
+    assert.ok(
+      !output.includes(token) &&
+        !output.includes(password) &&
+        !output.includes("stack"),
+    );
+  }
 });
 
 function browserFixture({

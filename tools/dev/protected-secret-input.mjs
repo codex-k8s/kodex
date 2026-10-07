@@ -31,6 +31,16 @@ const safeCodes = new Set([
   "UNKNOWN_OUTCOME",
   "READBACK_FAILED",
 ]);
+// Этап назначается только локальным потоком, не внешней ошибкой или payload.
+const phases = Object.freeze({
+  preflight: "PREFLIGHT",
+  sso: "SSO",
+  bootstrap: "BOOTSTRAP",
+  connection: "CONNECTION",
+  catalog: "CATALOG",
+  credential: "CREDENTIAL",
+  readback: "READBACK",
+});
 const maximumResponseBytes = 1 << 20;
 const maximumSSOMilliseconds = 100_000;
 const managedPinKeys = [
@@ -515,10 +525,12 @@ export async function configureExactIntegrationCredential(
   let owner;
   let credentials;
   let mutationAttempted = false;
+  let phase = phases.preflight;
   try {
     validCLI(options);
     browserEnvironment(dependencies.environment ?? process.env);
     const readSecrets = dependencies.readSecrets ?? readPrivateAgentSecrets;
+    phase = phases.sso;
     credentials = readSecrets(ownerKeys);
     owner = await (dependencies.authenticate ?? authenticateIsolatedOwner)(
       options,
@@ -526,6 +538,8 @@ export async function configureExactIntegrationCredential(
     );
     credentials.KODEX_LOCAL_OWNER_USERNAME = "";
     credentials.KODEX_LOCAL_OWNER_PASSWORD = "";
+    // Первый request включает закрытый owner-session metadata preflight.
+    phase = phases.bootstrap;
     const client = createOwnerSessionClient({
       origin: options.origin,
       storage: owner.storage,
@@ -544,12 +558,14 @@ export async function configureExactIntegrationCredential(
       "OWNER_INVALID",
     );
     const path = `/api/v1/integration-connections/${options.connectionRef}`;
+    phase = phases.connection;
     const connection = await safeJSON(
       await client.request(path),
       200,
       "READ_FAILED",
     );
     requireConnection(connection, options, options.expectedVersion);
+    phase = phases.catalog;
     const definition = await readDefinition(client, options);
     const mapping = mappings[options.definitionKey];
     requireValue(
@@ -572,6 +588,7 @@ export async function configureExactIntegrationCredential(
         connection.nextActions.includes("CONFIGURE_CREDENTIAL"),
       "TARGET_INVALID",
     );
+    phase = phases.credential;
     const selected = readSecrets([options.secretKey]);
     let response;
     try {
@@ -598,6 +615,7 @@ export async function configureExactIntegrationCredential(
           : "UNKNOWN_OUTCOME",
       );
     }
+    phase = phases.readback;
     const receipt = await safeJSON(response, 200, "READBACK_FAILED");
     requireConnection(receipt, options, receipt.version, "READBACK_FAILED");
     requireValue(
@@ -635,6 +653,7 @@ export async function configureExactIntegrationCredential(
           ? "UNKNOWN"
           : "FAIL",
       code,
+      phase,
     };
   } finally {
     if (credentials) for (const key of ownerKeys) credentials[key] = "";
@@ -650,7 +669,7 @@ export async function main(args, dependencies = {}) {
       dependencies,
     );
   } catch {
-    result = { status: "FAIL", code: "CLI_INVALID" };
+    result = { status: "FAIL", code: "CLI_INVALID", phase: phases.preflight };
   }
   (dependencies.output ?? ((value) => process.stdout.write(value)))(
     `${JSON.stringify(result)}\n`,
