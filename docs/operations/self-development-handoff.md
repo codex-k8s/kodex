@@ -10,6 +10,40 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 15:07 UTC:11scopedfiles зафиксированы и опубликованы:
+HEAD/remote/Draft1800 `5619124028dc67108ab0f51583e2a3e82ca0575b`.
+Первый publisher readback FAIL из-за ещё старого PR head после push;
+независимый повтор remote/PR подтвердил новый SHA, update того же Draft PASS.
+Callback repeat4.470s/vet/RC ready/source/serving PASS на этом SHA.
+Один новый ordinary Manager принят штатным UI: `run_uQG_mO6fATJvlnbDpTqEvKBN`,
+session `ses_TvF91TM4a42kRMrYf_LYeqoK`, turn
+`trn_IC_LqnfXp5vjsMGjJ5ruUPjH`/attempt1, RUNNING2.
+ACK Podruntime-turn-d645537aed9e01b7/UIDf196ad72-0970-4730-a001-e881545e1ec4:
+owner task3796B/SHAbd2efea0431c643c5710087a1bb32ccef1c283e9fdd415340ea7c7644c1c51c7
+независимо пересчитан, provider/inbox EQUAL; instructions30076B/a48cfdd4
+file/inbox EQUAL. G5/ENV5/binding6/tools38/grants21/capabilities24,
+actual PID14 SHA40f3268a EQUAL same-Pod image file.
+Native PROJECT manager-plan2395B EOF и Issue/branch/PR READ PASS,
+Workflow launch/coordinator READ ещё NOT RUN. Screenshot15:01 не получен;
+transient MCP fill readback восстановился, повторного submit не было.
+Наблюдать exact run, не blind retry; children capture watcher read-only.
+Full65/DeveloperPR/reviews/fixes/READY OPEN. Final внутренний PR не merge.
+
+Повтор15:09: graph ROOT24tests PASS1.85s; ManagernativeAGENTS45730B EOF,
+exactmainb5 sourceSHA9c6ff8aa подтверждён ROOTgitshow. Процесс пока не принят,
+seq111; история показывает компактные группы tools, Console0/overflowfalse.
+
+Повтор15:11: Workflow `run_VBfbPKdFWcUnqIpTxJpxqQc6` штатно принят
+Managernative launch_workflow, target15/revision5; parentseq119 turn завершён,
+callbackedge `edg_8cKUlN3luAMcCBpLntyZjv3z`. Child RUNNING2/35nodes/47edges,
+coordinator session `ses_DcQAwBX-Rr4GbP0Ynj6uEOYZ`/turn
+`trn_Un32xg6YO7sZ4mJIB2tUCYaY`/attempt1. Самостоятельно delegatedINTAKE:
+`run_rmVVR0gOBIPOU586lNi6YFe-`, session `ses_6m6TgL_pS1cm98FHEViVWiKZ`,
+turn `trn_ObtaQXKBBOVcgJ5PgdRGawBE`/attempt1. Child watcher captureread-only;
+следующее — exactcallbackread и Architect, без blindretry.
+
+## Предыдущий checkpoint14:53
+
 07.10.2026 14:53 UTC: оба host patch FROZEN, commit/push следующий шаг.
 Catalog input diagnostics: локальные shape/selector/page дают исправимую
 CATALOG_INPUT_INVALID лишь при successful terminal projection; owner/context/

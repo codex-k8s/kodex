@@ -10,6 +10,62 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 15:07 UTC — пакет опубликован, новый Manager принят
+
+HEAD/remote/Draft1800 `5619124028dc67108ab0f51583e2a3e82ca0575b`,
+fresh main `b5f6fcde885c4e6369255a86559b3ed2c785043f`;11scopedfiles
+закоммичены и опубликованы. Первый publisher readback FAIL после успешного
+push: GitHub ещё возвращал старый PR head. Независимый повтор подтвердил
+новый remote/PR head, затем update того же Draft1800 PASS; повторного push
+старого состояния не было. Рабочее дерево после публикации чистое.
+
+- PASS callback fullunit4.470s/vet/diff check повторены на exact56191240,
+  RC Ready и четыре source/Pod digest EQUAL. Serving PID1962/SHA2a0e7caf
+  совпадает с независимой сборкой сохранённого frozen production patch.
+- PASS ordinary Manager штатно принят один раз: `run_uQG_mO6fATJvlnbDpTqEvKBN`,
+  session `ses_TvF91TM4a42kRMrYf_LYeqoK`, turn
+  `trn_IC_LqnfXp5vjsMGjJ5ruUPjH`/attempt1. RUNNING2; Workflow launch ещё
+  NOT RUN. Старые terminal runs не повторялись.
+- PASS ранний ACK CAPTURED/rejoin: Pod `runtime-turn-d645537aed9e01b7`,
+  UIDf196ad72-0970-4730-a001-e881545e1ec4, G5/ENV5/binding6,
+  tools38/grants21/capabilities24. Owner task3796B/SHA
+  bd2efea0431c643c5710087a1bb32ccef1c283e9fdd415340ea7c7644c1c51c7
+  независимо пересчитан из exact отправленного текста; provider/inbox EQUAL.
+  Instructions30076B/SHAa48cfdd4bdef11c268196feaffb568c1ab2b1d6de731323da8af9c1feb8bb4ce
+  file/inbox EQUAL. Actual servicing PID14 SHA40f3268a совпадает с image file
+  того же Pod; independent runner build NOT RUN.
+- PASS native Issue/branch/PR/file-list READ и PROJECT manager-plan.md
+  2395B до EOF с exact source digest958c4ae7. Это предварительные чтения,
+  не полный upstream/source/review proof.
+- NOT RUN новый screenshot15:01: bounded ожидание остановлено без изображения.
+  Form fill ответ задержался, ROOT сначала readback подтвердил filled3796B/
+  enabled submit и лишь затем единственный UI click. Запуск принят; повторов
+  из-за observation timeout не было. Chrome list/evaluate восстановились,
+  Console0/relevantAPI200/realtime connected; foreign tabs не трогались.
+
+Далее наблюдать этот exact Manager, native launch published Workflow15/revision5,
+ранние ACK дочерних ролей, intrinsic immutable callback READ и полный
+SOFTWARE_CHANGE. Full65/DeveloperPR/reviews/fixes/READY остаются OPEN.
+
+Повтор15:09: ROOT frontend graph24tests/2files PASS1.85s на56191240.
+Manager опубликовал полный native EOF AGENTS.md45730B на exact mainb5f6fcde,
+SHA9c6ff8aa54a9dd393f99ab270babee943453864cd038a70916e11ac78c383097.
+Независимый ROOT git show exact main:AGENTS.md подтвердил тот же SHA.
+Дочерний процесс ещё не принят. UI activity drawer719×975px, tools38
+свёрнуты в компактные группы; realtime111/Console0/overflowfalse.
+Эта DOM-проверка не подменяет неполученный screenshot.
+
+Повтор15:11: Managernative launch_workflow SUCCEEDED/1165ms; единственный
+дочерний `run_VBfbPKdFWcUnqIpTxJpxqQc6` принят WORKFLOWv15/revision5,
+callbackedge `edg_8cKUlN3luAMcCBpLntyZjv3z`. Managerturn завершён seq119;
+родитель ждёт callback и не объявлен semantic READY.
+Workflow RUNNING2/35nodes/47edges. Coordinator самостоятельно передал INTAKE:
+`run_rmVVR0gOBIPOU586lNi6YFe-`, rootRunRef exactWorkflow,
+session `ses_6m6TgL_pS1cm98FHEViVWiKZ`, turn
+`trn_ObtaQXKBBOVcgJ5PgdRGawBE`/attempt1; native delegate SUCCEEDED.
+Ранние ACK coordinator/INTAKE захватываются separately; результат INTAKE
+и coordinator result READ ещё UNKNOWN/NOT RUN. Никаких host APIwrites.
+
 ## Checkpoint 07.10.2026 14:53 UTC — диагностика каталога frozen и serving proof
 
 Scoped RC patch и frontend graph patch FROZEN поверхf7cd3815, следующий
@@ -863,28 +919,28 @@ Bootstrap-изменения вошли в один сквозной PR как �
 ## План с доказательствами
 
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
-     PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
+      PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
 - [x] 2. Полные управляемые MCP/tool profiles системного помощника,
-     проектного помощника и каждого сотрудника; управляемый Context7 profile,
-     immutable RuntimeRevision, scoped Secret binding, exact network/readiness.
-     Ключ Context7 доступен только доверенному MCP adapter/server, не shell агента.
+      проектного помощника и каждого сотрудника; управляемый Context7 profile,
+      immutable RuntimeRevision, scoped Secret binding, exact network/readiness.
+      Ключ Context7 доступен только доверенному MCP adapter/server, не shell агента.
 - [x] 3. Настраиваемая ApprovalPolicy grant: package default/allowed policies,
-     durable/versioned/audited selected policy, CP/gateway/adapter/runtime pins.
-     Collaborative GitHub writes допускают NONE только в разрешённом реестре;
-     destructive операции не становятся автономными.
+      durable/versioned/audited selected policy, CP/gateway/adapter/runtime pins.
+      Collaborative GitHub writes допускают NONE только в разрешённом реестре;
+      destructive операции не становятся автономными.
 - [x] 4. Сессия для её владельца отображается как переписка: пользовательские
-     сообщения, публикуемые промежуточные сообщения и итоговые ответы агента.
-     В общей хронологии показываются вызовы инструментов, название действия,
-     статус и раскрываемые безопасные детали/результат, как в интерфейсе Codex.
-     Работает для помощников, сотрудников, процессов и дочерних сессий; автора,
-     session/turn/attempt нельзя перепутать. Realtime/rejoin/reload сохраняют
-     порядок, сообщения и дедупликацию; длинный вывод сворачивается, прокрутка
-     не прыгает. Секреты, сырые bearer headers и скрытые рассуждения не выводятся.
+      сообщения, публикуемые промежуточные сообщения и итоговые ответы агента.
+      В общей хронологии показываются вызовы инструментов, название действия,
+      статус и раскрываемые безопасные детали/результат, как в интерфейсе Codex.
+      Работает для помощников, сотрудников, процессов и дочерних сессий; автора,
+      session/turn/attempt нельзя перепутать. Realtime/rejoin/reload сохраняют
+      порядок, сообщения и дедупликацию; длинный вывод сворачивается, прокрутка
+      не прыгает. Секреты, сырые bearer headers и скрытые рассуждения не выводятся.
 - [x] 5. Безопасный observability/read path фактически materialized prompt:
-     instructions, template variables, integrations, identity, tools/MCP,
-     files, user/task input с harmless marker, model/reasoning и exact pins.
+      instructions, template variables, integrations, identity, tools/MCP,
+      files, user/task input с harmless marker, model/reasoning и exact pins.
 - [x] 6. Общий admitted/promoted образ kodex-selfdev со всем требуемым
-     инструментарием; отдельные execution workspaces, без общего mutable PVC.
+      инструментарием; отдельные execution workspaces, без общего mutable PVC.
 - [x] 6.1. Администратор рассматривает безопасный отчёт уязвимостей образа:
       пакет и версия, severity, CVE/GHSA/GO со ссылкой и доступное исправление.
       Явное принятие риска с обязательным обоснованием относится только к точному
@@ -894,14 +950,14 @@ Bootstrap-изменения вошли в один сквозной PR как �
       Допуск после принятия риска требует штатного повторного подписанного
       admission, не переписывает прежнее evidence и не выдаётся самим агентом.
 - [x] 7. System Assistant сам настраивает себя typed plan; подтверждение,
-     публикация, Context7/web/GitHub read и prompt proof реальных ходов.
+      публикация, Context7/web/GitHub read и prompt proof реальных ходов.
 - [x] 8. System Assistant создаёт Kodex | Dev и отдельного Project Assistant;
-     authoritative ownership/version/audit readback; project isolation,
-     Context7/repository/network/runtime/prompt proof.
+      authoritative ownership/version/audit readback; project isolation,
+      Context7/repository/network/runtime/prompt proof.
 - [x] 9. Project Assistant создаёт шесть сотрудников (Manager, Architect,
-     Developer, Documentation Reviewer, Security Reviewer, Lexical Guardian),
-     selfdev-write/selfdev-review, Project Files/Secrets, GitHub connection и
-     least-privilege grants. Raw git push token только Developer.
+      Developer, Documentation Reviewer, Security Reviewer, Lexical Guardian),
+      selfdev-write/selfdev-review, Project Files/Secrets, GitHub connection и
+      least-privilege grants. Raw git push token только Developer.
 - [x] 10. Проверить реальные тестовые ходы каждой роли, template validate/
       preview/publish/materialization, scoped grants, NONE writes, оба Human Gate
       режима, delegation и handoff через файлы/артефакты.
@@ -1377,9 +1433,9 @@ GitHub PASS автоматически не распространяется н�
   attempt 1: первый запрос каталога TOOL*UNAVAILABLE, следующие три
   SUCCEEDED, затем TURN_COMPLETED. Полное адресное чтение Manager установило
   одинаковые published/effective revision `ins*-otL2zl0QPgcT0rlA8ajz3t6`,
-digest `527e660e59d6532bef4c6438ed43089c3a345dc0b3b6b6eac536900d6463d527`.
-Owner GET независимо подтвердил Manager v9, binding
-`inb_g3bt8F\_\_i8bdt5ywpXbvslD3` v1/effective=true и тот же revisionRef.
+  digest `527e660e59d6532bef4c6438ed43089c3a345dc0b3b6b6eac536900d6463d527`.
+  Owner GET независимо подтвердил Manager v9, binding
+  `inb_g3bt8F\_\_i8bdt5ywpXbvslD3` v1/effective=true и тот же revisionRef.
   Поэтому для этого Manager применим native instruction impact/publish;
   гипотеза managed override к нему не относится.
 - PROJECT ACK same Pod UID `2b2516a2-072d-453b-8dca-5ffa944759e8`:
