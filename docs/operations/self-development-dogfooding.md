@@ -202,6 +202,41 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 10:41 UTC — Developer восстановлен, Architect принят, Chrome ожидает
+
+- HEAD/remote/Draft1800 `ee84718118ae0e2a2522936006b2b1452931bf1f`;
+  предыдущий checkpoint опубликован и прочитан обратно, без production diff.
+- Developer `run_YGbK0Vhsymo-uzg0Dk2FJsu_` SUCCEEDED, native plan
+  `pln_EYX8O6Xbo8RdybljHOFGNdkz`:24 уникальные прежние grants,
+  owner comparison problems0, единственный diff enabled false→true/NONE/[];
+  native Validate/Apply APPLIED/version3, receipt
+  `rct__n8bV3526lj0osOdt1FyfIlc`,24 APPLIED/conflicts0. Connection193,
+  Developer24 включены. Совмещённый schema+data запрос был закрыто отклонён;
+  раздельные native запросы прошли, model не обходил границу.
+- Architect restore16 принят один раз в10:37: conversation
+  `cnv_7ih-F82RVat-9CFpeQSwWTSB`, run `run_qR4TdjS3mjrF92LDRYnovAMJ`,
+  turn `trn_EWog2B2ZiuD4i1dVMQPBiOX0`. DRAFT/Apply outcome пока UNKNOWN;
+  не отправлять повторный ход, сначала authoritative readback.
+- Ранний ACK Architect-context хода helper captured/rejoined до cleanup:
+  Pod UID `191562f4-ba89-4b17-805b-44d8849b4c5f`, exact G5 image f8b60814,
+  PROJECT identity, tools38/grants23, ENV8/binding7. Task/provider/inbox SHA
+  `bf9203d3b0544de8985191e46359de70805e16054c08850ac57c8107c73dd4b9`
+  совпали; instructions/inbox EQUAL. Independent task/binary NOT RUN.
+- Повторный screenshot только assistant dialog JPEG40 завис: ожидание
+  остановлено локально, изображения нет (NOT RUN), не visual PASS.
+  После этого list_pages и evaluate также не ответили за bounded ожидание;
+  подтверждён общий server tool mutex в установленном Chrome MCP.
+  Context7 /chromedevtools/chrome-devtools-mcp: shared mutex/context и
+  connection troubleshooting прочитаны. Chrome и чужие вкладки не
+  перезапускались/не закрывались; MCP package/config не редактировались.
+  Backend Ready и ранний ACK доступны; platform дефект по зависшему MCP
+  не доказан. Следующий шаг — восстановить MCP readback существующего
+  Architect диалога, затем owner Validate/Apply и три оставшиеся роли.
+- Read-only preflight10:43: `/tmp`22GB свободно, но inode556из1048576;
+  inode pressure подтверждён, причинная связь с MCP UNKNOWN. Отдельному
+  child поручена только metadata inventory собственных завершённых временных
+  работ; shared/active/неподтверждённые объекты не удаляются.
+
 ### 07.10.2026 10:32 UTC — собственные права, GitHub EOF и Manager восстановлены
 
 - HEAD/remote/Draft1800 `11c803b42eaa0b0b791773bb2f9c25b9afafdf77`,

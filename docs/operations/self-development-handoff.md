@@ -10,6 +10,25 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 10:41 UTC: HEAD/remote/Draft1800
+`ee84718118ae0e2a2522936006b2b1452931bf1f`, новый journal DIRTY.
+Developer restore24 native Validate/Apply PASS receipt
+`rct__n8bV3526lj0osOdt1FyfIlc`; connection193, own21+Manager17+Developer24 ON.
+Architect restore16 принят один раз: conversation
+`cnv_7ih-F82RVat-9CFpeQSwWTSB`, run `run_qR4TdjS3mjrF92LDRYnovAMJ`,
+turn `trn_EWog2B2ZiuD4i1dVMQPBiOX0`. Ранний helper PROJECT ACK captured,
+task/provider/inbox bf9203d3 EQUAL; runtime Pod уже cleaned10:41.
+DRAFT/terminal outcome UNKNOWN, не повторять submit.
+Chrome page5 Architect AGENT/helper; reload/navigation10:36. Повторный
+dialog screenshot завис, локальное ожидание прекращено без изображения;
+последующие MCP list_pages/evaluate также timeout ожидания. Tool server
+держит общий mutex; Chrome/чужие вкладки/MCP config не трогали. После
+восстановления MCP сначала readback Architect, Verify exact16 → native
+Validate/Apply → Docs14/Security13/Lexical13 → NEW33. Все прежние grants
+NONE/[] сохраняются; final internalPR не merge. Publisher previousee847181.
+
+## Предыдущий checkpoint10:32
+
 07.10.2026 10:32 UTC: HEAD/remote/Draft1800
 `11c803b42eaa0b0b791773bb2f9c25b9afafdf77`; source чистый до нового
 журнального checkpoint. Own PROJECT21 native Validate/Apply PASS receipt
