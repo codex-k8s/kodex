@@ -10,6 +10,111 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 14:10 UTC — точные callback результаты и terminal UX
+
+Пакет поверх `4d5845c5eb02bf8ae57d06ae20b352071d1c757b` готов к scoped
+commit; новый committed SHA будет прочитан после фиксации. Live migration и
+повтор helper/Workflow пока NOT RUN. Bootstrap и final internal PR не смешиваются.
+
+- PASS coordinator intrinsic RUN_RESULT: immutable callback result_snapshot,
+  child/node/attempt/RuntimeRevision+artifact version/digest pins; server-owned
+  CONTINUES ancestry сохраняет прежние доставленные результаты. Required nested
+  Workflow складывает exact полученные квитанции, не файлы всего root. Старый
+  overload visibility удалён новой forward migration20261007135000; legacyNULL
+  не backfill и не выдаёт READ. WRITE/PROJECT/foreign root отклоняются.
+- PASS disposable component: CoordinatorFiles5.96s, WorkflowLaunch15.53s/
+  11subcases, ParallelLifecycle10.59s, TerminalStorage3.98s/4subcases,
+  Activity1.67s; goose up/status/repeated-up, runner policy/grant checks.
+  Missingfunction Claim→Unavailable с неизменными Run state/version;39KB body,
+  replay immutable, nested/resumed attempt, quarantine/delete/restore version,
+  stale generation/lease, revoke/terminal. Первый fixture-only DDL privilege FAIL
+  исправлен separate disposable admin connection, production grants не расширены.
+- PASS ROOT Go1.26.6 CP full unit (`platform`1.114s), vet и independent build;
+  serving `/proc/3498/exe` SHA
+  `dd4308ac16759fae4708798444e5fc9da38e9c2457c7a4941b1bfbdd1dbcd2d7`
+  EQUAL независимому host executable. Source/Pod runtime97dc3c13,
+  capture96b8e106, callbackSQLfb4b1007 и migration557f17dd EQUAL.
+- PASS frontend terminal UX: known exact terminal run прекращает dots/Stop/
+  queue даже без ASSISTANT final и при stale USER state. Nonterminal accepted
+  COMPLETED user остаётся active; чужой run/version не влияет на текущий turn.
+  Addressed220tests/4suites, typecheck/ESLint/Prettier/build окончательного tree
+  PASS. Первый fixture non-null lintFAIL исправлен; штатный chunk-size warning
+  build сохранён. Disposable browser E2E NOT RUN.
+- PASS Chrome5 hot reload: FAILED2/seq3, «Kodex работает» отсутствует,
+  Stop отсутствует, screenshot исправленной переписки, Console0, relevantAPI200;
+  documentWidth1692=viewport. Reload14:10 повторяет отсутствие dots/Stop;
+  source/Pod modela9170bb1 и Workspaceb585957e EQUAL, foreign tabs неизменны.
+
+Live previous migration Job704659b6e90a Complete, безопасный log readback даёт
+current version20261006000400. Единственная новая source migration — 20261007135000. Канонический узкий apply: fresh frozen-SHA render-current-local,
+deploy-local --stage migrate --workload control-plane-migrate, затем exact
+same-render readback и schema version. Нельзя считать Ready Pod доказательством
+применённой схемы. После этого один новый PROJECT helper для8Manager allowlists,
+полный before/after compare33steps, native Validate/Apply/WorkflowPublish, затем
+новый ordinary Manager и actual role prompt/file/tool proofs.
+
+## Checkpoint 07.10.2026 13:59 UTC — запуск процесса принят, два ограниченных READ добавлены
+
+HEAD/remote/Draft1800 `4d5845c5eb02bf8ae57d06ae20b352071d1c757b`.
+Текущий незакоммиченный пакет coordinator result catalog находится в разработке;
+его component/live проверки пока NOT RUN. Полный QA из65разделов остаётся OPEN.
+
+Один Additional Manager13:25 штатно запустил опубликованный SOFTWARE*CHANGE12/
+revision4: родитель `run_btQXGOWXWyV0qoMRs4YGHf35`, дочерний процесс
+`run_LG_yPxraXAL_wvJoA-ljYE7*`, квитанция запуска
+`wlaunch_tVm4ytJpUGxsBFm5SYeZOvDe`. Native launch_workflow SUCCEEDED,
+callbackedge `edg_3JWb6nTHoXl7mZ4VK-GrNFmH`; keyed input принят владельцем.
+Manager INTAKE `run_R6k3RBBasHK90D8FpNqTKTYF` прочитал PROJECT plan до
+EOF2395B, Issue/PR metadata, но mandatory repository documents недоступны:
+semantic BLOCKED при technical SUCCEEDED2. После callback координатор не имел
+native READ дочерних артефактов и завершился BLOCKED. Процесс и родитель FAILED3;
+на графе36nodes:3SUCCEEDED/1FAILED/32CANCELLED, активных0. Старые terminal runs
+не повторять и не считать успешной реализацией Issue1796.
+
+PROJECT helper `cnv_LyIAVErDBTntrBK2fH16KarU`, run
+`run_Hom3MBjS2_BGypZjxV8KOdFB`, turn `trn_FYepp8XB0aW9-Efirss9tue2`/
+attempt1 подготовил ровно два CHANGE_INTEGRATION_GRANT. Штатные UI Validate и
+Apply200: plan `pln_8Dx0ROofigVufwlDwcnc6Iev`, revision1/APPLIED/version3;
+receipt `rct_TWxza4MBr5Zv_6eXb7KePJFl`, conflicts0, audit
+`aud_sX_GOKEMUO-N3-pfXjxYjwxB` и `aud_INgdSPprI67-KkNxLyN0Nrw1`.
+Owner readback подтверждает Manager integrations19→21, connection249→251:
+`github.repository.content.read`/`github.branch.read`, enabled/READ/NONE,
+scope только codex-k8s/kodex. Все прежние19 refs/version/approval сохранены,
+platform capabilities и Agent version12 неизменны. Дополнительного WRITE нет.
+В8 Manager steps опубликованного процесса эти ключи ещё отсутствуют:
+следующий native DRAFT должен добавить только их, сохранив33steps и все gates.
+
+- PASS helper ранний ACK CAPTURED/rejoin: input/provider/inbox1965B,
+  SHAd6267273b95a4772b3779e1a0c372d4aa7bd9e2e21538a73706f02c988eeabcf
+  EQUAL; instructions/file27531B/SHAeb2e61907886c578f0af0e8218d0c085ecbc5ac622144e9b6a721216c2fece6f
+  EQUAL. RuntimeRevision `rrev_nhD_9yOq-ZzNBQU-ShkX9ypT`, G5/ENV8/binding7.
+  Независимый expected host input comparison14:01 EQUAL:1965B/тот же SHA.
+- PASS same-Pod servicing executable SHA40f3268a EQUAL captured image file;
+  это не новая независимая сборка runner. Initial capture CLI с timeout90
+  отклонён локально до обращения; корректный timeout30 дал CAPTURED.
+- PASS Chrome5 reload13:55, screenshot переписки и Applied plan,
+  Console0; owner workflow/conversation reads200, Validate/Apply200.
+  Чужие вкладки не изменены. Независимые Workflow step preservation и новый
+  live INTAKE после исправлений пока NOT RUN.
+
+Coordinator исправляется без нового capability, WRITE или project-wide READ:
+immutable owner callback result snapshot с exact child/source RuntimeRevision
+и artifact version/digest; текущая server-resolved coordinator lineage и
+CONTINUES ancestry; свежие lease/fence/access на каждой странице. Исторический
+callback без pins закрыто отклоняется. Только forward migration, никаких
+legacy predicates/ручной подмены native результатов. Дальше адресный disposable
+component, exact source/Pod/serving proof и один свежий native Workflow.
+
+Следующий helper `cnv_ujis3iV4l-rGqkKPH5mLTK7a` /
+`run_9A6718q0sUMWWwFxa3eZ3r36` / `trn_px7Cr5IQcHOrtTh3KpVxToqQ`
+завершён13:58:20 FAILED2/seq3 до provider, usage0, эффектов/плана нет.
+CP диагностирует safe_stage=file_catalog/error_class=CONFLICT. Hot reload
+подхватил новый SQL call до применения обязательной forward migration;
+ошибка инфраструктуры ошибочно преобразована в eligibility Conflict.
+Повтор до миграции запрещён; исправляется classification SQL failures→Unavailable
+без legacy fallback и без failgraph. Addressed disposable fixture первого
+пакета PASS8.02s, окончательный пакет и live activation пока NOT RUN.
+
 ## Checkpoint 07.10.2026 13:20 UTC — чтение восстановлено, keyed input процесса
 
 HEAD/remote/Draft1800 `be34792fcaa5fa3686d3febd90de83d7ef249af4`.
@@ -232,7 +337,6 @@ Context7 /golang/go: UTF8 Valid/RuneStart и json escaping; зависимост
 Общий инвариант bounded model full-read закреплён в GO-DOC-001/README.
 Full65, внутренний Developer1796 PR/review/fix/READY остаются OPEN.
 
-
 ## Checkpoint 07.10.2026 12:13 UTC — честное состояние realtime и semantic gates
 
 Рабочее дерево поверх `369e5f4cb06ed8683d17b158c3c05e9bf691e0d9`.
@@ -255,13 +359,13 @@ terminal сохраняет подпись завершённой истории
   справа, компактная работа помощника слева, input/Stop доступны.
   Это desktop/debug evidence, не весь mobile/full65 acceptance.
 
-Ordinary Manager run_HlZ_jAiNMRgOAewB2OxpEC4Z принял ровно один child Workflow
+Ordinary Manager run*HlZ_jAiNMRgOAewB2OxpEC4Z принял ровно один child Workflow
 `run_L-owWrHrLwT99S0xYk9nx81Y`; первая technical attempt SUCCEEDED.
-INTAKE `run_AObhbf54wXy3wQDRnaGURni_` semantic BLOCKED: от роли требовался
+INTAKE `run_AObhbf54wXy3wQDRnaGURni*`semantic BLOCKED: от роли требовался
 отдельный workflow snapshot/step-authority preflight, отсутствующий в callable
-каталоге. Полный manager-plan.md `art_kt1urckBLNFMU8KXH8IsNLAB` read200,
+каталоге. Полный manager-plan.md`art_kt1urckBLNFMU8KXH8IsNLAB`read200,
 6169B/SHA701eae94488ac1351e9c0efe9a76f1d8029d7e3bd2548b3c390de3fe862ab61a.
-Architect `run_nfpfg-6HbUsLALNH1Uko_Ixd` также semantic BLOCKED. Coordinator
+Architect`run_nfpfg-6HbUsLALNH1Uko_Ixd` также semantic BLOCKED. Coordinator
 продолжил к Developer несмотря на этот hard BLOCKED; ROOT отменил exact
 Workflow один раз штатным UI. Authoritative CANCELLED/version3/sequence173,
 32CANCELLED+5SUCCEEDED, активных узлов0; не retry/resume.
@@ -295,7 +399,6 @@ DRAFT не создан. Полный snapshot configuration SHA525aa117a6e4b9a5
 доступен серверу, но большая выдача обрезана в модельном tool output;
 несуществующая continuation offset1 закрыто отклонена TOOL_UNAVAILABLE.
 Далее исправить native read delivery, затем повторить план. BLOCKED не PASS.
-
 
 ## Checkpoint 07.10.2026 11:52 UTC — исправление опубликовано, новый Manager
 
@@ -648,72 +751,72 @@ Bootstrap-изменения вошли в один сквозной PR как �
 ## План с доказательствами
 
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
-  PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
+     PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
 - [x] 2. Полные управляемые MCP/tool profiles системного помощника,
-  проектного помощника и каждого сотрудника; управляемый Context7 profile,
-  immutable RuntimeRevision, scoped Secret binding, exact network/readiness.
-  Ключ Context7 доступен только доверенному MCP adapter/server, не shell агента.
+     проектного помощника и каждого сотрудника; управляемый Context7 profile,
+     immutable RuntimeRevision, scoped Secret binding, exact network/readiness.
+     Ключ Context7 доступен только доверенному MCP adapter/server, не shell агента.
 - [x] 3. Настраиваемая ApprovalPolicy grant: package default/allowed policies,
-  durable/versioned/audited selected policy, CP/gateway/adapter/runtime pins.
-  Collaborative GitHub writes допускают NONE только в разрешённом реестре;
-  destructive операции не становятся автономными.
+     durable/versioned/audited selected policy, CP/gateway/adapter/runtime pins.
+     Collaborative GitHub writes допускают NONE только в разрешённом реестре;
+     destructive операции не становятся автономными.
 - [x] 4. Сессия для её владельца отображается как переписка: пользовательские
-  сообщения, публикуемые промежуточные сообщения и итоговые ответы агента.
-  В общей хронологии показываются вызовы инструментов, название действия,
-  статус и раскрываемые безопасные детали/результат, как в интерфейсе Codex.
-  Работает для помощников, сотрудников, процессов и дочерних сессий; автора,
-  session/turn/attempt нельзя перепутать. Realtime/rejoin/reload сохраняют
-  порядок, сообщения и дедупликацию; длинный вывод сворачивается, прокрутка
-  не прыгает. Секреты, сырые bearer headers и скрытые рассуждения не выводятся.
+     сообщения, публикуемые промежуточные сообщения и итоговые ответы агента.
+     В общей хронологии показываются вызовы инструментов, название действия,
+     статус и раскрываемые безопасные детали/результат, как в интерфейсе Codex.
+     Работает для помощников, сотрудников, процессов и дочерних сессий; автора,
+     session/turn/attempt нельзя перепутать. Realtime/rejoin/reload сохраняют
+     порядок, сообщения и дедупликацию; длинный вывод сворачивается, прокрутка
+     не прыгает. Секреты, сырые bearer headers и скрытые рассуждения не выводятся.
 - [x] 5. Безопасный observability/read path фактически materialized prompt:
-  instructions, template variables, integrations, identity, tools/MCP,
-  files, user/task input с harmless marker, model/reasoning и exact pins.
+     instructions, template variables, integrations, identity, tools/MCP,
+     files, user/task input с harmless marker, model/reasoning и exact pins.
 - [x] 6. Общий admitted/promoted образ kodex-selfdev со всем требуемым
-  инструментарием; отдельные execution workspaces, без общего mutable PVC.
+     инструментарием; отдельные execution workspaces, без общего mutable PVC.
 - [x] 6.1. Администратор рассматривает безопасный отчёт уязвимостей образа:
-  пакет и версия, severity, CVE/GHSA/GO со ссылкой и доступное исправление.
-  Явное принятие риска с обязательным обоснованием относится только к точному
-  artifact/image digest, immutable отчёту и policy. Решение сохраняется в
-  аудите; новая сборка либо другой отчёт требуют нового решения. Ошибки scan,
-  целостности, происхождения, runtime ABI и подписи не подлежат обходу.
-  Допуск после принятия риска требует штатного повторного подписанного
-  admission, не переписывает прежнее evidence и не выдаётся самим агентом.
+      пакет и версия, severity, CVE/GHSA/GO со ссылкой и доступное исправление.
+      Явное принятие риска с обязательным обоснованием относится только к точному
+      artifact/image digest, immutable отчёту и policy. Решение сохраняется в
+      аудите; новая сборка либо другой отчёт требуют нового решения. Ошибки scan,
+      целостности, происхождения, runtime ABI и подписи не подлежат обходу.
+      Допуск после принятия риска требует штатного повторного подписанного
+      admission, не переписывает прежнее evidence и не выдаётся самим агентом.
 - [x] 7. System Assistant сам настраивает себя typed plan; подтверждение,
-  публикация, Context7/web/GitHub read и prompt proof реальных ходов.
+     публикация, Context7/web/GitHub read и prompt proof реальных ходов.
 - [x] 8. System Assistant создаёт Kodex | Dev и отдельного Project Assistant;
-  authoritative ownership/version/audit readback; project isolation,
-  Context7/repository/network/runtime/prompt proof.
+     authoritative ownership/version/audit readback; project isolation,
+     Context7/repository/network/runtime/prompt proof.
 - [x] 9. Project Assistant создаёт шесть сотрудников (Manager, Architect,
-  Developer, Documentation Reviewer, Security Reviewer, Lexical Guardian),
-  selfdev-write/selfdev-review, Project Files/Secrets, GitHub connection и
-  least-privilege grants. Raw git push token только Developer.
+     Developer, Documentation Reviewer, Security Reviewer, Lexical Guardian),
+     selfdev-write/selfdev-review, Project Files/Secrets, GitHub connection и
+     least-privilege grants. Raw git push token только Developer.
 - [x] 10. Проверить реальные тестовые ходы каждой роли, template validate/
-  preview/publish/materialization, scoped grants, NONE writes, оба Human Gate
-  режима, delegation и handoff через файлы/артефакты.
+      preview/publish/materialization, scoped grants, NONE writes, оба Human Gate
+      режима, delegation и handoff через файлы/артефакты.
 - [ ] 11. SOFTWARE_CHANGE: Manager → Architect → Developer → параллельные
-  Documentation/Security/Lexical reviews → fixes/re-review → final Manager.
-  Проверить небольшой disposable delegated run до настоящей Issue.
+      Documentation/Security/Lexical reviews → fixes/re-review → final Manager.
+      Проверить небольшой disposable delegated run до настоящей Issue.
 - [x] 12. При bootstrap acceptance зафиксировать и автономно слить bootstrap
-  PR, обновить стенд на свежий main и повторно сверить созданные ресурсы,
-  migrations/source/Pod/image/runtime/realtime и prompt pins.
+      PR, обновить стенд на свежий main и повторно сверить созданные ресурсы,
+      migrations/source/Pod/image/runtime/realtime и prompt pins.
 - [ ] 13. Manager выбирает #1796, если актуальна и имеет поддерживаемый
-  upstream API; иначе следующую подходящую реальную Issue. Не scraping,
-  не private undocumented endpoint и не выдуманные usage/credits.
+      upstream API; иначе следующую подходящую реальную Issue. Не scraping,
+      не private undocumented endpoint и не выдуманные usage/credits.
 - [ ] 14. Выполнить полный реальный Workflow силами команды Kodex; host
-  проверяет каждый значимый transition и исправляет дефекты платформы,
-  но не пишет финальную задачу вместо Developer и не подменяет reviewers.
+      проверяет каждый значимый transition и исправляет дефекты платформы,
+      но не пишет финальную задачу вместо Developer и не подменяет reviewers.
 - [ ] 15. Internal reviews/fixes/responses на exact SHA, final-readiness.md,
-  финальный PR READY_FOR_HUMAN_REVIEW и отчёт по разделу 64 исходного задания.
-  Этот PR не merge, не auto-merge, не approve от имени владельца.
+      финальный PR READY_FOR_HUMAN_REVIEW и отчёт по разделу 64 исходного задания.
+      Этот PR не merge, не auto-merge, не approve от имени владельца.
 
 ## Карта новых пользовательских сценариев
 
-| Сценарий | Authority и владелец состояния | Consumer / проверка |
-| --- | --- | --- |
-| MCP profile publish → turn | Проверенный actor/scope, CP immutable revision и secret metadata; trusted adapter получает только exact binding | Runner startup и штатный MCP call, Console/Network/runtime proof |
-| Grant policy select → GitHub effect | Package allowed set и exact selected grant snapshot; CP owner transaction | Gateway/adapter membership check, grant pin, NONE/Human Gate negative cases |
-| Runtime message/tool → transcript | Callback workload/session/turn/attempt, CP persisted event sequence; session eligibility из серверного read path | Scoped WebSocket и history/rejoin, owner transcript без secret leakage |
-| Typed plan self-config → следующий ход | Owner confirmation, OCC/idempotency, immutable опубликованные pins | Runtime readback, actual prompt/tool/network proof; stale plan закрыто отклоняется |
+| Сценарий                               | Authority и владелец состояния                                                                                   | Consumer / проверка                                                                |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| MCP profile publish → turn             | Проверенный actor/scope, CP immutable revision и secret metadata; trusted adapter получает только exact binding  | Runner startup и штатный MCP call, Console/Network/runtime proof                   |
+| Grant policy select → GitHub effect    | Package allowed set и exact selected grant snapshot; CP owner transaction                                        | Gateway/adapter membership check, grant pin, NONE/Human Gate negative cases        |
+| Runtime message/tool → transcript      | Callback workload/session/turn/attempt, CP persisted event sequence; session eligibility из серверного read path | Scoped WebSocket и history/rejoin, owner transcript без secret leakage             |
+| Typed plan self-config → следующий ход | Owner confirmation, OCC/idempotency, immutable опубликованные pins                                               | Runtime readback, actual prompt/tool/network proof; stale plan закрыто отклоняется |
 
 Lifecycle cancel/delete/retry/terminal, deduplication и возможные частичные
 переходы детализируются перед изменением соответствующих контрактов. Нельзя
@@ -721,17 +824,17 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ### Жизненный цикл переписки и инструментов
 
-| Переход | Проверка и атомарный результат владельца | История и потребитель |
-| --- | --- | --- |
-| Native/MCP tool started | Exact lease/fence/generation + session/turn/attempt/input/revision; stable call ref и revision 1, RUNNING, audit/event/receipt | Одна раскрываемая запись действия; сырые аргументы не выдаются |
-| Published message completed | Только COMMENTARY/FINAL completed item, UTF-8 до 64 KiB, стабильный item ref; owner назначает execution/actor, immutable event | Полный текст в отдельном message body, не в сокращённом summary; reasoning исключён |
-| Tool completed | Тот же call/execution, монотонная revision, неизменный тип и authority; bounded безопасный результат | Обновление той же записи SUCCEEDED/FAILED, исходные события неизменяемы |
-| Exact replay / lost ACK | Тот же item/revision/content возвращает прежний receipt; иной content закрыто отклоняется | Дедупликация по immutable event и item/execution/revision |
-| Cancel/delete/terminal/expiry | Прежняя owner-транзакция отзывает execution и закрывает незавершённые activity; stale callback не создаёт новых фактов | Сохранённая история остаётся доступна только по прежнему eligibility; отмена не превращается в успех |
-| Retry/continuation | Новые turn/attempt и свежая RuntimeRevision, прежние items не переписываются | Exact tuple разделяет попытки и дочерние сессии |
-| Rejoin/reload/gap | Прежний защищённый run event read и непрерывный cursor, без нового cache/authority | Порядок внутри Run по sequence; между assistant turns по owner turnNumber |
+| Переход                                     | Проверка и атомарный результат владельца                                                                                                                                                                                  | История и потребитель                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native/MCP tool started                     | Exact lease/fence/generation + session/turn/attempt/input/revision; stable call ref и revision 1, RUNNING, audit/event/receipt                                                                                            | Одна раскрываемая запись действия; сырые аргументы не выдаются                                                                                                                                                                                                                                                            |
+| Published message completed                 | Только COMMENTARY/FINAL completed item, UTF-8 до 64 KiB, стабильный item ref; owner назначает execution/actor, immutable event                                                                                            | Полный текст в отдельном message body, не в сокращённом summary; reasoning исключён                                                                                                                                                                                                                                       |
+| Tool completed                              | Тот же call/execution, монотонная revision, неизменный тип и authority; bounded безопасный результат                                                                                                                      | Обновление той же записи SUCCEEDED/FAILED, исходные события неизменяемы                                                                                                                                                                                                                                                   |
+| Exact replay / lost ACK                     | Тот же item/revision/content возвращает прежний receipt; иной content закрыто отклоняется                                                                                                                                 | Дедупликация по immutable event и item/execution/revision                                                                                                                                                                                                                                                                 |
+| Cancel/delete/terminal/expiry               | Прежняя owner-транзакция отзывает execution и закрывает незавершённые activity; stale callback не создаёт новых фактов                                                                                                    | Сохранённая история остаётся доступна только по прежнему eligibility; отмена не превращается в успех                                                                                                                                                                                                                      |
+| Retry/continuation                          | Новые turn/attempt и свежая RuntimeRevision, прежние items не переписываются                                                                                                                                              | Exact tuple разделяет попытки и дочерние сессии                                                                                                                                                                                                                                                                           |
+| Rejoin/reload/gap                           | Прежний защищённый run event read и непрерывный cursor, без нового cache/authority                                                                                                                                        | Порядок внутри Run по sequence; между assistant turns по owner turnNumber                                                                                                                                                                                                                                                 |
 | Integration completion → compact transcript | После exact lease/fence/generation owner берёт invocation ref из заблокированной строки; в той же транзакции сохраняет typed integrationInvocationRef в delta/outbox; Proto/HTTP/WS не выводят его из общего aggregateRef | Только совпавшая каноническая SUCCEEDED tool receipt revision≥2 и полный run/node/session/turn/turnNumber/attempt позволяют скрыть повторную служебную запись. Локализованный summary не источник привязки; ошибки, опубликованные сообщения, artifacts и unbound история остаются видимыми. Backfill и миграция не нужны |
-| UI consumer acquire/release | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию |
+| UI consumer acquire/release                 | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев                                                                                                                                      | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию                                                                                                                                                                                                                                    |
 
 ### Карта native полного чтения файла
 
@@ -744,14 +847,14 @@ CP из свежей execution lease/root lineage; поля tool request тол�
 CP owner catalog/artifact → verified spool → повтор metadata → terminal audit.
 Новых публичных HTTP endpoints, Proto методов, grants или migrations нет.
 
-| Переход | Проверяемые полномочия и pins | State/event и consumer |
-| --- | --- | --- |
-| tools/list | Тот же valid immutable input/file catalog predicate у producer/runner; exact набор пяти tools | Read-only каталог, без нового доменного события; schema consumer — pinned runner |
-| Start page | Execution ticket и method/execution binding; server-resolved lease/fence/generation/catalog/purpose, exact entry/artifact/revision/digest | Прежний RecordRunToolCall RUNNING/revision1 и receipt/audit/event до owner чтения; UI хранит только purpose/catalog grant |
-| Read full source | Текущая owner eligibility и полный immutable artifact tuple; metadata/size/SHA/Complete/clean EOF, quota2/512MiB/64KiB chunks | Read-only artifact stream; приватные partial bytes не видны модели/UI, нового artifact event нет |
-| Complete page | Полный UTF-8/NUL scan; rune-aligned offset, bounded page и progress; повтор exact metadata; свежий terminal audit | Прежний RecordRunToolCall SUCCEEDED/revision2 только после проверок; модель получает page/source commitments и next offset/EOF, UI — безопасный статус |
-| Error/cancel/expiry/revoke | Невалидные arguments, source mismatch, stale lease/pins, timeout или отказ любого audit закрывают text response | FAILED activity только если прежняя lease ещё действительна; прежний owner terminal/cancel event и authoritative run/activity read, частичный текст не выдаётся |
-| Same page after lost response | Новое read-only обращение с теми же exact pins/offset и свежей lease; старый ответ не является authority cache | Новый безопасный tool-call ref и обычные audit/events, без внешнего эффекта или изменения artifact; contiguous offsets до EOF нужны для доказательства полного чтения |
+| Переход                       | Проверяемые полномочия и pins                                                                                                             | State/event и consumer                                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tools/list                    | Тот же valid immutable input/file catalog predicate у producer/runner; exact набор пяти tools                                             | Read-only каталог, без нового доменного события; schema consumer — pinned runner                                                                                      |
+| Start page                    | Execution ticket и method/execution binding; server-resolved lease/fence/generation/catalog/purpose, exact entry/artifact/revision/digest | Прежний RecordRunToolCall RUNNING/revision1 и receipt/audit/event до owner чтения; UI хранит только purpose/catalog grant                                             |
+| Read full source              | Текущая owner eligibility и полный immutable artifact tuple; metadata/size/SHA/Complete/clean EOF, quota2/512MiB/64KiB chunks             | Read-only artifact stream; приватные partial bytes не видны модели/UI, нового artifact event нет                                                                      |
+| Complete page                 | Полный UTF-8/NUL scan; rune-aligned offset, bounded page и progress; повтор exact metadata; свежий terminal audit                         | Прежний RecordRunToolCall SUCCEEDED/revision2 только после проверок; модель получает page/source commitments и next offset/EOF, UI — безопасный статус                |
+| Error/cancel/expiry/revoke    | Невалидные arguments, source mismatch, stale lease/pins, timeout или отказ любого audit закрывают text response                           | FAILED activity только если прежняя lease ещё действительна; прежний owner terminal/cancel event и authoritative run/activity read, частичный текст не выдаётся       |
+| Same page after lost response | Новое read-only обращение с теми же exact pins/offset и свежей lease; старый ответ не является authority cache                            | Новый безопасный tool-call ref и обычные audit/events, без внешнего эффекта или изменения artifact; contiguous offsets до EOF нужны для доказательства полного чтения |
 
 ### Карта захвата архива после ошибки провайдера
 
@@ -765,16 +868,16 @@ owner-транзакция session storage → snapshot worker. Новые вн�
 grants и migrations не требуются. Реализация и адресные local/component
 проверки выполнены; новый image и live-проверка пока NOT RUN.
 
-| Переход | Проверяемая граница | Результат и consumer |
-| --- | --- | --- |
-| До подтверждённого thread binding | Нет доказанного native session/path | Ошибка без archive tuple; существующая история не заимствуется |
-| Ошибка после записи rollout | Bounded остановка процесса и join readers; exact UUID/path, regular file, NOFOLLOW/ownership, SHA/size | Только свежий capture proof; исходная ошибка и измеренный Usage сохраняются |
-| Ошибка credential refresh после capture | Тот же input-bound proof, не exported Result fields | Проверенный archive tuple переживает отказ; успешный ответ и credential effect не подделываются |
-| Broker terminal success/failure | Один strict versioned decoder, authenticated UDS peer, exact attempt/revision/execution binding и source tuple | Private proof восстанавливается только после проверки; partial/foreign/unknown pins закрыто отклоняются |
-| Generic/activity/post-execution failure | Только private proof текущего input | FAILED completion с проверенным tuple и прежним Usage; final/artifacts не выдаются |
-| Completion / lost ACK | Exact lease/fence, generation, attempt/revision, тот же immutable callback payload | Прежний idempotent owner receipt; source/content generation и storage task обновляются атомарно |
-| Cancel/delete/expiry/retry | Прежняя owner lifecycle boundary; capture не продлевает lease и не запускает provider retry | Stale completion закрыто отклоняется; новая attempt не использует старый proof |
-| Capture невозможен | Нет join/source/integrity proof | Tuple отсутствует, ошибка сохраняется; такой residual path не объявляется исправленным без owner invalidation evidence |
+| Переход                                 | Проверяемая граница                                                                                            | Результат и consumer                                                                                                   |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| До подтверждённого thread binding       | Нет доказанного native session/path                                                                            | Ошибка без archive tuple; существующая история не заимствуется                                                         |
+| Ошибка после записи rollout             | Bounded остановка процесса и join readers; exact UUID/path, regular file, NOFOLLOW/ownership, SHA/size         | Только свежий capture proof; исходная ошибка и измеренный Usage сохраняются                                            |
+| Ошибка credential refresh после capture | Тот же input-bound proof, не exported Result fields                                                            | Проверенный archive tuple переживает отказ; успешный ответ и credential effect не подделываются                        |
+| Broker terminal success/failure         | Один strict versioned decoder, authenticated UDS peer, exact attempt/revision/execution binding и source tuple | Private proof восстанавливается только после проверки; partial/foreign/unknown pins закрыто отклоняются                |
+| Generic/activity/post-execution failure | Только private proof текущего input                                                                            | FAILED completion с проверенным tuple и прежним Usage; final/artifacts не выдаются                                     |
+| Completion / lost ACK                   | Exact lease/fence, generation, attempt/revision, тот же immutable callback payload                             | Прежний idempotent owner receipt; source/content generation и storage task обновляются атомарно                        |
+| Cancel/delete/expiry/retry              | Прежняя owner lifecycle boundary; capture не продлевает lease и не запускает provider retry                    | Stale completion закрыто отклоняется; новая attempt не использует старый proof                                         |
+| Capture невозможен                      | Нет join/source/integrity proof                                                                                | Tuple отсутствует, ошибка сохраняется; такой residual path не объявляется исправленным без owner invalidation evidence |
 
 ## Журнал
 
@@ -1159,12 +1262,12 @@ GitHub PASS автоматически не распространяется н�
   deadline; причина прежних FAILED ходов по этому результату не установлена.
 - PROJECT: новый `run_Yq_si_BeVFJDGhanmPEaZeHn`,
   `ses_07I8JuxguIs7k9FF3kyQrn-6`, `trn_ufM0qBwaXSOyTty3M8C20vJt`,
-  attempt 1: первый запрос каталога TOOL_UNAVAILABLE, следующие три
+  attempt 1: первый запрос каталога TOOL*UNAVAILABLE, следующие три
   SUCCEEDED, затем TURN_COMPLETED. Полное адресное чтение Manager установило
-  одинаковые published/effective revision `ins_-otL2zl0QPgcT0rlA8ajz3t6`,
-  digest `527e660e59d6532bef4c6438ed43089c3a345dc0b3b6b6eac536900d6463d527`.
-  Owner GET независимо подтвердил Manager v9, binding
-  `inb_g3bt8F__i8bdt5ywpXbvslD3` v1/effective=true и тот же revisionRef.
+  одинаковые published/effective revision `ins*-otL2zl0QPgcT0rlA8ajz3t6`,
+digest `527e660e59d6532bef4c6438ed43089c3a345dc0b3b6b6eac536900d6463d527`.
+Owner GET независимо подтвердил Manager v9, binding
+`inb_g3bt8F\_\_i8bdt5ywpXbvslD3` v1/effective=true и тот же revisionRef.
   Поэтому для этого Manager применим native instruction impact/publish;
   гипотеза managed override к нему не относится.
 - PROJECT ACK same Pod UID `2b2516a2-072d-453b-8dca-5ffa944759e8`:
@@ -1356,7 +1459,7 @@ ReadinessREADY/allowed,33steps, finalgatetrue/4decisions сохранены.
 Plan screenshot: scroll body/stickyfooter/32px controls без x-overflow;
 Console0. Это configurationPASS, не принятие всего SOFTWARE_CHANGE.
 
-Новый обычный UI launch07:23:09: run_qac3AdH1vgybtUSD99lyrhL9,
+Новый обычный UI launch07:23:09: run*qac3AdH1vgybtUSD99lyrhL9,
 session ses_RNRufiv4ypgyHGCdl2ggk8sX, attempt1, targetWorkflowversion9.
 Coordinator native делегировал step001 run_6TgIzsNfT84A1H0DzOrXPhOJ,
 session ses_gNVOmcBgiqCNndMjCRdAs49f, turn trn_6JWL-gVQjCx6t3SwngefYrnJ.
@@ -1365,7 +1468,7 @@ instructionsfile/inbox EQUAL/taskInPrompttrue; coordinatorcap1/grants0,
 INTAKEcap22/grants19 — штатное attenuation, не новый доступ.
 INTAKE samePod UIDa4ad857e-4ca0-4b34-921b-57ae029cbb75 rejoinCAPTURED,
 image-file binary40f3268a257abb9ed21e016069baf3cbfbf16698c4634da7fa102fa1508fc93b
-EQUAL. RuntimeRevisionrrev_hflPzy0tY3uBAgtS_-I4z0VR/eb05f34e…68ed87c,
+EQUAL. RuntimeRevisionrrev_hflPzy0tY3uBAgtS*-I4z0VR/eb05f34e…68ed87c,
 materializationdc7f1774…d5ed95; taskbda5c0e…35be29. Независимое сравнение
 expectedtask и protectedRUNpreview ещё NOT RUN; ACK не подменяет его.
 Coordinator binaryfilecapture NOT RUN (exec недоступен), не объявлятьEQUAL.
@@ -1418,10 +1521,10 @@ Catalogvfc_lGre3OM8M6u7ZkhK0Yit5cQS/digest
 96cced23dc6047487f4b5def5f71e352668e65fce55e48fdd04684c4b30b62c1
 не менялся, purposeRUN_RESULT, source digests совпали с exact owner files.
 
-| Artifact | Revision/version/bytes | Actual contiguous pages |
-| --- | --- | --- |
-| art_HjIkZsPbF_YcLy6sQTzNFiyC | 6/1/26276 | 0→16384(false),16384→26276(true) |
-| art_RT7lMAhhZ1SD3s3YXJy-L5Vs | 1/1/39301 | 0→16383(false),16383→32767(false),32767→39301(true) |
+| Artifact                     | Revision/version/bytes | Actual contiguous pages                             |
+| ---------------------------- | ---------------------- | --------------------------------------------------- |
+| art_HjIkZsPbF_YcLy6sQTzNFiyC | 6/1/26276              | 0→16384(false),16384→26276(true)                    |
+| art_RT7lMAhhZ1SD3s3YXJy-L5Vs | 1/1/39301              | 0→16383(false),16383→32767(false),32767→39301(true) |
 
 ROOT independent owner-read verifier PASS: exact run/session/turn/attempt,
 catalog/entry/version/source pins, size/offset/progress/EOF, ≤16384 page,
@@ -1489,8 +1592,8 @@ Source137058d9 remote/Draft1800 exact readback PASS. Первый publish proces
 body ещё прежний. Повтор publisher не делал второй push и завершил только
 обычный body update/readback PASS. Никакого force/main/merge.
 
-Native global SYSTEM run_NtLhopH70zVQqgJtgisnuOp- завершён; DRAFT
-pln_VQ0MG4-zW28znOkYyb0vOvy_ rev1 ровно UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+Native global SYSTEM run*NtLhopH70zVQqgJtgisnuOp- завершён; DRAFT
+pln_VQ0MG4-zW28znOkYyb0vOvy* rev1 ровно UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
 target own ORGANIZATION recipe/version16. Standard base5c49c8f4→2d1efe7f,
 spec9b1fac6d→de4c0770, остальные значения наследуются. Validate200 VALID2,
 Apply200 APPLIED3: recipe17/G11, единственный build
@@ -1541,13 +1644,13 @@ Model summary не принимается за независимое доказ
 миграций/identity и без вывода содержимого файла. Реализация локально проверена
 ниже; actual native EOF proof ещё NOT RUN.
 
-| Этап | Источник полномочий и проверка | Результат и lifecycle |
-| --- | --- | --- |
-| tools/call → readFile | Authenticated RunnerInput, frozen catalog/purpose, exact lease/fence/generation/file; full source digest/size/UTF-8/noNUL, page и повторный descriptor | Private typed proof только после всех checks; прежний MCP JSON без изменения |
-| Terminal recorder | Только private proof, exact input binding, closed refs/digests/numbers/purpose; не map/decoded JSON; ≤2000 без truncation | Канонический metadata-only JSON в SUCCEEDED rev2; missing/invalid proof закрывается до terminal write; handler error без page metadata |
-| CP transport → caster → domain → repository | Существующие grant/catalog/purpose, lease/attempt/current generation, rev1→rev2, idempotency | Одной owner transaction RunToolCall/event/outbox; JSON inert evidence, не authority |
-| Owner GET → gateway/WebSocket → UI | Существующая eligibility и exact execution/session/turn/attempt | SafeResult передаётся без потерь и доступен в свёрнутых details; без нового consumer/readiness |
-| Cancel/delete/retry/stale/projection refusal | Прежний owner lifecycle и terminal guards | Нет ложного SUCCEEDED/page proof; потеря ответа после CP ACK не объявляется отдельным provider read ACK |
+| Этап                                         | Источник полномочий и проверка                                                                                                                         | Результат и lifecycle                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| tools/call → readFile                        | Authenticated RunnerInput, frozen catalog/purpose, exact lease/fence/generation/file; full source digest/size/UTF-8/noNUL, page и повторный descriptor | Private typed proof только после всех checks; прежний MCP JSON без изменения                                                           |
+| Terminal recorder                            | Только private proof, exact input binding, closed refs/digests/numbers/purpose; не map/decoded JSON; ≤2000 без truncation                              | Канонический metadata-only JSON в SUCCEEDED rev2; missing/invalid proof закрывается до terminal write; handler error без page metadata |
+| CP transport → caster → domain → repository  | Существующие grant/catalog/purpose, lease/attempt/current generation, rev1→rev2, idempotency                                                           | Одной owner transaction RunToolCall/event/outbox; JSON inert evidence, не authority                                                    |
+| Owner GET → gateway/WebSocket → UI           | Существующая eligibility и exact execution/session/turn/attempt                                                                                        | SafeResult передаётся без потерь и доступен в свёрнутых details; без нового consumer/readiness                                         |
+| Cancel/delete/retry/stale/projection refusal | Прежний owner lifecycle и terminal guards                                                                                                              | Нет ложного SUCCEEDED/page proof; потеря ответа после CP ACK не объявляется отдельным provider read ACK                                |
 
 Closed receipt v1: kind/version, catalog_ref/catalog_digest/purpose, entry_ref/artifact_ref,
 file_revision/file_version/size_bytes, offset_bytes/next_offset_bytes/eof/source_digest/
@@ -1597,10 +1700,10 @@ compare; это доказательство startup PASS, не конечног
 
 Дополнение06:27 UTC: native Review ENV draft Validate200 VALID/version2,
 validation/target digest f1d75600ddb82f62f01e673a3ea10f3b538419b2dae3f0e05b3e5a261afe9ca8.
-Impact rvip_25Gp4Isi3ovW09NSazTDN4pO/201 показал ровно5 intended Review
+Impact rvip*25Gp4Isi3ovW09NSazTDN4pO/201 показал ровно5 intended Review
 потребителей (без Developer). Screenshot compact modal PASS, all5 selected.
 Publish200 один раз: draft PUBLISHED/version3, ENVversion5/revision5,
-renvv_-0WysH45SV7kvjfxUwLb7_1b, digest совпал. Fresh impact READ200 APPLIED,
+renvv*-0WysH45SV7kvjfxUwLb7_1b, digest совпал. Fresh impact READ200 APPLIED,
 каждый из5 items outcome APPLIED. Runtime configuration каждого5 READ200:
 bindingversion6, exact new revision/image artifactG5/f8b60814, tools38.
 Console0 после nativeSSO restoration. Developer/helper bindings ещё NOT RUN.
@@ -2768,7 +2871,7 @@ local trusted-cluster. Полный65 и финальный33step Workflow ещ�
   grid и toolbar не обрезают controls; screenshot390 PASS, workspace370,
   внутренний table scroll1120, кнопка целиком видима. Child15units/lint/format
   PASS; Console0/concurrencyPUT200. Types/build нового source ещё NOT RUN.
--11 native dialogs созданы/названы через UI. 01:07:14 и01:08:58 authoritative
+  -11 native dialogs созданы/названы через UI. 01:07:14 и01:08:58 authoritative
   account active10/limit10, первые10 USER RUNNING,11-й QUEUED;11 distinct
   sessions. Все10 early+same-UID provider ACK CAPTURED, inbox/instructions
   EQUAL и task_in_prompt=true. Ожидаемый original task digest comparison
@@ -2777,7 +2880,7 @@ local trusted-cluster. Полный65 и финальный33step Workflow ещ�
   дал actual CAPTURED. Старый role-runtime exit1 — исторический FAIL startup,
   причина ещё UNKNOWN; замена Pod не скрывается за общим green.
 - Stop первого01:09:01: USER/Run CANCELLED, active9, остальные9 RUNNING,
- 11-й QUEUED. 11-й started01:09:06 после освобождения slot,
+  11-й QUEUED. 11-й started01:09:06 после освобождения slot,
   completed01:10:00. Hard reload сохранил exact refs/history и rejoin;
   свежий native header CONNECTED. Конец остальных9 требует final readback.
 - Old connection246/2.4 имеет118 enabled grants: exact safe owner snapshot
@@ -3244,7 +3347,7 @@ manifest `sha256:e5e5a118be7a619fda9914a25491d3fd8b269679f33b06cbaa82e7565423ca1
 Официальный complete report READY:2938 unique/4640 matches; прочитаны
 metadata, первая страница и оба blocking findings, не все2938 записей.
 Два fix-available HIGH: undici GHSA-rfgv-xxqx-mfg5 и tar GHSA-r292-9mhp-454m.
-Native ACCEPT_RISK `imgrisk_6tTBN1gAfvvHpJ-mASGx9dl_`21:35:58
+Native ACCEPT*RISK `imgrisk_6tTBN1gAfvvHpJ-mASGx9dl*`21:35:58
 привязан к exact generation/report/digest/policy для local QA;
 старый REJECTED attempt неизменен. Новый admission ACCEPTED receipt
 `66119533aa50bc855c524d018c3722f850804e150be5f6e86f7509fc1ad939fb`,
@@ -3280,8 +3383,7 @@ Native cancellation folding repeat NOT RUN, исходный FAIL сохранё
 
 UX: recipe390 mobile без overflow, desktop risk modal и ENV draft/editor/
 impact publication screenshot PASS, controls32px/внутренний scroll/действия
-доступны. Console0 после штатной навигации; relevant reads/validate/publish
-200. SSO absolute07.10 06:23UTC покрывает окно; Chrome5 reload/navigation,
+доступны. Console0 после штатной навигации; relevant reads/validate/publish 200. SSO absolute07.10 06:23UTC покрывает окно; Chrome5 reload/navigation,
 foreign6 не затронута. Full65/bootstrap merge/fullWorkflow OPEN.
 
 ### 06.10.2026 21:32 UTC — восстановление supply-chain и recipe generation4
@@ -3450,7 +3552,6 @@ PROJECT ENV proposal run `run_mWgOCzdvduidMB2r3SXgkVU4` отправлен од�
 RUNNING. Ordinary6, delegation, ApprovalPolicy effects, bootstrap merge
 и full dogfooding остаются NOT RUN; открытые checkbox не отмечаются.
 
-
 06.10.2026 20:05 UTC, source `9931f8700616fde2f6424bf49e2e7e7799b937cb`.
 Callback descriptor UPDATE_ROLE_IMAGE_RECIPE использовал CREATE; закрытый
 server action registry теперь единственный источник действия. ROOT callback
@@ -3497,7 +3598,7 @@ Admission/promotion/rebind generation3 и actual ordinary launch NOT RUN.
 
 Project File manager-plan.md ACTIVE/CLEAN, 2395 байт, digest958c4ae7…2e4
 создан applied plan pln_Xvd1-J6zbYXAcqETLuWzwXzk/v3/receipt
-rct__M0JMvWVka1KZhh1xUWn1n-a. Native Files/attachment picker PASS;
+rct\_\_M0JMvWVka1KZhh1xUWn1n-a. Native Files/attachment picker PASS;
 чтение файла обычной ролью пока NOT RUN. Нативно опубликованы процессы
 SOFTWARE_CHANGE_DELEGATION_SMOKE/v3 и SOFTWARE_CHANGE/v3/33steps/4required
 inputs/единственный финальный human gate. Конфигурация PASS, execution NOT RUN.
@@ -3767,14 +3868,14 @@ guard. Новых ordinary исполнений/Workflow пока нет; Full65
 190-символьный template интеграций, исходный текст совпадает точным suffix.
 Все6 own runtime configurations: gpt-6.1-sol, published medium overlay.
 
-| Роль | Actual agentRef | Применённая среда | План привязки |
-| --- | --- | --- | --- |
-| Manager | `agt_MPH0YpY7PXej_VLOZcYW3T74` | selfdev-review | `pln_QuHXYOBsUZHKFUS9EVSoNuCU` |
-| Architect | `agt_KmYyn3hhyr6GQ8an4KbZgO3R` | selfdev-review | `pln_9ftmbkZjbN0l631jt-c19bq7` |
-| Developer | `agt_pWHh9efzn_Ug0qYiMdVlqjeb` | selfdev-write | `pln_-SyhIEzhH3TT3BfmmcnAkbXv` |
-| Documentation Reviewer | `agt_L2Dz5H6p7P9NIzkOaRwJ4t0O` | selfdev-review | `pln_R2I4OJHZ4QV4Uea133Hfn0ll` |
-| Security Reviewer | `agt_4uL98uA20yVhOcAIBeQfI8IP` | selfdev-review | `pln_dTiXNUcZkCPHbClP5okBn8Hg` |
-| Lexical Guardian | `agt__KzHZ3YqxmxOp0yR4eve33NK` | selfdev-review | `pln_qKU9YYEb6K1EmOtB7C47yTQh` |
+| Роль                   | Actual agentRef                | Применённая среда | План привязки                  |
+| ---------------------- | ------------------------------ | ----------------- | ------------------------------ |
+| Manager                | `agt_MPH0YpY7PXej_VLOZcYW3T74` | selfdev-review    | `pln_QuHXYOBsUZHKFUS9EVSoNuCU` |
+| Architect              | `agt_KmYyn3hhyr6GQ8an4KbZgO3R` | selfdev-review    | `pln_9ftmbkZjbN0l631jt-c19bq7` |
+| Developer              | `agt_pWHh9efzn_Ug0qYiMdVlqjeb` | selfdev-write     | `pln_-SyhIEzhH3TT3BfmmcnAkbXv` |
+| Documentation Reviewer | `agt_L2Dz5H6p7P9NIzkOaRwJ4t0O` | selfdev-review    | `pln_R2I4OJHZ4QV4Uea133Hfn0ll` |
+| Security Reviewer      | `agt_4uL98uA20yVhOcAIBeQfI8IP` | selfdev-review    | `pln_dTiXNUcZkCPHbClP5okBn8Hg` |
+| Lexical Guardian       | `agt__KzHZ3YqxmxOp0yR4eve33NK` | selfdev-review    | `pln_qKU9YYEb6K1EmOtB7C47yTQh` |
 
 Каждая привязка подготовлена в своём AGENT context, отдельно Validate/Apply.
 Fresh native GET всех6: HTTP200, agentVersion2/bindingVersion2,
@@ -4417,8 +4518,7 @@ fixtures PASS. Полный Codex unit PASS (4.544 s), адресный race PAS
 vet/format/diffcheck PASS. Живой повтор нового runner пока NOT RUN.
 После hard reload UI: нет лишнего пояснения, false «Работает» и горизонтального
 overflow; terminal события догнали receipts, fallback-карточки исчезли.
-Chrome Console без ошибок; проверенные session/bootstrap/history/run запросы
-200. Скрин `/tmp/kodex-chat-no-service-binding-banner.png` просмотрен.
+Chrome Console без ошибок; проверенные session/bootstrap/history/run запросы 200. Скрин `/tmp/kodex-chat-no-service-binding-banner.png` просмотрен.
 
 04.10.2026 10:54–11:04 UTC, checkpoint
 `09c0f0b8b3a12ef076233f95cdb430e7bea9ef80`:
@@ -4684,10 +4784,10 @@ SSO owner login и отдельный штатный вход приложени
 зависший побочный login client остановлен без закрытия браузера/вкладок.
 
 04.10.2026 13:15–13:24 UTC, source поверх `fdd1f81e`:
-PASS — Run22 SUCCEEDED/version2, но propose_configuration_plan FAILED.
+PASS — Run22 SUCCEEDED/version2, но propose*configuration_plan FAILED.
 Safe operation_types впервые показывают точные4 операции: инструкции,
 runtime config, environment revision, integration connection. Exact closed
-log: assistant_plan_hydrate_conflict, operation_index2. Это PREPARE_ASSISTANT_
+log: assistant_plan_hydrate_conflict, operation_index2. Это PREPARE_ASSISTANT*
 RUNTIME_CONFIGURATION. No-op, draft, provider eligibility либо profile
 конфликт всё ещё различаются только по source; no-op не считается доказанным.
 Owner GETruntime200, READY, draftOverlay absent, текущая модель gpt-6.1-sol.
@@ -5146,7 +5246,7 @@ safe-code до cleanup. Raw task/termination/input/logs не выводятся;
 и retry неизменны. Actual SNAPSHOT root cause всё ещё UNKNOWN до активации.
 Frozen оптимизация Dockerfile cache подготовлена отдельным исполнителем:
 runner source больше не будет инвалидировать toolchain/apt/npm/Chromium.
-  Её actual build/time ещё NOT RUN; в текущий активируемый tree не включена.
+Её actual build/time ещё NOT RUN; в текущий активируемый tree не включена.
 Checkbox2–15 OPEN; 38/38 actual inventory, MCP call и полный QA ещё впереди.
 
 04.10.2026 18:18 UTC, интеграционный tree поверх `0b5defa0c7896fdf330f8b486a396903452de757`:
@@ -5221,7 +5321,7 @@ Ready; warm Pod использует exact full498b9012 тремя Ready кон�
 Актуальный protected SYSTEM readback READY. Это trusted-local evidence,
 не staging/production acceptance.
 PASS — настоящий SYSTEM ход36 выполнил оба управляемых Context7 вызова:
-run_G6CBzCKAoE5N2aBhU6plgSAc, exact invocation receipts
+run*G6CBzCKAoE5N2aBhU6plgSAc, exact invocation receipts
 inv_s00cxwhK1ggJKphgKfd5eQmY и inv_3hApAw6LUK06LtcUM54Nqaki.
 Ни один итоговый текст модели не заменяет owner event/read path.
 PASS — повторный ход37 на full498: run_DF-mqdtnS82EJfDaio9Vr3eV,
@@ -5233,7 +5333,7 @@ Actual Pod proof: инструкции byte-equal runtime input, prompt соде
 task и harmless marker, model gpt-6.1-sol/medium, prompt-service-v2, семь
 platform slots, пользовательский шаблон и один managed MCP profile.
 PASS — helper37 сам прочитал свежий ROLE_ENVIRONMENTS и создал typed план
-pln_Z-C67-5hoTRUbbtCrQnGOee_; normal UI Validate и Apply выполнены.
+pln_Z-C67-5hoTRUbbtCrQnGOee*; normal UI Validate и Apply выполнены.
 Серверный Dockerfile использует exact full498 digest без host-подмены плана.
 Actual build/admission/38-required inventory/promotion пока NOT RUN.
 PASS — сквозной typed integrationInvocationRef: owner locked row → delta/
@@ -5465,7 +5565,7 @@ spec сверены. Builder получен node CRI через штатный T
 это уже не только предварительный import в node cache.
 PASS — host/Pod/host hashes CP image repair, archive controller и frontend
 совпали на stable clean SHA; mounted source не называется immutable release.
-PASS — QA_ARCHIVE_RESTORE_36C: RESTORE
+PASS — QA*ARCHIVE_RESTORE_36C: RESTORE
 `sat_faffe855-5839-48c3-9d4b-b3223f22fc49` SUCCEEDED, затем реальное продолжение
 `run_FnowGalO3AosCdcEJ1wlLmGr` SUCCEEDED в прежней
 `ses_QQzu5ZZ1iOG0OAQqa9tzuR4x`. Actual prompt readback подтвердил exact task,
@@ -5475,8 +5575,8 @@ PASS — normal SYSTEM QA38C plan `pln_uZ8YpKj-V3IBLpmPrnNewa05`
 VALID→APPLIED/version3, recipe version4/generation3. Live mobile390 screenshot
 плана просмотрен: редактор300px с внутренней прокруткой, горизонтального
 overflow нет; desktop terminal fallback читабелен. Console после reload чиста.
-FAIL — собственный build `imgbld_-WMa-HiGtF9z0sINjPeAJ19X` COMPLETED,
-но actual admission artifact `imgart_ea_Xf9O3zmWMKp8OV8ON-wYO` REJECTED:
+FAIL — собственный build `imgbld*-WMa-HiGtF9z0sINjPeAJ19X`COMPLETED,
+но actual admission artifact`imgart_ea_Xf9O3zmWMKp8OV8ON-wYO` REJECTED:
 38 required, 32 VERIFIED; git/go/goimports/grpcurl/chromium PROBE_FAILED,
 yarn MISSING. Общий inventory VERIFIED не выдаётся за допуск tools.
 Сборка FROM-only наследовала platform full runner498; отдельная bounded
@@ -6797,12 +6897,12 @@ e373f2dbc93ad93c494ffe455cc326e85adddc091e7ad953fb15412a9c15a293.
 Production исправление готовится отдельно: WaitForReady лишь Fail/Expire
 в пределах прежнего deadline8s. Матрица жизненного цикла:
 
-| Путь | Authority и состояние | Результат/событие |
-| --- | --- | --- |
-| Native Job → bridge Fail → registered CP RPC | Server-owned attempt, exact actor/scope/grant/fence/version; прежняя owner-транзакция | Atomic artifact/attempt/receipt/audit/domain event |
-| PermissionDenied expired claim → typed Expire | Fresh expiry context, тот же immutable tuple, owner eligibility | Прежний атомарный terminal и отзыв grant |
-| Transport wait, cancellation/deadline до соединения | Нет нового claim/grant и нет owner effect | Нет события; authoritative owner read |
-| Полученный server status | WaitForReady не повторяет обработанный RPC | Прежняя ошибка или terminal receipt |
+| Путь                                                | Authority и состояние                                                                 | Результат/событие                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Native Job → bridge Fail → registered CP RPC        | Server-owned attempt, exact actor/scope/grant/fence/version; прежняя owner-транзакция | Atomic artifact/attempt/receipt/audit/domain event |
+| PermissionDenied expired claim → typed Expire       | Fresh expiry context, тот же immutable tuple, owner eligibility                       | Прежний атомарный terminal и отзыв grant           |
+| Transport wait, cancellation/deadline до соединения | Нет нового claim/grant и нет owner effect                                             | Нет события; authoritative owner read              |
+| Полученный server status                            | WaitForReady не повторяет обработанный RPC                                            | Прежняя ошибка или terminal receipt                |
 
 Live terminal receipt, idle barrier и новая активация worker images пока NOT RUN.
 
@@ -6928,13 +7028,12 @@ Console error/warn отсутствуют. Первоначальное подо
 modal не подтвердилось: она находится в середине accessibility snapshot.
 Frontend по этому подозрению не менялся.
 
-OWNER UI16:48:41 UTC сохранил ACCEPT_RISK только для exact образа/отчёта/
+OWNER UI16:48:41 UTC сохранил ACCEPT*RISK только для exact образа/отчёта/
 policy; причина ограничивает решение локальным QA/dogfooding и не отменяет
 integrity/provenance/signature/network checks. Decision
 `imgrisk_Fs7xGePjbIQyVsockGaQu9hE` имеет проверенные immutable digest и pins.
-Прежняя attempt1 `imgadm_-zSJ1wCf6wJv7xi5L5NTa4eL` остаётся REJECTED с
-совпадающим terminal snapshot и прежним отчётом. Создана отдельная attempt2
-`imgadm_qzaTBu3oOljYWt2PD7iWimEH`, CLAIMED; exact prior receipt/evidence и
+Прежняя attempt1 `imgadm*-zSJ1wCf6wJv7xi5L5NTa4eL`остаётся REJECTED с
+совпадающим terminal snapshot и прежним отчётом. Создана отдельная attempt2`imgadm_qzaTBu3oOljYWt2PD7iWimEH`, CLAIMED; exact prior receipt/evidence и
 sourceAdmissionRevision1 сохранены. Новый ACCEPTED admission и promotion
 пока NOT RUN. Checklist2–15/6.1 остаётся OPEN.
 
@@ -7399,7 +7498,7 @@ remote/PR head подтверждён; PR1798 остаётся Draft/OPEN, body 
 инвариант в GUIDE-DOC-003. Context7 и первичный source tag rust-v0.160.0
 подтвердили: model.tool_mode имеет приоритет, поэтому одного enabled=false
 недостаточно при CodeModeOnly. Отключённый host не включается; закрытые
-namespace functions/web/mcp__kodex явно получают DirectModelOnly.
+namespace functions/web/mcp\_\_kodex явно получают DirectModelOnly.
 Прежние sandbox/approval/deny paths/tool policy и authority сохраняются.
 Адресная регрессия RED на старом config; полный codex unit PASS4.603s
 у исполнителя и4.702s у ROOT, go vet/build PASS. Host CLI0.160.1 не
@@ -7749,12 +7848,12 @@ ROOT forced vue-tsc/Prettier PASS; Console error/warn нет. Все резул�
   Protected RUN previews200/complete/diagnostics[]; template digest f4926f1b
   и каждый materialization digest точно совпали с ACK, полный prompt не выдавался.
 
-| Реальная проверка | Run | Фактический результат |
-| --- | --- | --- |
-| Context7 SYSTEM60 | `run_dnwra2vNmSPM6m6StO91mWL9` | Два native MCP вызова resolve/query, Vue docs `/vuejs/docs`, подтверждён watch cleanup до await |
-| GitHub SYSTEM61 | `run_Jw0ki--CKwXP3pQ-X784eLxP` | Git2.39.5/ls-remote exit0, main d43bd605; настоящий README прочитан curl/sed exit0 без записи |
+| Реальная проверка   | Run                            | Фактический результат                                                                                  |
+| ------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Context7 SYSTEM60   | `run_dnwra2vNmSPM6m6StO91mWL9` | Два native MCP вызова resolve/query, Vue docs `/vuejs/docs`, подтверждён watch cleanup до await        |
+| GitHub SYSTEM61     | `run_Jw0ki--CKwXP3pQ-X784eLxP` | Git2.39.5/ls-remote exit0, main d43bd605; настоящий README прочитан curl/sed exit0 без записи          |
 | Native web SYSTEM62 | `run_Fk0qvdxlrwvCFC8mVFqEneln` | Native SEARCH queryCount1 SUCCEEDED, затем чтение официальной документации; подтверждён item lifecycle |
-| Контекст SYSTEM63 | `run_aE31RuLrjn_hrb2jRuSJlPEI` | SYSTEM/ORGANIZATION, проект отсутствует, gpt-6.1-sol medium, gen10/ENV25/38tools и Context7 grants |
+| Контекст SYSTEM63   | `run_aE31RuLrjn_hrb2jRuSJlPEI` | SYSTEM/ORGANIZATION, проект отсутствует, gpt-6.1-sol medium, gen10/ENV25/38tools и Context7 grants     |
 
 - PASS: внутри actual provider Pod SHA256 runner равен
   `f8a44936452d36642806982db4d6b1939f7c064d74ffe48e89fbad3a513c095f`.
@@ -8153,7 +8252,7 @@ Marshal/Unmarshal/Equal проверен. Новый PROJECT send пока NOT R
 - Canonical JCS regenerated; frozen source manifest28/28 совпал. Затем один
   operations.go отформатирован gofmt, client units повторно PASS.
   Дополнительные frontend RoleImages167/167 PASS5.07с и fresh-render helper
- 13/13 PASS11.30с на checkpointd686. Проверки не заменяют live delivery.
+  13/13 PASS11.30с на checkpointd686. Проверки не заменяют live delivery.
 - Build OCI, reader Apply/Ready и old workspace cleanup пока NOT RUN.
   Chrome MCP доступен, вкладка SSO; native visual/search NOT RUN. Full65 OPEN.
 
@@ -8472,12 +8571,12 @@ turn1/attempt1, собственный B3 manifest1ac22394…a94f1f, ENV/binding
 tools38. Ранний provider ACK захвачен до cleanup; actual role/provider
 binary SHA `f8a44936452d36642806982db4d6b1939f7c064d74ffe48e89fbad3a513c095f`.
 
-| Сценарий | Actual run/session/turn | Результат |
-| --- | --- | --- |
-| Context7 | `run_c0efySXhM9OuQMotfF6c31ZC` / `ses_uRluAygg0B5EHX455CzSqzLB` / `trn_2A1EPPwO9IuaSMyI-KP9x64E` | PASS: resolve и query SUCCEEDED, exact две own grants/NONE, `/websites/vuejs`, официальный источник |
-| Hosted web | `run__kD_QpW7jpqlOqNsC5T1c3iE` / `ses_ltcm3tx3OAcIro2dnnZhWjIf` / `trn_FSIGcTvlZNp4ewZx59l3Swit` | PASS: native CODEX_WEB_SEARCH SEARCH/OPEN_PAGE SUCCEEDED, официальный vuejs.org, persisted transcript после reload |
-| Project context | `run_SIxvK7QufkaqAIIRbRlIsF8z` / `ses_u5k5CA2koeyQhrfDmH_gVlm0` / `trn_ErPZZiaipO7SMX_iZkZ4Pxqj` | PASS: PROJECT identity/current config/pinned revision точны; native search SUCCEEDED; только хеши двух файлов |
-| Public Git | `run_JEYKlFYQ9zoOKPwPKPztIliN` / `ses_ko7TuVyTR3FWxwol90GVHv9j` / `trn_IaI2RSVLmbZSg3iQb5YULe1F` | FAIL repo read: git2.39.5 PASS, ls-remote exit128 — proxy DNS unresolved; текущая web policy NONE тоже требует штатной настройки |
+| Сценарий        | Actual run/session/turn                                                                          | Результат                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Context7        | `run_c0efySXhM9OuQMotfF6c31ZC` / `ses_uRluAygg0B5EHX455CzSqzLB` / `trn_2A1EPPwO9IuaSMyI-KP9x64E` | PASS: resolve и query SUCCEEDED, exact две own grants/NONE, `/websites/vuejs`, официальный источник                              |
+| Hosted web      | `run__kD_QpW7jpqlOqNsC5T1c3iE` / `ses_ltcm3tx3OAcIro2dnnZhWjIf` / `trn_FSIGcTvlZNp4ewZx59l3Swit` | PASS: native CODEX_WEB_SEARCH SEARCH/OPEN_PAGE SUCCEEDED, официальный vuejs.org, persisted transcript после reload               |
+| Project context | `run_SIxvK7QufkaqAIIRbRlIsF8z` / `ses_u5k5CA2koeyQhrfDmH_gVlm0` / `trn_ErPZZiaipO7SMX_iZkZ4Pxqj` | PASS: PROJECT identity/current config/pinned revision точны; native search SUCCEEDED; только хеши двух файлов                    |
+| Public Git      | `run_JEYKlFYQ9zoOKPwPKPztIliN` / `ses_ko7TuVyTR3FWxwol90GVHv9j` / `trn_IaI2RSVLmbZSg3iQb5YULe1F` | FAIL repo read: git2.39.5 PASS, ls-remote exit128 — proxy DNS unresolved; текущая web policy NONE тоже требует штатной настройки |
 
 Task/provider/inbox SHA совпадают, comparisons EQUAL для всех четырёх ACK:
 Context7 `cde2e65a8f69086d4362ae4990f2c852c4cdbfae2f73e9d3c004acc56c8a259d`;

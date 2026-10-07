@@ -5,6 +5,7 @@ FROM control_plane.runtime_leases lease
 JOIN control_plane.runtime_revisions revision ON revision.id=lease.runtime_revision_id
 JOIN control_plane.runtime_file_catalogs catalog ON catalog.runtime_revision_ref=revision.ref AND catalog.frozen
 JOIN control_plane.run_nodes node ON node.id=lease.node_id AND node.id=catalog.node_id AND node.state='RUNNING'
+  AND node.turn_id IS NOT DISTINCT FROM revision.turn_id AND node.attempt=revision.attempt
 JOIN control_plane.runs run ON run.id=lease.run_id AND run.id=catalog.run_id
 JOIN control_plane.runs root ON root.id=revision.root_run_id AND root.initiated_by=catalog.actor_id
 JOIN control_plane.subjects actor ON actor.id=catalog.actor_id AND actor.organization_id=lease.organization_id AND actor.active
@@ -20,6 +21,9 @@ WHERE lease.organization_id=@organization_id::uuid AND catalog.organization_id=l
   AND (@authority_project='' OR catalog.project_id=NULLIF(@authority_project,'')::uuid)
   AND run.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')
   AND root.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')
+  AND (@purpose<>'RUN_RESULT' OR node.workflow_step_key NOT LIKE 'workflow.coordinator.%'
+    OR control_plane.runtime_file_coordinator(
+        catalog.organization_id,catalog.actor_id,catalog.project_id,catalog.agent_id,catalog.node_id))
   AND control_plane.catalog_resource_visible(catalog.organization_id,catalog.actor_id,'project.view','PROJECT',
       project.id,project.project_id,project.owner_id,project.related_ids,statement_timestamp(),false)
   AND (control_plane.catalog_resource_visible(catalog.organization_id,catalog.actor_id,'agent.view','AGENT',

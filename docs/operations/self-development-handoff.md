@@ -10,6 +10,60 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 14:10 UTC: CP patch frozen и проверки PASS, frontend terminal-busy
+patch frozen/220unit/typecheck/lint/buildPASS. HEAD ещё4d5845c5;
+ROOT фиксирует всё одним scoped commit в Draft1800, затем fresh render и
+узкий migration apply/readback. CP migration20261007135000 НЕ применена live;
+последний completed Job schema20261006000400. Full65 остаётся OPEN.
+
+CP disposable CoordinatorFiles/WorkflowLaunch/ParallelLifecycle/TerminalStorage/
+Activity PASS, включая failed/cancel/nested/gate/revoke и missingfunction
+Unavailable без terminal mutation. ROOT CP fullGo1.26.6 unit/vet/buildPASS;
+independent executable и `/proc/3498/exe` SHA dd4308ac… EQUAL. Source/Pod
+runtime/capture/callbackSQL/migration EQUAL. Intrinsic read только immutable
+delivered callback pins и coordinator ancestry, без WRITE/project-wide READ.
+Frontend HMR screenshotPASS: после FAILED2 нет «работает»/Stop, Console0,
+documentWidth1692=viewport. Пакет кода готов, но live новая schema/read НЕ доказаны.
+После commit/push держать tree frozen на время exact-render migration Job.
+Затем одно новое helper задание на8Manager requiredCapabilityKeys; прежний
+run_9A6718q0sUMWWwFxa3eZ3r36 terminalFAIL, никакого его blind retry.
+
+## Предыдущий checkpoint13:59
+
+07.10.2026 13:59 UTC: HEAD/remote/Draft1800
+`4d5845c5eb02bf8ae57d06ae20b352071d1c757b`; coordinator patch в разработке,
+дерево DIRTY. Новый accepted Workflow `run_LG_yPxraXAL_wvJoA-ljYE7_` и
+parent `run_btQXGOWXWyV0qoMRs4YGHf35` FAILED3, активных0, не retry/resume.
+INTAKE technical SUCCEEDED2, semantic BLOCKED: Manager не имел repository
+content/branch READ; Coordinator не имеет native полного чтения callback files.
+Native PROJECT helper уже добавил ровно два READ/NONE Manager grants:
+plan `pln_8Dx0ROofigVufwlDwcnc6Iev` APPLIED3/revision1, receipt
+`rct_TWxza4MBr5Zv_6eXb7KePJFl` conflicts0. Connection251, integrations21,
+старые19 и platform caps неизменны. В8 Manager Workflow steps READ keys пока
+отсутствуют. Следующий native helper UPDATE_WORKFLOW меняет только их,
+сохраняет33steps/inputs/gates/instructions и проходит Validate/Apply/Publish.
+
+Дочерний host agent workflow_coordinator_result_read владеет CP runtime files,
+callback receipt SQL/runtime.go/requiredWorkflow snapshot producer и новой
+forward migration20261007135000, dedicated disposable fixtures. ROOT не меняет
+эти файлы параллельно; агент не deploy/commit/Chrome/live AI. Изменения дают
+intrinsic node-bound RUN_RESULT READ exact delivered immutable receipts,
+не grants/project-wide WRITE. После fixtures PASS активировать repo-owned
+способом и доказать source/Pod/serving hashes; только потом один новый Manager/
+Workflow, capture реальных ролей и полный внутренний Issue1796/reviews/READY.
+Full65 OPEN, финальный внутренний PR не merge/auto-merge/owner approve.
+Chrome5 reload13:55, Console0/screenshot Applied plan/owner reads200.
+
+Helper UPDATE_WORKFLOW один раз отправлен13:58; run_9A6718q0sUMWWwFxa3eZ3r36
+FAILED2/seq3 до provider/usage0. Нет DRAFT/Apply. Новый capture SQL query
+нуждается в ещё неприменённой migration; CP safe_stage=file_catalog/CONFLICT
+ошибочно закрыл граф. Agent исправляет SQL error classification и fixture,
+ROOT больше не запускает живые ходы до migration/serving proof. Затем новое
+задание из сохранённого QA1797_WORKFLOW_MANAGER_READ_KEYS_1402, не blind retry.
+Первый disposable fixture PASS8.02s; полный final patch ещё не frozen.
+
+## Предыдущий checkpoint13:20
+
 07.10.2026 13:20 UTC: HEAD/remote/Draft1800
 `be34792fcaa5fa3686d3febd90de83d7ef249af4`, дерево чистое до следующего
 scoped checkpoint. Единственный Additional в прежней session
@@ -147,8 +201,8 @@ Ordinary parent run_HlZ_jAiNMRgOAewB2OxpEC4Z ожидает callback;
 не запускать его заново без authoritative readback.
 
 PROJECT helper текстового UPDATE_WORKFLOW запущен ОДИН РАЗ в WORKFLOW контексте:
-cnv_jOk6I4lp-1gg7rcS3K4cgKOu/run__sCSFyhjhTLhMU_pph3cyQHi,
-session ses_lNgeUXltgH__w-MS-yxxzbG7,turn trn_bhinlPcvvSQhLGJdD7Kz5yn7,
+cnv_jOk6I4lp-1gg7rcS3K4cgKOu/run**sCSFyhjhTLhMU_pph3cyQHi,
+session ses_lNgeUXltgH**w-MS-yxxzbG7,turn trn_bhinlPcvvSQhLGJdD7Kz5yn7,
 attempt1 technical SUCCEEDED/COMPLETED12:14, semantic BLOCKED/нет DRAFT;
 ACK CAPTURED/rejoined/EQUAL. Native snapshot большой, model output обрезан;
 offset1 неподдержан. Далее исправить native full-read delivery и повторить
@@ -348,12 +402,12 @@ NONE/[] сохраняются; final internalPR не merge. Publisher previouse
 `rct_zdQU1qebHN3EMUgsq_OPk-m6`. Только прежние права enabled, NONE/[] неизменны.
 Fresh GitHub3 `run_HfpGAPEYG7tR8q2LIr_vnUNw` semantic PASS:23 actual content
 read SUCCEEDED, AGENTS.md45730B EOF, exact main b5f6fcde/blob bf17d377/source
-9c6ff8aa совпали с независимым git show. Ошибочный recipient_ref в первом
+9c6ff8aa совпали с независимым git show. Ошибочный recipient*ref в первом
 Manager prompt исправлен новым native selector; новый run_quP_TE2RTIjrLof6mCFA5G5v
 прочитал каталог и подготовил17-op, production fix не понадобился.
 Page5 Developer AGENT, helper открыт. Native restore24 принят один раз:
 conversation `cnv_9K0LhfluWcyv6Aj0U6fs2q5T`, run
-`run_YGbK0Vhsymo-uzg0Dk2FJsu_`, turn `trn_oDsZ5zVXwi2JgwSz2N-AP4DS`,
+`run_YGbK0Vhsymo-uzg0Dk2FJsu*`, turn `trn_oDsZ5zVXwi2JgwSz2N-AP4DS`,
 RUNNING. Сначала readback, не повторять submit. Проверить24 unique existing
 disabled grants GitHub3, единственный enabled diff/NONE/[]; native owner
 Validate/Apply после DRAFT, без новых прав.
@@ -532,10 +586,10 @@ Goal ACTIVE; full65/full33/internal finalPR OPEN, finalPR не сливать.
 Chrome снова отвечает без restart: рабочая вкладка 5 на Manager, PROJECT
 helper `cnv_9BHWJexjJ2Be8CswHTAHL1M6`. Новый screenshot завис, визуальная
 проверка NOT RUN; list/snapshot/evaluate/native ввод и навигация восстановились.
-SYSTEM свежий CURRENT_CONFIGURATION + Context7 resolve/query SUCCEEDED,
+SYSTEM свежий CURRENT*CONFIGURATION + Context7 resolve/query SUCCEEDED,
 exact G11 ACK/preview/task/instructions EQUAL. PROJECT полный
 AGENT_CONFIGURATION прочитан; actual Manager v9 native binding effective=true,
-published/effective один `ins_-otL2zl0QPgcT0rlA8ajz3t6` v1. Managed override
+published/effective один `ins*-otL2zl0QPgcT0rlA8ajz3t6` v1. Managed override
 НЕ подтверждается для этого Manager; native draft/impact/publish применим.
 Запрошен один DRAFT CREATE_INSTRUCTION_DRAFT для исправления фазового actual PR
 требования без изменения иных правил; наблюдать текущий helper ход, не
@@ -711,8 +765,8 @@ GoalACTIVE/full65/full33 OPEN; nativeEOF NOT RUN, finaldogfoodingPR не сли�
 ## Предыдущий checkpoint06:33
 
 07.10.2026 06:33 UTC: PROJECT G5 admission/promotion PASS; Review ENV
-публикация завершена. Draft renvd_Rf8-9ItrcsnH4Zza90N1l7Qq PUBLISHED/version3,
-ENVversion5/revision5/renvv_-0WysH45SV7kvjfxUwLb7_1b. Impact
+публикация завершена. Draft renvd*Rf8-9ItrcsnH4Zza90N1l7Qq PUBLISHED/version3,
+ENVversion5/revision5/renvv*-0WysH45SV7kvjfxUwLb7_1b. Impact
 rvip_25Gp4Isi3ovW09NSazTDN4pO APPLIED: все5 Review consumers APPLIED;
 fresh runtime configuration каждого5 bindingversion6/exact new G5/tools38.
 Developer/helper ENV ещё не обновлены; native EOF/full33 NOT RUN.
@@ -775,8 +829,8 @@ apply/readback+safe selected projection PASS. Policy a0ead18a/revision1,
 CP52/GW30/RC51/archive10 observed==generation/Ready1; host/Pod file_read hash
 89eedbfa совпал. Старые own RoleImage/ENV pins этим не обновляются.
 
-Native PROJECT conversation cnv_NUQsdvNr7OHA9EAl8z_haQTp/run_9j_Y3acw8OL8eJgArFdHceCY
-SUCCEEDED. Plan pln_Wt439zyZZlH3SQpGKcQoUgA_ rev1: только standard recipe
+Native PROJECT conversation cnv*NUQsdvNr7OHA9EAl8z_haQTp/run_9j_Y3acw8OL8eJgArFdHceCY
+SUCCEEDED. Plan pln_Wt439zyZZlH3SQpGKcQoUgA* rev1: только standard recipe
 update, before fac2d905→after2d1efe7f, spec f4a28768→de4c0770. Validate PASS;
 первый Chrome click stale UID завершился timeout без application request,
 server VALID/recipe8/generation4 подтвердил отсутствие effect. Fresh UID Apply
@@ -1007,7 +1061,7 @@ receiptwlaunch_7RdH_JoyTbc2-dZx7nWMKJHY/callbackedg_C4Zx7FZQLVLNGonJVE_KdGn7.
 35nodes/47edges/33stages. Coordinator SUCCEEDED; INTAKE
 `run_6YFdj-dpPPpG8G7spTLmewOZ` RUNNING, actualcap22/grants19/ownGitHub reads
 PASS (исходный cap3/grants0 дефект исправлен). INTAKE ACK полныйG4/binary/
-file/inbox EQUAL, RRrrev_CNoFGXi5EJJ-v1r1dnsxGW0l; turntrn_6TMIatsUGUQD4aGIP808W__5.
+file/inbox EQUAL, RRrrev_CNoFGXi5EJJ-v1r1dnsxGW0l; turntrn_6TMIatsUGUQD4aGIP808W\_\_5.
 Coordinator ACK sameUID/input/file EQUAL, binaryNOTRUN; task-independentSHA
 двух делегирований NOTRUN. Post-read helperrun_mxpavwTyJDoow17GHLs8j5LX
 FAILED/PROVIDER_UNAVAILABLE/no tools; full native postcompare UNKNOWN.
@@ -1024,7 +1078,7 @@ onlyrequiredCapabilityKeys → Validate/Apply receipt rct_Rf3e3KQ8uCvE_RQ72NIReO
 → Workflow Validate/Publish PASS; v6/rev2/refwfv_0n-pUpfWDJxEUHYwPN7Dc1FF.
 Fresh editable semantic baseline EQUAL;33steps/4inputs/concurrency3/finalgate33.
 Дополнительный FULL native post-read run_mxpavwTyJDoow17GHLs8j5LX pending.
-Новый ordinary Manager run_9L2rPXkDFpkkAKGuKp__eNxd RUNNING, сам читает
+Новый ordinary Manager run_9L2rPXkDFpkkAKGuKp\_\_eNxd RUNNING, сам читает
 Issue1796/PR и должен Launch full33; не дублировать. Manager ACK complete:
 task0b80e668…5b64/instructionsd45fccf5…e0ef/G4 binary/pins/file/inbox EQUAL.
 Session ses_kV5drLfta8sxZCNcBVv-GNDu, turntrn_dXeMlyJtyn9LFzo2Tj2OiLlw.
@@ -1039,12 +1093,12 @@ Source backend unchanged, hot-reload verify21deployPASS, curves13PASS наa2c.
 
 07.10.2026 04:04 UTC: source23fileclosure заморожен от51c6f3af для Draft
 PR1800. PublicPG7/CP13/callback582/2SKIP/vet/diff PASS. Exact old published
-metadata безопасно PACKAGE_UNAVAILABLE/grantablefalse; serving CP PID1069
+metadata безопасно PACKAGE*UNAVAILABLE/grantablefalse; serving CP PID1069
 binary c32ec9c6…f28d/sourcef16cd2…192f EQUAL. Retry3 native Manager pagination
 до next_offset0 PASS, затем PROVIDER_UNAVAILABLE/FAILED без плана/effects;
 whole6roles ещё не PASS. Новый отдельный диалог
 `cnv_YEUigovM-MKkkVUDwG9xl1vV`, run`run_f7dC8OHmUvIGyE4xIG10Hew8`,
-turn`trn_n0LhUPeKvGxZjLykJFk5mUL_`, session`ses_5aoeibRS7_8TQx-JmoyxA3oH`
+turn`trn_n0LhUPeKvGxZjLykJFk5mUL*`, session`ses_5aoeibRS7_8TQx-JmoyxA3oH`
 RUNNING: freshWorkflow + healthy GitHub/Context7 query pagination для6ролей.
 ACK completeCAPTURED/taskf4dc44ad…6555/image/binary/file/inbox EQUAL.
 Не дублировать AddTurn; sessionStorage retry-4 guards accepted.
@@ -2877,20 +2931,19 @@ WaitForReady только Fail/Expire уже реализован и прове�
 
 Native SYSTEM39 в диалоге `cnv_h4JZw1FWPxVrsK_gxSx5gWgr` завершён:
 шесть read tool events SUCCESS и один propose. Единственный typed plan
-обновления recipe подтверждён через UI16:39:37 UTC; отдельный REQUEST_BUILD
+обновления recipe подтверждён через UI16:39:37 UTC; отдельный REQUEST*BUILD
 и ручная подмена состояния не использовались. Авторитетный результат:
 recipe v9/generation7, specSHA256
 `742bdccb9ea4c2d831a8d135c1f90199fe8671490c54be3b034e18e256b31a61`;
 Прежний digest `FROM` с префиксом `72b27` сохранён. Build
 `imgbld_391ktSUxZEzhsxVdJjm97i0r`, attempt1, COMPLETED/version12/100%
-подтверждён16:40:12 UTC. Новый artifact `imgart_-PQ2z3H-QfPi7dAYxUgBMsHm`
-получил полный READY отчёт и REJECTED/version3/admissionRevision1.
-Report SHA256 `c503f02a94e7003090e9171f01807da946c7e96e41f83d996244df6cb4025b96`,
+подтверждён16:40:12 UTC. Новый artifact `imgart*-PQ2z3H-QfPi7dAYxUgBMsHm`получил полный READY отчёт и REJECTED/version3/admissionRevision1.
+Report SHA256`c503f02a94e7003090e9171f01807da946c7e96e41f83d996244df6cb4025b96`,
 4640 matches/2938 advisories/blocking2. OWNER UI16:48:41 UTC принял риск
 для exact image/report/policy. Прежний REJECTED snapshot сохранён, отдельная
-attempt2 `imgadm_qzaTBu3oOljYWt2PD7iWimEH` ACCEPTED16:50:49 UTC.
+attempt2 `imgadm_qzaTBu3oOljYWt2PD7iWimEH`ACCEPTED16:50:49 UTC.
 После OWNER UI promotion artifact достиг ACCEPTED/PROMOTED/version10,
-recipe version10/promotedImageReady=true; exact digest `1c82da82` сохранён.
+recipe version10/promotedImageReady=true; exact digest`1c82da82` сохранён.
 Inventory37/38 VERIFIED; npm PROBE_FAILED — открытое замечание.
 
 Далее: typed SYSTEM environment → новый turn и tool/prompt proof →

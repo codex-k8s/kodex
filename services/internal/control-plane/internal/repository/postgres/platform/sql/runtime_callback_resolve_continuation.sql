@@ -17,15 +17,11 @@ SELECT parent_node.run_id::text,
                SELECT jsonb_agg(jsonb_build_object(
                    'runRef', child.ref,
                    'nodeRef', child_node.ref,
-                   'state', child_node.state,
-                   'resultSummary', child.result_summary,
+                   'state', receipt.result_snapshot->>'state',
+                   'resultSummary', receipt.result_snapshot->>'resultSummary',
                    'artifactRefs', COALESCE((
-                       SELECT jsonb_agg(artifact.ref ORDER BY artifact.ref)
-                       FROM control_plane.artifacts artifact
-                       JOIN control_plane.runs artifact_run ON artifact_run.id = artifact.run_id
-                       WHERE artifact.organization_id = parent_node.organization_id
-                         AND artifact_run.organization_id = parent_node.organization_id
-                         AND (artifact_run.id = child.id OR artifact_run.root_run_id = child.id)
+                       SELECT jsonb_agg(pin.value->>'ref' ORDER BY pin.value->>'ref')
+                       FROM jsonb_array_elements(receipt.result_snapshot->'artifacts') pin(value)
                    ), '[]'::jsonb)
                ) ORDER BY callback_edge.created_at, callback_edge.ref)
                FROM control_plane.run_edges callback_edge
@@ -51,7 +47,7 @@ SELECT parent_node.run_id::text,
                            AND launch.state IN ('SUCCEEDED', 'FAILED', 'CANCELLED')
                      )
                  )
-                 AND child_node.state IN ('SUCCEEDED', 'FAILED', 'CANCELLED')
+                 AND receipt.result_snapshot->>'state' IN ('SUCCEEDED', 'FAILED', 'CANCELLED')
            ), '[]'::jsonb),
            'remainingStepKeys', COALESCE((
                SELECT jsonb_agg(step.value ->> 'Key' ORDER BY step.position)

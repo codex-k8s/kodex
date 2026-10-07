@@ -1722,6 +1722,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			if _, callbackErr := repository.recordChildCallback(ctx, tx, scope, callbackRecord{
 				childRunID: lease["runID"].(string), childRunRef: stringMap(lease, "runRef"),
 				rootRunID: stringMap(lease, "rootRunID"), projectID: stringMap(lease, "projectID"),
+				runtimeRevisionID: stringMap(lease, "runtimeRevisionID"), artifactRefs: artifactRefs,
 				parentRunID: parentRunID, resultSummary: payload.ResultSummary, callbackEdgeID: callbackEdgeID,
 				callbackEdgeRef: callbackEdgeRef, parentNodeID: parentNodeID, parentNodeRef: parentNodeRef,
 			}); callbackErr != nil {
@@ -2081,14 +2082,32 @@ type callbackRecord struct {
 	childRunID, childRunRef, rootRunID, projectID, parentRunID string
 	resultSummary, callbackEdgeID, callbackEdgeRef             string
 	parentNodeID, parentNodeRef                                string
+	runtimeRevisionID                                          string
+	artifactRefs                                               []string
 }
 
 func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx, scope scope, record callbackRecord) (bool, error) {
-	tag, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId, record.childRunID, record.callbackEdgeID)
+	if record.artifactRefs == nil {
+		record.artifactRefs = []string{}
+	}
+	tag, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "child_run_id": record.childRunID,
+		"callback_edge_id": record.callbackEdgeID, "runtime_revision_id": record.runtimeRevisionID,
+		"artifact_refs": record.artifactRefs,
+	})
 	if err != nil {
 		return false, errs.ErrUnavailable
 	}
 	if tag.RowsAffected() == 0 {
+		var replay bool
+		if err := tx.QueryRow(ctx, queryRuntimeCallbackReceiptExists, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID, "child_run_id": record.childRunID, "callback_edge_id": record.callbackEdgeID,
+		}).Scan(&replay); err != nil {
+			return false, errs.ErrUnavailable
+		}
+		if !replay {
+			return false, errs.ErrConflict
+		}
 		return true, nil
 	}
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesCallbackSummaryVersion, record.parentNodeID, truncate(record.resultSummary, 2000)); err != nil {

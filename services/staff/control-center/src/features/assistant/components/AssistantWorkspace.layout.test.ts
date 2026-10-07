@@ -49,6 +49,24 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("использует один exact lifecycle turn для индикатора, Stop и очереди", () => {
+    const lifecycle = source.slice(
+      source.indexOf("const activeUserTurn = computed"),
+      source.indexOf("const providerAccountRequired"),
+    );
+    expect(lifecycle).toContain("store.selectedConversation,");
+    expect(lifecycle).toContain("platform.runs,");
+    expect(lifecycle).toContain("platform.bootstrap?.organizationRef,");
+    expect(lifecycle).toContain(
+      "const awaitingReply = computed(() => Boolean(activeUserTurn.value))",
+    );
+    expect(lifecycle).toContain("const runRef = activeUserTurn.value?.runRef");
+    expect(template).toContain('v-if="awaitingReply"');
+    expect(template).toContain(
+      'v-if="showWorkingFallback && !store.loading && !store.problem"',
+    );
+  });
+
   it.each(["plan", "form", "move"] as const)(
     "закрывает вложенный контекст до inert-перехода drawer: %s",
     (transition) => {
@@ -211,9 +229,7 @@ describe("AssistantWorkspace layout", () => {
       .split("}")[0];
     expect(typingStyle).toContain("padding: 6px 10px");
     expect(typingStyle).toContain("border: 0");
-    expect(source).toContain(
-      "assistantActiveUserTurn(store.selectedConversation)?.runRef",
-    );
+    expect(source).toContain("activeUserTurn.value?.runRef");
     expect(template).toContain(
       "'assistant-composer__field--active': awaitingReply",
     );

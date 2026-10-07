@@ -5,8 +5,10 @@ import type {
   AssistantPlanOperationInput,
   AssistantPlanTarget,
   AssistantTurn,
+  Run,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+import { assertRunOwner } from "@/features/runs/run-owner";
 import { projectAssistantConnectionPlanOwner } from "./project-connection-plan";
 
 function assistantAppliedResourceRef(
@@ -542,18 +544,45 @@ export function assistantLaunchedRunTarget(
 
 export function assistantActiveUserTurn(
   conversation?: AssistantConversation,
+  runs: Readonly<Record<string, Run>> = {},
+  organizationRef?: string,
 ): AssistantTurn | undefined {
   if (conversation?.state !== "ACTIVE") return undefined;
   let running: AssistantTurn | undefined;
   let queued: AssistantTurn | undefined;
   for (const turn of conversation.turns) {
     if (turn.role !== "USER") continue;
-    if (
-      turn.state === "RUNNING" &&
-      (!running || turn.sequence < running.sequence)
-    )
+    if (!["QUEUED", "RUNNING", "COMPLETED"].includes(turn.state)) continue;
+    let run = turn.runRef ? runs[turn.runRef] : undefined;
+    if (run) {
+      const pin = run.assistantPin;
+      try {
+        assertRunOwner(run, organizationRef);
+        if (
+          run.ref !== turn.runRef ||
+          run.target.type !== "SYSTEM_ASSISTANT" ||
+          !pin ||
+          pin.conversationRef !== conversation.ref ||
+          pin.scope !== conversation.assistantScope ||
+          pin.assistantRef !== conversation.assistantRef ||
+          pin.projectRef !== conversation.projectRef ||
+          pin.profileRef !== conversation.assistantProfileRef ||
+          (turn.runVersion !== undefined && run.version < turn.runVersion)
+        )
+          run = undefined;
+      } catch {
+        run = undefined;
+      }
+    }
+    // Terminal run закрывает ожидание даже при запаздывающей квитанции USER.
+    // COMPLETED USER сам по себе подтверждает только сохранение сообщения.
+    if (run && ["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state))
+      continue;
+    if (!run && turn.state === "COMPLETED") continue;
+    const queuedState = run ? run.state === "QUEUED" : turn.state === "QUEUED";
+    if (!queuedState && (!running || turn.sequence < running.sequence))
       running = turn;
-    if (turn.state === "QUEUED" && (!queued || turn.sequence < queued.sequence))
+    if (queuedState && (!queued || turn.sequence < queued.sequence))
       queued = turn;
   }
   return running ?? queued;
@@ -561,15 +590,10 @@ export function assistantActiveUserTurn(
 
 export function assistantAwaitingReply(
   conversation?: AssistantConversation,
+  runs: Readonly<Record<string, Run>> = {},
+  organizationRef?: string,
 ): boolean {
-  if (conversation?.state !== "ACTIVE") return false;
-  if (assistantActiveUserTurn(conversation)) return true;
-  const latest = conversation.turns.reduce<AssistantTurn | undefined>(
-    (current, turn) =>
-      !current || turn.sequence > current.sequence ? turn : current,
-    undefined,
-  );
-  return latest?.role === "USER" && latest.state === "COMPLETED";
+  return Boolean(assistantActiveUserTurn(conversation, runs, organizationRef));
 }
 
 export interface EditablePlanOperation {

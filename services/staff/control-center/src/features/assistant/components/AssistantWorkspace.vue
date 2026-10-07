@@ -73,7 +73,6 @@ import {
 } from "@/features/assistant/events";
 import {
   assistantActiveUserTurn,
-  assistantAwaitingReply,
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
   operationActionLabel,
@@ -468,12 +467,17 @@ const assistantRuntimeState = computed(() =>
       ? assistantEffectiveRuntimeState(store.assistant)
       : "RECOVERING",
 );
-const awaitingReply = computed(() =>
-  assistantAwaitingReply(store.selectedConversation),
+const activeUserTurn = computed(() =>
+  assistantActiveUserTurn(
+    store.selectedConversation,
+    platform.runs,
+    platform.bootstrap?.organizationRef,
+  ),
 );
+const awaitingReply = computed(() => Boolean(activeUserTurn.value));
 const showWorkingFallback = computed(() => {
   if (!awaitingReply.value) return false;
-  const runRef = assistantActiveUserTurn(store.selectedConversation)?.runRef;
+  const runRef = activeUserTurn.value?.runRef;
   const run = runRef ? platform.runs[runRef] : undefined;
   const graph = run
     ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])

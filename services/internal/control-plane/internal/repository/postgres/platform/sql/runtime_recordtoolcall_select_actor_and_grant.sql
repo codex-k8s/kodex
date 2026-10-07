@@ -48,6 +48,10 @@ SELECT agent.ref,agent.name,COALESCE(agent.system_key='system-assistant',false),
            WHERE catalog.runtime_revision_ref=revision.ref AND catalog.organization_id=revision.organization_id
              AND catalog.ref=@grant_ref AND catalog.generation=revision.generation AND catalog.frozen
              AND @purpose=ANY(catalog.purposes)
+             AND (@purpose<>'RUN_RESULT' OR NOT EXISTS (SELECT 1 FROM control_plane.run_nodes node
+                 WHERE node.id=revision.node_id AND node.workflow_step_key LIKE 'workflow.coordinator.%')
+               OR control_plane.runtime_file_coordinator(
+                   catalog.organization_id,catalog.actor_id,catalog.project_id,catalog.agent_id,catalog.node_id))
          )
          ELSE EXISTS (
            SELECT 1
