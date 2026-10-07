@@ -134,6 +134,14 @@ NODE_USE_SYSTEM_CA=1 node tools/dev/protected-secret-input.mjs \
 Для Context7 выбирают только `--definition-key context7 --secret-key CONTEXT7_API_KEY`.
 UI-копия GitHub требует также всех четырёх exact managed pins по штатному
 owner history/impact; отсутствие этих pins не разрешает копию автоматически.
+Новая опубликованная UI-ревизия может соответствовать следующей версии
+SHIPPED-пакета: текущие content, digest и capability schemas должны точно
+совпасть с актуальным каталогом после нормализации только `origin`. Исторический
+copy provenance доказывает исходную копию, а не полномочия новой ревизии.
+При обновлении дополнительно проверяются исходная ревизия `SUPERSEDED`, её
+точный digest и строго возрастающая версия пакета; drift, произвольное
+редактирование и rollback закрыто отклоняются. Привязку новой ревизии
+подтверждает свежий owner impact, а не переданные CLI идентификаторы.
 `PASS` включает один PUT с OCC/idempotency, receipt и fresh readback.
 Отказ выводит только `status`, прежний закрытый `code` и локальный `phase`:
 `PREFLIGHT|SSO|BOOTSTRAP|CONNECTION|CATALOG|CREDENTIAL|READBACK`.

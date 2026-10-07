@@ -395,13 +395,55 @@ async function readDefinition(client, options) {
   throw failure("CATALOG_INVALID");
 }
 
-// Исключение ограничено неизменённой UI-копией текущего SHIPPED GitHub.
+function packageVersion(value) {
+  requireValue(
+    typeof value === "string" &&
+      value.length <= 32 &&
+      /^[1-9][0-9]*\.[0-9]+\.[0-9]+$/.test(value),
+    "CATALOG_INVALID",
+  );
+  return value.split(".").map((part) => BigInt(part));
+}
+
+function laterPackageVersion(current, source) {
+  const left = packageVersion(current);
+  const right = packageVersion(source);
+  for (let index = 0; index < left.length; index++) {
+    if (left[index] !== right[index]) return left[index] > right[index];
+  }
+  return false;
+}
+
+function requireExactShippedContent(revision, definitionVersion, digest) {
+  packageVersion(definitionVersion);
+  requireValue(
+    revision?.contentFormat === "JSON" &&
+      typeof revision.content === "string" &&
+      Buffer.byteLength(revision.content, "utf8") <= 256 * 1024 &&
+      sha256(revision.content) === revision.digest &&
+      /^[a-f0-9]{64}$/.test(digest),
+    "CATALOG_INVALID",
+  );
+  const prefix = `{"apiVersion":"integrations.kodex.io/v1","kind":"IntegrationPackage","metadata":{"key":"github","version":"${definitionVersion}","origin":`;
+  requireValue(
+    revision.content.startsWith(`${prefix}"UI"},"spec":`) &&
+      sha256(
+        `${prefix}"SHIPPED"${revision.content.slice(prefix.length + 4)}`,
+      ) === digest,
+    "CATALOG_INVALID",
+  );
+}
+
+// Исключение ограничено exact UI-публикацией текущего SHIPPED GitHub.
 // Authority и фактическую связь подтверждают owner history и impact, не CLI pins.
 async function requireManagedCopy(client, options, connection, definition) {
   const path = `/api/v1/managed-configurations/${options.managedConfigurationRef}`;
   let cursor;
   const seen = new Set();
   let target;
+  let original;
+  let source;
+  let publishedRevision;
   for (let index = 0; index < 10; index++) {
     const query = new URLSearchParams({ pageSize: "100" });
     if (cursor) query.set("pageToken", cursor);
@@ -423,19 +465,32 @@ async function requireManagedCopy(client, options, connection, definition) {
         config.currentRevision?.ref === options.managedRevisionRef &&
         config.currentRevision.state === "PUBLISHED" &&
         config.currentRevision.digest === options.managedRevisionDigest &&
+        version(config.currentRevision.revision) &&
         provenance?.origin === "SHIPPED" &&
         provenance.sourceRef === definition.key &&
-        provenance.sourceRevision === definition.definitionVersion &&
         // OCC каталога может вырасти без смены immutable package pins.
         version(provenance.sourceVersion) &&
         version(definition.version) &&
         provenance.sourceVersion <= definition.version &&
-        provenance.sourceDigest === definition.digest &&
+        /^[a-f0-9]{64}$/.test(provenance.sourceDigest) &&
         Array.isArray(page.items) &&
         page.items.length <= 100,
       "CATALOG_INVALID",
     );
+    source ??= provenance;
+    publishedRevision ??= config.currentRevision.revision;
+    requireValue(
+      provenance.sourceRevision === source.sourceRevision &&
+        provenance.sourceVersion === source.sourceVersion &&
+        provenance.sourceDigest === source.sourceDigest &&
+        config.currentRevision.revision === publishedRevision,
+      "CATALOG_INVALID",
+    );
     for (const revision of page.items) {
+      if (revision?.revision === 1) {
+        requireValue(!original, "CATALOG_INVALID");
+        original = revision;
+      }
       if (revision?.ref !== options.managedRevisionRef) continue;
       requireValue(!target, "CATALOG_INVALID");
       target = revision;
@@ -453,6 +508,7 @@ async function requireManagedCopy(client, options, connection, definition) {
   }
   requireValue(
     target?.state === "PUBLISHED" &&
+      target.revision === publishedRevision &&
       target.contentFormat === "JSON" &&
       target.digest === options.managedRevisionDigest &&
       target.digest === connection.definitionDigest &&
@@ -462,16 +518,39 @@ async function requireManagedCopy(client, options, connection, definition) {
       connection.definitionVersion === definition.definitionVersion,
     "CATALOG_INVALID",
   );
-  const prefix = `{"apiVersion":"integrations.kodex.io/v1","kind":"IntegrationPackage","metadata":{"key":"github","version":"${definition.definitionVersion}","origin":`;
-  requireValue(
-    target.content.startsWith(`${prefix}"UI"},"spec":`) &&
-      sha256(`${prefix}"SHIPPED"${target.content.slice(prefix.length + 4)}`) ===
-        definition.digest,
-    "CATALOG_INVALID",
+  requireExactShippedContent(
+    target,
+    definition.definitionVersion,
+    definition.digest,
   );
+  if (source.sourceRevision === definition.definitionVersion) {
+    requireValue(source.sourceDigest === definition.digest, "CATALOG_INVALID");
+  } else {
+    // Исторический provenance доказывает только настоящую исходную копию.
+    // Новую authority задаёт опубликованный exact package текущего каталога.
+    requireValue(
+      laterPackageVersion(
+        definition.definitionVersion,
+        source.sourceRevision,
+      ) &&
+        version(target.revision) &&
+        target.revision > 1 &&
+        original?.state === "SUPERSEDED" &&
+        opaqueRef(original.ref) &&
+        original.ref !== target.ref,
+      "CATALOG_INVALID",
+    );
+    requireExactShippedContent(
+      original,
+      source.sourceRevision,
+      source.sourceDigest,
+    );
+  }
   requireValue(
     Array.isArray(definition.capabilities) &&
       definition.capabilities.length > 0 &&
+      new Set(definition.capabilities.map((item) => item.key)).size ===
+        definition.capabilities.length &&
       Array.isArray(connection.capabilities) &&
       connection.capabilities.length === definition.capabilities.length &&
       new Set(connection.capabilities.map((item) => item.key)).size ===
@@ -486,6 +565,7 @@ async function requireManagedCopy(client, options, connection, definition) {
             typeof item.inputSchema === "string" &&
             /^[a-f0-9]{64}$/.test(item.inputSchemaSha256) &&
             sha256(item.inputSchema) === item.inputSchemaSha256 &&
+            item.inputSchema === base.inputSchema &&
             item.inputSchemaSha256 === base.inputSchemaSha256,
         ),
       ),

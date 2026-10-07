@@ -10,6 +10,55 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 18:46 UTC — GitHub3.1 подключён, собственные права восстановлены
+
+На базе `156af9f91644264bf22d87bef15bf59e989f6f22` (remote/Draft1800
+readback EQUAL, main `b5f6fcde` неизменен) подготовлены исправления
+event-prefill и exact forward UI credential guard. Пакет пока working tree.
+Владелец разрешил автономную работу до08.10.2026 14:00 Саратов;
+полный65 и checklist11/13/14/15 остаются обязательными и OPEN.
+
+- PASS: native SYSTEM publication plan `pln_-qbUFaqWqpvxUvEjb82l4Mos`
+  APPLIED, existing UI configuration `mcfg_2qHLfZHqxPZ6-_WTJcDsBEAI`
+  revision3 `mrev_K0f8g2uL1c0wUJb5SUmHhgRE`/PUBLISHED,
+  digest `e77918c318871d76ef01caeb109a926890fdc0fd23ed8aea82be0b61f67c2949`.
+  Native owner Impact→rebind configuration9/binding2. Только active connection
+  обновлён до GitHub3.1, прежние120 grants отключены, не удалены.
+  Вторая disabled connection247 не менялась. Credential/readback253 и
+  native Test255/CONNECTED PASS, без сохранения значений в документах.
+- FAIL: первая попытка привязать existing connection к отдельной новой UI
+  копии отправила expectedAbsent=true и вернула409. Fresh readback251/120
+  неизменен, повтор/ручная запись запрещены. Выбран штатный forward draft
+  внутри прежней configuration; UX первой cross-configuration привязки OPEN.
+- PASS: PROJECT native run `run_sEAk6qBMJTMjFcrv3UE0MV7J`, conversation
+  `cnv_9o2k_1HDHy0ZrdZhV__vy2bA`, own21 grants прочитаны до EOF.
+  План `pln_7hIWI6Zg3USjrHtwHCAWEwg1`21unique, diff только enabledfalse→true,
+  NONE/[] и прежние recipients/capabilities сохранены. Validate VALID2,
+  Apply APPLIED3, connection276/21enabled. Первый Apply пересёк reload до
+  ACK (UNKNOWN); fresh VALID/no receipt/255/0enabled и отсутствие active
+  DB transaction проверены до штатного нового Apply. Остальные99 grants
+  должны восстанавливаться последовательно с fresh versions через помощника.
+  Baseline120 semantic SHA256 `cc599c122e56826c728766e07748c13275d150c60b7d91d3e62f64b8da0e8d3e`.
+- PASS локально на current diff: ROOT58/58 prefill/layout tests1.39s,
+  50/50 helper tests406.66ms, forced typecheck, ESLint/Prettier/diff и
+  build9.20s. Существующее предупреждение chunk>500KB отдельно.
+  AssistantWorkspace host/Pod SHA256 `f83307321456c7b67b9dcb2e8d542444a72e5fc6b54bfd023067049bfeaafc27` EQUAL.
+  Context7 Vue watch/flush/nextTick проверен. Event-prefill browser regression
+  ещё NOT RUN; unit не выдаётся за живую приёмку.
+- PASS Chrome18:42 screenshot: список5 операций с раскрытием остальных,
+  раздельный composer/footer, прокрутка, Console0/history200.
+  Две попытки screenshot с filePath закрыто отклонены MCP path permissions;
+  capture без filePath действительно получен, чужие вкладки не затронуты.
+- FAIL rejoin18:23–18:25: snapshot/ListAssistantConversations Unavailable,
+  SQL cancellation; поздний401 отдельно, причинная связь UNKNOWN.
+  Fresh SSO18:28/reload18:38 восстановили работу, но это не fix.
+  Read-only exactSQL measurement: page19 initial SELECT1265ms, projection
+  20loops≈61.9ms, sharedhits19462/diskreads0; page100 превышает4s.
+  Нет active blockers. Причина дорогого context projection подтверждена;
+  дедупликация exact authority/context tuples готовится без увеличения timeout.
+- NOT RUN: native READ новых pins больше64KiB до EOF, новый полный Manager,
+  Architect/Developer/internal reviews/fixes/READY и оставшиеся65 сценарии.
+
 ## Checkpoint 07.10.2026 17:49 UTC — причина INTAKE и большие GitHub-источники
 
 База пакета `4b36c38d120e31cd3635545f068bbb335fb416fe`; fresh

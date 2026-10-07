@@ -267,6 +267,7 @@ test("GitHub использует только отдельный agent integrat
 
 function managedFixture(change = {}) {
   const hash = (raw) => createHash("sha256").update(raw).digest("hex");
+  const packageVersion = change.packageVersion ?? "2.4.0";
   const schema =
     '{"additionalProperties":false,"properties":{"draft":{"type":"boolean"}},"type":"object"}';
   const capability = {
@@ -277,8 +278,7 @@ function managedFixture(change = {}) {
     inputSchema: schema,
     inputSchemaSha256: hash(schema),
   };
-  const raw =
-    '{"apiVersion":"integrations.kodex.io/v1","kind":"IntegrationPackage","metadata":{"key":"github","version":"2.4.0","origin":"UI"},"spec":{"credential":{"secretKey":"token","kind":"TOKEN"}}}';
+  const raw = `{"apiVersion":"integrations.kodex.io/v1","kind":"IntegrationPackage","metadata":{"key":"github","version":"${packageVersion}","origin":"UI"},"spec":{"credential":{"secretKey":"token","kind":"TOKEN"}}}`;
   const content = change.content ?? raw;
   const digest = hash(content);
   const shippedDigest = hash(
@@ -295,6 +295,7 @@ function managedFixture(change = {}) {
   };
   const revision = {
     ref: selected.managedRevisionRef,
+    revision: 1,
     state: "PUBLISHED",
     contentFormat: "JSON",
     content,
@@ -311,7 +312,7 @@ function managedFixture(change = {}) {
     copyProvenance: {
       origin: "SHIPPED",
       sourceRef: "github",
-      sourceRevision: "2.4.0",
+      sourceRevision: packageVersion,
       sourceVersion: 300,
       sourceDigest: shippedDigest,
     },
@@ -334,18 +335,18 @@ function managedFixture(change = {}) {
     {
       ...change,
       connection: {
-        definitionVersion: "2.4.0",
+        definitionVersion: packageVersion,
         definitionDigest: digest,
         capabilities: [capability],
         ...change.connection,
       },
       readback: {
-        definitionVersion: "2.4.0",
+        definitionVersion: packageVersion,
         definitionDigest: digest,
         ...change.readback,
       },
       definition: {
-        definitionVersion: "2.4.0",
+        definitionVersion: packageVersion,
         version: 300,
         digest: shippedDigest,
         capabilities: [capability],
@@ -356,7 +357,10 @@ function managedFixture(change = {}) {
           ? { ...impact, ...change.impact }
           : {
               configuration: { ...config, ...change.config },
-              items: [{ ...revision, ...change.revision }],
+              items: [
+                { ...revision, ...change.revision },
+                ...(change.additionalRevisions ?? []),
+              ],
               ...change.history,
             },
     },
@@ -374,13 +378,36 @@ function managedFixture(change = {}) {
       const value = await response.json();
       return json({
         ...value,
-        definitionVersion: "2.4.0",
+        definitionVersion: packageVersion,
         definitionDigest: digest,
       });
     }
     return response;
   };
   return { ...f, selected, revision, config, impact, capability };
+}
+
+function forwardManagedFixture(change = {}) {
+  const copied = managedFixture();
+  const current = managedFixture({ packageVersion: "2.5.0" });
+  const original = {
+    ...copied.revision,
+    ref: "mrev_original01",
+    state: "SUPERSEDED",
+    ...change.original,
+  };
+  return managedFixture({
+    ...change,
+    packageVersion: "2.5.0",
+    config: {
+      copyProvenance: copied.config.copyProvenance,
+      currentRevision: { ...current.revision, revision: 3 },
+      ...change.config,
+    },
+    revision: { revision: 3, ...change.revision },
+    additionalRevisions: [original],
+    ...change.fixture,
+  });
 }
 
 test("exact SHIPPED UI-copy: owner history/current/content/schema + actual impact binding до одного PUT", async () => {
@@ -413,6 +440,138 @@ test("copy generation300/current catalog301 допускаются только 
   );
   assert.equal(f.reads.length, 2);
   assert.equal(f.calls.filter((call) => call.method === "PUT").length, 1);
+});
+
+test("новая owner PUBLISHED revision существующей SHIPPED UI-копии проверяет исходный provenance отдельно от current package", async () => {
+  const f = forwardManagedFixture({ definition: { version: 301 } });
+  const result = await configureExactIntegrationCredential(f.selected, f.deps);
+  assert.deepEqual(result, {
+    status: "PASS",
+    connectionRef: f.selected.connectionRef,
+    version: 8,
+  });
+  assert.deepEqual(f.reads.at(-1), ["CODEX_GITHUB_AGENT_INTEGRATION_TOKEN"]);
+  assert.equal(f.calls.filter((call) => call.method === "PUT").length, 1);
+});
+
+test("forward original revision читается до EOF owner history, а drift provenance между страницами запрещён", async () => {
+  for (const drift of [false, true]) {
+    const f = forwardManagedFixture();
+    const fetchAPI = f.deps.fetchAPI;
+    f.deps.fetchAPI = async (url, init) => {
+      const response = await fetchAPI(url, init);
+      if (!url.pathname.endsWith("/revisions")) return response;
+      const history = await response.json();
+      if (!url.searchParams.has("pageToken"))
+        return json({
+          ...history,
+          items: [history.items[0]],
+          nextPageToken: "older",
+        });
+      assert.equal(url.searchParams.get("pageToken"), "older");
+      if (drift)
+        history.configuration.copyProvenance.sourceDigest = "b".repeat(64);
+      return json({ ...history, items: [history.items[1]], nextPageToken: "" });
+    };
+    assert.equal(
+      (await configureExactIntegrationCredential(f.selected, f.deps)).status,
+      drift ? "FAIL" : "PASS",
+    );
+    assert.equal(f.reads.length, drift ? 1 : 2);
+    assert.equal(
+      f.calls.filter((call) => call.method === "PUT").length,
+      drift ? 0 : 1,
+    );
+  }
+});
+
+test("forward UI publication: forged origin/history, rollback, arbitrary package, catalog schema и actual bindings закрыты до key/PUT", async () => {
+  const initial = managedFixture();
+  const current = managedFixture({ packageVersion: "2.5.0" });
+  const original = {
+    ...initial.revision,
+    ref: "mrev_original01",
+    state: "SUPERSEDED",
+  };
+  const cases = [
+    { original: { state: "DRAFT" } },
+    { original: { ref: current.revision.ref } },
+    { original: { revision: 2 } },
+    { original: { contentFormat: "YAML" } },
+    { original: { digest: "b".repeat(64) } },
+    { original: { content: `${original.content} ` } },
+    { fixture: { additionalRevisions: [] } },
+    { fixture: { additionalRevisions: [original, original] } },
+    { revision: { revision: 1 } },
+    { revision: { revision: "3" } },
+    { revision: { state: "VALID" } },
+    { config: { version: 4 } },
+    { config: { projectRef: "prj_foreign001" } },
+    { config: { currentRevision: { ...current.revision, revision: 2 } } },
+    {
+      config: {
+        currentRevision: { ...current.revision, ref: "mrev_foreign01" },
+      },
+    },
+    ...["2.6.0", "3.0.0", "2.5.0", "bad", ""].map((sourceRevision) => ({
+      config: {
+        copyProvenance: { ...initial.config.copyProvenance, sourceRevision },
+      },
+    })),
+    ...[
+      { origin: "UI" },
+      { sourceRef: "foreign" },
+      { sourceVersion: 302 },
+      { sourceDigest: "b".repeat(64) },
+    ].map((patch) => ({
+      definition: { version: 301 },
+      config: {
+        copyProvenance: { ...initial.config.copyProvenance, ...patch },
+      },
+    })),
+    {
+      content: current.revision.content.replace(
+        '"secretKey":"token"',
+        '"secretKey":"foreign"',
+      ),
+    },
+    { definition: { digest: "b".repeat(64) } },
+    { connection: { definitionVersion: "2.4.0" } },
+    { connection: { definitionDigest: initial.revision.digest } },
+    {
+      definition: {
+        capabilities: [{ ...current.capability, inputSchema: "{}" }],
+      },
+    },
+    {
+      definition: {
+        capabilities: [current.capability, current.capability],
+      },
+    },
+    {
+      connection: {
+        capabilities: [{ ...current.capability, inputSchema: "{}" }],
+      },
+    },
+    {
+      impact: {
+        consumers: [
+          { ...current.impact.consumers[0], revisionRef: original.ref },
+        ],
+      },
+    },
+    { impact: { consumers: [], total: 0 } },
+  ];
+  for (const change of cases) {
+    const f = forwardManagedFixture(change);
+    assert.deepEqual(
+      await configureExactIntegrationCredential(f.selected, f.deps),
+      { status: "FAIL", code: "CATALOG_INVALID", phase: "CATALOG" },
+    );
+    assert.equal(f.reads.length, 1);
+    assert.equal(f.calls.filter((call) => call.method === "PUT").length, 0);
+    assert.equal(f.closed(), 1);
+  }
 });
 
 test("catalog generation не подменяет immutable pins: future/unsafe/changed package закрыты до key и PUT", async () => {

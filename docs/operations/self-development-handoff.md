@@ -10,6 +10,93 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 18:40 UTC
+
+Сохраняется автономная цель полного QA до 08.10.2026 14:00 Саратов
+(10:00 UTC). HEAD/remote/Draft1800 `156af9f91644264bf22d87bef15bf59e989f6f22`;
+main `b5f6fcde` не менялся. Текущий frontend/utility пакет ещё working tree,
+не выдаётся за доказательство на опубликованном SHA.
+
+GitHub3.1: native SYSTEM plan `pln_-qbUFaqWqpvxUvEjb82l4Mos`
+проверен и применён. Существующая UI configuration
+`mcfg_2qHLfZHqxPZ6-_WTJcDsBEAI` штатно обновлена до revision3
+`mrev_K0f8g2uL1c0wUJb5SUmHhgRE`, digest `e77918c3…f67c2949`.
+Impact и штатный rebind только active connection PASS: configuration9,
+binding2, connection252. Прежние120 grants сохранены, но отключены;
+второе disabled подключение247 не менялось. Credential setup/readback253
+и штатный Test255/CONNECTED PASS. Значения credential в журнал не включаются.
+
+После reload18:38 история PROJECT снова доступна, agent11/runtimeReady=true.
+Отправлен ровно один план восстановления21 прежнего собственного grant:
+conversation `cnv_9o2k_1HDHy0ZrdZhV__vy2bA`, user turn
+`trn_z_NHY977s76mDisMncz2V0U9`, run `run_sEAk6qBMJTMjFcrv3UE0MV7J`.
+План `pln_7hIWI6Zg3USjrHtwHCAWEwg1`: owner diff21/unique21,
+единственное изменение enabled=false→true, остальные pins/policies прежние;
+Validate VALID2 и Apply APPLIED3, connection276/21enabled PASS.
+Первый Apply пересёк reload до ACK: outcome сначала UNKNOWN, повтор разрешён
+только после fresh VALID/нет receipt/неизменный255/0enabled и отсутствия
+active transaction; затем штатный Apply дал подтверждённый результат.
+Остальные99 grants ещё NOT RUN. Семантический
+baseline120 `cc599c12…a0e8d3e` остаётся точным ограничением восстановления.
+
+Адресные fixes: delayed hydration больше не стирает event-prefill при
+открытии помощника; новая forward UI revision допускается только при
+точном соответствии текущему SHIPPED-пакету и проверенном owner binding.
+ROOT58/58 frontend tests, typecheck/lint/build9.45s и50/50 dev helper tests
+PASS на текущем diff; ROOT повтор50/50=406.66ms,58/58=1.39s,
+forced typecheck/lint и build9.20s PASS (прежнее предупреждение chunk>500KB).
+Host/Pod AssistantWorkspace hash `f8330732…faafc27` EQUAL.
+Screenshot18:42 получен: компактные5 операций и раскрытие остальных,
+footer/composer раздельны, прокрутка работает. Live regression event-prefill
+пока NOT RUN; этот снимок её не заменяет.
+
+Rejoin18:23–18:25 FAIL: snapshot/ListAssistantConversations Unavailable и
+SQL cancellation; причина latency UNKNOWN. Поздний session401 отдельно,
+причинная связь не доказана. Свежий SSO18:28 восстановил owner/WebSocket;
+последний reload18:38 PASS, Console0 и history200. Read-only диагностика
+повторного latency доказала context projection≈62ms на разговор:
+page19 initial SELECT1265ms, page100 превышает4s даже до N+1.
+Blockers/disk reads не найдены; bounded read-only measured proof.
+Минимальное исправление дедупликации exact projection tuples готовится
+отдельно, timeout и authority не ослабляются; отказ пока не исправлен.
+Checklist11/13/14/15 OPEN; новый Manager/full Workflow ещё не запускались.
+
+## Checkpoint 07.10.2026 18:20 UTC
+
+Владелец подтвердил автономную работу до 14:00 по Саратову следующего дня;
+активная цель полного65-раздельного QA сохраняется без сужения. На развилках
+сравнивать варианты и выбирать рекомендуемый; финальный dogfooding PR не сливать.
+HEAD/remote/Draft1800 `156af9f91644264bf22d87bef15bf59e989f6f22`.
+Chrome MCP page1 доступна, owner и WebSocket сохранены; foreign вкладки
+не трогать, page4 принадлежит владельцу. Reload18:11 и navigation18:16 PASS.
+
+Штатный UI copy GitHub3.1 создал `mcfg_2nW70fdWh5fxo4DlZ2jMr5OY`,
+revision `mrev_8V61b4w9L6cWiQGbA21M10kx`, digest `e77918c3…f67c2949`.
+SYSTEM native publication plan `pln_mopwJnDLqV_5jh0OjR5vo8Wt`
+проверен и применён; опубликованная ревизия owner readback PASS.
+UI первая привязка existing connection FAILED409: candidate отправляет
+expectedAbsent=true, хотя подключение уже связано с прежней configuration.
+Fresh owner readback доказывает connection251/CONNECTED/120grants неизменным.
+Никакого blind retry, SQL mutation или сохранения старых pins вместо rebind.
+
+Рекомендуемый путь — новая ревизия в существующей UI configuration
+`mcfg_2qHLfZHqxPZ6-_WTJcDsBEAI`: через редактор штатно сохранено точно
+новое shipped-normalized UI содержимое, revision3
+`mrev_K0f8g2uL1c0wUJb5SUmHhgRE`, тот же полный digest, VALID.
+Один native SYSTEM follow-up `run_u4-WwVs6a-sw1LoojyaYLrTj` отправлен;
+publication/apply/rebind этой ревизии ещё NOT RUN. После него штатный Impact
+с существующими exact binding pins; только active connection, второй не менять.
+Baseline120 сохранён, семантический digest без refs/versions
+`cc599c122e56826c728766e07748c13275d150c60b7d91d3e62f64b8da0e8d3e`.
+
+Chrome screenshot capture timed out: visual NOT RUN, Console0 и API200
+проверены, отсутствие снимка не называется visual PASS. Event-prefill иногда
+теряется при позднем восстановлении выбранного диалога — адресный frontend fix
+в отдельном владении. Второй узкий fix проверяет exact SHIPPED revision при
+forward-only обновлении UI configuration в защищённой credential-утилите;
+ни у одного child нет Chrome, секретов или полномочий на live mutations.
+Checklist11/13/14/15 OPEN, новый Manager/full workflow ещё не запущен.
+
 ## Checkpoint 07.10.2026 17:49 UTC
 
 База `4b36c38d120e31cd3635545f068bbb335fb416fe`, main `b5f6fcde`
