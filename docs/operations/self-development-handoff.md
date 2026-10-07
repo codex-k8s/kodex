@@ -10,6 +10,22 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 10:18 UTC: на HEAD `d37e2d4f` ROOT candidates/component/guide/journal
+DIRTY, адресные unit/vet/disposable PostgreSQL PASS42.25s. Frozen child patch
+интегрирован; host/Pod source SHA cb25db63 и обслуживаемый binary b1e4ab17
+подтверждены, Go1.26.6. Read-only опубликованный несовместимый package теперь
+диагностический PACKAGE_UNAVAILABLE, но enable/execute закрыто отклоняются.
+Нативный fresh own PROJECT restore21 RUNNING:
+conversation `cnv_TBPuyv4ShYS-flaQA14vEwFo`, run `run_Y7-tSKjvh3SMDA6vfS6rNTx2`,
+user turn `trn_uVwUwXIlzceJxANFCe2PsToJ`. Не повторять submit: сначала readback.
+После DRAFT проверить ровно21 прежнее право, owner Validate/Apply; затем
+остальные role profiles через exact контекст, fresh paged GitHub EOF → NEW33.
+Internal1796 PR не merge. Privatepublisher previous actual d37e2d4f;
+добавить candidates.go в exact allowlist до новой публикации. Page5 проект,
+helper открыт; reload10:16. Старое отключённое подключение не трогать.
+
+## Предыдущий checkpoint10:08
+
 07.10.2026 10:08 UTC: HEAD/remote/Draft1800
 `4de83a637cb44230d509f6b3f74f41baeff36763`, дерево чистое.
 GitHub3 page implementation/codegen/tests и текущий журнал запушены.

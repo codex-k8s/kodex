@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
@@ -213,6 +214,136 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 		if bound.ManagedRevision == nil {
 			t.Fatal("published fixture missing")
 		}
+		t.Run("exact bound unsupported package is diagnostic and does not poison current sibling", func(t *testing.T) {
+			// Отдельный producer воспроизводит смену executable registry. Published
+			// content остаётся immutable; меняются только prospective source pins
+			// и disposable sibling fixture, без legacy decoder или grant authority.
+			updated := *r
+			updated.integrationDefinitions = make(map[string]integrationpackage.Package, len(r.integrationDefinitions))
+			for key, definition := range r.integrationDefinitions {
+				updated.integrationDefinitions[key] = definition
+			}
+			future, err := integrationpackage.Parse(asJSON(r.integrationDefinitions["github"]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			future.Metadata.Version = "9000.0.0"
+			for index := range future.Spec.Capabilities {
+				if future.Spec.Capabilities[index].Key == "github.pull_request.review.create" {
+					for field := range future.Spec.Capabilities[index].OutputFields {
+						if future.Spec.Capabilities[index].OutputFields[field].Key == "id" {
+							future.Spec.Capabilities[index].OutputFields[field].Maximum--
+						}
+					}
+				}
+			}
+			future, err = integrationpackage.Parse(asJSON(future))
+			if err != nil {
+				t.Fatal(err)
+			}
+			updated.integrationDefinitions["github"] = future
+			updatedService, err := serviceplatform.New(&updated)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET definition_version=$2,definition_digest=$3 WHERE ref=$1`, connection.Ref, future.Metadata.Version, future.Digest); err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET definition_version=$2,definition_digest=$3 WHERE ref=$1`, connection.Ref, connection.DefinitionVersion, connection.DefinitionDigest); err != nil {
+					t.Fatal(err)
+				}
+			}()
+			retired, err := updatedService.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, old.Ref, "", query.Page{Size: 100})
+			if err != nil || len(retired.Items) == 0 || retired.DefinitionDigest != bound.ManagedRevision.Digest {
+				t.Fatalf("exact bound metadata disappeared: %v", err)
+			}
+			for _, item := range retired.Items {
+				if item.Grantable || item.Reason != "PACKAGE_UNAVAILABLE" || item.CurrentGrantEnabled {
+					t.Fatal("incompatible package gained enable eligibility")
+				}
+			}
+			first, err := updatedService.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, old.Ref, "", query.Page{Size: 1})
+			if err != nil || first.NextPageToken == "" {
+				t.Fatal("diagnostic package cursor missing", err)
+			}
+			if _, err := updatedService.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, old.Ref, "changed query", query.Page{Size: 1, Token: first.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
+				t.Fatalf("diagnostic cursor escaped query pins: %v", err)
+			}
+			if _, err := updatedService.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, connection.Ref, "", query.Page{Size: 1, Token: first.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
+				t.Fatalf("diagnostic cursor escaped connection pins: %v", err)
+			}
+			readUpdated := func(search string, offset int32, fence string, generation int64) (entity.AssistantConfigurationCatalogResponse, error) {
+				return updatedService.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), fence, generation,
+					entity.AssistantConfigurationCatalogRequest{Kind: "PROJECT_INTEGRATION_GRANTS", AssistantRef: profile.AgentRef, Query: search, Offset: offset})
+			}
+			seen := map[string]bool{}
+			for offset := int32(0); ; {
+				page, err := readUpdated("", offset, stringMap(lease, "fence"), lease["generation"].(int64))
+				if err != nil {
+					t.Fatalf("bound unsupported package poisoned aggregate: %v", err)
+				}
+				for _, item := range page.ProjectIntegrationGrants {
+					seen[item.ConnectionRef] = true
+					if item.ConnectionRef == old.Ref {
+						if item.Candidate.Grantable || item.Candidate.Reason != "PACKAGE_UNAVAILABLE" {
+							t.Fatal("aggregate lost unsupported classification")
+						}
+					} else if item.ConnectionRef != connection.Ref || item.DefinitionDigest != future.Digest || item.Candidate.Reason == "PACKAGE_UNAVAILABLE" {
+						t.Fatal("current or foreign sibling admission changed")
+					}
+				}
+				if page.NextOffset == 0 {
+					break
+				}
+				if page.NextOffset <= offset || page.NextOffset > 100 {
+					t.Fatal("aggregate pagination did not progress")
+				}
+				offset = page.NextOffset
+			}
+			if !seen[old.Ref] || !seen[connection.Ref] || len(seen) != 2 {
+				t.Fatal("diagnostic old package or eligible current sibling disappeared")
+			}
+			filtered, err := readUpdated(connection.Name, 0, stringMap(lease, "fence"), lease["generation"].(int64))
+			if err != nil || len(filtered.ProjectIntegrationGrants) == 0 {
+				t.Fatal("current sibling query failed", err)
+			}
+			for _, item := range filtered.ProjectIntegrationGrants {
+				if item.ConnectionRef != connection.Ref {
+					t.Fatal("query isolation changed")
+				}
+			}
+			if _, err := readUpdated("", 0, "wrong-fence", lease["generation"].(int64)); err == nil {
+				t.Fatal("unsupported package read bypassed lease fence")
+			}
+			if _, err := readUpdated("", 0, stringMap(lease, "fence"), lease["generation"].(int64)+1); err == nil {
+				t.Fatal("unsupported package read bypassed lease generation")
+			}
+			if _, err := updatedService.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, foreignProject.Ref, old.Ref, "", query.Page{Size: 100}); !errors.Is(err, errs.ErrNotFound) {
+				t.Fatalf("metadata reader widened project/profile authority: %v", err)
+			}
+			if _, err := updated.integrationPackage(ctx, pool, current.organizationID, old.Ref, "github", retired.DefinitionVersion, retired.DefinitionDigest); !errors.Is(err, errs.ErrForbidden) || errors.Is(err, errIntegrationPackageUnavailable) {
+				t.Fatalf("bound incompatible package became executable or skippable: %v", err)
+			}
+			// Поднимаем только disposable readiness, чтобы enable отказ был именно
+			// executable package admission, а не прежнее disabled состояние.
+			if _, err := pool.Exec(ctx, strings.ReplaceAll(queryIntegrationGrantPolicyCredentialFixture, "icred_policy_fixture", "icred_retired_fixture"), old.Ref); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET enabled=true,version=version+1 WHERE ref=$1`, old.Ref); err != nil {
+				t.Fatal(err)
+			}
+			retired, err = updatedService.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, old.Ref, "", query.Page{Size: 100})
+			if err != nil || len(retired.Items) == 0 || retired.Items[0].Grantable || retired.Items[0].Reason != "PACKAGE_UNAVAILABLE" {
+				t.Fatal("readiness accidentally enabled retired package", err)
+			}
+			if _, err := updatedService.Execute(ctx, command.Command{Kind: command.ChangeProjectAssistantIntegrationGrant, Principal: owner,
+				Mutation: value.Mutation{IdempotencyKey: "project-retired-enable-denied", ExpectedVersion: &retired.ConnectionVersion},
+				Payload: command.ProjectAssistantIntegrationGrantInput{AssistantRef: profile.AgentRef, Grant: command.SystemAssistantIntegrationGrantInput{
+					ConnectionRef: old.Ref, CapabilityKey: "github.repository.metadata.read", Enabled: true, ApprovalPolicy: "NONE"}}}); !errors.Is(err, errs.ErrForbidden) {
+				t.Fatalf("metadata reader enabled unsupported package: %v", err)
+			}
+		})
 		if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET definition_digest=repeat('8',64),version=version+1 WHERE ref=$1`, old.Ref); err != nil {
 			t.Fatal(err)
 		}

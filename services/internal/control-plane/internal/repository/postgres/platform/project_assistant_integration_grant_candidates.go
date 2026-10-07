@@ -67,7 +67,7 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 		}
 		return result, errs.ErrUnavailable
 	}
-	definition, err := repository.integrationPackage(ctx, tx, current.organizationID, connectionRef, definitionKey, result.DefinitionVersion, result.DefinitionDigest)
+	definition, executable, err := repository.assistantRecipientCatalogPackage(ctx, tx, current.organizationID, connectionRef, definitionKey, result.DefinitionVersion, result.DefinitionDigest)
 	if err != nil {
 		return result, err
 	}
@@ -113,12 +113,15 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 		}
 		item := grants[capability.Key]
 		item.CurrentApprovalScopePaths = append([]string{}, item.CurrentApprovalScopePaths...)
-		item.Grantable = connectionReady && target.ready
+		item.Grantable = executable && connectionReady && target.ready
 		item.Reason = "READY"
 		if !connectionReady {
 			item.Reason = "CONNECTION_UNAVAILABLE"
 		} else if !target.ready {
 			item.Reason = "RECIPIENT_UNAVAILABLE"
+		}
+		if !executable {
+			item.Reason = "PACKAGE_UNAVAILABLE"
 		}
 		schema, err := capability.InputSchema()
 		if err != nil {

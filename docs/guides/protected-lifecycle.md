@@ -18,6 +18,14 @@ Aggregate catalog не должен выдавать недопущенную ex
 Фильтр и cursor применяются после единого authoritative eligibility rule;
 пропуск не включает исторический decoder и не создаёт права на mutation.
 
+Каталог собственных прав помощника использует ту же проверенную read-only
+проекцию exact published package, что каталог назначенного сотрудника.
+Корректный, но несовместимый с текущим executable registry пакет доступен
+для диагностики как `PACKAGE_UNAVAILABLE`, `grantable=false`. Enable и
+invocation по-прежнему проходят отдельный executable decoder и закрыто
+отклоняются. Ошибки owner scope, binding, content digest, parser и чтения не
+превращаются в диагностический успех и не скрываются blanket suppression.
+
 Перепривязка consumer между configuration sets проверяет глобальную связь по
 организации/kind/consumer, а не только версию нового set. Явное expected absence
 разрешает только INSERT; существующая связь меняется только UPDATE с точными

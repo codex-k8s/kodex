@@ -202,6 +202,43 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 10:18 UTC — защищённое чтение собственного PROJECT каталога
+
+- На base `d37e2d4f336c1bc7b0c01ca1199fea2428375aaf` применён frozen patch
+  `d131c744ae617e14e587ef2d08abd5144ee2c5753c6b208b743a0e058ef31780`:
+  собственный PROJECT candidates read использует существующую verified
+  metadata projection. Exact published несовместимый package виден как
+  PACKAGE_UNAVAILABLE/grantable=false; execution/enable boundary не изменена.
+  Системный инвариант закреплён в GUIDE-DOC-006. Нет новых RPC, events,
+  миграций, legacy decoder либо расширения authority.
+- Карта: owner/project scoped candidates endpoint → gateway/RPC → CP
+  projectAssistantIntegrationGrantCandidatesTx → exact published snapshot;
+  runtime get_configuration PROJECT_INTEGRATION_GRANTS → тот же CP reader.
+  Tenant/Assistant/profile из проверенной owner/lease boundary, cursor закрепляет
+  точные connection/profile versions/digest/query. Read не создаёт mutation,
+  receipt или event. Enable/execute сохраняют прежний отказ и owner lifecycle.
+- ROOT unit TestAssistantRecipientCatalog|TestIntegrationPackageEligibility
+  PASS0.343s; vet/diff-check PASS. Repo-owned disposable PostgreSQL
+  TestProjectAssistantIntegrationGrantsComponent PASS42.25s (package42.313s),
+  новый nested unsupported-published/sibling subtest PASS0.57s; cursor/query,
+  connection/profile/lease-fence/generation и enable rejection проверены.
+  Worker-grant/runner-policy read-only query PASS. Изолированный child тот же
+  file hash проверил отдельно: component46.38s/nested0.43s PASS.
+- Hot CP Pod UID `2b48b1ab-9d22-4209-871f-5307f1e1e428`; host/Pod candidates
+  SHA `cb25db63d24fde0fd6e24e1fd6927ea4245c539e9453d92ba8f875900346f4a2`.
+  Обслуживаемый executable и repo-owned hot build совпадают:
+  `b1e4ab17f23bd1fed8322262dc5831983a9874f1d88e9e5e26fc19c2b59a81c9`,
+  Go1.26.6. Compiled Git SHA UNKNOWN, source/binary proof не заменяет live QA.
+- Native fresh PROJECT ход принят один раз: conversation
+  `cnv_TBPuyv4ShYS-flaQA14vEwFo`, run `run_Y7-tSKjvh3SMDA6vfS6rNTx2`,
+  user turn `trn_uVwUwXIlzceJxANFCe2PsToJ`. Current configuration прочитан;
+  live каталог/21-op план/Validate/Apply пока RUNNING/UNKNOWN. Не отправлять
+  повторный ход. Старое отключённое подключение не изменено.
+- Chrome page5 reload10:16; актуальный граф повторно проверен:41 nodes,
+  7 callback paths/196 samples/crossings0, Console error/warn0. Screenshot
+  после прежнего protocol timeout не повторялся, нового visual PASS нет.
+  Full33 и internal Developer PR/reviews/final-readiness остаются OPEN.
+
 ### 07.10.2026 10:07–10:08 UTC — свежий граф и отказ собственного каталога
 
 - HEAD/remote/Draft1800 `4de83a637cb44230d509f6b3f74f41baeff36763`;
