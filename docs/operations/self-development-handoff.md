@@ -10,6 +10,29 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 01:25 UTC: source `8c0eeaed`; remote/PR пока `e652f64f`.
+Цель ACTIVE; полный65/33step OPEN.
+
+- Native10 final read01:12:58 account8/limit10/active0;01CANCELLED,
+  02–11COMPLETED с собственными markers. Queue11/Stop соседнего/rejoin PASS.
+  Старый startup404 source renewal-gap расследуется/исправляется, causality
+  UNKNOWN; lowering нового demand/backend restart ещё NOT RUN.
+- `a6360d4b` NewDialogue background guard; ROOT120units PASS, isolated
+  18suites461tests/lint/forced typecheck/build PASS на exacta6360d4b.
+- Новый PROJECT typed connection `int_Pn1ALY1e8kAn67vrr1-okIKe`
+  создан plan `pln_qRZMp5LNM7DZ7DRcaZNpQVi5`, Validate/Apply200.
+  Canonical GitHub2.5/digest133fd4b1…4cd500. Первый TEST DEGRADED от задержки
+  projection; свежий exact файл440/readable, повторная owner health-проверка
+  pending. Old connection246/118grants и UNKNOWN review invocation неизменны.
+- Helper47tests/closed phase diagnostic PASS (`8c0eeaed`). Адресные source
+  проверки не native acceptance. UX длинной capabilities-модалки чинится.
+
+Далее: connection health/точные118grants → обычный Manager callback к Developer
+с ответом на существующий review → адресные проверки/publish/merge/freshmain
+readback → полный SOFTWARE_CHANGE Issue1796. Не повторять GitHub write effects.
+
+## Предыдущий checkpoint01:10
+
 07.10.2026 01:10 UTC: source `cb4136a92fef9942344914ee6b90f481b0c99047`;
 remote/PR пока `e652f64f`. Цель ACTIVE; полный65/33step остаётся OPEN.
 

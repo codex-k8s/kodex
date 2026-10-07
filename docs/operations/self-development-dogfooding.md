@@ -158,6 +158,35 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 01:25 UTC — итог native10 и новый canonical connection
+
+Source `8c0eeaed`, frontend проверен отдельно на exact
+`a6360d4b78d323b3a2d60abe6b689963374bdb46`; remote/PR пока `e652f64f`.
+Полный65 и итоговый33step Workflow остаются OPEN.
+
+- Fresh owner read01:12:58: account8/limit10/active0; первый из11 диалогов
+  CANCELLED, остальные10 COMPLETED. Каждый ответ содержит только свой marker.
+  Десять одновременно RUNNING, очередь11-го, изолированный Stop и reload/rejoin
+  подтверждены native; backend restart и новый blocked demand после lowering
+  пока NOT RUN. Старый startup404 остаётся FAIL с причиной UNKNOWN.
+- `a6360d4b`: «Новый диалог» не блокируется фоновой сверкой истории;
+  initial/scope/owner/revocation/busy gates сохранены. ROOT120tests PASS2.31s;
+  isolated18suites/461tests PASS10.88s, полный lint/forced typecheck/build PASS.
+  Vite предупреждает только о chunks>500kB; native background case пока NOT RUN.
+- PROJECT helper создал typed draft `pln_qRZMp5LNM7DZ7DRcaZNpQVi5`;
+  native Validate/Apply200 создали `int_Pn1ALY1e8kAn67vrr1-okIKe`, canonical
+  GitHub2.5.0/digest133fd4b1fc378bb8458f643dc104bf1cbf9ed625964d7c7deea98722884cd500.
+  Серверные immutable pins проверены в technical projection до Apply.
+  Old connection/UNKNOWN review effect не изменены и не повторены.
+- Первая native проверка нового connection дала DEGRADED: consumer ещё не
+  получил credential projection. Позже exact projected file доступен с440;
+  это не auth rejection upstream. Исправление transient health lifecycle
+  выполняется отдельно; не переписывать ранний FAIL как PASS. Новый bounded
+  health-test после подтверждения projection ещё выполняется.
+- `8c0eeaed`: закрытая phase диагностика helper; ROOT47synthetic tests PASS,
+  без retry UNKNOWN и раскрытия credential. Проверки source не заменяют
+  native connection/grants/callback acceptance.
+
 ### 07.10.2026 01:10 UTC — native10, Stop и мобильные настройки
 
 Source `cb4136a92fef9942344914ee6b90f481b0c99047`, remote/PR `e652f64f`;
