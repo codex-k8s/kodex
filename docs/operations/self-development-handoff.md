@@ -10,6 +10,55 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 00:32UTC: source `7fde1921`; подтверждённый remote/PR `e652f64f`.
+Callback fit `56d4a919`: Chrome screenshot PASS как без панели, так и с
+«Ходом работы»; вся дуга снаружи карточек и внутри видимой области.
+ROOT22focused tests PASS. API graph/events/session200; один независимый
+i18n warning `common.no` передан на исправление, не Console0 этой навигации.
+Integrations revoke `dfe7fb6c`: native desktop/mobile PASS, action144px,
+mobile390px без горизонтального переполнения страницы; ROOT249unit PASS.
+`7fde1921` добавляет подписи всех32 context operations; child36unit PASS.
+
+Resume-review root `run_JTA4VTxm5RDEcZ7o0pSry-Qp` завершился BLOCKED:
+Documentation Reviewer не имел branch.read для независимого base SHA.
+Новый helper draft `pln_2mDTIDTJKg2MZ-npEuADg3fT` содержит ровно один
+read-only branch.read/NONE[] для Documentation, current C245 и recipient8;
+пока DRAFT, требуется штатное Apply. Первый recipient catalog ошибочно
+использовал recipient ref вместо own helper ref; fresh explicit selector
+`run_i_S5WQsmV_0HEsb8SFT1QSez` успешно прочитал кандидат и создал этот draft.
+Причина итогового workspace отказа прежнего Developer не доказана:
+проверены сценарии private0700/shared UID и limits, старый Pod уже удалён.
+Не повторять Git push/create. Remote base e652 временно не изменять до
+review/response existing PR1799. Далее grant Apply → review/response →
+concurrency → commit/push/merge/fresh main → полный33step Workflow.
+
+## Предыдущий checkpoint00:22
+
+07.10.2026 00:22UTC: source `fab6aa04`; подтверждённый remote/PR `e652f64f`.
+Новый callback layout `9030e6e0` проверен в Chrome на настоящем четырёхузловом
+графе: плавная зелёная дуга вне карточек, стрелка видна; Console0 и API200.
+19 focused tests/lint/typecheck PASS. Делегированные задания отображаются
+со стороны своего actor (`67338427`,225tests PASS); native readback ещё нужен.
+TMPDIR public MCP entrypoint исправлен `fab6aa04`:5fixtures и настоящий
+producer/consumer16cases PASS. Полный выбранный Go/PG baseline на `49cbed1d`
+PASS: CP1527/callback568/runner643,3PG suites,vet/codegen; explicit SKIP
+не приравниваются к PASS. Readonly recipient catalog native повтор завершён
+успешно:41кандидат/24enabled/17disabled, exact Developer context-switch.
+
+Native Git retry root `run_Q58BmoBPCcrFynGrTrPYORC2`/Developer
+`run_bkP1PxF6PNk0a8TAl1wfAxoK` создал scratch commit
+`a22785d6bbb1a33cac6c6a33d2fccbdb4743fec9` и Draft PR#1799,
+base `e652f64f`; независимый GitHub GET подтвердил OPEN/draft=true/exact SHA.
+Create invocation `inv_nGBmk3mUNsJlzMMIGsKOPQWt` SUCCEEDED. Затем выполнение
+закрылось FAILED/RUNTIME_WORKSPACE_INVALID: итоговый workspace check
+исследуется. НЕ повторять push/create: эффекты уже есть. Review/response
+ещё NOT RUN; продолжение должно читать существующие эффекты.
+UI Integrations revoke-button clipping чинится отдельно. Далее восстановить
+Git lifecycle → review/response → concurrency → merge/fresh main → full33.
+Цель ACTIVE, Chrome5 own/6 foreign; deadline04:30UTC, SSO06:23UTC.
+
+## Предыдущий checkpoint00:07
+
 07.10.2026 00:07UTC: source49cbed1d, remote/PR50947a8f. Семь native
 APPLIED restore plans завершены: fresh GitHub C245/CONNECTED2.4.0,
 enabled117/117, independently all117 tuples diff0. Documentation/Security/

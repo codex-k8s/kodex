@@ -158,6 +158,51 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 00:32 UTC — дуга целиком помещается; компактная таблица
+
+- `56d4a919`: границы callback-дуги входят в расчёт «Вместить».
+  ROOT22focused unit PASS; native screenshot PASS в полном графе и с
+  открытой панелью «Ход работы», возвратная связь не скрыта узлами/панелью.
+  Graph/events/session200. Console содержит отдельный missing `common.no`,
+  исправление локали выполняется отдельно; Console0 не заявляется.
+- `dfe7fb6c`: ширина действия144px, revoke-button целиком видна на desktop;
+  mobile390px сохраняет внутренний scroll таблицы без переполнения страницы.
+  Native desktop/mobile screenshot PASS; ROOT249focused tests PASS.
+- `7fde1921`: добавлены6 отсутствовавших подписей контекстных операций RU/EN,
+  проверка всех32 registry operations; child36unit/lint/format PASS.
+- Resume Manager→Documentation на существующем PR1799 дал честный BLOCKED:
+  у Reviewer отсутствует собственный github.branch.read для exact base SHA.
+  PROJECT helper fresh recipient catalog с own assistant locator создал
+  draft `pln_2mDTIDTJKg2MZ-npEuADg3fT`, одна read-only/NONE[] операция.
+  Apply пока NOT RUN. Старый TOOL_UNAVAILABLE принадлежал ошибочному
+  recipient-as-helper locator, не missing grant decoder.
+- Git effects не повторялись; Review/response и concurrency ещё NOT RUN.
+  Bootstrap remote base e652 сохранён до проверки existing PR1799.
+
+### 07.10.2026 00:22 UTC — обратные связи графа и настоящий Git effect
+
+- `9030e6e0`: CALLBACK_TO вынесен плавной дугой над карточками со стабильными
+  отдельными полосами. На настоящем четырёхузловом графе screenshot PASS,
+  Console0, graph/events API200;19unit/lint/typecheck PASS. Прочитана
+  актуальная Context7 документация Vue Flow custom edges/BaseEdge.
+- `67338427`: сторона делегированного входного задания определяется actor,
+  а не phase USER.225unit/lint/typecheck PASS; native ещё NOT RUN.
+- Выбранный baseline `49cbed1d`:3PG suite PASS, CP1527/callback568/runner643,
+  vet/Proto/policy/SQL-boundary PASS.45/2/5 explicit unit skips остаются SKIP.
+  `fab6aa04` устраняет hardcode `/tmp` public MCP entrypoint;5fixture и
+  настоящий16case producer/consumer PASS без изменения assertions.
+- Native catalog `run_Xo9fgF5JgdpCWphiSvBfkpoe` SUCCEEDED:41 возможный ключ,
+  24enabled/17disabled, точный Developer context-switch; ранний бюджетный
+  BLOCKED не заменяется PASS задним числом.
+- Native Manager→Developer retry `run_Q58BmoBPCcrFynGrTrPYORC2`/
+  `run_bkP1PxF6PNk0a8TAl1wfAxoK`: real push и managed Draft create произошли.
+  Независимый GitHub readback: PR#1799 OPEN/draft=true, scratch head
+  `a22785d6bbb1a33cac6c6a33d2fccbdb4743fec9`, base `e652f64f`;
+  invocation `inv_nGBmk3mUNsJlzMMIGsKOPQWt` SUCCEEDED. Но финальный
+  workspace check вернул RUNTIME_WORKSPACE_INVALID и root FAILED.
+  Общий цикл FAIL; не повторять уже совершённые эффекты. Review/response,
+  concurrency, merge/fresh main и полный33step Workflow ещё NOT RUN.
+
 ### 07.10.2026 00:07 UTC — восстановлены все права; каталог получателя
 
 Source `49cbed1d`; последний подтверждённый remote/PR `50947a8f`.
