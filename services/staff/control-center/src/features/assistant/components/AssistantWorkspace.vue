@@ -541,7 +541,10 @@ const canSend = computed(
 );
 const canStartConversation = computed(
   () =>
-    props.live && !store.loading && !store.busy && canCreateConversation.value,
+    props.live &&
+    store.conversationCreationReady &&
+    !store.busy &&
+    canCreateConversation.value,
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 for (const [root, sentinel, visible] of [

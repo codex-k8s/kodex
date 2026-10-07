@@ -192,6 +192,125 @@ describe("assistant workspace store", () => {
     turns: [],
   });
 
+  it("разрешает новый диалог при фоновой сверке старой страницы, не подтверждая выбранное сообщение", async () => {
+    const selected = projectConversation();
+    const older = { ...selected, ref: "cnv_older_project" };
+    const pending = deferred<ListAssistantConversationsResponse>();
+    readConversationsMock.mockReturnValue(pending.promise);
+    const store = useAssistantStore();
+    store.setContext(context, profile.projectRef);
+    store.assistantScope = "PROJECT";
+    store.projectAssistant = profile;
+    store.projectAssistantAgent = projectAgent;
+    store.assistant = systemAssistant();
+    store.conversations = [selected, older];
+    store.selectedRef = selected.ref;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [selected],
+      profile.projectRef,
+      "ws-partial",
+    );
+    expect(store.loading).toBe(true);
+    expect(store.historyRefreshing).toBe(true);
+    expect(store.conversationCreationReady).toBe(true);
+    expect(store.selectedRef).toBe(selected.ref);
+    store.projectAssistantAgent = undefined;
+    expect(store.conversationCreationReady).toBe(false);
+    store.projectAssistantAgent = { ...projectAgent, projectRef: "prj_other" };
+    expect(store.conversationCreationReady).toBe(false);
+    store.projectAssistantAgent = projectAgent;
+    store.projectAssistant = { ...profile, state: "DISABLED" };
+    expect(store.conversationCreationReady).toBe(false);
+    store.projectAssistant = profile;
+    store.busy = true;
+    expect(store.conversationCreationReady).toBe(false);
+    store.busy = false;
+    pending.resolve({ items: [selected, older] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.historyRefreshing).toBe(false);
+    expect(store.conversationCreationReady).toBe(true);
+  });
+
+  it("не снимает initial loading barrier из-за частичного WS во время owner load", async () => {
+    const selected = conversation();
+    const older = { ...selected, ref: "cnv_older_initial" };
+    const initial = deferred<ListAssistantConversationsResponse>();
+    const refresh = deferred<ListAssistantConversationsResponse>();
+    readConversationsMock
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(refresh.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [selected, older];
+    store.selectedRef = selected.ref;
+    const loading = store.load(context, "prj_sales");
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [selected],
+      "prj_sales",
+      "ws-partial",
+    );
+    expect(store.conversationCreationReady).toBe(false);
+    initial.resolve({ items: [selected, older] });
+    await loading;
+    expect(store.loading).toBe(true);
+    refresh.resolve({ items: [selected, older] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+  });
+
+  it.each(["scope", "forbidden"] as const)(
+    "закрывает background creation при %s и не принимает старую сверку",
+    async (change) => {
+      const selected = projectConversation();
+      const older = { ...selected, ref: "cnv_older_revoked" };
+      let reject: (reason: unknown) => void = () => {};
+      const pending = deferred<ListAssistantConversationsResponse>();
+      readConversationsMock.mockReturnValue(
+        new Promise((resolve, fail) => {
+          reject = fail;
+          void pending.promise.then(resolve);
+        }),
+      );
+      const store = useAssistantStore();
+      store.setContext(context, profile.projectRef);
+      store.assistantScope = "PROJECT";
+      store.projectAssistant = profile;
+      store.projectAssistantAgent = projectAgent;
+      store.assistant = systemAssistant();
+      store.conversations = [selected, older];
+      store.selectedRef = selected.ref;
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [selected],
+        "prj_sales",
+        "ws",
+      );
+      expect(store.conversationCreationReady).toBe(true);
+      if (change === "scope") {
+        store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+        store.assistantScope = "PROJECT";
+        pending.resolve({ items: [selected, older] });
+        await Promise.resolve();
+        expect(store.historyRefreshing).toBe(false);
+        expect(store.selectedConversation).toBeUndefined();
+      } else {
+        reject(
+          new AppProblem({
+            status: 403,
+            code: "FORBIDDEN",
+            retryable: false,
+            kind: "forbidden",
+          }),
+        );
+        await vi.waitFor(() => expect(store.loading).toBe(false));
+        expect(store.selectedConversation).toBeUndefined();
+      }
+      expect(store.conversationCreationReady).toBe(false);
+    },
+  );
+
   it("после навигации не передаёт общий WS cursor в фильтрованную историю SYSTEM", async () => {
     const store = useAssistantStore();
     store.setContext(context, "prj_sales");
@@ -497,7 +616,11 @@ describe("assistant workspace store", () => {
       runtimeReady: true,
       nextActions: ["EDIT", "LAUNCH"],
     });
-    await store.invalidateProjectAssistantFromRealtime("prj_sales");
+    const refreshing =
+      store.invalidateProjectAssistantFromRealtime("prj_sales");
+    expect(store.conversationCreationReady).toBe(false);
+    await refreshing;
+    expect(store.conversationCreationReady).toBe(true);
     expect(readProjectAssistantMock).toHaveBeenCalledTimes(before + 1);
     expect(store.projectAssistantAgent?.runtimeReady).toBe(true);
     expect(store.selectedConversation?.assistantRef).toBe(profile.agentRef);

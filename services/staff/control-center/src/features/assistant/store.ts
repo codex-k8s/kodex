@@ -83,6 +83,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   const context = ref<AssistantContextDescriptor>();
   const projectRef = ref<string>();
   const loading = ref(false);
+  const foregroundLoading = ref(false);
+  const historyRefreshing = ref(false);
   const busy = ref(false);
   const problem = ref<AppProblem>();
   const receipt = ref<AssistantPlanReceipt>();
@@ -105,12 +107,36 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   let realtimeReadRevision = 0;
   let realtimeReadAgain = false;
 
+  const conversationCreationReady = computed(() => {
+    if (
+      busy.value ||
+      foregroundLoading.value ||
+      problem.value?.status === 401 ||
+      problem.value?.status === 403 ||
+      (loading.value && !historyRefreshing.value)
+    )
+      return false;
+    if (assistantScope.value !== "PROJECT") return true;
+    const profile = projectAssistant.value;
+    const agent = projectAssistantAgent.value;
+    return Boolean(
+      projectRef.value &&
+      profile?.state === "ACTIVE" &&
+      profile.projectRef === projectRef.value &&
+      agent?.ref === profile.agentRef &&
+      agent.projectRef === projectRef.value &&
+      agent.enabled &&
+      !agent.system,
+    );
+  });
+
   function cancelRealtimeRead(): void {
     if (realtimeReadController) loading.value = false;
     realtimeReadController?.abort();
     realtimeReadController = undefined;
     realtimeReadRevision += 1;
     realtimeReadAgain = false;
+    historyRefreshing.value = false;
     retainedSelectedDetail.value = undefined;
   }
 
@@ -122,6 +148,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     profileReadGeneration += 1;
     generation += 1;
     loading.value = false;
+    foregroundLoading.value = false;
     loadingMore.value = false;
   }
 
@@ -278,6 +305,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     context.value = nextContext;
     projectRef.value = nextProjectRef;
     assistantScope.value = nextAssistantScope;
+    foregroundLoading.value = true;
     loading.value = true;
     problem.value = undefined;
     try {
@@ -367,7 +395,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         receipt.value = undefined;
       }
     } finally {
-      if (current === generation) loading.value = false;
+      if (current === generation) {
+        foregroundLoading.value = false;
+        loading.value = historyRefreshing.value;
+      }
     }
   }
 
@@ -778,7 +809,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       sourceAssistant === activeAssistantRef.value &&
       sourceProfile === projectAssistant.value?.ref;
     loading.value = true;
-    problem.value = undefined;
+    historyRefreshing.value = true;
+    if (problem.value?.status !== 401 && problem.value?.status !== 403)
+      problem.value = undefined;
     void (async () => {
       try {
         const items = new Map<string, AssistantConversation>();
@@ -819,6 +852,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           (count < depth || (retainedRef && !items.has(retainedRef)))
         );
         if (!isCurrent()) return;
+        problem.value = undefined;
         const previous = new Map(
           conversations.value.map((item) => [item.ref, item]),
         );
@@ -864,10 +898,14 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
             selectedRef.value = undefined;
             nextPageToken.value = undefined;
             loading.value = false;
+            historyRefreshing.value = false;
           } else if (realtimeReadAgain) {
             realtimeReadAgain = false;
             refreshPartialHistory();
-          } else loading.value = false;
+          } else {
+            historyRefreshing.value = false;
+            loading.value = foregroundLoading.value;
+          }
         }
       }
     })();
@@ -1139,6 +1177,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     context,
     projectRef,
     loading,
+    historyRefreshing,
+    conversationCreationReady,
     busy,
     problem,
     receipt,

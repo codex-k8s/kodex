@@ -595,11 +595,13 @@ describe("AssistantWorkspace layout", () => {
       'nextActions.includes("CREATE_CONVERSATION")',
     );
     expect(sendAccess).toContain('nextActions.includes("ADD_TURN")');
+    expect(sendAccess).toContain("!store.loading");
     expect(sendAccess).toContain(
       "store.selectedConversation || canCreateConversation.value",
     );
     expect(sendAccess).not.toContain("store.problem");
-    expect(startAccess).toContain("!store.loading");
+    expect(startAccess).toContain("store.conversationCreationReady");
+    expect(startAccess).toContain("props.live");
     expect(startAccess).toContain("!store.busy");
     expect(startAccess).toContain("canCreateConversation.value");
     expect(startAccess).not.toContain("store.problem");
