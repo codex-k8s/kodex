@@ -10,6 +10,46 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 04:26 UTC: base source/remote/PR1800 `4e54f3df`, frozen frontend
+2file child completion fix +2rootdocs ready for commit/push. 241unit/lint/
+format/forcedtypes PASS, host/Pod sourcee494…7c7e EQUAL, Chrome desktop/mobile/
+reload/Console0/API200 PASS; errors не скрыты. Начальные lint/type FAIL
+сохранены. Privatepublisher previous4e54, allowlist25files, тот же Draft1800.
+Architect technicalSUCCEEDED/semanticBLOCKED; full39301B architecture artifact
+`art_RT7lMAhhZ1SD3s3YXJy-L5Vs` SHA825dd981…5cd6 EQUAL. Проблемы: predecessor
+preview_file TOOL_UNAVAILABLE при доступных metadata; stage не может читать
+workflow readiness; providerquota требует сквозного пути, а запрет platform
+в assignment и single-unit scope неоднозначны. Не объявлять это approval.
+Coordinator сам передал Developer `run_j4X4MojC9-O0G27onbXWYChB`, сейчас
+RUNNING; turntrn_MBsMzhPYpahoQZ_0iv_P9_1F/session ses_kXpC5VKr1xW4Ui1Bg_781pxR.
+Developer ACK G4/binary/inbox/file EQUAL, RRrrev_OPNu_Jux-1wD3zf-tmOuasgb.
+Agent assistant_architecture read-only исследует exact predecessor preview
+rootcause, без edits/grants/API mutations/Chrome. Не подменять final Issue1796.
+Whole65/33 OPEN, rootrun_MKg…RUNNING; без повторных Launch/Apply/Publish/Retry.
+Chrome5 reload04:23, следующий≤04:28; чужие6/13 не трогать. Workingindicator
+между tools уRUNNING child — отдельное NOTRUN наблюдение, не дополнительныйfix.
+
+## Предыдущий checkpoint04:21
+
+07.10.2026 04:21 UTC: source/remote/Draft PR1800 `4e54f3df` readback PASS.
+Root `run_MKgCFtKbMOiEkqX_5-iEM4wM` RUNNING, полный33WFv6/rev2.
+INTAKE technicalSUCCEEDED/semanticBLOCKED; полный manager-plan artifact
+`art_HjIkZsPbF_YcLy6sQTzNFiyC` bytes/SHA EQUAL. Coordinator сам передал
+Architect `run_dOfA8FnuZLj_0rnk_Qx-MPbe`, который RUNNING и читает
+GitHub/Context7/web, не реализует задачу вместо Developer. Architect earlyACK
+и sameUID rejoin G4/binary/inbox/file EQUAL; final artifact ещё NOTRUN.
+Rootfrontend agent исправляет только run-activity.ts/test: completion дочернего
+execution не скрывается при root event.runRef. Это UX fix, не review;
+доказать trustedgraph child binding и negative tuple, затем Chrome/hot reload.
+Rootdocs dirty checkpoint, остальная ветка не публиковалась заново.
+Следующий publisher previous=4e54f3df; allowlist дополнить только двумя
+frontend files после freeze/test. Не повторять Launch/Apply/Publish/Retry.
+Chrome5 hardreload04:18, Console0/relevantHTTP200, все33Deployment готовы.
+Далее Architect→Developer→reviews/full33→human gate; whole65/33 OPEN.
+Чужие6/13 не трогать; следreload≤04:23, снять новый экран/Console/Network.
+
+## Предыдущий checkpoint04:13
+
 07.10.2026 04:13 UTC: source/remote/PR1800 747aa30b, публикация тела PASS.
 Новый full33 `run_MKgCFtKbMOiEkqX_5-iEM4wM` RUNNING, targetWFv6/rev2;
 receiptwlaunch_7RdH_JoyTbc2-dZx7nWMKJHY/callbackedg_C4Zx7FZQLVLNGonJVE_KdGn7.

@@ -1903,6 +1903,70 @@ describe("buildRunActivityItems", () => {
       expect(show([...input].reverse())).toEqual(result);
     });
 
+    it("сводит child completion из root stream только по owner graph lineage и exact execution", () => {
+      const input = completionFixture().map((event) => ({
+        ...event,
+        displaySummary: event.summary,
+        nodeRef: "nod_child_fixture",
+        execution: {
+          ...required(event.execution),
+          runRef: "run_child_fixture",
+          nodeRef: "nod_child_fixture",
+        },
+      }));
+      const execution = required(input[0]?.execution);
+      const child: RunNode = {
+        ...node,
+        ref: execution.nodeRef,
+        runRef: execution.runRef,
+        turnRef: execution.turnRef,
+        attempt: execution.attempt,
+      };
+      const parent = { ...node, childRunRefs: [child.runRef] };
+      const renderGraph = (nodes: RunNode[]) =>
+        presentRunTranscriptItems(buildRunActivityItems(run, nodes, input));
+      expect(renderGraph([parent, child])).toHaveLength(1);
+      expect(show(input)).toHaveLength(2);
+      for (const nodes of [
+        [parent],
+        [child],
+        [parent, child, child],
+        [parent, { ...child, runRef: "run_other_fixture" }],
+        [parent, { ...child, turnRef: "trn_other_fixture" }],
+        [parent, { ...child, attempt: execution.attempt + 1 }],
+        [parent, { ...child, type: "EXTERNAL_ACTION" as const }],
+      ])
+        expect(renderGraph(nodes)).toHaveLength(2);
+      const foreignRoot = { ...run, rootRunRef: "run_other_root" };
+      expect(
+        presentRunTranscriptItems(
+          buildRunActivityItems(foreignRoot, [parent, child], input),
+        ),
+      ).toHaveLength(2);
+      for (const field of ["sessionRef", "turnNumber"] as const) {
+        const completion = required(input[1]);
+        const mismatched = {
+          ...completion,
+          execution: {
+            ...execution,
+            [field]:
+              field === "sessionRef"
+                ? "ses_other_fixture"
+                : execution.turnNumber + 1,
+          },
+        };
+        expect(
+          presentRunTranscriptItems(
+            buildRunActivityItems(
+              run,
+              [parent, child],
+              [required(input[0]), mismatched],
+            ),
+          ),
+        ).toHaveLength(2);
+      }
+    });
+
     it("не связывает receipt с presentation-переводом summary", () => {
       const [tool, completion] = completionFixture();
       const translated: PresentedRunEvent = {

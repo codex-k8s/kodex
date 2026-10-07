@@ -102,6 +102,7 @@ interface ActivityContext {
   target?: string;
   platform?: string;
   nodes?: readonly RunNode[];
+  graphRootRunRef?: string;
 }
 
 export function isTranscriptNearBottom(position: {
@@ -206,9 +207,29 @@ export function buildRunTranscriptItems(
       previousPosition !== undefined ? items[previousPosition] : undefined;
     const presented = event as Partial<PresentedRunEvent>;
     // Привязка повторного подтверждения не выводится из текста или aggregateRef.
+    const graphExecutionNodes = context.nodes?.filter(
+      (node) => node.ref === event.execution?.nodeRef,
+    );
+    const graphExecutionNode = graphExecutionNodes?.[0];
+    // Root stream хранит события дочернего run: lineage берётся из owner graph.
+    const graphChildBound = Boolean(
+      scope &&
+      context.graphRootRunRef &&
+      event.runRef === context.graphRootRunRef &&
+      event.execution?.runRef !== context.graphRootRunRef &&
+      graphExecutionNodes?.length === 1 &&
+      graphExecutionNode?.type === "AGENT_EXECUTION" &&
+      graphExecutionNode.runRef === event.execution?.runRef &&
+      graphExecutionNode.turnRef === event.execution.turnRef &&
+      graphExecutionNode.attempt === event.execution.attempt &&
+      context.nodes?.some((node) =>
+        node.childRunRefs.includes(graphExecutionNode.runRef),
+      ),
+    );
     const integrationBound = Boolean(
       scope &&
-      event.runRef === event.execution?.runRef &&
+      event.execution &&
+      (event.runRef === event.execution.runRef || graphChildBound) &&
       event.nodeRef === event.execution.nodeRef &&
       event.run.ref === event.runRef &&
       Number.isSafeInteger(event.run.version) &&
@@ -960,6 +981,7 @@ export function buildRunActivityItems(
     initiator: run.initiator.displayName,
     target: run.target.displayName,
     platform: run.title,
+    graphRootRunRef: run.rootRunRef,
   });
   if (
     initiatorSummary?.trim() &&

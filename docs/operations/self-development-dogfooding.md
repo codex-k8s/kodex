@@ -159,6 +159,84 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 04:26 UTC — компактный child transcript и передача Developer
+
+Два frontend файла заморожены на base `4e54f3df`: source
+SHA `e494ae5e065a358030dbe8234b2793020bfb2082a8e14653465d795f4f4f7c7e`
+равен фактическому Pod mount; test SHA
+`31585023ec3e7b32f0d4f4aac422e503ecf19679e109812ac8ebd1b5ef60b2cf`.
+Успешная child completion сворачивается только при exact owner graph root,
+unique AGENT_EXECUTION node/run/turn/attempt и parent.childRunRefs lineage;
+полный session/turnNumber/attempt tuple receipt/completion остаётся обязательным.
+Raw helper без graph context не расширен; ошибки/unknown/mismatch видимы.
+241/241 unit, scoped lint/format, forced typecheck, diff-check PASS. Начальные
+lint/type FAIL устранены и сохранены как история, не переименованы в PASS.
+Production build после этого малого mapping fix NOT RUN.
+
+Native Chrome после hot reload и hard reload04:23: completion218 hidden,
+ошибки245/252 видимы. Открытый drawer содержит0 повторных successful completion
+и2 error records, компактные tool rows/commentary. Desktop screenshot и
+mobile390x844 PASS, document.scrollWidth390 при innerWidth390; Console0,
+bootstrap/session/graph/events HTTP200, realtime connected. Desktop viewport
+восстановлен. Рабочий индикатор между завершёнными tools у RUNNING child —
+отдельное наблюдение NOT RUN, вне этого адресного fix.
+
+Architect технически SUCCEEDED, semantic BLOCKED. Его actual artifact
+`art_RT7lMAhhZ1SD3s3YXJy-L5Vs` CLEAN,39301bytes,
+SHA `825dd981d9632b818416c8682b50e191c5f26fc0a78a3a24509d113a0ecd5cd6`
+полностью прочитан и EQUAL. В документе подтверждён поддерживаемый provider
+read и отсутствующий путь subscription observations→CP→UI; frontend-only
+unit не выполнит Issue1796. Дополнительный блокер: predecessor preview_file
+возвращает TOOL_UNAVAILABLE; metadata доступны, exact bytes агент не получил.
+Workflow assignments/readiness не были доступны собственному stage allowlist.
+Архитектор не разрешал реализацию и не делал repo writes. Различать дефект
+read path, неоднозначность scope и невыбранные product rules; не обходить их.
+
+Coordinator сам передал step-003 Developer `run_j4X4MojC9-O0G27onbXWYChB`
+с точными predecessor artifact refs и запретом объявлять BLOCKED успешным.
+Developer ранний ACK CAPTURED: session `ses_kXpC5VKr1xW4Ui1Bg_781pxR`, turn
+`trn_MBsMzhPYpahoQZ_0iv_P9_1F`, RR `rrev_OPNu_Jux-1wD3zf-tmOuasgb`,
+instructions30120bytes SHA `8718301ea978e5c91e30e669e8ba7025d70706ac20b5b96a80570be0d4dabc55`,
+taskSHA `44219c716d4ea573d47b336109813eb79a19171a3267b838c9052fd9414d2f93`.
+G4image/binary file/inbox/instructions EQUAL, independent expected taskSHA
+NOT RUN. Actual implementation/PR ещё NOT RUN. Root не пишет задачу вместо
+Developer; отдельный helper read-only диагностирует predecessor preview,
+не меняет grants/запуски/контракты. Whole65/33 OPEN, финальный PR не merge.
+
+### 07.10.2026 04:21 UTC — INTAKE artifact и настоящий Architect
+
+Source/remote/Draft PR1800 `4e54f3df6f868958a67054d3170c4e984b611304`
+прочитаны заново, bot identity подтверждена. INTAKE технически SUCCEEDED,
+но его собственный semantic verdict BLOCKED: неподтверждённые assignments/
+readiness переданы в исследование, не объявлены успешными host-агентом.
+Серверный `manager-plan.md` `art_HjIkZsPbF_YcLy6sQTzNFiyC` скачан полностью:
+26276 bytes, SHA `e8688388f96f096b0be4e16676d844389143fb5442b3b1ec5cf5e584233e9c96`
+EQUAL, содержит Issue1796, exact baseSHA, acceptance/constraints и BLOCKED.
+
+Coordinator штатно передал step-002 Architect, не повторял INTAKE.
+`run_dOfA8FnuZLj_0rnk_Qx-MPbe` RUNNING, session
+`ses_GTsegPUAF6j37-9Okpq_1TVD`, turn `trn_vxRJj_L-MBqi8pNKWRis5Pbw`.
+Actual GitHub repository reads, Context7 resolve/docs и web tools работают;
+отдельные отклонённые integration calls остаются видимыми, не PASS.
+Architect сам различил доступность/параллельность ProviderAccountUsage
+и реальные подписочные лимиты; итог исследования ещё NOT RUN.
+Полный ранний ACK и повторный same-UID readback CAPTURED: Pod
+`runtime-turn-f56e1e39d02f4310`, RR `rrev__jxFtPfO3SHmegHytAqoayN0`,
+instructions23853bytes SHA `b80b37ae9f2877530ce3c28214c92c550f8bfba63ca28f82ef181baa6429a9e1`,
+taskSHA `2c746e6d1d6bf05440cd7f33a8375a097a47abc30ac6caa3590bf57a6088fdff`.
+G4image/binary file/inbox/instructions EQUAL, независимый expected taskSHA
+NOT RUN; binary scope SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS.
+
+Chrome5 hard reload04:18, screenshot внешних callback дуг PASS, Console0,
+bootstrap/session/graph/events/artifact HTTP200, realtime восстановился.
+Все33 Deployment кластера готовы; первоначальный запрос ошибочно к namespace
+kodex дал0 и не использовался как evidence. Runtime-controller bounded logs
+содержат0ERROR; пустота логов не заменяет role execution proof.
+На Run transcript обнаружен новый UX defect: typed completion дочернего
+execution не сворачивается из-за сравнения root event.runRef с childrunRef.
+Адресный frontend fix и negative tests в работе, не PASS до Chrome readback.
+Whole65/33 OPEN, финальный dogfooding PR не merge; новый Launch/Retry не делался.
+
 ### 07.10.2026 04:13 UTC — новый полный процесс и восстановленные права INTAKE
 
 Actual Manager сам запустил SOFTWARE_CHANGE33 один раз:
