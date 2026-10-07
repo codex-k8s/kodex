@@ -1,0 +1,377 @@
+"""Синтетические boundary/privacy tests; live kubectl не запускается."""
+import copy
+import importlib.util
+import io
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+import unittest
+from unittest.mock import patch
+
+
+def load(name, filename):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+CAPTURE = load('provider_failure', 'provider-failure-capture.py')
+FIXTURE = load('provider_ack_fixture', 'test_provider_input_ack_capture.py')
+SENTINEL = 'PRIVATE_SECRET_BODY_SENTINEL'
+
+
+def fixture():
+    proof, columns, options = FIXTURE.fixture()
+    options.timeout_seconds, options.pod_uid = 30, None
+    return proof, columns, options
+
+
+def request(**fields):
+    values = dict(stage='TERMINAL_WAIT', category='PROVIDER', detail='STREAM_CLOSED', code=0,
+                  notification='NONE', account='NONE', notification_error='NONE')
+    values.update(fields)
+    return ('2026/10/07 07:49:00 ' + CAPTURE.REQUEST_PREFIX + '{stage}; class: {category}; '
+            'detail: {detail}; rpc_code: {code}; notification: {notification}; '
+            'account_read: {account}; notification_error: {notification_error}\n').format(**values).encode()
+
+
+class FakeClock:
+    def __init__(self):
+        self.value = 0
+
+    def now(self):
+        return self.value
+
+    def sleep(self, seconds):
+        self.value += seconds
+
+
+class CaptureTests(unittest.TestCase):
+    def exercise(self, proof=None, columns=None, options=None, after=None, log=None, diagnostic=None):
+        baseline, baseline_columns, baseline_options = fixture()
+        proof = baseline if proof is None else proof
+        columns = baseline_columns if columns is None else columns
+        options = baseline_options if options is None else options
+        calls, followed, closed = [], [], []
+        gets = 0
+
+        def read(args):
+            nonlocal gets
+            calls.append(args)
+            if args[0] == 'get':
+                gets += 1
+                if gets >= 3 and after is not None:
+                    if isinstance(after, Exception):
+                        raise after
+                    return after
+                return columns
+            self.assertEqual(args[0], 'logs')
+            return (json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof,
+                               'private': SENTINEL}).encode() if log is None else log)
+
+        def follow(pod):
+            followed.append(pod['uid'])
+            try:
+                yield json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof,
+                                  'private': SENTINEL}).encode() + b'\n'
+                yield (SENTINEL + '\n').encode()
+                yield request() if diagnostic is None else diagnostic
+                self.fail('capture did not close follow after exact diagnostic')
+            finally:
+                closed.append(True)
+
+        clock = FakeClock()
+        result = CAPTURE.capture(options, read, follow, now=clock.now, sleep=clock.sleep)
+        return result, calls, followed, closed
+
+    def test_exact_capture_rejoin_and_privacy(self):
+        result, calls, followed, closed = self.exercise()
+        self.assertEqual(result['status'], 'CAPTURED')
+        self.assertEqual(result['rejoin'], 'VERIFIED')
+        self.assertEqual(result['diagnostic']['stage'], 'TERMINAL_WAIT')
+        self.assertEqual(result['diagnostic']['class'], 'PROVIDER')
+        self.assertNotIn(SENTINEL, json.dumps(result))
+        self.assertEqual([call[0] for call in calls], ['get', 'logs', 'get', 'get'])
+        self.assertEqual(len(followed), 1)
+        self.assertEqual(closed, [True])
+
+    def test_system_and_project_use_same_source_scope_contract(self):
+        for scope in ('SYSTEM', 'PROJECT'):
+            with self.subTest(scope=scope):
+                proof, columns, options = fixture()
+                proof['assistant_scope'] = options.assistant_scope = scope
+                if scope == 'SYSTEM':
+                    del proof['project_ref']
+                result, _, _, _ = self.exercise(proof, columns, options)
+                self.assertEqual(result['assistant_scope'], scope)
+
+    def test_pod_cleanup_does_not_forge_rejoin(self):
+        result, _, _, _ = self.exercise(after=b'')
+        self.assertEqual(result['rejoin'], 'POD_CLEANED_AFTER_CAPTURE')
+
+    def test_transport_unavailable_after_capture_is_explicit(self):
+        result, _, _, _ = self.exercise(after=CAPTURE.Failure('KUBECTL_READ_FAILED'))
+        self.assertEqual(result['rejoin'], 'READ_UNAVAILABLE_AFTER_CAPTURE')
+
+    def test_changed_uid_after_capture_rejects(self):
+        _, columns, _ = fixture()
+        changed = columns.replace(b'12345678-1234-1234-1234-123456789abc',
+                                  b'12345678-1234-1234-1234-123456789abd')
+        with self.assertRaisesRegex(CAPTURE.Failure, '^POD_CHANGED_AFTER_CAPTURE$'):
+            self.exercise(after=changed)
+
+    def test_rejoin_pending_replacement_not_falsely_reported_cleaned(self):
+        _, columns, _ = fixture()
+        changed = columns.replace(b'|Running|', b'|Pending|').replace(
+            b'12345678-1234-1234-1234-123456789abc', b'12345678-1234-1234-1234-123456789abd')
+        with self.assertRaisesRegex(CAPTURE.Failure, '^POD_CHANGED_AFTER_CAPTURE$'):
+            self.exercise(after=changed)
+
+    def test_corrupt_pin_after_capture_not_transport_exception(self):
+        _, columns, _ = fixture()
+        with self.assertRaises(CAPTURE.Failure):
+            self.exercise(after=columns.replace(b'a' * 64, b'c' * 64, 1))
+
+    def test_foreign_tuple_never_reads_logs_and_timeout_bounded(self):
+        proof, columns, options = fixture()
+        for field in ('session_ref', 'turn_ref', 'attempt'):
+            with self.subTest(field=field):
+                candidate = copy.copy(options)
+                setattr(candidate, field, 'foreign_reference' if field != 'attempt' else 2)
+                clock, calls = FakeClock(), []
+
+                def read(args):
+                    calls.append(args)
+                    self.assertEqual(args[0], 'get')
+                    return columns
+
+                with self.assertRaisesRegex(CAPTURE.Failure, '^EXACT_ACK_NOT_OBSERVED$'):
+                    CAPTURE.capture(candidate, read, lambda pod: self.fail('foreign follow'),
+                                    now=clock.now, sleep=clock.sleep)
+                self.assertEqual(clock.value, 30)
+                self.assertEqual(len(calls), 60)
+
+    def test_wrong_image_rejected_before_log_read(self):
+        _, columns, options = fixture()
+        options.image_manifest = 'sha256:' + 'c' * 64
+        calls = []
+
+        def read(args):
+            calls.append(args[0])
+            return columns
+
+        with self.assertRaisesRegex(CAPTURE.Failure, '^POD_IMAGE_MISMATCH$'):
+            CAPTURE.capture(options, read, lambda pod: self.fail('follow'))
+        self.assertEqual(calls, ['get'])
+
+    def test_uid_pins_and_duplicate_pods_fail_before_logs(self):
+        _, columns, options = fixture()
+        options.pod_uid = '12345678-1234-1234-1234-123456789abd'
+        with self.assertRaisesRegex(CAPTURE.Failure, '^POD_UID_MISMATCH$'):
+            CAPTURE.selected_pod(lambda _: columns, options)
+        options.pod_uid = None
+        with self.assertRaisesRegex(CAPTURE.Failure, '^MULTIPLE_MATCHING_PODS$'):
+            CAPTURE.selected_pod(lambda _: columns * 2, options)
+        with self.assertRaises(CAPTURE.Failure):
+            CAPTURE.selected_pod(lambda _: columns.replace(b'a' * 64, b'x' * 64, 1), options)
+
+    def test_malformed_foreign_namespace_and_restart_denied(self):
+        _, columns, options = fixture()
+        for data in (b'bad\n', columns.replace(b'kodex-runtime', b'foreign-runtime'),
+                     columns.replace(b'|0', b'|1')):
+            with self.subTest(data=data[:8]), self.assertRaises(CAPTURE.Failure):
+                CAPTURE.selected_pod(lambda _: data, options)
+
+    def test_ack_mismatched_run_cannot_start_follow(self):
+        proof, columns, options = fixture()
+        proof['run_ref'] = 'run_foreign01'
+        with self.assertRaisesRegex(CAPTURE.Failure, '^EXACT_ACK_NOT_OBSERVED$'):
+            self.exercise(proof, columns, options)
+
+    def test_ack_wrong_scope_or_pin_fails_closed(self):
+        for field, value in (('assistant_scope', 'PROJECT'), ('runtime_revision_digest', 'c' * 64),
+                             ('session_ref', 'ses_foreign01'), ('attempt', 2)):
+            proof, columns, options = fixture()
+            proof[field] = value
+            with self.subTest(field=field), self.assertRaises(CAPTURE.Failure):
+                self.exercise(proof, columns, options)
+
+    def test_same_uid_rebound_before_follow_rejected(self):
+        proof, columns, options = fixture()
+        count = 0
+
+        def read(args):
+            nonlocal count
+            if args[0] == 'logs':
+                return json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof}).encode()
+            count += 1
+            return columns if count == 1 else columns.replace(b'a' * 64, b'c' * 64, 1)
+
+        with self.assertRaises(CAPTURE.Failure):
+            CAPTURE.capture(options, read, lambda pod: self.fail('changed follow'))
+
+    def test_known_request_fields_and_account_classification(self):
+        parsed = CAPTURE.parse_line(request(stage='ACCOUNT_READ', detail='RPC_ERROR', code=-32603,
+                                            account='DISCOVERY_UNAUTHORIZED'))
+        self.assertEqual(parsed['rpc_code'], -32603)
+        self.assertEqual(parsed['account_read'], 'DISCOVERY_UNAUTHORIZED')
+        for stage in CAPTURE.STAGES:
+            self.assertEqual(CAPTURE.parse_line(request(stage=stage))['stage'], stage)
+        for category in CAPTURE.CLASSES:
+            self.assertEqual(CAPTURE.parse_line(request(category=category))['class'], category)
+
+    def test_closed_notification_and_terminal_codes(self):
+        for method in CAPTURE.NOTIFICATIONS - {'NONE'}:
+            parsed = CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID', notification=method,
+                                                notification_error='ENVELOPE'))
+            self.assertEqual(parsed['notification'], method)
+        for code in CAPTURE.TERMINAL_CODES:
+            result = CAPTURE.parse_line(('2026/10/07 07:49:00 ' + CAPTURE.TERMINAL_PREFIX + code).encode())
+            self.assertEqual(result, {'kind': 'TERMINAL_FAILURE', 'failure_code': code})
+
+    def test_enum_sets_match_exact_repo_producers(self):
+        source = Path(__file__).resolve().parents[2] / 'services/jobs/agent-runner/internal/codex'
+        process = (source / 'process.go').read_text()
+        stages = set(re.findall(r'providerStage\w+\s+providerExecutionStage = "([A-Z_]+)"', process))
+        self.assertEqual(CAPTURE.STAGES, stages)
+        parser = (source / 'parser.go').read_text()
+        methods = parser.split('var serverNotificationMethods = stringSet(', 1)[1].split(')', 1)[0]
+        broker = (source / 'broker.go').read_text()
+        additional = broker.split('func safeNotificationMethod(', 1)[1].split('default:', 1)[0]
+        notifications = set(re.findall(r'"([A-Za-z/._]+)"', methods + additional))
+        self.assertEqual(CAPTURE.NOTIFICATIONS, notifications | {'NONE', 'UNKNOWN'})
+        terminal = parser.split('func parseCodexErrorInfo(', 1)[1].split('func (state *protocolState) terminalResult', 1)[0]
+        codes = set(re.findall(r'return "([a-z_]+)", true', terminal))
+        self.assertEqual(CAPTURE.TERMINAL_CODES, codes | {
+            'provider_error_info_invalid', 'provider_interrupted', 'RUNTIME_ARTIFACT_INVALID'})
+        account = (source / 'account_read_failure.go').read_text().split('func safeAccountReadFailure(', 1)[1]
+        self.assertEqual(CAPTURE.ACCOUNT_READ, set(re.findall(r'"([A-Z_]+)"', account)))
+
+    def test_unknown_or_malformed_diagnostic_never_reflects_sentinel(self):
+        for field in ('stage', 'category', 'detail', 'notification', 'account', 'notification_error', 'code'):
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$') as caught:
+                CAPTURE.parse_line(request(**{field: SENTINEL}))
+            self.assertNotIn(SENTINEL, str(caught.exception))
+        with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+            CAPTURE.parse_line((CAPTURE.TERMINAL_PREFIX + SENTINEL).encode())
+
+    def test_inconsistent_diagnostic_fields_and_integer_bound(self):
+        for fields in ({'code': 5}, {'code': 1 << 63, 'detail': 'RPC_ERROR'},
+                       {'notification': 'error'}, {'notification_error': 'ITEM'},
+                       {'account': 'DISCOVERY_FAILED'}, {'detail': 'NOTIFICATION_INVALID'}):
+            with self.subTest(fields=fields), self.assertRaises(CAPTURE.Failure):
+                CAPTURE.parse_line(request(**fields))
+
+    def test_unrelated_raw_lines_and_invalid_utf8_are_not_output(self):
+        for raw in (SENTINEL.encode(), b'\xff' + SENTINEL.encode(),
+                    json.dumps({'input': SENTINEL, 'failure': 'provider_error'}).encode()):
+            self.assertIsNone(CAPTURE.parse_line(raw))
+
+    def test_chunked_diagnostic_with_large_ack_and_private_lines(self):
+        raw = (b'{"proof":"' + b'x' * 20000 + b'"}\n' + SENTINEL.encode() + b'\n' + request())
+        result = CAPTURE.diagnostic_from_chunks(iter(raw[index:index + 17] for index in range(0, len(raw), 17)))
+        self.assertEqual(result['class'], 'PROVIDER')
+        self.assertNotIn(SENTINEL, json.dumps(result))
+
+    def test_oversized_known_diagnostic_rejected(self):
+        with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+            CAPTURE.diagnostic_from_chunks(iter([CAPTURE.REQUEST_PREFIX.encode() + b'x' * 5000 + b'\n']))
+
+    def test_no_diagnostic_is_not_pass(self):
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FAILURE_NOT_OBSERVED_BEFORE_DEADLINE$'):
+            CAPTURE.diagnostic_from_chunks(iter([SENTINEL.encode() + b'\n']))
+
+    def test_follow_requires_same_exact_ack_not_only_pre_read_metadata(self):
+        proof, _, options = fixture()
+        expected = CAPTURE.ACK.project_ack({'event': CAPTURE.ACK.EVENT, 'proof': proof}, options.run_ref)
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FOLLOW_ACK_NOT_OBSERVED$'):
+            CAPTURE.diagnostic_from_chunks(iter([request()]), expected, options.run_ref)
+        foreign = dict(proof, run_ref='run_foreign01')
+        foreign_line = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': foreign}).encode() + b'\n'
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FOLLOW_ACK_NOT_OBSERVED$'):
+            CAPTURE.diagnostic_from_chunks(iter([foreign_line, request()]), expected, options.run_ref)
+        changed = dict(proof, lease_generation=2)
+        changed_line = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': changed}).encode() + b'\n'
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FOLLOW_ACK_BINDING_MISMATCH$'):
+            CAPTURE.diagnostic_from_chunks(iter([changed_line, request()]), expected, options.run_ref)
+
+    def test_large_follow_ack_preserves_only_binding_no_payload(self):
+        proof, _, options = fixture()
+        expected = CAPTURE.ACK.project_ack({'event': CAPTURE.ACK.EVENT, 'proof': proof}, options.run_ref)
+        raw = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof,
+                          'private': SENTINEL * 500}).encode() + b'\n' + request()
+        result = CAPTURE.diagnostic_from_chunks(iter(raw[index:index + 101] for index in range(0, len(raw), 101)),
+                                                expected, options.run_ref)
+        self.assertEqual(result['stage'], 'TERMINAL_WAIT')
+        self.assertNotIn(SENTINEL, json.dumps(result))
+
+    def test_options_bounds_and_private_cli_errors(self):
+        for field, value in (('timeout_seconds', 29), ('timeout_seconds', 241),
+                             ('attempt', 0), ('attempt', True), ('run_ref', SENTINEL + '/'),
+                             ('image_manifest', SENTINEL), ('assistant_scope', SENTINEL)):
+            _, _, options = fixture()
+            setattr(options, field, value)
+            with self.subTest(field=field), self.assertRaises(CAPTURE.Failure):
+                CAPTURE.validate_options(options)
+        output = io.StringIO()
+        with patch('sys.stdout', output):
+            status = CAPTURE.main(['--unknown-' + SENTINEL])
+        self.assertEqual(status, 1)
+        self.assertEqual(json.loads(output.getvalue())['code'], 'ARGUMENTS_INVALID')
+        self.assertNotIn(SENTINEL, output.getvalue())
+
+    def test_kubectl_exact_identity_private_cache_and_no_inherited_env(self):
+        with patch.object(CAPTURE.subprocess, 'Popen') as popen:
+            CAPTURE.Kubectl('/home/s/.cache/owned-private', time.monotonic() + 30).start(['get', 'pods'])
+        args, kwargs = popen.call_args
+        self.assertIn('--kubeconfig=/home/s/.kube/config', args[0])
+        self.assertIn('--context=k3d-kodex', args[0])
+        self.assertIn('--cache-dir=/home/s/.cache/owned-private', args[0])
+        self.assertEqual(set(kwargs['env']), {'HOME', 'PATH', 'KUBECONFIG'})
+        self.assertEqual(kwargs['env']['HOME'], '/home/s')
+        self.assertEqual(kwargs['stderr'], subprocess.DEVNULL)
+        self.assertEqual(kwargs['stdin'], subprocess.DEVNULL)
+
+    def test_follow_timeout_uses_bounded_watch_budget_not_five_second_read_budget(self):
+        with patch.object(CAPTURE.subprocess, 'Popen') as popen:
+            CAPTURE.Kubectl('/home/s/.cache/owned-private', time.monotonic() + 30).start(['logs', '--follow'])
+        timeouts = [arg for arg in popen.call_args.args[0] if arg.startswith('--request-timeout=')]
+        self.assertEqual(len(timeouts), 1)
+        self.assertIn(timeouts[0], ('--request-timeout=30s', '--request-timeout=31s'))
+
+    def test_cancel_is_closed_error_for_join_finally(self):
+        with self.assertRaisesRegex(CAPTURE.Failure, '^CAPTURE_CANCELLED$'):
+            CAPTURE.cancel_capture(15, None)
+
+    def test_actual_local_synthetic_pipe_timeout_and_join(self):
+        process = subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(30)'],
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   stdin=subprocess.DEVNULL)
+        started = time.monotonic()
+        try:
+            self.assertEqual(list(CAPTURE.chunks(process, started + 0.05)), [])
+        finally:
+            CAPTURE.stop_process(process)
+        self.assertIsNotNone(process.returncode)
+        self.assertTrue(process.stdout.closed)
+        self.assertLess(time.monotonic() - started, 3)
+
+    def test_actual_local_synthetic_pipe_limit_and_stderr_privacy(self):
+        code = 'import sys;sys.stderr.write("' + SENTINEL + '");sys.stdout.write("x"*10000)'
+        process = subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        try:
+            with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_LOG_LIMIT$'):
+                list(CAPTURE.chunks(process, time.monotonic() + 2, maximum=5000))
+        finally:
+            CAPTURE.stop_process(process)
+        self.assertIsNotNone(process.returncode)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -10,6 +10,25 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 08:10 UTC: HEAD/remote/Draft1800 exact
+`d8e47a5eb017046f8e827451ef90a5be38341bbb`, предыдущий checkpoint уже
+committed/pushed. ROOT новые watcher31 + existingACK12 PASS0.356s;
+новые2файла ещё untracked, live closed failure capture NOT RUN. ROOT graph13
+PASS0.797s, Chrome5actual external callback SVG/Console0/realtimeConnected;
+fresh screenshot MCP hung, visual NOT RUN. Последний navigate SYSTEM ENV
+не подтвердился; не считать его выполненным. Child chrome_probe_health
+проверяет MCP read-only без restart/foreign tabs. Child callback_delegation_resume
+готовит AGENT_CONFIGURATION fullrecipient chain вisolatedWT, newrunner
+предварительно не нужен: tools/list dynamic, publicwire уже PASS со старым
+consumer. Дождаться frozen patch/tests, читать contract и внедрить scoped
+catalog→native Managerinstruction draft/Apply/Publish→NEWfull33.
+Старые SYSTEM/provider failures UNKNOWN; не blindretry. Serving RC executable
+PID2406/SHA167c472e независимо доказан07:55. ROOT2docs DIRTY + newwatcher2,
+после следующего checkpoint privatepublisher previous→d8e47a5e и allowed
+exact newpaths. Full65/33/finalinternalPR OPEN, goalACTIVE.
+
+## Предыдущий checkpoint07:52
+
 07.10.2026 07:52 UTC: source253d5fe6 + ROOT working tree callback3/capture2/
 GUIDE006+2docs. Full33run_qac3AdH1vgybtUSD99lyrhL9 FAILED3/active0: actual
 Developer+step002 wrongpair доказан seq110–111; guard правильно отклонил.

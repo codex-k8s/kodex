@@ -202,6 +202,34 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 08:10 UTC — перепроверка внешних дуг и ранняя диагностика провайдера
+
+- Source/remote/Draft1800: `d8e47a5eb017046f8e827451ef90a5be38341bbb`.
+  Предыдущие callback recovery и ACK scope исправления зафиксированы и
+  опубликованы; full65/full33 и финальный внутренний PR остаются OPEN.
+- Повторный ROOT graph unit: PASS, 13/13, 0.797s. Рабочая вкладка Chrome5
+  загрузила новую геометрию: actual callback SVG использует внешний коридор
+  с control Y=-116, выше всех карточек. История root run содержит 36 узлов
+  и 48 связей; reconnect завершился состоянием «Подключено». Console error/
+  warn0. Это DOM/геометрический readback, не новый визуальный PASS.
+- Свежий MCP screenshot attachment снова не завершился; остановлен только
+  ожидающий observer. Последующий navigate также не вернул результат за
+  ограниченный срок. Чужие вкладки не менялись и не закрывались; безопасная
+  диагностика Chrome поручена отдельно. Новый screenshot/relevant Network
+  для этой перепроверки NOT RUN. Исторический screenshot07:16 сохранён.
+- Новые provider failure watcher/tests заморожены на source d8e47a5e.
+  ROOT synthetic unit PASS: 31 новых + 12 существующих ACK tests, 0.356s,
+  exit0. Первый запуск из frontend cwd не нашёл Python test paths: ошибка
+  команды, не PASS и не дефект production; повтор из ROOT прошёл.
+  Context7 `/python/cpython`: subprocess timeout/terminate/kill/join проверен.
+  Watcher связывает metadata, точные run/session/turn/attempt/image,
+  ACK и follow stream, выводит только закрытые diagnostic enums; live capture
+  NOT RUN. Старый PROVIDER_UNAVAILABLE остаётся с primary cause UNKNOWN.
+- RC serving PID2406 ранее независимо проверен07:55: executable SHA
+  `167c472e3ec3c17b0cfc83c1534c7ca9933bc2d638877b5d96feb28b5b70bcb9`
+  совпал с callback recovery build. Новый recipient AGENT_CONFIGURATION
+  реализуется в отдельном worktree; source integration/cutover ещё NOT RUN.
+
 ### 07.10.2026 07:31–07:52 UTC — причины остановки, hot fix и свежие input proofs
 
 На source253d5fe6 полный run_qac3AdH1vgybtUSD99lyrhL9 завершился FAILED3,
