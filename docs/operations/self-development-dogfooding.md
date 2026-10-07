@@ -202,6 +202,54 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 10:32 UTC — собственные права, GitHub EOF и Manager восстановлены
+
+- HEAD/remote/Draft1800 `11c803b42eaa0b0b791773bb2f9c25b9afafdf77`,
+  дерево чистое до этого журнального checkpoint. Новых production изменений
+  после кандидатов каталога нет; прошлые адресные проверки остаются привязаны
+  к их точному source, не подменяют полный QA.
+- Own PROJECT план `pln_qzxV0GTGUF-HdbOgVJo1xDKB` штатно проверен и применён
+  в10:21:29: APPLIED/version3, receipt `rct_YBu_rvpbxAo_lH1jS4FTro6M`,
+  21 успешная операция, conflicts0. До Apply сравнение с owner read подтвердило
+  21 уникальное прежнее право, единственный diff enabled false→true,
+  NONE/[] и exact versions/digests сохранены. Connection version131→152;
+  другие97 прав оставались выключены, старое отключённое подключение неизменно.
+- Ранний ACK собственного хода захвачен до cleanup: Pod UID
+  `85f36d13-6b87-42f1-af30-33dc0b7635e2`, exact G5 image digest
+  `f8b6081413a12095ee1dd84e5a78afa6547fd8b2519caddaec79ad5d1748041c`.
+  Task/provider/inbox SHA
+  `825b8371ba4bf8daacc919aa81033d42a8a6dcbf63e2df1d539f99f1c31ae3d5`
+  совпадают; instructions/inbox EQUAL. Независимое воспроизведение task и
+  обслуживаемый binary этого завершённого Pod NOT RUN.
+- Fresh native GitHub3 run `run_HfpGAPEYG7tR8q2LIr_vnUNw`, conversation
+  `cnv_OzrbqtG5JZQgGH1SfR-fV___`: semantic PASS. В сохранённых events ровно23
+  content.read SUCCEEDED, failed tools0; final EOF=true, offset45730,
+  source45730B, commit `b5f6fcde885c4e6369255a86559b3ed2c785043f`, blob
+  `bf17d3778b9a3c8a47b1c4aee489adb27d009c7d`. Source SHA
+  `9c6ff8aa54a9dd393f99ab270babee943453864cd038a70916e11ac78c383097`
+  независимо совпал с git show exact main AGENTS.md; последний раздел
+  «Безопасность и конфиденциальность». Это реальное чтение моделью, не suite.
+- Initial Manager run `run_t-oRUCGKt3LOON8b510s6XOs` semantic BLOCKED:
+  ROOT ошибочно указал recipient_ref. Source parser закрыто запрещает это
+  поле до CP RPC; runtime Unknown/control_unknown совпал, actual arguments
+  первого вызова не раскрыты и точная wire причина остаётся UNKNOWN.
+  Исправленный native selector без этого поля в новом
+  `run_quP_TE2RTIjrLof6mCFA5G5v` прошёл до EOF и создал ровно17 операций.
+  Дополнительный production fix не потребовался. Изолированный existing
+  TestAssistantRecipientIntegrationCatalogClosedRead PASS0.047s.
+- Manager plan `pln_a8D4M024n-kSyO1dDQQI6iHx` owner diff17/unique17/problems0,
+  native Validate VALID/version2 и Apply APPLIED/version3:
+  receipt `rct_zdQU1qebHN3EMUgsq_OPk-m6`,17 APPLIED/conflicts0.
+  Включены только его прежние права, NONE/[] сохранены. Остальные5 role
+  profiles ещё восстанавливаются последовательно с актуальной version.
+- Developer restore24 принят один раз: conversation
+  `cnv_9K0LhfluWcyv6Aj0U6fs2q5T`, run `run_YGbK0Vhsymo-uzg0Dk2FJsu_`,
+  turn `trn_oDsZ5zVXwi2JgwSz2N-AP4DS`, RUNNING; DRAFT/Apply пока NOT RUN.
+- Chrome page5 reload10:30, сохранённый диалог/план восстановились;
+  Console error/warn0. Нового screenshot после capture timeout нет — visual
+  acceptance NOT RUN. Full33, actual internal Developer PR/reviews и full65
+  остаются OPEN; окончательный внутренний PR автоматически не сливать.
+
 ### 07.10.2026 10:18 UTC — защищённое чтение собственного PROJECT каталога
 
 - На base `d37e2d4f336c1bc7b0c01ca1199fea2428375aaf` применён frozen patch

@@ -10,6 +10,30 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 10:32 UTC: HEAD/remote/Draft1800
+`11c803b42eaa0b0b791773bb2f9c25b9afafdf77`; source чистый до нового
+журнального checkpoint. Own PROJECT21 native Validate/Apply PASS receipt
+`rct_YBu_rvpbxAo_lH1jS4FTro6M`; Manager17 PASS receipt
+`rct_zdQU1qebHN3EMUgsq_OPk-m6`. Только прежние права enabled, NONE/[] неизменны.
+Fresh GitHub3 `run_HfpGAPEYG7tR8q2LIr_vnUNw` semantic PASS:23 actual content
+read SUCCEEDED, AGENTS.md45730B EOF, exact main b5f6fcde/blob bf17d377/source
+9c6ff8aa совпали с независимым git show. Ошибочный recipient_ref в первом
+Manager prompt исправлен новым native selector; новый run_quP_TE2RTIjrLof6mCFA5G5v
+прочитал каталог и подготовил17-op, production fix не понадобился.
+Page5 Developer AGENT, helper открыт. Native restore24 принят один раз:
+conversation `cnv_9K0LhfluWcyv6Aj0U6fs2q5T`, run
+`run_YGbK0Vhsymo-uzg0Dk2FJsu_`, turn `trn_oDsZ5zVXwi2JgwSz2N-AP4DS`,
+RUNNING. Сначала readback, не повторять submit. Проверить24 unique existing
+disabled grants GitHub3, единственный enabled diff/NONE/[]; native owner
+Validate/Apply после DRAFT, без новых прав.
+Остальные Architect16/Docs14/Security13/Lexical13 — следующие по очереди;
+подготовленные планы не применять с устаревшей connection version.
+После всех профилей NEW SOFTWARE_CHANGE33 Issue1796; финальный internalPR
+не merge. Privatepublisher previous11c803b4, page5 reload10:30/Console0;
+нового screenshot нет. Full65/checklist остаётся OPEN.
+
+## Предыдущий checkpoint10:18
+
 07.10.2026 10:18 UTC: на HEAD `d37e2d4f` ROOT candidates/component/guide/journal
 DIRTY, адресные unit/vet/disposable PostgreSQL PASS42.25s. Frozen child patch
 интегрирован; host/Pod source SHA cb25db63 и обслуживаемый binary b1e4ab17
