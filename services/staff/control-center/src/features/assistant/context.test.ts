@@ -4,6 +4,7 @@ import type { RouteLocationNormalizedLoaded } from "vue-router";
 import { i18n } from "@/app/i18n";
 import {
   assistantContextIdentity,
+  assistantContextOperations,
   assistantContextRouteLabelKey,
   assistantContextTitle,
   conversationMatchesContext,
@@ -19,6 +20,20 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
+
+it.each(["ru", "en"] as const)(
+  "явно переводит весь текущий реестр операций контекста в %s без fallback",
+  (locale) => {
+    for (const operation of assistantContextOperations) {
+      const key = `assistant.contextOperation.${operation}`;
+      expect(i18n.global.te(key, locale), key).toBe(true);
+      const text = i18n.global.t(key, {}, { locale });
+      expect(text.trim(), key).not.toBe("");
+      expect(text, key).not.toBe(key);
+      expect(text, key).not.toBe(operation);
+    }
+  },
+);
 
 function route(
   fullPath: string,

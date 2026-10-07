@@ -3849,9 +3849,15 @@ const ru = {
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION:
         "Подготовить новую ревизию окружения",
+      BIND_AGENT_RUNTIME_ENVIRONMENT: "Назначить рабочее окружение",
       CREATE_ROLE_IMAGE_RECIPE: "Создать рецепт образа",
       UPDATE_ROLE_IMAGE_RECIPE: "Изменить рецепт образа",
+      CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Создать рецепт образа Kodex",
+      UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Изменить рецепт образа Kodex",
+      PREPARE_ASSISTANT_RUNTIME_CONFIGURATION:
+        "Подготовить настройки модели помощника",
       CREATE_WORKFLOW: "Создать Workflow",
+      UPDATE_WORKFLOW: "Изменить Workflow",
       CHANGE_CAPABILITY: "Изменить возможности",
       CHANGE_INTEGRATION_GRANT: "Изменить доступ к подключению",
       CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT:
@@ -3859,6 +3865,7 @@ const ru = {
       CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT:
         "Изменить доступ помощника Проекта",
       CREATE_SCHEDULE: "Создать Автоматизацию",
+      UPDATE_SCHEDULE: "Изменить Автоматизацию",
       LAUNCH_RUN: "Запустить Run",
       CREATE_INTEGRATION_CONNECTION: "Создать подключение",
       PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION:
@@ -8433,9 +8440,15 @@ const en = {
       CREATE_PROJECT_ASSISTANT: "Create project assistant",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION: "Prepare environment revision",
+      BIND_AGENT_RUNTIME_ENVIRONMENT: "Assign runtime environment",
       CREATE_ROLE_IMAGE_RECIPE: "Create image recipe",
       UPDATE_ROLE_IMAGE_RECIPE: "Update image recipe",
+      CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Create Kodex image recipe",
+      UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Update Kodex image recipe",
+      PREPARE_ASSISTANT_RUNTIME_CONFIGURATION:
+        "Prepare assistant model settings",
       CREATE_WORKFLOW: "Create Workflow",
+      UPDATE_WORKFLOW: "Update Workflow",
       CHANGE_CAPABILITY: "Change capabilities",
       CHANGE_INTEGRATION_GRANT: "Change connection access",
       CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT:
@@ -8443,6 +8456,7 @@ const en = {
       CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT:
         "Change project assistant access",
       CREATE_SCHEDULE: "Create Automation",
+      UPDATE_SCHEDULE: "Update Automation",
       LAUNCH_RUN: "Launch Run",
       CREATE_INTEGRATION_CONNECTION: "Create connection",
       PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION:
