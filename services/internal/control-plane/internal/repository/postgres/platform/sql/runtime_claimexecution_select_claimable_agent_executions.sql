@@ -438,7 +438,7 @@ SELECT n.id::text,
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),
            CASE
-               WHEN a.system_key <> 'system-assistant'
+               WHEN a.system_key IS DISTINCT FROM 'system-assistant'
                 AND 'platform.run.delegate' <> ALL(a.capabilities)
                 AND NOT (root.workflow_version_id IS NOT NULL
                          AND n.workflow_step_key LIKE 'workflow.coordinator.%') THEN '[]'::jsonb
@@ -465,13 +465,6 @@ SELECT n.id::text,
                               0::bigint AS position
                        FROM control_plane.agents candidate
                        WHERE root.workflow_version_id IS NULL
-                         AND NOT EXISTS (
-                             SELECT 1
-                             FROM control_plane.run_edges continuation
-                             WHERE continuation.root_run_id = root.id
-                               AND continuation.target_node_id = n.id
-                               AND continuation.type = 'CONTINUES'
-                         )
                          AND candidate.organization_id = r.organization_id
                          AND candidate.project_id = r.project_id
                          AND candidate.id <> a.id

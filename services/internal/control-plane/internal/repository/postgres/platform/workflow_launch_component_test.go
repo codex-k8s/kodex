@@ -188,6 +188,58 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		}
 		return state, origin, root, exact, leases, turns
 	}
+	t.Run("ordinary-sequential-delegation-callback", func(t *testing.T) {
+		// Обычный Manager продолжает задачу после callback, сохраняя только
+		// текущую capability. Каждая делегация принадлежит свежей attempt.
+		agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "ordinary-manager", "Ordinary manager")
+		agent = *execute(command.ChangeAgentCapability, owner, "ordinary-manager-cap", command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: "platform.run.delegate", Enabled: true}, &agent.Version).Agent
+		parent := execute(command.LaunchRun, owner, "ordinary-parent", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Delegate review, then delegate response."}, nil).Run
+		initial := claim("ordinary-initial-claim", parent.Ref)
+		current := initial
+		for index, stage := range []string{"review", "response"} {
+			targets, ok := current["delegationTargets"].([]map[string]string)
+			found := false
+			for _, target := range targets {
+				found = found || target["ref"] == specialist.Ref
+			}
+			if !ok || !found || !strings.Contains(strings.Join(runtimecontract.RuntimeMCPToolNames(runtimecontract.RunnerInput{DelegationTargets: runtimeRevisionDelegationTargets(current["delegationTargets"])}), ","), "delegate_agent") {
+				t.Fatalf("ordinary %s lost its delegation catalog", stage)
+			}
+			delegated := execute(command.DelegateExecution, worker, "ordinary-"+stage+"-delegate", command.DelegateInput{LeaseRef: stringMap(current, "leaseRef"), Fence: stringMap(current, "fence"), Generation: runtimeRevisionMapInt64(current, "generation"), TargetAgentRef: specialist.Ref, Task: "Complete bounded " + stage}, nil)
+			child := delegated.Run
+			bound := false
+			for _, node := range delegated.Graph.Nodes {
+				bound = bound || (node.RunRef == child.Ref && node.ParentNodeRef == stringMap(current, "nodeRef") && node.Type == "AGENT_EXECUTION")
+			}
+			if !bound {
+				t.Fatal("ordinary child lost its current server-owned parent node")
+			}
+			complete("ordinary-"+stage+"-parent-complete", current, true)
+			childLease := claim("ordinary-"+stage+"-child-claim", child.Ref)
+			complete("ordinary-"+stage+"-child-complete", childLease, true)
+			if index == 0 {
+				current = claim("ordinary-review-callback", parent.Ref)
+				if stringMap(current, "sessionRef") != stringMap(initial, "sessionRef") || stringMap(current, "nodeRef") == stringMap(initial, "nodeRef") || stringMap(current, "runtimeRevisionRef") == stringMap(initial, "runtimeRevisionRef") {
+					t.Fatal("ordinary callback did not receive a fresh execution in the same session")
+				}
+				if _, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "ordinary-stale-delegate"}, Payload: command.DelegateInput{LeaseRef: stringMap(initial, "leaseRef"), Fence: stringMap(initial, "fence"), Generation: runtimeRevisionMapInt64(initial, "generation"), TargetAgentRef: specialist.Ref, Task: "Reject stale attempt"}}); err == nil {
+					t.Fatal("completed initial lease delegated a new child")
+				}
+			}
+		}
+		agent = *execute(command.ChangeAgentCapability, owner, "ordinary-manager-revoke", command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: "platform.run.delegate", Enabled: false}, &agent.Version).Agent
+		last := claim("ordinary-response-callback", parent.Ref)
+		if targets, _ := last["delegationTargets"].([]map[string]string); len(targets) != 0 {
+			t.Fatal("revoked ordinary callback retained delegation targets")
+		}
+		if _, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "ordinary-revoked-delegate"}, Payload: command.DelegateInput{LeaseRef: stringMap(last, "leaseRef"), Fence: stringMap(last, "fence"), Generation: runtimeRevisionMapInt64(last, "generation"), TargetAgentRef: specialist.Ref, Task: "Reject revoked capability"}}); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("revoked callback delegation was not forbidden: %v", err)
+		}
+		completed := complete("ordinary-last-complete", last, true)
+		if completed.Run == nil || completed.Run.State != "SUCCEEDED" {
+			t.Fatal("ordinary sequential delegation did not complete")
+		}
+	})
 	t.Run("two-step-authoritative-callback", func(t *testing.T) {
 		specialist = *execute(command.ChangeAgentCapability, owner, "two-artifact-cap", command.AgentBindingInput{AgentRef: specialist.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}, &specialist.Version).Agent
 		twoStep := draft
