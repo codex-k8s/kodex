@@ -159,6 +159,42 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 04:13 UTC — новый полный процесс и восстановленные права INTAKE
+
+Actual Manager сам запустил SOFTWARE_CHANGE33 один раз:
+`run_MKgCFtKbMOiEkqX_5-iEM4wM`, receipt
+`wlaunch_7RdH_JoyTbc2-dZx7nWMKJHY`, callback
+`edg_C4Zx7FZQLVLNGonJVE_KdGn7`. Target Workflow v6/revision2; граф35nodes,
+47edges с33этапами. Coordinator передал INTAKE и завершил собственный ход.
+INTAKE `run_6YFdj-dpPPpG8G7spTLmewOZ` теперь имеет capabilities22/grants19,
+а не прежние cap3/grants0, и сам успешно читает GitHub/каталоги/репозиторий.
+Это фактическое устранение исходного stage allowlist failure, не ослабление
+attenuation. INTAKE ещё RUNNING, его полный результат и следующие этапы не PASS.
+
+Coordinator ранний ACK/file/inbox/same-UID rejoin CAPTURED, instructions
+14192bytes SHA157bd8f5…51c6, taske4662e6f…47ec, cap1/grants0 как оркестратор;
+binary file check NOT RUN при завершении контейнера, не скрытый PASS.
+INTAKE полный ACK CAPTURED: RR`rrev_CNoFGXi5EJJ-v1r1dnsxGW0l`, session
+`ses_6E54s4mgTYPDp3yAFwMNx8GH`, turn`trn_6TMIatsUGUQD4aGIP808W__5`,
+instructions26517bytes SHAf1b6c471…f5d6, taskedb2b182…d8e5,
+G4image/binary/file/inbox EQUAL. Дополнительная независимая task SHA
+для этих двух server-generated делегирований NOT RUN. Ошибочный сокращённый
+hash в первом host capture command отклонён локально до Kubernetes; исправленный
+capture успешен, никакого resource effect или подмены expected hash.
+
+Дополнительный native FULL post-read `run_mxpavwTyJDoow17GHLs8j5LX` FAILED
+с PROVIDER_UNAVAILABLE до tools. Полная native повторная сверка instructions/
+DependsOn поэтому UNKNOWN, не PASS; уже полученный editable snapshot EQUAL
+и source hydration proof не заменяют её. Никаких повторных Apply/Publish/Launch.
+Chrome full33 graph/screenshot/Console0/realtime PASS; текущий stage transcript
+успешно показывает actual commentary/tools. Рабочая вкладка5, чужие6/13 целы.
+
+Source checkpoint747aa30b подтверждён GitHub PR и remote exact readback.
+Первый immediate git readback вернул FAIL после успешного push; отдельное
+чтение подтвердило exact747aa30b. Повтор publisher не делал повторный push,
+успешно обновил тело того же Draft PR1800 с выполненными6role/Apply/Publish.
+Whole65/33 OPEN; финальный dogfooding PR не сливать.
+
 ### 07.10.2026 04:10 UTC — штатное применение плана и новая опубликованная версия
 
 Source `a2c2a385cc5cdc2b38dd6019c6b86d4888605d17` запушен и точно
