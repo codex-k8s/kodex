@@ -159,6 +159,28 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 04:29 UTC — публикация и три реальных review-исполнителя
+
+Source/remote/Draft PR1800 `820d2906172540f64376dca333ddbd7c0356410e`
+exact readback PASS, чистое дерево; body обновлён с child transcript fix.
+Первый immediate readback опять отстал после успешного push; отдельное
+чтение подтвердило SHA, повтор publisher пропустил push и обновил body.
+Developer technicalSUCCEEDED/semanticBLOCKED, branch/headSHA/PR отсутствуют:
+preview predecessor unavailable, обязательные prerequisites не доказаны.
+Coordinator передал все три настоящие review роли; это не успешный review.
+Ранние G4image/binary/inbox/file/sameUID ACK всех трёх CAPTURED/EQUAL;
+independent task expectedSHA NOT RUN. Documentation
+`run_SGeZvdaf9kpDSfEz8Bwlg7_q`, RRrrev_vam2upgs4rf-CLIgG6b0fj_r,
+instructions22655bytes/d5828675…d2df; Security
+`run_QYxDCnj2D1X2hX76NZE4Uche`, RRrrev_rWlr10g_IMKESE0e0YwSEtVo,
+21963bytes/daeee51d…380f; Lexical
+`run_j6A5vmjG3nlI4ozJ0LrTLP9L`, RRrrev_8LHDugSDrUI93IQHzGLECuW-,
+22218bytes/08e81e8c…45bb. Binary scope не serving process.
+Первые reviewer reads также сообщают TOOL_UNAVAILABLE для predecessor;
+Documentation отдельный GitHub list PR INTEGRATION_UNAVAILABLE не скрыт.
+Root read-only helper исследует preview; production fix ещё NOT RUN.
+Chrome5 hardreload04:27, Console0, чужие6/13 целы. Whole65/33 OPEN.
+
 ### 07.10.2026 04:26 UTC — компактный child transcript и передача Developer
 
 Два frontend файла заморожены на base `4e54f3df`: source

@@ -10,6 +10,16 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 04:29 UTC: source/remote/Draft1800 `820d2906` exact PASS,
+child transcript fix опубликован. Root full33RUNNING; Developer semanticBLOCKED
+безbranch/headSHA/PR, три review роли RUNNING с полными ранними ACK EQUAL.
+Всеactualrefs и ограничения в journal04:29. Pending helper preview rootcause,
+нет нового backend fix; не объявлять semantic acceptance или fullQA PASS.
+Chrome5 reload04:27, след≤04:32; чужие6/13. Следующий publisherprevious820d,
+allowlist25files, толькоrootdocs checkpoint. Цель ACTIVE, whole65/33 OPEN.
+
+## Предыдущий checkpoint04:26
+
 07.10.2026 04:26 UTC: base source/remote/PR1800 `4e54f3df`, frozen frontend
 2file child completion fix +2rootdocs ready for commit/push. 241unit/lint/
 format/forcedtypes PASS, host/Pod sourcee494…7c7e EQUAL, Chrome desktop/mobile/
