@@ -177,13 +177,17 @@ export function buildRunTranscriptItems(
       event.toolCall.revision >= 1
         ? event.toolCall
         : undefined;
+    // USER обозначает входное задание, а сторону сообщения задаёт его автор.
     const kind: RunActivityItem["kind"] = tool
       ? "tool"
       : callback
         ? "agent"
-        : message?.phase === "USER"
+        : message?.phase === "USER" && event.actor?.kind === "USER"
           ? "initiator"
-          : message
+          : message &&
+              (message.phase !== "USER" ||
+                event.actor?.kind === "AGENT" ||
+                event.actor?.kind === "SYSTEM_ASSISTANT")
             ? "agent"
             : "system";
     const revision = tool?.revision ?? message?.revision;
@@ -451,6 +455,9 @@ export function activeTranscriptItemId(
       item.execution &&
       !item.historical &&
       item.kind !== "initiator" &&
+      !(
+        item.phase === "USER" && item.messageOrigin !== "CALLBACK_CONTINUATION"
+      ) &&
       !closed.has(scope) &&
       executionKey(current.get(sessionKey(item.execution))) === scope &&
       (activeTranscriptStates.has(states.get(scope) ?? "") ||

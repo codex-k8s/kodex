@@ -1745,6 +1745,110 @@ describe("assistantTurnHasAuthoritativeActivity", () => {
 });
 
 describe("buildRunActivityItems", () => {
+  it.each([
+    ["USER", "Владелец", "initiator"],
+    ["USER", "Другой участник", "initiator"],
+    ["AGENT", "Менеджер", "agent"],
+    ["SYSTEM_ASSISTANT", "Помощник проекта", "agent"],
+    ["PLATFORM", "Платформа", "system"],
+    ["INTEGRATION", "Интеграция", "system"],
+  ] as const)(
+    "сохраняет USER задание автора %s, но выбирает сторону по опубликованному actor",
+    (actorKind, actorName, kind) => {
+      const base = required(events[0]);
+      const message = {
+        source: { origin: "ORDINARY" as const },
+        ref: "msg_delegated_task",
+        phase: "USER" as const,
+        revision: 1,
+        text: "Подготовь архитектурное решение",
+      };
+      const result = buildRunTranscriptItems(
+        [
+          {
+            ...base,
+            actor: { kind: actorKind, ref: "actor_exact", name: actorName },
+            message,
+          },
+        ],
+        { initiator: "Неавтор сообщения", target: "Неавтор задания" },
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        kind,
+        actor: actorName,
+        phase: "USER",
+        messageOrigin: "ORDINARY",
+        summary: message.text,
+        execution: base.execution,
+        revision: 1,
+      });
+      expect(activeTranscriptItemId(result)).toBeNull();
+    },
+  );
+
+  it("не приписывает USER без опубликованного actor человеку из текущего контекста", () => {
+    const base = required(events[0]);
+    const result = buildRunTranscriptItems(
+      [
+        {
+          ...base,
+          actor: undefined,
+          message: {
+            source: { origin: "ORDINARY" },
+            ref: "msg_unattributed_task",
+            phase: "USER",
+            revision: 1,
+            text: "Задание без опубликованного автора",
+          },
+        },
+      ],
+      { initiator: "Владелец", platform: "Платформа" },
+    );
+    expect(result[0]).toMatchObject({
+      kind: "system",
+      phase: "USER",
+      messageOrigin: "ORDINARY",
+    });
+    expect(result[0]?.actor).not.toBe("Владелец");
+  });
+
+  it("сохраняет нейтральное callback сообщение слева и exact дедупликацию без raw input", () => {
+    const base = required(events[0]);
+    const callback: RunEvent = {
+      ...base,
+      actor: { kind: "AGENT", ref: "agt_callback", name: "Менеджер" },
+      message: {
+        source: { origin: "CALLBACK_CONTINUATION" },
+        ref: required(base.execution).turnRef,
+        phase: "USER",
+        revision: 1,
+        text: "PRIVATE_CALLBACK_INPUT_SENTINEL",
+      },
+    };
+    const items = buildRunTranscriptItems([
+      callback,
+      {
+        ...callback,
+        ref: "evt_callback_duplicate",
+        sequence: base.sequence + 1,
+      },
+    ]);
+    expect(publishedRunMessage(callback)?.phase).toBe("USER");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "agent",
+      actor: "Менеджер",
+      phase: undefined,
+      messageOrigin: "CALLBACK_CONTINUATION",
+      execution: base.execution,
+      summary: "i18n:CALLBACK_CONTINUATION_PUBLIC",
+    });
+    expect(JSON.stringify(items)).not.toContain(
+      "PRIVATE_CALLBACK_INPUT_SENTINEL",
+    );
+  });
+
   describe("точное повторное подтверждение успешной интеграции", () => {
     function completionFixture(): [RunEvent, RunEvent] {
       const base = required(events[0]);
