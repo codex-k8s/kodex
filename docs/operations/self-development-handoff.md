@@ -10,6 +10,32 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 17:49 UTC
+
+База `4b36c38d120e31cd3635545f068bbb335fb416fe`, main `b5f6fcde`
+не менялся; поверх готов пакет GitHub3.1.0. Chrome рабочая1 снова доступна,
+owner вход и WebSocket сохранены; literal reload17:46:07 без dirty input.
+Вкладка4 — открытая форма владельца; дальнейший heartbeat делать на1.
+
+Actual manager-plan owner read40345B/b604df79 EQUAL: semantic BLOCKED из-за
+READ применимого OPS-DOC-SELFDEV-001. Pinned file536156B; running binary
+имел source и offset limit65536. Invocation READ FAILED RESPONSE_INVALID,
+effectreceipt0, read-only proof. Исправлены source/offset/schema до1МиБ,
+page2048/envelope8192/output64КиБ/provider2МиБ сохранены. Codegen/unit/vet/
+build PASS; Go1.26.6 actualPID6375/independent binary3fbcf533 EQUAL, host/Pod
+hashes EQUAL и objdump0x100000. Подробности в главном журнале.
+
+Следующее — штатная UI definition revision3.1.0/публикация помощником,
+Impact→явный rebind active int_Pn1ALY1e8kAn67vrr1-okIKe; второй disabled
+не трогать. Старые pins не переинтерпретировать. Rebind штатно отзывает
+credential/grants; защищённый UI setup и native подтверждаемые планы должны
+восстановить ровно120 прежних grant capabilities/recipients/policies/scopes
+(baseline digest a9276308). Не расширять grants и не создавать новые роли.
+Baseline и последнийManagerinput7944B извлечены через owner API; прошлые
+roots terminal, новый READ/full Workflow пока NOT RUN. После readiness новых
+pins — ровно один новый Manager и earlyACK+actual descendants. Полный65 и
+checklist11/13/14/15 OPEN; Developer/reviews/fixes/READY ещё не выполнены.
+
 ## Checkpoint 07.10.2026 17:24 UTC
 
 Source/remote/Draft1800 `f4e77b384a770911eb1fb22c77321399622c0763`

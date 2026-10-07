@@ -10,6 +10,71 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 17:49 UTC — причина INTAKE и большие GitHub-источники
+
+База пакета `4b36c38d120e31cd3635545f068bbb335fb416fe`; fresh
+main `b5f6fcde885c4e6369255a86559b3ed2c785043f`, remote и Draft1800
+сверены штатным bot readback. Checklist11/13/14/15 остаётся OPEN.
+
+- PASS: Chrome MCP восстановлен, рабочая вкладка1. Owner API прочитал
+  `art_i6ozYAPM-0HweYiy1AEslB-h` целиком:40345B, SHA256
+  `b604df794ca39bf64d610daead4af52fa6694801272d44f5f2c6179132d75b55`
+  совпал с immutable callback descriptor. Причина semantic BLOCKED —
+  native READ дополнительного применимого OPS-DOC-SELFDEV-001, а не
+  отсутствие четырёх уже прочитанных обязательных документов.
+- FAIL исходного рабочего пути подтверждён независимо: invocation
+  `inv_hL_iWKejmFoIuZFj2M7CR_Ic`, READ/FAILED/INTEGRATION_RESPONSE_INVALID,
+  version3/generation1, effect receipt0. Pinned source536156B превышает
+  ошибочный лимит полного файла65536. Read-only evidence без записи состояния.
+  Дизассемблер actual PID4776 подтвердил две границы0x10000: source и offset.
+- Исправлены source contract GitHub3.1.0, штатный generated package и adapter:
+  source/offset/size/next до1048576, страница2048, native envelope8192,
+  безопасная проекция65536, сырой SDK-ответ2097152. Полные UTF-8/NUL/Git blob
+  SHA и source/chunk SHA256 проверяются прежде выдачи. Нет download fallback,
+  новых destinations, permissive decoder, grant expansion или auto-retry.
+  Общий инвариант отдельных бюджетов закреплён в GO-DOC-001.
+- PASS ROOT Go1.26.6: полный integrationpackage unit3.947с, gateway
+  integration unit23.230с и полный gateway unit; vet обоих модулей, build,
+  codegen check, gofmt/diff. Повтор точного large-source/full-read regression
+  6.422с. CP platform/domain/transport unit0.900/0.271/0.642с PASS.
+  Fixtures проверяют весь adapter+schema для536156/1048576B,
+  continuation за64КиБ, exact EOF, invalid UTF-8/NUL tail, старую revision и
+  неизменный page/envelope bound. Первоначальный make без pinned toolchain
+  FAIL; повтор с go1.26.6 PASS. Ошибочные relative paths диагностической
+  команды не считаются source proof; исправленный exact readback указан ниже.
+- PASS source/Pod: integration-gateway UID
+  `078c2a47-39c4-4e07-be7c-f4d1a5ae6dc0`, hot reload PID6375,
+  actual `/proc/6375/exe` и независимо собранный с теми же Go1.26.6/
+  CGO0/trimpath/buildvcsfalse binary SHA256
+  `3fbcf5333d3050a438377a8338b19c1ade33ea56ce656525002cd9ee57b0a598`
+  EQUAL. Дизассемблер показывает0x100000. Host/Pod page helper
+  `ac14087166f5f35d2540e78aba323b5e012cb21aba03537e36bded879903a691`,
+  generated package
+  `ef0c68d15cbad9ba45876f6a51108c16a31a50367a10283812bc9ab33c4cf361`
+  EQUAL; repo-owned Air использовал уже существующий source mount.
+- PASS текущего workflow screen: native screenshot получен/просмотрен,
+  control heights компактные, горизонтального overflow нет; Console0,
+  authenticated/connected true, bootstrap/session/ticket/workflow/agents200.
+  Вкладка4 с открытой формой владельца не используется для дальнейших reload;
+  рабочая1 обновлена17:46:07, несохранённого textarea input нет. Это не
+  visual PASS нового active-thinking состояния: последний run terminal.
+- Context7: `/google/go-github`, Repository.GetContents/GetContent и exact ref;
+  SDK остаётся закреплённым v74. Дополнительно проверена официальная
+  документация [Contents API](https://docs.github.com/en/rest/repos/contents):
+  полного base64-ответа достаточно для источников до1МБ; файлы с
+  encoding:none не обслуживаются запасным download URL.
+
+Следующее: штатная новая UI definition revision3.1.0 с явным owner rebind
+только active connection `int_Pn1ALY1e8kAn67vrr1-okIKe`;
+старые connection251/package3.0.0 и120grants не переинтерпретировать.
+До перепривязки сохранён baseline grant capabilities/recipients/policies/scopes:
+SHA256 `a92763085ea8d24e797fe17b965c6ddfcf5b26fa635152534fd491679b75235e`.
+Rebind отзывает прежние grants/credential: восстановление только штатным
+защищённым UI и подтверждаемыми планами помощника с точным прежним набором,
+без расширения полномочий. Новый native READ/полный Workflow NOT RUN до
+readiness новых pins. Не повторять старый terminal run вслепую. Полный
+Architect/Developer/reviews/fixes/READY и исходные65 требований OPEN.
+
 ## Checkpoint 07.10.2026 17:13 UTC — уточнение INTAKE и индикатор работы
 
 База текущего пакета `d8195317f478495bff519e2b717a55f463be6c81`;

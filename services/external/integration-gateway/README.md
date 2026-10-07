@@ -4,7 +4,7 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.4.1
+version: 2.5.0
 updated: 2026-10-07
 ---
 
@@ -95,11 +95,30 @@ worker проверяет durable `UNKNOWN_OUTCOME`, сохранённый inte
 control-plane, а не вымышленную поддержку idempotency header провайдером.
 Ответы HTTP остальных провайдеров и итоговая безопасная JSON-проекция
 ограничены 64 КиБ. GitHub SDK использует отдельный сырой бюджет, описанный
-выше; это не увеличивает допустимый размер исходного файла или результата.
+выше; это не увеличивает допустимый размер итогового результата.
 Большие результаты отклоняются без выдачи
 частичного файла. GitHub Contents API возвращает каталог без pagination;
 страницы остальных списков используют provider cursor. Jira transitions,
 links/attachments и exact Confluence space возвращают ограниченный полный набор.
+
+`github.repository.content.read` проверяет полный UTF-8 файл до 1 МиБ,
+но возвращает только страницу до 2048 байт с отдельным receipt, Git blob SHA,
+SHA-256 источника и страницы, byte offset, next и EOF. Native MCP envelope
+остаётся ограничен 8192 байтами, итоговая проекция — 64 КиБ, сырой SDK-ответ —
+2 МиБ. `ref` закрепляет commit, continuation требует `expected_sha`;
+проверяются весь UTF-8, NUL и Git blob SHA до выдачи первой страницы.
+Файлы больше 1 МиБ, `encoding: none` и повреждённые источники отклоняются без
+partial-success, download URL, redirect, raw fallback или автоматического retry.
+Лимиты `size/offset_bytes/next_offset_bytes` совпадают с generated package.
+
+Сквозной путь не меняется: actor/grant runtime revision → native MCP invocation
+→ control-plane claim с exact definition/version/digest и immutable input
+→ integration-gateway → SDK Contents API разрешённого repository/commit/path
+→ проверенная bounded страница и receipt → owner completion/audit/event
+→ исходный runtime consumer. `READ_ONLY/NONE`, tenant/repository authority,
+idempotency, leases, grants и события остаются прежними. Новый package `3.1.0`
+подключается новой owner revision с явным rebind; уже закреплённые revisions
+не переинтерпретируются и не получают новые лимиты молча.
 
 Jira users ограничены assignable users выбранного проекта, без email/address
 профиля пользователя. JQL не может выйти из project-условия; верхнеуровневый
@@ -117,7 +136,7 @@ GitHub workflow dispatch принимает `workflow_inputs`: JSON-объект
 
 ## Обновление каталога
 
-Текущие версии: GitHub `3.0.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
+Текущие версии: GitHub `3.1.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
 Mattermost `2.2.0`, Synthetic `3.1.0`.
 Публикация новых packages не расширяет существующие grants автоматически.
 Старая pinned revision не переинтерпретируется: владелец публикует новую

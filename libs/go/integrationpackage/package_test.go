@@ -46,7 +46,7 @@ func TestLoadShippedDefinitions(t *testing.T) {
 		t.Fatalf("LoadShipped() returned %d definitions; want 10", len(definitions))
 	}
 	github := definitions["github"]
-	if github.Digest == "" || github.Metadata.Version != "3.0.0" || github.Spec.Credential.SecretKey != "token" {
+	if github.Digest == "" || github.Metadata.Version != "3.1.0" || github.Spec.Credential.SecretKey != "token" {
 		t.Fatal("GitHub definition metadata is incomplete")
 	}
 	for _, key := range []string{"github.repository.metadata.read", "github.issue.create", "github.issue.update"} {

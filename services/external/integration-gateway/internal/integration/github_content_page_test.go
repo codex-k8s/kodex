@@ -38,7 +38,7 @@ func githubPageFixtureAdapter(t *testing.T, file *github.RepositoryContent) (*Ad
 			t.Fatal("exact repository, commit, method or credential boundary changed")
 		}
 		body, err := json.Marshal(file)
-		if err != nil || len(body) > maximumResponseBytes {
+		if err != nil || len(body) > maximumGitHubProviderResponseBytes {
 			t.Fatalf("fixture exceeds the unchanged HTTP bound: size=%d err=%v", len(body), err)
 		}
 		return &http.Response{Request: r, StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(string(body)))}, nil
@@ -71,6 +71,7 @@ func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 		maximum       int
 	}{
 		{"instructions_45730_bytes", strings.Repeat("x", 45730), 2048},
+		{"source_over_projection_budget", strings.Repeat("x", 96<<10), 2048},
 		{"unicode", strings.Repeat("Я🙂e\u0301\n", 300), 7},
 		{"four_byte_runes", strings.Repeat("🙂", 9), 4},
 		{"empty", "", 2048},
@@ -130,7 +131,7 @@ func TestGitHubContentPagesRejectInvalidInput(t *testing.T) {
 		{"path_escape", func(in *githubCatalogInput) { in.Path = "../AGENTS.md" }},
 		{"long_path", func(in *githubCatalogInput) { in.Path = strings.Repeat("x", 1025) }},
 		{"negative_offset", func(in *githubCatalogInput) { in.OffsetBytes = -1 }},
-		{"oversized_offset", func(in *githubCatalogInput) { in.OffsetBytes = maximumResponseBytes + 1 }},
+		{"oversized_offset", func(in *githubCatalogInput) { in.OffsetBytes = maximumGitHubContentSourceBytes + 1 }},
 		{"continuation_without_sha", func(in *githubCatalogInput) { in.OffsetBytes = 1 }},
 		{"invalid_expected_sha", func(in *githubCatalogInput) { in.ExpectedSHA = "abc" }},
 		{"maximum_zero", func(in *githubCatalogInput) { in.MaximumBytes = github.Ptr(0) }},
@@ -156,6 +157,52 @@ func TestGitHubContentPagesRejectInvalidInput(t *testing.T) {
 	}
 }
 
+func TestGitHubContentPagesLargeSourcePreservesPinsAndDeliveryBudget(t *testing.T) {
+	for _, size := range []int{536156, maximumGitHubContentSourceBytes} {
+		t.Run(strconv.Itoa(size), func(t *testing.T) {
+			content := strings.Repeat("x", size)
+			file := githubPageFixtureFile(content, "docs/operations/large-source.md")
+			adapter, credential, calls := githubPageFixtureAdapter(t, file)
+			sourceHash := sha256.Sum256([]byte(content))
+			// Проверяется весь executable adapter, включая generated package
+			// input/output schema, а не только локальное разбиение строки.
+			for _, offset := range []int64{0, (64 << 10) + 3, int64(size - 2048), int64(size)} {
+				input := map[string]any{"path": file.GetPath(), "ref": githubPageFixtureCommit,
+					"offset_bytes": offset, "maximum_bytes": 2048}
+				if offset > 0 {
+					input["expected_sha"] = file.GetSHA()
+				}
+				page := githubPageFixtureRead(t, adapter, credential, input)
+				end := min(offset+2048, int64(size))
+				chunkHash := sha256.Sum256([]byte(content[offset:end]))
+				if page.Text != content[offset:end] || page.OffsetBytes != offset || page.NextOffsetBytes != end ||
+					page.Size != size || page.SHA != file.GetSHA() || page.CommitSHA != githubPageFixtureCommit ||
+					page.SourceDigest != "sha256:"+hex.EncodeToString(sourceHash[:]) ||
+					page.ChunkDigest != "sha256:"+hex.EncodeToString(chunkHash[:]) || page.EOF != (end == int64(size)) ||
+					!githubContentPageFitsEnvelope(page) {
+					t.Fatal("large source lost immutable pins, exact offset, EOF or native delivery budget")
+				}
+			}
+			if *calls != 4 {
+				t.Fatal("large source added a provider fallback or repeated a successful read")
+			}
+		})
+	}
+}
+
+func TestGitHubContentPagesLargeSourceDoesNotHideInvalidTail(t *testing.T) {
+	for _, tail := range []string{"\xff", "\x00"} {
+		file := githubPageFixtureFile(strings.Repeat("x", 96<<10)+tail, "AGENTS.md")
+		adapter, credential, calls := githubPageFixtureAdapter(t, file)
+		result, err := adapter.Execute(t.Context(), invocationRequest(t, adapter.definitions["github"],
+			"github.repository.content.read", map[string]any{"path": file.GetPath(), "ref": githubPageFixtureCommit}, credential))
+		assertGitHubPageError(t, err, "INTEGRATION_RESPONSE_INVALID")
+		if result.Summary != "" || *calls != 1 {
+			t.Fatal("invalid large source returned a partial page or retried a local validation refusal")
+		}
+	}
+}
+
 func TestGitHubContentPagesVerifyEntireSourceAndMetadata(t *testing.T) {
 	for _, fixture := range []struct {
 		name string
@@ -166,7 +213,7 @@ func TestGitHubContentPagesVerifyEntireSourceAndMetadata(t *testing.T) {
 		{"encoding", func(file *github.RepositoryContent) { file.Encoding = github.Ptr("none") }},
 		{"negative_size", func(file *github.RepositoryContent) { file.Size = github.Ptr(-1) }},
 		{"wrong_size", func(file *github.RepositoryContent) { file.Size = github.Ptr(file.GetSize() + 1) }},
-		{"oversized", func(file *github.RepositoryContent) { file.Size = github.Ptr(maximumResponseBytes + 1) }},
+		{"oversized", func(file *github.RepositoryContent) { file.Size = github.Ptr(maximumGitHubContentSourceBytes + 1) }},
 		{"bad_base64", func(file *github.RepositoryContent) { file.Content = github.Ptr("!") }},
 		{"invalid_sha", func(file *github.RepositoryContent) { file.SHA = github.Ptr("abc") }},
 		{"wrong_git_blob_sha", func(file *github.RepositoryContent) { file.SHA = github.Ptr(strings.Repeat("b", 40)) }},

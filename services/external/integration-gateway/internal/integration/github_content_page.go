@@ -16,6 +16,10 @@ const maximumGitHubContentPageBytes = 2048
 
 const maximumGitHubContentEnvelopeBytes = 8192
 
+// Полный UTF-8 источник имеет отдельный бюджет: страница и provider JSON
+// не определяют его размер. Contents API используется без download fallback.
+const maximumGitHubContentSourceBytes = 1 << 20
+
 type githubContentPage struct {
 	Path            string `json:"path"`
 	Type            string `json:"type"`
@@ -58,7 +62,7 @@ func validateGitHubContentPageInput(in githubCatalogInput) (int, error) {
 		maximum = *in.MaximumBytes
 	}
 	if len(in.Path) > 1024 || !validRepositoryPath(in.Path, false) || !sourceCommitPattern.MatchString(in.Ref) ||
-		in.OffsetBytes < 0 || in.OffsetBytes > maximumResponseBytes || maximum < utf8.UTFMax || maximum > maximumGitHubContentPageBytes ||
+		in.OffsetBytes < 0 || in.OffsetBytes > maximumGitHubContentSourceBytes || maximum < utf8.UTFMax || maximum > maximumGitHubContentPageBytes ||
 		in.ExpectedSHA != "" && !sourceCommitPattern.MatchString(in.ExpectedSHA) || in.OffsetBytes > 0 && in.ExpectedSHA == "" {
 		return 0, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
@@ -67,7 +71,7 @@ func validateGitHubContentPageInput(in githubCatalogInput) (int, error) {
 
 func projectGitHubContentPage(file *github.RepositoryContent, in githubCatalogInput, maximum int) (githubContentPage, error) {
 	if file == nil || file.GetPath() != in.Path || file.GetType() != "file" || file.GetEncoding() != "base64" ||
-		file.GetSize() < 0 || file.GetSize() > maximumResponseBytes || !sourceCommitPattern.MatchString(file.GetSHA()) {
+		file.GetSize() < 0 || file.GetSize() > maximumGitHubContentSourceBytes || !sourceCommitPattern.MatchString(file.GetSHA()) {
 		return githubContentPage{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	content, err := file.GetContent()
