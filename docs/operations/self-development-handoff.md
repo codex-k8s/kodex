@@ -10,6 +10,27 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 08:23 UTC: HEAD/remote/Draft1800
+`3e100ad9e3b8295987c5a00758c09e9ddfd3b868` + ROOT frozen16-file catalog
+integration и2docs DIRTY. Watcher2 зафиксированы и опубликованы;43 tests PASS.
+Recipient AGENT_CONFIGURATION implemented; CURRENT_CONFIGURATION own-only
+unchanged. Root CP3packages/callback/vet/Proto PASS, generated exactmatch;
+child exact frozen disposable PG44.382sPASS, publicwire oldconsumerPASS.
+Hot sourcehash2/serving CP382 f46c12ea и RC385 0fe179e8/symbolsPASS.
+Native acceptance NOT RUN. Важно: managed effective template отдельно от
+native published; при binding.effective=false native Publish НЕ переключает
+actualtemplate. Следующийhelpertask сначала readобоихsources иexistingmanaged
+ownerimpact/publish path, безскрытогоdetach/ручнойподмены.
+Chrome MCP screenshot/evaluate hangs; mutex mechanism proven, точнаяфаза/
+ROOT serverPID UNKNOWN. Chrome жив; не перезапускалисьlauncher/Chrome/MCP
+и чужие6/13/18 не менялись. Scoped sessionrestore требуется доnativeQA.
+Сначала commit/push catalog+2docs sameDraft1800, privatepublisher previous→3e,
+allowed add4newcatalogfiles+wiretest. ЗатемrestoreMCP→onefreshSYSTEMREAD с
+failurewatcher240s+ACK→rootcausefix→nativeManagereffectiveinstructionfix→NEWfull33.
+Full65/33/finalinternalPR OPEN, goalACTIVE, никакогоhostimplementation1796.
+
+## Предыдущий checkpoint08:10
+
 07.10.2026 08:10 UTC: HEAD/remote/Draft1800 exact
 `d8e47a5eb017046f8e827451ef90a5be38341bbb`, предыдущий checkpoint уже
 committed/pushed. ROOT новые watcher31 + existingACK12 PASS0.356s;

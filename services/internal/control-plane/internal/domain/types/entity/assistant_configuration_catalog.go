@@ -35,6 +35,13 @@ type AssistantConfigurationCatalogResponse struct {
 	ProjectIntegrationGrants                                                        []ProjectAssistantIntegrationGrantCatalogEntry
 	RecipientIntegrationGrants                                                      *AssistantRecipientIntegrationGrantCatalog
 	WorkflowConfiguration                                                           *AssistantWorkflowConfiguration
+	AgentConfiguration                                                              *AssistantAgentConfiguration
+}
+
+type AssistantAgentConfiguration struct {
+	AgentRef, ProjectRef, ConfigurationSHA256 string
+	Version                                   int64
+	ConfigurationJSON                         []byte
 }
 
 type AssistantWorkflowConfiguration struct {

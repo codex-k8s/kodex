@@ -202,6 +202,48 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 08:23 UTC — адресное чтение инструкции сотрудника и hot serving proof
+
+- Source `3e100ad9e3b8295987c5a00758c09e9ddfd3b868` + frozen16-file
+  AGENT_CONFIGURATION patch `e9e8c5bd…dda0ed`. Диагностический checkpoint3e
+  опубликован, remote/PR1800 exact SHA/Draft readback PASS. Первый publisher
+  timeout на readback не считался успехом: отдельный authoritative read
+  подтвердил SHA, затем идемпотентный повтор body/readback завершился PASS.
+- Каталог теперь выдаёт полный безопасный снимок только сотрудника текущего
+  AGENT context помощника SYSTEM/PROJECT: owner lease/fence/generation,
+  fresh actor/view/manage, organization/project и immutable/current version.
+  CURRENT_CONFIGURATION own-only не расширен; чужие и Workflow targets закрыты.
+  Новых RPC, grants, migrations и runner image нет. Native published и effective
+  managed instructions разделены, содержимое/пины/дайджесты не усечены.
+- ROOT regenerate Proto совпал byte-for-byte с frozen generated file:
+  SHA256 `77e91fca939c371549db8e3e6dc416941db3c9645fcfb3389f435baa8ad4ffd0`.
+  ROOT callback unit PASS3.122s; CP service/transport/repository unit
+  PASS0.243/0.583/0.837s; vet обеих областей exit0. Component tests без PG
+  штатно SKIP, не новый live PASS. ROOT Proto registry5/lint/build/codegen
+  PASS; remote rate limit использовал прежний exact local plugin fallback.
+- Child final frozen disposable PG PASS44.382s и public producer→unchanged
+  consumer PASS0.048/0.041s. Его два предыдущих PG fixture FAIL, отсутствие
+  Node в PATH и transient stale codegen не скрыты: исправлена оснастка,
+  production authority не ослаблялась. Отдельный новый cancel fixture NOT RUN.
+- Host/Pod source exactmatch: RC assistant_agent_configuration.go
+  `c8fc5ac3db850097ca1710ab38c244f1421ab6d9a85eae8717aac0659956acab`,
+  CP assistant_agent_configuration_catalog.go
+  `102904b80fbe8b5046522f0c2da4ec02faaac68c969cceec01843ba9599adf23`.
+  Serving binaries independently match build: RC PID385/SHA
+  `0fe179e851772bb000622cc90744f0bcc27b63a87d2be7da5d8de20d1322416c`
+  с castAssistantAgentConfiguration; CP PID382/SHA
+  `f46c12eaee536b1aaf6acd2920cbc3f166f6089d4bea9c94821d3465ae0a2307`
+  с assistantAgentConfigurationCatalogTx. Это local hot proof, не native acceptance.
+- Следующий native шаг обязан сначала проверить binding.effective: native
+  InstructionDraft/Publish сам не меняет managed PROMPT_TEMPLATE при false.
+  Использовать существующий managed impact/publish path, не скрытый detach,
+  не ручную подмену результата помощника и не расширение его полномочий.
+- Chrome live, но MCP scoped evaluate после screenshot не отвечает. Общий
+  mutex без AbortSignal/deadline способен блокировать очередь; конкретная
+  фаза UNKNOWN. Семь MCP соединены с общим launcher, exact ROOT PID UNKNOWN:
+  не выполнялись restart/kill и не менялись чужие вкладки. Native catalog
+  acceptance, live failure capture и новый full33 NOT RUN; goal ACTIVE.
+
 ### 07.10.2026 08:10 UTC — перепроверка внешних дуг и ранняя диагностика провайдера
 
 - Source/remote/Draft1800: `d8e47a5eb017046f8e827451ef90a5be38341bbb`.

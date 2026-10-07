@@ -112,6 +112,46 @@ Query/refresh не получают новую authority на shell, arbitrary M
 
 ### Адресное чтение Workflow и назначенных сотрудников
 
+`AGENT_CONFIGURATION` использует тот же leased catalog только для текущего
+`AGENT` context SYSTEM/PROJECT помощника. Запрос содержит собственный
+`assistant_ref` и точную пару `entity_kind=AGENT`, `entity_ref` сохранённого
+контекста; произвольный сотрудник, Workflow recipient, query, pagination и
+account/profile override запрещены. `CURRENT_CONFIGURATION` остаётся own-only.
+CP заново выводит actor из owner lease, проверяет source helper, organization/
+project, `agent.view` и допустимость `CREATE_INSTRUCTION_DRAFT` либо
+`UPDATE_AGENT` по `agent.manage`. Одно и то же намерение и agent version должны
+совпасть в immutable RuntimeRevision и свежей owner context projection.
+
+Typed `agent_configuration` несёт `agent_ref`, `project_ref`, OCC `version`,
+canonical JSON и SHA256 точных bytes. Закрытая модель сохраняет name, purpose,
+role, avatar, state, enabled и безопасные runtime labels. Native
+`publishedInstructions` и фактически выбранные `effectiveInstructions` отдельно
+содержат полный content, revision ref/number и digest; managed `PROMPT_TEMPLATE`
+выбирается тем же SQL, что штатный `GetEffectivePromptTemplate`. Binding ref/
+version/revision и effective flag не подменяют фактически выбранный шаблон.
+Native content ограничен 64KiB, managed template — 256KiB, весь snapshot —
+1MiB. Усечения и рендеринга исходного текста нет. Environment values, secrets,
+provider credentials и hidden runtime materialization в модель не входят.
+Consumer проверяет exact owner/context/version, закрытые поля и вложенные
+модели, digest текста и canonical bytes; повреждение не становится частичным
+успешным ответом. Чтение не заменяет существующие OCC/owner confirmation
+последующего `CREATE_INSTRUCTION_DRAFT` или `UPDATE_AGENT`.
+
+| Lifecycle адресного AGENT read | Авторитетный результат |
+| --- | --- |
+| Exact действующий SYSTEM/PROJECT helper и текущий AGENT | Один полный `REPEATABLE READ` owner snapshot |
+| Ordinary agent, чужой helper/entity/organization/project, Workflow context | Закрытый отказ без instruction payload |
+| Отзыв actor/view/manage, context version drift | Свежая eligibility отклоняет read |
+| Cancel/terminal/expiry/stale fence/generation | Прежний owner lease resolver отклоняет read |
+| Repeat/rejoin | Нет mutation, idempotency receipt, audit/domain event или новых grants |
+| Последующая подготовка/Apply | Прежние специализированные операции, immutable plan и owner/OCC проверки |
+
+Новый enum/message генерируется из Proto для CP и runtime-controller. Имя
+инструмента, RPC, transport permission и runner operation profile неизменны.
+Новый kind приходит в динамическом `tools/list` прежнего инструмента; публичная
+wire-проверка producer/consumer покрывает SYSTEM/PROJECT AGENT context без
+ослабления закрытого runner catalog и без изменения runner image.
+
 `WORKFLOW_CONFIGURATION` расширяет тот же leased configuration catalog:
 `assistant_ref` остаётся собственным помощником, а парные `entity_kind=WORKFLOW`
 и `entity_ref` выбирают только Workflow сохранённого контекста execution.

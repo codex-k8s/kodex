@@ -1949,6 +1949,7 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_PROJECT_INTEGRATION_GRANTS = 9;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS = 10;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_CONFIGURATION = 11;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_CONFIGURATION = 12;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -2008,6 +2009,7 @@ message AssistantConfigurationCatalogResponse {
   // Получатель разрешён из сохранённого контекста exact lease, не из request.
   AssistantRecipientIntegrationGrantCatalog recipient_integration_grants = 11;
   AssistantWorkflowConfiguration workflow_configuration = 12;
+  AssistantAgentConfiguration agent_configuration = 13;
 }
 
 message AssistantWorkflowConfiguration {
@@ -8606,4 +8608,13 @@ message RunSessionArchiveTask {
   int32 maximum_attempts = 5;
   // Закрытый producer whitelist; неизвестный сохранённый код становится UNKNOWN.
   string safe_error_code = 6;
+}
+
+message AssistantAgentConfiguration {
+  string agent_ref = 1;
+  string project_ref = 2;
+  int64 version = 3;
+  // Полная безопасная конфигурация только текущего AGENT context, не runtime materialization.
+  bytes configuration_json = 4;
+  string configuration_sha256 = 5;
 }

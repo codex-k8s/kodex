@@ -82,6 +82,14 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 					t.Fatal("missing exact recipient lease")
 				}
 				lease := leases[0]
+				if recipient.kind == "AGENT" {
+					testAssistantAgentConfigurationUnderLease(t, ctx, repository, service, owner, reader, lease, agent.Ref, unassigned.Ref, foreignHelperRef)
+				} else {
+					_, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
+					if !errors.Is(err, errs.ErrNotFound) {
+						t.Fatal("Workflow context read agent instructions")
+					}
+				}
 				runRef := turn.Turns[0].RunRef
 				defer func() {
 					run, err := service.GetRun(ctx, owner, runRef)
@@ -302,6 +310,10 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 					changed := execute(command.SetAgentEnabled, owner, "stale-recipient", &agent.Version, command.AgentInput{Ref: agent.Ref, Enabled: false})
 					if changed.Agent == nil {
 						t.Fatal("missing changed recipient")
+					}
+					_, agentReadErr := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
+					if !errors.Is(agentReadErr, errs.ErrNotFound) {
+						t.Fatal("agent instructions accepted stale context version")
 					}
 					if _, err := read(reader, stringMap(lease, "fence"), lease["generation"].(int64)); !errors.Is(err, errs.ErrNotFound) {
 						t.Fatal("accepted stale immutable recipient context")

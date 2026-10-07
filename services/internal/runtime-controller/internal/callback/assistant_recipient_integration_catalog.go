@@ -27,7 +27,7 @@ func castAssistantRecipientIntegrationCatalog(input runtimecontract.RunnerInput,
 	if !assistantRecipientIntegrationCatalogAvailable(input) || request.GetAssistantRef() != input.AgentRef || response == nil || !validAssistantCurrentReadMessage(response.ProtoReflect(), 0) ||
 		response.GetKind() != request.GetKind() || response.GetAssistantRef() != input.AgentRef || response.GetOrganizationRef() != input.OrganizationRef ||
 		response.GetScopeKind() != "PROJECT" || !validAssistantResourceRef(response.GetProjectRef()) || response.GetAssistantProfileRef() != "" ||
-		input.AssistantScope == runtimecontract.AssistantScopeProject && response.GetProjectRef() != input.ProjectRef || response.GetCurrentConfiguration() != nil || response.GetWorkflowConfiguration() != nil || len(response.GetEntries()) != 0 || len(response.GetProjectIntegrationGrants()) != 0 ||
+		input.AssistantScope == runtimecontract.AssistantScopeProject && response.GetProjectRef() != input.ProjectRef || response.GetCurrentConfiguration() != nil || response.GetWorkflowConfiguration() != nil || response.GetAgentConfiguration() != nil || len(response.GetEntries()) != 0 || len(response.GetProjectIntegrationGrants()) != 0 ||
 		response.GetNextOffset() < 0 || response.GetNextOffset() > 10000 || response.GetNextOffset() != 0 && response.GetNextOffset() != request.GetOffset()+10 {
 		return nil, invalid
 	}

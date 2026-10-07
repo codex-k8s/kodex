@@ -936,7 +936,7 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 	}
 	validKind := false
 	switch input.Kind {
-	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION", "PROJECT_INTEGRATION_GRANTS", "RECIPIENT_INTEGRATION_GRANTS", "WORKFLOW_CONFIGURATION":
+	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION", "PROJECT_INTEGRATION_GRANTS", "RECIPIENT_INTEGRATION_GRANTS", "WORKFLOW_CONFIGURATION", "AGENT_CONFIGURATION":
 		validKind = true
 	}
 	if !validKind || len(input.AssistantRef) < 8 || len(input.AssistantRef) > 128 || len([]rune(input.Query)) > 80 || input.Offset < 0 || input.Offset > 10000 ||
@@ -946,11 +946,14 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 	}
 	input.Query = strings.TrimSpace(input.Query)
 	if (input.EntityKind == "") != (input.EntityRef == "") || input.EntityKind != "" &&
-		(input.Kind != "RECIPIENT_INTEGRATION_GRANTS" && input.Kind != "WORKFLOW_CONFIGURATION" ||
+		(input.Kind != "RECIPIENT_INTEGRATION_GRANTS" && input.Kind != "WORKFLOW_CONFIGURATION" && input.Kind != "AGENT_CONFIGURATION" ||
 			input.EntityKind != "AGENT" && input.EntityKind != "WORKFLOW" || !validAssistantCatalogEntityRef(input.EntityRef)) {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
 	}
 	if input.Kind == "WORKFLOW_CONFIGURATION" && (input.EntityKind != "WORKFLOW" || input.Query != "" || input.Offset != 0) {
+		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
+	}
+	if input.Kind == "AGENT_CONFIGURATION" && (input.EntityKind != "AGENT" || input.Query != "" || input.Offset != 0) {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
 	}
 	if input.Kind == "CURRENT_CONFIGURATION" && (input.Query != "" || input.Offset != 0) {
