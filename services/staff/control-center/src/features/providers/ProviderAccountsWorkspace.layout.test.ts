@@ -86,4 +86,17 @@ describe("provider account layout", () => {
     );
     expect(lifecycle).toContain("props.account.deletion?.version");
   });
+
+  it("переносит длинный статус внутри ячейки, сохраняя индикатор и локальный scroll таблицы", () => {
+    expect(workspace).toMatch(
+      /\.provider-account-row :deep\(\.status-badge\)\s*\{[^}]*max-width: 100%;[^}]*white-space: normal;/,
+    );
+    expect(workspace).toMatch(
+      /\.provider-account-row :deep\(\.status-badge__dot\)\s*\{\s*flex-shrink: 0;/,
+    );
+    expect(workspace).toMatch(
+      /\.provider-account-list\s*\{[^}]*min-width: 0;[^}]*overflow: auto;/,
+    );
+    expect(workspace).toContain("min-width: 1120px;");
+  });
 });

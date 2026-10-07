@@ -1357,6 +1357,13 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
   font-size: 0.82rem;
 }
+.provider-account-row :deep(.status-badge) {
+  max-width: 100%;
+  white-space: normal;
+}
+.provider-account-row :deep(.status-badge__dot) {
+  flex-shrink: 0;
+}
 .provider-account-row td small {
   display: block;
   margin-top: 3px;

@@ -48,6 +48,11 @@ function messages() {
       title: "Запуски",
       queued: "Задача поставлена в очередь",
       graph: "Граф выполнения",
+      graphNodes: "Узлы: {count}",
+      graphEdges: "Связи: {count}",
+      runtimeProgress: {
+        workloadScheduled: "Задание передано исполнителю",
+      },
       activity: "Ход работы",
       context: "Контекст узла",
       workspaceTools: "Инструменты запуска",
