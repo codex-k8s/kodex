@@ -10,6 +10,36 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 21:04 UTC — восстановление цели и текущие ресурсы
+
+- Цель Full65 ACTIVE подтверждена через goal readback; дубликат не создаётся.
+  Автономное окно — до08.10 14:00 Саратов /10:00UTC, Chrome list_pages и
+  reload рабочей вкладки каждые5мин. Вкладка4 владельца не изменялась.
+- HEAD/remote/Draft1800 `75290a4a934b851cacd5da9710c7b3b8d2edbd0a`
+  EQUAL; bot identity и OPEN1797 подтверждены, mainb5f6fcde неизменен.
+- PASS current owner metadata read: SYSTEM/PROJECT помощники и шесть
+  сотрудников имеют model gpt-6.1-sol, все восемь environment ready=true,
+  blockers=[]; configuration/environment revision refs сохранены. SYSTEM image
+  sha256:46df7c9124eeeee3e80705f31cf909d89092b3ab8d6ec695d6c1e59efeebff68,
+  PROJECT/команда G5 sha256:f8b6081413a12095ee1dd84e5a78afa6547fd8b2519caddaec79ad5d1748041c.
+  SOFTWARE_CHANGE15/revision5 PUBLISHED, 33steps, published revision
+  wfv_EqR96za6ufj4wMoieQv_TIvI. Это metadata, не proof всех actual prompts.
+- INTAKE run_PQ7jploZn32FzIRNmcKhoVjp RUNNING, native content READ sequence259;
+  AGENTS/кодификация/delivery/testing EOF подтверждены опубликованным commentary,
+  полное QA-задание ещё читается. Новых failed tool events в прочитанном диапазоне
+  нет. Architect/Developer/reviews этого процесса пока NOT RUN. Старые terminal
+  roots не Retry/Resume, новый launch не выполнялся.
+- PASS Chrome screenshot graph и compact transcript: читаемые комментарии,
+  свёрнутые группы инструментов, собственная прокрутка, horizontal overflowfalse.
+  После reload realtime Connected, Console0. Session/bootstrap/graph/history
+  GET200. Ошибочный диагностический GET write-only environment-binding дал405;
+  проверка повторена по каноническому runtime-configuration GET200, это ошибка
+  оснастки, не дефект API. Никаких Send/Apply.
+- Cluster read: kodex-system49 Pods (27Running/18Succeeded/4Failed исторических),
+  все Running Ready; kodex-runtime2Running/Ready. Логи CP/gateway/controller
+  --since5m/--tail100 пусты; отсутствие новых строк не доказывает отсутствие
+  исторических ошибок. Full65/11/13/14/15 и final owner gate OPEN.
+
 ## Checkpoint 07.10.2026 20:56 UTC — новый Workflow и browser prefill
 
 - `3da17911dcda6fe11b8c2623f7b493778373f318` опубликован bot identity;
