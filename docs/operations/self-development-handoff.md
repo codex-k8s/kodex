@@ -10,6 +10,27 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 03:23 UTC: bootstrap PR1798 штатно MERGED; local/origin/GitHub main
+`b5f6fcde885c4e6369255a86559b3ed2c785043f`, exact source/Pod и repo-owned
+hot-reload verify PASS, 21 Deployment готовы. Пункт12 закрыт. Callback UX
+проверен: внешние скруглённые дуги не скрываются за карточками.
+
+Первый настоящий Manager `run_DJsFFxJh70uo11NfvQnfPWVg` сам прочитал #1796,
+PR/Context7 и запустил полный33 Workflow `run_SuW1o00uhBeAriPlgu8Vrnce`.
+INTAKE семантически BLOCKED: опубликованный stage allowlist содержит только
+platform keys и исключает own-role integration grants. Исходный root штатно
+CANCELLED в03:16:55, весь дочерний граф terminal; не Retry старую revision.
+PROJECT helper `run_F5S6m4PJ3m6VIyBujZxWpori` не подменил missing snapshot:
+native catalog не даёт target AGENT selector и полный Workflow snapshot.
+
+Текущая ветка `kodex-agent/issue-1797-post-bootstrap-qa` от свежего main.
+Далее: защищённый native catalog fix→адресные tests→hot reload/exact runner
+admission→PROJECT typed UPDATE_WORKFLOW только requiredCapabilityKeys→owner
+Apply/Validate/Publish→новый Manager/full33. Whole65/33 OPEN, finalPR не merge.
+Own Chrome5 reload/navigation03:21, чужие6/13 не трогать. GitHub checks0 не PASS.
+
+## Предыдущий checkpoint03:10
+
 07.10.2026 03:10 UTC: bootstrap acceptance §44/45 сверена; пункты2–5/8–10
 отмечены по фактическим доказательствам. На source53143869 frozen3frontend
 файла сворачивают служебные квитанции; 119unit/lint/format/types/build PASS,

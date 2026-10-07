@@ -19,9 +19,10 @@ updated: 2026-10-06
 Исходный `main`: `d43bd605ec7b41335ec038a84a896b1ab5b0d189`, PR #1790 уже слит.
 Связанное Issue: https://github.com/codex-k8s/kodex/issues/1797.
 Ветка: `kodex-agent/issue-1797-self-development-bootstrap`.
-Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
-Все новые платформенные изменения — в одном сквозном bootstrap PR как явно
-разрешённое владельцем исключение из правила одного deployable unit.
+Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (слит 07.10.2026).
+Bootstrap-изменения вошли в один сквозной PR как явно разрешённое владельцем
+исключение из правила одного deployable unit. Найденные после merge дефекты
+сохраняются отдельной веткой от нового main и привязаны к той же #1797.
 Данный документ фиксирует дополнения владельца; полный сценарий сохранён
 в `docs/qa/full-qa-task.md` и выполняется целиком. Краткая точка продолжения —
 [точка продолжения](self-development-handoff.md).
@@ -116,7 +117,7 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
 - [ ] 11. SOFTWARE_CHANGE: Manager → Architect → Developer → параллельные
   Documentation/Security/Lexical reviews → fixes/re-review → final Manager.
   Проверить небольшой disposable delegated run до настоящей Issue.
-- [ ] 12. При bootstrap acceptance зафиксировать и автономно слить bootstrap
+- [x] 12. При bootstrap acceptance зафиксировать и автономно слить bootstrap
   PR, обновить стенд на свежий main и повторно сверить созданные ресурсы,
   migrations/source/Pod/image/runtime/realtime и prompt pins.
 - [ ] 13. Manager выбирает #1796, если актуальна и имеет поддерживаемый
@@ -157,6 +158,55 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 | UI consumer acquire/release | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию |
 
 ## Журнал
+
+### 07.10.2026 03:23 UTC — bootstrap merge и первый настоящий SOFTWARE_CHANGE
+
+PR #1798 штатно переведён из Draft и слит squash без admin bypass на точном
+head `0e3b8efec1e6dd5d2f93710b90e2ac87f516dc51`. Новый `main`:
+`b5f6fcde885c4e6369255a86559b3ed2c785043f`; local/origin/GitHub readback
+совпали. GitHub checks отсутствовали; это не CI PASS. Пункт 12 завершён.
+Все 21 Deployment готовы; repo-owned hot-reload verify PASS. Source/Pod hashes
+совпали: runtime context `fd3736b6…170`, preview context `c4047c2a…d79`,
+RunTranscript `97fb7d4e…0b6`. Tree миграций совпадает с проверенным bootstrap
+head; новой миграции после merge нет. SYSTEM/PROJECT helper, шесть сотрудников,
+окружения, точные admitted image digests, опубликованные инструкции и scoped
+GitHub/Context7 grants повторно прочитаны штатным API.
+
+Manager `run_DJsFFxJh70uo11NfvQnfPWVg` прочитал актуальную #1796, список PR
+и Context7, затем сам вызвал `launch_workflow`. Настоящий root
+`run_SuW1o00uhBeAriPlgu8Vrnce` создал граф 33 этапов. Ранние provider ACK
+Manager, координатора и INTAKE captured; input/inbox и instructions/file
+EQUAL, exact image/Pod pins подтверждены. Coordinator имеет grants0 как
+оркестратор. INTAKE получил cap3/grants0: `requiredCapabilityKeys` этапа
+содержали только platform keys и закономерно исключили собственные
+GitHub/Context7 grants сотрудника. Это неверная конфигурация процесса;
+runtime attenuation не ослабляется. SUCCEEDED технического этапа не означает
+семантический PASS: его результат был BLOCKED из-за отсутствующего каталога.
+
+В 03:16:55 штатный CANCEL исходного Manager закрыл весь дочерний граф:
+workflow CANCELLED, 36 nodes — 33 CANCELLED и 3 уже SUCCEEDED, активных нет.
+Неподтверждённые эффекты не повторялись, старый immutable run не retry.
+Для новой revision PROJECT helper попросили подготовить один UPDATE_WORKFLOW,
+меняющий только stage capability allowlists с сохранением graph/keys/gates.
+Его `run_F5S6m4PJ3m6VIyBujZxWpori` выявил пробел native catalog: инструмент
+не позволяет выбрать recipient AGENT и получить полный Workflow snapshot.
+План не выдуман и ресурсы не изменены. Исправление этого защищённого read path
+ведётся на ветке `kodex-agent/issue-1797-post-bootstrap-qa`; после него нужно
+повторить typed plan, owner Apply→Validate→Publish и новый Manager launch.
+Пункты 11, 13–15 остаются OPEN; полный QA не завершён.
+
+UX ответа дочернего запуска: callback теперь идёт внешней плавной дугой над
+карточками; несколько ответов разведены по отдельным полосам, bounds включают
+дугу. На слитом main в Chrome показаны именно внешние пути, карточки не
+перекрывают верхний участок. Screenshot/Console0/relevant HTTP200 PASS.
+Повторный `run-graph-layout.test.ts`: 13/13 PASS, 0.775s, production source
+на `b5f6fcde`; изменены только два документа журнала. Один последующий
+ERR_NAME_NOT_RESOLVED возник в host-диагностике: generated SDK вызван сразу
+после navigation, до настройки runtime base URL, и использовал example origin.
+После загрузки приложения штатные UI/API requests HTTP200; это не дефект
+пользовательского запроса и не скрывается как полностью чистый Console.
+Обзор всех 36 узлов закономерно уменьшает масштаб; это не проверка читаемости
+текста при рабочем zoom. Чужие вкладки не затрагивались.
 
 ### 07.10.2026 03:10 UTC — bootstrap acceptance и компактная история файлов
 
