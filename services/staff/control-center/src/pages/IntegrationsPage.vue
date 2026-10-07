@@ -329,6 +329,19 @@ const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");
 const editingConnection = ref<IntegrationConnection>();
 const credentialConnection = ref<IntegrationConnection>();
 const detailsConnection = ref<IntegrationConnection>();
+const detailsCapabilitiesExpanded = ref(false);
+const visibleDetailsCapabilities = computed(() => {
+  const capabilities = detailsConnection.value?.capabilities ?? [];
+  return detailsCapabilitiesExpanded.value
+    ? capabilities
+    : capabilities.slice(0, 5);
+});
+watch(
+  () => detailsConnection.value?.ref,
+  () => {
+    detailsCapabilitiesExpanded.value = false;
+  },
+);
 const mailboxCredentialBusy = ref(false);
 const mailboxConfigurationBusy = ref(false);
 const mailboxConfigurationPanel = ref<{ canClose(): Promise<boolean> }>();
@@ -1361,9 +1374,15 @@ onBeforeUnmount(() => {
             <p v-if="!detailsConnection.capabilities.length">
               {{ $t("integrations.noCapabilities") }}
             </p>
-            <ul v-else class="connection-details__capabilities">
+            <ul
+              v-else
+              :id="`${fieldPrefix}-capabilities`"
+              class="connection-details__capabilities"
+              tabindex="0"
+              :aria-label="$t('integrations.capabilities')"
+            >
               <li
-                v-for="capability in detailsConnection.capabilities"
+                v-for="capability in visibleDetailsCapabilities"
                 :key="capability.key"
               >
                 <strong>{{ capability.name }}</strong>
@@ -1374,7 +1393,29 @@ onBeforeUnmount(() => {
                 <p>{{ capability.description }}</p>
               </li>
             </ul>
+            <button
+              v-if="detailsConnection.capabilities.length > 5"
+              class="button connection-details__capabilities-toggle"
+              type="button"
+              :aria-expanded="detailsCapabilitiesExpanded"
+              :aria-controls="`${fieldPrefix}-capabilities`"
+              @click="
+                detailsCapabilitiesExpanded = !detailsCapabilitiesExpanded
+              "
+            >
+              {{
+                detailsCapabilitiesExpanded
+                  ? $t("integrations.collapseCapabilities", {
+                      count: detailsConnection.capabilities.length,
+                    })
+                  : $t("integrations.showAllCapabilities", {
+                      count: detailsConnection.capabilities.length,
+                    })
+              }}
+            </button>
           </section>
+        </div>
+        <template #actions>
           <div class="connection-details__actions">
             <button
               v-if="detailsConnection.nextActions.includes('UPDATE')"
@@ -1398,7 +1439,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               v-if="detailsConnection.nextActions.includes('TEST')"
-              class="button"
+              class="button button--primary"
               type="button"
               :disabled="!!commandRef"
               @click="command(detailsConnection, 'TEST')"
@@ -1433,7 +1474,7 @@ onBeforeUnmount(() => {
               {{ $t("integrations.manageGrants") }}
             </button>
           </div>
-        </div>
+        </template>
         <InteractionIdentitiesPanel
           v-if="detailsConnection.definitionKey === 'mattermost'"
           :key="detailsConnection.ref"
@@ -1833,12 +1874,16 @@ onBeforeUnmount(() => {
 .connection-details__capabilities {
   display: grid;
   gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .connection-details__capabilities li {
-  padding: 10px;
+  min-width: 0;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -1850,10 +1895,31 @@ onBeforeUnmount(() => {
   margin-top: 5px;
   color: var(--muted);
 }
+.connection-details__capabilities-toggle {
+  margin-top: 8px;
+}
 .connection-details__actions {
   display: flex;
+  width: 100%;
+  min-width: 0;
   flex-wrap: wrap;
   gap: 8px;
+}
+.connection-details__actions .button {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .connection-details__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .connection-details__facts div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
 }
 .credential-failure {
   display: grid;

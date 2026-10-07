@@ -94,4 +94,64 @@ describe("IntegrationsPage layout", () => {
     expect(pageSource).not.toContain("Публичные настройки");
     expect(pageSource).not.toContain("Доступных возможностей пока нет.");
   });
+
+  it("показывает первые пять возможностей с доступным раскрытием полного списка", () => {
+    expect(pageSource).toContain(
+      "const detailsCapabilitiesExpanded = ref(false)",
+    );
+    expect(pageSource).toContain(
+      "const visibleDetailsCapabilities = computed(",
+    );
+    expect(pageSource).toContain("capabilities.slice(0, 5)");
+    expect(pageSource).toContain(
+      'v-for="capability in visibleDetailsCapabilities"',
+    );
+    expect(pageSource).toContain(
+      ':aria-expanded="detailsCapabilitiesExpanded"',
+    );
+    expect(pageSource).toContain(
+      ':aria-controls="`${fieldPrefix}-capabilities`"',
+    );
+    expect(pageSource).toContain("integrations.showAllCapabilities");
+    expect(pageSource).toContain("integrations.collapseCapabilities");
+    expect(pageSource).toContain("detailsConnection.capabilities.length > 5");
+  });
+
+  it("держит главные действия в штатном footer вне прокручиваемых сведений", () => {
+    const modal = pageSource.slice(
+      pageSource.indexOf('v-if="detailsConnection"'),
+      pageSource.indexOf('v-if="dialog && selectedDefinition"'),
+    );
+    const footer = modal.slice(modal.indexOf("<template #actions>"));
+    expect(footer).toContain('class="connection-details__actions"');
+    expect(footer).toContain("detailsConnection.nextActions.includes('TEST')");
+    expect(footer).toContain("@click=\"command(detailsConnection, 'TEST')\"");
+    expect(footer).toContain(
+      "canConfigureCredential(detailsDefinition, detailsConnection)",
+    );
+    expect(footer).toContain(
+      "detailsConnection.nextActions.includes('MANAGE_GRANTS')",
+    );
+    expect(footer).toContain(':disabled="!!commandRef"');
+    expect(modal.indexOf('v-for="capability')).toBeLessThan(
+      modal.indexOf("<template #actions>"),
+    );
+    expect(modal).toContain('@close="closeConnectionDetails"');
+    expect(modal).toContain(
+      ':busy="mailboxCredentialBusy || mailboxConfigurationBusy"',
+    );
+  });
+
+  it("ограничивает высоту раскрытого списка и переносит footer на мобильном экране", () => {
+    const list = pageSource.match(
+      /\.connection-details__capabilities\s*\{([^}]+)\}/,
+    )?.[1];
+    expect(list).toContain("max-height: 360px;");
+    expect(list).toContain("overflow-y: auto;");
+    expect(pageSource).toContain("@media (max-width: 600px)");
+    expect(pageSource).toContain(
+      "grid-template-columns: repeat(2, minmax(0, 1fr));",
+    );
+    expect(pageSource).toContain(".connection-details__actions .button");
+  });
 });
