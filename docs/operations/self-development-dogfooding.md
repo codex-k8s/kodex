@@ -10,6 +10,47 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 19:01 UTC — история без повторных context projections
+
+Source/remote/Draft1800 `3745da7ef088f3e4966624434bf6574596870b7b`
+EQUAL; новый CP пакет пока working tree. Main `b5f6fcde` неизменен.
+Checklist11/13/14/15 и полный65 остаются OPEN.
+
+- Доказанная причина initial history timeout: одинаковый fresh context
+  вычислялся для каждого разговора (~62ms), page100 не укладывалась в5s.
+  Варианты: дедупликация exact tuple в снимке, отдельная migration общей
+  функции или уменьшение страницы. Выбран первый — устраняет причину без
+  изменения контракта, timeouts и authority.
+- PASS local: исходные actor/org/project/filter/cursor guards применены до
+  context CTE; exact organization/project/kind/ref дедуплицируются в том же
+  snapshot при неизменных actor/authority/evaluated_at. Fresh eligibility
+  и INNERJOIN остаются до LIMIT, hidden context не занимает страницу.
+  Новых migrations, contracts и fallback нет.
+- PASS ROOT canonical disposable PostgreSQL subset34.725s:
+  fresh context authority, search/archive/actor cursor; projection loops2
+  для5 conversations/2 contexts; page2 без дублей и пропусков, fresh version,
+  revocation перед LIMIT; полные PROJECT profiles и SYSTEM project scope.
+  Compile/unit/format/diff PASS; Context7 PostgreSQL18 MATERIALIZED проверен.
+- PASS runtime: SQL host/Pod
+  `1cf90e8a95ab1557a298b84f96910f339d0c76d8eed2fe3718e6b30fbc881a12`
+  EQUAL, actual serving PID3976 и independent Go1.26.6 executable
+  `b147a14d5a7be3f85b55804c4cb268459e6ec6e9cf72f558a21c06636ce64f28`
+  EQUAL. Первая scratch build FAIL (directory отсутствовала, read-only FS
+  закрыто отклонила output, /main не создан), исправленный bounded build PASS.
+- PASS live: owner GET page100 HTTP200/2240ms,100items+nextPage.
+  Read-only diagnostic SQL101rows1052ms/20projections вместо timeout4s.
+  N+1 вложенных reads, старый401 и полный reconnect ещё не объявлены исправленными.
+- PASS Manager restoration: только прежние19 grants, diff enabledfalse→true,
+  NONE/[] сохранены, native plan `pln_Dn6a8Cg4bWZ1_g_k2WVOe9t8`
+  VALID2→APPLIED3, receipt `rct_DmvxMtqtwgkccT3QFduPft-1`.
+  Connection295/40enabled = own21+Manager19; остальные80 ещё отключены.
+  Первый ход `run_JWeJ_TK3u173dFaEUrHtXpI4` semantic BLOCKED из-за
+  неверного INTEGRATION_GRANTS в задании ROOT, не дефект платформы.
+  Follow-up `run_Zm9EaYcIn6C0bJRS4fUTLfUy` с существующим
+  RECIPIENT_INTEGRATION_GRANTS прошёл EOF и создал план.
+- NOT RUN: остальные80 grants, новый native READ536156B до EOF,
+  полный Manager/Architect/Developer/reviews/fixes/READY и остаток65 QA.
+
 ## Checkpoint 07.10.2026 18:46 UTC — GitHub3.1 подключён, собственные права восстановлены
 
 На базе `156af9f91644264bf22d87bef15bf59e989f6f22` (remote/Draft1800

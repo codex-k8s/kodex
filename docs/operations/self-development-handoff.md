@@ -10,6 +10,37 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 19:01 UTC
+
+HEAD/remote/Draft1800 `3745da7ef088f3e4966624434bf6574596870b7b`
+EQUAL: frontend prefill и exact forward UI credential fixes опубликованы.
+Main `b5f6fcde` неизменен, полный65 и checklist11/13/14/15 OPEN.
+
+План Manager19 `pln_Dn6a8Cg4bWZ1_g_k2WVOe9t8` Validate VALID2,
+Apply APPLIED3/receipt `rct_DmvxMtqtwgkccT3QFduPft-1`;
+connection295/40enabled = собственные21+Manager19. Никакого расширения прав.
+Первый запрос ошибочно требовал несуществующий INTEGRATION_GRANTS: semantic
+BLOCKED без эффектов. Адресный follow-up с существующим
+RECIPIENT_INTEGRATION_GRANTS создал правильный план, platform fix не требовался.
+Следующий Developer24 через текущий AGENT контекст; остальные80 выключены.
+
+CP пакет в working tree: точные context tuples вычисляются один раз внутри
+свежего снимка списка разговоров. Actor/org/project/filter/cursor guards и
+eligibility до LIMIT сохранены; новых migrations/contracts/timeouts нет.
+ROOT disposable PostgreSQL subset PASS34.725s (history/actor cursor,
+fresh exact authority, actual projection loops2/5 dialogs, page2/revocation,
+полные PROJECT profiles и SYSTEM project scope). Host/Pod SQL SHA256
+`1cf90e8a95ab1557a298b84f96910f339d0c76d8eed2fe3718e6b30fbc881a12` EQUAL.
+Actual serving PID3976 и independent Go1.26.6 trimpath binary SHA256
+`b147a14d5a7be3f85b55804c4cb268459e6ec6e9cf72f558a21c06636ce64f28` EQUAL.
+Первая independent build попытка FAIL из-за отсутствующего scratch directory;
+read-only root FS отклонила /main, файл не создан. Исправленный fail-fast
+bounded build в существующем workload cache PASS.
+Live page100 HTTP200/2240ms/100items+nextPage. SQL diagnostic101rows1052ms,
+20 unique projections вместо101; Context7 PostgreSQL18 MATERIALIZED проверен.
+Это исправляет доказанный initial SELECT path; nested N+1, поздний401 и
+прочие причины1833 не объявлены устранёнными. Новые visual/rejoin checks впереди.
+
 ## Checkpoint 07.10.2026 18:40 UTC
 
 Сохраняется автономная цель полного QA до 08.10.2026 14:00 Саратов
