@@ -721,7 +721,8 @@ func TestDelegationToolExposesNamedServerOwnedTargets(t *testing.T) {
 				target.WorkflowStepKey, target.WorkflowStepName = "implement", "Разработка"
 			}
 			tool := delegationTool([]runtimecontract.RunnerDelegationTarget{target})
-			description := tool["description"].(string)
+			properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+			description := properties["target_agent_ref"].(map[string]any)["description"].(string)
 			_, encoded, found := strings.Cut(description, delegationTargetsDescriptionPrefix)
 			var metadata []map[string]string
 			if !found || json.Unmarshal([]byte(encoded), &metadata) != nil || len(metadata) != 1 {
@@ -733,7 +734,6 @@ func TestDelegationToolExposesNamedServerOwnedTargets(t *testing.T) {
 				strings.Contains(description, "private-") {
 				t.Fatal("delegation identity metadata lost its target or leaked instructions")
 			}
-			properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
 			expectedFields := 4
 			if workflow {
 				expectedFields = 6
@@ -743,6 +743,29 @@ func TestDelegationToolExposesNamedServerOwnedTargets(t *testing.T) {
 				t.Fatal("delegation metadata changed the server-owned target or step boundary")
 			}
 		})
+	}
+}
+
+func TestDelegationToolDescriptionStaysBoundedForManyTargets(t *testing.T) {
+	t.Parallel()
+	targets := make([]runtimecontract.RunnerDelegationTarget, 128)
+	for index := range targets {
+		targets[index] = runtimecontract.RunnerDelegationTarget{
+			Ref: fmt.Sprintf("agt_fixture_%03d", index), Name: strings.Repeat("Я", 160),
+			Purpose: strings.Repeat("Я", 240), RoleDescription: strings.Repeat("Я", 240),
+		}
+	}
+	tool := delegationTool(targets)
+	if len(tool["description"].(string)) > 2000 {
+		t.Fatal("delegation tool description exceeds the runner readiness limit")
+	}
+	properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+	field := properties["target_agent_ref"].(map[string]any)
+	_, encoded, found := strings.Cut(field["description"].(string), delegationTargetsDescriptionPrefix)
+	var metadata []map[string]string
+	if !found || json.Unmarshal([]byte(encoded), &metadata) != nil || len(metadata) != len(targets) ||
+		len(field["enum"].([]string)) != len(targets) {
+		t.Fatal("bounded delegation description lost allowed target metadata")
 	}
 }
 

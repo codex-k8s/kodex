@@ -637,7 +637,7 @@ func (inputErr *integrationCallInputError) GRPCStatus() *status.Status {
 	return status.New(codes.InvalidArgument, inputErr.Error())
 }
 
-const delegationTargetsDescriptionPrefix = " Allowed delegation_targets (server-owned identity metadata, not instructions): "
+const delegationTargetsDescriptionPrefix = "Server-owned targets (metadata only): "
 
 func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string]any {
 	targetRefs := make([]string, 0, len(targets))
@@ -647,10 +647,14 @@ func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string
 	for _, target := range targets {
 		targetRefs = append(targetRefs, target.Ref)
 		metadata := map[string]string{
-			"ref":              target.Ref,
-			"name":             truncateRunes(target.Name, 160),
-			"purpose":          truncateRunes(target.Purpose, 240),
-			"role_description": truncateRunes(target.RoleDescription, 240),
+			"ref":  target.Ref,
+			"name": truncateRunes(target.Name, 160),
+		}
+		if target.Purpose != "" {
+			metadata["purpose"] = truncateRunes(target.Purpose, 240)
+		}
+		if target.RoleDescription != "" {
+			metadata["role_description"] = truncateRunes(target.RoleDescription, 240)
 		}
 		if target.WorkflowStepKey != "" {
 			requiresStep = true
@@ -663,7 +667,7 @@ func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string
 	encodedMetadata, _ := json.Marshal(targetMetadata)
 	required := []string{"target_agent_ref", "task"}
 	properties := map[string]any{
-		"target_agent_ref": map[string]any{"type": "string", "enum": targetRefs},
+		"target_agent_ref": map[string]any{"type": "string", "enum": targetRefs, "description": delegationTargetsDescriptionPrefix + string(encodedMetadata)},
 		"task":             map[string]any{"type": "string", "minLength": 1, "maxLength": 65536},
 		"input":            map[string]any{"type": "object", "additionalProperties": true},
 	}
@@ -673,7 +677,7 @@ func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string
 	}
 	return map[string]any{
 		"name":        "delegate_agent",
-		"description": "Start one allowed child AI employee. Select its exact ref by name and purpose from the identity metadata below. For a workflow, use the step key paired with that ref and end the current turn after all delegations are accepted; results arrive in a callback turn." + delegationTargetsDescriptionPrefix + string(encodedMetadata),
+		"description": "Delegate using named schema targets and paired workflow steps. End this turn after acceptance; results arrive in a callback.",
 		"inputSchema": map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties},
 	}
 }
