@@ -202,6 +202,134 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 06:50–06:59 UTC — helper G5, SYSTEM promotion и квитанции
+
+Source137058d9 плюс ограниченные callback/UI changes; commit этих изменений
+ещё NOT RUN. PROJECT helper draft renvd_a4YEioyE14AdRR7nCBRBF2PS штатно
+Validate200 VALID2 после свежего OIDC06:55, digestf1d75600…1afe9ca8.
+План публикации содержит ровно одного own helper, binding6; screenshot PASS.
+Publish один раз, draftPUBLISHED3, ENVversion7/revision8,
+renvv_1FuSvesuPxRs8iNCRed_hV5B/digest совпал. Runtime configuration GET200
+helperbinding7/versionRef совпал; только image G5 и прежние tools сохранены.
+Диагностический ошибочный host GET несуществующего вложенного drafts endpoint
+вернул404; это не приложение и не скрытый PASS Console. После навигации Console0.
+
+SYSTEM G11 admission2 ACCEPTED, native promotion выполнен один раз.
+Fresh GET200 activeArtifactimgart_gbJS3AmgR-GWhoGTjQ6wX2kN/version10
+ACCEPTED/PROMOTED, manifest46df7c91…eeff68. Новый global conversation
+cnv_VJdRdCJHvbojjpZt40A-aONT, turntrn_gVqLLSRWJbqywpnpvqrD3ajE,
+run_dwA2SDxpxx-SRIQ9gkj3ILvF SUCCEEDED/version2: только own SYSTEM image-only
+planpln_fBYHTmzjkeE9mF9FdUJ0yysN/rev1/baseVersion25. Validate200 VALID2,
+Apply200 APPLIED3, receiptrct_ldnpviX7xylQ_YUJAu8mytiJ создал
+renvd_X2p-hjEWicaFvsUmKLDsg1vI/DRAFT1. После freshOIDC07:02 ENV
+Validate200 VALID2/digest92b94a5643a12b96d3620ad104dcdac1ffc45998cc74a14033a6e520e0d735ae.
+Native impact содержит толькоSYSTEM/binding5; screenshot PASS. Publish один
+раз: draftPUBLISHED3, ENVversion26/revision26,
+renvv_p7yzbFDz0Pu6hqjwXwu6_jRc. RuntimeconfigGET200 binding6/versionRef и
+ENV digest совпали. Duplicate build/risk/promotion/Apply не было.
+
+Callback receipt implementation FROZEN7files: private proof, прежний JSON wire,
+канонические15 whitelist fields≤2000bytes, без content/name/rawargs/headers.
+Agent full callback unit3.190s, vet/gofmt PASS; первоначальный дополнительный
+race build отказал по no-space в /tmp, безопасный повтор в собственном /var/tmp
+PASS11.214s. ROOT full callback unit3.174s PASS, diffcheck PASS.
+ROOTvet PASS; hot-reload source delivery PASS: PodUID
+38269def-50fc-402e-ab6e-b876424d929a/Ready1, четыре production hashes
+равны host, runningPID459/build-main SHA
+d5d36271a3e42f8810c29a4f706ce852f17bbe5346160277ce2453ef5b13a7f4.
+Private receipt symbol присутствует, binarymtime новее productionfiles.
+Deployment annotation0d43 остаётся историческим render; это hot source proof,
+не новый immutable image. Live receipt/EOF пока NOT RUN.
+
+UX: stale вложенный context восстановлен native Escape, затем exact drawer
+close. Прежний screenshot не доказывает inert как actual причину, но source
+имеет stale context при inert transition; минимальный synchronous watcher
+закрывает context доplan/form/move. Agent RED3→GREEN43/43, ESLint/Prettier/
+forcedvue-tsc PASS; ROOT43/43 PASS637ms, productionbuild PASS9.63s
+(сохраняется advisory о chunks>500kB, лимит предупреждения не повышен).
+Прежний temporarylintFAIL в новом тесте исправлен, повтор PASS.
+Широкие внешние callback дуги уже проверены в графе на05:18; это не новая
+непроверенная реализация. Full65/full33 OPEN; цель остаётся ACTIVE.
+
+### 07.10.2026 06:34–06:47 UTC — SYSTEM G11 и Developer G5
+
+Source137058d9 remote/Draft1800 exact readback PASS. Первый publish process
+завершился FAIL/readback после push; inspect-only доказал exact remote/PR137058,
+body ещё прежний. Повтор publisher не делал второй push и завершил только
+обычный body update/readback PASS. Никакого force/main/merge.
+
+Native global SYSTEM run_NtLhopH70zVQqgJtgisnuOp- завершён; DRAFT
+pln_VQ0MG4-zW28znOkYyb0vOvy_ rev1 ровно UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
+target own ORGANIZATION recipe/version16. Standard base5c49c8f4→2d1efe7f,
+spec9b1fac6d→de4c0770, остальные значения наследуются. Validate200 VALID2,
+Apply200 APPLIED3: recipe17/G11, единственный build
+imgbld_x1LsI0GVq0wbLb6ugYx0StIS/attempt1 COMPLETED12.
+Candidate imgart_gbJS3AmgR-GWhoGTjQ6wX2kN, exact manifest
+sha256:46df7c9124eeeee3e80705f31cf909d89092b3ab8d6ec695d6c1e59efeebff68,
+provenanceb8c3fb97. Initial admission REJECTED; полный reportREADY/complete,
+projection65bd974b7a9faece0c0d7968d848eaeca9856b0ab9ee25e51d112f4a46ee7b59,
+vulnerability evidence6114a492, policy1/a0ead18a; counters4640/2938/2315/459.
+blockingOnly READ200 ровно2HIGH undici6.27.0 иtar7.5.19/пустой cursor.
+Native local-QA-only owner ACCEPT_RISK imgrisk_qtYDy3BsUA3ZUpn5pRb3wkWT
+принят; exact report/image показаны, reason обязателен, screenshot compact PASS.
+Fresh admission2 imgadm_HWzxp0u_EbMIPQpAoHgXJhj1/fence3 CLAIMED/version2.
+Promotion/SYSTEM ENV ещё NOT RUN; старый receipt a8feccbb сохранён.
+
+Native Developer plan run_RYA3NeZ_1_HmAhE-1Dwuin9l,
+conversationcnv_4htsXFKkjokKnDcs-I9zJClY,
+pln_n4D4DG7UtL_CItDyWaGU9lfp rev1 target selfdev-write/renv_NjHA7WWnyjCtNggYCTdLeV5W
+expectedVersion4, только oldG4→newG5. Первый combined catalog query получил
+TOOL_UNAVAILABLE; отдельные schema/catalog reads и plan последовательно успешны.
+Validate200 VALID2; один stale UID исчез до request, readbackVALID/noeffect;
+fresh click Apply200 APPLIED3 создал единственный draft
+renvd_JnkjxsLnv_YFavY8JMPMUb_q, tools38/secretbinding1, base4.
+ENV validate запросил штатную свежую OIDC owner authentication; draft остался
+DRAFT1, не было слепого повторного effect. После native SSO06:39 Validate200
+VALID2/digeste01a8b281d203ff979bcd96ea0eb5ed10500e6f75b422d2a544c9d7b8a2ebb8e.
+Impactrvip_dNzFu6m3mYTBnB0afPtym_LL201 содержит толькоDeveloper, checkboxselected;
+screenshot compact PASS. Publish200 один раз, ENVversion5/revision5,
+renvv_5x2-uyWjnYR-q82aOz9wHPEG, digest совпал. Impact READ200 APPLIED,
+consumeragt_pWHh9efzn_Ug0qYiMdVlqjeb/resultbinding6/точнаяrev совпали;
+его runtimeconfigREAD200 binding6/imageG5/f8b60814/tools38 PASS. Console0 послеSSO.
+
+PROJECT own image-only plan run_HQXbmQqezHUc7A7PviYT7opD,
+conversationcnv_H29rTh-tf_PvNuYoDLyKHdHT,
+pln_AZ7az1jFOgFXtMK3RxZUPc74 rev1 target ownENVrenv_zycHL70M8UYGvTAU_W6fgvaB/v6.
+projectAssistantRef разрешён сервером, не передавался environmentRef;
+Validate200 VALID2; Apply200 APPLIED3, receipt
+rct_FnKk9TAMQvizg57f643KH3Y2 создал draft
+renvd_a4YEioyE14AdRR7nCBRBF2PS/DRAFT1/baseVersion6, tools38.
+Native EOF/full33 NOT RUN, full65 OPEN.
+
+### 07.10.2026 06:47 UTC — матрица безопасной квитанции native read_file
+
+Предварительная source-проверка: существующие durable file tool events
+сохраняют только purpose и read_file:completed; это не exact contiguous/EOF proof.
+Model summary не принимается за независимое доказательство. Выбрано минимальное
+расширение существующего terminal SafeResult (≤2000), без новыхRPC/schema/grants/
+миграций/identity и без вывода содержимого файла. Реализация локально проверена
+ниже; actual native EOF proof ещё NOT RUN.
+
+| Этап | Источник полномочий и проверка | Результат и lifecycle |
+| --- | --- | --- |
+| tools/call → readFile | Authenticated RunnerInput, frozen catalog/purpose, exact lease/fence/generation/file; full source digest/size/UTF-8/noNUL, page и повторный descriptor | Private typed proof только после всех checks; прежний MCP JSON без изменения |
+| Terminal recorder | Только private proof, exact input binding, closed refs/digests/numbers/purpose; не map/decoded JSON; ≤2000 без truncation | Канонический metadata-only JSON в SUCCEEDED rev2; missing/invalid proof закрывается до terminal write; handler error без page metadata |
+| CP transport → caster → domain → repository | Существующие grant/catalog/purpose, lease/attempt/current generation, rev1→rev2, idempotency | Одной owner transaction RunToolCall/event/outbox; JSON inert evidence, не authority |
+| Owner GET → gateway/WebSocket → UI | Существующая eligibility и exact execution/session/turn/attempt | SafeResult передаётся без потерь и доступен в свёрнутых details; без нового consumer/readiness |
+| Cancel/delete/retry/stale/projection refusal | Прежний owner lifecycle и terminal guards | Нет ложного SUCCEEDED/page proof; потеря ответа после CP ACK не объявляется отдельным provider read ACK |
+
+Closed receipt v1: kind/version, catalog_ref/catalog_digest/purpose, entry_ref/artifact_ref,
+file_revision/file_version/size_bytes, offset_bytes/next_offset_bytes/eof/source_digest/
+chunk_digest. Исключены name/media/text/content/rawargs/headers/download/source.
+Negative matrix: fake type/JSON/version, cross-binding, integrity/UTF8/NUL/
+descriptor mismatch, offsets/EOF/chunk/size budget, error/cancel/replay/stale/
+projection refusal и secret canaries; positive multi-pageUTF8/EOF. Независимый
+живой proof требует actual SUCCEEDED receipts от0 доEOF=size без gaps/overlaps
+с неизменными pins, затем final outcome; историческое completed не переоценивается.
+Context7 ROOT: /golang/go encoding/json Marshaler/Marshal и string encoding;
+используется стандартный encoding/json, не json/v2. Agent implementation отдельно
+ограничен callback package; ROOT владеет журналом и delivery.
+
 ### 07.10.2026 06:28–06:33 UTC — причинность SYSTEM MCP и штатный global scope
 
 Exact diagnostic run_nZxycoAkP6UAx_QoXRoymFbP, turn

@@ -1745,6 +1745,12 @@ func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecont
 		state = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED
 	}
 	safeResult := safeToolCallResult(tool, result, toolErr)
+	if tool == runtimecontract.FileToolRead && revision == 2 && toolErr == nil {
+		safeResult, err = safeFileReadReceipt(input, arguments, result)
+		if err != nil {
+			return err
+		}
+	}
 	if revision == 1 {
 		state, safeResult = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_RUNNING, ""
 	}
@@ -1880,6 +1886,11 @@ func safeInvocationRef(value string) bool {
 
 func safeToolCallResult(tool string, result any, toolErr error) string {
 	if toolErr != nil {
+		return "TOOL_UNAVAILABLE"
+	}
+	// У read_file нет нового successful legacy fallback: terminal проекция
+	// требует private evidence и authenticated input в recordToolCallPhase.
+	if tool == runtimecontract.FileToolRead {
 		return "TOOL_UNAVAILABLE"
 	}
 	if tool == "invoke_integration" || tool == runtimecontract.Context7ResolveTool || tool == runtimecontract.Context7QueryTool {

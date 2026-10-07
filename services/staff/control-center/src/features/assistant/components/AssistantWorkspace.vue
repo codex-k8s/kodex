@@ -1411,6 +1411,16 @@ watch(assistantFormActive, (active) => {
   if (active && !open.value) void show();
 });
 watch(
+  () =>
+    Boolean(currentPlan.value) ||
+    assistantFormActive.value ||
+    Boolean(pendingProjectMove.value),
+  (drawerInert) => {
+    if (drawerInert) contextOpen.value = false;
+  },
+  { flush: "sync" },
+);
+watch(
   [() => props.context, () => props.projectRef] as const,
   ([nextContext, nextProjectRef], [previousContext, previousProjectRef]) => {
     if (

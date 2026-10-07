@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { compileStyle } from "@vue/compiler-sfc";
-import { createSSRApp } from "vue";
+import { createSSRApp, effectScope, ref, watch } from "vue";
 import { renderToString } from "vue/server-renderer";
 
 import { describe, expect, it } from "vitest";
@@ -48,6 +49,46 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it.each(["plan", "form", "move"] as const)(
+    "закрывает вложенный контекст до inert-перехода drawer: %s",
+    (transition) => {
+      const contextWatcher = source.match(
+        /watch\(\s*\(\) =>\s*Boolean\(currentPlan\.value\) \|\|\s*assistantFormActive\.value \|\|\s*Boolean\(pendingProjectMove\.value\),[\s\S]*?\{ flush: "sync" \},\s*\);/,
+      )?.[0];
+      expect(contextWatcher).toBeDefined();
+      if (!contextWatcher) throw new Error("Context inert watcher is missing");
+      const currentPlan = ref<object>();
+      const assistantFormActive = ref(false);
+      const pendingProjectMove = ref<object>();
+      const contextOpen = ref(true);
+      const scope = effectScope();
+      try {
+        scope.run(() => {
+          runInNewContext(contextWatcher, {
+            watch,
+            currentPlan,
+            assistantFormActive,
+            pendingProjectMove,
+            contextOpen,
+          });
+        });
+        expect(contextOpen.value).toBe(true);
+        if (transition === "plan") currentPlan.value = {};
+        if (transition === "form") assistantFormActive.value = true;
+        if (transition === "move") pendingProjectMove.value = {};
+        expect(contextOpen.value).toBe(false);
+        currentPlan.value = undefined;
+        assistantFormActive.value = false;
+        pendingProjectMove.value = undefined;
+        expect(contextOpen.value).toBe(false);
+        contextOpen.value = true;
+        expect(contextOpen.value).toBe(true);
+      } finally {
+        scope.stop();
+      }
+    },
+  );
+
   it("сохраняет принятую переписку при обновлении, но не подменяет начальную загрузку и ошибку", async () => {
     const loadingBranch = template.match(
       /<div\s+v-else-if="store\.loading[^"]*"[\s\S]*?<\/div>/,

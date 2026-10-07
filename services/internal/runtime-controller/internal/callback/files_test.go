@@ -464,7 +464,8 @@ func TestRuntimeRunResultPreviewBoundsAndBinding(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = connection.Close() })
 			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: cp.NewRuntimeWorkServiceClient(connection)}}
-			result, err := server.callFileTool(t.Context(), input, runtimecontract.FileToolPreview, arguments)
+			rawResult, err := server.callFileTool(t.Context(), input, runtimecontract.FileToolPreview, arguments)
+			result, _ := rawResult.(map[string]any)
 			if wantClass == "" {
 				if err != nil || result["text"] != preview || result["truncated"] != response.Truncated || result["preview_digest"] != digest(preview) {
 					t.Fatal("exact bounded RUN_RESULT preview rejected")

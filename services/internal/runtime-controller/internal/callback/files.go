@@ -109,7 +109,7 @@ func fileText(value string, maximum int) bool {
 	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= maximum && !strings.ContainsRune(value, '\x00')
 }
 
-func (server *Server) callFileTool(ctx context.Context, input runtimecontract.RunnerInput, tool string, arguments map[string]any) (map[string]any, error) {
+func (server *Server) callFileTool(ctx context.Context, input runtimecontract.RunnerInput, tool string, arguments map[string]any) (any, error) {
 	purpose, _ := arguments["purpose"].(string)
 	purposeValue, ok := runtimeFilePurpose(input, purpose)
 	if !ok || !runtimecontract.IsRuntimeFileTool(tool) {

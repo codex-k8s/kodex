@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.12
+version: 1.7.13
 updated: 2026-10-07
 ---
 
@@ -1831,6 +1831,19 @@ grants. Подмена enum/profile ref меняет digest и закрыто о
 переход на новый ABI требует новой server-owned revision и exact admission.
 
 ## Доказательство результата
+
+Квитанция полного файлового чтения подтверждает только проверенную страницу
+доверенного обработчика, не отдельный ACK её получения моделью. Она создаётся
+после проверки полного source digest/size, UTF-8 без NUL и повторного exact
+descriptor; связывается с lease/fence/generation, frozen catalog/purpose и
+file revision/version. Terminal-проекция принимает только private typed proof,
+а не caller JSON/map; потеря или нарушение proof закрывает успешную запись.
+В durable SafeResult разрешён только bounded whitelist metadata: catalog/file
+refs и commitments, offset/next offset, size и EOF. Имена, содержимое, сырые
+аргументы, transport headers и download credentials не сохраняются. Полное
+чтение доказывается последовательностью actual успешных квитанций от нуля
+до EOF=size с неизменными pins, без пропусков и перекрытий; итоговый ответ
+модели, старый статус completed или одна последняя страница это не заменяют.
 
 Kodex выбирает формат проверок по `GOV-DOC-003`, но ревью должно иметь
 воспроизводимые доказательства:

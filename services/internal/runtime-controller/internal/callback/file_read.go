@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -21,7 +22,7 @@ import (
 // и ответа. Она не продлевает lease и не вводит новый транспортный timeout.
 const maximumFileReadDuration = 45 * time.Second
 
-func (server *Server) readFile(ctx context.Context, input runtimecontract.RunnerInput, purpose cp.RuntimeFilePurpose, arguments map[string]any) (map[string]any, error) {
+func (server *Server) readFile(ctx context.Context, input runtimecontract.RunnerInput, purpose cp.RuntimeFilePurpose, arguments map[string]any) (any, error) {
 	if !onlyKeys(arguments, "purpose", "entry_ref", "artifact_ref", "revision", "digest", "offset_bytes", "maximum_bytes") {
 		return nil, errRuntimeFileInput
 	}
@@ -86,7 +87,17 @@ func (server *Server) readFile(ctx context.Context, input runtimecontract.Runner
 	next := offset + int64(len(page))
 	result["text"], result["offset_bytes"], result["next_offset_bytes"] = string(page), offset, next
 	result["eof"], result["chunk_digest"], result["source_digest"] = next == pin.size, "sha256:"+hex.EncodeToString(sum[:]), digest
-	return result, nil
+	// Доказательство создаётся только после полного source и повторной authority
+	// проверки; JSON ответа или аргументов не может восстановить private evidence.
+	return fileReadToolResult{wire: result, evidence: &fileReadEvidence{
+		leaseRef: input.LeaseRef, fence: input.LeaseFence, generation: input.LeaseGeneration,
+		receipt: fileReadReceipt{Version: 1, Kind: fileReadReceiptKind,
+			CatalogRef: input.FileCatalog.Ref, CatalogDigest: input.FileCatalog.Digest,
+			Purpose: strings.TrimPrefix(purpose.String(), "RUNTIME_FILE_PURPOSE_"), EntryRef: metadata.GetEntryRef(), ArtifactRef: metadata.GetArtifactRef(),
+			FileRevision: metadata.GetRevision(), FileVersion: metadata.GetVersion(), SizeBytes: pin.size,
+			OffsetBytes: offset, NextOffsetBytes: next, EOF: next == pin.size,
+			SourceDigest: digest, ChunkDigest: "sha256:" + hex.EncodeToString(sum[:])},
+	}}, nil
 }
 
 func fileReadOffset(arguments map[string]any) (int64, bool) {

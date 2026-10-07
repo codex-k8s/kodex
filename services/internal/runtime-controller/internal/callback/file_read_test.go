@@ -45,6 +45,7 @@ type fileReadOwnerFixture struct {
 	transferComplete bool
 	readBaseline     int
 	records          []cp.RunToolCallState
+	projections      []*cp.RecordRunToolCallRequest
 }
 
 func readFixtureDigest(body []byte) string {
@@ -125,6 +126,7 @@ func (fixture *fileReadOwnerFixture) StreamExecutionArtifact(request *cp.StreamE
 func (fixture *fileReadOwnerFixture) RecordRunToolCall(ctx context.Context, request *cp.RecordRunToolCallRequest) (*cp.RecordRunToolCallResponse, error) {
 	fixture.mu.Lock()
 	fixture.records = append(fixture.records, request.GetState())
+	fixture.projections = append(fixture.projections, proto.Clone(request).(*cp.RecordRunToolCallRequest))
 	if request.GetRevision() == 1 {
 		fixture.transferComplete = false
 		fixture.readBaseline = fixture.reads
@@ -223,6 +225,20 @@ func TestReadFileConsumesWholeVerifiedSourceInContiguousPages(t *testing.T) {
 				if failed {
 					t.Fatal("exact full file page failed")
 				}
+				fixture.owner.mu.Lock()
+				projection := fixture.owner.projections[len(fixture.owner.projections)-1]
+				fixture.owner.mu.Unlock()
+				var receipt fileReadReceipt
+				if json.Unmarshal([]byte(projection.GetSafeResult()), &receipt) != nil || projection.GetRevision() != 2 ||
+					receipt.Version != 1 || receipt.Kind != fileReadReceiptKind || receipt.CatalogRef != fixture.input.FileCatalog.Ref ||
+					receipt.CatalogDigest != fixture.input.FileCatalog.Digest || receipt.Purpose != runtimecontract.FilePurposeProject ||
+					receipt.EntryRef != fixture.owner.file.EntryRef || receipt.ArtifactRef != fixture.owner.file.ArtifactRef ||
+					receipt.FileRevision != fixture.owner.file.Revision || receipt.FileVersion != fixture.owner.file.Version ||
+					receipt.SizeBytes != int64(len(body)) || receipt.OffsetBytes != offset ||
+					receipt.NextOffsetBytes != int64(result["next_offset_bytes"].(float64)) || receipt.EOF != result["eof"] ||
+					receipt.SourceDigest != result["source_digest"] || receipt.ChunkDigest != result["chunk_digest"] {
+					t.Fatal("terminal metadata receipt lost the exact verified page or execution catalog")
+				}
 				text := result["text"].(string)
 				next := int64(result["next_offset_bytes"].(float64))
 				if len(text) > 16384 || !utf8.ValidString(text) || int64(result["offset_bytes"].(float64)) != offset || next != offset+int64(len(text)) ||
@@ -288,6 +304,13 @@ func TestReadFileFailuresExposeNoTextOrPrivateAuthority(t *testing.T) {
 			}
 			fixture.owner.mu.Lock()
 			defer fixture.owner.mu.Unlock()
+			for _, projection := range fixture.owner.projections {
+				if strings.Contains(projection.GetSafeResult(), "PRIVATE_FILE_READ_SENTINEL") ||
+					projection.GetState() != cp.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED &&
+						projection.GetSafeResult() != "" && projection.GetSafeResult() != "TOOL_UNAVAILABLE" {
+					t.Fatal("failed file handler published content or successful metadata")
+				}
+			}
 			if scenario == "initial audit" && (fixture.owner.reads != 0 || fixture.owner.transfers != 0) {
 				t.Fatal("initial audit rejection performed file effects")
 			}
