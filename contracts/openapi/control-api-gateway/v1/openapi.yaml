@@ -4907,6 +4907,11 @@ paths:
     get:
       tags: [Integrations]
       operationId: getIntegrationConnection
+      description: >-
+        Адресное авторитетное чтение. definitionConfigurationBinding возвращается
+        только после organization.manage и проверки доступа к текущему set.
+        Отсутствующее поле не означает ABSENT; ABSENT доказывает отсутствие связи
+        в том же snapshot. Каталоги и командные ответы поле не обещают.
       parameters: [{ $ref: "#/components/parameters/ConnectionRef" }]
       responses:
         "200":
@@ -18034,8 +18039,28 @@ components:
         definitionDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
         publicConfiguration:
           { type: object, maxProperties: 50, additionalProperties: true }
+        definitionConfigurationBinding:
+          { $ref: "#/components/schemas/IntegrationDefinitionConfigurationBinding" }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         updatedAt: { $ref: "#/components/schemas/Timestamp" }
+    IntegrationDefinitionConfigurationBinding:
+      description: >-
+        Авторитетная связь INTEGRATION_DEFINITION; MATCH содержит текущие глобальные
+        pins для OCC, ABSENT разрешает явную проверку отсутствия. Pins не выдают права.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [state]
+          properties:
+            state: { type: string, enum: [ABSENT] }
+        - type: object
+          additionalProperties: false
+          required: [state, configurationRef, revisionRef, bindingVersion]
+          properties:
+            state: { type: string, enum: [MATCH] }
+            configurationRef: { $ref: "#/components/schemas/OpaqueRef" }
+            revisionRef: { $ref: "#/components/schemas/OpaqueRef" }
+            bindingVersion: { type: integer, format: int64, minimum: 1 }
     IntegrationConnectionInput:
       type: object
       additionalProperties: false

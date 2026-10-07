@@ -668,6 +668,14 @@ func castConnection(value entity.IntegrationConnection) *controlplanev1.Integrat
 	if value.CredentialRevision != nil {
 		result.CredentialRevision = castIntegrationCredential(*value.CredentialRevision)
 	}
+	if value.DefinitionConfigurationBinding != nil {
+		binding := value.DefinitionConfigurationBinding
+		result.DefinitionConfigurationBinding = &controlplanev1.IntegrationDefinitionConfigurationBinding{
+			State: controlplanev1.IntegrationDefinitionConfigurationBinding_State(
+				controlplanev1.IntegrationDefinitionConfigurationBinding_State_value["STATE_"+binding.State]),
+			ConfigurationRef: binding.ConfigurationRef, RevisionRef: binding.RevisionRef, BindingVersion: binding.BindingVersion,
+		}
+	}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))
 	}

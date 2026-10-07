@@ -10,6 +10,93 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 20:20 UTC — native переход к Architect
+
+- ROOT PASS: current focused binding/graph59tests3.93s. Picker native event и
+  сохранение selected metadata67tests/lint/format/typecheck исполнителя PASS.
+  ROOT final typecheck/build8.75s PASS; прежнее предупреждение больших chunks.
+- Live readonly preview после literal reload20:17 PASS: видимый закрытый
+  selector содержит имя подключения; прежний вывод по aria-label был неверен.
+  Metadata wiring уже корректен, фиктивная дополнительная правка не добавлена.
+  Console0; history/Impact/connection200, connection375/binding2 неизменен.
+  i18n/editor exact host/Pod hashes EQUAL. Apply не выполнялся.
+- Native INTAKE SUCCEEDED2, manager-plan.md создан, обязательные применимые
+  документы EOF сообщены. Coordinator передал следующую роль без host-подмены:
+  Architect `run_P8RfAT13uCHGlqF1eqRIt6jJ` RUNNING, ACK2746B
+  `054cb6c446316ff95bb3ba1e83a9dc630bac858a6b13fe4a7b63a02a9cad46d6`,
+  inbox/instructions EQUAL, actual G5 image и same-Pod file binary EQUAL.
+  Original expected comparison NOT RUN для derived prompt. Три RUN_RESULT и
+  PROJECT прочитаны до EOF, main самостоятельно подтверждён native READ.
+- Native536156B EOF, upstream контракт, downstream Developer/reviews/fixes/
+  READY и исходный Full65 остаются OPEN. Новые скриншоты не объявлять PASS
+  до успешного получения; история прежних timeout/FAIL сохранена.
+
+## Checkpoint 07.10.2026 20:08 UTC — exact binding read и принятый Workflow
+
+Новый read/UI/graph пакет working tree на базе `96a30d4`, не immutable release.
+
+- Карта read сценария: verified OIDC owner → GET integration-connections/ref →
+  existing gateway/PlatformQuery.GetIntegrationConnection → existing eligibility →
+  одна RR transaction organization.manage/current binding SQL/set access →
+  optional ABSENT/MATCH → typed frontend fresh history/Impact/OCC → прежняя
+  специализированная Rebind команда. Новых RPC/commands/events нет; отсутствие
+  поля не является absence, скрытая/повреждённая связь не даёт ABSENT/pins.
+- PASS: backend canonical Go1.26.6 unit/disposable component, Proto/OpenAPI
+  воспроизводимость/SQL boundary; ROOT42/42 binding tests и16/16 graph tests,
+  final frontend typecheck/build8.40s. Существующее предупреждение chunk>500KB.
+  CP/helper/query и frontend helper/editor host/Pod hashes EQUAL.
+  Serving CP PID564 executable `052ee794…58f9` и gateway PID1692
+  `d9f1b6ff…d3cd` EQUAL независимым current-source сборкам.
+- PASS live readonly preview: history100/current MATCH/Impact200 и доступная
+  кнопка перепривязки. Apply не выполнялся, connection375/120/binding2 неизменен.
+  Последний UX fix имени выбранного подключения в закрытом picker IN PROGRESS.
+- Graph исходный HMR screenshot19:54 FAIL; fresh reload19:55 DOM geometry
+  PASS: canvas1201x780, обе ноды целиком внутри. Последний screenshot FAIL
+  Page.captureScreenshot timeout180s, visual нового layout NOT RUN.
+  RunPage/Canvas host/Pod `04d2cf31…df779`/`9e081086…b71b` EQUAL.
+- IN PROGRESS один принятый WORKFLOW15/33steps `run_VZcHUSUfqhZf6JruCzjjAVaF`.
+  Derived coordinator ACK61363B/inbox/instructions EQUAL; оригинальное task
+  comparison NOT RUN для derived prompt. Штатный INTAKE
+  `run_n6Q3gjtW_TQ237_xheS6rQFZ` ACK8397B/inbox/instructions EQUAL,
+  exact G5 image и same-Pod file binary EQUAL, RUNNING/native read.
+  Manager не подменяет исполнителей и ожидает exact callbacks.
+- NOT RUN native mandatory source536156B EOF, полный downstream Workflow и
+  reviews/fix/re-review/READY. Checklist11/13/14/15 и Full65 не закрыты.
+
+## Checkpoint 07.10.2026 19:45 UTC — exact120 и новый реальный Manager
+
+Source/remote/Draft1800 `96a30d4a021a8ada69941c9ffb00dcc824e786eb`
+EQUAL; новые binding read/frontend изменения пока working tree.
+
+- PASS Documentation14: `pln_QGyd_qV8ADGpRBQU2RG524dK`, receipt
+  `rct_8EfuU2G1vsO3LA3zOhO7fpNZ`; Security13:
+  `pln_GSK3rFqunHglFoJ5KZmY91LT`/`rct_E2LiQkOIFMmGREV0a1lkfU-N`;
+  Lexical13: `pln_1N_HEUOdggD4kVODX2wYW08M`/`rct_7jculnXX_FAUJV3jxsN2uXy2`.
+  Owner exact baseline guards PASS, каждый VALID2→APPLIED3, только enabled.
+- PASS owner readback connection375/CONNECTED/120enabled: полные semantic
+  recipients/capabilities/approvalPolicy/approvalScopePaths/resourceScope и
+  publicConfiguration совпадают с исходным120. Второе disabled247/118/0
+  неизменно; восстановление не расширило доступ.
+- IN PROGRESS ONE Manager `run_G8w6OtYD4eUm31LZOPk-7Od1`, session
+  `ses_OidEiRcjHVyv0I9xOe6fO5fG`, turn `trn_ik5cjdBQTjVMFtQrDoo4yIaU`,
+  attempt1. Native UI launch19:43:03, точное7944B задание передано провайдеру.
+  Provider ACK CAPTURED: task/inbox/instructions EQUAL, SHA256
+  `f8432f162977cc68942b801019fc0b26abe4b9662fd27272bfc1cc7a912c3032`.
+  G5 image `f8b60814…8041c` exact; binary `40f3268a…c93b` — image-file proof,
+  не serving-process hash. Обычные native READ уже наблюдаются.
+- PASS Chrome19:43 новый graph screenshot/Console0. Hot reload19:34
+  временно bootstrap503 при session200; codegen/rebuild завершён,
+  bootstrap200/CPReady/reload/Console0 восстановлены19:35. Не SSO failure.
+- IN PROGRESS cross-config binding fix: additive optional exact owner read
+  ABSENT/MATCH в одной RR transaction; omitted не означает absence.
+  Live current MATCH config/revision/binding2 PASS. Backend canonical unit,
+  disposable component, Proto/OpenAPI reproducibility и SQL boundary PASS;
+  frontend35 focused PASS, итоговая проверка/live picker preview NOT RUN.
+  Первая disposable bridge readiness FAIL и неверная immutable fixture FAIL
+  исправлены безопасными host fixture/transaction-local fixture и повторены PASS.
+- NOT RUN полный33-step Workflow/native source536156B EOF/все callbacks/
+  reviews/fix/re-review/READY. Full65 и checklist11/13/14/15 OPEN.
+
 ## Checkpoint 07.10.2026 19:27 UTC — права исполнителей и компактный ход работы
 
 На опубликованном `3a216d4cf892a93359c1cac25f61916bf7b6c226`

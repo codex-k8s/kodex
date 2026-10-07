@@ -949,7 +949,6 @@ onBeforeUnmount(() => {
           <section id="run-graph-panel" class="graph-panel">
             <div class="graph-panel__canvas">
               <RunGraphCanvas
-                :key="activityOpen ? 'with-activity' : 'full-width'"
                 :compact="activityOpen"
                 :nodes="sessionGraph.nodes"
                 :edges="sessionGraph.edges"
@@ -1215,6 +1214,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 .run-page-body {
+  --run-activity-width: clamp(520px, 54%, 720px);
   position: relative;
   display: flex;
   min-width: 0;
@@ -1476,10 +1476,10 @@ onBeforeUnmount(() => {
   background: var(--canvas);
 }
 .run-workspace--activity .graph-panel {
-  right: min(720px, 54%);
+  right: var(--run-activity-width);
 }
 .run-workspace--activity .run-workspace-toolbar {
-  left: calc((100% - min(720px, 54%)) / 2);
+  left: calc((100% - var(--run-activity-width)) / 2);
 }
 .graph-panel__canvas {
   width: 100%;
@@ -1492,8 +1492,7 @@ onBeforeUnmount(() => {
   inset-block: 0;
   right: 0;
   display: flex;
-  width: min(720px, 54%);
-  min-width: 520px;
+  width: var(--run-activity-width);
   min-height: 0;
   border: 0;
   border-left: 1px solid var(--border);
@@ -1526,7 +1525,7 @@ onBeforeUnmount(() => {
 @media (min-width: 761px) {
   .run-workspace--activity .run-canvas-summary {
     top: 70px;
-    width: min(360px, calc((100% - min(720px, 54%)) / 2 - 86px));
+    width: min(360px, calc((100% - var(--run-activity-width)) / 2 - 86px));
   }
   .run-workspace--activity .run-workspace-toolbar {
     top: 70px;

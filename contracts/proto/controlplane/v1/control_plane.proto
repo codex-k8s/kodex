@@ -1546,6 +1546,21 @@ message IntegrationConnection {
   IntegrationCredentialRevision credential_revision = 16;
   google.protobuf.Timestamp created_at = 17;
   google.protobuf.Timestamp updated_at = 18;
+  // Только адресный GetIntegrationConnection; omitted не означает ABSENT.
+  IntegrationDefinitionConfigurationBinding definition_configuration_binding = 19;
+}
+
+// Безопасные pins текущей связи; не являются grant на чтение или изменение.
+message IntegrationDefinitionConfigurationBinding {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_ABSENT = 1;
+    STATE_MATCH = 2;
+  }
+  State state = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  int64 binding_version = 4;
 }
 
 message AssistantPlanOperation {

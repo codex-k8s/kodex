@@ -2241,6 +2241,9 @@ func (repository *Repository) GetIntegrationConnection(ctx context.Context, prin
 	if err != nil {
 		return entity.IntegrationConnection{}, err
 	}
+	if err := repository.attachIntegrationDefinitionBinding(ctx, tx, scope, &item); err != nil {
+		return entity.IntegrationConnection{}, err
+	}
 	if tx.Commit(ctx) != nil {
 		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}

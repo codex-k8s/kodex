@@ -1,12 +1,33 @@
 import { renderToString } from "@vue/server-renderer";
-import { createSSRApp, h } from "vue";
+import {
+  createSSRApp,
+  createRenderer,
+  defineComponent,
+  h,
+  nextTick,
+  ssrContextKey,
+  type App,
+  type Ref,
+  type SetupContext,
+} from "vue";
 import { createI18n } from "vue-i18n";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const flow = vi.hoisted(() => ({
+  dimensions: undefined as Ref<{ width: number; height: number }> | undefined,
+  viewport: { x: 0, y: 0, zoom: 1 },
+  setViewport: vi.fn(),
+}));
 
 vi.mock("@vue-flow/core", async (importOriginal) => {
   const { getTransformForBounds } =
     await importOriginal<typeof import("@vue-flow/core")>();
-  const { defineComponent, h } = await import("vue");
+  const { defineComponent, h, ref } = await import("vue");
+  flow.dimensions = ref({ width: 1921, height: 780 });
+  flow.setViewport.mockImplementation((viewport: typeof flow.viewport) => {
+    flow.viewport = viewport;
+    return Promise.resolve();
+  });
   return {
     getTransformForBounds,
     BaseEdge: defineComponent({
@@ -23,11 +44,11 @@ vi.mock("@vue-flow/core", async (importOriginal) => {
     }),
     getBezierPath: () => ["M0 0"],
     useVueFlow: () => ({
-      dimensions: { value: { width: 700, height: 480 } },
+      dimensions: flow.dimensions,
       fitView: vi.fn().mockResolvedValue(undefined),
-      getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
+      getViewport: () => ({ ...flow.viewport }),
       onInit: vi.fn(),
-      setViewport: vi.fn().mockResolvedValue(undefined),
+      setViewport: flow.setViewport,
       zoomIn: vi.fn().mockResolvedValue(undefined),
       zoomOut: vi.fn().mockResolvedValue(undefined),
     }),
@@ -66,6 +87,11 @@ import type {
   RunEdge,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
+import {
+  layoutRunGraph,
+  runGraphNodeWidth,
+  runGraphNodeHeight,
+} from "./run-graph-layout";
 
 const nodes: RunNode[] = [
   {
@@ -106,6 +132,71 @@ const edges: RunEdge[] = [
     label: "",
   },
 ];
+
+const apps: App[] = [];
+afterEach(() => apps.splice(0).forEach((app) => app.unmount()));
+beforeEach(() => {
+  vi.clearAllMocks();
+  if (flow.dimensions) flow.dimensions.value = { width: 1921, height: 780 };
+  flow.viewport = { x: 0, y: 0, zoom: 1 };
+});
+
+interface CanvasState {
+  userAdjustedView: Ref<boolean>;
+  markUserAdjusted(): void;
+}
+function mountCanvas(): CanvasState {
+  let state: CanvasState | undefined;
+  const renderer = createRenderer<object, object>({
+    patchProp() {},
+    insert() {},
+    remove() {},
+    createElement: () => ({}),
+    createText: () => ({}),
+    createComment: () => ({}),
+    setText() {},
+    setElementText() {},
+    parentNode: () => null,
+    nextSibling: () => null,
+  });
+  const original = (
+    RunGraphCanvas as unknown as {
+      setup: (props: object, context: SetupContext) => CanvasState;
+    }
+  ).setup;
+  const app = renderer.createApp(
+    defineComponent({
+      setup(_, context) {
+        state = original(
+          {
+            nodes,
+            edges,
+            selectedRef: "node_root",
+            futureNodeRefs: [],
+            activeNodeRefs: [],
+            executionLabels: {},
+            compact: true,
+          },
+          context,
+        );
+        return () => null;
+      },
+    }),
+  );
+  app.use(
+    createI18n({
+      legacy: false,
+      locale: "ru",
+      missingWarn: false,
+      fallbackWarn: false,
+    }),
+  );
+  app.provide(ssrContextKey, { modules: new Set<string>() });
+  app.mount({});
+  apps.push(app);
+  if (!state) throw new Error("Missing canvas fixture");
+  return state;
+}
 
 function required<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Missing graph test fixture");
@@ -175,6 +266,67 @@ async function render(
 }
 
 describe("RunGraphCanvas", () => {
+  it("поздний resize после открытия drawer пересчитывает untouched viewport по ширине1201", async () => {
+    const state = mountCanvas();
+    const dimensions = required(flow.dimensions);
+    flow.viewport = { x: 700, y: 0, zoom: 1 };
+    dimensions.value = { width: 1201, height: 780 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(flow.viewport.x).toBeGreaterThan(0);
+    expect(flow.viewport.zoom).toBeGreaterThan(0);
+    for (const node of layoutRunGraph(nodes, edges).nodes) {
+      expect(
+        node.x * flow.viewport.zoom + flow.viewport.x,
+      ).toBeGreaterThanOrEqual(0);
+      expect(
+        (node.x + runGraphNodeWidth) * flow.viewport.zoom + flow.viewport.x,
+      ).toBeLessThanOrEqual(1201);
+      expect(
+        node.y * flow.viewport.zoom + flow.viewport.y,
+      ).toBeGreaterThanOrEqual(0);
+      expect(
+        (node.y + runGraphNodeHeight) * flow.viewport.zoom + flow.viewport.y,
+      ).toBeLessThanOrEqual(780);
+    }
+    expect(state.userAdjustedView.value).toBe(false);
+    flow.setViewport.mockClear();
+    dimensions.value = { width: 1201, height: 780 };
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+  });
+
+  it("resize сохраняет ручной world-center и zoom; события без resize их не сбрасывают", async () => {
+    const state = mountCanvas();
+    const dimensions = required(flow.dimensions);
+    flow.viewport = { x: 320, y: 90, zoom: 0.72 };
+    state.markUserAdjusted();
+    const center = { x: (1921 / 2 - 320) / 0.72, y: (780 / 2 - 90) / 0.72 };
+    dimensions.value = { width: 1201, height: 680 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(flow.viewport.zoom).toBe(0.72);
+    expect((1201 / 2 - flow.viewport.x) / flow.viewport.zoom).toBeCloseTo(
+      center.x,
+    );
+    expect((680 / 2 - flow.viewport.y) / flow.viewport.zoom).toBeCloseTo(
+      center.y,
+    );
+    expect(state.userAdjustedView.value).toBe(true);
+    flow.setViewport.mockClear();
+    dimensions.value = { width: 1201, height: 680 };
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    dimensions.value = { width: 1921, height: 780 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(flow.viewport).toEqual({ x: 320, y: 90, zoom: 0.72 });
+  });
+
+  it("пустые dimensions при скрытом canvas не применяют синтетический viewport", async () => {
+    mountCanvas();
+    required(flow.dimensions).value = { width: 0, height: 0 };
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+  });
+
   it("резервирует место для detached-панелей при начальном fit", () => {
     expect(runGraphFitViewOptions(1440).padding).toEqual({
       top: "180px",

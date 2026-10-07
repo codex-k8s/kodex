@@ -222,6 +222,33 @@ watch(runSignature, (current, previous) => {
 watch(graphSignature, () => {
   if (!userAdjustedView.value) void nextTick(() => fit(false));
 });
+watch(
+  [() => dimensions.value.width, () => dimensions.value.height],
+  async ([width, height], [previousWidth, previousHeight]) => {
+    if (!width || !height || viewMode.value !== "graph") return;
+    if (!userAdjustedView.value) {
+      await fit(false);
+      return;
+    }
+    if (!previousWidth || !previousHeight) return;
+    // Resize сохраняет выбранный пользователем центр и масштаб графа.
+    const viewport = getViewport();
+    programmaticViewportChange.value = true;
+    try {
+      await setViewport(
+        {
+          x: viewport.x + (width - previousWidth) / 2,
+          y: viewport.y + (height - previousHeight) / 2,
+          zoom: viewport.zoom,
+        },
+        { duration: 0 },
+      );
+    } finally {
+      programmaticViewportChange.value = false;
+    }
+  },
+  { flush: "post" },
+);
 
 async function fit(userInitiated = true): Promise<void> {
   if (userInitiated) userAdjustedView.value = true;

@@ -10,6 +10,97 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 20:20 UTC
+
+Текущий read/UI/graph пакет проверен ROOT: 59/59 адресных frontend tests
+(binding43 и graph16), детальный picker контур исполнителя67/67,
+lint/format/typecheck PASS. ROOT final typecheck/build8.75s PASS;
+прежнее предупреждение больших chunks сохранено.
+После literal reload20:17 закрытый picker действительно показывает
+«GitHub Kodex selfdev 2.5»: innerText/strong/title подтверждены.
+Прежнее предположение об отсутствии имени опровергнуто: accessibility snapshot
+показывал aria-label «Подключение», а не видимый текст. Дополнительный metadata
+fix не нужен; ru/en подпись и подсказка теперь одинаково описывают привязку и
+перепривязку. i18n/editor host/Pod hashes EQUAL. Console0, GET history/Impact/
+connection200; connection375/CONNECTED/binding2 без Apply.
+
+INTAKE `run_n6Q3gjtW_TQ237_xheS6rQFZ` SUCCEEDED2, создал manager-plan.md;
+точный EOF обязательных применимых документов сообщён в результате.
+Coordinator штатно передал Architect `run_P8RfAT13uCHGlqF1eqRIt6jJ`, session
+`ses_NJB701c1-FBiaBm-gC7-_aze`, turn `trn_dhxyjN6bPTgg41CqQ3M2ibS2`.
+Architect ACK2746B SHA256
+`054cb6c446316ff95bb3ba1e83a9dc630bac858a6b13fe4a7b63a02a9cad46d6`,
+inbox/instructions EQUAL, G5 exact image/same-Pod file binary EQUAL;
+derived prompt expected comparison NOT RUN. Architect RUNNING/native READ;
+сам прочитал три RUN_RESULT и PROJECT до EOF и подтвердил main.
+Native mandatory source536156B EOF, upstream контракт, Developer/reviews/fix/
+READY и Full65 ещё не закрыты. Не повторять запуск и не выполнять active rebind.
+
+## Checkpoint 07.10.2026 20:08 UTC
+
+Рабочий пакет additive binding read и desktop graph resize завершает адресные
+проверки на базе `96a30d4`; пока не опубликован. ROOT binding42/42 и Run16/16
+PASS, финальный frontend typecheck/build8.40s PASS (прежний chunk warning).
+CP helper/query и frontend binding helper/editor host/Pod SHA256 EQUAL.
+Actual CP PID564/independent executable `052ee794adf24497ea47e4bff699b0e5b27c79740b174f5f1315660b09ca58f9`
+и gateway PID1692/independent executable `d9f1b6ff64a05362b911acb30bf74698249ca6628ad392e07eb9c03e9e32d3cd` EQUAL.
+
+Live preview cross-config: fresh target history100, current connection MATCH,
+Impact200, кандидат «Перепривязать выбранные» доступен; никакого Apply.
+Connection375/120enabled/binding2 неизменен. Имя выбранного подключения
+пока не сохранялось в закрытом picker — последний узкий UX fix выполняется.
+Graph HMR19:54 visual FAIL сохранён; после literal reload19:55 actual1201x780
+и оба node rects внутри PASS. Повтор screenshot FAIL protocol timeout180s;
+новый визуальный снимок NOT RUN, DOM proof не выдаётся за screenshot.
+RunPage/Canvas host/Pod hashes `04d2cf31…df779`/`9e081086…b71b` EQUAL.
+
+Native Manager ONE launch_workflow SUCCEEDED: `run_VZcHUSUfqhZf6JruCzjjAVaF`,
+WORKFLOW15/33steps, session `ses_KmJA6dXGrO_m4uufxrHSWXtU`.
+Coordinator ACK prompt61363B SHA256 `bcb35847dc68eb9925c86f187c747ab2ac372057085e3b5520548902b785e863`,
+inbox/instructions EQUAL; original task comparison NOT RUN для derived prompt.
+INTAKE step001 `run_n6Q3gjtW_TQ237_xheS6rQFZ`, session
+`ses_jEcftl8j-U_8PUUP3H377_3N`, turn `trn_eHf_9uIJLCUvc5eY9deb5iRx`:
+ACK prompt8397B SHA256 `0f323b5eb4c585feaad16a2353191e6d27f693541bc1ac611b43a2ab4efe7240`,
+inbox/instructions EQUAL, G5 exact image and same-Pod binary EQUAL.
+INTAKE RUNNING/native reads. Четыре mandatory repository документа EOF
+сообщены, продуктовые/технические источники ещё читаются. Native536156B EOF,
+downstream Architect/Developer/reviews/fix/READY остаются NOT RUN.
+Reload20:07 PASS, Console0 на configuration preview. Full65 OPEN.
+
+## Checkpoint 07.10.2026 19:45 UTC
+
+HEAD/remote/Draft1800 `96a30d4a021a8ada69941c9ffb00dcc824e786eb`
+EQUAL; опубликован журнал19:27. Новый binding read/frontend пакет working tree.
+
+Restoration120 завершён только native планами: Documentation14
+`pln_QGyd_qV8ADGpRBQU2RG524dK`/receipt `rct_8EfuU2G1vsO3LA3zOhO7fpNZ`,
+Security13 `pln_GSK3rFqunHglFoJ5KZmY91LT`/`rct_E2LiQkOIFMmGREV0a1lkfU-N`,
+Lexical13 `pln_1N_HEUOdggD4kVODX2wYW08M`/`rct_7jculnXX_FAUJV3jxsN2uXy2`.
+Каждый exact baseline diff только enabledfalse→true, VALID2→APPLIED3.
+Connection375/CONNECTED/120enabled. Полные recipients/capabilities/policies/
+approvalScopePaths/resourceScope и publicConfiguration EQUAL исходному120;
+второе disabled подключение247/118grants/0enabled не менялось.
+
+ONE новый Manager `run_G8w6OtYD4eUm31LZOPk-7Od1`, session
+`ses_OidEiRcjHVyv0I9xOe6fO5fG`, turn `trn_ik5cjdBQTjVMFtQrDoo4yIaU`,
+attempt1 запущен native UI19:43:03. Provider ACK CAPTURED: exact task7944B
+SHA256 `f8432f162977cc68942b801019fc0b26abe4b9662fd27272bfc1cc7a912c3032`,
+task/inbox/instructions comparison EQUAL; runtime G5 image `f8b60814…8041c`.
+Binary `40f3268a…c93b` EQUAL как SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS,
+не выдаётся за hash обслуживающего процесса. Manager RUNNING/native READ;
+не Retry старые failed roots и не дублировать текущий запуск.
+Следующий readback: один launch_workflow опубликованного15/revision5/33steps,
+native mandatory source536156B EOF и фактические downstream callbacks/reviews.
+
+Chrome19:43 graph screenshot PASS (две читаемые ноды, realtime), Console0.
+19:34 bootstrap503/session200 совпал с codegen/Air rebuild, не SSO expiry;
+19:35 bootstrap200/CPReady, reload и Console0 восстановлены.
+Cross-config fix: owner GET definitionConfigurationBinding MATCH с точными
+current config/revision/binding2 PASS на working diff. Backend canonical
+Go1.26.6 unit/component/Proto/codegen/SQL PASS; frontend focused35 PASS,
+финальная frontend проверка и live picker preview ещё впереди.
+Full65/checklist11/13/14/15 остаются OPEN; финальный внутренний PR не сливать.
+
 ## Checkpoint 07.10.2026 19:27 UTC
 
 HEAD/remote/Draft1800 `3a216d4cf892a93359c1cac25f61916bf7b6c226`
