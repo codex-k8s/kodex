@@ -10,6 +10,31 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 01:38 UTC: source `73695c1f`; remote/PR ещё `e652f64f`.
+Цель ACTIVE; полный65/33step OPEN.
+
+- Callback screenshot1692: внешняя плавная дуга обходит карточки, Console0,
+  graph/events200. Details preview5/full41 bounded360px/native390 footer PASS;
+  exactd19d 15suites302units PASS, scopedlint/format/forcedtypecheck PASS.
+- Exactc8d renewal keeper/source race57/fullunit864/3existingSKIP/vet PASS;
+  live smoke нового keeper NOT RUN, old404 causality UNKNOWN.
+- Exact73695 health PG12top-level/2nested PASS7.018s; transient READ/NONE
+  projection retry только TEST, не WRITE/UNKNOWN. Изолированный IG units PASS;
+  unrelated выбранный managed models=[] fixture FAIL, baseline UNKNOWN.
+- Новое connection `int_Pn1ALY1e8kAn67vrr1-okIKe` v7CONNECTED, TEST PASS.
+  Старое `int_WU4eTfyUKdPzKebRO0bcuZ2D` после exact118tuples snapshot
+  штатно DISABLED v247/enabled0, UNKNOWN review не повторён.
+- Helpergrant run_rZA4… FAILED после5recipient pages/21NONE и до proposal,
+  safe RUNTIME_PROVIDER_UNAVAILABLE/causeUNKNOWN. Новый отдельный native
+  диалог подготовки21grants запущен; root typedplans не подменяет API writes.
+  Узкий source aggregate-catalog poisoning fix готовится отдельно; parse/
+  digest corruption не пропускать, только unresolved old eligibility.
+
+Далее: exact118grants → native Manager→Developer response на existingreview
+→ адресные проверки/publish/merge/freshmain → full33 Issue1796.
+
+## Предыдущий checkpoint01:25
+
 07.10.2026 01:25 UTC: source `8c0eeaed`; remote/PR пока `e652f64f`.
 Цель ACTIVE; полный65/33step OPEN.
 

@@ -158,6 +158,42 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 01:38 UTC — внешняя callback-дуга и точные source проверки
+
+Source `73695c1f3ff9835e764f228f7572ccd4344f8069`; remote/PR пока `e652f64f`.
+Полный65/33step OPEN; исторические FAIL/UNKNOWN не переписаны.
+
+- Native Run graph: зелёный callback огибает четыре карточки сверху внешней
+  плавной дугой; screenshot1692 проверен, Console error/warn0, graph/events200.
+  Source callback9030e6e/fit56d4a919 не изменялся этим checkpoint.
+- `d19d29fd`: details показывает первые5 возможностей, полный список раскрывается
+  в bounded360px scroll; действия закреплены в штатном footer. Native desktop
+  и390px screenshot проверены, page width390/scrollWidth390, footer внутри
+  viewport, все41 возможности доступны без дополнительных запросов.
+  На exactd19d combined15suites/302tests PASS10.78s, ранее scopedlint/format/
+  forced typecheck PASS. Native keyboard Escape/focus ещё NOT RUN.
+- `c8d3dcb0`: immediate/periodic exact lease renewal до материализации и
+  fresh publication guard, single keeper→tracker handoff/cancel/join;
+  TTL/batch/authority не менялись. Exactc8d unit864PASS/3existingSKIP,
+  scopedrace57PASS/0SKIP, vet/diffcheck PASS. Новый live gap smoke NOT RUN;
+  old404 причинность UNKNOWN.
+- `73695c1f`: только READ/NONE health test ждёт transient credential projection
+  в прежнем bounded attempt/backoff; immutable snapshot/fences сохранены,
+  WRITE/UNKNOWN replay не добавлен. ROOT canonical disposable health PG
+  PASS7.018s (12top-level/2nested), readback/cleanup PASS. Изолированный
+  IG integration/app unit PASS. Дополнительный managed lifecycle fixture
+  models=[] остаётся FAIL с baseline причинностью UNKNOWN; не скрывать.
+- Fresh connection health01:26:29: новое подключение v7CONNECTED, credential
+  configured, outcome «Подключение работает». Старое v246/118enabled tuples
+  независимо совпали со snapshot до штатного Disable; теперь v247DISABLED,
+  enabled0. Исторический UNKNOWN review не повторён. Новый118 grants ещё OPEN.
+- Первый helper grant proposal был семантически BLOCKED. Следующий ход
+  `run_rZA4qFyRZIe7fQEtobL-s5zd` прочитал все5 recipient catalog pages,
+  подтвердил21NONE, затем FAILED RUNTIME_PROVIDER_UNAVAILABLE до записанного
+  proposal; причины UNKNOWN. Project aggregate catalogue имеет source-proven
+  poisoning от unresolved old package; исправление готовится отдельно.
+  Повтор подготовки — новый диалог, никаких повторов GitHub writes.
+
 ### 07.10.2026 01:25 UTC — итог native10 и новый canonical connection
 
 Source `8c0eeaed`, frontend проверен отдельно на exact
