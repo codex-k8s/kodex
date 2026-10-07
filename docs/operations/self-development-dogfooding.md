@@ -202,12 +202,34 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 08:27 UTC — опубликованный checkpoint и границы продолжения
+
+- Код адресного каталога зафиксирован и опубликован на exact
+  `8507251725126560f302e38e8b826c117f09ff91`: remote ветки и PR1800 совпали,
+  Draft сохранён, итоговое тело PR проверено после повторного чтения.
+  Первый publisher получил только closed READBACK/CHECK_FAILED, не доказанный
+  timeout; причина первичного отказа UNKNOWN. Повтор не создавал новый PR
+  или новый эффект разработки, а проверял тот же SHA и идемпотентное тело.
+- На этом SHA ROOT targeted AGENT_CONFIGURATION + delegation recovery unit
+  PASS0.105s; whole-unit/Proto/vet/hot proofs предыдущего checkpoint относятся
+  к тому же source tree. ROOT public wire PASS0.046/0.055s. Worktree был чистым
+  после публикации; следующий документальный checkpoint не меняет runtime.
+- Обратные дуги графа исправлены и перепроверены: 13 units и actual SVG выше
+  карточек. Свежий screenshot не получен из-за зависшей MCP очереди;
+  native catalog acceptance/эффективное изменение Manager/новый full33 ещё
+  NOT RUN. Chrome не перезапускался, чужие вкладки не закрывались.
+- Продолжение: восстановить scoped Chrome MCP; один свежий SYSTEM READ с
+  заранее запущенным failure watcher и exact ACK; устранить доказанную причину,
+  затем native помощником исправить реально выбранную инструкцию Manager
+  и пройти новый full33 до внутреннего PR/review/fix/READY_FOR_HUMAN_REVIEW.
+  Full65 остаётся OPEN, цель ACTIVE; финальный dogfooding PR не сливать.
+
 ### 07.10.2026 08:23 UTC — адресное чтение инструкции сотрудника и hot serving proof
 
 - Source `3e100ad9e3b8295987c5a00758c09e9ddfd3b868` + frozen16-file
   AGENT_CONFIGURATION patch `e9e8c5bd…dda0ed`. Диагностический checkpoint3e
   опубликован, remote/PR1800 exact SHA/Draft readback PASS. Первый publisher
-  timeout на readback не считался успехом: отдельный authoritative read
+  отказ на readback не считался успехом: отдельный authoritative read
   подтвердил SHA, затем идемпотентный повтор body/readback завершился PASS.
 - Каталог теперь выдаёт полный безопасный снимок только сотрудника текущего
   AGENT context помощника SYSTEM/PROJECT: owner lease/fence/generation,

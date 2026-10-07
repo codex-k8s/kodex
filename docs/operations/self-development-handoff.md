@@ -10,6 +10,23 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 08:27 UTC: runtime code HEAD/remote/Draft1800 exact
+`8507251725126560f302e38e8b826c117f09ff91`, publisher finalreadback PASS,
+каталог16files иwatcher2 committed/pushed. ROOT targeted catalog/recovery
+PASS0.105s; whole CP/RC units/vet/Proto/publicwire/hot source/serving proof
+PASS согласно08:23. Следующий checkpoint толькодокументы, runtimeunchanged.
+Chrome MCP unavailable послеscreenshot; session/tabrouteCURRENT UNKNOWN,
+не делатьfreshLaunchдоscopedreconnect. Chrome жив, exactROOTMCPPIDUNKNOWN:
+не kill/restartсемьподключений/общийlauncher/чужиетабы. Остатки: onefreshSYSTEM
+read сwatcher240+ACK→доказатьproviderprimarycause→fix/retest;
+nativeAGENT_CONFIGURATION→выбранныеeffectiveинструкцииManager→штатныйplan/
+ownerimpact/publish→NEWfull33/internalDeveloperPR/reviews/fix/READY.
+Managedtemplate иnativepublicationне смешивать; finalPR НЕсливать.
+Полный65 и33 OPEN, goalACTIVE. Передследующимcommit privatepublisherprevious
+→85072517. ПослевосстановленияChrome каждые5минreloadтолькоpage5.
+
+## Предыдущий checkpoint08:23
+
 07.10.2026 08:23 UTC: HEAD/remote/Draft1800
 `3e100ad9e3b8295987c5a00758c09e9ddfd3b868` + ROOT frozen16-file catalog
 integration и2docs DIRTY. Watcher2 зафиксированы и опубликованы;43 tests PASS.
