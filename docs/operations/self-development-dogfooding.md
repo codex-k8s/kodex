@@ -5,7 +5,7 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 # Цель и источники
@@ -201,6 +201,54 @@ grants и migrations не требуются. Реализация и адрес
 | Capture невозможен | Нет join/source/integrity proof | Tuple отсутствует, ошибка сохраняется; такой residual path не объявляется исправленным без owner invalidation evidence |
 
 ## Журнал
+
+### 07.10.2026 05:46–06:03 UTC — exact delivery и native PROJECT generation5
+
+Source/remote/Draft1800 `0d43cd0b783b47f4e82e32ff66d46d18e108b486`
+подтверждены bot readback. Full runner cache hit повторно verified на этом
+clean SHA: manifest `2d1efe7f4391323883adeffb195f073e247c741ad7be17c358d40af099e57dda`,
+binary `40f3268a257abb9ed21e016069baf3cbfbf16698c4634da7fa102fa1508fc93b`,
+provenance `018e64ea75213ac8704dfc130db0fa8bd506960227d2fd0182fbb4dfa011140a`.
+
+Исторический render FAIL: `GO_TOOLCHAIN_MISMATCH`, host Go1.27.1 вместо
+закреплённого1.26.6. Guard не ослаблен; найден существующий private repo-owned
+toolchain. Fresh render на его PATH PASS, SHA
+`b89d18e9aecb18abd7617c0e745af76b8ae73471e14739ed9076499e5ea61f5e`.
+Первый quiesce FAIL до effects: урезанный PATH исключил Node. Exact live
+snapshot подтвердил все5 прежних workloads Ready1/replicas1. Исправлено только
+окружение запуска: private tools prefix + inherited PATH. Новый quiesce
+apply/readback PASS: fresh owner idle до/после stop5, отсутствие процессов,
+empty managed jobs и неизменные promoted pins.
+
+Canonical supply-chain apply/readback PASS, затем отдельно core
+`--workload session-archive` apply/readback PASS. Read-only safe projection
+сверила worker image, controller image/command, source и generation/readiness
+с тем же render; immutable/full-profile archive verifier не выдавался за
+hot-reload verifier. Новый worker manifest
+`0db667ffecf540d3362599e220a88acdf9d8dc7a311f09b7acc7529dfdddf961`.
+Policy `a0ead18a1aa0e649d859397a3297a3950a30dc77697d81274459dcff59fd568f`,
+revision1; CP52/GW30/RC51/archive10 observed==generation и Ready1. Supply-chain
+readback проверил exact policy работающего CP process. Host/runtime-controller
+Pod `file_read.go` hash `89eedbfaf4109b090001325dfd1f254f997742c4893ffeaa414208578c284c68`
+совпадает. Это delivery, не полный native archive/read_file acceptance.
+
+Chrome5: свежая страница PROJECT recipe, компактный отчёт с внутренней
+прокруткой, plan/editor screenshot, Console0 и relevant API200 PASS. Чужие
+вкладки не затронуты. Native PROJECT run `run_9j_Y3acw8OL8eJgArFdHceCY`
+в conversation `cnv_NUQsdvNr7OHA9EAl8z_haQTp` SUCCEEDED:7 native tools,
+отдельные schema/catalog selectors и один план
+`pln_Wt439zyZZlH3SQpGKcQoUgA_` revision1. В owner UI проверен exact diff:
+только FROM fac2d905→2d1efe7f; name/environmentKey/project/ref сохранены,
+specSha256 f4a28768→de4c0770. Validate PASS.
+
+Первое нажатие Apply по устаревшему Chrome UID — timeout, не PASS.
+Network не содержал application request; authoritative recipe8/generation4 и
+plan VALID/version2 подтвердили отсутствие effect. Fresh UID Apply дал
+квитанцию одной операции и recipe9/generation5 с единственным build
+`imgbld_ACNFBXnwoofhOguwhwRLBGjo`, attempt1, STAGING_PUSH на06:03.
+Второй build не запрошен. Admission/promotion/ENV groups/SYSTEM updates,
+contiguous EOF и новый full33 пока NOT RUN; прежние G4/gen10 bindings не
+объявлены обновлёнными. Whole65/33 остаётся OPEN.
 
 ### 07.10.2026 05:44 UTC — registry preflight исправлен и проверен
 

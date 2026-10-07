@@ -5,10 +5,35 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 # Текущее состояние
+
+07.10.2026 06:03 UTC: source/remote/Draft1800 exact0d43 PASS. Full runner
+2d1efe7f/binary40f3268a/provenance018e64ea и worker0db667ff verified/seeded.
+Fresh render b89d18e9 PASS после выбора private Go1.26.6 PATH; исторический
+GO_TOOLCHAIN_MISMATCH (host1.27.1) сохранён. Первый quiesce FAIL до effects:
+урезанный PATH не содержал Node; повтор с private tools prefix+inherited PATH
+PASS apply/readback. Supply-chain apply/readback PASS, core session-archive
+apply/readback+safe selected projection PASS. Policy a0ead18a/revision1,
+CP52/GW30/RC51/archive10 observed==generation/Ready1; host/Pod file_read hash
+89eedbfa совпал. Старые own RoleImage/ENV pins этим не обновляются.
+
+Native PROJECT conversation cnv_NUQsdvNr7OHA9EAl8z_haQTp/run_9j_Y3acw8OL8eJgArFdHceCY
+SUCCEEDED. Plan pln_Wt439zyZZlH3SQpGKcQoUgA_ rev1: только standard recipe
+update, before fac2d905→after2d1efe7f, spec f4a28768→de4c0770. Validate PASS;
+первый Chrome click stale UID завершился timeout без application request,
+server VALID/recipe8/generation4 подтвердил отсутствие effect. Fresh UID Apply
+PASS: recipe9/generation5, единственный build imgbld_ACNFBXnwoofhOguwhwRLBGjo
+attempt1 STAGING_PUSH на06:03. Не создавать duplicate build/Apply.
+Далее дождаться current build/admission; fresh risk decision только для точного
+нового report при необходимости; Promote→native3ENV groups→SYSTEM recipe/ENV
+→contiguous read_file EOF→новый full33. Whole65/33 OPEN; goal ACTIVE.
+Chrome5 PROJECT recipe/план screenshot PASS, Console0/relevant API200;
+reload06:04, next≤06:09; предварительно сохранить ввод; чужие6/13–17 не трогать.
+
+## Предыдущий checkpoint05:44
 
 07.10.2026 05:44 UTC:5 dev/test+3 ROOT files FROZEN поверх657. ROOT public
 registry credentials16PASS33.561s, cache-import19PASS1.376s+guards, syntax/
