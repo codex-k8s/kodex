@@ -88,15 +88,37 @@ export function layoutRunGraph(
       y: position.y - runGraphNodeHeight / 2,
     };
   });
+  const positionByRef = new Map(
+    positioned.map((item) => [item.node.ref, item]),
+  );
+  const callbackLanes = new Map(
+    validEdges
+      .filter((edge) => edge.type === "CALLBACK_TO")
+      .sort(compareEdges)
+      .map((edge, index) => [edge.ref, index]),
+  );
   const positionedEdges = validEdges.map((edge) => {
-    const points =
-      edge.type === "CALLBACK_TO"
-        ? undefined
-        : graph.edge({
-            v: edge.sourceNodeRef,
-            w: edge.targetNodeRef,
-            name: edge.ref,
-          }).points;
+    if (edge.type === "CALLBACK_TO") {
+      const source = positionByRef.get(edge.sourceNodeRef);
+      const target = positionByRef.get(edge.targetNodeRef);
+      return {
+        edge,
+        path:
+          source && target
+            ? callbackRunEdgePath(
+                source,
+                target,
+                positioned,
+                callbackLanes.get(edge.ref) ?? 0,
+              )
+            : undefined,
+      };
+    }
+    const points = graph.edge({
+      v: edge.sourceNodeRef,
+      w: edge.targetNodeRef,
+      name: edge.ref,
+    }).points;
     return {
       edge,
       path: points ? smoothRunEdgePath(points) : undefined,
@@ -109,6 +131,46 @@ export function layoutRunGraph(
     width: bounds.width ?? 0,
     height: bounds.height ?? 0,
   };
+}
+
+export function callbackRunEdgePath(
+  source: Pick<PositionedRunNode, "x" | "y">,
+  target: Pick<PositionedRunNode, "x" | "y">,
+  nodes: ReadonlyArray<Pick<PositionedRunNode, "x" | "y">>,
+  lane = 0,
+): string {
+  // Боковые участки остаются в межколоночном зазоре, а обратная дуга
+  // проходит над всеми карточками, включая продолжение в колонке исполнителя.
+  const bend = horizontalGap / (target.x > source.x ? 3 : 2);
+  const radius = Math.min(bend, runGraphNodeHeight / 2);
+  const corridorY =
+    Math.min(source.y, target.y, ...nodes.map((node) => node.y)) -
+    radius * 2 -
+    lane * 32;
+  const sourceX = source.x + runGraphNodeWidth;
+  const sourceY = source.y + runGraphNodeHeight / 2;
+  const targetX = target.x;
+  const targetY = target.y + runGraphNodeHeight / 2;
+  const exitX = sourceX + bend;
+  const entryX = targetX - bend;
+  const shoulderY = corridorY + radius;
+
+  return [
+    ["M", sourceX, sourceY],
+    ["C", exitX, sourceY, exitX, shoulderY + radius, exitX, shoulderY],
+    [
+      "C",
+      exitX,
+      corridorY - radius,
+      entryX,
+      corridorY - radius,
+      entryX,
+      shoulderY,
+    ],
+    ["C", entryX, targetY - radius, entryX, targetY, targetX, targetY],
+  ]
+    .map((segment) => segment.join(" "))
+    .join(" ");
 }
 
 export function smoothRunEdgePath(

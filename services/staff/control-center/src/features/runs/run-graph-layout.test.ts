@@ -5,7 +5,10 @@ import type {
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import {
+  callbackRunEdgePath,
   layoutRunGraph,
+  runGraphNodeHeight,
+  runGraphNodeWidth,
   smoothRunEdgePath,
 } from "@/features/runs/run-graph-layout";
 
@@ -45,7 +48,183 @@ function required<T>(value: T | undefined): T {
   return value;
 }
 
+function sampleCurve(path: string): Array<{ x: number; y: number }> {
+  const coordinates = path.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  const points: Array<{ x: number; y: number }> = [];
+  let x = required(coordinates[0]);
+  let y = required(coordinates[1]);
+  for (let index = 2; index < coordinates.length; index += 6) {
+    const cx1 = required(coordinates[index]);
+    const cy1 = required(coordinates[index + 1]);
+    const cx2 = required(coordinates[index + 2]);
+    const cy2 = required(coordinates[index + 3]);
+    const endX = required(coordinates[index + 4]);
+    const endY = required(coordinates[index + 5]);
+    for (let step = 1; step < 100; step += 1) {
+      const t = step / 100;
+      const remaining = 1 - t;
+      points.push({
+        x:
+          remaining ** 3 * x +
+          3 * remaining ** 2 * t * cx1 +
+          3 * remaining * t ** 2 * cx2 +
+          t ** 3 * endX,
+        y:
+          remaining ** 3 * y +
+          3 * remaining ** 2 * t * cy1 +
+          3 * remaining * t ** 2 * cy2 +
+          t ** 3 * endY,
+      });
+    }
+    x = endX;
+    y = endY;
+  }
+  return points;
+}
+
 describe("layoutRunGraph", () => {
+  it("возвращает callback над четырьмя карточками без изменения основной цепочки", () => {
+    const nodes = [
+      node("root", "2026-01-01T00:00:00Z"),
+      node("manager", "2026-01-01T00:00:01Z"),
+      node("developer", "2026-01-01T00:00:02Z"),
+      node("continuation", "2026-01-01T00:00:03Z"),
+    ];
+    const forward = [
+      edge("root_manager", "root", "manager"),
+      edge("manager_developer", "manager", "developer"),
+      edge("manager_continuation", "manager", "continuation", "CONTINUES"),
+    ];
+    const baseline = layoutRunGraph(nodes, forward);
+    const layout = layoutRunGraph(nodes, [
+      ...forward,
+      edge("callback", "developer", "manager", "CALLBACK_TO"),
+    ]);
+    expect(layout.nodes).toEqual(baseline.nodes);
+    expect(layout.edges.slice(0, forward.length)).toEqual(baseline.edges);
+    const path = required(layout.edges.at(-1)?.path);
+    const source = required(
+      layout.nodes.find((item) => item.node.ref === "developer"),
+    );
+    const target = required(
+      layout.nodes.find((item) => item.node.ref === "manager"),
+    );
+    expect(
+      path.startsWith(
+        [
+          "M",
+          source.x + runGraphNodeWidth,
+          source.y + runGraphNodeHeight / 2,
+          "C",
+          "",
+        ].join(" "),
+      ),
+    ).toBe(true);
+    expect(
+      path.endsWith([target.x, target.y + runGraphNodeHeight / 2].join(" ")),
+    ).toBe(true);
+    expect(path).not.toContain(" L ");
+    const points = sampleCurve(path);
+    expect(Math.min(...points.map((point) => point.y))).toBeLessThan(
+      Math.min(...layout.nodes.map((item) => item.y)) - 80,
+    );
+    for (const point of points) {
+      expect(
+        layout.nodes.some(
+          (item) =>
+            point.x > item.x &&
+            point.x < item.x + runGraphNodeWidth &&
+            point.y > item.y &&
+            point.y < item.y + runGraphNodeHeight,
+        ),
+      ).toBe(false);
+    }
+  });
+
+  it("разносит callback по стабильным полосам при перестановке snapshot", () => {
+    const nodes = [
+      node("manager", "2026-01-01T00:00:00Z"),
+      node("developer_a", "2026-01-01T00:00:01Z"),
+      node("developer_b", "2026-01-01T00:00:02Z"),
+    ];
+    const edges = [
+      edge("delegation_a", "manager", "developer_a"),
+      edge("delegation_b", "manager", "developer_b"),
+      edge("callback_a", "developer_a", "manager", "CALLBACK_TO"),
+      edge("callback_b", "developer_b", "manager", "CALLBACK_TO"),
+    ];
+    const layout = layoutRunGraph(nodes, edges);
+    const reversed = layoutRunGraph([...nodes].reverse(), [...edges].reverse());
+    const paths = new Map(
+      reversed.edges.map((item) => [item.edge.ref, item.path]),
+    );
+    for (const item of layout.edges)
+      expect(item.path).toBe(paths.get(item.edge.ref));
+    const callbacks = layout.edges.filter(
+      (item) => item.edge.type === "CALLBACK_TO",
+    );
+    const highest = callbacks.map((item) =>
+      Math.min(...sampleCurve(required(item.path)).map((point) => point.y)),
+    );
+    expect(Math.abs(required(highest[0]) - required(highest[1]))).toBeCloseTo(
+      32,
+    );
+  });
+
+  it("сохраняет callback вне колонок при возврате через несколько уровней", () => {
+    const cards = [
+      { x: 0, y: 150 },
+      { x: 344, y: 150 },
+      { x: 688, y: 150 },
+      { x: 1032, y: 150 },
+      { x: 1032, y: -26 },
+    ];
+    const path = callbackRunEdgePath(
+      required(cards[3]),
+      required(cards[0]),
+      cards,
+    );
+    for (const point of sampleCurve(path)) {
+      expect(
+        cards.some(
+          (item) =>
+            point.x > item.x &&
+            point.x < item.x + runGraphNodeWidth &&
+            point.y > item.y &&
+            point.y < item.y + runGraphNodeHeight,
+        ),
+      ).toBe(false);
+    }
+  });
+
+  it("не сводит дугу callback к петле в зазоре перед продолжением", () => {
+    const cards = [
+      { x: 0, y: 0 },
+      { x: 344, y: 0 },
+    ];
+    const path = callbackRunEdgePath(
+      required(cards[0]),
+      required(cards[1]),
+      cards,
+    );
+    const points = sampleCurve(path);
+    const corridor = points.slice(99, 198);
+    expect(required(corridor.at(-1)).x).toBeGreaterThan(
+      required(corridor[0]).x,
+    );
+    for (const point of points) {
+      expect(
+        cards.some(
+          (item) =>
+            point.x > item.x &&
+            point.x < item.x + runGraphNodeWidth &&
+            point.y > item.y &&
+            point.y < item.y + runGraphNodeHeight,
+        ),
+      ).toBe(false);
+    }
+  });
+
   it("раскладывает authoritative delegation слева направо", () => {
     const layout = layoutRunGraph(
       [
