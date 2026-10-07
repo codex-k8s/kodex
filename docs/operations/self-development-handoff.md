@@ -10,6 +10,33 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 12:13 UTC: HEAD369e5f4c, dirty frontend3+docs2; затем scoped commit.
+RunPage исправляет ложную live подпись при recovering/offline/connecting,
+не заявляет исправление primary cause задержки WS.34unit5.37s/lint/typecheck/
+build10.54s PASS на tree, предупреждение chunk size сохранено.
+Source/Pod RunPage/i18n hashes EQUAL. Screenshot снова работает; desktop helper
+modal visually checked, Console0/relevant GET200. Последний reload page5 12:11.
+
+Workflow run_L-owWrHrLwT99S0xYk9nx81Y owner CANCELLED/version3/seq173,
+32CANCELLED+5SUCCEEDED/активных0 после hard BLOCKED INTAKE/Architect и
+ошибочного продолжения Coordinator к Developer. Не retry/resume.
+Ordinary parent run_HlZ_jAiNMRgOAewB2OxpEC4Z ожидает callback;
+не запускать его заново без authoritative readback.
+
+PROJECT helper текстового UPDATE_WORKFLOW запущен ОДИН РАЗ в WORKFLOW контексте:
+cnv_jOk6I4lp-1gg7rcS3K4cgKOu/run__sCSFyhjhTLhMU_pph3cyQHi,
+session ses_lNgeUXltgH__w-MS-yxxzbG7,turn trn_bhinlPcvvSQhLGJdD7Kz5yn7,
+attempt1 technical SUCCEEDED/COMPLETED12:14, semantic BLOCKED/нет DRAFT;
+ACK CAPTURED/rejoined/EQUAL. Native snapshot большой, model output обрезан;
+offset1 неподдержан. Далее исправить native full-read delivery и повторить
+новый ход; не Apply partial plan. Это не отсутствие серверного snapshot.
+Цель: исправить выдуманный preflight и semantic gates, сохранить33steps/права/
+graph/owner gate. Далее independently compare text-only diff, UIValidateApply,
+WorkflowValidatePublish, новый ordinary Manager, capture реальных ролей до
+cleanup. Host не Developer1796; full65 OPEN, final internalPR не merge.
+
+## Предыдущий checkpoint11:52
+
 07.10.2026 11:52 UTC: source/remote/Draft1800
 `42def6ed86949f51855025a694be6e9bb46f36cb`, дерево чистое.
 ExactSHA Go1.26.6 full gateway unit22.700s/vet/build/codegen,

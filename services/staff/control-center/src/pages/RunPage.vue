@@ -95,6 +95,19 @@ const graph = computed(
 const streamState = computed(
   () => realtime.state[graph.value?.runRef ?? runRef.value],
 );
+const streamStatusKey = computed(() => {
+  if (run.value && isTerminalRun(run.value)) return "runs.historyComplete";
+  switch (streamState.value?.state) {
+    case "live":
+      return "runs.live";
+    case "recovering":
+      return "runs.streamRecovering";
+    case "offline":
+      return "runs.streamOffline";
+    default:
+      return "runs.streamConnecting";
+  }
+});
 function safeRuntimeText(
   value?: string,
   messageKind?: RunEvent["messageKind"],
@@ -924,9 +937,7 @@ onBeforeUnmount(() => {
                 :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
               >
                 ●
-                {{
-                  $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
-                }}
+                {{ $t(streamStatusKey) }}
                 <template v-if="sessionGraph.sequence > 0">
                   · #{{ sessionGraph.sequence }}</template
                 >

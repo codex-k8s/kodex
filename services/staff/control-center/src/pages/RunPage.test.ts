@@ -6,6 +6,7 @@ import { renderToString } from "@vue/server-renderer";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import RunPage from "@/pages/RunPage.vue";
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem } from "@/shared/api/problem";
@@ -67,6 +68,9 @@ function messages() {
       continueTask: "Дополнительное задание",
       live: "Данные поступают в реальном времени",
       historyComplete: "История запуска завершена",
+      streamConnecting: "Подключаем обновления…",
+      streamRecovering: "Восстанавливаем обновления…",
+      streamOffline: "Обновления недоступны · показаны последние данные",
       noEvents: "Событий пока нет",
       callback: "Ответ дочернего запуска",
       childRuns: "Дочерние запуски",
@@ -290,6 +294,33 @@ describe("RunPage runtime presentation", () => {
     const noEventsHtml = await renderToString(noEventsApp);
     expect(noEventsHtml).toContain("История запуска завершена");
     expect(noEventsHtml).not.toContain("· #");
+
+    currentRun.state = "RUNNING";
+    const realtime = useRealtimeStore(pinia);
+    for (const [state, label] of [
+      ["connecting", "Подключаем обновления…"],
+      ["recovering", "Восстанавливаем обновления…"],
+      ["offline", "Обновления недоступны · показаны последние данные"],
+      ["live", "Данные поступают в реальном времени"],
+    ] as const) {
+      realtime.state[runRef] = { state, attempt: 0 };
+      const streamApp = createSSRApp(RunPage);
+      streamApp
+        .use(pinia)
+        .use(router)
+        .use(
+          createI18n({
+            legacy: false,
+            locale: "ru",
+            messages: { ru: messages() },
+          }),
+        );
+      const streamHtml = await renderToString(streamApp);
+      expect(streamHtml).toContain(label);
+      expect(streamHtml).not.toContain("История запуска завершена");
+      if (state !== "live")
+        expect(streamHtml).not.toContain("Данные поступают в реальном времени");
+    }
 
     currentRun.state = "FAILED";
     currentRun.safeErrorCode = "REQUIRED_WORKFLOW_FAILED";

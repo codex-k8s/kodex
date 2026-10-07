@@ -10,6 +10,70 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 12:13 UTC — честное состояние realtime и semantic gates
+
+Рабочее дерево поверх `369e5f4cb06ed8683d17b158c3c05e9bf691e0d9`.
+На живом графе stream находился в recovering, но подпись ошибочно говорила
+о realtime. RunPage теперь различает connecting/recovering/offline/live;
+terminal сохраняет подпись завершённой истории. Это исправление индикации,
+а не доказательство устранения первопричины временного отставания cursor:
+после reload поток восстановился, primary cause остаётся UNKNOWN.
+
+- PASS на указанном tree:34 адресных frontend unit/rejoin/realtime теста,
+  повтор5.37s; lint, forced typecheck и production build10.54s.
+  Prettier сначала FAIL на тесте; после форматирования повтор PASS.
+  Сборка сохраняет существующее предупреждение о размере chunks.
+- PASS: source/Pod RunPage.vue SHA
+  `1f61be714f707b2ddb6ccb40b713b9ec4e71d8c86cb5ac048291f6635bce9ebd`,
+  i18n SHA `6ab9bee18dba3be36e4e22d875b7c7de43c7a72758dec6356398608dd16b08fe`
+  EQUAL в staff-control-center `/workspace`.
+- PASS: Chrome MCP/page5, Console0, relevant GET200. Screenshot восстановился:
+  свежие graph и PROJECT helper modal viewport доступны. Сообщение пользователя
+  справа, компактная работа помощника слева, input/Stop доступны.
+  Это desktop/debug evidence, не весь mobile/full65 acceptance.
+
+Ordinary Manager run_HlZ_jAiNMRgOAewB2OxpEC4Z принял ровно один child Workflow
+`run_L-owWrHrLwT99S0xYk9nx81Y`; первая technical attempt SUCCEEDED.
+INTAKE `run_AObhbf54wXy3wQDRnaGURni_` semantic BLOCKED: от роли требовался
+отдельный workflow snapshot/step-authority preflight, отсутствующий в callable
+каталоге. Полный manager-plan.md `art_kt1urckBLNFMU8KXH8IsNLAB` read200,
+6169B/SHA701eae94488ac1351e9c0efe9a76f1d8029d7e3bd2548b3c390de3fe862ab61a.
+Architect `run_nfpfg-6HbUsLALNH1Uko_Ixd` также semantic BLOCKED. Coordinator
+продолжил к Developer несмотря на этот hard BLOCKED; ROOT отменил exact
+Workflow один раз штатным UI. Authoritative CANCELLED/version3/sequence173,
+32CANCELLED+5SUCCEEDED, активных узлов0; не retry/resume.
+
+Ранний ACK coordinator attempt2 и Architect attempt1 CAPTURED/rejoined,
+instruction/file и provider/inbox EQUAL; отдельные expected task и serving
+runner comparisons NOT RUN. Same-Pod image file не выдаётся за serving binary.
+Architect прочитал переданные файлы, но это не отменяет его semantic BLOCKED.
+
+Native PROJECT helper на WORKFLOW контексте получил ровно один запрос только
+текстового UPDATE_WORKFLOW с сохранением33steps/прав/graph/owner gate:
+conversation `cnv_jOk6I4lp-1gg7rcS3K4cgKOu`,
+run `run__sCSFyhjhTLhMU_pph3cyQHi`, session `ses_lNgeUXltgH__w-MS-yxxzbG7`,
+turn `trn_bhinlPcvvSQhLGJdD7Kz5yn7`, attempt1 RUNNING.
+Исправление должно разделить серверную authority и доступные model READ,
+запретить зависимую implementation после hard BLOCKED и не требовать
+несуществующий callable preflight/publishArtifacts. DRAFT/Validate/Apply
+ещё OPEN; manual API/SQL update не делался.
+
+Helper ACK CAPTURED/rejoined, Podruntime-turn-4e773df17d2dcf1d,
+UID70e9afc7-c8c6-4546-b81d-3248b5dc6f3b; G5/ENV8/binding7/tools38/grants23.
+Task/provider/inbox SHA9a61ac4a95f7e56838730b4f7e3e137ae3c5a992b05d4af0e9a3ff201a9b6942;
+instructions/file SHAb201a2798bfe838378d808385c4e2d08a474b9acf5b06ca5a1165603a09bb023 EQUAL.
+Materialization704b428867e382bbba810d826ca2676f182e83d7faff479c7d1849f41c68e9d7.
+Первые catalog calls включают TOOL_UNAVAILABLE, последующие SUCCEEDED;
+помощник сам восстанавливает полный snapshot, без объявления PASS до EOF.
+Full65/внутренний Developer PR/reviews/READY остаются OPEN.
+
+12:14 readback: helper technical SUCCEEDED/turn COMPLETED, semantic BLOCKED,
+DRAFT не создан. Полный snapshot configuration SHA525aa117a6e4b9a54e2c2223a2e9e86f9883fd5885680e4140457035895cefb4
+доступен серверу, но большая выдача обрезана в модельном tool output;
+несуществующая continuation offset1 закрыто отклонена TOOL_UNAVAILABLE.
+Далее исправить native read delivery, затем повторить план. BLOCKED не PASS.
+
+
 ## Checkpoint 07.10.2026 11:52 UTC — исправление опубликовано, новый Manager
 
 HEAD/remote/Draft1800 `42def6ed86949f51855025a694be6e9bb46f36cb`;
