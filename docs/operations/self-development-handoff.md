@@ -10,6 +10,31 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 23:23 UTC
+
+Full65 ACTIVE; повторное поручение владельца — автономно до08.10 14:00
+Саратов/10:00UTC, рекомендованные варианты в согласованном scope, без
+дубликата goal. HEAD/remote/Draft1800 c9ae816c EQUAL; mainb5f6fcde неизменен.
+Chrome page1 авторизована, literal reload23:23; owner4 untouched.
+Native SYSTEM/PROJECT plans APPLIED3, по одной сборке COMPLETED13:
+SYSTEM recipe19/G12/buildimgbld___2MBP75ZyhK04XRCeqOkakD,
+artifactimgart_rSn0VrHIRD7empBOgwmYySMh/manifesta7a03f1d;
+PROJECT recipe11/G6/buildimgbld_BNIAFfqeGShUstxtY2RcVO0P,
+artifactimgart_69MKfJMQ40a9gZixxPW7a3nA/manifest806c6ee3.
+Оба exact complete report READY1, два blocking HIGH undici/tar с исправлениями.
+Свежие native local-QA-only risk decisions SYSTEMimgrisk_u9V_A0-fUDA0b8SNcV0BmDfa
+и PROJECTimgrisk__w26N8UsI9tXHJ78gZNl6jTD; admission attempts2 ожидаются,
+не повторять решения/сборки. Promotion и ENV publication NOT RUN.
+Следом штатно promotion → помощниками image-only PREPARE ENV (SYSTEM own
+renv_aSMtfZ2vp9GgOHqTOZnGhWE4, PROJECT helperrenv_zycHL70M8UYGvTAU_W6fgvaB,
+writerenv_NjHA7WWnyjCtNggYCTdLeV5W, reviewrenv_am09ABl3ulJb9PRi4QQ_E_I4)
+→ owner Validate/impact/Publish/rebind → exact actual ACK/binary → ONE EOF
+повтор → full33-step native Workflow. Параметры кроме image/ref опускать,
+чтобы сервер сохранил38tools/values/secrets/policy; SYSTEM systemAssistantRef
+обязателен.11/13/14/15 OPEN, finalinternalPR не merge/approve, STT NOT RUN.
+На каждом экране screenshot/Console/Network/backend и исправление UX;
+рабочую page1 reload5мин без ухода с незавершённой mutation.
+
 ## Checkpoint 07.10.2026 23:05 UTC
 
 Full65 ACTIVE: автономно до08.10 14:00 Саратов /10:00UTC, выбор рекомендуемых

@@ -10,6 +10,52 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Подтверждение режима 08.10.2026 — автономно до 14:00 Саратов
+
+Владелец повторно поручил довести прототип до согласованной готовности,
+работая автономно до 14:00 Саратов (10:00 UTC). Существующая Full65 goal
+продолжается без дубликата; источник этапов — исходное задание и checklist
+этого документа. Для развилок в разрешённом scope сравнивать 2–3 варианта
+и выбирать рекомендуемый, фиксируя причины и результат. Новые полномочия
+или обход защит из автономии не следуют. Каждый посещённый экран проверять
+по скриншоту, Console, relevant Network и применимым backend logs; сразу
+исправлять доказанные проблемы верстки и удобства. Рабочую вкладку Chrome
+обновлять каждые пять минут после сохранения ввода и завершения mutation;
+чужие вкладки не менять. Checklist отмечать только по фактическим доказательствам.
+
+## Checkpoint 07.10.2026 23:23 UTC — собственные G12/G6 собраны
+
+- HEAD/remote/Draft1800 `c9ae816cfc7d4b6904af2942da28d458a8e15165`
+  совпали по свежему bot readback; Issue1797 open, mainb5f6fcde неизменен.
+  Дерево было чистым. Chrome MCP/авторизация доступны; рабочая page1,
+  owner page4 не изменялась. Console error/warn0, report GET200.
+- Через самих помощников получены и штатно Validate/Apply применены планы
+  SYSTEM `pln_qxWiCqpj-QBzwNBZafsjxxVg` и PROJECT
+  `pln_BvBDNBDv8-OY9KGOZV9pAbCi`, оба APPLIED/version3. Только прежний
+  environmentKey=standard, без client Dockerfile/version/digest. Сервер
+  сохранил recipe identity, scope и пакеты, сменив exact base наa22d2003.
+  Spec `f0c8dc03a1e86a1da2246b3e5ddf6ce6b7d81d2d4148f0a75f87ac1f64f4b374`.
+  Повторного build запроса не было: по одной сборке от каждого Apply.
+- SYSTEM recipe19/G12: build `imgbld___2MBP75ZyhK04XRCeqOkakD`
+  COMPLETED13, artifact `imgart_rSn0VrHIRD7empBOgwmYySMh`, manifest
+  `sha256:a7a03f1d4e3eb868e8a409d63fd1b07da781e16c4c13b8ada49b62e0e2a460bc`.
+  PROJECT recipe11/G6: build `imgbld_BNIAFfqeGShUstxtY2RcVO0P`
+  COMPLETED13, artifact `imgart_69MKfJMQ40a9gZixxPW7a3nA`, manifest
+  `sha256:806c6ee3e89f84b7516a1ce79d9d98d15ad17fbad102fb2112666a7b70135681`.
+- Оба полных отчёта READY/complete/version1:4640 matches/2938 advisories,
+  suppressed2315/no-fix459, ровно2 blocking HIGH. Filtered READ вернул все
+  блокирующие findings и пустой cursor: undici6.27.0/GHSA-rfgv-xxqx-mfg5
+  (fix6.28.1), tar7.5.19/GHSA-r292-9mhp-454m (fix7.5.21).
+  Прежние риск-решения не переносились. Через owner UI созданы отдельные
+  exact local-QA-only ACCEPT_RISK: SYSTEM `imgrisk_u9V_A0-fUDA0b8SNcV0BmDfa`
+  в23:21:51 и PROJECT `imgrisk__w26N8UsI9tXHJ78gZNl6jTD`.
+  Новые admission attempts пока PENDING/CLAIMED, promotion и публикация ENV
+  ещё NOT RUN. Это не разрешение production и не завершение Full65.
+- Далее fresh admission/promotion → native ENV revisions (SYSTEM и три
+  PROJECT) с сохранением текущих tools/policy/values/bindings → actual
+  binary/ACK → один EOF repeat → полный33-step Workflow.11/13/14/15 OPEN;
+  итоговый внутренний PR не merge/approve. STT/device-code NOT RUN.
+
 ## Checkpoint 07.10.2026 23:05 UTC — новый runner и завершённая штатная активация
 
 - Existing Full65 goal ACTIVE; автономия владельца до08.10 14:00 Саратов
